@@ -64,17 +64,17 @@ public class CensusSchemaTest {
   private static String parquetDir;
   private static File modelFile;
 
-  // List of expected Census tables based on census-schema.json
+  // List of expected Census tables based on census-schema.yaml
   // Tables are created with lowercase names due to SMART_CASING
   private static final List<String> EXPECTED_TABLES =
-      Arrays.asList("acs_population",
-      "acs_demographics",
+      Arrays.asList(
+      // Core ACS tables
+      "acs_population",
       "acs_income",
       "acs_poverty",
       "acs_employment",
       "acs_education",
       "acs_housing",
-      "acs_housing_costs",
       "acs_commuting",
       "acs_health_insurance",
       "acs_language",
@@ -82,12 +82,35 @@ public class CensusSchemaTest {
       "acs_veterans",
       "acs_migration",
       "acs_occupation",
+      "acs_industry",
+      "acs_internet",
+      "acs_nativity",
+      "acs_marital_status",
+      "acs_household_type",
+      "acs_housing_tenure",
+      "acs_income_distribution",
+      "acs_race_ethnicity",
+      "acs_age",
+      // ACS 1-year estimates
+      "acs1_population",
+      "acs1_income",
+      // Decennial Census
       "decennial_population",
-      "decennial_demographics",
       "decennial_housing",
+      // Economic data
       "economic_census",
-      "county_business_patterns",
-      "population_estimates");
+      "cbp_establishments",
+      "pep_population",
+      "saipe_poverty",
+      "sahie_insurance",
+      "bds_dynamics",
+      "abs_characteristics",
+      "nonemployer_statistics",
+      "building_permits",
+      "qwi_employment",
+      "lodes_workplace",
+      "trade_exports",
+      "trade_imports");
 
   @BeforeAll
   public static void setUp() throws Exception {
@@ -132,37 +155,63 @@ public class CensusSchemaTest {
   private static void createTestModel() throws Exception {
     modelFile = tempDir.resolve("census-model.json").toFile();
 
+    String executionEngine = TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE");
+    if (executionEngine == null) {
+      executionEngine = "duckdb";
+    }
+    String censusApiKey = TestEnvironmentLoader.getEnv("CENSUS_API_KEY");
+
+    // S3 configuration for MinIO or AWS S3
+    String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");
+    String awsSecretAccessKey = TestEnvironmentLoader.getEnv("AWS_SECRET_ACCESS_KEY");
+    String awsEndpointOverride = TestEnvironmentLoader.getEnv("AWS_ENDPOINT_OVERRIDE");
+    String awsRegion = TestEnvironmentLoader.getEnv("AWS_REGION");
+
+    // Build s3Config JSON if directory uses S3
+    String s3ConfigJson = "";
+    if (parquetDir != null && parquetDir.startsWith("s3://")) {
+      StringBuilder s3Config = new StringBuilder();
+      s3Config.append("\"s3Config\": {");
+      if (awsEndpointOverride != null) {
+        s3Config.append("\"endpoint\": \"").append(awsEndpointOverride).append("\",");
+      }
+      if (awsAccessKeyId != null) {
+        s3Config.append("\"accessKeyId\": \"").append(awsAccessKeyId).append("\",");
+      }
+      if (awsSecretAccessKey != null) {
+        s3Config.append("\"secretAccessKey\": \"").append(awsSecretAccessKey).append("\",");
+      }
+      if (awsRegion != null) {
+        s3Config.append("\"region\": \"").append(awsRegion).append("\",");
+      }
+      // Remove trailing comma
+      if (s3Config.charAt(s3Config.length() - 1) == ',') {
+        s3Config.setLength(s3Config.length() - 1);
+      }
+      s3Config.append("},");
+      s3ConfigJson = s3Config.toString();
+    }
+
     String modelJson = "{\n"
-  +
-        "  \"version\": \"1.0\",\n"
-  +
-        "  \"defaultSchema\": \"census\",\n"
-  +
-        "  \"schemas\": [{\n"
-  +
-        "    \"name\": \"census\",\n"
-  +
-        "    \"type\": \"custom\",\n"
-  +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
-  +
-        "    \"operand\": {\n"
-  +
-        "      \"dataSource\": \"census\",\n"
-  +
-        "      \"autoDownload\": true,\n"
-  +  // Enable auto-download with improved caching
-        "      \"startYear\": 2020,\n"
-  +
-        "      \"endYear\": 2023,\n"
-  +
-        "      \"censusCacheTtlDays\": 365\n"
-  +
-        "    }\n"
-  +
-        "  }]\n"
-  +
-        "}";
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"census\",\n"
+        + "  \"schemas\": [{\n"
+        + "    \"name\": \"census\",\n"
+        + "    \"type\": \"custom\",\n"
+        + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+        + "    \"operand\": {\n"
+        + "      \"dataSource\": \"census\",\n"
+        + "      \"executionEngine\": \"" + executionEngine + "\",\n"
+        + "      \"cacheDirectory\": \"" + cacheDir + "\",\n"
+        + "      \"directory\": \"" + parquetDir + "\",\n"
+        + "      " + s3ConfigJson + "\n"
+        + "      \"autoDownload\": false,\n"
+        + "      \"startYear\": 2020,\n"
+        + "      \"endYear\": 2023"
+        + (censusApiKey != null ? ",\n      \"censusApiKey\": \"" + censusApiKey + "\"\n" : "\n")
+        + "    }\n"
+        + "  }]\n"
+        + "}";
 
     try (FileWriter writer = new FileWriter(modelFile)) {
       writer.write(modelJson);
@@ -442,7 +491,7 @@ public class CensusSchemaTest {
       Statement stmt = connection.createStatement();
 
       // Aggregation WITH partition filter should work correctly
-      String query = "SELECT COUNT(*) as row_count FROM census.population_estimates WHERE \"year\" = 2020";
+      String query = "SELECT COUNT(*) as row_count FROM census.pep_population WHERE \"year\" = 2020";
 
       ResultSet rs = stmt.executeQuery(query);
       assertTrue(rs.next(), "Should have results");
@@ -468,13 +517,18 @@ public class CensusSchemaTest {
 
       // Define which tables are partitioned by year
       List<String> partitionedTables =
-          Arrays.asList("acs_population", "acs_demographics", "acs_income", "acs_poverty",
-          "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+          Arrays.asList("acs_population", "acs_income", "acs_poverty",
+          "acs_employment", "acs_education", "acs_housing",
           "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
-          "acs_veterans", "acs_migration", "acs_occupation",
-          "decennial_population", "decennial_demographics", "decennial_housing",
-          "economic_census", "county_business_patterns",
-          "population_estimates");
+          "acs_veterans", "acs_migration", "acs_occupation", "acs_industry", "acs_internet",
+          "acs_nativity", "acs_marital_status", "acs_household_type", "acs_housing_tenure",
+          "acs_income_distribution", "acs_race_ethnicity", "acs_age",
+          "acs1_population", "acs1_income",
+          "decennial_population", "decennial_housing",
+          "economic_census", "cbp_establishments", "pep_population",
+          "saipe_poverty", "sahie_insurance", "bds_dynamics", "abs_characteristics",
+          "nonemployer_statistics", "building_permits", "qwi_employment", "lodes_workplace",
+          "trade_exports", "trade_imports");
 
       for (String tableName : EXPECTED_TABLES) {
         try {
@@ -531,19 +585,19 @@ public class CensusSchemaTest {
 
     // Tables by data source type
     List<String> acsTables =
-        Arrays.asList("acs_population", "acs_demographics", "acs_income", "acs_poverty",
-        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+        Arrays.asList("acs_population", "acs_income", "acs_poverty",
+        "acs_employment", "acs_education", "acs_housing",
         "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
-        "acs_veterans", "acs_migration", "acs_occupation");
+        "acs_veterans", "acs_migration", "acs_occupation", "acs_race_ethnicity", "acs_age");
 
     List<String> decennialTables =
-        Arrays.asList("decennial_population", "decennial_demographics", "decennial_housing");
+        Arrays.asList("decennial_population", "decennial_housing");
 
     List<String> economicTables =
-        Arrays.asList("economic_census", "county_business_patterns");
+        Arrays.asList("economic_census", "cbp_establishments");
 
     List<String> populationTables =
-        Arrays.asList("population_estimates");
+        Arrays.asList("pep_population");
 
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();

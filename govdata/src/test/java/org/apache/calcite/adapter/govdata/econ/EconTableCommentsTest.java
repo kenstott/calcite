@@ -37,8 +37,8 @@ public class EconTableCommentsTest {
 
   @Test public void testAllEconTablesHaveComments() {
     // Load table comments from schema file
-    Map<String, String> tableComments = GovDataUtils.loadTableComments(
-        EconSchemaFactory.class, ECON_SCHEMA);
+    Map<String, String> tableComments =
+        GovDataUtils.loadTableComments(EconSchemaFactory.class, ECON_SCHEMA);
 
     // List of core ECON tables that should have comments
     String[] tables = {
@@ -59,16 +59,16 @@ public class EconTableCommentsTest {
       assertFalse(tableComment.isEmpty(), "Table comment empty for: " + tableName);
 
       // Check column comments exist
-      Map<String, String> columnComments = GovDataUtils.loadColumnComments(
-          EconSchemaFactory.class, ECON_SCHEMA, tableName);
+      Map<String, String> columnComments =
+          GovDataUtils.loadColumnComments(EconSchemaFactory.class, ECON_SCHEMA, tableName);
       assertNotNull(columnComments, "Column comments missing for: " + tableName);
       assertFalse(columnComments.isEmpty(), "No column comments for: " + tableName);
     }
   }
 
   @Test public void testEconTableCommentsAreDescriptive() {
-    Map<String, String> tableComments = GovDataUtils.loadTableComments(
-        EconSchemaFactory.class, ECON_SCHEMA);
+    Map<String, String> tableComments =
+        GovDataUtils.loadTableComments(EconSchemaFactory.class, ECON_SCHEMA);
 
     // Verify that table comments mention appropriate data sources
     String employmentComment = tableComments.get("employment_statistics");
