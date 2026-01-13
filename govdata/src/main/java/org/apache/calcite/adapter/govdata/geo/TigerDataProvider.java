@@ -198,9 +198,14 @@ public class TigerDataProvider implements DataProvider {
           TIGER_BASE_URL, tigerPath, year, cbsaSuffix);
 
     case "congressional_districts":
+      if (stateFips == null) {
+        return null;
+      }
+      // Congressional district files are per-state
+      // 118th Congress (2023-2024), 119th Congress (2025-2026)
       int congressNum = ((yearInt - 1789) / 2) + 1;
-      return String.format("%s/%s/CD/tl_%s_us_cd%d.zip",
-          TIGER_BASE_URL, tigerPath, year, congressNum);
+      return String.format("%s/%s/CD/tl_%s_%s_cd%d.zip",
+          TIGER_BASE_URL, tigerPath, year, stateFips, congressNum);
 
     case "school_districts":
       if (stateFips == null) {
@@ -209,6 +214,67 @@ public class TigerDataProvider implements DataProvider {
       String sdSuffix = (yearInt == 2010) ? "unsd10" : "unsd";
       return String.format("%s/%s/UNSD/tl_%s_%s_%s.zip",
           TIGER_BASE_URL, tigerPath, year, stateFips, sdSuffix);
+
+    case "state_legislative_lower":
+      if (stateFips == null) {
+        return null;
+      }
+      String sldlSuffix = (yearInt == 2010) ? "sldl10" : "sldl";
+      return String.format("%s/%s/SLDL/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, stateFips, sldlSuffix);
+
+    case "state_legislative_upper":
+      if (stateFips == null) {
+        return null;
+      }
+      String slduSuffix = (yearInt == 2010) ? "sldu10" : "sldu";
+      return String.format("%s/%s/SLDU/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, stateFips, slduSuffix);
+
+    case "county_subdivisions":
+      if (stateFips == null) {
+        return null;
+      }
+      String cousubSuffix = (yearInt == 2010) ? "cousub10" : "cousub";
+      return String.format("%s/%s/COUSUB/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, stateFips, cousubSuffix);
+
+    case "tribal_areas":
+      String aiannhSuffix = (yearInt == 2010) ? "aiannh10" : "aiannh";
+      return String.format("%s/%s/AIANNH/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, aiannhSuffix);
+
+    case "urban_areas":
+      // UAC files are in UAC/ directory (not UAC20/) but use uac20 suffix
+      String uacSuffix = (yearInt == 2010) ? "uac10" : "uac20";
+      return String.format("%s/%s/UAC/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, uacSuffix);
+
+    case "pumas":
+      if (stateFips == null) {
+        return null;
+      }
+      // PUMA files are in PUMA/ directory (not PUMA20/) but use puma20 suffix
+      String pumaSuffix = (yearInt == 2010) ? "puma10" : "puma20";
+      return String.format("%s/%s/PUMA/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, year, stateFips, pumaSuffix);
+
+    case "voting_districts":
+      if (stateFips == null) {
+        return null;
+      }
+      // VTD files have different URL patterns based on census vintage:
+      // - 2012: TIGER2012/VTD/tl_2012_{state}_vtd10.zip (2010 census boundaries)
+      // - 2020+: TIGER2020PL/LAYER/VTD/2020/tl_2020_{state}_vtd20.zip (2020 census boundaries)
+      if (yearInt >= 2020) {
+        // 2020 census vintage - different path structure
+        return String.format("%s/TIGER2020PL/LAYER/VTD/2020/tl_2020_%s_vtd20.zip",
+            TIGER_BASE_URL, stateFips);
+      } else {
+        // 2010 census vintage (available in TIGER2012)
+        return String.format("%s/%s/VTD/tl_%s_%s_vtd10.zip",
+            TIGER_BASE_URL, tigerPath, year, stateFips);
+      }
 
     default:
       return null;
@@ -424,6 +490,176 @@ public class TigerDataProvider implements DataProvider {
         };
       };
 
+    case "state_legislative_lower":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        return new Object[]{
+            getAttrString(feature, "GEOID"),
+            getAttrString(feature, "STATEFP"),
+            getAttrString(feature, "NAMELSAD"),
+            getAttrDouble(feature, "ALAND"),
+            getAttrDouble(feature, "AWATER"),
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "state_legislative_upper":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        return new Object[]{
+            getAttrString(feature, "GEOID"),
+            getAttrString(feature, "STATEFP"),
+            getAttrString(feature, "NAMELSAD"),
+            getAttrDouble(feature, "ALAND"),
+            getAttrDouble(feature, "AWATER"),
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "county_subdivisions":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        return new Object[]{
+            getAttrString(feature, "GEOID"),
+            getAttrString(feature, "STATEFP"),
+            getAttrString(feature, "COUNTYFP"),
+            getAttrString(feature, "NAME"),
+            getAttrString(feature, "NAMELSAD"),
+            getAttrDouble(feature, "ALAND"),
+            getAttrDouble(feature, "AWATER"),
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "tribal_areas":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        return new Object[]{
+            getAttrString(feature, "GEOID"),
+            getAttrString(feature, "NAME"),
+            getAttrString(feature, "NAMELSAD"),
+            getAttrDouble(feature, "ALAND"),
+            getAttrDouble(feature, "AWATER"),
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "urban_areas":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        String uace = getAttrString(feature, "UACE20");
+        if (uace == null) {
+          uace = getAttrString(feature, "UACE10");
+        }
+        if (uace == null) {
+          uace = getAttrString(feature, "GEOID");
+        }
+        Double aland = getAttrDouble(feature, "ALAND20");
+        if (aland == null) {
+          aland = getAttrDouble(feature, "ALAND");
+        }
+        Double awater = getAttrDouble(feature, "AWATER20");
+        if (awater == null) {
+          awater = getAttrDouble(feature, "AWATER");
+        }
+        return new Object[]{
+            uace,
+            getAttrString(feature, "NAME20") != null
+                ? getAttrString(feature, "NAME20") : getAttrString(feature, "NAME10"),
+            getAttrString(feature, "UATYP20") != null
+                ? getAttrString(feature, "UATYP20") : getAttrString(feature, "UATYP10"),
+            aland,
+            awater,
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "pumas":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        String pumace = getAttrString(feature, "PUMACE20");
+        if (pumace == null) {
+          pumace = getAttrString(feature, "PUMACE10");
+        }
+        Double aland = getAttrDouble(feature, "ALAND20");
+        if (aland == null) {
+          aland = getAttrDouble(feature, "ALAND");
+        }
+        Double awater = getAttrDouble(feature, "AWATER20");
+        if (awater == null) {
+          awater = getAttrDouble(feature, "AWATER");
+        }
+        return new Object[]{
+            getAttrString(feature, "GEOID20") != null
+                ? getAttrString(feature, "GEOID20") : getAttrString(feature, "GEOID"),
+            getAttrString(feature, "STATEFP20") != null
+                ? getAttrString(feature, "STATEFP20") : getAttrString(feature, "STATEFP"),
+            getAttrString(feature, "NAMELSAD20") != null
+                ? getAttrString(feature, "NAMELSAD20") : getAttrString(feature, "NAMELSAD"),
+            aland,
+            awater,
+            geom != null ? geom.toText() : null
+        };
+      };
+
+    case "voting_districts":
+      return feature -> {
+        Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
+        // Normalize attributes from both 2010 (vtd10) and 2020 (vtd20) census vintages
+        // Try 2020 attributes first, then 2010, then unversioned
+        String geoid = getAttrString(feature, "GEOID20");
+        if (geoid == null) {
+          geoid = getAttrString(feature, "GEOID10");
+        }
+        if (geoid == null) {
+          geoid = getAttrString(feature, "GEOID");
+        }
+        String stateFips = getAttrString(feature, "STATEFP20");
+        if (stateFips == null) {
+          stateFips = getAttrString(feature, "STATEFP10");
+        }
+        if (stateFips == null) {
+          stateFips = getAttrString(feature, "STATEFP");
+        }
+        String countyFips = getAttrString(feature, "COUNTYFP20");
+        if (countyFips == null) {
+          countyFips = getAttrString(feature, "COUNTYFP10");
+        }
+        if (countyFips == null) {
+          countyFips = getAttrString(feature, "COUNTYFP");
+        }
+        String name = getAttrString(feature, "NAME20");
+        if (name == null) {
+          name = getAttrString(feature, "NAME10");
+        }
+        if (name == null) {
+          name = getAttrString(feature, "NAME");
+        }
+        Double aland = getAttrDouble(feature, "ALAND20");
+        if (aland == null) {
+          aland = getAttrDouble(feature, "ALAND10");
+        }
+        if (aland == null) {
+          aland = getAttrDouble(feature, "ALAND");
+        }
+        Double awater = getAttrDouble(feature, "AWATER20");
+        if (awater == null) {
+          awater = getAttrDouble(feature, "AWATER10");
+        }
+        if (awater == null) {
+          awater = getAttrDouble(feature, "AWATER");
+        }
+        return new Object[]{
+            geoid,
+            stateFips,
+            countyFips,
+            name,
+            aland,
+            awater,
+            geom != null ? geom.toText() : null
+        };
+      };
+
     default:
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
@@ -458,6 +694,27 @@ public class TigerDataProvider implements DataProvider {
           "land_area", "water_area", "geometry"};
     case "school_districts":
       return new String[]{"sd_lea", "state_fips", "sd_name", "sd_type",
+          "land_area", "water_area", "geometry"};
+    case "state_legislative_lower":
+      return new String[]{"sldl_fips", "state_fips", "sldl_name",
+          "land_area", "water_area", "geometry"};
+    case "state_legislative_upper":
+      return new String[]{"sldu_fips", "state_fips", "sldu_name",
+          "land_area", "water_area", "geometry"};
+    case "county_subdivisions":
+      return new String[]{"cousub_fips", "state_fips", "county_fips", "cousub_name", "cousub_type",
+          "land_area", "water_area", "geometry"};
+    case "tribal_areas":
+      return new String[]{"aiannh_fips", "aiannh_name", "aiannh_type",
+          "land_area", "water_area", "geometry"};
+    case "urban_areas":
+      return new String[]{"ua_code", "ua_name", "ua_type",
+          "land_area", "water_area", "geometry"};
+    case "pumas":
+      return new String[]{"puma_fips", "state_fips", "puma_name",
+          "land_area", "water_area", "geometry"};
+    case "voting_districts":
+      return new String[]{"vtd_fips", "state_fips", "county_fips", "vtd_name",
           "land_area", "water_area", "geometry"};
     default:
       return new String[]{"geometry"};

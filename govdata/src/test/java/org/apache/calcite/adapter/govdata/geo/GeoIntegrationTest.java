@@ -947,12 +947,22 @@ public class GeoIntegrationTest {
           String.format("%-30s %15s %10s",
           "------------------------------", "---------------", "----------"));
 
-      // All geo tables from geo-schema.json
+      // All geo tables from geo-schema.yaml (32 tables)
       String[] geoTables = {
+          // TIGER Boundary Tables (15)
           "states", "counties", "places", "zctas", "census_tracts",
           "block_groups", "cbsa", "congressional_districts", "school_districts",
-          "population_demographics", "housing_characteristics", "economic_indicators",
-          "zip_county_crosswalk", "zip_cbsa_crosswalk", "tract_zip_crosswalk"
+          "state_legislative_lower", "state_legislative_upper", "county_subdivisions",
+          "tribal_areas", "urban_areas", "pumas", "voting_districts",
+          // HUD Crosswalk Tables (7)
+          "zip_county_crosswalk", "zip_cbsa_crosswalk", "tract_zip_crosswalk",
+          "zip_tract_crosswalk", "zip_cd_crosswalk", "county_zip_crosswalk", "cd_zip_crosswalk",
+          // USDA Rural-Urban Classification (2)
+          "rural_urban_continuum", "ruca_codes",
+          // Census Gazetteer Reference (3)
+          "gazetteer_counties", "gazetteer_places", "gazetteer_zctas",
+          // USGS Watershed Boundaries (4)
+          "watersheds_huc2", "watersheds_huc4", "watersheds_huc8", "watersheds_huc12"
       };
 
       long totalRows = 0;
@@ -989,6 +999,77 @@ public class GeoIntegrationTest {
       LOGGER.info("\n--------------------------------------------------------------------------------");
       LOGGER.info(
           String.format("GEO: %d tables, %d ok, %d errors, %,d total rows",
+          geoTables.length, successCount, errorCount, totalRows));
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  /**
+   * Triggers materialization for all GEO tables by querying them with autoDownload=true.
+   * This test requires network access and API keys for HUD data.
+   */
+  @Tag("integration")
+  @Test public void testMaterializeAllTables() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" MATERIALIZING ALL GEO TABLES (autoDownload=true)");
+    LOGGER.info("================================================================================\n");
+
+    // Use autoDownload: true to trigger ETL for all tables
+    try (Connection conn = createConnection();
+         Statement stmt = conn.createStatement()) {
+
+      // All geo tables from geo-schema.yaml (32 tables)
+      String[] geoTables = {
+          // TIGER Boundary Tables (16)
+          "states", "counties", "places", "zctas", "census_tracts",
+          "block_groups", "cbsa", "congressional_districts", "school_districts",
+          "state_legislative_lower", "state_legislative_upper", "county_subdivisions",
+          "tribal_areas", "urban_areas", "pumas", "voting_districts",
+          // HUD Crosswalk Tables (7)
+          "zip_county_crosswalk", "zip_cbsa_crosswalk", "tract_zip_crosswalk",
+          "zip_tract_crosswalk", "zip_cd_crosswalk", "county_zip_crosswalk", "cd_zip_crosswalk",
+          // USDA Rural-Urban Classification (2)
+          "rural_urban_continuum", "ruca_codes",
+          // Census Gazetteer Reference (3)
+          "gazetteer_counties", "gazetteer_places", "gazetteer_zctas",
+          // USGS Watershed Boundaries (4)
+          "watersheds_huc2", "watersheds_huc4", "watersheds_huc8", "watersheds_huc12"
+      };
+
+      LOGGER.info(String.format("%-30s %15s %10s %s", "TABLE", "ROWS", "TIME(ms)", "STATUS"));
+      LOGGER.info(String.format("%-30s %15s %10s %s",
+          "------------------------------", "---------------", "----------", "----------"));
+
+      long totalRows = 0;
+      int successCount = 0;
+      int errorCount = 0;
+
+      for (String table : geoTables) {
+        try {
+          long start = System.currentTimeMillis();
+          // Query triggers ETL if autoDownload=true and data doesn't exist
+          ResultSet rs =
+              stmt.executeQuery("SELECT COUNT(*) FROM \"GEO\".\"" + table + "\"");
+          rs.next();
+          long count = rs.getLong(1);
+          long elapsed = System.currentTimeMillis() - start;
+
+          String status = count > 0 ? "OK" : "EMPTY";
+          LOGGER.info(String.format("%-30s %,15d %10d %s", table, count, elapsed, status));
+          totalRows += count;
+          successCount++;
+        } catch (Exception e) {
+          String msg = e.getMessage();
+          if (msg != null && msg.length() > 60) {
+            msg = msg.substring(0, 60) + "...";
+          }
+          LOGGER.info(String.format("%-30s %15s %10s %s", table, "ERROR", "-", msg));
+          errorCount++;
+        }
+      }
+
+      LOGGER.info("\n--------------------------------------------------------------------------------");
+      LOGGER.info(String.format("MATERIALIZATION COMPLETE: %d tables, %d ok, %d errors, %,d total rows",
           geoTables.length, successCount, errorCount, totalRows));
       LOGGER.info("================================================================================");
     }
