@@ -1233,7 +1233,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1310,7 +1310,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=4&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=4&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1387,7 +1387,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=3&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=3&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1465,7 +1465,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1542,7 +1542,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=5&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=5&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1616,7 +1616,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=7&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=7&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1693,7 +1693,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=10&year={year}&quarter=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=10&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
