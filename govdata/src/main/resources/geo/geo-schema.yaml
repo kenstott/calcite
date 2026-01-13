@@ -106,11 +106,11 @@ column_templates:
 dimension_values:
 
   # --- Year Range for TIGER data ---
-  # TIGER data has ~1 year lag - 2025 data released in late 2025
+  # TIGER 2024/2025 data not yet available in early 2026, use dataLag: 3 to only request 2023
   tiger_year_range: &tiger_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2020}"
-    dataLag: 1
+    dataLag: 3
 
   # --- Year Range for HUD crosswalk data ---
   # HUD crosswalk updates quarterly with ~3 year lag (2024/2025 data not yet available in 2026)
@@ -360,6 +360,7 @@ partitionedTables:
       type:
         - boundary
       year: *tiger_year_range
+      state_fips: *all_state_fips
 
     # TIGER tables use TigerDataProvider for binary shapefile handling
     source:
@@ -375,9 +376,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=boundary/year=*/"
+        pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, state_fips]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: places
@@ -650,12 +651,18 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
+      year:
+        type: yearRange
+        start: "2023"
+        end: "2023"
+        dataLag: 0
+      state_fips: *all_state_fips
 
     # TIGER tables use TigerDataProvider for binary shapefile handling
+    # Note: cd118 = 118th Congress (2023-2024), cd119 = 119th Congress (2025-2026)
     source:
       type: http
-      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_us_cd118.zip"
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_{state_fips}_cd118.zip"
       method: GET
       response:
         format: json
@@ -666,9 +673,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=boundary/year=*/"
+        pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, state_fips]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: congressional_districts
@@ -789,9 +796,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=boundary/year=*/"
+        pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, state_fips]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: state_legislative_lower
@@ -848,9 +855,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=boundary/year=*/"
+        pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, state_fips]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: state_legislative_upper
@@ -913,9 +920,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=boundary/year=*/"
+        pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, state_fips]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: county_subdivisions
@@ -1101,11 +1108,16 @@ partitionedTables:
   # --------------------------------------------------------------------------
   # Voting Districts (VTDs)
   # --------------------------------------------------------------------------
+  # VTD data is available for census years with different URL patterns:
+  # - 2012: TIGER2012/VTD/tl_2012_{state}_vtd10.zip (2010 census boundaries)
+  # - 2020: TIGER2020PL/LAYER/VTD/2020/tl_2020_{state}_vtd20.zip (2020 census boundaries)
+  # TigerDataProvider handles the URL pattern differences automatically.
   - name: voting_districts
     pattern: "type=boundary/year=*/voting_districts.parquet"
     comment: >
       Voting district boundaries (precincts, wards, election districts) as reported
-      by states for redistricting. Updated after each decennial census.
+      by states for redistricting. Available for 2012 (2010 census vintage) and
+      2020 (2020 census vintage). Attributes are normalized to canonical form.
 
     columns:
       - name: vtd_code
@@ -1134,18 +1146,26 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
-      state_fips: *all_state_fips
+      # VTD available for 2012 (2010 census) and 2020 (2020 census)
+      # Using explicit list since years are not contiguous
+      year:
+        - "2012"
+        - "2020"
+      # Use resolver to filter states based on year - some states only have county-level files for 2020
+      state_fips:
+        type: custom
 
     source:
       type: http
-      url: "https://www2.census.gov/geo/tiger/TIGER{year}/VTD20/tl_{year}_{state_fips}_vtd20.zip"
+      # URL pattern varies by year - TigerDataProvider handles this
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/VTD/tl_{year}_{state_fips}_vtd.zip"
       method: GET
       response:
         format: json
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.geo.TigerVtdDimensionResolver"
 
     materialize:
       format: iceberg
@@ -1213,7 +1233,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=1"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1290,7 +1310,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=4"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=4&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1367,7 +1387,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=3"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=3&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1445,7 +1465,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=1"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1522,7 +1542,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=5"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=5&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1596,7 +1616,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=7"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=7&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1673,7 +1693,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=10"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=10&year={year}&quarter=4"
       method: GET
       response:
         format: json
@@ -1760,6 +1780,8 @@ partitionedTables:
       method: GET
       response:
         format: csv
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRuralUrbanTransformer"
@@ -1835,6 +1857,8 @@ partitionedTables:
       method: GET
       response:
         format: csv
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRucaTransformer"
@@ -1908,6 +1932,8 @@ partitionedTables:
       extractPattern: "*.txt"
       response:
         format: tsv
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
@@ -1990,6 +2016,8 @@ partitionedTables:
       method: GET
       response:
         format: tsv
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
@@ -2062,6 +2090,8 @@ partitionedTables:
       method: GET
       response:
         format: tsv
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
