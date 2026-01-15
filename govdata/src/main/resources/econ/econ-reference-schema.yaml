@@ -290,6 +290,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: 7-digit BLS area code for metro employment series (state FIPS + 5-digit area code, e.g., '3693561' for NYC). NULL for states/regions.
+      - name: cbsa_code
+        type: string
+        nullable: true
+        comment: 5-digit OMB Core Based Statistical Area code (e.g., '35620' for NYC). NULL for states/regions. Enables joins to geo.cbsa for geographic boundaries.
 
     # Source configuration - reads from YAML constants file
     source:
@@ -936,12 +940,23 @@ constraints:
         targetTable: states
         targetColumns: [state_fips]
         comment: Links BLS state geography codes to Census TIGER state boundaries (for geo_type='state' records)
-    comment: Reference table mapping BLS geography codes to FIPS codes and Census regions
+      - columns: [cbsa_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
+        comment: Links BLS metro areas to Census CBSA geographic boundaries (for geo_type='metro' records)
+    comment: Reference table mapping BLS geography codes to FIPS codes, CBSA codes, and Census regions
 
   nipa_tables:
     primaryKey:
       - type
     comment: Reference dimension table for NIPA table classifications and descriptions
+
+  naics_sectors:
+    primaryKey:
+      - type
+      - supersector_code
+    comment: Reference dimension table for NAICS supersector industry classifications
 
   regional_linecodes:
     primaryKey:
