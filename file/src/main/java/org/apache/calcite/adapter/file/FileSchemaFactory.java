@@ -37,10 +37,14 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.lookup.LikePattern;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -84,7 +88,179 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
    * to hold the data arrival time. */
   public static final String ROWTIME_COLUMN_NAME = "ROWTIME";
 
+  /** Brand name used for .aperio directory, must match FileSchema.BRAND. */
+  private static final String BRAND = "aperio";
+
   private FileSchemaFactory() {
+  }
+
+  /**
+   * Writes a debug model file capturing the actual operands passed to Calcite.
+   * This is useful for debugging schema configuration issues.
+   *
+   * <p>The file is written to .aperio/debug-model-{schemaName}.json with sensitive
+   * information (credentials) sanitized.
+   *
+   * @param schemaName the schema name
+   * @param operand the operand map passed to create()
+   * @param parentSchemaName the parent schema name (for context)
+   */
+  @SuppressWarnings("unchecked")
+  private static void writeDebugModel(String schemaName, Map<String, Object> operand,
+      String parentSchemaName) {
+    try {
+      // Determine .aperio root directory (always working directory)
+      String userDir = System.getProperty("user.dir");
+      File aperioRoot = new File(userDir, "." + BRAND);
+      if (!aperioRoot.exists()) {
+        aperioRoot.mkdirs();
+      }
+
+      // Create sanitized copy of operand
+      Map<String, Object> sanitized = sanitizeOperand(operand);
+
+      // Build debug model structure
+      Map<String, Object> debugModel = new HashMap<>();
+      debugModel.put("generatedAt", java.time.Instant.now().toString());
+      debugModel.put("schemaName", schemaName);
+      debugModel.put("parentSchema", parentSchemaName != null ? parentSchemaName : "");
+      debugModel.put("operands", sanitized);
+
+      // Write to file
+      File debugFile = new File(aperioRoot, "debug-model-" + schemaName.toLowerCase() + ".json");
+      ObjectMapper mapper = new ObjectMapper();
+      mapper.enable(SerializationFeature.INDENT_OUTPUT);
+      try (FileWriter writer = new FileWriter(debugFile)) {
+        writer.write(mapper.writeValueAsString(debugModel));
+      }
+      LOGGER.debug("Wrote debug model to: {}", debugFile.getAbsolutePath());
+
+    } catch (Exception e) {
+      // Don't fail schema creation due to debug file issues
+      LOGGER.debug("Failed to write debug model for schema '{}': {}", schemaName, e.getMessage());
+    }
+  }
+
+  /**
+   * Creates a sanitized copy of the operand map with sensitive values masked.
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> sanitizeOperand(Map<String, Object> operand) {
+    Map<String, Object> sanitized = new HashMap<>();
+
+    for (Map.Entry<String, Object> entry : operand.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+
+      if (value == null) {
+        sanitized.put(key, null);
+        continue;
+      }
+
+      // Mask sensitive keys
+      if (key.toLowerCase().contains("password") || key.toLowerCase().contains("secret")) {
+        sanitized.put(key, "********");
+        continue;
+      }
+
+      // Handle object instances - just record class name
+      if (key.startsWith("_")) {
+        sanitized.put(key, value.getClass().getSimpleName());
+        continue;
+      }
+
+      // Handle s3Config map - sanitize credentials inside
+      if ("s3Config".equals(key) && value instanceof Map) {
+        Map<String, Object> s3Config = (Map<String, Object>) value;
+        Map<String, Object> sanitizedS3 = new HashMap<>();
+        for (Map.Entry<String, Object> s3Entry : s3Config.entrySet()) {
+          String s3Key = s3Entry.getKey();
+          Object s3Value = s3Entry.getValue();
+          if (s3Key.toLowerCase().contains("secret") || s3Key.toLowerCase().contains("password")) {
+            sanitizedS3.put(s3Key, "********");
+          } else if ("accessKeyId".equals(s3Key) && s3Value instanceof String) {
+            String accessKey = (String) s3Value;
+            if (accessKey.length() > 4) {
+              sanitizedS3.put(s3Key, "****" + accessKey.substring(accessKey.length() - 4));
+            } else {
+              sanitizedS3.put(s3Key, "****");
+            }
+          } else {
+            sanitizedS3.put(s3Key, s3Value);
+          }
+        }
+        sanitized.put(key, sanitizedS3);
+        continue;
+      }
+
+      // Handle storageConfig map - sanitize credentials inside
+      if ("storageConfig".equals(key) && value instanceof Map) {
+        Map<String, Object> storageConfig = (Map<String, Object>) value;
+        Map<String, Object> sanitizedStorage = new HashMap<>();
+        for (Map.Entry<String, Object> storageEntry : storageConfig.entrySet()) {
+          String storageKey = storageEntry.getKey();
+          Object storageValue = storageEntry.getValue();
+          if (storageKey.startsWith("_")) {
+            sanitizedStorage.put(storageKey, storageValue != null
+                ? storageValue.getClass().getSimpleName() : null);
+          } else if (storageKey.toLowerCase().contains("secret")
+              || storageKey.toLowerCase().contains("password")
+              || storageKey.toLowerCase().contains("accesskey")) {
+            sanitizedStorage.put(storageKey, "********");
+          } else {
+            sanitizedStorage.put(storageKey, storageValue);
+          }
+        }
+        sanitized.put(key, sanitizedStorage);
+        continue;
+      }
+
+      // Handle nested maps recursively (but only one level deep to avoid complexity)
+      if (value instanceof Map) {
+        sanitized.put(key, sanitizeNestedMap((Map<String, Object>) value));
+        continue;
+      }
+
+      // Handle modelUri - may contain inline credentials
+      if ("modelUri".equals(key) && value instanceof String) {
+        String modelUri = (String) value;
+        // Redact any accessKeyId and secretAccessKey values in the inline model
+        modelUri = modelUri.replaceAll(
+            "\"accessKeyId\"\\s*:\\s*\"[^\"]+\"",
+            "\"accessKeyId\": \"****\"");
+        modelUri = modelUri.replaceAll(
+            "\"secretAccessKey\"\\s*:\\s*\"[^\"]+\"",
+            "\"secretAccessKey\": \"********\"");
+        sanitized.put(key, modelUri);
+        continue;
+      }
+
+      // Pass through other values as-is
+      sanitized.put(key, value);
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Sanitizes a nested map (one level deep).
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> sanitizeNestedMap(Map<String, Object> map) {
+    Map<String, Object> result = new HashMap<>();
+    for (Map.Entry<String, Object> entry : map.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      if (key.toLowerCase().contains("secret") || key.toLowerCase().contains("password")
+          || key.toLowerCase().contains("accesskey")) {
+        result.put(key, "********");
+      } else if (value != null && value.getClass().getName().startsWith("org.apache.calcite")) {
+        result.put(key, value.getClass().getSimpleName());
+      } else {
+        result.put(key, value);
+      }
+    }
+    return result;
   }
 
   @Override public Schema create(SchemaPlus parentSchema, String name,
@@ -583,6 +759,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Add metadata schemas as sibling schemas
       addMetadataSchemas(parentSchema);
 
+      // Write debug model for troubleshooting
+      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+
       return schemaToRegister;
     }
 
@@ -737,6 +916,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     if (materializations != null && !materializations.isEmpty()) {
       registerMaterializations(parentSchema, name, materializations);
     }
+
+    // Write debug model for troubleshooting
+    writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
 
     return fileSchema;
   }
