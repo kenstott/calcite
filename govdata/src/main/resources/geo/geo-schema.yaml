@@ -2025,6 +2025,15 @@ partitionedTables:
 
     constraints:
       primaryKey: [county_fips, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+          comment: Links gazetteer county metadata to county boundaries
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+          comment: Links gazetteer county to state
       indexes:
         - [state_fips]
         - [county_name]
@@ -2111,6 +2120,15 @@ partitionedTables:
 
     constraints:
       primaryKey: [place_fips, year]
+      foreignKeys:
+        - columns: [place_fips]
+          targetTable: places
+          targetColumns: [place_fips]
+          comment: Links gazetteer place metadata to place boundaries
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+          comment: Links gazetteer place to state
       indexes:
         - [state_fips]
         - [place_name]
@@ -2188,6 +2206,11 @@ partitionedTables:
 
     constraints:
       primaryKey: [zcta, year]
+      foreignKeys:
+        - columns: [zcta]
+          targetTable: zctas
+          targetColumns: [zcta]
+          comment: Links gazetteer ZCTA metadata to ZCTA boundaries
       indexes:
         - [zcta]
 
