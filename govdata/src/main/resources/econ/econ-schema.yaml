@@ -1136,6 +1136,15 @@ partitionedTables:
         expression: "CASE SUBSTR(CAST(area_fips AS VARCHAR), 1, 2) WHEN '01' THEN 'Alabama' WHEN '02' THEN 'Alaska' WHEN '04' THEN 'Arizona' WHEN '05' THEN 'Arkansas' WHEN '06' THEN 'California' WHEN '08' THEN 'Colorado' WHEN '09' THEN 'Connecticut' WHEN '10' THEN 'Delaware' WHEN '11' THEN 'District of Columbia' WHEN '12' THEN 'Florida' WHEN '13' THEN 'Georgia' WHEN '15' THEN 'Hawaii' WHEN '16' THEN 'Idaho' WHEN '17' THEN 'Illinois' WHEN '18' THEN 'Indiana' WHEN '19' THEN 'Iowa' WHEN '20' THEN 'Kansas' WHEN '21' THEN 'Kentucky' WHEN '22' THEN 'Louisiana' WHEN '23' THEN 'Maine' WHEN '24' THEN 'Maryland' WHEN '25' THEN 'Massachusetts' WHEN '26' THEN 'Michigan' WHEN '27' THEN 'Minnesota' WHEN '28' THEN 'Mississippi' WHEN '29' THEN 'Missouri' WHEN '30' THEN 'Montana' WHEN '31' THEN 'Nebraska' WHEN '32' THEN 'Nevada' WHEN '33' THEN 'New Hampshire' WHEN '34' THEN 'New Jersey' WHEN '35' THEN 'New Mexico' WHEN '36' THEN 'New York' WHEN '37' THEN 'North Carolina' WHEN '38' THEN 'North Dakota' WHEN '39' THEN 'Ohio' WHEN '40' THEN 'Oklahoma' WHEN '41' THEN 'Oregon' WHEN '42' THEN 'Pennsylvania' WHEN '44' THEN 'Rhode Island' WHEN '45' THEN 'South Carolina' WHEN '46' THEN 'South Dakota' WHEN '47' THEN 'Tennessee' WHEN '48' THEN 'Texas' WHEN '49' THEN 'Utah' WHEN '50' THEN 'Vermont' WHEN '51' THEN 'Virginia' WHEN '53' THEN 'Washington' WHEN '54' THEN 'West Virginia' WHEN '55' THEN 'Wisconsin' WHEN '56' THEN 'Wyoming' WHEN '72' THEN 'Puerto Rico' WHEN '78' THEN 'Virgin Islands' ELSE 'Unknown' END"
         comment: State name derived from FIPS code
 
+    constraints:
+      primaryKey: [state_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetSchema: "${GEO_SCHEMA_NAME:geo}"
+          targetTable: states
+          targetColumns: [state_fips]
+          comment: Links state wages to geographic state boundaries and metadata
+
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
@@ -2858,6 +2867,15 @@ partitionedTables:
         nullable: true
         comment: Value for this year (unpivoted from wide format)
 
+    constraints:
+      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      foreignKeys:
+        - columns: [TableName, LineCode]
+          targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+          targetTable: regional_linecodes
+          targetColumns: [tablename, LineCode]
+          comment: Links BEA income data to line code descriptions and metadata
+
     # API Configuration - references bulk download
     download:
       bulkDownload: bea_sainc_bulk
@@ -2963,6 +2981,15 @@ partitionedTables:
         nullable: true
         comment: Value for this year (unpivoted from wide format)
 
+    constraints:
+      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      foreignKeys:
+        - columns: [TableName, LineCode]
+          targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+          targetTable: regional_linecodes
+          targetColumns: [tablename, LineCode]
+          comment: Links BEA GDP data to line code descriptions and metadata
+
     download:
       bulkDownload: bea_sagdp_bulk
 
@@ -3063,6 +3090,15 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this period (unpivoted from wide format)
+
+    constraints:
+      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      foreignKeys:
+        - columns: [TableName, LineCode]
+          targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+          targetTable: regional_linecodes
+          targetColumns: [tablename, LineCode]
+          comment: Links BEA quarterly income data to line code descriptions
 
     download:
       bulkDownload: bea_sqinc_bulk
@@ -3165,6 +3201,15 @@ partitionedTables:
         nullable: true
         comment: Value for this period (unpivoted from wide format)
 
+    constraints:
+      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      foreignKeys:
+        - columns: [TableName, LineCode]
+          targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+          targetTable: regional_linecodes
+          targetColumns: [tablename, LineCode]
+          comment: Links BEA quarterly GDP data to line code descriptions
+
     download:
       bulkDownload: bea_sqgdp_bulk
 
@@ -3265,6 +3310,15 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
+
+    constraints:
+      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      foreignKeys:
+        - columns: [TableName, LineCode]
+          targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+          targetTable: regional_linecodes
+          targetColumns: [tablename, LineCode]
+          comment: Links BEA consumption data to line code descriptions
 
     download:
       bulkDownload: bea_sapce_bulk
