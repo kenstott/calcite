@@ -4121,6 +4121,14 @@ constraints:
       - type
       - frequency
       - year
+    foreignKeys:
+      - columns:
+          - area_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: bls_geographies
+        targetColumns:
+          - metro_cpi_area_code
+        comment: Links metro CPI data to BLS geography reference for CBSA lookups and geographic analysis
 
   state_industry:
     primaryKey:
@@ -4135,6 +4143,13 @@ constraints:
         targetColumns:
           - state_fips
         comment: Links state industry employment to geographic and demographic data for state-level analysis
+      - columns:
+          - industry_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: naics_sectors
+        targetColumns:
+          - supersector_code
+        comment: Links to NAICS supersector reference for industry name lookups
 
   state_wages:
     primaryKey:
@@ -4155,12 +4170,35 @@ constraints:
       - type
       - frequency
       - year
+    foreignKeys:
+      - columns:
+          - metro_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: bls_geographies
+        targetColumns:
+          - metro_bls_area_code
+        comment: Links metro industry employment to BLS geography reference for CBSA lookups and geographic analysis
+      - columns:
+          - industry_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: naics_sectors
+        targetColumns:
+          - supersector_code
+        comment: Links to NAICS supersector reference for industry name lookups
 
   metro_wages:
     primaryKey:
       - type
       - frequency
       - year
+    foreignKeys:
+      - columns:
+          - metro_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: bls_geographies
+        targetColumns:
+          - geo_code
+        comment: Links metro wage data to BLS geography reference for CBSA lookups and geographic analysis
 
   county_qcew:
     primaryKey:

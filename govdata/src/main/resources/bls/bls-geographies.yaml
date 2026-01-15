@@ -228,48 +228,56 @@ geographies:
     region_code: "0400"
 
   # === METROS (27 major metro areas) ===
-  # Each metro has publication code, CPI area code (if available), and BLS area code
+  # Each metro has publication code, CPI area code (if available), BLS area code, and CBSA code
+  # CBSA (Core Based Statistical Area) codes are OMB-defined 5-digit codes for geographic joins
   - geo_code: A100
     geo_name: New York-Newark-Jersey City, NY-NJ-PA
     geo_type: metro
     metro_publication_code: A100
     metro_cpi_area_code: S35D
     metro_bls_area_code: "3693561"
+    cbsa_code: "35620"
   - geo_code: A400
     geo_name: Los Angeles-Long Beach-Anaheim, CA
     geo_type: metro
     metro_publication_code: A400
     metro_cpi_area_code: S49G
     metro_bls_area_code: "0631080"
+    cbsa_code: "31080"
   - geo_code: A207
     geo_name: Chicago-Naperville-Elgin, IL-IN-WI
     geo_type: metro
     metro_publication_code: A207
     metro_cpi_area_code: S12A
     metro_bls_area_code: "1716980"
+    cbsa_code: "16980"
   - geo_code: A425
     geo_name: Houston-The Woodlands-Sugar Land, TX
     geo_type: metro
     metro_publication_code: A425
     metro_cpi_area_code: S37B
     metro_bls_area_code: "4826420"
+    cbsa_code: "26420"
   - geo_code: A423
     geo_name: Phoenix-Mesa-Scottsdale, AZ
     geo_type: metro
     metro_publication_code: A423
     metro_cpi_area_code: S49B
     metro_bls_area_code: "0438060"
+    cbsa_code: "38060"
   - geo_code: A102
     geo_name: Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
     geo_type: metro
     metro_publication_code: A102
     metro_cpi_area_code: S12B
     metro_bls_area_code: "4237980"
+    cbsa_code: "37980"
   - geo_code: A426
     geo_name: San Antonio-New Braunfels, TX
     geo_type: metro
     metro_publication_code: A426
     metro_bls_area_code: "4841700"
+    cbsa_code: "41700"
     # No CPI data available for this metro
   - geo_code: A421
     geo_name: San Diego-Carlsbad, CA
@@ -277,23 +285,27 @@ geographies:
     metro_publication_code: A421
     metro_cpi_area_code: S49E
     metro_bls_area_code: "0641740"
+    cbsa_code: "41740"
   - geo_code: A127
     geo_name: Dallas-Fort Worth-Arlington, TX
     geo_type: metro
     metro_publication_code: A127
     metro_cpi_area_code: S23A
     metro_bls_area_code: "4819100"
+    cbsa_code: "19100"
   - geo_code: A429
     geo_name: San Jose-Sunnyvale-Santa Clara, CA
     geo_type: metro
     metro_publication_code: A429
     metro_cpi_area_code: S49A
     metro_bls_area_code: "0641940"
+    cbsa_code: "41940"
   - geo_code: A438
     geo_name: Austin-Round Rock, TX
     geo_type: metro
     metro_publication_code: A438
     metro_bls_area_code: "4812420"
+    cbsa_code: "12420"
     # No CPI data available for this metro
   - geo_code: A420
     geo_name: Jacksonville, FL
@@ -301,41 +313,48 @@ geographies:
     metro_publication_code: A420
     metro_cpi_area_code: S35C
     metro_bls_area_code: "1227260"
+    cbsa_code: "27260"
   - geo_code: A103
     geo_name: Boston-Cambridge-Newton, MA-NH
     geo_type: metro
     metro_publication_code: A103
     metro_cpi_area_code: S35E
     metro_bls_area_code: "2514460"
+    cbsa_code: "14460"
   - geo_code: A428
     geo_name: Seattle-Tacoma-Bellevue, WA
     geo_type: metro
     metro_publication_code: A428
     metro_cpi_area_code: S48B
     metro_bls_area_code: "5342660"
+    cbsa_code: "42660"
   - geo_code: A427
     geo_name: Denver-Aurora-Lakewood, CO
     geo_type: metro
     metro_publication_code: A427
     metro_cpi_area_code: S48A
     metro_bls_area_code: "0819740"
+    cbsa_code: "19740"
   - geo_code: A101
     geo_name: Washington-Arlington-Alexandria, DC-VA-MD-WV
     geo_type: metro
     metro_publication_code: A101
     metro_cpi_area_code: S35B
     metro_bls_area_code: "1147900"
+    cbsa_code: "47900"
   - geo_code: A211
     geo_name: Detroit-Warren-Dearborn, MI
     geo_type: metro
     metro_publication_code: A211
     metro_cpi_area_code: S23B
     metro_bls_area_code: "2619820"
+    cbsa_code: "19820"
   - geo_code: A104
     geo_name: Cleveland-Elyria, OH
     geo_type: metro
     metro_publication_code: A104
     metro_bls_area_code: "3917460"
+    cbsa_code: "17460"
     # No CPI data available for this metro
   - geo_code: A212
     geo_name: Minneapolis-St. Paul-Bloomington, MN-WI
@@ -343,41 +362,48 @@ geographies:
     metro_publication_code: A212
     metro_cpi_area_code: S24A
     metro_bls_area_code: "2733460"
+    cbsa_code: "33460"
   - geo_code: A422
     geo_name: Miami-Fort Lauderdale-West Palm Beach, FL
     geo_type: metro
     metro_publication_code: A422
     metro_cpi_area_code: S35C
     metro_bls_area_code: "1233100"
+    cbsa_code: "33100"
   - geo_code: A419
     geo_name: Atlanta-Sandy Springs-Roswell, GA
     geo_type: metro
     metro_publication_code: A419
     metro_cpi_area_code: S35A
     metro_bls_area_code: "1312060"
+    cbsa_code: "12060"
   - geo_code: A437
     geo_name: Portland-Vancouver-Hillsboro, OR-WA
     geo_type: metro
     metro_publication_code: A437
     metro_cpi_area_code: S49C
     metro_bls_area_code: "4138900"
+    cbsa_code: "38900"
   - geo_code: A424
     geo_name: Riverside-San Bernardino-Ontario, CA
     geo_type: metro
     metro_publication_code: A424
     metro_cpi_area_code: S49D
     metro_bls_area_code: "0640140"
+    cbsa_code: "40140"
   - geo_code: A320
     geo_name: St. Louis, MO-IL
     geo_type: metro
     metro_publication_code: A320
     metro_cpi_area_code: S24B
     metro_bls_area_code: "2941180"
+    cbsa_code: "41180"
   - geo_code: A319
     geo_name: Baltimore-Columbia-Towson, MD
     geo_type: metro
     metro_publication_code: A319
     metro_bls_area_code: "2412580"
+    cbsa_code: "12580"
     # No CPI data available for this metro
   - geo_code: A433
     geo_name: Tampa-St. Petersburg-Clearwater, FL
@@ -385,9 +411,11 @@ geographies:
     metro_publication_code: A433
     metro_cpi_area_code: S35D
     metro_bls_area_code: "1245300"
+    cbsa_code: "45300"
   - geo_code: A440
     geo_name: Anchorage, AK
     geo_type: metro
     metro_publication_code: A440
     metro_bls_area_code: "0211260"
+    cbsa_code: "11260"
     # No CPI data available for this metro
