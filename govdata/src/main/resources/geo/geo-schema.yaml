@@ -184,12 +184,21 @@ materializationDefaults:
   options:
     warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
     icebergTableName: "${TABLE_NAME}"
-    catalogType: hadoop
     partitionBy:
       - type
       - year
     emptyResultTtlDays: 7
     errorRetryDays: 1
+  iceberg:
+    catalogType: hadoop
+    # Automatic compaction - consolidates many small state-level files into fewer large files
+    # This runs after commit to merge dimension-level downloads into partition-optimized files
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728  # 128MB
+    compactionMinFiles: 5  # Compact if partition has 5+ small files (lower than econ due to state downloads)
+    compactionSmallFileSizeBytes: 10485760  # 10MB - files under this are "small"
+    runMaintenance: true
+    snapshotRetentionDays: 7
 
 # ============================================================================
 # TIGER BOUNDARY TABLES
@@ -259,6 +268,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: states
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Counties - U.S. county boundaries
@@ -320,6 +333,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: counties
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Places - Census designated places (cities, towns)
@@ -383,6 +400,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: places
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # ZCTAs - ZIP Code Tabulation Areas
@@ -433,6 +454,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: zctas
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Census Tracts - Statistical subdivisions of counties
@@ -494,6 +519,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: census_tracts
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Block Groups - Smallest census geography with sample data
@@ -555,6 +584,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: block_groups
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # CBSAs - Core Based Statistical Areas (metros/micros)
@@ -615,6 +648,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: cbsa
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Congressional Districts
@@ -680,6 +717,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: congressional_districts
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # School Districts
@@ -744,6 +785,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: school_districts
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # State Legislative Districts - Lower Chamber
@@ -781,7 +826,9 @@ partitionedTables:
       type:
         - boundary
       year: *tiger_year_range
-      state_fips: *all_state_fips
+      # Use custom resolver to exclude DC (11) and Nebraska (31) which don't have lower chambers
+      state_fips:
+        type: custom
 
     source:
       type: http
@@ -792,6 +839,7 @@ partitionedTables:
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.geo.TigerStateLegislativeLowerDimensionResolver"
 
     materialize:
       format: iceberg
@@ -803,6 +851,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: state_legislative_lower
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # State Legislative Districts - Upper Chamber
@@ -862,6 +914,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: state_legislative_upper
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # County Subdivisions (Minor Civil Divisions)
@@ -927,6 +983,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: county_subdivisions
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # American Indian/Alaska Native/Native Hawaiian Areas
@@ -988,6 +1048,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: tribal_areas
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Urban Areas
@@ -995,8 +1059,9 @@ partitionedTables:
   - name: urban_areas
     pattern: "type=boundary/year=*/urban_areas.parquet"
     comment: >
-      Census Bureau urban area boundaries including Urbanized Areas (50,000+ population)
-      and Urban Clusters (2,500-50,000 population). Based on decennial census data.
+      Census Bureau urban area boundaries. For 2020 Census, minimum threshold is 5,000
+      people or 2,000 housing units. The distinction between Urbanized Areas and Urban
+      Clusters was eliminated - all qualifying areas are now simply 'urban areas'.
 
     columns:
       - name: uace
@@ -1010,7 +1075,7 @@ partitionedTables:
       - name: urban_type
         type: string
         nullable: true
-        comment: Urban type (U=Urbanized Area, C=Urban Cluster)
+        comment: Urban type code (legacy field from pre-2020 Census, may be blank for 2020+ data)
       - <<: *land_area_column
       - <<: *water_area_column
       - <<: *geometry_column
@@ -1045,6 +1110,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: urban_areas
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Public Use Microdata Areas (PUMAs)
@@ -1104,6 +1173,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: pumas
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Voting Districts (VTDs)
@@ -1177,6 +1250,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: voting_districts
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
 # ============================================================================
 # HUD CROSSWALK TABLES
@@ -1233,7 +1310,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=1&year={year}&quarter=4&query=All"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=2&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1255,6 +1332,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: zip_county_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # ZIP to CBSA Crosswalk
@@ -1310,7 +1391,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=4&year={year}&quarter=4&query=All"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=3&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1332,6 +1413,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: zip_cbsa_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Tract to ZIP Crosswalk
@@ -1387,7 +1472,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/hudapi/public/usps?type=3&year={year}&quarter=4&query=All"
+      url: "https://www.huduser.gov/hudapi/public/usps?type=6&year={year}&quarter=4&query=All"
       method: GET
       response:
         format: json
@@ -1409,6 +1494,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: tract_zip_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # ZIP to Tract Crosswalk
@@ -1487,6 +1576,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: zip_tract_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # ZIP to Congressional District Crosswalk
@@ -1564,6 +1657,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: zip_cd_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # County to ZIP Crosswalk (Reverse)
@@ -1638,6 +1735,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: county_zip_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Congressional District to ZIP Crosswalk (Reverse)
@@ -1715,6 +1816,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: cd_zip_crosswalk
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
 # ============================================================================
 # USDA RURAL-URBAN CLASSIFICATION TABLES
@@ -1779,12 +1884,10 @@ partitionedTables:
       url: "https://www.ers.usda.gov/media/5768/2023-rural-urban-continuum-codes.csv"
       method: GET
       response:
-        format: csv
-      rawCache:
-        enabled: true
+        format: json
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRuralUrbanTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.UsdaDataProvider"
 
     materialize:
       format: iceberg
@@ -1796,6 +1899,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: rural_urban_continuum
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # RUCA Codes (Census Tract-level)
@@ -1856,12 +1963,10 @@ partitionedTables:
       url: "https://www.ers.usda.gov/media/5443/2020-rural-urban-commuting-area-codes-census-tracts.csv"
       method: GET
       response:
-        format: csv
-      rawCache:
-        enabled: true
+        format: json
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRucaTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.UsdaDataProvider"
 
     materialize:
       format: iceberg
@@ -1873,6 +1978,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: ruca_codes
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
 # ============================================================================
 # CENSUS GAZETTEER REFERENCE TABLES
@@ -1929,14 +2038,11 @@ partitionedTables:
       type: http
       url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_counties_national.zip"
       method: GET
-      extractPattern: "*.txt"
       response:
-        format: tsv
-      rawCache:
-        enabled: true
+        format: json
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.GazetteerDataProvider"
 
     materialize:
       format: iceberg
@@ -1948,6 +2054,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: gazetteer_counties
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Gazetteer - Places
@@ -2015,12 +2125,10 @@ partitionedTables:
       url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_place_national.zip"
       method: GET
       response:
-        format: tsv
-      rawCache:
-        enabled: true
+        format: json
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.GazetteerDataProvider"
 
     materialize:
       format: iceberg
@@ -2032,6 +2140,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: gazetteer_places
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Gazetteer - ZCTAs
@@ -2089,12 +2201,10 @@ partitionedTables:
       url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_zcta_national.zip"
       method: GET
       response:
-        format: tsv
-      rawCache:
-        enabled: true
+        format: json
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.GazetteerDataProvider"
 
     materialize:
       format: iceberg
@@ -2106,6 +2216,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: gazetteer_zctas
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
 # ============================================================================
 # USGS WATERSHED BOUNDARY TABLES
@@ -2165,6 +2279,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: watersheds_huc2
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Watersheds - HUC4 (Subregions)
@@ -2228,6 +2346,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: watersheds_huc4
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Watersheds - HUC8 (Subbasins)
@@ -2291,6 +2413,10 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: watersheds_huc8
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
   # Watersheds - HUC12 (Subwatersheds)
@@ -2354,3 +2480,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
         tableName: watersheds_huc12
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760

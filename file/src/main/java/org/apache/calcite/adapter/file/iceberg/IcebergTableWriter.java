@@ -181,6 +181,9 @@ public class IcebergTableWriter {
         overwrite.addFile(dataFile);
       }
       overwrite.commit();
+
+      // Ensure version-hint.text exists after overwrite commit
+      ensureVersionHint();
     } else {
       // Simple append
       LOGGER.info("Appending {} data files to table", dataFiles.size());
@@ -190,6 +193,9 @@ public class IcebergTableWriter {
       }
       append.commit();
     }
+
+    // Ensure version-hint.text exists after commit (repairs orphaned tables)
+    ensureVersionHint();
 
     LOGGER.info("Successfully committed {} files to Iceberg table {}", dataFiles.size(), table.name());
   }
@@ -221,6 +227,9 @@ public class IcebergTableWriter {
       append.appendFile(dataFile);
     }
     append.commit();
+
+    // Ensure version-hint.text exists after commit (repairs orphaned tables)
+    ensureVersionHint();
 
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
@@ -886,7 +895,11 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Compacts files within a single partition.
+   * Compacts files within a single partition using streaming to avoid OOM.
+   *
+   * <p>This method streams records from input files directly to output files
+   * without loading all records into memory. This allows compaction of partitions
+   * with millions of records that would otherwise cause OutOfMemoryError.
    */
   private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes)
       throws IOException {
@@ -897,43 +910,29 @@ public class IcebergTableWriter {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
 
-    // Read all records from small files
-    List<Record> allRecords = new ArrayList<>();
+    // First pass: count total records and bytes to plan output files
+    long totalRecords = 0;
+    long totalBytes = 0;
     Set<DataFile> filesToDelete = new HashSet<>();
 
-    // Read records from each small file individually using Parquet reader
     for (FileScanTask task : smallFiles) {
       DataFile dataFile = task.file();
       filesToDelete.add(dataFile);
-
-      String filePath = normalizeS3Path(dataFile.path().toString());
-      // Use HadoopInputFile with configured hadoopConf for S3 credentials
-      InputFile inputFile = HadoopInputFile.fromPath(new Path(filePath), hadoopConf);
-
-      try (CloseableIterable<Record> records = Parquet.read(inputFile)
-          .project(schema)
-          .createReaderFunc(fileSchema ->
-              org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
-                  schema, fileSchema))
-          .build()) {
-        for (Record record : records) {
-          allRecords.add(record);
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
-      }
+      totalRecords += dataFile.recordCount();
+      totalBytes += dataFile.fileSizeInBytes();
     }
 
-    if (allRecords.isEmpty()) {
+    if (totalRecords == 0) {
       return;
     }
 
-    LOGGER.info("Read {} records from {} small files, writing compacted files",
-        allRecords.size(), smallFiles.size());
+    // Estimate records per output file based on compression ratio
+    // Assume compacted files have similar compression to originals
+    double avgBytesPerRecord = (double) totalBytes / totalRecords;
+    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
 
-    // Write compacted files
-    List<DataFile> newFiles = new ArrayList<>();
-    int recordsPerFile = Math.max(1, (int) (targetFileSizeBytes / estimateRecordSize(allRecords)));
+    LOGGER.info("Streaming compaction: {} records from {} files, ~{} records per output file",
+        totalRecords, smallFiles.size(), recordsPerFile);
 
     // Get partition values from first file (all files in partition have same values)
     StructLike partitionData = smallFiles.get(0).file().partition();
@@ -943,35 +942,87 @@ public class IcebergTableWriter {
     String dataLocation = table.location() + "/data";
     String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
 
-    for (int i = 0; i < allRecords.size(); i += recordsPerFile) {
-      int end = Math.min(i + recordsPerFile, allRecords.size());
-      List<Record> chunk = allRecords.subList(i, end);
+    // Streaming compaction: read from input files and write directly to output
+    List<DataFile> newFiles = new ArrayList<>();
+    DataWriter<Record> currentWriter = null;
+    int currentRecordCount = 0;
+    int totalWritten = 0;
 
-      String filePath = dataLocation + "/" + partitionPath + "/compacted_"
-          + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
-      if (filePath.startsWith("s3://")) {
-        filePath = "s3a://" + filePath.substring(5);
-      }
+    try {
+      for (FileScanTask task : smallFiles) {
+        DataFile dataFile = task.file();
+        String inputPath = normalizeS3Path(dataFile.path().toString());
+        InputFile inputFile = HadoopInputFile.fromPath(new Path(inputPath), hadoopConf);
 
-      OutputFile outputFile = table.io().newOutputFile(filePath);
-      DataWriter<Record> writer = Parquet.writeData(outputFile)
-          .schema(schema)
-          .withSpec(spec)
-          .withPartition(partitionKey)
-          .createWriterFunc(GenericParquetWriter::buildWriter)
-          .overwrite()
-          .build();
+        try (CloseableIterable<Record> records = Parquet.read(inputFile)
+            .project(schema)
+            .createReaderFunc(fileSchema ->
+                org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                    schema, fileSchema))
+            .build()) {
 
-      try {
-        for (Record record : chunk) {
-          writer.write(record);
+          for (Record record : records) {
+            // Open new writer if needed
+            if (currentWriter == null) {
+              String outputPath = dataLocation + "/" + partitionPath + "/compacted_"
+                  + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+              if (outputPath.startsWith("s3://")) {
+                outputPath = "s3a://" + outputPath.substring(5);
+              }
+
+              OutputFile outputFile = table.io().newOutputFile(outputPath);
+              currentWriter = Parquet.writeData(outputFile)
+                  .schema(schema)
+                  .withSpec(spec)
+                  .withPartition(partitionKey)
+                  .createWriterFunc(GenericParquetWriter::buildWriter)
+                  .overwrite()
+                  .build();
+              currentRecordCount = 0;
+            }
+
+            // Write record
+            currentWriter.write(record);
+            currentRecordCount++;
+            totalWritten++;
+
+            // Rotate file when target size reached
+            if (currentRecordCount >= recordsPerFile) {
+              currentWriter.close();
+              newFiles.add(currentWriter.toDataFile());
+              currentWriter = null;
+              LOGGER.debug("Compaction progress: {} records written to {} files",
+                  totalWritten, newFiles.size());
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
         }
-      } finally {
-        writer.close();
       }
 
-      newFiles.add(writer.toDataFile());
+      // Close final writer if still open
+      if (currentWriter != null) {
+        currentWriter.close();
+        newFiles.add(currentWriter.toDataFile());
+        currentWriter = null;
+      }
+    } finally {
+      // Ensure writer is closed on any exception
+      if (currentWriter != null) {
+        try {
+          currentWriter.close();
+        } catch (Exception e) {
+          LOGGER.warn("Failed to close writer: {}", e.getMessage());
+        }
+      }
     }
+
+    if (newFiles.isEmpty()) {
+      LOGGER.warn("No records written during compaction");
+      return;
+    }
+
+    LOGGER.info("Streaming compaction wrote {} records to {} files", totalWritten, newFiles.size());
 
     // Commit the rewrite: delete old files, add new files
     RewriteFiles rewrite = table.newRewrite();
@@ -984,19 +1035,6 @@ public class IcebergTableWriter {
     rewrite.commit();
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
-  }
-
-  /**
-   * Estimates average record size from a sample of records.
-   */
-  private long estimateRecordSize(List<Record> records) {
-    if (records.isEmpty()) {
-      return 100; // Default estimate
-    }
-    // Simple estimate: count fields and estimate bytes per field
-    Record sample = records.get(0);
-    int fieldCount = table.schema().columns().size();
-    return fieldCount * 50L; // Rough estimate of 50 bytes per field
   }
 
   /**
@@ -1031,6 +1069,82 @@ public class IcebergTableWriter {
    */
   public Table getTable() {
     return table;
+  }
+
+  /**
+   * Ensures that version-hint.text exists in the metadata directory.
+   *
+   * <p>This method repairs Iceberg tables that are missing their version-hint.text file,
+   * which can occur due to partial commits, interrupted writes, or previous buggy code.
+   * Without version-hint.text, DuckDB's iceberg_scan (without unsafe_enable_version_guessing)
+   * and other Iceberg readers cannot discover the latest metadata.
+   *
+   * <p>The method:
+   * <ol>
+   *   <li>Lists all files in the metadata directory</li>
+   *   <li>Finds the highest-versioned metadata JSON file (e.g., v4.metadata.json)</li>
+   *   <li>Checks if version-hint.text exists</li>
+   *   <li>If missing, creates version-hint.text with the correct version number</li>
+   * </ol>
+   */
+  private void ensureVersionHint() {
+    try {
+      String metadataDir = table.location() + "/metadata";
+      String versionHintPath = metadataDir + "/version-hint.text";
+
+      // Check if version-hint.text already exists
+      try {
+        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(versionHintPath);
+        if (metadata != null && metadata.getSize() > 0) {
+          LOGGER.debug("version-hint.text already exists at {}", versionHintPath);
+          return;
+        }
+      } catch (IOException e) {
+        // File doesn't exist, need to create it
+        LOGGER.debug("version-hint.text not found, will create: {}", e.getMessage());
+      }
+
+      // List metadata directory to find latest version
+      List<StorageProvider.FileEntry> metadataFiles;
+      try {
+        metadataFiles = storageProvider.listFiles(metadataDir, false);
+      } catch (IOException e) {
+        LOGGER.warn("Cannot list metadata directory {}: {}", metadataDir, e.getMessage());
+        return;
+      }
+
+      // Find the highest version number from metadata files (v1.metadata.json, v2.metadata.json, etc.)
+      int maxVersion = 0;
+      java.util.regex.Pattern versionPattern = java.util.regex.Pattern.compile("v(\\d+)\\.metadata\\.json$");
+      for (StorageProvider.FileEntry entry : metadataFiles) {
+        String fileName = entry.getPath();
+        int lastSlash = fileName.lastIndexOf('/');
+        if (lastSlash >= 0) {
+          fileName = fileName.substring(lastSlash + 1);
+        }
+        java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
+        if (matcher.find()) {
+          int version = Integer.parseInt(matcher.group(1));
+          if (version > maxVersion) {
+            maxVersion = version;
+          }
+        }
+      }
+
+      if (maxVersion == 0) {
+        LOGGER.warn("No metadata files found in {}, cannot create version-hint.text", metadataDir);
+        return;
+      }
+
+      // Create version-hint.text with the version number (no trailing newline)
+      String versionContent = String.valueOf(maxVersion);
+      storageProvider.writeFile(versionHintPath, versionContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      LOGGER.info("Created missing version-hint.text with version {} at {}", maxVersion, versionHintPath);
+
+    } catch (Exception e) {
+      // Non-fatal - log and continue
+      LOGGER.warn("Failed to ensure version-hint.text: {}", e.getMessage());
+    }
   }
 
   /**

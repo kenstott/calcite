@@ -1737,7 +1737,7 @@ partitionedTables:
       - name: value
         type: double
         nullable: true
-        comment: Metric value in thousands
+        comment: JOLTS metric value (levels in thousands, rates as percentage)
         source: value
       - name: percent_change_month
         type: double
@@ -1878,7 +1878,7 @@ partitionedTables:
       - name: value
         type: double
         nullable: true
-        comment: Metric value (rate)
+        comment: JOLTS metric value (levels in thousands, rates as percentage)
         source: value
 
     # Dimension definitions for iteration
