@@ -869,18 +869,18 @@ partitionedTables:
         enabled: true
 
     # Dimension definitions for ETL iteration
-    # FRED category IDs from fred-catalog-config.json majorCategories
+    # FRED category IDs - see https://fred.stlouisfed.org/categories for full list
     dimensions:
       type:
         - fred_series
       category:
-        - 1        # National Accounts
+        - 1        # Production & Business Activity
         - 10       # Population, Employment, & Labor Markets
-        - 32992    # Money, Banking, & Finance
-        - 32455    # International Data
-        - 3        # Production & Business Activity
-        - 32991    # Prices
-        - 32263    # Academic Data
+        - 32992    # National Accounts
+        - 32455    # Prices
+        - 3        # Discontinued/Legacy category
+        - 32991    # Money, Banking, & Finance
+        - 32263    # International Data
 
     # Custom hooks for FRED response handling
     hooks:

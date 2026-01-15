@@ -21,7 +21,7 @@
         "2020": {"dataset": "pl", "variable": "P1_003N"}
       },
       "acs": {
-        "allYears": {"variable": "B01001_002E"}
+        "allYears": {"variable": "B02001_002E"}
       }
     },
     "black_african_american_alone": {
@@ -33,7 +33,7 @@
         "2020": {"dataset": "pl", "variable": "P1_004N"}
       },
       "acs": {
-        "allYears": {"variable": "B01001_026E"}
+        "allYears": {"variable": "B02001_003E"}
       }
     },
     "asian_alone": {
@@ -43,6 +43,9 @@
         "2000": {"dataset": "sf1", "variable": "P003005"},
         "2010": {"dataset": "sf1", "variable": "P003005"},
         "2020": {"dataset": "pl", "variable": "P1_006N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B02001_005E"}
       }
     },
     "male_population": {
@@ -139,8 +142,8 @@
         "allYears": {"variable": "B25064_001E"}
       }
     },
-    "bachelor_degree_or_higher": {
-      "description": "Population 25 years and over with bachelor's degree or higher",
+    "bachelor_degree": {
+      "description": "Population 25 years and over with bachelor's degree (does not include higher degrees)",
       "dataType": "LONG",
       "acs": {
         "2007-2011": {"variable": "B15002_015E"},
@@ -163,7 +166,7 @@
       }
     },
     "high_school_graduate": {
-      "description": "Population 25 years and over with high school diploma",
+      "description": "Population 25 years and over with regular high school diploma (excludes GED/equivalency)",
       "dataType": "LONG",
       "acs": {
         "2007-2011": {"variable": "B15002_011E"},
@@ -193,7 +196,7 @@
       }
     },
     "labor_force_participation": {
-      "description": "Population 16 years and over in labor force",
+      "description": "Civilian population 16 years and over in labor force",
       "dataType": "LONG",
       "acs": {
         "allYears": {"variable": "B23025_002E"}
@@ -226,7 +229,7 @@
       }
     },
     "total_population_poverty_determined": {
-      "description": "Total population for whom poverty status is determined",
+      "description": "Total population for whom poverty status is determined (excludes institutionalized persons, persons in military group quarters, and unrelated children under 15)",
       "dataType": "LONG",
       "acs": {
         "allYears": {"variable": "B17001_001E"}
@@ -499,7 +502,7 @@
       "conceptualColumns": [
         "population_25_and_over",
         "high_school_graduate",
-        "bachelor_degree_or_higher"
+        "bachelor_degree"
       ]
     },
     "acs_housing": {

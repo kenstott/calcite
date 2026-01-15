@@ -451,12 +451,12 @@ partitionedTables:
         type: long
         nullable: true
         expression: 'TRY_CAST(src."high_school_graduate" AS BIGINT)'
-        comment: High school graduate (includes equivalency)
+        comment: Regular high school diploma (excludes GED/equivalency)
       - name: bachelors
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."bachelor_degree_or_higher" AS BIGINT)'
-        comment: Bachelor's degree
+        expression: 'TRY_CAST(src."bachelor_degree" AS BIGINT)'
+        comment: Bachelor's degree only (excludes higher degrees)
       - name: masters
         type: long
         nullable: true
@@ -525,7 +525,7 @@ partitionedTables:
         type: long
         nullable: true
         expression: 'TRY_CAST(src."labor_force_participation" AS BIGINT)'
-        comment: In labor force (population 16 years and over)
+        comment: Civilian labor force (population 16 years and over)
       - name: employed
         type: long
         nullable: true
@@ -599,7 +599,7 @@ partitionedTables:
         type: long
         nullable: true
         expression: 'TRY_CAST(src."total_population_poverty_determined" AS BIGINT)'
-        comment: Total population for poverty status determination
+        comment: Population for whom poverty status is determined (excludes institutionalized, military, unrelated children under 15)
       - name: below_poverty
         type: long
         nullable: true
