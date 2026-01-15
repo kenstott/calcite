@@ -227,6 +227,46 @@ public interface IncrementalTracker {
   void markTableComplete(String pipelineName, String dimensionSignature);
 
   /**
+   * Marks a pipeline as complete with config hash and row count for fast-path skip.
+   *
+   * @param pipelineName The pipeline name
+   * @param configHash Hash of dimension configuration (for fast comparison)
+   * @param dimensionSignature Hash of all dimension values
+   * @param rowCount Total row count in the table
+   */
+  default void markTableCompleteWithConfig(String pipelineName, String configHash,
+      String dimensionSignature, long rowCount) {
+    // Default: fall back to simple markTableComplete
+    markTableComplete(pipelineName, dimensionSignature);
+  }
+
+  /**
+   * Gets cached completion info for a pipeline including config hash.
+   * Used for fast-path skip to avoid dimension expansion.
+   *
+   * @param pipelineName The pipeline name
+   * @return CachedCompletion with configHash, signature, rowCount, or null if not found
+   */
+  default CachedCompletion getCachedCompletion(String pipelineName) {
+    return null; // Default: no caching support
+  }
+
+  /**
+   * Cached completion info for fast-path skip.
+   */
+  class CachedCompletion {
+    public final String configHash;
+    public final String signature;
+    public final long rowCount;
+
+    public CachedCompletion(String configHash, String signature, long rowCount) {
+      this.configHash = configHash;
+      this.signature = signature;
+      this.rowCount = rowCount;
+    }
+  }
+
+  /**
    * Invalidates table completion status, forcing reprocessing.
    *
    * @param pipelineName The pipeline name
@@ -248,6 +288,37 @@ public interface IncrementalTracker {
   void clearAllCompletions();
 
   // ===== Dimension Signature Computation =====
+
+  /**
+   * Computes a hash of the dimension configuration (not expanded values).
+   * This is fast to compute and captures changes to dimension config.
+   * Used to determine if cached dimension signatures are still valid.
+   *
+   * @param dimensions Map of dimension name to configuration
+   * @return Config hash string for comparison
+   */
+  static String computeConfigHash(
+      Map<String, org.apache.calcite.adapter.file.etl.DimensionConfig> dimensions) {
+    if (dimensions == null || dimensions.isEmpty()) {
+      return "empty";
+    }
+    // Build hash from sorted dimension names and their key properties
+    int hash = 0;
+    java.util.List<String> sortedKeys = new java.util.ArrayList<>(dimensions.keySet());
+    java.util.Collections.sort(sortedKeys);
+    for (String key : sortedKeys) {
+      org.apache.calcite.adapter.file.etl.DimensionConfig dim = dimensions.get(key);
+      hash = 31 * hash + key.hashCode();
+      hash = 31 * hash + (dim.getType() != null ? dim.getType().hashCode() : 0);
+      hash = 31 * hash + (dim.getStart() != null ? dim.getStart().hashCode() : 0);
+      hash = 31 * hash + (dim.getEnd() != null ? dim.getEnd().hashCode() : 0);
+      hash = 31 * hash + (dim.getStep() != null ? dim.getStep().hashCode() : 0);
+      hash = 31 * hash + (dim.getDataLag() != null ? dim.getDataLag().hashCode() : 0);
+      hash = 31 * hash + (dim.getValues() != null ? dim.getValues().hashCode() : 0);
+      hash = 31 * hash + (dim.getSql() != null ? dim.getSql().hashCode() : 0);
+    }
+    return "cfg:" + Integer.toHexString(hash);
+  }
 
   /**
    * Computes a signature for a list of dimension combinations.

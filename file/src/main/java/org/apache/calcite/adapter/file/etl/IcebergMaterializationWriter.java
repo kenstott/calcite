@@ -1515,6 +1515,35 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return null;
   }
 
+  @Override public void storeEtlProperties(String configHash, String dimensionSignature,
+      long rowCount) {
+    if (table == null) {
+      LOGGER.warn("Cannot store ETL properties: table not initialized");
+      return;
+    }
+    try {
+      LOGGER.debug("Storing ETL properties in Iceberg table: configHash={}, signature={}, rows={}",
+          configHash, dimensionSignature, rowCount);
+      table.updateProperties()
+          .set("etl.config-hash", configHash)
+          .set("etl.signature", dimensionSignature)
+          .set("etl.row-count", String.valueOf(rowCount))
+          .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
+          .commit();
+      LOGGER.info("Stored ETL properties in Iceberg table: configHash={}, signature={}",
+          configHash, dimensionSignature);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to store ETL properties in Iceberg table: {}", e.getMessage());
+    }
+  }
+
+  @Override public String getEtlProperty(String key) {
+    if (table == null) {
+      return null;
+    }
+    return table.properties().get(key);
+  }
+
   @Override public void close() throws IOException {
     // Close shared DuckDB connection
     if (sharedDuckDBConnection != null) {

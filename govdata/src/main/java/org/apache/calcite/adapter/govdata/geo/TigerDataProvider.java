@@ -78,6 +78,12 @@ public class TigerDataProvider implements DataProvider {
     // Download and extract to temp directory
     Path tempDir = null;
     try {
+      // Log memory status before processing (helps diagnose OOM crashes)
+      Runtime runtime = Runtime.getRuntime();
+      long usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+      long maxMb = runtime.maxMemory() / (1024 * 1024);
+      LOGGER.info("Memory before fetch: {}MB used / {}MB max", usedMb, maxMb);
+
       tempDir = Files.createTempDirectory("tiger_" + tableName + "_");
       File zipFile = new File(tempDir.toFile(), "download.zip");
 
@@ -143,6 +149,23 @@ public class TigerDataProvider implements DataProvider {
           LOGGER.debug("Failed to cleanup temp directory: {}", cleanupError.getMessage());
         }
       }
+      throw e;
+    } catch (OutOfMemoryError oom) {
+      // Critical: Log OOM before JVM crashes, flush immediately
+      Runtime runtime = Runtime.getRuntime();
+      long usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+      LOGGER.error("FATAL OutOfMemoryError in TigerDataProvider for table={}, year={}, state={}. "
+          + "Memory at failure: {}MB. Forcing GC and rethrowing.",
+          tableName, year, stateFips, usedMb);
+      System.err.println("FATAL OOM: TigerDataProvider table=" + tableName + " state=" + stateFips);
+      System.err.flush();
+      throw oom;
+    } catch (Error e) {
+      // Catch any other JVM errors (StackOverflow, etc.) and log before crash
+      LOGGER.error("FATAL Error in TigerDataProvider for table={}, year={}, state={}: {}",
+          tableName, year, stateFips, e.getClass().getName() + ": " + e.getMessage());
+      System.err.println("FATAL ERROR: " + e.getClass().getName() + " in TigerDataProvider: " + e.getMessage());
+      System.err.flush();
       throw e;
     }
   }

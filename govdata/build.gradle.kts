@@ -93,6 +93,15 @@ tasks.test {
     minHeapSize = "1g"
     maxHeapSize = "4g"
 
+    // JVM crash debugging - generates detailed crash logs and heap dumps
+    jvmArgs(
+        "-XX:+HeapDumpOnOutOfMemoryError",
+        "-XX:HeapDumpPath=${layout.buildDirectory.get()}/test-logs/heapdump.hprof",
+        "-XX:ErrorFile=${layout.buildDirectory.get()}/test-logs/hs_err_pid%p.log",
+        "-XX:+CrashOnOutOfMemoryError",  // Force crash with error file on OOM
+        "-XX:NativeMemoryTracking=summary"  // Track native memory usage
+    )
+
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

@@ -95,6 +95,14 @@ public class TigerVtdDimensionResolver implements DimensionResolver {
           "72"  // Puerto Rico
       ));
 
+  // States WITHOUT 2012 state-level VTD files (only have county-level)
+  // These states did not provide state-level aggregated VTD files for the 2010 census vintage
+  private static final Set<String> STATES_WITHOUT_2012_STATE_LEVEL_VTD = new HashSet<>(
+      Arrays.asList(
+          "21", // Kentucky - only county-level files available
+          "44"  // Rhode Island - only county-level files available
+      ));
+
   // All 50 states + DC (FIPS 01-56, excluding invalid codes)
   private static final List<String> ALL_STATE_FIPS = Arrays.asList(
       "01", "02", "04", "05", "06", "08", "09", "10", "11", "12",
@@ -141,10 +149,16 @@ public class TigerVtdDimensionResolver implements DimensionResolver {
           year, filtered.size());
       return filtered;
     } else {
-      // 2012 and earlier: all states have state-level VTD files
-      LOGGER.info("TigerVtdDimensionResolver: year={} -> all {} states",
-          year, ALL_STATE_FIPS.size());
-      return ALL_STATE_FIPS;
+      // 2012 (2010 census vintage): exclude states without state-level VTD files
+      List<String> filtered = new ArrayList<>();
+      for (String state : ALL_STATE_FIPS) {
+        if (!STATES_WITHOUT_2012_STATE_LEVEL_VTD.contains(state)) {
+          filtered.add(state);
+        }
+      }
+      LOGGER.info("TigerVtdDimensionResolver: year={} -> {} states (excluding {} without state-level files)",
+          year, filtered.size(), STATES_WITHOUT_2012_STATE_LEVEL_VTD.size());
+      return filtered;
     }
   }
 }

@@ -116,4 +116,32 @@ public interface MaterializationWriter extends Closeable {
    * @return The table location URI, or null if not yet initialized
    */
   String getTableLocation();
+
+  /**
+   * Stores ETL completion metadata in the table properties.
+   *
+   * <p>For Iceberg format, this stores properties in the Iceberg table metadata
+   * which can be read on subsequent connections to skip dimension expansion.
+   * For other formats, this is a no-op.
+   *
+   * @param configHash Hash of the dimension configuration
+   * @param dimensionSignature Signature of expanded dimension combinations
+   * @param rowCount Total row count in the table
+   */
+  default void storeEtlProperties(String configHash, String dimensionSignature, long rowCount) {
+    // Default no-op for formats that don't support table properties
+  }
+
+  /**
+   * Reads an ETL property from the table metadata.
+   *
+   * <p>For Iceberg format, reads from Iceberg table properties.
+   * For other formats, returns null.
+   *
+   * @param key Property key (e.g., "etl.config-hash", "etl.signature")
+   * @return Property value, or null if not found or not supported
+   */
+  default String getEtlProperty(String key) {
+    return null;
+  }
 }
