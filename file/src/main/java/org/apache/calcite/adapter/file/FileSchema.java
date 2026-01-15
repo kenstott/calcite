@@ -4026,6 +4026,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return;
     }
 
+    // Fast-path: Skip S3 check if we already have ICEBERG_PARQUET type cached
+    // This avoids expensive S3 metadata calls (~1.5 sec/table) when the table is already known
+    ConversionMetadata.ConversionRecord existingRecord = conversionMetadata.getAllConversions().get(tableName);
+    if (existingRecord != null && "ICEBERG_PARQUET".equals(existingRecord.getConversionType())) {
+      LOGGER.debug("Skipping Iceberg discovery for '{}' - already cached as ICEBERG_PARQUET", tableName);
+      return;
+    }
+
     // Check if this table has Iceberg materialize configuration
     Map<String, Object> materializeConfig = (Map<String, Object>) partTableConfig.get("materialize");
     if (materializeConfig == null) {
