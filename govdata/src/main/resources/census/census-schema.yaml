@@ -64,7 +64,14 @@ column_templates:
     name: county
     type: string
     nullable: true
-    comment: County FIPS code (3 digits)
+    comment: County FIPS code (3 digits, within state)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    expression: "CASE WHEN county IS NOT NULL THEN state || county ELSE NULL END"
+    comment: 5-digit county FIPS code (state + county) for joining to geo.counties
 
   # --- Partition Column Definitions ---
 
@@ -226,6 +233,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Column expressions use conceptual names that are
       # normalized by CensusVariableNormalizer from API-specific variable codes
       # (e.g., B01001_001E for ACS, P1_001N for Decennial 2020)
@@ -298,6 +306,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Uses canonical name from CensusVariableNormalizer
       - name: median_household_income
         type: long
@@ -362,6 +371,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Uses canonical names from CensusVariableNormalizer
       - name: total_housing_units
         type: long
@@ -441,6 +451,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Uses canonical names from CensusVariableNormalizer
       - name: pop_25_plus
         type: long
@@ -520,6 +531,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Uses canonical names from CensusVariableNormalizer
       - name: labor_force
         type: long
@@ -594,6 +606,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: Uses canonical names from CensusVariableNormalizer
       - name: poverty_universe
         type: long
@@ -669,6 +682,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       # Schema Evolution: CensusVariableNormalizer maps year-specific variables
       # (P001001/P1_001N) to canonical names (total_population)
       - name: total_population
@@ -744,6 +758,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: white_alone
         type: long
         nullable: true
@@ -835,6 +850,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: median_age
         type: double
         nullable: true
@@ -907,6 +923,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_workers
         type: long
         nullable: true
@@ -993,6 +1010,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_population
         type: long
         nullable: true
@@ -1064,6 +1082,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: population_5_plus
         type: long
         nullable: true
@@ -1145,6 +1164,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_population
         type: long
         nullable: true
@@ -1221,6 +1241,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: civilian_population_18_plus
         type: long
         nullable: true
@@ -1292,6 +1313,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: population_1_year_plus
         type: long
         nullable: true
@@ -1368,6 +1390,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_employed
         type: long
         nullable: true
@@ -1444,6 +1467,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_employed
         type: long
         nullable: true
@@ -1560,6 +1584,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_households
         type: long
         nullable: true
@@ -1636,6 +1661,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_population
         type: long
         nullable: true
@@ -1707,6 +1733,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: population_15_plus
         type: long
         nullable: true
@@ -1783,6 +1810,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_households
         type: long
         nullable: true
@@ -1869,6 +1897,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: occupied_units
         type: long
         nullable: true
@@ -1945,6 +1974,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_households
         type: long
         nullable: true
@@ -2035,6 +2065,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: total_housing_units
         type: long
         nullable: true
@@ -2123,6 +2154,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: population
         type: long
         nullable: true
@@ -2189,6 +2221,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: naics_code
         type: string
         nullable: true
@@ -2415,6 +2448,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: naics_code
         type: string
         nullable: true
@@ -2498,6 +2532,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: all_ages_poverty_count
         type: long
         nullable: true
@@ -2578,6 +2613,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: insured_count
         type: long
         nullable: true
@@ -2820,6 +2856,7 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
+      - *county_fips_column
       - name: naics_code
         type: string
         nullable: true
@@ -3434,6 +3471,378 @@ tables:
         ROUND(100.0 * labor_force / NULLIF(labor_force + not_in_labor_force, 0), 2) AS labor_force_participation_pct
       FROM acs_employment
       WHERE geography = 'state'
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# Foreign key relationships to GEO schema for geographic joins
+# ============================================================================
+
+constraints:
+  # ACS 5-Year Tables
+  acs_population:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links census state data to geographic boundaries and state metadata
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links census county data to geographic boundaries (when geography=county)
+
+  acs_income:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_housing:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_education:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_employment:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_poverty:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  decennial_population:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_race_ethnicity:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_age_distribution:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_commute:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_occupation:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_language:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_disability:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_veterans:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_migration:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_industry_employment:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_industry_wages:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_internet:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_citizenship:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_marital_status:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_households:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_housing_tenure:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_income_distribution:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  decennial_housing:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  population_estimates:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  cbp_establishments:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  # ACS 1-Year Tables
+  acs1_population:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  acs1_income:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  # Economic Census
+  economic_census:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  # SAIPE/SAHIE
+  saipe:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  sahie:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  # Business Data
+  bds:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  abs:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  nonemp:
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
 
 # ============================================================================
 # END OF SCHEMA
