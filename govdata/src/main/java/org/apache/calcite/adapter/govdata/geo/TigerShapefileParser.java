@@ -98,6 +98,15 @@ public class TigerShapefileParser {
       LOGGER.info("Parsed {} features from {} (with {} geometries)",
           records.size(), dbfFile.getName(), geometries.size());
 
+    } catch (OutOfMemoryError oom) {
+      // Critical: Log OOM with details before JVM crashes
+      Runtime runtime = Runtime.getRuntime();
+      long usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+      LOGGER.error("FATAL OutOfMemoryError parsing shapefile in {}, records so far: {}, memory: {}MB",
+          shapefileDir, records.size(), usedMb);
+      System.err.println("FATAL OOM in TigerShapefileParser: " + shapefileDir + ", records: " + records.size());
+      System.err.flush();
+      throw oom;
     } catch (Exception e) {
       LOGGER.error("Error parsing shapefile in directory: " + shapefileDir, e);
     }

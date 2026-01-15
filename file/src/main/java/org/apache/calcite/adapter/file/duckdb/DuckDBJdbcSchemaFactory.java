@@ -912,8 +912,8 @@ public class DuckDBJdbcSchemaFactory {
       if (parquetCache != null && parquetCache.length() > 200) {
         parquetCache = parquetCache.substring(0, 197) + "...";
       }
-      LOGGER.info("DuckDB: Table '{}' -> sourceFile='{}', convertedFile='{}', parquetCacheFile='{}', viewScanPattern='{}', conversionType='{}'",
-          record.tableName, record.sourceFile, record.convertedFile, parquetCache, record.viewScanPattern, record.conversionType);
+      LOGGER.info("DuckDB: Table '{}' -> sourceFile='{}', convertedFile='{}', parquetCacheFile='{}', viewScanPattern='{}', conversionType='{}', rowCount={}",
+          record.tableName, record.sourceFile, record.convertedFile, parquetCache, record.viewScanPattern, record.conversionType, record.rowCount);
     }
 
     // Debug why records might be empty

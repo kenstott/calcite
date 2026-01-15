@@ -230,6 +230,18 @@ public class SchemaLifecycleProcessor {
           resultBuilder.addTableResult(tableName, tableResult);
           LOGGER.info("Table '{}' complete: {}", tableName, tableResult);
 
+          // Force GC between tables to prevent memory accumulation from large geometry data
+          // This is especially important for TIGER shapefiles with WKT strings
+          Runtime runtime = Runtime.getRuntime();
+          long beforeGc = runtime.totalMemory() - runtime.freeMemory();
+          System.gc();
+          long afterGc = runtime.totalMemory() - runtime.freeMemory();
+          long freedMb = (beforeGc - afterGc) / (1024 * 1024);
+          if (freedMb > 50) {
+            LOGGER.info("Memory cleanup after '{}': freed {}MB ({}MB -> {}MB used)",
+                tableName, freedMb, beforeGc / (1024 * 1024), afterGc / (1024 * 1024));
+          }
+
         } catch (Exception e) {
           LOGGER.error("Table '{}' failed: {}", tableName, e.getMessage(), e);
 

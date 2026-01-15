@@ -52,14 +52,23 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       String tableName = deriveTableNameFromUrl(context.getUrl());
       LOGGER.info("Transforming HUD crosswalk for table: {}", tableName);
 
-      // HUD API returns { "data": [ ... ] }
+      // HUD API returns { "data": { "results": [ ... ] } }
       JsonNode data = root.get("data");
-      if (data == null || !data.isArray()) {
-        // Try root as array
+      if (data == null) {
+        LOGGER.warn("No 'data' field found in HUD response for {}", tableName);
+        return "[]";
+      }
+
+      // Check if data has a "results" array (newer API format)
+      JsonNode results = data.get("results");
+      if (results != null && results.isArray()) {
+        data = results;
+      } else if (!data.isArray()) {
+        // Try root as array for backwards compatibility
         if (root.isArray()) {
           data = root;
         } else {
-          LOGGER.warn("No 'data' array found in HUD response for {}", tableName);
+          LOGGER.warn("No 'results' array found in HUD response for {}", tableName);
           return "[]";
         }
       }
@@ -88,33 +97,36 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
    * Derives table name from HUD API URL.
    * HUD URLs have format: https://www.huduser.gov/hudapi/public/usps?type=N
    * where:
-   *   type=1: ZIP to Tract
-   *   type=2: ZIP to County (legacy, use type=1 style URL param)
-   *   type=3: Tract to ZIP (reverse)
-   *   type=4: ZIP to CBSA
-   *   type=5: ZIP to Congressional District
-   *   type=7: County to ZIP (reverse)
-   *   type=10: Congressional District to ZIP (reverse)
+   *   type=1: ZIP to Tract (zip-tract)
+   *   type=2: ZIP to County (zip-county)
+   *   type=3: ZIP to CBSA (zip-cbsa)
+   *   type=4: ZIP to CBSA Division (zip-cbsadiv)
+   *   type=5: ZIP to Congressional District (zip-cd)
+   *   type=6: Tract to ZIP (tract-zip) [REVERSE]
+   *   type=7: County to ZIP (county-zip) [REVERSE]
+   *   type=8: CBSA to ZIP (cbsa-zip) [REVERSE]
+   *   type=9: CBSA Division to ZIP (cbsadiv-zip) [REVERSE]
+   *   type=10: Congressional District to ZIP (cd-zip) [REVERSE]
    */
   private String deriveTableNameFromUrl(String url) {
     if (url == null) {
       return "unknown";
     }
     // Check for specific type parameter - order matters for substring matching
+    // Multi-digit types must be checked first to avoid partial matches
     if (url.contains("type=10")) {
       return "cd_zip_crosswalk";
-    } else if (url.contains("type=1")) {
-      // type=1 is ZIP to Tract (also handles legacy zip_county if type=1 was used)
+    } else if (url.contains("type=1&") || url.endsWith("type=1")) {
       return "zip_tract_crosswalk";
-    } else if (url.contains("type=2")) {
+    } else if (url.contains("type=2&") || url.endsWith("type=2")) {
       return "zip_county_crosswalk";
-    } else if (url.contains("type=3")) {
-      return "tract_zip_crosswalk";
-    } else if (url.contains("type=4")) {
+    } else if (url.contains("type=3&") || url.endsWith("type=3")) {
       return "zip_cbsa_crosswalk";
-    } else if (url.contains("type=5")) {
+    } else if (url.contains("type=5&") || url.endsWith("type=5")) {
       return "zip_cd_crosswalk";
-    } else if (url.contains("type=7")) {
+    } else if (url.contains("type=6&") || url.endsWith("type=6")) {
+      return "tract_zip_crosswalk";
+    } else if (url.contains("type=7&") || url.endsWith("type=7")) {
       return "county_zip_crosswalk";
     }
     return "unknown";
@@ -123,11 +135,13 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
   private ObjectNode transformRecord(JsonNode record, String tableName) {
     ObjectNode result = JSON_MAPPER.createObjectNode();
 
+    // HUD API uses "geoid" for the target geography in forward lookups (ZIP to X)
+    // and for the ZIP in reverse lookups (X to ZIP)
     switch (tableName) {
     case "zip_county_crosswalk":
+      // type=2: ZIP to County - geoid contains county FIPS
       result.put("zip", getStringField(record, "zip", "ZIP"));
-      result.put("county_fips", getStringField(record, "county", "COUNTY", "geoid"));
-      result.put("state_fips", getStringField(record, "state", "STATE", "usps_zip_pref_state"));
+      result.put("county_fips", getStringField(record, "geoid", "county", "COUNTY"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -135,9 +149,9 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "zip_cbsa_crosswalk":
+      // type=3: ZIP to CBSA - geoid contains CBSA code
       result.put("zip", getStringField(record, "zip", "ZIP"));
-      result.put("cbsa_code", getStringField(record, "cbsa", "CBSA", "geoid"));
-      result.put("cbsa_name", getStringField(record, "cbsa_name", "usps_zip_pref_city"));
+      result.put("cbsa_code", getStringField(record, "geoid", "cbsa", "CBSA"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -145,8 +159,9 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "tract_zip_crosswalk":
-      result.put("tract_fips", getStringField(record, "tract", "TRACT", "geoid"));
-      result.put("zip", getStringField(record, "zip", "ZIP"));
+      // type=6: Tract to ZIP - geoid contains ZIP, tract field has tract FIPS
+      result.put("tract_fips", getStringField(record, "tract", "TRACT"));
+      result.put("zip", getStringField(record, "geoid", "zip", "ZIP"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -154,9 +169,14 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "zip_tract_crosswalk":
+      // type=1: ZIP to Tract - geoid contains tract FIPS
       result.put("zip", getStringField(record, "zip", "ZIP"));
-      result.put("tract_fips", getStringField(record, "tract", "TRACT", "geoid"));
-      result.put("state_fips", getStringField(record, "state", "STATE", "usps_zip_pref_state"));
+      result.put("tract_fips", getStringField(record, "geoid", "tract", "TRACT"));
+      // Extract state_fips from tract_fips (first 2 digits)
+      String tractFips = getStringField(record, "geoid", "tract", "TRACT");
+      if (tractFips != null && tractFips.length() >= 2) {
+        result.put("state_fips", tractFips.substring(0, 2));
+      }
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -164,8 +184,9 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "zip_cd_crosswalk":
+      // type=5: ZIP to CD - geoid contains CD code
       result.put("zip", getStringField(record, "zip", "ZIP"));
-      result.put("cd_fips", getStringField(record, "cd", "CD", "geoid", "congressional_district"));
+      result.put("cd_fips", getStringField(record, "geoid", "cd", "CD"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -173,8 +194,9 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "county_zip_crosswalk":
-      result.put("county_fips", getStringField(record, "county", "COUNTY", "geoid"));
-      result.put("zip", getStringField(record, "zip", "ZIP"));
+      // type=7: County to ZIP - geoid contains ZIP, county field has county FIPS
+      result.put("county_fips", getStringField(record, "county", "COUNTY"));
+      result.put("zip", getStringField(record, "geoid", "zip", "ZIP"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));
@@ -182,8 +204,9 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       break;
 
     case "cd_zip_crosswalk":
-      result.put("cd_fips", getStringField(record, "cd", "CD", "geoid", "congressional_district"));
-      result.put("zip", getStringField(record, "zip", "ZIP"));
+      // type=10: CD to ZIP - geoid contains ZIP, cd field has CD code
+      result.put("cd_fips", getStringField(record, "cd", "CD"));
+      result.put("zip", getStringField(record, "geoid", "zip", "ZIP"));
       result.put("res_ratio", getDoubleField(record, "res_ratio", "RES_RATIO"));
       result.put("bus_ratio", getDoubleField(record, "bus_ratio", "BUS_RATIO"));
       result.put("oth_ratio", getDoubleField(record, "oth_ratio", "OTH_RATIO"));

@@ -201,6 +201,63 @@ public class EtlPipeline {
     MaterializationWriter writer = null;
 
     try {
+      // Fast-path: Check cached completion from DuckDB to skip dimension expansion entirely
+      // This works for both Parquet and Iceberg formats
+      MaterializeConfig materializeConfig = config.getMaterialize();
+      String configHash = IncrementalTracker.computeConfigHash(config.getDimensions());
+
+      IncrementalTracker.CachedCompletion cached = incrementalTracker.getCachedCompletion(pipelineName);
+      if (cached != null && configHash.equals(cached.configHash)) {
+        // Config hash matches - verify data still exists
+        if (verifyDataExists(pipelineName, config)) {
+          long elapsed = System.currentTimeMillis() - startTime;
+
+          // Check empty result TTL
+          if (cached.rowCount == 0 && materializeConfig != null && materializeConfig.getOptions() != null) {
+            long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
+            if (emptyResultTtlMillis > 0) {
+              LOGGER.info("Pipeline '{}' complete but has 0 rows - invalidating to retry ({}ms TTL)",
+                  pipelineName, emptyResultTtlMillis);
+              incrementalTracker.invalidateTableCompletion(pipelineName);
+              // Fall through to normal dimension expansion
+            } else {
+              LOGGER.info("Pipeline '{}' complete (fast-path, no dimension expansion) - "
+                  + "skipping ({}ms, 0 rows)", pipelineName, elapsed);
+              String tableLocation = baseDirectory + "/" + pipelineName;
+              return EtlResult.builder()
+                  .pipelineName(pipelineName)
+                  .skippedEntirePipeline(true)
+                  .elapsedMs(elapsed)
+                  .tableLocation(tableLocation)
+                  .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
+                  .totalRows(0)
+                  .build();
+            }
+          } else {
+            LOGGER.info("Pipeline '{}' complete (fast-path, no dimension expansion) - "
+                + "skipping ({}ms, {} rows)", pipelineName, elapsed, cached.rowCount);
+            String tableLocation = baseDirectory + "/" + pipelineName;
+            return EtlResult.builder()
+                .pipelineName(pipelineName)
+                .skippedEntirePipeline(true)
+                .elapsedMs(elapsed)
+                .tableLocation(tableLocation)
+                .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
+                .totalRows(cached.rowCount)
+                .build();
+          }
+        } else {
+          // Data doesn't exist - invalidate and fall through
+          LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating",
+              pipelineName);
+          incrementalTracker.invalidateTableCompletion(pipelineName);
+          incrementalTracker.invalidateAll(pipelineName);
+        }
+      } else if (cached != null) {
+        LOGGER.debug("Config hash mismatch (cached: {}, current: {}) - will expand dimensions",
+            cached.configHash, configHash);
+      }
+
       // Phase 1: Expand dimensions (with optional custom DimensionResolver from hooks)
       LOGGER.info("Phase 1: Expanding dimensions for pipeline '{}'", pipelineName);
       DimensionResolver dimensionResolver = loadDimensionResolver(config.getHooks());
@@ -220,7 +277,6 @@ public class EtlPipeline {
         if (verifyDataExists(pipelineName, config)) {
           long elapsed = System.currentTimeMillis() - startTime;
           // Include materialization info for skipped tables so DuckDB knows it's Iceberg
-          MaterializeConfig materializeConfig = config.getMaterialize();
           if (materializeConfig != null && materializeConfig.isEnabled()) {
             String tableLocation = baseDirectory + "/" + pipelineName;
             // Read row count from Iceberg metadata for COUNT(*) optimization
@@ -228,6 +284,9 @@ public class EtlPipeline {
             if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
               rowCount = readRowCountFromIceberg(tableLocation);
             }
+            // Store config hash in DuckDB for fast-path skip on subsequent connections
+            incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
+                dimensionSignature, rowCount);
             // If table has 0 rows and empty result TTL is configured, check if we should retry
             if (rowCount == 0 && materializeConfig.getOptions() != null) {
               long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
@@ -281,7 +340,6 @@ public class EtlPipeline {
 
       // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed
       // This handles the case where cache DB was deleted but Iceberg table has data
-      MaterializeConfig materializeConfig = config.getMaterialize();
       if (materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
           && materializeConfig.isEnabled()) {
@@ -309,13 +367,21 @@ public class EtlPipeline {
       // If all combinations are already processed, mark complete and return
       // But only if there were actual combinations - empty dimensions is a config error
       if (neededCount == 0 && totalBatches > 0) {
-        incrementalTracker.markTableComplete(pipelineName, dimensionSignature);
+        // Try to get row count from Iceberg metadata for COUNT(*) optimization
+        long cachedRowCount = 0;
+        if (materializeConfig != null
+            && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
+          String tableLocation = baseDirectory + "/" + pipelineName;
+          cachedRowCount = readRowCountFromIceberg(tableLocation);
+        }
+        incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
+            dimensionSignature, cachedRowCount);
         long elapsed = System.currentTimeMillis() - startTime;
-        LOGGER.info("All {} combinations already processed - marking complete ({}ms)",
-            totalBatches, elapsed);
+        LOGGER.info("All {} combinations already processed - marking complete ({}ms, {} rows)",
+            totalBatches, elapsed, cachedRowCount);
         return EtlResult.builder()
             .pipelineName(pipelineName)
-            .totalRows(0)
+            .totalRows(cachedRowCount)
             .successfulBatches(0)
             .skippedBatches(totalBatches)
             .elapsedMs(elapsed)
@@ -465,6 +531,12 @@ public class EtlPipeline {
             progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
           }
 
+          // Periodic GC every 10 batches to prevent memory buildup
+          // Critical for large batch pipelines like VTDs (78 batches with geometry data)
+          if (processedCount % 10 == 0) {
+            System.gc();
+          }
+
         } catch (IOException e) {
           String errorMsg =
               String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
@@ -528,8 +600,9 @@ public class EtlPipeline {
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
-        incrementalTracker.markTableComplete(pipelineName, dimensionSignature);
-        LOGGER.info("Marked pipeline '{}' as complete with signature: {}", pipelineName, dimensionSignature);
+        incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
+        LOGGER.info("Marked pipeline '{}' as complete with configHash={}, signature={}, rows={}",
+            pipelineName, configHash, dimensionSignature, totalRows);
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -1115,6 +1188,216 @@ public class EtlPipeline {
     } catch (Exception e) {
       LOGGER.warn("Failed to read row count from Iceberg for '{}': {}", tableLocation, e.getMessage());
       return 0;
+    }
+  }
+
+  /**
+   * Cached ETL properties from Iceberg table.
+   * Used for fast-path skip check to avoid dimension expansion.
+   */
+  private static class CachedEtlProperties {
+    final String configHash;
+    final String signature;
+    final long rowCount;
+
+    CachedEtlProperties(String configHash, String signature, long rowCount) {
+      this.configHash = configHash;
+      this.signature = signature;
+      this.rowCount = rowCount;
+    }
+  }
+
+  /**
+   * Reads ETL properties from Iceberg table metadata.
+   * Returns cached config hash, signature, and row count if available.
+   *
+   * @param tableLocation The Iceberg table location
+   * @return CachedEtlProperties, or null if properties not found or table doesn't exist
+   */
+  private CachedEtlProperties readEtlPropertiesFromIceberg(String tableLocation) {
+    try {
+      org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+
+      // Configure S3 filesystem if using S3 storage
+      if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
+        org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
+            (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
+        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        if (s3Config != null) {
+          hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+          hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+          String endpoint = s3Config.get("endpoint");
+          String accessKey = s3Config.get("accessKeyId");
+          String secretKey = s3Config.get("secretAccessKey");
+          String region = s3Config.get("region");
+
+          if (endpoint != null) {
+            hadoopConf.set("fs.s3a.endpoint", endpoint);
+            hadoopConf.set("fs.s3a.path.style.access", "true");
+          }
+          if (accessKey != null) {
+            hadoopConf.set("fs.s3a.access.key", accessKey);
+          }
+          if (secretKey != null) {
+            hadoopConf.set("fs.s3a.secret.key", secretKey);
+          }
+          if (region != null) {
+            hadoopConf.set("fs.s3a.endpoint.region", region);
+          }
+        }
+      }
+
+      // Extract warehouse path from table location
+      String warehousePath = tableLocation;
+      int lastSlash = warehousePath.lastIndexOf('/');
+      if (lastSlash > 0) {
+        warehousePath = warehousePath.substring(0, lastSlash);
+      }
+
+      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
+      try {
+        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+
+        String tableName = tableLocation.substring(lastSlash + 1);
+        org.apache.iceberg.catalog.TableIdentifier tableId =
+            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+
+        if (!catalog.tableExists(tableId)) {
+          return null;
+        }
+
+        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+
+        // Read ETL properties
+        String configHash = table.properties().get("etl.config-hash");
+        String signature = table.properties().get("etl.signature");
+        String rowCountStr = table.properties().get("etl.row-count");
+
+        if (configHash == null || signature == null) {
+          LOGGER.debug("Iceberg table '{}' has no cached ETL properties", tableLocation);
+          return null;
+        }
+
+        long rowCount = 0;
+        if (rowCountStr != null) {
+          try {
+            rowCount = Long.parseLong(rowCountStr);
+          } catch (NumberFormatException e) {
+            // Fall back to reading from manifest
+            org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
+            if (snapshot != null) {
+              for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+                Long addedRows = manifest.addedRowsCount();
+                if (addedRows != null) {
+                  rowCount += addedRows;
+                }
+              }
+            }
+          }
+        }
+
+        LOGGER.debug("Read cached ETL properties from '{}': configHash={}, signature={}, rows={}",
+            tableLocation, configHash, signature, rowCount);
+        return new CachedEtlProperties(configHash, signature, rowCount);
+
+      } finally {
+        if (catalog != null) {
+          catalog.close();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to read ETL properties from Iceberg for '{}': {}",
+          tableLocation, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Stores ETL properties to an existing Iceberg table.
+   * Used to cache dimension config hash and signature for fast-path skip on subsequent connections.
+   *
+   * @param tableLocation The Iceberg table location
+   * @param configHash Hash of dimension configuration
+   * @param signature Dimension signature
+   * @param rowCount Total row count
+   */
+  private void storeEtlPropertiesToIceberg(String tableLocation, String configHash,
+      String signature, long rowCount) {
+    try {
+      org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+
+      // Configure S3 filesystem if using S3 storage
+      if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
+        org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
+            (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
+        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        if (s3Config != null) {
+          hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+          hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+          String endpoint = s3Config.get("endpoint");
+          String accessKey = s3Config.get("accessKeyId");
+          String secretKey = s3Config.get("secretAccessKey");
+          String region = s3Config.get("region");
+
+          if (endpoint != null) {
+            hadoopConf.set("fs.s3a.endpoint", endpoint);
+            hadoopConf.set("fs.s3a.path.style.access", "true");
+          }
+          if (accessKey != null) {
+            hadoopConf.set("fs.s3a.access.key", accessKey);
+          }
+          if (secretKey != null) {
+            hadoopConf.set("fs.s3a.secret.key", secretKey);
+          }
+          if (region != null) {
+            hadoopConf.set("fs.s3a.endpoint.region", region);
+          }
+        }
+      }
+
+      // Extract warehouse path from table location
+      String warehousePath = tableLocation;
+      int lastSlash = warehousePath.lastIndexOf('/');
+      if (lastSlash > 0) {
+        warehousePath = warehousePath.substring(0, lastSlash);
+      }
+
+      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
+      try {
+        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+
+        String tableName = tableLocation.substring(lastSlash + 1);
+        org.apache.iceberg.catalog.TableIdentifier tableId =
+            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+
+        if (!catalog.tableExists(tableId)) {
+          LOGGER.debug("Cannot store ETL properties: table doesn't exist at {}", tableLocation);
+          return;
+        }
+
+        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+
+        // Store ETL properties
+        table.updateProperties()
+            .set("etl.config-hash", configHash)
+            .set("etl.signature", signature)
+            .set("etl.row-count", String.valueOf(rowCount))
+            .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
+            .commit();
+
+        LOGGER.info("Stored ETL properties to Iceberg table '{}' for fast-path skip: configHash={}",
+            tableLocation, configHash);
+
+      } finally {
+        if (catalog != null) {
+          catalog.close();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to store ETL properties to Iceberg for '{}': {}",
+          tableLocation, e.getMessage());
     }
   }
 

@@ -1537,12 +1537,16 @@ public class ConversionMetadata {
   public void updateMaterializationInfo(String tableName, String tableLocation, String conversionType, Long rowCount) {
     ConversionRecord record = conversions.get(tableName);
     if (record != null) {
-      LOGGER.info("Updating materialization info for table '{}': conversionType='{}' -> '{}', sourceFile='{}' -> '{}', rowCount={}",
-          tableName, record.conversionType, conversionType, record.sourceFile, tableLocation, rowCount);
+      LOGGER.info("Updating materialization info for table '{}': conversionType='{}' -> '{}', sourceFile='{}' -> '{}', rowCount={} (existing={})",
+          tableName, record.conversionType, conversionType, record.sourceFile, tableLocation, rowCount, record.rowCount);
       record.conversionType = conversionType;
       record.sourceFile = tableLocation;
       record.tableType = "ICEBERG_PARQUET".equals(conversionType) ? "IcebergTable" : "ParquetTable";
-      record.rowCount = rowCount;
+      // Only update rowCount if a new value is provided; preserve existing rowCount if null passed
+      // This prevents discoverExistingIcebergTable from overwriting ETL-populated rowCount
+      if (rowCount != null) {
+        record.rowCount = rowCount;
+      }
       // Clear parquet-related fields when switching to Iceberg to avoid DuckDB using stale parquet paths
       if ("ICEBERG_PARQUET".equals(conversionType)) {
         record.viewScanPattern = null;

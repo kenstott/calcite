@@ -843,6 +843,60 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     }
   }
 
+  @Override public void markTableCompleteWithConfig(String pipelineName, String configHash,
+      String dimensionSignature, long rowCount) {
+    // Ensure the table_completion table exists
+    try {
+      ensureTableCompletionTableExists();
+    } catch (SQLException e) {
+      LOGGER.error("Failed to create table_completion table: {}", e.getMessage());
+      return;
+    }
+
+    long now = System.currentTimeMillis();
+    String sql = "INSERT INTO table_completion (pipeline_name, signature, config_hash, row_count, completed_at) "
+        + "VALUES (?, ?, ?, ?, ?) "
+        + "ON CONFLICT (pipeline_name) DO UPDATE SET "
+        + "signature = EXCLUDED.signature, "
+        + "config_hash = EXCLUDED.config_hash, "
+        + "row_count = EXCLUDED.row_count, "
+        + "completed_at = EXCLUDED.completed_at";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      stmt.setString(2, dimensionSignature);
+      stmt.setString(3, configHash);
+      stmt.setLong(4, rowCount);
+      stmt.setLong(5, now);
+      stmt.executeUpdate();
+      LOGGER.debug("Marked pipeline {} as complete with configHash={}, signature={}, rows={}",
+          pipelineName, configHash, dimensionSignature, rowCount);
+    } catch (SQLException e) {
+      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+    }
+  }
+
+  @Override public CachedCompletion getCachedCompletion(String pipelineName) {
+    String sql = "SELECT config_hash, signature, row_count FROM table_completion "
+        + "WHERE pipeline_name = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          String configHash = rs.getString("config_hash");
+          String signature = rs.getString("signature");
+          long rowCount = rs.getLong("row_count");
+          if (configHash != null) {
+            return new CachedCompletion(configHash, signature, rowCount);
+          }
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error getting cached completion for {}: {}", pipelineName, e.getMessage());
+    }
+    return null;
+  }
+
   @Override public void invalidateTableCompletion(String pipelineName) {
     String sql = "DELETE FROM table_completion WHERE pipeline_name = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
@@ -878,15 +932,25 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
   }
 
   /**
-   * Ensures the table_completion table exists.
+   * Ensures the table_completion table exists with config hash support.
    */
   private void ensureTableCompletionTableExists() throws SQLException {
     String sql = "CREATE TABLE IF NOT EXISTS table_completion ("
         + "pipeline_name VARCHAR PRIMARY KEY, "
         + "signature VARCHAR NOT NULL, "
+        + "config_hash VARCHAR, "
+        + "row_count BIGINT DEFAULT 0, "
         + "completed_at BIGINT NOT NULL)";
     try (Statement stmt = getConnection().createStatement()) {
       stmt.execute(sql);
+      // Add columns if they don't exist (for existing databases)
+      try {
+        stmt.execute("ALTER TABLE table_completion ADD COLUMN IF NOT EXISTS config_hash VARCHAR");
+        stmt.execute("ALTER TABLE table_completion ADD COLUMN IF NOT EXISTS row_count BIGINT DEFAULT 0");
+      } catch (SQLException e) {
+        // Ignore if columns already exist or syntax not supported
+        LOGGER.debug("Column migration: {}", e.getMessage());
+      }
     }
   }
 
