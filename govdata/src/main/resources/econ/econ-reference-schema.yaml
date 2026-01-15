@@ -926,6 +926,18 @@ constraints:
       - type
     comment: Reference dimension table for JOLTS metric codes and descriptions
 
+  bls_geographies:
+    primaryKey:
+      - type
+      - geo_code
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links BLS state geography codes to Census TIGER state boundaries (for geo_type='state' records)
+    comment: Reference table mapping BLS geography codes to FIPS codes and Census regions
+
   nipa_tables:
     primaryKey:
       - type
