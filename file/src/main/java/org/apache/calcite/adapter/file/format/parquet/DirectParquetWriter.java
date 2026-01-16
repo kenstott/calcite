@@ -30,6 +30,8 @@ import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +61,7 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
  */
 public class DirectParquetWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(DirectParquetWriter.class);
-
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private DirectParquetWriter() {
     // Utility class
@@ -106,12 +108,21 @@ public class DirectParquetWriter {
       LOGGER.debug("Adding table comment metadata: {}", tableComment);
     }
     if (columnComments != null && !columnComments.isEmpty()) {
-      for (Map.Entry<String, String> entry : columnComments.entrySet()) {
-        String columnName = entry.getKey();
-        String comment = entry.getValue();
-        if (comment != null && !comment.isEmpty()) {
-          extraMetadata.put("column_comment:" + columnName, comment);
-          LOGGER.debug("Adding column comment metadata for {}: {}", columnName, comment);
+      // Store column comments as JSON for cleaner parsing
+      try {
+        String json = MAPPER.writeValueAsString(columnComments);
+        extraMetadata.put("column_comments", json);
+        LOGGER.debug("Adding column comments metadata: {} columns", columnComments.size());
+      } catch (Exception e) {
+        LOGGER.warn("Failed to serialize column comments as JSON, using individual keys: {}",
+            e.getMessage());
+        // Fallback to individual keys for backward compatibility
+        for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+          String columnName = entry.getKey();
+          String comment = entry.getValue();
+          if (comment != null && !comment.isEmpty()) {
+            extraMetadata.put("column_comment:" + columnName, comment);
+          }
         }
       }
     }

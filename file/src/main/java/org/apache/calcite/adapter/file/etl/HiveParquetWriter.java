@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.format.parquet.ParquetMetadataWriter;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.slf4j.Logger;
@@ -216,6 +217,9 @@ public class HiveParquetWriter {
         stmt.execute(sql);
       }
 
+      // Post-process to add metadata to Parquet files
+      addMetadataToOutput(config, fullOutputPath);
+
       long elapsed = System.currentTimeMillis() - startTime;
       LOGGER.info("JSON materialization complete in {}ms", elapsed);
 
@@ -256,6 +260,9 @@ public class HiveParquetWriter {
       try (Statement stmt = conn.createStatement()) {
         stmt.execute(sql);
       }
+
+      // Post-process to add metadata to Parquet files
+      addMetadataToOutput(config, fullOutputPath);
 
       long elapsed = System.currentTimeMillis() - startTime;
       LOGGER.info("CSV materialization complete in {}ms", elapsed);
@@ -298,6 +305,9 @@ public class HiveParquetWriter {
         stmt.execute(sql);
       }
 
+      // Post-process to add metadata to Parquet files
+      addMetadataToOutput(config, fullOutputPath);
+
       long elapsed = System.currentTimeMillis() - startTime;
       LOGGER.info("Parquet materialization complete in {}ms", elapsed);
 
@@ -308,6 +318,36 @@ public class HiveParquetWriter {
           String.format("DuckDB Parquet materialization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Adds table and column metadata to Parquet files in the output directory.
+   *
+   * <p>This post-processing step is needed because DuckDB COPY does not support
+   * adding custom key-value metadata to Parquet files. The metadata is embedded
+   * in each Parquet file's footer for standalone artifact support.
+   *
+   * @param config Materialization configuration containing comments
+   * @param outputPath Output directory path
+   */
+  private void addMetadataToOutput(MaterializeConfig config, String outputPath) {
+    String tableComment = config.getTableComment();
+    Map<String, String> columnComments = config.getColumnComments();
+
+    if ((tableComment == null || tableComment.isEmpty())
+        && (columnComments == null || columnComments.isEmpty())) {
+      return;
+    }
+
+    try {
+      int processed = ParquetMetadataWriter.addMetadataToDirectory(
+          storageProvider, outputPath, tableComment, columnComments);
+      if (processed > 0) {
+        LOGGER.info("Added metadata to {} Parquet files", processed);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to add metadata to Parquet files: {}", e.getMessage());
     }
   }
 

@@ -339,10 +339,19 @@ public class IcebergCatalogManager {
     List<Types.NestedField> fields = new ArrayList<Types.NestedField>();
     int fieldId = 1;
     for (ColumnDef col : columns) {
-      Types.NestedField field =
-          Types.NestedField.optional(fieldId++,
-          col.getName(),
-          mapToIcebergType(col.getType()));
+      Types.NestedField field;
+      if (col.getDoc() != null && !col.getDoc().isEmpty()) {
+        // Create field with documentation
+        field = Types.NestedField.optional(fieldId++,
+            col.getName(),
+            mapToIcebergType(col.getType()),
+            col.getDoc());
+      } else {
+        // Create field without documentation
+        field = Types.NestedField.optional(fieldId++,
+            col.getName(),
+            mapToIcebergType(col.getType()));
+      }
       fields.add(field);
     }
     Schema schema = new Schema(fields);
@@ -537,10 +546,27 @@ public class IcebergCatalogManager {
   public static class ColumnDef {
     private final String name;
     private final String type;
+    private final String doc;
 
-    public ColumnDef(String name, String type) {
+    /**
+     * Creates a column definition with documentation.
+     *
+     * @param name Column name
+     * @param type Column type (defaults to VARCHAR if null)
+     * @param doc Column documentation/comment (can be null)
+     */
+    public ColumnDef(String name, String type, String doc) {
       this.name = name;
       this.type = type != null ? type : "VARCHAR";
+      this.doc = doc;
+    }
+
+    /**
+     * Creates a column definition without documentation.
+     * Backward-compatible constructor.
+     */
+    public ColumnDef(String name, String type) {
+      this(name, type, null);
     }
 
     public String getName() {
@@ -549,6 +575,15 @@ public class IcebergCatalogManager {
 
     public String getType() {
       return type;
+    }
+
+    /**
+     * Returns the column documentation/comment.
+     *
+     * @return Column doc, or null if not set
+     */
+    public String getDoc() {
+      return doc;
     }
   }
 }

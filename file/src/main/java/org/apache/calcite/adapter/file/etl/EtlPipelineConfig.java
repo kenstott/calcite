@@ -224,6 +224,23 @@ public class EtlPipelineConfig {
 
     Map<String, Object> materializeMap = toMap(map.get("materialize"));
     if (materializeMap != null) {
+      // Propagate table comment from table level to materialize config
+      Object tableComment = map.get("comment");
+      if (tableComment instanceof String && !materializeMap.containsKey("tableComment")) {
+        materializeMap = new LinkedHashMap<>(materializeMap);
+        materializeMap.put("tableComment", tableComment);
+      }
+
+      // Extract column comments from columns array and propagate to materialize config
+      if (!materializeMap.containsKey("columnComments") && columnsObj instanceof List) {
+        Map<String, String> columnComments = extractColumnComments((List<?>) columnsObj);
+        if (!columnComments.isEmpty()) {
+          materializeMap = materializeMap instanceof LinkedHashMap
+              ? materializeMap : new LinkedHashMap<>(materializeMap);
+          materializeMap.put("columnComments", columnComments);
+        }
+      }
+
       builder.materialize(MaterializeConfig.fromMap(materializeMap));
     }
 
@@ -238,6 +255,28 @@ public class EtlPipelineConfig {
     }
 
     return builder.build();
+  }
+
+  /**
+   * Extracts column comments from a list of column definitions.
+   *
+   * @param columns List of column config maps
+   * @return Map of column name to comment
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> extractColumnComments(List<?> columns) {
+    Map<String, String> comments = new LinkedHashMap<>();
+    for (Object item : columns) {
+      if (item instanceof Map) {
+        Map<String, Object> colMap = (Map<String, Object>) item;
+        String name = (String) colMap.get("name");
+        Object comment = colMap.get("comment");
+        if (name != null && comment instanceof String) {
+          comments.put(name, (String) comment);
+        }
+      }
+    }
+    return comments;
   }
 
   /**
