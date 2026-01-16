@@ -129,12 +129,14 @@ public class ParquetMetadataWriter {
     Path inputPath = new Path(filePath);
     Configuration conf = new Configuration();
 
-    // Create temp file for output
+    // Create temp file path for output (create then delete to get unique name)
     java.nio.file.Path tempFile = Files.createTempFile("parquet_meta_", ".parquet");
+    Files.delete(tempFile);  // Delete so ParquetWriter can create it
     Path outputPath = new Path(tempFile.toString());
 
     try {
       // Read existing metadata
+      LOGGER.debug("Reading existing Parquet file: {}", filePath);
       InputFile inputFile = HadoopInputFile.fromPath(inputPath, conf);
       ParquetMetadata footer;
       MessageType schema;
@@ -142,6 +144,7 @@ public class ParquetMetadataWriter {
       try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
         footer = reader.getFooter();
         schema = footer.getFileMetaData().getSchema();
+        LOGGER.debug("Parquet schema: {}", schema);
       }
 
       // Merge existing metadata with new metadata
@@ -157,11 +160,13 @@ public class ParquetMetadataWriter {
       if (!footer.getBlocks().isEmpty() && !footer.getBlocks().get(0).getColumns().isEmpty()) {
         compression = footer.getBlocks().get(0).getColumns().get(0).getCodec();
       }
+      LOGGER.debug("Using compression: {}", compression);
 
-      // Set up reader
+      // Set up reader/writer configuration
       GroupWriteSupport.setSchema(schema, conf);
 
       // Create writer with metadata
+      LOGGER.debug("Opening reader and writer...");
       try (ParquetReader<Group> reader = ParquetReader.builder(new GroupReadSupport(), inputPath)
               .withConf(conf)
               .build();
@@ -174,13 +179,18 @@ public class ParquetMetadataWriter {
               .build()) {
 
         // Copy all records
+        LOGGER.debug("Copying records...");
         Group record;
+        int count = 0;
         while ((record = reader.read()) != null) {
           writer.write(record);
+          count++;
         }
+        LOGGER.debug("Copied {} records", count);
       }
 
       // Replace original file with temp file
+      LOGGER.debug("Replacing original file with temp file...");
       Files.delete(java.nio.file.Paths.get(filePath));
       Files.move(tempFile, java.nio.file.Paths.get(filePath));
 
@@ -189,6 +199,7 @@ public class ParquetMetadataWriter {
     } catch (Exception e) {
       // Clean up temp file on failure
       Files.deleteIfExists(tempFile);
+      LOGGER.warn("Exception adding metadata to {}: {}", filePath, e.toString(), e);
       throw new IOException("Failed to add metadata to " + filePath, e);
     }
   }
