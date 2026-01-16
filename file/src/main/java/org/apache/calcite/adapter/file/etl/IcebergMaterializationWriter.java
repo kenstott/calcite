@@ -337,13 +337,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     java.util.Set<String> expectedColumnNamesLower = new java.util.HashSet<String>();
     // Map lowercase column name -> actual column name (for partition spec)
     Map<String, String> lowerToActualName = new java.util.HashMap<String, String>();
+    // Get column comments from config
+    Map<String, String> columnComments = config.getColumnComments();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
       for (ColumnConfig colConfig : columnConfigs) {
         String icebergType = mapToIcebergType(colConfig.getType());
+        // Get column comment if available
+        String colComment = columnComments != null
+            ? columnComments.get(colConfig.getName()) : null;
         expectedColumns.add(
             new IcebergCatalogManager.ColumnDef(
             colConfig.getName(),
-            icebergType));
+            icebergType,
+            colComment));
         expectedColumnNames.add(colConfig.getName());
         String lowerName = colConfig.getName().toLowerCase(java.util.Locale.ROOT);
         expectedColumnNamesLower.add(lowerName);
@@ -380,7 +386,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         } else {
           partitionType = "STRING";
         }
-        expectedColumns.add(new IcebergCatalogManager.ColumnDef(partitionCol, partitionType));
+        // Get partition column comment if available (check both exact case and lowercase)
+        String partitionComment = null;
+        if (columnComments != null) {
+          partitionComment = columnComments.get(partitionCol);
+          if (partitionComment == null) {
+            // Try case-insensitive lookup
+            for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+              if (entry.getKey().equalsIgnoreCase(partitionCol)) {
+                partitionComment = entry.getValue();
+                break;
+              }
+            }
+          }
+        }
+        expectedColumns.add(new IcebergCatalogManager.ColumnDef(
+            partitionCol, partitionType, partitionComment));
         expectedColumnNames.add(partitionCol);
         expectedColumnNamesLower.add(partitionColLower);
         lowerToActualName.put(partitionColLower, partitionCol);
@@ -1448,6 +1469,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
         long commitElapsed = System.currentTimeMillis() - commitStart;
         LOGGER.info("Bulk commit complete: {} files in {}ms", pendingDataFiles.size(), commitElapsed);
+
+        // Store table and column comments as Iceberg properties
+        storeTableMetadata();
       } catch (Exception e) {
         LOGGER.error("Bulk commit failed: {}", e.getMessage());
         throw new IOException("Bulk commit failed", e);
@@ -1534,6 +1558,46 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           configHash, dimensionSignature);
     } catch (Exception e) {
       LOGGER.warn("Failed to store ETL properties in Iceberg table: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Stores table and column comments as Iceberg table properties.
+   *
+   * <p>Table comment is stored as property "comment".
+   * Column comments are stored as JSON in property "column.comments".
+   */
+  private void storeTableMetadata() {
+    if (table == null || config == null) {
+      return;
+    }
+
+    String tableComment = config.getTableComment();
+    Map<String, String> columnComments = config.getColumnComments();
+
+    if ((tableComment == null || tableComment.isEmpty())
+        && (columnComments == null || columnComments.isEmpty())) {
+      return;
+    }
+
+    try {
+      org.apache.iceberg.UpdateProperties update = table.updateProperties();
+
+      if (tableComment != null && !tableComment.isEmpty()) {
+        update.set("comment", tableComment);
+        LOGGER.debug("Storing table comment in Iceberg properties");
+      }
+
+      if (columnComments != null && !columnComments.isEmpty()) {
+        String json = MAPPER.writeValueAsString(columnComments);
+        update.set("column.comments", json);
+        LOGGER.debug("Storing {} column comments in Iceberg properties", columnComments.size());
+      }
+
+      update.commit();
+      LOGGER.info("Stored table metadata in Iceberg table properties");
+    } catch (Exception e) {
+      LOGGER.warn("Failed to store table metadata in Iceberg properties: {}", e.getMessage());
     }
   }
 

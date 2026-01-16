@@ -56,6 +56,8 @@ import org.apache.parquet.io.InputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -77,6 +79,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class PartitionedParquetTable extends AbstractTable implements ScannableTable, FilterableTable, CommentableTable, org.apache.calcite.adapter.file.statistics.StatisticsProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedParquetTable.class);
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final List<String> filePaths;
   private final PartitionDetector.PartitionInfo partitionInfo;
@@ -364,34 +367,66 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       FileMetaData fileMetaData = metadata.getFileMetaData();
 
       // Extract table comment from file key-value metadata (only if not already set from config)
-      if (tableComment == null) {
-        Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
-        if (keyValueMetaData != null) {
-          // Look for table comment in various possible keys
-          String parquetTableComment = keyValueMetaData.get("table.comment");
-          if (parquetTableComment == null) {
-            parquetTableComment = keyValueMetaData.get("comment");
-          }
-          if (parquetTableComment == null) {
-            parquetTableComment = keyValueMetaData.get("description");
-          }
-
-          if (parquetTableComment != null) {
-            tableComment = parquetTableComment;
-            LOGGER.debug("Found table comment from Parquet metadata: {}", tableComment);
-          }
+      Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
+      if (tableComment == null && keyValueMetaData != null) {
+        // Look for table comment in various possible keys (priority order)
+        String parquetTableComment = keyValueMetaData.get("table_comment"); // DirectParquetWriter format
+        if (parquetTableComment == null) {
+          parquetTableComment = keyValueMetaData.get("table.comment");
         }
-      } else {
+        if (parquetTableComment == null) {
+          parquetTableComment = keyValueMetaData.get("comment");
+        }
+        if (parquetTableComment == null) {
+          parquetTableComment = keyValueMetaData.get("description");
+        }
+
+        if (parquetTableComment != null) {
+          tableComment = parquetTableComment;
+          LOGGER.debug("Found table comment from Parquet metadata: {}", tableComment);
+        }
+      } else if (tableComment != null) {
         LOGGER.debug("Table comment from config takes precedence over Parquet metadata");
       }
 
-      // Extract column comments from schema (only add comments not already in config)
-      MessageType schema = fileMetaData.getSchema();
+      // Try to load column comments from JSON blob first (DirectParquetWriter format)
+      if (keyValueMetaData != null) {
+        String columnCommentsJson = keyValueMetaData.get("column_comments");
+        if (columnCommentsJson != null && !columnCommentsJson.isEmpty()) {
+          try {
+            Map<String, String> parquetColumnComments = MAPPER.readValue(columnCommentsJson,
+                new TypeReference<Map<String, String>>() { });
+            // Add comments that aren't already set from config
+            for (Map.Entry<String, String> entry : parquetColumnComments.entrySet()) {
+              if (!columnComments.containsKey(entry.getKey())) {
+                columnComments.put(entry.getKey(), entry.getValue());
+                LOGGER.debug("Added column comment from Parquet JSON for '{}': {}",
+                    entry.getKey(), entry.getValue());
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Failed to parse column_comments JSON, will try individual keys: {}",
+                e.getMessage());
+          }
+        }
+
+        // Also check for legacy column_comment:columnName format
+        for (Map.Entry<String, String> entry : keyValueMetaData.entrySet()) {
+          if (entry.getKey().startsWith("column_comment:")) {
+            String colName = entry.getKey().substring("column_comment:".length());
+            if (!columnComments.containsKey(colName) && entry.getValue() != null) {
+              columnComments.put(colName, entry.getValue());
+              LOGGER.debug("Added column comment from Parquet legacy format for '{}': {}",
+                  colName, entry.getValue());
+            }
+          }
+        }
+      }
 
       // Extract column names from Parquet schema for constraint mapping
+      MessageType schema = fileMetaData.getSchema();
       parquetColumnNames = new ArrayList<>();
 
-      Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
       int parquetCommentsAdded = 0;
       int parquetCommentsSkipped = 0;
 
@@ -399,36 +434,31 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
         String fieldName = field.getName();
         parquetColumnNames.add(fieldName);
 
-        // Skip if comment already exists from config (config wins)
+        // Skip if comment already exists (from config or earlier metadata loading)
         if (columnComments.containsKey(fieldName)) {
           parquetCommentsSkipped++;
           continue;
         }
 
-        // Try to get comment from field's original type (if it has one)
-        String fieldComment = null;
-
-        // Check if there's a column-specific comment in key-value metadata
+        // Check for additional legacy comment formats in key-value metadata
         if (keyValueMetaData != null) {
-          fieldComment = keyValueMetaData.get("column." + fieldName + ".comment");
+          String fieldComment = keyValueMetaData.get("column." + fieldName + ".comment");
           if (fieldComment == null) {
             fieldComment = keyValueMetaData.get(fieldName + ".comment");
           }
-        }
-
-        // Store the comment if found
-        if (fieldComment != null) {
-          columnComments.put(fieldName, fieldComment);
-          parquetCommentsAdded++;
-          LOGGER.debug("Added comment for column '{}' from Parquet metadata: {}", fieldName, fieldComment);
+          if (fieldComment != null) {
+            columnComments.put(fieldName, fieldComment);
+            parquetCommentsAdded++;
+            LOGGER.debug("Added comment for column '{}' from Parquet metadata: {}", fieldName, fieldComment);
+          }
         }
       }
 
       if (parquetCommentsSkipped > 0) {
-        LOGGER.debug("Skipped {} column comments from Parquet (config takes precedence)", parquetCommentsSkipped);
+        LOGGER.debug("Skipped {} column comments (already loaded)", parquetCommentsSkipped);
       }
       if (parquetCommentsAdded > 0) {
-        LOGGER.debug("Added {} column comments from Parquet metadata (not in config)", parquetCommentsAdded);
+        LOGGER.debug("Added {} column comments from legacy Parquet metadata", parquetCommentsAdded);
       }
 
       // Add partition columns to the column names list

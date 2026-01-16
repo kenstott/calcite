@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -121,6 +122,8 @@ public class MaterializeConfig {
   private final MaterializeOptionsConfig options;
   private final String name;
   private final IcebergConfig iceberg;
+  private final String tableComment;
+  private final Map<String, String> columnComments;
 
   private MaterializeConfig(Builder builder) {
     this.enabled = builder.enabled != null ? builder.enabled : true;
@@ -135,6 +138,10 @@ public class MaterializeConfig {
     this.options = builder.options != null ? builder.options : MaterializeOptionsConfig.defaults();
     this.name = builder.name;
     this.iceberg = builder.iceberg;
+    this.tableComment = builder.tableComment;
+    this.columnComments = builder.columnComments != null
+        ? Collections.unmodifiableMap(new HashMap<String, String>(builder.columnComments))
+        : Collections.<String, String>emptyMap();
   }
 
   /**
@@ -209,6 +216,24 @@ public class MaterializeConfig {
    */
   public IcebergConfig getIceberg() {
     return iceberg;
+  }
+
+  /**
+   * Returns the table-level comment/description.
+   * Used for JDBC metadata REMARKS column in getTables().
+   */
+  public String getTableComment() {
+    return tableComment;
+  }
+
+  /**
+   * Returns the column comments/descriptions.
+   * Used for JDBC metadata REMARKS column in getColumns().
+   *
+   * @return Map of column name to comment, never null
+   */
+  public Map<String, String> getColumnComments() {
+    return columnComments;
   }
 
   /**
@@ -288,6 +313,24 @@ public class MaterializeConfig {
       builder.iceberg(IcebergConfig.fromMap((Map<String, Object>) icebergObj));
     }
 
+    // Parse table comment
+    Object tableCommentObj = map.get("tableComment");
+    if (tableCommentObj instanceof String) {
+      builder.tableComment((String) tableCommentObj);
+    }
+
+    // Parse column comments
+    Object columnCommentsObj = map.get("columnComments");
+    if (columnCommentsObj instanceof Map) {
+      Map<String, String> comments = new HashMap<String, String>();
+      for (Map.Entry<?, ?> entry : ((Map<?, ?>) columnCommentsObj).entrySet()) {
+        if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+          comments.put((String) entry.getKey(), (String) entry.getValue());
+        }
+      }
+      builder.columnComments(comments);
+    }
+
     return builder.build();
   }
 
@@ -344,6 +387,8 @@ public class MaterializeConfig {
     private MaterializeOptionsConfig options;
     private String name;
     private IcebergConfig iceberg;
+    private String tableComment;
+    private Map<String, String> columnComments;
 
     public Builder enabled(boolean enabled) {
       this.enabled = enabled;
@@ -392,6 +437,16 @@ public class MaterializeConfig {
 
     public Builder iceberg(IcebergConfig iceberg) {
       this.iceberg = iceberg;
+      return this;
+    }
+
+    public Builder tableComment(String tableComment) {
+      this.tableComment = tableComment;
+      return this;
+    }
+
+    public Builder columnComments(Map<String, String> columnComments) {
+      this.columnComments = columnComments;
       return this;
     }
 

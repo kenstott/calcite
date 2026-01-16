@@ -22,6 +22,7 @@ import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
@@ -37,6 +38,8 @@ import org.apache.iceberg.hadoop.HadoopTables;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Types;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 
 import org.slf4j.Logger;
@@ -46,6 +49,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,8 +66,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>Hidden partitioning</li>
  * </ul>
  */
-public class IcebergTable extends AbstractTable implements ScannableTable {
+public class IcebergTable extends AbstractTable implements ScannableTable, CommentableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTable.class);
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final Table icebergTable;
   private final @Nullable Long snapshotId;
@@ -71,6 +77,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable {
   private final Map<String, Object> config;
   private @Nullable RelDataType rowType;
   private @Nullable Double cachedRowCount;
+  private @Nullable Map<String, String> cachedColumnComments;
 
   /**
    * Creates an IcebergTable from a path.
@@ -278,5 +285,92 @@ public class IcebergTable extends AbstractTable implements ScannableTable {
     Map<String, Object> newConfig = new java.util.HashMap<>(this.config);
     newConfig.put("asOfTimestamp", timestamp);
     return new IcebergTable(source, newConfig);
+  }
+
+  // CommentableTable implementation
+
+  /**
+   * Returns the table comment from Iceberg properties.
+   *
+   * <p>The table comment is stored as the "comment" property in Iceberg table metadata.
+   *
+   * @return Table comment, or null if not available
+   */
+  @Override public @Nullable String getTableComment() {
+    return icebergTable.properties().get("comment");
+  }
+
+  /**
+   * Returns the column comment from Iceberg schema or properties.
+   *
+   * <p>Column comments are retrieved from two sources (in order of priority):
+   * <ol>
+   *   <li>Iceberg schema field documentation (field.doc())</li>
+   *   <li>Iceberg table property "column.comments" (JSON map)</li>
+   * </ol>
+   *
+   * @param columnName Name of the column (case-insensitive)
+   * @return Column comment, or null if not available
+   */
+  @Override public @Nullable String getColumnComment(String columnName) {
+    if (columnName == null) {
+      return null;
+    }
+
+    // First try to get from Iceberg schema field doc
+    Schema schema = icebergTable.schema();
+    for (Types.NestedField field : schema.columns()) {
+      if (field.name().equalsIgnoreCase(columnName)) {
+        String doc = field.doc();
+        if (doc != null && !doc.isEmpty()) {
+          return doc;
+        }
+        break;
+      }
+    }
+
+    // Fall back to column.comments property
+    Map<String, String> comments = loadColumnComments();
+    if (comments != null) {
+      // Try exact match first
+      String comment = comments.get(columnName);
+      if (comment != null) {
+        return comment;
+      }
+      // Try case-insensitive match
+      for (Map.Entry<String, String> entry : comments.entrySet()) {
+        if (entry.getKey().equalsIgnoreCase(columnName)) {
+          return entry.getValue();
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Loads column comments from Iceberg table properties.
+   * Results are cached for performance.
+   */
+  private Map<String, String> loadColumnComments() {
+    if (cachedColumnComments != null) {
+      return cachedColumnComments;
+    }
+
+    String json = icebergTable.properties().get("column.comments");
+    if (json == null || json.isEmpty()) {
+      cachedColumnComments = Collections.emptyMap();
+      return cachedColumnComments;
+    }
+
+    try {
+      cachedColumnComments = MAPPER.readValue(json,
+          new TypeReference<Map<String, String>>() { });
+    } catch (Exception e) {
+      LOGGER.warn("Failed to parse column.comments property: {}", e.getMessage());
+      cachedColumnComments = Collections.emptyMap();
+    }
+
+    return cachedColumnComments;
   }
 }
