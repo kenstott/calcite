@@ -389,6 +389,12 @@ public class FileSchemaBuilder {
       throw new IllegalStateException("Schema config must be set before building");
     }
 
+    // Inject schema name into config for ETL processing
+    // This ensures SchemaConfig.fromMap() has the required name field
+    if (!config.containsKey("name") && !config.containsKey("schemaName")) {
+      config.put("name", name);
+    }
+
     // Run ETL if autoDownload is enabled (ensures all hooks are configured first)
     runEtlIfNeeded();
 
