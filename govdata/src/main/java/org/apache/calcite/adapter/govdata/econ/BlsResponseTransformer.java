@@ -79,6 +79,9 @@ public class BlsResponseTransformer implements ResponseTransformer {
   /** BLS status indicating failed request. */
   private static final String STATUS_FAILED = "REQUEST_FAILED";
 
+  /** BLS status indicating rate limiting - request was not processed. */
+  private static final String STATUS_NOT_PROCESSED = "REQUEST_NOT_PROCESSED";
+
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("BLS: Empty response received for {}", context.getUrl());
@@ -95,6 +98,12 @@ public class BlsResponseTransformer implements ResponseTransformer {
         return extractSuccessData(root, context);
       } else if (STATUS_FAILED.equals(status)) {
         return handleFailedRequest(root, context);
+      } else if (STATUS_NOT_PROCESSED.equals(status)) {
+        // Rate limiting - throw exception to trigger error TTL retry
+        String msg = String.format("BLS rate limited (REQUEST_NOT_PROCESSED) for %s - will retry after error TTL",
+            context.getUrl());
+        LOGGER.warn(msg);
+        throw new RuntimeException(msg);
       } else {
         // Unknown status - log warning but try to extract data anyway
         LOGGER.warn("BLS: Unknown status '{}' for {}", status, context.getUrl());
