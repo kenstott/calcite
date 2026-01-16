@@ -648,8 +648,9 @@ public class ModelLifecycleProcessor {
         return null;
       }
       // Configure LoaderOptions with higher alias limit for complex YAML schemas
+      // (e.g., *county_fips_column repeated in 30+ census tables)
       org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
-      loaderOptions.setMaxAliasesForCollections(200);
+      loaderOptions.setMaxAliasesForCollections(500);
       org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(loaderOptions);
       Map<String, Object> schemaMap = yaml.load(is);
 
