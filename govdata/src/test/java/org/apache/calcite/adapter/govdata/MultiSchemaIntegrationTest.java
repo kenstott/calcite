@@ -79,7 +79,7 @@ public class MultiSchemaIntegrationTest {
 
   /**
    * Creates a connection with all four schemas: ECON, ECON_REFERENCE, GEO, CENSUS.
-   * Uses autoDownload: false to query existing cached data without making API calls.
+   * Uses autoDownload: true to materialize tables from API sources on first access.
    */
   private Connection createUnifiedConnection() throws SQLException {
     String cacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
@@ -150,7 +150,7 @@ public class MultiSchemaIntegrationTest {
         "        " + s3ConfigJson +
         "        \"startYear\": " + startYear + "," +
         "        \"endYear\": " + endYear + "," +
-        "        \"autoDownload\": false" +
+        "        \"autoDownload\": true" +
         "      }" +
         "    }," +
         "    {" +
@@ -166,7 +166,7 @@ public class MultiSchemaIntegrationTest {
         "        \"cacheDirectory\": \"" + cacheDir + "\"," +
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
-        "        \"autoDownload\": false" +
+        "        \"autoDownload\": true" +
         "      }" +
         "    }," +
         "    {" +
@@ -182,7 +182,7 @@ public class MultiSchemaIntegrationTest {
         "        \"cacheDirectory\": \"" + cacheDir + "\"," +
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
-        "        \"autoDownload\": false" +
+        "        \"autoDownload\": true" +
         "      }" +
         "    }," +
         "    {" +
@@ -200,7 +200,7 @@ public class MultiSchemaIntegrationTest {
         "        " + s3ConfigJson +
         "        \"startYear\": " + startYear + "," +
         "        \"endYear\": " + endYear + "," +
-        "        \"autoDownload\": false" +
+        "        \"autoDownload\": true" +
         "      }" +
         "    }" +
         "  ]" +

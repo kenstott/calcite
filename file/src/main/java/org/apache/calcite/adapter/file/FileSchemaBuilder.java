@@ -88,9 +88,9 @@ public class FileSchemaBuilder {
         throw new IllegalStateException("Schema resource not found: " + resourcePath);
       }
       // Configure LoaderOptions with higher alias limit for complex YAML schemas
-      // that use many anchors/aliases (e.g., *standard_partitions repeated in many tables)
+      // that use many anchors/aliases (e.g., *county_fips_column repeated in 30+ tables)
       org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
-      loaderOptions.setMaxAliasesForCollections(200);
+      loaderOptions.setMaxAliasesForCollections(500);
       Map<String, Object> rawConfig = new Yaml(loaderOptions).load(is);
       // Resolve all ${ENV_VAR} patterns at load time
       this.config = resolveAllEnvVars(rawConfig);
