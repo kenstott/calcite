@@ -431,6 +431,8 @@ public class EtlPipeline {
               .options(materializeConfig.getOptions())
               .name(needsName ? config.getName() : materializeConfig.getName())
               .iceberg(materializeConfig.getIceberg())
+              .tableComment(materializeConfig.getTableComment())
+              .columnComments(materializeConfig.getColumnComments())
               .build();
           LOGGER.debug("Merged table config: name={}, columns={}",
               needsName, needsColumns ? config.getColumns().size() : 0);
