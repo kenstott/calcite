@@ -280,8 +280,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Schema config can come from:
     //   1. "schemaResource": "/path/to/schema.yaml" (classpath resource)
     //   2. Directly embedded in the operand (sources, materialize sections, etc.)
+    // Skip if ETL was already run by parent FileSchemaBuilder (_etlComplete flag)
     Boolean autoDownload = parseBooleanValue(operand.get("autoDownload"));
-    if (Boolean.TRUE.equals(autoDownload)) {
+    Boolean etlComplete = Boolean.TRUE.equals(operand.get("_etlComplete"));
+    if (Boolean.TRUE.equals(autoDownload) && !etlComplete) {
       String schemaResource = (String) operand.get("schemaResource");
       LOGGER.info("autoDownload enabled, running ETL pipeline (schemaResource: {})",
           schemaResource != null ? schemaResource : "embedded in operand");

@@ -212,17 +212,18 @@ public class EtlPipeline {
         if (verifyDataExists(pipelineName, config)) {
           long elapsed = System.currentTimeMillis() - startTime;
 
-          // Check empty result TTL
+          // Check empty result TTL - only retry if TTL has expired
           if (cached.rowCount == 0 && materializeConfig != null && materializeConfig.getOptions() != null) {
             long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
-            if (emptyResultTtlMillis > 0) {
-              LOGGER.info("Pipeline '{}' complete but has 0 rows - invalidating to retry ({}ms TTL)",
-                  pipelineName, emptyResultTtlMillis);
+            // Use TTL-aware check: retry only if TTL has expired
+            if (cached.isEmptyResultTtlExpired(emptyResultTtlMillis)) {
+              LOGGER.info("Pipeline '{}' complete but has 0 rows and TTL expired - invalidating to retry (TTL={}ms, completedAt={})",
+                  pipelineName, emptyResultTtlMillis, cached.completedAt);
               incrementalTracker.invalidateTableCompletion(pipelineName);
               // Fall through to normal dimension expansion
             } else {
               LOGGER.info("Pipeline '{}' complete (fast-path, no dimension expansion) - "
-                  + "skipping ({}ms, 0 rows)", pipelineName, elapsed);
+                  + "skipping ({}ms, 0 rows, TTL not expired)", pipelineName, elapsed);
               String tableLocation = baseDirectory + "/" + pipelineName;
               return EtlResult.builder()
                   .pipelineName(pipelineName)
@@ -253,9 +254,56 @@ public class EtlPipeline {
           incrementalTracker.invalidateTableCompletion(pipelineName);
           incrementalTracker.invalidateAll(pipelineName);
         }
+      } else if (cached != null && cached.rowCount > 0) {
+        // Config hash mismatch but data exists with rows - skip ETL validation
+        // This handles cases where year range changed but data is already complete
+        if (verifyDataExists(pipelineName, config)) {
+          long elapsed = System.currentTimeMillis() - startTime;
+          String tableLocation = baseDirectory + "/" + pipelineName;
+          // Update cached config hash for future fast-path
+          incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
+              cached.signature, cached.rowCount);
+          LOGGER.info("Pipeline '{}' data exists (config hash updated) - skipping ETL validation ({}ms, {} rows)",
+              pipelineName, elapsed, cached.rowCount);
+          return EtlResult.builder()
+              .pipelineName(pipelineName)
+              .skippedEntirePipeline(true)
+              .elapsedMs(elapsed)
+              .tableLocation(tableLocation)
+              .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
+              .totalRows(cached.rowCount)
+              .build();
+        } else {
+          LOGGER.debug("Config hash mismatch (cached: {}, current: {}) and data not found - will expand dimensions",
+              cached.configHash, configHash);
+        }
       } else if (cached != null) {
-        LOGGER.debug("Config hash mismatch (cached: {}, current: {}) - will expand dimensions",
+        // Config hash mismatch with 0 rows - need to validate
+        LOGGER.debug("Config hash mismatch (cached: {}, current: {}) with 0 rows - will expand dimensions",
             cached.configHash, configHash);
+      } else if (cached == null && materializeConfig != null
+          && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
+        // No cached completion - check if Iceberg data exists (cold start recovery)
+        if (verifyDataExists(pipelineName, config)) {
+          String tableLocation = baseDirectory + "/" + pipelineName;
+          long rowCount = readRowCountFromIceberg(tableLocation);
+          if (rowCount > 0) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            // Cache the completion for future fast-path
+            incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
+                "recovered", rowCount);
+            LOGGER.info("Pipeline '{}' recovered from Iceberg (cold start) - skipping ETL validation ({}ms, {} rows)",
+                pipelineName, elapsed, rowCount);
+            return EtlResult.builder()
+                .pipelineName(pipelineName)
+                .skippedEntirePipeline(true)
+                .elapsedMs(elapsed)
+                .tableLocation(tableLocation)
+                .materializeFormat(materializeConfig.getFormat())
+                .totalRows(rowCount)
+                .build();
+          }
+        }
       }
 
       // Phase 1: Expand dimensions (with optional custom DimensionResolver from hooks)
