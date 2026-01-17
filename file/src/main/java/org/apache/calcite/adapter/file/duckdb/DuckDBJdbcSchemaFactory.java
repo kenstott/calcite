@@ -931,6 +931,35 @@ public class DuckDBJdbcSchemaFactory {
       LOGGER.info("DuckDB: FileSchema reports it has tables but registry is empty - check conversion process");
     }
 
+    // Check if any Iceberg tables exist and pre-load extension once
+    boolean hasIcebergTables = records.values().stream()
+        .anyMatch(r -> "ICEBERG_PARQUET".equals(r.getConversionType()));
+
+    if (hasIcebergTables) {
+      // Install and load iceberg extension once (outside the loop for efficiency)
+      try {
+        conn.createStatement().execute("INSTALL iceberg");
+        LOGGER.debug("Iceberg extension installed");
+      } catch (SQLException e) {
+        LOGGER.debug("Iceberg extension may already be installed: {}", e.getMessage());
+      }
+
+      try {
+        conn.createStatement().execute("LOAD iceberg");
+        LOGGER.debug("Iceberg extension loaded");
+      } catch (SQLException e) {
+        LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
+      }
+
+      // Enable version guessing for tables without version-hint file
+      try {
+        conn.createStatement().execute("SET unsafe_enable_version_guessing = true");
+        LOGGER.debug("Iceberg version guessing enabled");
+      } catch (SQLException e) {
+        LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
+      }
+    }
+
     // Process each table from the registry
     int viewCount = 0;
     for (java.util.Map.Entry<String, ConversionMetadata.ConversionRecord> entry : records.entrySet()) {
@@ -1000,30 +1029,8 @@ public class DuckDBJdbcSchemaFactory {
 
         if (isIcebergTable) {
           // Use DuckDB's native Iceberg support
-          // First, ensure the iceberg extension is installed and loaded
+          // NOTE: Iceberg extension is installed/loaded once before the loop for efficiency
           try {
-            // Install and load iceberg extension if not already done
-            try {
-              conn.createStatement().execute("INSTALL iceberg");
-            } catch (SQLException e) {
-              // Extension might already be installed
-              LOGGER.debug("Iceberg extension may already be installed: {}", e.getMessage());
-            }
-
-            try {
-              conn.createStatement().execute("LOAD iceberg");
-            } catch (SQLException e) {
-              // Extension might already be loaded
-              LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
-            }
-
-            // Enable version guessing for tables without version-hint file
-            try {
-              conn.createStatement().execute("SET unsafe_enable_version_guessing = true");
-            } catch (SQLException e) {
-              LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
-            }
-
             // Use record.sourceFile which contains the actual Iceberg table location from materialization
             // For ICEBERG_PARQUET tables, sourceFile should always contain the correct path
             String icebergTablePath;

@@ -95,6 +95,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("No dataSource specified, defaulting to 'sec'");
     }
 
+    // Check if this schema was already created (e.g., as a dependency of another schema)
+    String cacheKey = dataSource.toLowerCase();
+    Schema cachedSchema = schemaCache.get(cacheKey);
+    if (cachedSchema != null) {
+      LOGGER.info("Schema '{}' (dataSource={}) already created as dependency, returning cached",
+          name, dataSource);
+      return cachedSchema;
+    }
+
     LOGGER.info("Creating government data schema '{}' for source: {}", name, dataSource);
 
     // Initialize storage providers
@@ -151,6 +160,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Run ETL for all schemas
     ModelLifecycleProcessor.ProcessResult result = processorBuilder.build().process();
 
+    // Cache dependency schemas so they can be returned if requested later
+    for (String depDataSource : factory.getDependencies()) {
+      String depSchemaName = depDataSource.toUpperCase();
+      Schema depSchema = result.getSchema(depSchemaName);
+      if (depSchema != null) {
+        schemaCache.put(depDataSource.toLowerCase(), depSchema);
+        LOGGER.debug("Cached dependency schema '{}' (key={})", depSchemaName, depDataSource.toLowerCase());
+      }
+    }
+
     // Return the created schema directly (not the SchemaPlus wrapper)
     // This is essential because CachingCalciteSchema.snapshot() fails
     // with SchemaPlus wrappers (SchemaPlusImpl.snapshot() throws UnsupportedOperationException)
@@ -159,12 +178,22 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       throw new IllegalStateException("Failed to create schema: " + name);
     }
 
+    // Cache the main schema as well
+    schemaCache.put(cacheKey, schema);
+
     LOGGER.info("Schema '{}' created successfully", name);
     return schema;
   }
 
-  // Track processed dependencies to avoid duplicates
-  private final java.util.Set<String> processedDependencies = new java.util.HashSet<>();
+  // Track processed dependencies to avoid duplicates across factory instances
+  // Static because Calcite creates new factory instances per schema
+  private static final java.util.Set<String> processedDependencies =
+      java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+  // Cache schemas that were created as dependencies so we can return them
+  // when they are requested as main schemas (avoids double processing)
+  private static final java.util.Map<String, Schema> schemaCache =
+      java.util.Collections.synchronizedMap(new java.util.HashMap<>());
 
   /**
    * Get the sub-schema factory for the given data source.

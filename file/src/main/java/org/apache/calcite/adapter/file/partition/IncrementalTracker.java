@@ -258,11 +258,29 @@ public interface IncrementalTracker {
     public final String configHash;
     public final String signature;
     public final long rowCount;
+    public final long completedAt;
 
     public CachedCompletion(String configHash, String signature, long rowCount) {
+      this(configHash, signature, rowCount, System.currentTimeMillis());
+    }
+
+    public CachedCompletion(String configHash, String signature, long rowCount, long completedAt) {
       this.configHash = configHash;
       this.signature = signature;
       this.rowCount = rowCount;
+      this.completedAt = completedAt;
+    }
+
+    /**
+     * Check if the empty result TTL has expired.
+     * @param emptyResultTtlMillis The TTL in milliseconds
+     * @return true if TTL has expired and retry is needed
+     */
+    public boolean isEmptyResultTtlExpired(long emptyResultTtlMillis) {
+      if (rowCount > 0 || emptyResultTtlMillis <= 0) {
+        return false; // Not empty or no TTL configured
+      }
+      return System.currentTimeMillis() > completedAt + emptyResultTtlMillis;
     }
   }
 

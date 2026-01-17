@@ -425,6 +425,11 @@ public class FileSchemaBuilder {
       operand.put("_incrementalTracker", incrementalTracker);
     }
 
+    // Mark ETL as complete to prevent FileSchemaFactory from running it again
+    if (etlExecuted) {
+      operand.put("_etlComplete", Boolean.TRUE);
+    }
+
     // Create schema via FileSchemaFactory
     return FileSchemaFactory.INSTANCE.create(parentSchema, name, operand);
   }

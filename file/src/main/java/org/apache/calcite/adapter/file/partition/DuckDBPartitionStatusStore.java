@@ -877,7 +877,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
   }
 
   @Override public CachedCompletion getCachedCompletion(String pipelineName) {
-    String sql = "SELECT config_hash, signature, row_count FROM table_completion "
+    String sql = "SELECT config_hash, signature, row_count, completed_at FROM table_completion "
         + "WHERE pipeline_name = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, pipelineName);
@@ -886,8 +886,9 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
           String configHash = rs.getString("config_hash");
           String signature = rs.getString("signature");
           long rowCount = rs.getLong("row_count");
+          long completedAt = rs.getLong("completed_at");
           if (configHash != null) {
-            return new CachedCompletion(configHash, signature, rowCount);
+            return new CachedCompletion(configHash, signature, rowCount, completedAt);
           }
         }
       }
