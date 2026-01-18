@@ -288,7 +288,15 @@ public class EtlPipeline {
         // No cached completion - check if Iceberg data exists (cold start recovery)
         if (verifyDataExists(pipelineName, config)) {
           String tableLocation = baseDirectory + "/" + pipelineName;
-          long rowCount = readRowCountFromIceberg(tableLocation);
+          // Read row count with schema validation - if columns are missing,
+          // the table will be dropped and 0 returned, triggering full ETL
+          // Use config.getColumns() since materializeConfig.getColumns() isn't merged yet
+          List<ColumnConfig> expectedColumns = config.getColumns();
+          if ((expectedColumns == null || expectedColumns.isEmpty())
+              && materializeConfig.getColumns() != null && !materializeConfig.getColumns().isEmpty()) {
+            expectedColumns = materializeConfig.getColumns();
+          }
+          long rowCount = readRowCountFromIceberg(tableLocation, expectedColumns);
           if (rowCount > 0) {
             long elapsed = System.currentTimeMillis() - startTime;
             // Cache the completion for future fast-path
@@ -1163,6 +1171,19 @@ public class EtlPipeline {
    * @return Row count from metadata, or 0 if unable to read
    */
   private long readRowCountFromIceberg(String tableLocation) {
+    return readRowCountFromIceberg(tableLocation, null);
+  }
+
+  /**
+   * Read row count from Iceberg metadata with optional schema validation.
+   * If expectedColumns is provided and there's a schema mismatch, the table
+   * is dropped and 0 is returned to trigger full ETL recreation.
+   *
+   * @param tableLocation The Iceberg table location
+   * @param expectedColumns Optional list of expected columns for schema validation
+   * @return Row count from metadata, or 0 if unable to read or schema mismatch
+   */
+  private long readRowCountFromIceberg(String tableLocation, List<ColumnConfig> expectedColumns) {
     try {
       org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
 
@@ -1213,6 +1234,32 @@ public class EtlPipeline {
             org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
         org.apache.iceberg.Table table = catalog.loadTable(tableId);
+
+        // Schema validation if expected columns provided
+        if (expectedColumns != null && !expectedColumns.isEmpty()) {
+          org.apache.iceberg.Schema icebergSchema = table.schema();
+          java.util.Set<String> existingColumns = new java.util.HashSet<String>();
+          for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
+            existingColumns.add(field.name().toLowerCase());
+          }
+
+          java.util.Set<String> missingColumns = new java.util.HashSet<String>();
+          for (ColumnConfig col : expectedColumns) {
+            String colName = col.getName().toLowerCase();
+            if (!existingColumns.contains(colName)) {
+              missingColumns.add(col.getName());
+            }
+          }
+
+          if (!missingColumns.isEmpty()) {
+            LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
+                + "Dropping table for recreation.",
+                tableLocation, missingColumns);
+            catalog.dropTable(tableId, true);
+            return 0;
+          }
+        }
+
         org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
 
         if (snapshot == null) {
