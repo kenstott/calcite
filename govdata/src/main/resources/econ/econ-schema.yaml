@@ -443,81 +443,36 @@ partitionedTables:
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
+    # Columns match BLS API response fields
     columns:
-      - *date_column
       - name: series
         type: string
         nullable: true
         comment: BLS series identifier (e.g., 'LNS14000000' for unemployment rate)
-      - name: series_name
+      - name: year
         type: string
         nullable: true
-        comment: Descriptive name of employment series
+        comment: Data year from BLS API
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly, Q01-Q04 for quarterly)
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name (e.g., 'January', 'February')
       - name: value
         type: double
         nullable: true
         comment: Employment statistic value (e.g., unemployment rate as percentage)
-      - name: unit
-        type: string
-        nullable: true
-        comment: Unit of measurement (e.g., 'Percent', 'Thousands of Persons')
-      - name: seasonally_adjusted
+      - name: latest
         type: boolean
         nullable: true
-        comment: Whether data is seasonally adjusted
-      - name: category
+        comment: Whether this is the latest data point in the series
+      - name: footnotes
         type: string
         nullable: true
-        comment: Employment category (e.g., 'Labor Force', 'Employment Level')
-      - name: subcategory
-        type: string
-        nullable: true
-        comment: Employment subcategory for detailed classification
-      - name: net_change_1month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.net_changes['1'] AS DOUBLE)"
-        comment: Net change over 1 month from BLS calculations
-      - name: net_change_3month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.net_changes['3'] AS DOUBLE)"
-        comment: Net change over 3 months from BLS calculations
-      - name: net_change_6month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.net_changes['6'] AS DOUBLE)"
-        comment: Net change over 6 months from BLS calculations
-      - name: net_change_12month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.net_changes['12'] AS DOUBLE)"
-        comment: Net change over 12 months from BLS calculations
-      - name: pct_change_1month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.pct_changes['1'] AS DOUBLE)"
-        comment: Percentage change over 1 month from BLS calculations
-      - name: pct_change_3month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.pct_changes['3'] AS DOUBLE)"
-        comment: Percentage change over 3 months from BLS calculations
-      - name: pct_change_6month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.pct_changes['6'] AS DOUBLE)"
-        comment: Percentage change over 6 months from BLS calculations
-      - name: pct_change_12month
-        type: double
-        nullable: true
-        expression: "CAST(calculations.pct_changes['12'] AS DOUBLE)"
-        comment: Percentage change over 12 months from BLS calculations
-      - name: series_name_embedding
-        type: array<double>
-        nullable: true
-        expression: "CASE WHEN length(series_name) > 10 THEN embed(series_name)::FLOAT[384] ELSE NULL END"
-        comment: 384-dim vector embedding for semantic search on series_name (only for substantial text)
+        comment: Any footnotes or qualifiers for the data point
 
     # API Configuration
     download:
@@ -603,44 +558,36 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates.
+    # Columns match BLS API response fields (series > data array)
     columns:
-      - *date_column
-      - name: index_type
+      - name: series
         type: string
         nullable: true
-        comment: Price index type (CPI=Consumer Price Index, PPI=Producer Price Index)
-      - name: item_code
+        comment: BLS series identifier (e.g., 'CUUR0000SA0' for CPI All Urban, 'WPUFD49207' for PPI)
+      - name: year
         type: string
         nullable: true
-        comment: BLS item code identifying specific goods/services category
-      - name: area_code
+        comment: Data year from BLS API
+      - name: period
         type: string
         nullable: true
-        comment: BLS area code (e.g., 'U'=U.S. city average, regional codes)
-      - name: item_name
+        comment: BLS period identifier (M01-M12 for monthly)
+      - name: periodName
         type: string
         nullable: true
-        comment: Description of goods/services category (e.g., 'Food', 'Energy', 'All items')
-      - name: index_value
+        comment: Human-readable period name (e.g., 'January', 'February')
+      - name: value
         type: double
         nullable: true
         comment: Price index value (typically base period = 100)
-      - name: percent_change_month
-        type: double
-        nullable: true
-        comment: Month-over-month percentage change in price index
-      - name: percent_change_year
-        type: double
-        nullable: true
-        comment: Year-over-year percentage change in price index
-      - name: area_name
-        type: string
-        nullable: true
-        comment: Geographic area name (e.g., 'U.S. City Average', 'Los Angeles')
-      - name: seasonally_adjusted
+      - name: latest
         type: boolean
         nullable: true
-        comment: Whether price index is seasonally adjusted
+        comment: Whether this is the latest data point in the series
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: Any footnotes or qualifiers for the data point
 
     # API Configuration
     download:
@@ -983,25 +930,37 @@ partitionedTables:
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
 
+    # Columns match BLS API response fields (series > data array)
+    # The series ID encodes state and industry: SMS{stateCode}{industryCode}01
     columns:
-      - *date_column
-      - *series_column
-      - name: state_code
+      - name: series
         type: string
         nullable: true
-        comment: State FIPS code
-      - *state_name
-      - name: industry_code
+        comment: BLS series ID (e.g., SMS01000000000000001 encodes Alabama total employment)
+      - name: year
         type: string
         nullable: true
-        comment: NAICS supersector code
-      - *industry_name
+        comment: Data year from BLS API
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name (e.g., 'January')
       - name: value
         type: double
         nullable: true
         comment: Employment in thousands
-      - *percent_change_month
-      - *percent_change_year
+      - name: latest
+        type: boolean
+        nullable: true
+        comment: Whether this is the latest data point in the series
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: Any footnotes or qualifiers for the data point
 
     # API Configuration
     # Full series list (1,122 total: 51 states x 22 industries) available in /bls/state-industry-series.json
@@ -1206,28 +1165,37 @@ partitionedTables:
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
 
+    # Columns match BLS API response fields (series > data array)
+    # The series ID encodes metro area and industry: SMU{areaCode}{industryCode}01
     columns:
-      - *date_column
-      - *series_column
-      - name: metro_code
+      - name: series
         type: string
         nullable: true
-        comment: Metro area code
-      - name: metro_name
+        comment: BLS series ID (e.g., SMU36935610000000001 encodes NYC total employment)
+      - name: year
         type: string
         nullable: true
-        comment: Metro area name
-      - name: industry_code
+        comment: Data year from BLS API
+      - name: period
         type: string
         nullable: true
-        comment: NAICS supersector code
-      - *industry_name
+        comment: BLS period identifier (M01-M12 for monthly)
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name (e.g., 'January')
       - name: value
         type: double
         nullable: true
         comment: Employment in thousands
-      - *percent_change_month
-      - *percent_change_year
+      - name: latest
+        type: boolean
+        nullable: true
+        comment: Whether this is the latest data point in the series
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: Any footnotes or qualifiers for the data point
 
     # API Configuration
     # Full series list (594 total) available in /bls/metro-industry-series.json
@@ -2026,6 +1994,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
@@ -2146,6 +2115,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
@@ -2160,24 +2130,28 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API.
+    # Columns match Treasury Fiscal Data API response fields
     columns:
-      - *date_column
-      - name: maturity_months
-        type: int
-        nullable: true
-        comment: Maturity period in months (e.g., 1, 3, 6, 12, 60, 120, 360)
-      - name: maturity_label
+      - name: record_date
         type: string
         nullable: true
-        comment: Human-readable maturity label (e.g., '1-Month', '10-Year', '30-Year')
-      - name: yield_percent
+        comment: Date of the interest rate record (YYYY-MM-DD format)
+      - name: security_type_desc
+        type: string
+        nullable: true
+        comment: Type of Treasury security (e.g., 'Treasury Bills', 'Treasury Notes')
+      - name: security_desc
+        type: string
+        nullable: true
+        comment: Description of the security
+      - name: avg_interest_rate_amt
         type: double
         nullable: true
-        comment: Yield rate as a percentage (e.g., 4.25 for 4.25%)
-      - name: yield_type
+        comment: Average interest rate as a percentage
+      - name: src_line_nbr
         type: string
         nullable: true
-        comment: Type of Treasury security (e.g., 'Treasury Bill', 'Treasury Note', 'Treasury Bond')
+        comment: Source line number identifier
 
     # API Configuration
     download:
@@ -2254,28 +2228,28 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API.
+    # Columns match Treasury Fiscal Data debt_to_penny API response fields
     columns:
-      - *date_column
-      - name: debt_type
+      - name: record_date
         type: string
         nullable: true
-        comment: Type of federal debt (e.g., 'Total Public Debt Outstanding')
-      - name: amount_billions
+        comment: Date of the debt record (YYYY-MM-DD format)
+      - name: debt_held_public_amt
         type: double
         nullable: true
-        comment: Total debt amount in billions of dollars
-      - name: holder_category
+        comment: Debt held by the public in dollars
+      - name: intragov_hold_amt
+        type: double
+        nullable: true
+        comment: Intragovernmental holdings in dollars
+      - name: tot_pub_debt_out_amt
+        type: double
+        nullable: true
+        comment: Total public debt outstanding in dollars
+      - name: src_line_nbr
         type: string
         nullable: true
-        comment: Category of debt holder (always 'All' for total debt)
-      - name: debt_held_by_public
-        type: double
-        nullable: true
-        comment: Portion of debt held by the public in billions of dollars
-      - name: intragovernmental_holdings
-        type: double
-        nullable: true
-        comment: Intragovernmental debt holdings in billions of dollars
+        comment: Source line number identifier
 
     # API Configuration
     download:
@@ -2363,43 +2337,17 @@ partitionedTables:
         source: "/worldbank/worldbank-indicators.json"
         path: "indicators[*].items[*].code"
 
+    # Columns match World Bank API response fields from [1] array (data array)
+    # API response: [metadata, [{indicator:{id,value}, country:{id,value}, countryiso3code, date, value, unit, ...}]]
     columns:
-      # Partition columns (required for Hive-style partitioning)
-      - name: type
-        type: string
-        nullable: false
-        expression: "'world_bank'"  # Literal value for partition
-        comment: Data source type identifier
-      - name: frequency
-        type: string
-        nullable: false
-        expression: "'A'"  # Annual data
-        comment: Data frequency (A=Annual)
-      - name: country_code
+      - name: countryiso3code
         type: string
         nullable: true
-        expression: "countryiso3code"  # Map from API field name
         comment: ISO 3-letter country code (e.g., 'USA', 'CHN')
-      - name: country_name
+      - name: date
         type: string
         nullable: true
-        expression: "country.value"  # Nested object access
-        comment: Full country name
-      - name: indicator_code
-        type: string
-        nullable: true
-        expression: "indicator.id"  # Nested object access
-        comment: World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)
-      - name: indicator_name
-        type: string
-        nullable: true
-        expression: "indicator.value"  # Nested object access
-        comment: Full description of the World Bank indicator
-      - name: year
-        type: int
-        nullable: true
-        expression: "CAST(date AS INTEGER)"  # Map 'date' field to 'year'
-        comment: Year of observation
+        comment: Year of observation as string (e.g., '2022')
       - name: value
         type: double
         nullable: true
@@ -2408,11 +2356,14 @@ partitionedTables:
         type: string
         nullable: true
         comment: Unit of measurement (e.g., 'current US$', 'percent')
-      - name: scale
+      - name: obs_status
         type: string
         nullable: true
-        expression: "NULL"  # Not provided by World Bank API
-        comment: Scale factor (e.g., 'Millions', 'Billions')
+        comment: Observation status flag
+      - name: decimal
+        type: int
+        nullable: true
+        comment: Decimal precision indicator
 
     # HTTP Source configuration for EtlPipeline
     # Uses bulk download: all countries, year range filter, high per_page limit
