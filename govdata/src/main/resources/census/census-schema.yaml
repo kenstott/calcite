@@ -1729,41 +1729,64 @@ partitionedTables:
       year: *acs_year_range
       geography: *all_geographies
 
+    # Columns match Census ACS API response field names (B12001 table = Sex by Marital Status)
     columns:
-      - *name_column
-      - *state_column
-      - *county_column
-      - *county_fips_column
-      - name: population_15_plus
-        type: long
+      - name: NAME
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_001E" AS BIGINT)'
-        comment: Population 15 years and over
-      - name: never_married
-        type: long
+        comment: Geographic area name from Census API
+      - name: state
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_003E" AS BIGINT) + TRY_CAST(src."B12001_012E" AS BIGINT)'
-        comment: Never married
-      - name: now_married
-        type: long
+        comment: State FIPS code (2 digits)
+      - name: county
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_004E" AS BIGINT) + TRY_CAST(src."B12001_013E" AS BIGINT)'
-        comment: Now married (excluding separated)
-      - name: separated
-        type: long
+        comment: County FIPS code (3 digits, within state)
+      - name: B12001_001E
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_006E" AS BIGINT) + TRY_CAST(src."B12001_015E" AS BIGINT)'
-        comment: Separated
-      - name: widowed
-        type: long
+        comment: Population 15 years and over (total)
+      - name: B12001_003E
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_009E" AS BIGINT) + TRY_CAST(src."B12001_018E" AS BIGINT)'
-        comment: Widowed
-      - name: divorced
-        type: long
+        comment: Male never married
+      - name: B12001_004E
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."B12001_010E" AS BIGINT) + TRY_CAST(src."B12001_019E" AS BIGINT)'
-        comment: Divorced
+        comment: Male now married (excluding separated)
+      - name: B12001_006E
+        type: string
+        nullable: true
+        comment: Male separated
+      - name: B12001_009E
+        type: string
+        nullable: true
+        comment: Male widowed
+      - name: B12001_010E
+        type: string
+        nullable: true
+        comment: Male divorced
+      - name: B12001_012E
+        type: string
+        nullable: true
+        comment: Female never married
+      - name: B12001_013E
+        type: string
+        nullable: true
+        comment: Female now married (excluding separated)
+      - name: B12001_015E
+        type: string
+        nullable: true
+        comment: Female separated
+      - name: B12001_018E
+        type: string
+        nullable: true
+        comment: Female widowed
+      - name: B12001_019E
+        type: string
+        nullable: true
+        comment: Female divorced
 
     source:
       type: http
@@ -2936,52 +2959,53 @@ partitionedTables:
         - '2312'  # December 2023
         - '2412'  # December 2024
 
+    # Columns match Census Building Permits Survey fixed-width text file format
+    # Data parsed from https://www2.census.gov/econ/bps/State/stYYMMy.txt
     columns:
-      - name: survey_date
+      - name: column0
         type: string
-        nullable: false
-        expression: 'src."column0"'
+        nullable: true
         comment: Survey date in YYYYMM format
-      - name: state_fips
+      - name: column1
         type: string
-        nullable: false
-        expression: 'src."column1"'
+        nullable: true
         comment: State FIPS code (2-digit)
-      - name: state_name
+      - name: column4
         type: string
         nullable: true
-        expression: 'src."column4"'
         comment: State name
-      - name: units_1unit
-        type: long
+      - name: column6
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."column6" AS BIGINT)'
         comment: Single-family housing units authorized
-      - name: units_2unit
-        type: long
+      - name: column7
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."column9" AS BIGINT)'
-        comment: Duplex housing units authorized
-      - name: units_3_4unit
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."column12" AS BIGINT)'
-        comment: 3-4 unit housing units authorized
-      - name: units_5plus
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."column15" AS BIGINT)'
-        comment: 5+ unit housing units authorized
-      - name: value_1unit
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."column7" AS BIGINT)'
         comment: Value of single-family permits ($1000)
-      - name: value_total
-        type: long
+      - name: column9
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."column7" AS BIGINT) + TRY_CAST(src."column10" AS BIGINT) + TRY_CAST(src."column13" AS BIGINT) + TRY_CAST(src."column16" AS BIGINT)'
-        comment: Total value of all permits ($1000)
+        comment: Duplex housing units authorized
+      - name: column10
+        type: string
+        nullable: true
+        comment: Value of duplex permits ($1000)
+      - name: column12
+        type: string
+        nullable: true
+        comment: 3-4 unit housing units authorized
+      - name: column13
+        type: string
+        nullable: true
+        comment: Value of 3-4 unit permits ($1000)
+      - name: column15
+        type: string
+        nullable: true
+        comment: 5+ unit housing units authorized
+      - name: column16
+        type: string
+        nullable: true
+        comment: Value of 5+ unit permits ($1000)
 
     source:
       type: http
@@ -3151,46 +3175,40 @@ partitionedTables:
         - 'fl'
         - 'ga'
 
+    # Columns match LODES WAC CSV file column names
+    # Data from https://lehd.ces.census.gov/data/lodes/
     columns:
-      - name: block_id
+      - name: w_geocode
         type: string
-        nullable: false
-        expression: 'src."w_geocode"'
-        comment: Workplace census block code
-      - name: total_jobs
-        type: long
         nullable: true
-        expression: 'TRY_CAST(src."C000" AS BIGINT)'
+        comment: Workplace census block code (15 digits)
+      - name: C000
+        type: string
+        nullable: true
         comment: Total number of jobs
-      - name: jobs_age_29_or_younger
-        type: long
+      - name: CA01
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CA01" AS BIGINT)'
         comment: Jobs for workers age 29 or younger
-      - name: jobs_age_30_to_54
-        type: long
+      - name: CA02
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CA02" AS BIGINT)'
         comment: Jobs for workers age 30 to 54
-      - name: jobs_age_55_or_older
-        type: long
+      - name: CA03
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CA03" AS BIGINT)'
         comment: Jobs for workers age 55 or older
-      - name: jobs_earning_1250_or_less
-        type: long
+      - name: CE01
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CE01" AS BIGINT)'
         comment: Jobs with monthly earnings $1,250 or less
-      - name: jobs_earning_1251_to_3333
-        type: long
+      - name: CE02
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CE02" AS BIGINT)'
         comment: Jobs with monthly earnings $1,251 to $3,333
-      - name: jobs_earning_3333_or_more
-        type: long
+      - name: CE03
+        type: string
         nullable: true
-        expression: 'TRY_CAST(src."CE03" AS BIGINT)'
         comment: Jobs with monthly earnings $3,333 or more
 
     source:

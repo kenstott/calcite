@@ -213,6 +213,8 @@ public class EtlPipeline {
           long elapsed = System.currentTimeMillis() - startTime;
 
           // Check empty result TTL - only retry if TTL has expired
+          // TODO: Consider adding a default emptyResultTtlMillis (e.g., 24 hours) when not configured
+          // to ensure empty results are always retried eventually, rather than requiring explicit config
           if (cached.rowCount == 0 && materializeConfig != null && materializeConfig.getOptions() != null) {
             long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
             // Use TTL-aware check: retry only if TTL has expired

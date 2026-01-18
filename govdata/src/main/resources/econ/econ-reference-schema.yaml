@@ -388,6 +388,8 @@ partitionedTables:
           type: VARCHAR
     comment: >
       BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.
+    # Columns match BEA API GetParameterValues response fields
+    # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "TableName", "Desc": "Description (A, Q)"}]}}}
     columns:
       - name: TableName
         type: string
@@ -396,47 +398,7 @@ partitionedTables:
       - name: Description
         type: string
         nullable: true
-        comment: Full table description from BEA including frequency indicators
-      - name: type
-        type: string
-        nullable: false
-        comment: Reference table type identifier for partitioning
-        expression: "'nipa_tables'"
-      - name: section
-        type: string
-        nullable: false
-        comment: Section number (1-8) extracted from TableName for partitioning
-        expression: "SUBSTR(TableName, 2, 1)"
-      - name: section_name
-        type: string
-        nullable: true
-        comment: Descriptive section name (e.g., 'domestic_product_income', 'foreign_transactions')
-        expression: "CASE SUBSTR(TableName, 2, 1) WHEN '1' THEN 'domestic_product_income' WHEN '2' THEN 'personal_income_outlays' WHEN '3' THEN 'government' WHEN '4' THEN 'foreign_transactions' WHEN '5' THEN 'saving_investment' WHEN '6' THEN 'income_employment_industry' WHEN '7' THEN 'supplemental' WHEN '8' THEN 'not_seasonally_adjusted' ELSE 'unknown' END"
-      - name: family
-        type: string
-        nullable: true
-        comment: Table family code within section (e.g., '01' for section 1.1.x series)
-        expression: "SUBSTR(TableName, 3, 2)"
-      - name: metric
-        type: string
-        nullable: true
-        comment: Metric code (e.g., '05' for current dollars, '06' for chained dollars)
-        expression: "SUBSTR(TableName, 5, 2)"
-      - name: table_number
-        type: string
-        nullable: true
-        comment: Standard BEA table number format (e.g., '1.1.5', '4.2.5B')
-        expression: "SUBSTR(TableName, 2, 1) || '.' || REGEXP_REPLACE(SUBSTR(TableName, 3, 2), '^0*(.+)$', '\\1') || '.' || REGEXP_REPLACE(SUBSTR(TableName, 5, 2), '^0*(.+)$', '\\1')"
-      - name: annual
-        type: boolean
-        nullable: true
-        comment: True if table has annual (A) frequency data available. Parsed from Description field during conversion.
-        expression: "Description LIKE '%(A%' OR Description LIKE '%A)%'"
-      - name: quarterly
-        type: boolean
-        nullable: true
-        comment: True if table has quarterly (Q) frequency data available. Parsed from Description field during conversion.
-        expression: "Description LIKE '%(Q%' OR Description LIKE '%Q)%'"
+        comment: Full table description from BEA including frequency indicators (A, Q)
 
     # API Configuration
     download:
@@ -528,48 +490,17 @@ partitionedTables:
           type: VARCHAR
     comment: >
       BEA Regional dataset LineCode catalog. Maps table-specific line codes to their descriptions for all 67 Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP*, etc.). Each BEA Regional table has its own set of valid LineCodes - this catalog is downloaded first to enable complete regional data collection without hardcoded limitations.
+    # Columns match BEA API GetParameterValuesFiltered response fields
+    # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "10", "Desc": "Personal income"}]}}}
     columns:
-      # Source columns mapped from BEA API response fields
       - name: Key
         type: string
-        nullable: false
+        nullable: true
         comment: Line code identifier from BEA API (e.g., '10', '20', '30')
       - name: Desc
         type: string
-        nullable: false
-        comment: Line code description from BEA API
-      # Derived columns with user-friendly names
-      - name: LineCode
-        type: string
-        nullable: false
-        comment: Line code identifier for this table (e.g., '10', '20', '30'). Different tables use different LineCode numbering schemes.
-        expression: "Key"
-      - name: Description
-        type: string
-        nullable: false
-        comment: Full line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
-        expression: "Desc"
-      # Note: TableName is available via the 'tablename' partition column - no need to duplicate
-      - name: table_prefix
-        type: string
         nullable: true
-        comment: "Parsed table prefix indicating geography and frequency: SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc."
-        expression: "SUBSTR('{tablename}', 1, 2)"
-      - name: data_category
-        type: string
-        nullable: true
-        comment: "Parsed data category from table name: INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc."
-        expression: "REGEXP_EXTRACT('{tablename}', '[A-Z]{2}([A-Z]+)[0-9]', 1)"
-      - name: geography_level
-        type: string
-        nullable: true
-        comment: "Geographic aggregation level: state, county, msa, micropolitan, etc."
-        expression: "CASE WHEN SUBSTR('{tablename}', 1, 2) IN ('SA', 'SQ') THEN 'state' WHEN SUBSTR('{tablename}', 1, 2) = 'CA' THEN 'county' ELSE 'unknown' END"
-      - name: frequency
-        type: string
-        nullable: true
-        comment: "Data frequency: annual, quarterly"
-        expression: "CASE WHEN SUBSTR('{tablename}', 2, 1) = 'A' THEN 'annual' WHEN SUBSTR('{tablename}', 2, 1) = 'Q' THEN 'quarterly' ELSE 'unknown' END"
+        comment: Line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
 
     # API Configuration
     download:
