@@ -383,7 +383,7 @@ public class MultiSchemaIntegrationTest {
     try (Statement stmt = conn.createStatement()) {
       // Test 1: ECON state_gdp query
       allPassed &= testQuery(stmt, "ECON state_gdp data",
-          "SELECT geo_name, year, gdp_millions "
+          "SELECT \"GeoName\", \"Year\", \"DataValue\" "
           + "FROM \"ECON\".state_gdp "
           + "LIMIT 5");
 
@@ -394,23 +394,23 @@ public class MultiSchemaIntegrationTest {
           + "WHERE series LIKE 'GDP%' "
           + "LIMIT 5");
 
-      // Test 3: GEO tiger_states query
-      allPassed &= testQuery(stmt, "GEO tiger_states query",
+      // Test 3: GEO states query
+      allPassed &= testQuery(stmt, "GEO states query",
           "SELECT state_fips, state_name "
-          + "FROM \"GEO\".tiger_states "
+          + "FROM \"GEO\".states "
           + "WHERE state_fips IN ('06', '36', '48') "
           + "LIMIT 5");
 
-      // Test 4: GEO tiger_counties query
-      allPassed &= testQuery(stmt, "GEO tiger_counties query",
+      // Test 4: GEO counties query
+      allPassed &= testQuery(stmt, "GEO counties query",
           "SELECT state_fips, county_fips, county_name "
-          + "FROM \"GEO\".tiger_counties "
+          + "FROM \"GEO\".counties "
           + "WHERE state_fips = '06' "
           + "LIMIT 5");
 
       // Test 5: CENSUS acs_population query
       allPassed &= testQuery(stmt, "CENSUS acs_population query",
-          "SELECT geoid, geo_name "
+          "SELECT geo_name, total_population "
           + "FROM \"CENSUS\".acs_population "
           + "LIMIT 5");
 
@@ -418,7 +418,7 @@ public class MultiSchemaIntegrationTest {
       allPassed &= testQuery(stmt, "Multi-schema analytical query",
           "SELECT "
           + "  (SELECT COUNT(*) FROM \"ECON\".state_gdp) as econ_rows, "
-          + "  (SELECT COUNT(*) FROM \"GEO\".tiger_states) as geo_rows, "
+          + "  (SELECT COUNT(*) FROM \"GEO\".states) as geo_rows, "
           + "  (SELECT COUNT(*) FROM \"ECON_REFERENCE\".fred_series) as ref_rows");
 
       // Test 7: ECON + ECON_REFERENCE - join economic data with reference catalog
@@ -429,9 +429,9 @@ public class MultiSchemaIntegrationTest {
 
       // Test 8: Cross-schema join - GEO states with ECON state_gdp
       allPassed &= testQuery(stmt, "GEO + ECON cross-schema join",
-          "SELECT g.state_name, e.gdp_millions, e.year "
-          + "FROM \"GEO\".tiger_states g "
-          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.geo_fips "
+          "SELECT g.state_name, e.\"DataValue\", e.\"Year\" "
+          + "FROM \"GEO\".states g "
+          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.\"GeoFIPS\" "
           + "WHERE g.state_fips = '06' "
           + "LIMIT 5");
 
@@ -441,27 +441,27 @@ public class MultiSchemaIntegrationTest {
 
       // Test 9: Multiple filter conditions with AND/OR
       allPassed &= testQuery(stmt, "Complex filter with AND/OR",
-          "SELECT geo_name, year, gdp_millions "
+          "SELECT \"GeoName\", \"Year\", \"DataValue\" "
           + "FROM \"ECON\".state_gdp "
-          + "WHERE (year >= 2020 AND year <= 2023) "
-          + "  AND (gdp_millions > 100000 OR geo_name LIKE 'Cal%') "
-          + "ORDER BY gdp_millions DESC "
+          + "WHERE (\"Year\" >= 2020 AND \"Year\" <= 2023) "
+          + "  AND (\"DataValue\" > 100000 OR \"GeoName\" LIKE 'Cal%') "
+          + "ORDER BY \"DataValue\" DESC "
           + "LIMIT 10");
 
       // Test 10: IN clause with subquery-style filter
       allPassed &= testQuery(stmt, "Filter with IN clause",
           "SELECT state_fips, state_name "
-          + "FROM \"GEO\".tiger_states "
+          + "FROM \"GEO\".states "
           + "WHERE state_fips IN ('06', '36', '48', '12', '17') "
           + "ORDER BY state_name");
 
       // Test 11: BETWEEN filter
       allPassed &= testQuery(stmt, "Filter with BETWEEN",
-          "SELECT geo_name, year, gdp_millions "
+          "SELECT \"GeoName\", \"Year\", \"DataValue\" "
           + "FROM \"ECON\".state_gdp "
-          + "WHERE gdp_millions BETWEEN 500000 AND 2000000 "
-          + "  AND year = 2022 "
-          + "ORDER BY gdp_millions DESC "
+          + "WHERE \"DataValue\" BETWEEN 500000 AND 2000000 "
+          + "  AND \"Year\" = 2022 "
+          + "ORDER BY \"DataValue\" DESC "
           + "LIMIT 10");
 
       // Test 12: LIKE pattern matching
@@ -474,7 +474,7 @@ public class MultiSchemaIntegrationTest {
       // Test 13: IS NOT NULL filter
       allPassed &= testQuery(stmt, "Filter with IS NOT NULL",
           "SELECT county_fips, county_name, state_fips "
-          + "FROM \"GEO\".tiger_counties "
+          + "FROM \"GEO\".counties "
           + "WHERE county_name IS NOT NULL AND state_fips = '06' "
           + "LIMIT 10");
 
@@ -484,36 +484,36 @@ public class MultiSchemaIntegrationTest {
 
       // Test 14: Simple GROUP BY with COUNT
       allPassed &= testQuery(stmt, "GROUP BY with COUNT",
-          "SELECT year, COUNT(*) as state_count "
+          "SELECT \"Year\", COUNT(*) as state_count "
           + "FROM \"ECON\".state_gdp "
-          + "GROUP BY year "
-          + "ORDER BY year DESC "
+          + "GROUP BY \"Year\" "
+          + "ORDER BY \"Year\" DESC "
           + "LIMIT 10");
 
       // Test 15: GROUP BY with SUM
       allPassed &= testQuery(stmt, "GROUP BY with SUM",
-          "SELECT year, SUM(gdp_millions) as total_gdp "
+          "SELECT \"Year\", SUM(\"DataValue\") as total_gdp "
           + "FROM \"ECON\".state_gdp "
-          + "GROUP BY year "
-          + "ORDER BY year DESC "
+          + "GROUP BY \"Year\" "
+          + "ORDER BY \"Year\" DESC "
           + "LIMIT 10");
 
       // Test 16: GROUP BY with multiple aggregates
       allPassed &= testQuery(stmt, "GROUP BY with multiple aggregates (SUM, AVG, MIN, MAX)",
-          "SELECT year, "
-          + "  SUM(gdp_millions) as total_gdp, "
-          + "  AVG(gdp_millions) as avg_gdp, "
-          + "  MIN(gdp_millions) as min_gdp, "
-          + "  MAX(gdp_millions) as max_gdp "
+          "SELECT \"Year\", "
+          + "  SUM(\"DataValue\") as total_gdp, "
+          + "  AVG(\"DataValue\") as avg_gdp, "
+          + "  MIN(\"DataValue\") as min_gdp, "
+          + "  MAX(\"DataValue\") as max_gdp "
           + "FROM \"ECON\".state_gdp "
-          + "GROUP BY year "
-          + "ORDER BY year DESC "
+          + "GROUP BY \"Year\" "
+          + "ORDER BY \"Year\" DESC "
           + "LIMIT 5");
 
       // Test 17: GROUP BY with HAVING clause
       allPassed &= testQuery(stmt, "GROUP BY with HAVING",
           "SELECT state_fips, COUNT(*) as county_count "
-          + "FROM \"GEO\".tiger_counties "
+          + "FROM \"GEO\".counties "
           + "GROUP BY state_fips "
           + "HAVING COUNT(*) > 50 "
           + "ORDER BY county_count DESC "
@@ -522,7 +522,7 @@ public class MultiSchemaIntegrationTest {
       // Test 18: GROUP BY on GEO data
       allPassed &= testQuery(stmt, "GROUP BY on counties per state",
           "SELECT state_fips, COUNT(*) as num_counties "
-          + "FROM \"GEO\".tiger_counties "
+          + "FROM \"GEO\".counties "
           + "GROUP BY state_fips "
           + "ORDER BY num_counties DESC "
           + "LIMIT 10");
@@ -533,49 +533,49 @@ public class MultiSchemaIntegrationTest {
 
       // Test 19: INNER JOIN with aggregation
       allPassed &= testQuery(stmt, "JOIN with aggregation",
-          "SELECT g.state_name, SUM(e.gdp_millions) as total_gdp "
-          + "FROM \"GEO\".tiger_states g "
-          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.geo_fips "
+          "SELECT g.state_name, SUM(e.\"DataValue\") as total_gdp "
+          + "FROM \"GEO\".states g "
+          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.\"GeoFIPS\" "
           + "GROUP BY g.state_name "
           + "ORDER BY total_gdp DESC "
           + "LIMIT 10");
 
       // Test 20: LEFT JOIN
       allPassed &= testQuery(stmt, "LEFT JOIN states with GDP",
-          "SELECT g.state_name, g.state_fips, e.gdp_millions, e.year "
-          + "FROM \"GEO\".tiger_states g "
-          + "LEFT JOIN \"ECON\".state_gdp e ON g.state_fips = e.geo_fips AND e.year = 2022 "
+          "SELECT g.state_name, g.state_fips, e.\"DataValue\", e.\"Year\" "
+          + "FROM \"GEO\".states g "
+          + "LEFT JOIN \"ECON\".state_gdp e ON g.state_fips = e.\"GeoFIPS\" AND e.\"Year\" = 2022 "
           + "ORDER BY g.state_name "
           + "LIMIT 10");
 
       // Test 21: JOIN with filter on both tables
       allPassed &= testQuery(stmt, "JOIN with filters on both tables",
-          "SELECT g.state_name, e.year, e.gdp_millions "
-          + "FROM \"GEO\".tiger_states g "
-          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.geo_fips "
+          "SELECT g.state_name, e.\"Year\", e.\"DataValue\" "
+          + "FROM \"GEO\".states g "
+          + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.\"GeoFIPS\" "
           + "WHERE g.state_fips IN ('06', '48', '36') "
-          + "  AND e.year >= 2020 "
-          + "ORDER BY e.gdp_millions DESC "
+          + "  AND e.\"Year\" >= 2020 "
+          + "ORDER BY e.\"DataValue\" DESC "
           + "LIMIT 15");
 
       // Test 22: Three-table join (GEO counties -> states -> ECON)
       allPassed &= testQuery(stmt, "Three-table join (counties -> states -> GDP)",
-          "SELECT s.state_name, COUNT(c.county_fips) as num_counties, MAX(e.gdp_millions) as max_gdp "
-          + "FROM \"GEO\".tiger_states s "
-          + "INNER JOIN \"GEO\".tiger_counties c ON s.state_fips = c.state_fips "
-          + "INNER JOIN \"ECON\".state_gdp e ON s.state_fips = e.geo_fips AND e.year = 2022 "
+          "SELECT s.state_name, COUNT(c.county_fips) as num_counties, MAX(e.\"DataValue\") as max_gdp "
+          + "FROM \"GEO\".states s "
+          + "INNER JOIN \"GEO\".counties c ON s.state_fips = c.state_fips "
+          + "INNER JOIN \"ECON\".state_gdp e ON s.state_fips = e.\"GeoFIPS\" AND e.\"Year\" = 2022 "
           + "GROUP BY s.state_name "
           + "ORDER BY num_counties DESC "
           + "LIMIT 10");
 
       // Test 23: Self-referential style comparison (same table, different filters)
       allPassed &= testQuery(stmt, "Compare GDP across years",
-          "SELECT e1.geo_name, e1.gdp_millions as gdp_2021, e2.gdp_millions as gdp_2022 "
+          "SELECT e1.\"GeoName\", e1.\"DataValue\" as gdp_2021, e2.\"DataValue\" as gdp_2022 "
           + "FROM \"ECON\".state_gdp e1 "
           + "INNER JOIN \"ECON\".state_gdp e2 "
-          + "  ON e1.geo_fips = e2.geo_fips "
-          + "WHERE e1.year = 2021 AND e2.year = 2022 "
-          + "ORDER BY e2.gdp_millions DESC "
+          + "  ON e1.\"GeoFIPS\" = e2.\"GeoFIPS\" "
+          + "WHERE e1.\"Year\" = 2021 AND e2.\"Year\" = 2022 "
+          + "ORDER BY e2.\"DataValue\" DESC "
           + "LIMIT 10");
 
       // =========================================================================
@@ -584,29 +584,29 @@ public class MultiSchemaIntegrationTest {
 
       // Test 24: Scalar subquery in SELECT
       allPassed &= testQuery(stmt, "Scalar subquery in SELECT",
-          "SELECT geo_name, gdp_millions, "
-          + "  (SELECT AVG(gdp_millions) FROM \"ECON\".state_gdp WHERE year = 2022) as avg_gdp "
+          "SELECT \"GeoName\", \"DataValue\", "
+          + "  (SELECT AVG(\"DataValue\") FROM \"ECON\".state_gdp WHERE \"Year\" = 2022) as avg_gdp "
           + "FROM \"ECON\".state_gdp "
-          + "WHERE year = 2022 "
-          + "ORDER BY gdp_millions DESC "
+          + "WHERE \"Year\" = 2022 "
+          + "ORDER BY \"DataValue\" DESC "
           + "LIMIT 5");
 
       // Test 25: Subquery in WHERE with IN
       allPassed &= testQuery(stmt, "Subquery in WHERE with IN",
           "SELECT state_name, state_fips "
-          + "FROM \"GEO\".tiger_states "
+          + "FROM \"GEO\".states "
           + "WHERE state_fips IN ("
-          + "  SELECT DISTINCT geo_fips FROM \"ECON\".state_gdp "
-          + "  WHERE gdp_millions > 1000000 AND year = 2022"
+          + "  SELECT DISTINCT \"GeoFIPS\" FROM \"ECON\".state_gdp "
+          + "  WHERE \"DataValue\" > 1000000 AND \"Year\" = 2022"
           + ") "
           + "ORDER BY state_name");
 
       // Test 26: Correlated subquery
       allPassed &= testQuery(stmt, "Correlated subquery",
           "SELECT g.state_name, g.state_fips, "
-          + "  (SELECT MAX(e.gdp_millions) FROM \"ECON\".state_gdp e "
-          + "   WHERE e.geo_fips = g.state_fips) as max_gdp "
-          + "FROM \"GEO\".tiger_states g "
+          + "  (SELECT MAX(e.\"DataValue\") FROM \"ECON\".state_gdp e "
+          + "   WHERE e.\"GeoFIPS\" = g.state_fips) as max_gdp "
+          + "FROM \"GEO\".states g "
           + "ORDER BY g.state_name "
           + "LIMIT 10");
 
@@ -616,20 +616,20 @@ public class MultiSchemaIntegrationTest {
 
       // Test 27: Top-N per group using ROW_NUMBER (if supported)
       allPassed &= testQuery(stmt, "Complex analytical - states above average GDP",
-          "SELECT geo_name, gdp_millions "
+          "SELECT \"GeoName\", \"DataValue\" "
           + "FROM \"ECON\".state_gdp "
-          + "WHERE year = 2022 "
-          + "  AND gdp_millions > (SELECT AVG(gdp_millions) FROM \"ECON\".state_gdp WHERE year = 2022) "
-          + "ORDER BY gdp_millions DESC");
+          + "WHERE \"Year\" = 2022 "
+          + "  AND \"DataValue\" > (SELECT AVG(\"DataValue\") FROM \"ECON\".state_gdp WHERE \"Year\" = 2022) "
+          + "ORDER BY \"DataValue\" DESC");
 
       // Test 28: UNION of results from different schemas
       allPassed &= testQuery(stmt, "UNION across schemas",
           "SELECT 'STATE' as geo_type, state_name as name, state_fips as fips "
-          + "FROM \"GEO\".tiger_states "
+          + "FROM \"GEO\".states "
           + "WHERE state_fips IN ('06', '36') "
           + "UNION ALL "
           + "SELECT 'COUNTY' as geo_type, county_name as name, county_fips as fips "
-          + "FROM \"GEO\".tiger_counties "
+          + "FROM \"GEO\".counties "
           + "WHERE state_fips = '06' "
           + "LIMIT 20");
 
@@ -637,18 +637,18 @@ public class MultiSchemaIntegrationTest {
       allPassed &= testQuery(stmt, "CASE expression with aggregation",
           "SELECT "
           + "  CASE "
-          + "    WHEN gdp_millions > 1000000 THEN 'Large' "
-          + "    WHEN gdp_millions > 500000 THEN 'Medium' "
+          + "    WHEN \"DataValue\" > 1000000 THEN 'Large' "
+          + "    WHEN \"DataValue\" > 500000 THEN 'Medium' "
           + "    ELSE 'Small' "
           + "  END as gdp_category, "
           + "  COUNT(*) as state_count, "
-          + "  SUM(gdp_millions) as total_gdp "
+          + "  SUM(\"DataValue\") as total_gdp "
           + "FROM \"ECON\".state_gdp "
-          + "WHERE year = 2022 "
+          + "WHERE \"Year\" = 2022 "
           + "GROUP BY "
           + "  CASE "
-          + "    WHEN gdp_millions > 1000000 THEN 'Large' "
-          + "    WHEN gdp_millions > 500000 THEN 'Medium' "
+          + "    WHEN \"DataValue\" > 1000000 THEN 'Large' "
+          + "    WHEN \"DataValue\" > 500000 THEN 'Medium' "
           + "    ELSE 'Small' "
           + "  END "
           + "ORDER BY total_gdp DESC");
@@ -656,13 +656,13 @@ public class MultiSchemaIntegrationTest {
       // Test 30: Complex join with derived table
       allPassed &= testQuery(stmt, "Join with derived table (inline view)",
           "SELECT s.state_name, gdp_stats.total_gdp, gdp_stats.avg_gdp "
-          + "FROM \"GEO\".tiger_states s "
+          + "FROM \"GEO\".states s "
           + "INNER JOIN ("
-          + "  SELECT geo_fips, SUM(gdp_millions) as total_gdp, AVG(gdp_millions) as avg_gdp "
+          + "  SELECT \"GeoFIPS\", SUM(\"DataValue\") as total_gdp, AVG(\"DataValue\") as avg_gdp "
           + "  FROM \"ECON\".state_gdp "
-          + "  WHERE year >= 2020 "
-          + "  GROUP BY geo_fips"
-          + ") gdp_stats ON s.state_fips = gdp_stats.geo_fips "
+          + "  WHERE \"Year\" >= 2020 "
+          + "  GROUP BY \"GeoFIPS\""
+          + ") gdp_stats ON s.state_fips = gdp_stats.\"GeoFIPS\" "
           + "ORDER BY gdp_stats.total_gdp DESC "
           + "LIMIT 10");
 
