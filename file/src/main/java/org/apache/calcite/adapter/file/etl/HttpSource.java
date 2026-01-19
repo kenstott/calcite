@@ -1114,12 +1114,14 @@ public class HttpSource implements DataSource {
   private Iterator<Map<String, Object>> parseDelimitedResponseStreaming(String cachePath, char delimiter)
       throws IOException {
     LOGGER.info("Streaming from cache: {}", cachePath);
-    return new LazyCSVIterator(storageProvider, cachePath, delimiter, config.getRowFilter());
+    return new LazyCSVIterator(storageProvider, cachePath, delimiter,
+        config.getRowFilter(), config.getWideToNarrow());
   }
 
   /**
    * Lazy iterator that reads CSV rows one at a time from storage provider.
    * Parses rows on-demand to avoid loading entire file into memory.
+   * Supports wide-to-narrow transformation (unpivot) for bulk CSV files.
    */
   private class LazyCSVIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
     private final BufferedReader reader;
@@ -1129,6 +1131,13 @@ public class HttpSource implements DataSource {
     private final java.util.regex.Pattern filterRegex;
     private final int maxRows;
 
+    // Wide-to-narrow transformation support
+    private final HttpSourceConfig.WideToNarrowConfig wideToNarrow;
+    private final List<Integer> keyColumnIndices;
+    private final List<Integer> valueColumnIndices;
+    private final List<String> valueColumnNames;
+    private final java.util.Deque<Map<String, Object>> expandedRowQueue;
+
     private Map<String, Object> nextRow;
     private boolean exhausted;
     private int lineNumber;
@@ -1137,8 +1146,10 @@ public class HttpSource implements DataSource {
     private long lastLogTime;
 
     LazyCSVIterator(StorageProvider provider, String cachePath, char delimiter,
-        HttpSourceConfig.RowFilterConfig filter) throws IOException {
+        HttpSourceConfig.RowFilterConfig filter,
+        HttpSourceConfig.WideToNarrowConfig wideToNarrow) throws IOException {
       this.delimiter = delimiter;
+      this.wideToNarrow = wideToNarrow;
       this.reader = new BufferedReader(
           new InputStreamReader(provider.openInputStream(cachePath), StandardCharsets.UTF_8));
       this.exhausted = false;
@@ -1146,6 +1157,12 @@ public class HttpSource implements DataSource {
       this.matchedRows = 0;
       this.skippedRows = 0;
       this.lastLogTime = System.currentTimeMillis();
+
+      // Initialize wide-to-narrow data structures
+      this.keyColumnIndices = new ArrayList<Integer>();
+      this.valueColumnIndices = new ArrayList<Integer>();
+      this.valueColumnNames = new ArrayList<String>();
+      this.expandedRowQueue = new java.util.ArrayDeque<Map<String, Object>>();
 
       // Parse header row
       String headerLine = reader.readLine();
@@ -1159,6 +1176,21 @@ public class HttpSource implements DataSource {
       }
       this.headers = parseDelimitedLine(headerLine, delimiter);
       LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
+
+      // Setup wide-to-narrow column indices
+      if (wideToNarrow != null && wideToNarrow.isEnabled()) {
+        for (int i = 0; i < headers.length; i++) {
+          String header = headers[i].trim();
+          if (wideToNarrow.getKeyColumns().contains(header)) {
+            keyColumnIndices.add(i);
+          } else if (wideToNarrow.isValueColumn(header)) {
+            valueColumnIndices.add(i);
+            valueColumnNames.add(header);
+          }
+        }
+        LOGGER.info("Wide-to-narrow streaming: {} key columns, {} value columns to unpivot",
+            keyColumnIndices.size(), valueColumnIndices.size());
+      }
 
       // Setup filter
       String filterColumn = filter != null ? filter.getColumn() : null;
@@ -1197,6 +1229,12 @@ public class HttpSource implements DataSource {
         return;
       }
 
+      // Check if we have expanded rows from wide-to-narrow transformation
+      if (!expandedRowQueue.isEmpty()) {
+        nextRow = expandedRowQueue.poll();
+        return;
+      }
+
       try {
         String line;
         while ((line = reader.readLine()) != null) {
@@ -1224,42 +1262,105 @@ public class HttpSource implements DataSource {
             }
           }
 
-          // Build row map
-          Map<String, Object> row = new LinkedHashMap<String, Object>();
-          for (int j = 0; j < headers.length && j < values.length; j++) {
-            String header = headers[j].trim();
-            String value = values[j].trim();
-            if (value.startsWith("\"") && value.endsWith("\"")) {
-              value = value.substring(1, value.length() - 1);
+          // Wide-to-narrow transformation: one input row -> N output rows
+          if (wideToNarrow != null && wideToNarrow.isEnabled()) {
+            // Build base row with key columns
+            Map<String, Object> baseRow = new LinkedHashMap<String, Object>();
+            for (int idx : keyColumnIndices) {
+              if (idx < values.length) {
+                String header = headers[idx].trim();
+                String value = values[idx].trim();
+                if (value.startsWith("\"") && value.endsWith("\"")) {
+                  value = value.substring(1, value.length() - 1);
+                }
+                baseRow.put(header, parseValue(value));
+              }
             }
-            Object parsed = parseValue(value);
-            row.put(header, parsed);
+
+            // Create one output row per value column
+            for (int i = 0; i < valueColumnIndices.size(); i++) {
+              int idx = valueColumnIndices.get(i);
+              if (idx < values.length) {
+                String valueStr = values[idx].trim();
+                if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
+                  valueStr = valueStr.substring(1, valueStr.length() - 1);
+                }
+
+                // Skip null/empty values based on config
+                if (wideToNarrow.shouldSkipValue(valueStr)) {
+                  continue;
+                }
+
+                Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
+                row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
+                row.put(wideToNarrow.getValueColumnName(), parseValue(valueStr));   // e.g., 12345.0
+                expandedRowQueue.add(row);
+                matchedRows++;
+
+                // Check maxRows limit
+                if (maxRows > 0 && matchedRows >= maxRows) {
+                  LOGGER.info("Reached maxRows limit ({}), stopping lazy parse", maxRows);
+                  exhausted = true;
+                  break;
+                }
+              }
+            }
+
+            // Return first expanded row if we have any
+            if (!expandedRowQueue.isEmpty()) {
+              nextRow = expandedRowQueue.poll();
+
+              // Log progress periodically
+              long now = System.currentTimeMillis();
+              if (now - lastLogTime > 10000 || lineNumber % 100000 == 0) {
+                LOGGER.info("Lazy CSV (wide-to-narrow)... {} lines read, {} output rows, {} skipped",
+                    lineNumber, matchedRows, skippedRows);
+                lastLogTime = now;
+              }
+
+              return;
+            }
+            // If no rows added (all values skipped), continue to next line
+            continue;
+
+          } else {
+            // Standard row parsing (no transformation)
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            for (int j = 0; j < headers.length && j < values.length; j++) {
+              String header = headers[j].trim();
+              String value = values[j].trim();
+              if (value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+              }
+              Object parsed = parseValue(value);
+              row.put(header, parsed);
+            }
+
+            nextRow = row;
+            matchedRows++;
+
+            // Check maxRows limit
+            if (maxRows > 0 && matchedRows >= maxRows) {
+              LOGGER.info("Reached maxRows limit ({}), stopping lazy parse", maxRows);
+              exhausted = true;
+            }
+
+            // Log progress periodically
+            long now = System.currentTimeMillis();
+            if (now - lastLogTime > 10000 || lineNumber % 100000 == 0) {
+              LOGGER.info("Lazy CSV... {} lines read, {} matched, {} skipped",
+                  lineNumber, matchedRows, skippedRows);
+              lastLogTime = now;
+            }
+
+            return;
           }
-
-          nextRow = row;
-          matchedRows++;
-
-          // Check maxRows limit
-          if (maxRows > 0 && matchedRows >= maxRows) {
-            LOGGER.info("Reached maxRows limit ({}), stopping lazy parse", maxRows);
-            exhausted = true;
-          }
-
-          // Log progress periodically
-          long now = System.currentTimeMillis();
-          if (now - lastLogTime > 10000 || lineNumber % 100000 == 0) {
-            LOGGER.info("Lazy CSV... {} lines read, {} matched, {} skipped",
-                lineNumber, matchedRows, skippedRows);
-            lastLogTime = now;
-          }
-
-          return;
         }
 
         // End of file
         exhausted = true;
         nextRow = null;
-        LOGGER.info("Lazy CSV complete: {} lines read, {} matched, {} skipped",
+        LOGGER.info("Lazy CSV complete: {} lines read, {} output rows, {} skipped",
             lineNumber, matchedRows, skippedRows);
         close();
 

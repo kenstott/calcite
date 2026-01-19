@@ -3088,6 +3088,9 @@ public abstract class AbstractGovDataDownloader {
     // Load column metadata
     List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
 
+    // Get source configuration for wideToNarrow transformation
+    JsonNode sourceNode = metadata.containsKey("source") ? (JsonNode) metadata.get("source") : null;
+
     // Build SQL for CSV→Materialization
     String sql =
         buildCsvToParquetSql(tableName,
@@ -3095,7 +3098,8 @@ public abstract class AbstractGovDataDownloader {
         csvPath != null ? substitutePatternVariables(csvPath, variables) : null,
         fullParquetPath,
         columns,
-        csvConversionNode);
+        csvConversionNode,
+        sourceNode);
 
     // Execute conversion
     executeDuckDBSql(sql, "CSV to Materialization for " + tableName);
@@ -3118,6 +3122,10 @@ public abstract class AbstractGovDataDownloader {
    *   <li>If column has {@code csvColumn} field: read from that CSV column name with type casting</li>
    *   <li>Otherwise: read from CSV column with same name as output column</li>
    * </ul>
+   *
+   * <p>Wide-to-Narrow transformation:
+   * <p>When {@code source.wideToNarrow} is configured, the method generates an UNPIVOT query
+   * to transform wide-format CSV (with years as columns) to narrow format (with Year and Value columns).
    */
   private String buildCsvToParquetSql(
       String tableName,
@@ -3125,8 +3133,17 @@ public abstract class AbstractGovDataDownloader {
       String csvPath,
       String targetPath,
       List<PartitionedTableConfig.TableColumn> columns,
-      JsonNode csvConversionNode) {
+      JsonNode csvConversionNode,
+      JsonNode sourceNode) {
 
+    // Check if wideToNarrow transformation is configured
+    JsonNode wideToNarrowNode = sourceNode != null ? sourceNode.get("wideToNarrow") : null;
+    if (wideToNarrowNode != null && !wideToNarrowNode.isNull()) {
+      return buildWideToNarrowSql(tableName, sourcePath, csvPath, targetPath, columns,
+          csvConversionNode, wideToNarrowNode);
+    }
+
+    // Standard CSV to Parquet conversion (no unpivot)
     StringBuilder sql = new StringBuilder("COPY (\n  SELECT\n");
 
     // Build SELECT clause from column definitions
@@ -3191,6 +3208,175 @@ public abstract class AbstractGovDataDownloader {
 
     sql.append("\n) TO '").append(targetPath).append("' (FORMAT PARQUET);");
 
+    return sql.toString();
+  }
+
+  /**
+   * Builds DuckDB SQL with UNPIVOT for wide-to-narrow transformation.
+   *
+   * <p>Transforms CSV data where years are columns (wide format):
+   * <pre>
+   * GeoFIPS, GeoName, ..., 1997, 1998, 1999, ..., 2023
+   * 01000, Alabama, ..., 12345, 12456, 12567, ..., 25678
+   * </pre>
+   *
+   * <p>Into narrow format with Year and DataValue columns:
+   * <pre>
+   * GeoFIPS, GeoName, ..., Year, DataValue
+   * 01000, Alabama, ..., 1997, 12345
+   * 01000, Alabama, ..., 1998, 12456
+   * </pre>
+   */
+  private String buildWideToNarrowSql(
+      String tableName,
+      String sourcePath,
+      String csvPath,
+      String targetPath,
+      List<PartitionedTableConfig.TableColumn> columns,
+      JsonNode csvConversionNode,
+      JsonNode wideToNarrowNode) {
+
+    LOGGER.info("Building wide-to-narrow UNPIVOT SQL for table: {}", tableName);
+
+    // Extract wideToNarrow configuration
+    List<String> keyColumns = new java.util.ArrayList<>();
+    if (wideToNarrowNode.has("keyColumns")) {
+      for (JsonNode col : wideToNarrowNode.get("keyColumns")) {
+        keyColumns.add(col.asText());
+      }
+    }
+
+    String valueColumnPattern = wideToNarrowNode.has("valueColumnPattern")
+        ? wideToNarrowNode.get("valueColumnPattern").asText()
+        : "^\\d{4}$";  // Default: 4-digit years
+
+    String keyColumnName = wideToNarrowNode.has("keyColumnName")
+        ? wideToNarrowNode.get("keyColumnName").asText()
+        : "Year";
+
+    String valueColumnName = wideToNarrowNode.has("valueColumnName")
+        ? wideToNarrowNode.get("valueColumnName").asText()
+        : "DataValue";
+
+    List<String> skipValues = new java.util.ArrayList<>();
+    if (wideToNarrowNode.has("skipValues")) {
+      for (JsonNode val : wideToNarrowNode.get("skipValues")) {
+        skipValues.add(val.asText());
+      }
+    }
+
+    LOGGER.debug("wideToNarrow config: keyColumns={}, pattern={}, keyCol={}, valueCol={}, skipValues={}",
+        keyColumns, valueColumnPattern, keyColumnName, valueColumnName, skipValues);
+
+    // Build the CSV source path
+    String csvSourcePath;
+    if (csvPath != null && sourcePath.toLowerCase().endsWith(".zip")) {
+      csvSourcePath = "zipfs://" + sourcePath + "/" + csvPath;
+    } else {
+      csvSourcePath = sourcePath;
+    }
+
+    // First, discover the actual year columns from the CSV by reading headers
+    // We'll use a CTE to read the CSV and then UNPIVOT
+    StringBuilder sql = new StringBuilder();
+
+    // Build the query with UNPIVOT
+    // DuckDB UNPIVOT syntax: UNPIVOT table ON col1, col2, ... INTO NAME key_col VALUE val_col
+    sql.append("COPY (\n");
+    sql.append("  WITH csv_data AS (\n");
+    sql.append("    SELECT * FROM read_csv('").append(csvSourcePath)
+       .append("', AUTO_DETECT=TRUE, HEADER=TRUE, ALL_VARCHAR=TRUE)\n");
+    sql.append("  ),\n");
+
+    // Get year columns dynamically using COLUMNS() with regex
+    // This approach uses DuckDB's COLUMNS() function to match year columns by pattern
+    sql.append("  unpivoted AS (\n");
+    sql.append("    SELECT ");
+
+    // Add key columns
+    for (int i = 0; i < keyColumns.size(); i++) {
+      if (i > 0) {
+        sql.append(", ");
+      }
+      sql.append("\"").append(keyColumns.get(i)).append("\"");
+    }
+
+    sql.append(",\n");
+    sql.append("           unpivot_col AS \"").append(keyColumnName).append("\",\n");
+    sql.append("           unpivot_val AS \"").append(valueColumnName).append("\"\n");
+    sql.append("    FROM csv_data\n");
+    sql.append("    UNPIVOT (unpivot_val FOR unpivot_col IN (");
+
+    // Use COLUMNS() with regex to match year columns dynamically
+    // Pattern: columns that match 4-digit year format
+    sql.append("COLUMNS('").append(valueColumnPattern).append("')");
+    sql.append("))\n");
+    sql.append("  )\n");
+
+    // Build final SELECT with proper types
+    sql.append("  SELECT\n");
+
+    boolean first = true;
+    for (PartitionedTableConfig.TableColumn col : columns) {
+      if (col.isComputed()) {
+        continue;
+      }
+
+      if (!first) {
+        sql.append(",\n");
+      }
+      first = false;
+
+      String colName = col.getName();
+      String colType = col.getType();
+
+      // Check if this is the key column (Year) or value column (DataValue)
+      if (colName.equalsIgnoreCase(keyColumnName)) {
+        // Year column - cast from string
+        sql.append("    CAST(\"").append(keyColumnName).append("\" AS VARCHAR) AS \"")
+           .append(colName).append("\"");
+      } else if (colName.equalsIgnoreCase(valueColumnName)) {
+        // Value column - cast to appropriate type (usually DOUBLE)
+        sql.append("    CAST(NULLIF(TRIM(\"").append(valueColumnName).append("\"), '') AS ")
+           .append(mapToDuckDBType(colType)).append(") AS \"").append(colName).append("\"");
+      } else if (col.getExpression() != null && !col.getExpression().isEmpty()) {
+        sql.append("    (").append(col.getExpression()).append(") AS \"").append(colName).append("\"");
+      } else {
+        // Key column - read directly with type cast
+        String sourceCol = col.getCsvColumn() != null ? col.getCsvColumn() : colName;
+        sql.append("    CAST(\"").append(sourceCol).append("\" AS ")
+           .append(mapToDuckDBType(colType)).append(") AS \"").append(colName).append("\"");
+      }
+    }
+
+    sql.append("\n  FROM unpivoted\n");
+
+    // Add WHERE clause to filter out null/skip values
+    sql.append("  WHERE \"").append(valueColumnName).append("\" IS NOT NULL\n");
+    if (!skipValues.isEmpty()) {
+      sql.append("    AND TRIM(\"").append(valueColumnName).append("\") NOT IN (");
+      for (int i = 0; i < skipValues.size(); i++) {
+        if (i > 0) {
+          sql.append(", ");
+        }
+        sql.append("'").append(skipValues.get(i)).append("'");
+      }
+      sql.append(")\n");
+    }
+
+    // Add any additional filter conditions
+    if (csvConversionNode != null && csvConversionNode.has("filterConditions")) {
+      JsonNode filtersNode = csvConversionNode.get("filterConditions");
+      if (filtersNode.isArray() && !filtersNode.isEmpty()) {
+        for (JsonNode filterNode : filtersNode) {
+          sql.append("    AND ").append(filterNode.asText()).append("\n");
+        }
+      }
+    }
+
+    sql.append(") TO '").append(targetPath).append("' (FORMAT PARQUET);");
+
+    LOGGER.debug("Generated wide-to-narrow SQL:\n{}", sql);
     return sql.toString();
   }
 
