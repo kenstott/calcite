@@ -1,0 +1,1186 @@
+# ============================================================================
+# Securities and Exchange Commission Schema (SEC)
+# ============================================================================
+# Data Sources:
+#   - SEC EDGAR API - Company filings (10-K, 10-Q, 8-K, etc.)
+#   - XBRL Documents - Structured financial data
+#   - Form 3/4/5 - Insider trading transactions
+#   - Stock Price APIs - Yahoo Finance, AlphaVantage
+#
+# Features:
+#   - Document-based ETL with multi-table extraction
+#   - XBRL parsing for financial line items and contexts
+#   - MD&A text extraction from HTML filings
+#   - Rate-limited SEC EDGAR compliance (10 req/sec)
+#   - Supports both Iceberg and Parquet output formats
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:sec}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=sec"
+
+comment: >
+  Securities and Exchange Commission financial data including XBRL filings (10-K, 10-Q, 8-K),
+  insider trading transactions, stock prices, and earnings transcripts. Enables financial
+  analysis, regulatory compliance monitoring, and investment research across public companies.
+  Uses document-based ETL to extract multiple tables from each SEC filing.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  # --- Filing Identification Columns ---
+
+  cik_column: &cik_column
+    name: cik
+    type: string
+    nullable: false
+    comment: Central Index Key (unique SEC company identifier, 10 digits zero-padded)
+
+  accession_number_column: &accession_number
+    name: accession_number
+    type: string
+    nullable: false
+    comment: SEC accession number (unique filing identifier, format 0000000000-00-000000)
+
+  filing_date_column: &filing_date
+    name: filing_date
+    type: string
+    nullable: false
+    comment: Date the filing was submitted to SEC (ISO 8601 format)
+
+  filing_type_column: &filing_type
+    name: filing_type
+    type: string
+    nullable: false
+    comment: Type of SEC filing (e.g., '10-K', '10-Q', '8-K', 'DEF 14A')
+
+  # --- Period Columns ---
+
+  period_start_column: &period_start
+    name: period_start
+    type: string
+    nullable: true
+    comment: Start date of the reporting period (ISO 8601 format)
+
+  period_end_column: &period_end
+    name: period_end
+    type: string
+    nullable: true
+    comment: End date of the reporting period (ISO 8601 format)
+
+  # --- XBRL Columns ---
+
+  concept_column: &concept_column
+    name: concept
+    type: string
+    nullable: false
+    comment: XBRL concept name (e.g., 'us-gaap:Assets', 'dei:EntityRegistrantName')
+
+  context_ref_column: &context_ref
+    name: context_ref
+    type: string
+    nullable: false
+    comment: Reference to context element defining the reporting period and entity
+
+  unit_ref_column: &unit_ref
+    name: unit_ref
+    type: string
+    nullable: true
+    comment: Reference to unit element defining measurement units (e.g., 'USD', 'shares')
+
+  numeric_value_column: &numeric_value
+    name: numeric_value
+    type: double
+    nullable: true
+    comment: Numeric value for monetary and numeric facts
+
+  # --- Text Columns ---
+
+  paragraph_text_column: &paragraph_text
+    name: paragraph_text
+    type: string
+    nullable: false
+    comment: Full text content of the paragraph
+
+  footnote_refs_column: &footnote_refs
+    name: footnote_refs
+    type: string
+    nullable: true
+    comment: Comma-separated list of footnote references
+
+  # --- Partition Column Definitions ---
+
+  partition_cik: &partition_cik
+    name: cik
+    type: VARCHAR
+
+  partition_filing_type: &partition_filing_type
+    name: filing_type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_ticker: &partition_ticker
+    name: ticker
+    type: VARCHAR
+
+  # --- Standard SEC Partition Set ---
+
+  sec_partitions: &sec_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_cik
+      - *partition_filing_type
+      - *partition_year
+
+  stock_partitions: &stock_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_ticker
+      - *partition_year
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # --- Filing Type Dimensions ---
+
+  annual_filing_types: &annual_filing_types
+    - "10-K"
+    - "10-K/A"
+    - "20-F"
+    - "40-F"
+
+  quarterly_filing_types: &quarterly_filing_types
+    - "10-Q"
+    - "10-Q/A"
+
+  current_report_types: &current_report_types
+    - "8-K"
+    - "8-K/A"
+
+  insider_filing_types: &insider_filing_types
+    - "3"
+    - "4"
+    - "5"
+
+  all_filing_types: &all_filing_types
+    - "10-K"
+    - "10-K/A"
+    - "10-Q"
+    - "10-Q/A"
+    - "8-K"
+    - "8-K/A"
+    - "20-F"
+    - "40-F"
+    - "DEF 14A"
+    - "S-1"
+    - "S-3"
+    - "424B2"
+    - "424B5"
+
+  # --- Year Range ---
+  # Default: last 5 years of filings
+  # Can be overridden via startYear/endYear in schema operand
+
+  year_range: &year_range
+    type: yearRange
+    start: "${START_YEAR:2020}"
+    end: "${END_YEAR:${CURRENT_YEAR}}"
+
+# ============================================================================
+# DOCUMENT SOURCE CONFIGURATION
+# ============================================================================
+# SEC uses document-based ETL: download filing documents, then extract
+# multiple tables from each document using XbrlToParquetConverter
+# ============================================================================
+
+document_source_defaults: &document_source_defaults
+  type: document
+
+  # SEC EDGAR metadata endpoint
+  metadataUrl: "https://data.sec.gov/submissions/CIK{cik}.json"
+
+  # Filing document URL pattern
+  documentUrl: "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
+
+  # Rate limiting for SEC compliance (max 10 req/sec, we use 8)
+  rateLimit:
+    requestsPerSecond: 8
+    retryOn: [429, 503]
+    maxRetries: 5
+    retryDelayMs: 5000
+
+  # Required SEC headers
+  headers:
+    User-Agent: "Apache Calcite SEC Adapter (apache-calcite@apache.org)"
+    Accept-Encoding: "gzip, deflate"
+
+  # Response transformer for metadata
+  responseTransformer: "org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer"
+
+  # Document converter for XBRL/HTML to Parquet
+  documentConverter: "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter"
+
+  # Cache configuration
+  rawCache:
+    enabled: true
+    directory: "${GOVDATA_CACHE_DIR}/sec"
+    manifestFile: "cache-manifest.json"
+
+# ============================================================================
+# MATERIALIZATION DEFAULTS
+# ============================================================================
+
+materialize_defaults: &materialize_defaults
+  enabled: true
+  format: "${MATERIALIZE_FORMAT:iceberg}"  # iceberg or parquet
+  options:
+    compression: snappy
+    batchSize: 50000
+    stagingMode: local
+
+iceberg_defaults: &iceberg_defaults
+  warehousePath: "${GOVDATA_PARQUET_DIR}/source=sec/SEC"
+  catalogType: hadoop
+  targetFileSizeBytes: 134217728  # 128MB
+  runMaintenance: true
+  snapshotRetentionDays: 7
+
+parquet_defaults: &parquet_defaults
+  compression: snappy
+  rowGroupSize: 134217728  # 128MB
+
+# ============================================================================
+# TABLES
+# ============================================================================
+
+tables:
+
+  # ==========================================================================
+  # FILING METADATA
+  # ==========================================================================
+  # Core reference table for all SEC filings
+  # Extracted from submissions.json metadata endpoint
+  # ==========================================================================
+
+  - name: filing_metadata
+    pattern: "cik=*/filing_type=*/year=*/*_metadata.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      SEC filing metadata including form types (10-K, 10-Q, 8-K), company information,
+      filing dates, and document URLs. Core reference table for all SEC data.
+      Extracted from SEC EDGAR submissions.json API.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_type
+      - *filing_date
+      - name: primary_document
+        type: string
+        nullable: true
+        comment: Primary document filename in the filing
+      - name: company_name
+        type: string
+        nullable: false
+        comment: Legal name of the registrant company
+      - name: period_of_report
+        type: string
+        nullable: true
+        comment: Reporting period end date (ISO 8601 format)
+      - name: acceptance_datetime
+        type: string
+        nullable: true
+        comment: Date and time the filing was accepted by SEC
+      - name: file_size
+        type: long
+        nullable: true
+        comment: Total size of filing in bytes
+      - name: fiscal_year
+        type: int
+        nullable: true
+        comment: Fiscal year of the reporting period
+      - name: state_of_incorporation
+        type: string
+        nullable: true
+        comment: State or jurisdiction of incorporation
+      - name: fiscal_year_end
+        type: string
+        nullable: true
+        comment: Fiscal year end date (MMDD format)
+      - name: business_address
+        type: string
+        nullable: true
+        comment: Physical business address of the company
+      - name: mailing_address
+        type: string
+        nullable: true
+        comment: Mailing address for correspondence
+      - name: phone
+        type: string
+        nullable: true
+        comment: Company phone number
+      - name: sic_code
+        type: string
+        nullable: true
+        comment: Standard Industrial Classification code
+      - name: irs_number
+        type: string
+        nullable: true
+        comment: IRS Employer Identification Number (EIN)
+      - name: ticker
+        type: string
+        nullable: true
+        comment: Stock ticker symbol (if available)
+
+    constraints:
+      primaryKey: [cik, accession_number]
+      indexes:
+        - [filing_date]
+        - [company_name]
+        - [ticker]
+      foreignKeys:
+        - columns: [state_of_incorporation]
+          targetSchema: "${GEO_SCHEMA_NAME:GEO}"
+          targetTable: states
+          targetColumns: [state_abbr]
+          comment: Links filing state of incorporation to geographic state data
+
+    # Metadata is extracted from submissions.json API
+    source:
+      <<: *document_source_defaults
+      extractionType: metadata
+
+    # Custom hooks for SEC dimension resolution
+    hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.sec.CikResolver"
+
+    dimensions:
+      cik:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.sec.CikResolver"
+        # Default test CIKs - can be overridden via operand
+        values:
+          - "0000320193"   # Apple
+          - "0000070858"   # Bank of America
+          - "0000018230"   # Caterpillar
+        properties:
+          source: "${CIK_SOURCE:config}"  # config, sp500, russell2000, nasdaq100
+      filing_type: *all_filing_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: filing_metadata
+        batchPartitionColumns: [cik, year]
+        incrementalKeys: [cik, year]
+
+  # ==========================================================================
+  # FINANCIAL LINE ITEMS
+  # ==========================================================================
+  # XBRL facts extracted from 10-K, 10-Q filings
+  # ==========================================================================
+
+  - name: financial_line_items
+    pattern: "cik=*/filing_type=*/year=*/*_facts.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      XBRL financial statement data including balance sheet, income statement,
+      and cash flow line items from SEC filings. Includes quarterly and annual
+      data with standard GAAP classifications. Extracted from XBRL instance documents.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - *concept_column
+      - *context_ref
+      - *unit_ref
+      - name: value
+        type: string
+        nullable: true
+        comment: Text value of the fact element
+      - name: full_text
+        type: string
+        nullable: true
+        comment: Full text content for TextBlock elements (narrative disclosures)
+      - *numeric_value
+      - *period_start
+      - *period_end
+      - name: is_instant
+        type: boolean
+        nullable: false
+        comment: Whether this is an instant-in-time fact (true) or duration fact (false)
+      - *footnote_refs
+      - name: element_id
+        type: string
+        nullable: false
+        comment: Unique element identifier for linking to other elements
+      - name: decimals
+        type: int
+        nullable: true
+        comment: Decimal precision of the numeric value
+      - name: scale
+        type: int
+        nullable: true
+        comment: Scale factor applied to the value
+
+    constraints:
+      primaryKey: [cik, accession_number, element_id]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+        - columns: [context_ref]
+          targetTable: filing_contexts
+          targetColumns: [context_id]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: xbrl_facts
+      documentTypes:
+        - "*.xml"
+        - "*_htm.xml"
+        - "*.xbrl"
+
+    dimensions:
+      cik:
+        type: inherited  # Inherited from filing_metadata
+      filing_type:
+        - "10-K"
+        - "10-K/A"
+        - "10-Q"
+        - "10-Q/A"
+        - "20-F"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: financial_line_items
+        batchPartitionColumns: [cik, year]
+
+  # ==========================================================================
+  # FILING CONTEXTS
+  # ==========================================================================
+  # XBRL context definitions for reporting periods and dimensions
+  # ==========================================================================
+
+  - name: filing_contexts
+    pattern: "cik=*/filing_type=*/year=*/*_contexts.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      XBRL context metadata defining reporting periods, business segments, and
+      dimensional qualifiers for financial data. Links financial facts to their
+      reporting context.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: context_id
+        type: string
+        nullable: false
+        comment: Unique identifier for this context element
+      - name: entity_identifier
+        type: string
+        nullable: false
+        comment: Entity identifier (typically CIK number)
+      - name: entity_scheme
+        type: string
+        nullable: true
+        comment: Entity identifier scheme (e.g., 'http://www.sec.gov/CIK')
+      - *period_start
+      - *period_end
+      - name: period_instant
+        type: string
+        nullable: true
+        comment: Instant date for point-in-time facts (ISO 8601 format)
+      - name: segment
+        type: string
+        nullable: true
+        comment: Segment dimension information (XML fragment)
+      - name: scenario
+        type: string
+        nullable: true
+        comment: Scenario dimension information (XML fragment)
+
+    constraints:
+      primaryKey: [cik, accession_number, context_id]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: xbrl_contexts
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type:
+        - "10-K"
+        - "10-K/A"
+        - "10-Q"
+        - "10-Q/A"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: filing_contexts
+
+  # ==========================================================================
+  # MD&A SECTIONS
+  # ==========================================================================
+  # Management Discussion & Analysis text extracted from HTML filings
+  # ==========================================================================
+
+  - name: mda_sections
+    pattern: "cik=*/filing_type=*/year=*/*_mda.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      Management Discussion and Analysis (MD&A) sections extracted from 10-K
+      and 10-Q filings. Contains management narrative about company performance
+      and outlook. Extracted using multi-strategy HTML parsing.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: section
+        type: string
+        nullable: false
+        comment: Item section identifier (e.g., 'Item 7', 'Item 7A')
+      - name: subsection
+        type: string
+        nullable: true
+        comment: Subsection name (e.g., 'Overview', 'Results of Operations')
+      - name: paragraph_number
+        type: int
+        nullable: false
+        comment: Sequential paragraph number within the subsection
+      - *paragraph_text
+      - *footnote_refs
+
+    constraints:
+      primaryKey: [cik, accession_number, section, paragraph_number]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: mda_text
+      documentTypes:
+        - "*.htm"
+        - "*.html"
+      extractionStrategies:
+        - regex_item7
+        - direct_search
+        - html_element_specific
+        - aggressive_fallback
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type:
+        - "10-K"
+        - "10-K/A"
+        - "10-Q"
+        - "10-Q/A"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: mda_sections
+
+  # ==========================================================================
+  # XBRL RELATIONSHIPS
+  # ==========================================================================
+  # Calculation and presentation linkbase relationships
+  # ==========================================================================
+
+  - name: xbrl_relationships
+    pattern: "cik=*/filing_type=*/year=*/*_relationships.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      XBRL calculation and presentation linkbase relationships showing how
+      financial concepts relate to each other in SEC filings. Enables
+      financial statement reconstruction and validation.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: linkbase_type
+        type: string
+        nullable: false
+        comment: Type of linkbase relationship (presentation, calculation, definition)
+      - name: arc_role
+        type: string
+        nullable: false
+        comment: Arc role defining relationship type (e.g., parent-child, summation-item)
+      - name: from_concept
+        type: string
+        nullable: false
+        comment: Source concept in the relationship
+      - name: to_concept
+        type: string
+        nullable: false
+        comment: Target concept in the relationship
+      - name: weight
+        type: double
+        nullable: true
+        comment: Calculation weight (+1 for addition, -1 for subtraction)
+      - name: "order"
+        type: double
+        nullable: true
+        comment: Presentation order for display sequencing
+      - name: preferred_label
+        type: string
+        nullable: true
+        comment: Preferred label role for presentation
+
+    constraints:
+      primaryKey: [cik, accession_number, linkbase_type, from_concept, to_concept]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: xbrl_linkbases
+      documentTypes:
+        - "*_cal.xml"
+        - "*_pre.xml"
+        - "*_def.xml"
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type:
+        - "10-K"
+        - "10-K/A"
+        - "10-Q"
+        - "10-Q/A"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: xbrl_relationships
+
+  # ==========================================================================
+  # INSIDER TRANSACTIONS
+  # ==========================================================================
+  # Form 3/4/5 insider trading data
+  # ==========================================================================
+
+  - name: insider_transactions
+    pattern: "cik=*/filing_type=*/year=*/*_insider.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      Form 3/4/5 insider trading transactions by company officers, directors,
+      and 10% shareholders. Includes buy/sell transactions with prices and
+      volumes. Extracted from HTML tables in insider filings.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - *filing_type
+      - name: reporting_person_cik
+        type: string
+        nullable: false
+        comment: CIK of the reporting insider
+      - name: reporting_person_name
+        type: string
+        nullable: false
+        comment: Name of the reporting insider
+      - name: is_director
+        type: boolean
+        nullable: false
+        comment: Whether the insider is a director
+      - name: is_officer
+        type: boolean
+        nullable: false
+        comment: Whether the insider is an officer
+      - name: is_ten_percent_owner
+        type: boolean
+        nullable: false
+        comment: Whether the insider owns 10% or more of the company
+      - name: officer_title
+        type: string
+        nullable: true
+        comment: Title of the officer (if applicable)
+      - name: transaction_date
+        type: string
+        nullable: false
+        comment: Date of the transaction (ISO 8601 format)
+      - name: transaction_code
+        type: string
+        nullable: false
+        comment: Transaction code (P=purchase, S=sale, A=award, etc.)
+      - name: security_title
+        type: string
+        nullable: false
+        comment: Title of the security transacted
+      - name: shares_transacted
+        type: double
+        nullable: false
+        comment: Number of shares bought or sold
+      - name: price_per_share
+        type: double
+        nullable: true
+        comment: Price per share in the transaction
+      - name: shares_owned_after
+        type: double
+        nullable: false
+        comment: Shares beneficially owned after the transaction
+      - name: acquired_disposed_code
+        type: string
+        nullable: false
+        comment: Whether shares were acquired (A) or disposed (D)
+      - name: ownership_type
+        type: string
+        nullable: false
+        comment: Type of ownership (direct or indirect)
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: Additional footnotes and explanations
+
+    constraints:
+      primaryKey: [cik, accession_number, reporting_person_cik, transaction_date, transaction_code]
+      foreignKeys:
+        - columns: [cik]
+          targetTable: filing_metadata
+          targetColumns: [cik]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: insider_html_tables
+      documentTypes:
+        - "*.xml"  # Form 4 XML format
+        - "*.html"
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type: *insider_filing_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: insider_transactions
+
+  # ==========================================================================
+  # EARNINGS TRANSCRIPTS
+  # ==========================================================================
+  # 8-K earnings release sections
+  # ==========================================================================
+
+  - name: earnings_transcripts
+    pattern: "cik=*/filing_type=*/year=*/*_earnings.parquet"
+    partitions: *sec_partitions
+
+    comment: >
+      Quarterly earnings data extracted from 8-K filings. Contains earnings
+      paragraphs and exhibits including prepared remarks and Q&A sessions.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - *filing_type
+      - name: exhibit_number
+        type: string
+        nullable: true
+        comment: Exhibit number within the filing
+      - name: section_type
+        type: string
+        nullable: false
+        comment: Section type (prepared_remarks, qa_session)
+      - name: paragraph_number
+        type: int
+        nullable: false
+        comment: Sequential paragraph number
+      - *paragraph_text
+      - name: speaker_name
+        type: string
+        nullable: true
+        comment: Name of the speaker (for Q&A sections)
+      - name: speaker_role
+        type: string
+        nullable: true
+        comment: Role/title of the speaker
+
+    constraints:
+      primaryKey: [cik, accession_number, section_type, paragraph_number]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: earnings_text
+      documentTypes:
+        - "*.htm"
+        - "*.html"
+      itemFilter: ["2.02"]  # Item 2.02 = Results of Operations
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type: *current_report_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: earnings_transcripts
+
+  # ==========================================================================
+  # STOCK PRICES
+  # ==========================================================================
+  # Daily OHLCV data from external price APIs
+  # ==========================================================================
+
+  - name: stock_prices
+    enabled: false  # Disabled pending URL encoding fixes
+    pattern: "stock_prices/ticker=*/year=*/*_prices.parquet"
+    partitions: *stock_partitions
+
+    comment: >
+      Daily stock price data including open, high, low, close, and volume for
+      SEC-reporting companies. Historical equity market data from Yahoo Finance
+      and AlphaVantage APIs.
+
+    columns:
+      - *cik_column
+      - name: ticker
+        type: string
+        nullable: false
+        comment: Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+      - name: date
+        type: string
+        nullable: false
+        comment: Trading date (ISO 8601 format)
+      - name: open
+        type: double
+        nullable: false
+        comment: Opening price for the trading day
+      - name: high
+        type: double
+        nullable: false
+        comment: Highest price during the trading day
+      - name: low
+        type: double
+        nullable: false
+        comment: Lowest price during the trading day
+      - name: close
+        type: double
+        nullable: false
+        comment: Closing price for the trading day
+      - name: volume
+        type: long
+        nullable: false
+        comment: Number of shares traded during the day
+      - name: adjusted_close
+        type: double
+        nullable: true
+        comment: Closing price adjusted for splits and dividends
+      - name: split_coefficient
+        type: double
+        nullable: true
+        comment: Stock split multiplier (1.0 if no split)
+      - name: dividend
+        type: double
+        nullable: true
+        comment: Dividend amount paid on this date (if any)
+
+    constraints:
+      primaryKey: [ticker, date]
+      foreignKeys:
+        - columns: [cik]
+          targetTable: filing_metadata
+          targetColumns: [cik]
+
+    # Stock prices use standard HTTP API source (not document)
+    source:
+      type: http
+      url: "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+      method: GET
+      parameters:
+        period1: "{start_timestamp}"
+        period2: "{end_timestamp}"
+        interval: "1d"
+        events: "history,div,split"
+      response:
+        format: json
+        dataPath: "chart.result[0]"
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 503]
+        maxRetries: 3
+      responseTransformer: "org.apache.calcite.adapter.govdata.sec.YahooFinanceTransformer"
+
+      # Fallback to AlphaVantage if Yahoo fails
+      fallback:
+        url: "https://www.alphavantage.co/query"
+        parameters:
+          function: "TIME_SERIES_DAILY_ADJUSTED"
+          symbol: "{ticker}"
+          outputsize: "full"
+          apikey: "{env:ALPHAVANTAGE_API_KEY}"
+        response:
+          format: json
+          dataPath: "Time Series (Daily)"
+        responseTransformer: "org.apache.calcite.adapter.govdata.sec.AlphaVantageResponseTransformer"
+
+    dimensions:
+      ticker:
+        type: derived
+        sourceTable: filing_metadata
+        sourceColumn: ticker
+        filter: "ticker IS NOT NULL"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "stock_prices/ticker=*/year=*/"
+      partition:
+        columns: [ticker, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: stock_prices
+        batchPartitionColumns: [ticker, year]
+
+  # ==========================================================================
+  # VECTORIZED BLOBS (Optional)
+  # ==========================================================================
+  # Text embeddings for semantic search
+  # ==========================================================================
+
+  - name: vectorized_blobs
+    pattern: "cik=*/filing_type=*/year=*/*_vectorized.parquet"
+    partitions: *sec_partitions
+    enabled: "${ENABLE_VECTORIZATION:false}"
+
+    comment: >
+      Text embeddings and vector representations of SEC filing content for
+      semantic search and analysis. Optional table for AI/ML applications.
+      Uses DuckDB quackformers extension for embedding generation.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - name: vector_id
+        type: string
+        nullable: false
+        comment: Unique identifier for this vector
+      - name: original_blob_id
+        type: string
+        nullable: false
+        comment: Identifier of the original text blob
+      - name: blob_type
+        type: string
+        nullable: false
+        comment: Type of text blob (footnote, mda_paragraph, concept_group)
+      - *filing_date
+      - name: original_text
+        type: string
+        nullable: false
+        comment: Original text before enrichment
+      - name: enriched_text
+        type: string
+        nullable: false
+        comment: Text after adding financial context and relationships
+      - name: embedding
+        type: string
+        nullable: false
+        comment: Vector embedding (JSON array of floats, 256-dimensional)
+      - name: parent_section
+        type: string
+        nullable: true
+        comment: Parent section identifier (e.g., 'Item 7', 'Note 1')
+      - name: relationships
+        type: string
+        nullable: true
+        comment: JSON string of relationships to other blobs
+      - name: financial_concepts
+        type: string
+        nullable: true
+        comment: Comma-separated list of referenced financial concepts
+      - name: tokens_used
+        type: int
+        nullable: false
+        comment: Number of tokens used for this embedding
+      - name: token_budget
+        type: int
+        nullable: false
+        comment: Token budget allocated for this blob
+
+    constraints:
+      primaryKey: [cik, accession_number, vector_id]
+      foreignKeys:
+        - columns: [cik, accession_number]
+          targetTable: filing_metadata
+          targetColumns: [cik, accession_number]
+
+    source:
+      <<: *document_source_defaults
+      extractionType: vectorization
+      embeddingConfig:
+        provider: duckdb_quackformers
+        model: "sentence-transformers/all-MiniLM-L6-v2"
+        dimension: 256
+        maxTextLength: 8192
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type:
+        - "10-K"
+        - "10-Q"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "cik=*/filing_type=*/year=*/"
+      partition:
+        columns: [cik, filing_type, year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: vectorized_blobs
+
+# ============================================================================
+# CROSS-TABLE CONSTRAINTS
+# ============================================================================
+
+constraints:
+  financial_line_items:
+    indexes:
+      - [concept]
+      - [period_end]
+      - [numeric_value]
+
+  filing_metadata:
+    indexes:
+      - [company_name]
+      - [sic_code]
+      - [state_of_incorporation]
+
+  insider_transactions:
+    indexes:
+      - [transaction_date]
+      - [reporting_person_name]
+      - [transaction_code]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+# Pre-defined views for common analytical queries
+# ============================================================================
+
+views:
+
+  - name: latest_filings
+    comment: Most recent filing of each type per company
+    sql: >
+      SELECT fm.* FROM filing_metadata fm
+      INNER JOIN (
+        SELECT cik, filing_type, MAX(filing_date) as max_date
+        FROM filing_metadata
+        GROUP BY cik, filing_type
+      ) latest ON fm.cik = latest.cik
+        AND fm.filing_type = latest.filing_type
+        AND fm.filing_date = latest.max_date
+
+  - name: revenue_trends
+    comment: Revenue line items across quarters for trend analysis
+    sql: >
+      SELECT
+        fm.company_name,
+        fm.ticker,
+        fli.period_end,
+        fli.numeric_value as revenue
+      FROM financial_line_items fli
+      JOIN filing_metadata fm ON fli.cik = fm.cik AND fli.accession_number = fm.accession_number
+      WHERE fli.concept LIKE '%Revenue%'
+        AND fli.numeric_value IS NOT NULL
+      ORDER BY fm.cik, fli.period_end
+
+  - name: insider_activity_summary
+    comment: Aggregated insider trading activity by company
+    sql: >
+      SELECT
+        fm.company_name,
+        fm.ticker,
+        it.transaction_code,
+        COUNT(*) as transaction_count,
+        SUM(it.shares_transacted) as total_shares,
+        AVG(it.price_per_share) as avg_price
+      FROM insider_transactions it
+      JOIN filing_metadata fm ON it.cik = fm.cik
+      WHERE it.transaction_code IN ('P', 'S')
+      GROUP BY fm.company_name, fm.ticker, it.transaction_code

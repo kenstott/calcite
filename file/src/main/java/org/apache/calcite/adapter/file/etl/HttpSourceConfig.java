@@ -135,6 +135,12 @@ public class HttpSourceConfig {
   // Wide-to-narrow transformation for CSV files with years as columns
   private final WideToNarrowConfig wideToNarrow;
 
+  // Document source configuration for document-based ETL (SEC filings, etc.)
+  private final DocumentSourceConfig documentSource;
+
+  // Source type: "http", "document", or "bulkDownload"
+  private final String sourceType;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -159,6 +165,18 @@ public class HttpSourceConfig {
     this.rowFilter = builder.rowFilter;
     this.responsePartitioning = builder.responsePartitioning;
     this.wideToNarrow = builder.wideToNarrow;
+    this.documentSource = builder.documentSource;
+    this.sourceType = builder.sourceType != null ? builder.sourceType : determineSourceType(builder);
+  }
+
+  private static String determineSourceType(Builder builder) {
+    if (builder.documentSource != null && builder.documentSource.isEnabled()) {
+      return "document";
+    } else if (builder.bulkDownload != null && !builder.bulkDownload.isEmpty()) {
+      return "bulkDownload";
+    } else {
+      return "http";
+    }
   }
 
   public String getUrl() {
@@ -341,6 +359,34 @@ public class HttpSourceConfig {
     return wideToNarrow != null && wideToNarrow.isEnabled();
   }
 
+  /**
+   * Returns the document source configuration for document-based ETL.
+   *
+   * <p>Document sources are used for SEC EDGAR filings where documents
+   * (XBRL, HTML) are downloaded and multiple tables are extracted from
+   * each document.
+   *
+   * @return Document source config, or null if not configured
+   */
+  public DocumentSourceConfig getDocumentSource() {
+    return documentSource;
+  }
+
+  /**
+   * Returns true if this is a document source configuration.
+   */
+  public boolean isDocumentSource() {
+    return "document".equals(sourceType)
+        || (documentSource != null && documentSource.isEnabled());
+  }
+
+  /**
+   * Returns the source type: "http", "document", or "bulkDownload".
+   */
+  public String getSourceType() {
+    return sourceType;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -449,6 +495,25 @@ public class HttpSourceConfig {
     Object wideToNarrowObj = map.get("wideToNarrow");
     if (wideToNarrowObj instanceof Map) {
       builder.wideToNarrow(WideToNarrowConfig.fromMap((Map<String, Object>) wideToNarrowObj));
+    }
+
+    // Parse source type
+    Object typeObj = map.get("type");
+    if (typeObj instanceof String) {
+      builder.sourceType((String) typeObj);
+    }
+
+    // Parse document source configuration
+    // Document source can be specified inline (metadataUrl, documentUrl, etc.)
+    // or as a nested "documentSource" block
+    if ("document".equals(typeObj)) {
+      // Build DocumentSourceConfig from top-level fields
+      builder.documentSource(DocumentSourceConfig.fromMap(map));
+    } else {
+      Object documentSourceObj = map.get("documentSource");
+      if (documentSourceObj instanceof Map) {
+        builder.documentSource(DocumentSourceConfig.fromMap((Map<String, Object>) documentSourceObj));
+      }
     }
 
     return builder.build();
@@ -1477,6 +1542,250 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Document source configuration for document-based ETL.
+   *
+   * <p>Document sources download filing documents (XBRL, HTML, XML) and extract
+   * multiple tables from each document. This is used for SEC EDGAR filings where
+   * a single 10-K document produces financial_line_items, filing_contexts,
+   * mda_sections, and other tables.
+   *
+   * <h3>YAML Configuration Example</h3>
+   * <pre>{@code
+   * source:
+   *   type: document
+   *   metadataUrl: "https://data.sec.gov/submissions/CIK{cik}.json"
+   *   documentUrl: "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
+   *   documentTypes:
+   *     - "*.xml"
+   *     - "*.htm"
+   *   extractionType: xbrl_facts
+   *   documentConverter: "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter"
+   *   responseTransformer: "org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer"
+   * }</pre>
+   */
+  public static class DocumentSourceConfig {
+    private final String metadataUrl;
+    private final String documentUrl;
+    private final java.util.List<String> documentTypes;
+    private final String extractionType;
+    private final String documentConverter;
+    private final String responseTransformer;
+    private final java.util.List<String> extractionStrategies;
+    private final java.util.List<String> itemFilter;
+    private final EmbeddingConfig embeddingConfig;
+
+    private DocumentSourceConfig(String metadataUrl, String documentUrl,
+        java.util.List<String> documentTypes, String extractionType,
+        String documentConverter, String responseTransformer,
+        java.util.List<String> extractionStrategies, java.util.List<String> itemFilter,
+        EmbeddingConfig embeddingConfig) {
+      this.metadataUrl = metadataUrl;
+      this.documentUrl = documentUrl;
+      this.documentTypes = documentTypes != null
+          ? Collections.unmodifiableList(new java.util.ArrayList<String>(documentTypes))
+          : Collections.<String>emptyList();
+      this.extractionType = extractionType;
+      this.documentConverter = documentConverter;
+      this.responseTransformer = responseTransformer;
+      this.extractionStrategies = extractionStrategies != null
+          ? Collections.unmodifiableList(new java.util.ArrayList<String>(extractionStrategies))
+          : Collections.<String>emptyList();
+      this.itemFilter = itemFilter != null
+          ? Collections.unmodifiableList(new java.util.ArrayList<String>(itemFilter))
+          : Collections.<String>emptyList();
+      this.embeddingConfig = embeddingConfig;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static DocumentSourceConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String metadataUrl = (String) map.get("metadataUrl");
+      String documentUrl = (String) map.get("documentUrl");
+      String extractionType = (String) map.get("extractionType");
+      String documentConverter = (String) map.get("documentConverter");
+      String responseTransformer = (String) map.get("responseTransformer");
+
+      java.util.List<String> documentTypes = null;
+      Object docTypesObj = map.get("documentTypes");
+      if (docTypesObj instanceof java.util.List) {
+        documentTypes = new java.util.ArrayList<String>();
+        for (Object item : (java.util.List<?>) docTypesObj) {
+          documentTypes.add(String.valueOf(item));
+        }
+      }
+
+      java.util.List<String> extractionStrategies = null;
+      Object strategiesObj = map.get("extractionStrategies");
+      if (strategiesObj instanceof java.util.List) {
+        extractionStrategies = new java.util.ArrayList<String>();
+        for (Object item : (java.util.List<?>) strategiesObj) {
+          extractionStrategies.add(String.valueOf(item));
+        }
+      }
+
+      java.util.List<String> itemFilter = null;
+      Object filterObj = map.get("itemFilter");
+      if (filterObj instanceof java.util.List) {
+        itemFilter = new java.util.ArrayList<String>();
+        for (Object item : (java.util.List<?>) filterObj) {
+          itemFilter.add(String.valueOf(item));
+        }
+      }
+
+      EmbeddingConfig embeddingConfig = null;
+      Object embeddingObj = map.get("embeddingConfig");
+      if (embeddingObj instanceof Map) {
+        embeddingConfig = EmbeddingConfig.fromMap((Map<String, Object>) embeddingObj);
+      }
+
+      return new DocumentSourceConfig(metadataUrl, documentUrl, documentTypes,
+          extractionType, documentConverter, responseTransformer,
+          extractionStrategies, itemFilter, embeddingConfig);
+    }
+
+    /**
+     * Returns the URL pattern for fetching filing metadata.
+     * Supports variable substitution like {cik} for dimension values.
+     */
+    public String getMetadataUrl() {
+      return metadataUrl;
+    }
+
+    /**
+     * Returns the URL pattern for fetching document files.
+     * Supports variables like {cik}, {accession}, {document}.
+     */
+    public String getDocumentUrl() {
+      return documentUrl;
+    }
+
+    /**
+     * Returns the list of document file patterns to process.
+     * For example: ["*.xml", "*.htm", "*_htm.xml"]
+     */
+    public java.util.List<String> getDocumentTypes() {
+      return documentTypes;
+    }
+
+    /**
+     * Returns the type of extraction to perform.
+     * Values: metadata, xbrl_facts, xbrl_contexts, xbrl_linkbases,
+     *         mda_text, insider_html_tables, earnings_text, vectorization
+     */
+    public String getExtractionType() {
+      return extractionType;
+    }
+
+    /**
+     * Returns the fully qualified class name of the document converter.
+     */
+    public String getDocumentConverter() {
+      return documentConverter;
+    }
+
+    /**
+     * Returns the fully qualified class name of the response transformer
+     * for metadata API responses.
+     */
+    public String getResponseTransformer() {
+      return responseTransformer;
+    }
+
+    /**
+     * Returns the list of extraction strategies for text extraction.
+     * For MD&A: ["regex_item7", "direct_search", "html_element_specific", "aggressive_fallback"]
+     */
+    public java.util.List<String> getExtractionStrategies() {
+      return extractionStrategies;
+    }
+
+    /**
+     * Returns the list of item filters for 8-K filings.
+     * For example: ["2.02"] to filter for Item 2.02 (Results of Operations).
+     */
+    public java.util.List<String> getItemFilter() {
+      return itemFilter;
+    }
+
+    /**
+     * Returns the embedding configuration for vectorization.
+     */
+    public EmbeddingConfig getEmbeddingConfig() {
+      return embeddingConfig;
+    }
+
+    /**
+     * Returns true if this is a valid document source configuration.
+     */
+    public boolean isEnabled() {
+      return (metadataUrl != null && !metadataUrl.isEmpty())
+          || (documentUrl != null && !documentUrl.isEmpty());
+    }
+
+    @Override
+    public String toString() {
+      return "DocumentSourceConfig{metadataUrl='" + metadataUrl
+          + "', documentUrl='" + documentUrl
+          + "', extractionType='" + extractionType
+          + "', documentTypes=" + documentTypes + "}";
+    }
+  }
+
+  /**
+   * Embedding configuration for text vectorization.
+   */
+  public static class EmbeddingConfig {
+    private final String provider;
+    private final String model;
+    private final int dimension;
+    private final int maxTextLength;
+
+    private EmbeddingConfig(String provider, String model, int dimension, int maxTextLength) {
+      this.provider = provider != null ? provider : "duckdb_quackformers";
+      this.model = model != null ? model : "sentence-transformers/all-MiniLM-L6-v2";
+      this.dimension = dimension > 0 ? dimension : 256;
+      this.maxTextLength = maxTextLength > 0 ? maxTextLength : 8192;
+    }
+
+    public static EmbeddingConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String provider = (String) map.get("provider");
+      String model = (String) map.get("model");
+      int dimension = 256;
+      Object dimObj = map.get("dimension");
+      if (dimObj instanceof Number) {
+        dimension = ((Number) dimObj).intValue();
+      }
+      int maxTextLength = 8192;
+      Object maxTextObj = map.get("maxTextLength");
+      if (maxTextObj instanceof Number) {
+        maxTextLength = ((Number) maxTextObj).intValue();
+      }
+      return new EmbeddingConfig(provider, model, dimension, maxTextLength);
+    }
+
+    public String getProvider() {
+      return provider;
+    }
+
+    public String getModel() {
+      return model;
+    }
+
+    public int getDimension() {
+      return dimension;
+    }
+
+    public int getMaxTextLength() {
+      return maxTextLength;
+    }
+  }
+
+  /**
    * Builder for HttpSourceConfig.
    */
   public static class Builder {
@@ -1497,6 +1806,8 @@ public class HttpSourceConfig {
     private RowFilterConfig rowFilter;
     private ResponsePartitioningConfig responsePartitioning;
     private WideToNarrowConfig wideToNarrow;
+    private DocumentSourceConfig documentSource;
+    private String sourceType;
 
     public Builder url(String url) {
       this.url = url;
@@ -1583,12 +1894,24 @@ public class HttpSourceConfig {
       return this;
     }
 
+    public Builder documentSource(DocumentSourceConfig documentSource) {
+      this.documentSource = documentSource;
+      return this;
+    }
+
+    public Builder sourceType(String sourceType) {
+      this.sourceType = sourceType;
+      return this;
+    }
+
     public HttpSourceConfig build() {
-      // Either url or bulkDownload must be set
+      // Either url, bulkDownload, or documentSource must be set
       boolean hasUrl = url != null && !url.isEmpty();
       boolean hasBulkDownload = bulkDownload != null && !bulkDownload.isEmpty();
-      if (!hasUrl && !hasBulkDownload) {
-        throw new IllegalArgumentException("Either URL or bulkDownload is required");
+      boolean hasDocumentSource = documentSource != null && documentSource.isEnabled();
+      if (!hasUrl && !hasBulkDownload && !hasDocumentSource) {
+        throw new IllegalArgumentException(
+            "Either URL, bulkDownload, or documentSource is required");
       }
       return new HttpSourceConfig(this);
     }

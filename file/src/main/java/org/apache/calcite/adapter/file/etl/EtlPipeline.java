@@ -538,6 +538,27 @@ public class EtlPipeline {
         try {
           LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
 
+          // For document sources, the dataWriter handles all processing
+          // (download + convert + write) so skip the standard fetch/write flow
+          if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
+            LOGGER.info("Document source - using custom DataWriter for processing");
+            if (dataWriter != null) {
+              long batchRows = dataWriter.write(config, null, variables);
+              totalRows += batchRows;
+              successfulBatches++;
+              incrementalTracker.markProcessedWithRowCount(
+                  pipelineName, pipelineName, variables, null, batchRows);
+              if (progressListener != null) {
+                progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
+              }
+              continue;
+            } else {
+              LOGGER.warn("Document source requires custom DataWriter - skipping batch");
+              skippedBatches++;
+              continue;
+            }
+          }
+
           // Fetch data - use custom provider if available, otherwise built-in HttpSource
           Iterator<Map<String, Object>> data = null;
           if (dataProvider != null) {
@@ -656,7 +677,9 @@ public class EtlPipeline {
       LOGGER.info("Materialization complete: format={}, location={}", writerFormat, tableLocation);
 
       // Close resources
-      dataSource.close();
+      if (dataSource != null) {
+        dataSource.close();
+      }
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
@@ -843,6 +866,13 @@ public class EtlPipeline {
       LOGGER.info("Creating FileSource for type: {}", sourceType);
       FileSourceConfig fileConfig = FileSourceConfig.fromMap(config.getRawSourceConfig());
       return new FileSource(fileConfig);
+    }
+
+    if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(sourceType)) {
+      LOGGER.info("Creating DocumentSource for type: {}", sourceType);
+      // Document sources use DocumentETLProcessor which writes files directly
+      // Return null to indicate no standard data fetching needed
+      return null;
     }
 
     // Default to HTTP source
