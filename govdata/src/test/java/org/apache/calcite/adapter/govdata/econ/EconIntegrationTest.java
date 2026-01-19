@@ -451,7 +451,7 @@ public class EconIntegrationTest {
         if (found > 0) {
           // Verify data structure for state_personal_income
           LOGGER.info("\n2. Verifying state_personal_income data structure:");
-          String structQuery = "SELECT GeoFIPS, GeoName, TableName, LineCode, Year, DataValue "
+          String structQuery = "SELECT \"GeoFIPS\", \"GeoName\", \"TableName\", \"LineCode\", \"Year\", \"DataValue\" "
               + "FROM \"ECON\".state_personal_income LIMIT 5";
           try (ResultSet rs = stmt.executeQuery(structQuery)) {
             int rows = 0;
