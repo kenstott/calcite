@@ -391,12 +391,14 @@ partitionedTables:
     # Columns match BEA API GetParameterValues response fields
     # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "TableName", "Desc": "Description (A, Q)"}]}}}
     columns:
-      - name: TableName
+      - name: table_name
         type: string
+        source: TableName
         nullable: true
         comment: NIPA table code (e.g., 'T10105', 'T20100')
-      - name: Description
+      - name: description
         type: string
+        source: Description
         nullable: true
         comment: Full table description from BEA including frequency indicators (A, Q)
 
@@ -493,12 +495,14 @@ partitionedTables:
     # Columns match BEA API GetParameterValuesFiltered response fields
     # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "10", "Desc": "Personal income"}]}}}
     columns:
-      - name: Key
+      - name: key
         type: string
+        source: Key
         nullable: true
         comment: Line code identifier from BEA API (e.g., '10', '20', '30')
-      - name: Desc
+      - name: "desc"
         type: string
+        source: Desc
         nullable: true
         comment: Line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
 

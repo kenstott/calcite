@@ -1305,9 +1305,11 @@ public class HttpSourceConfig {
     private final String keyColumnName;
     private final String valueColumnName;
     private final java.util.Set<String> skipValues;
+    private final java.util.Map<String, String> columnMapping;
 
     private WideToNarrowConfig(java.util.List<String> keyColumns, String valueColumnPattern,
-        String keyColumnName, String valueColumnName, java.util.Set<String> skipValues) {
+        String keyColumnName, String valueColumnName, java.util.Set<String> skipValues,
+        java.util.Map<String, String> columnMapping) {
       this.keyColumns = keyColumns != null
           ? Collections.unmodifiableList(new java.util.ArrayList<String>(keyColumns))
           : Collections.<String>emptyList();
@@ -1317,6 +1319,9 @@ public class HttpSourceConfig {
       this.skipValues = skipValues != null
           ? Collections.unmodifiableSet(new java.util.HashSet<String>(skipValues))
           : Collections.<String>emptySet();
+      this.columnMapping = columnMapping != null
+          ? Collections.unmodifiableMap(new java.util.LinkedHashMap<String, String>(columnMapping))
+          : Collections.<String, String>emptyMap();
     }
 
     /**
@@ -1352,8 +1357,17 @@ public class HttpSourceConfig {
         }
       }
 
+      // Parse columnMapping: source column name -> output column name
+      java.util.Map<String, String> columnMapping = new java.util.LinkedHashMap<String, String>();
+      Object columnMappingObj = map.get("columnMapping");
+      if (columnMappingObj instanceof Map) {
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) columnMappingObj).entrySet()) {
+          columnMapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+        }
+      }
+
       return new WideToNarrowConfig(keyColumns, valueColumnPattern, keyColumnName,
-          valueColumnName, skipValues);
+          valueColumnName, skipValues, columnMapping);
     }
 
     /**
@@ -1424,12 +1438,41 @@ public class HttpSourceConfig {
       return columnName.matches(valueColumnPattern);
     }
 
+    /**
+     * Returns the column mapping (source name -> output name).
+     * Used to rename columns during the wide-to-narrow transformation.
+     *
+     * @return Immutable map of source column names to output column names
+     */
+    public java.util.Map<String, String> getColumnMapping() {
+      return columnMapping;
+    }
+
+    /**
+     * Returns the output column name for a given source column.
+     * If no mapping exists, returns the source column name unchanged.
+     *
+     * @param sourceColumn The source column name from the CSV
+     * @return The output column name to use in the transformed data
+     */
+    public String getOutputColumnName(String sourceColumn) {
+      return columnMapping.getOrDefault(sourceColumn, sourceColumn);
+    }
+
+    /**
+     * Returns true if column mapping is configured.
+     */
+    public boolean hasColumnMapping() {
+      return !columnMapping.isEmpty();
+    }
+
     @Override
     public String toString() {
       return "WideToNarrowConfig{keyColumns=" + keyColumns
           + ", valueColumnPattern='" + valueColumnPattern + "'"
           + ", keyColumnName='" + keyColumnName + "'"
-          + ", valueColumnName='" + valueColumnName + "'}";
+          + ", valueColumnName='" + valueColumnName + "'"
+          + ", columnMapping=" + columnMapping + "}";
     }
   }
 

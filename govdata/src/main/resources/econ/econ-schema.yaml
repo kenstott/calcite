@@ -2581,70 +2581,70 @@ partitionedTables:
     comment: >
       National Income and Product Accounts (NIPA) data from BEA covering comprehensive economic statistics. Includes ALL NIPA tables across 8 sections: 1=Domestic Product & Income (GDP, national income), 2=Personal Income & Outlays (wages, consumer spending), 3=Government (receipts, expenditures), 4=Foreign Transactions (exports, imports), 5=Saving & Investment (capital formation), 6=Industry (sectoral data), 7=Supplemental (per capita, additional details), 8=Not Seasonally Adjusted. Tables dynamically discovered from BEA reference catalog.
     columns:
-      # Source columns from BEA NIPA API response (PascalCase field names)
-      - name: TableName
+      # Source columns from BEA NIPA API response (snake_case with source mapping)
+      - name: table_name
         type: string
+        source: TableName
         nullable: true
         comment: BEA table identifier (e.g., 'T10101')
-      - name: LineNumber
+      - name: line_number_raw
         type: string
+        source: LineNumber
         nullable: true
-        comment: Line number within the BEA table
-      - name: LineDescription
-        type: string
-        nullable: true
-        comment: Description of the GDP component
-      - name: SeriesCode
-        type: string
-        nullable: true
-        comment: BEA series code for this component
-      - name: TimePeriod
-        type: string
-        nullable: true
-        comment: BEA time period (e.g., '2023' for annual, '2023Q1' for quarterly)
-      - name: DataValue
-        type: string
-        nullable: true
-        comment: Raw data value from BEA API
-      - name: CL_UNIT
-        type: string
-        nullable: true
-        comment: Units of measurement (e.g., 'Millions of Dollars')
-      - name: UNIT_MULT
-        type: string
-        nullable: true
-        comment: Unit multiplier
-      - name: NoteRef
-        type: string
-        nullable: true
-        comment: Note reference
-      # Computed columns with user-friendly lowercase names
-      - name: table_id
-        expression: "TableName"
-        comment: BEA table identifier for GDP components
-      - name: line_number
-        expression: "CAST(LineNumber AS INTEGER)"
-        comment: Line number within the BEA table
+        comment: Line number within the BEA table (raw string)
       - name: line_description
-        expression: "LineDescription"
+        type: string
+        source: LineDescription
+        nullable: true
         comment: Description of the GDP component
       - name: series_code
-        expression: "SeriesCode"
+        type: string
+        source: SeriesCode
+        nullable: true
         comment: BEA series code for this component
       - name: time_period
-        expression: "TimePeriod"
-        comment: BEA time period from API
+        type: string
+        source: TimePeriod
+        nullable: true
+        comment: BEA time period (e.g., '2023' for annual, '2023Q1' for quarterly)
+      - name: data_value
+        type: string
+        source: DataValue
+        nullable: true
+        comment: Raw data value from BEA API
+      - name: cl_unit
+        type: string
+        source: CL_UNIT
+        nullable: true
+        comment: Units of measurement (e.g., 'Millions of Dollars')
+      - name: unit_mult
+        type: string
+        source: UNIT_MULT
+        nullable: true
+        comment: Unit multiplier
+      - name: note_ref
+        type: string
+        source: NoteRef
+        nullable: true
+        comment: Note reference
+      # Computed columns derived from source columns
+      - name: table_id
+        expression: "table_name"
+        comment: BEA table identifier for GDP components
+      - name: line_number
+        expression: "CAST(line_number_raw AS INTEGER)"
+        comment: Line number within the BEA table
       - name: year
-        expression: "CAST(SUBSTR(TimePeriod, 1, 4) AS INTEGER)"
+        expression: "CAST(SUBSTR(time_period, 1, 4) AS INTEGER)"
         comment: Year extracted from time period
       - name: value
-        expression: "CASE WHEN DataValue IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(REPLACE(DataValue, ',', '') AS DOUBLE) END"
+        expression: "CASE WHEN data_value IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(REPLACE(data_value, ',', '') AS DOUBLE) END"
         comment: Component value in millions of dollars (NULL for unavailable data)
       - name: units
-        expression: "CL_UNIT"
+        expression: "cl_unit"
         comment: Units of measurement
       - name: frequency
-        expression: "CASE WHEN TimePeriod LIKE '%Q%' THEN 'Q' WHEN LENGTH(TimePeriod) = 4 THEN 'A' ELSE NULL END"
+        expression: "CASE WHEN time_period LIKE '%Q%' THEN 'Q' WHEN LENGTH(time_period) = 4 THEN 'A' ELSE NULL END"
         comment: Data frequency (A=Annual, Q=Quarterly)
 
     # API Configuration
@@ -2777,51 +2777,51 @@ partitionedTables:
         - state_personal_income  # Static table type
 
     columns:
-      - name: GeoFIPS
+      - name: geo_fips
         type: string
         nullable: true
         comment: FIPS code for the geographic area (e.g., '01000' for Alabama)
-      - name: GeoName
+      - name: geo_name
         type: string
         nullable: true
         comment: Name of the geographic area (state name)
-      - name: Region
+      - name: region
         type: string
         nullable: true
         comment: Census region
-      - name: TableName
+      - name: table_name
         type: string
         nullable: true
         comment: BEA table identifier (e.g., SAINC1, SAINC30)
-      - name: LineCode
+      - name: line_code
         type: string
         nullable: true
         comment: BEA line code for specific metric
-      - name: IndustryClassification
+      - name: industry_classification
         type: string
         nullable: true
         comment: Industry classification code
-      - name: Description
+      - name: description
         type: string
         nullable: true
         comment: Description of the metric
-      - name: Unit
+      - name: unit
         type: string
         nullable: true
         comment: Unit of measurement
-      - name: Year
+      - name: year
         type: string
         nullable: true
         comment: Year (unpivoted from column headers)
-      - name: DataValue
+      - name: data_value
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
 
     constraints:
-      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      primaryKey: [geo_fips, table_name, line_code, year]
       foreignKeys:
-        - columns: [TableName, LineCode]
+        - columns: [table_name, line_code]
           targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
           targetTable: regional_linecodes
           targetColumns: [tablename, LineCode]
@@ -2843,9 +2843,18 @@ partitionedTables:
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
         valueColumnPattern: "^\\d{4}$"  # Match 4-digit year columns (1929-2024)
-        keyColumnName: Year
-        valueColumnName: DataValue
+        keyColumnName: year
+        valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]  # BEA notation for missing/suppressed data
+        columnMapping:
+          GeoFIPS: geo_fips
+          GeoName: geo_name
+          Region: region
+          TableName: table_name
+          LineCode: line_code
+          IndustryClassification: industry_classification
+          Description: description
+          Unit: unit
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -2891,51 +2900,51 @@ partitionedTables:
         - state_gdp
 
     columns:
-      - name: GeoFIPS
+      - name: geo_fips
         type: string
         nullable: true
         comment: FIPS code for the geographic area
-      - name: GeoName
+      - name: geo_name
         type: string
         nullable: true
         comment: Name of the geographic area (state name)
-      - name: Region
+      - name: region
         type: string
         nullable: true
         comment: Census region
-      - name: TableName
+      - name: table_name
         type: string
         nullable: true
         comment: BEA table identifier (e.g., SAGDP1, SAGDP2)
-      - name: LineCode
+      - name: line_code
         type: string
         nullable: true
         comment: BEA line code for specific metric
-      - name: IndustryClassification
+      - name: industry_classification
         type: string
         nullable: true
         comment: Industry classification code
-      - name: Description
+      - name: description
         type: string
         nullable: true
         comment: Description of the metric
-      - name: Unit
+      - name: unit
         type: string
         nullable: true
         comment: Unit of measurement
-      - name: Year
+      - name: year
         type: string
         nullable: true
         comment: Year (unpivoted from column headers)
-      - name: DataValue
+      - name: data_value
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
 
     constraints:
-      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      primaryKey: [geo_fips, table_name, line_code, year]
       foreignKeys:
-        - columns: [TableName, LineCode]
+        - columns: [table_name, line_code]
           targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
           targetTable: regional_linecodes
           targetColumns: [tablename, LineCode]
@@ -2954,9 +2963,18 @@ partitionedTables:
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
         valueColumnPattern: "^\\d{4}$"
-        keyColumnName: Year
-        valueColumnName: DataValue
+        keyColumnName: year
+        valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        columnMapping:
+          GeoFIPS: geo_fips
+          GeoName: geo_name
+          Region: region
+          TableName: table_name
+          LineCode: line_code
+          IndustryClassification: industry_classification
+          Description: description
+          Unit: unit
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -3001,51 +3019,51 @@ partitionedTables:
         - state_quarterly_income
 
     columns:
-      - name: GeoFIPS
+      - name: geo_fips
         type: string
         nullable: true
         comment: FIPS code for the geographic area
-      - name: GeoName
+      - name: geo_name
         type: string
         nullable: true
         comment: Name of the geographic area (state name)
-      - name: Region
+      - name: region
         type: string
         nullable: true
         comment: Census region
-      - name: TableName
+      - name: table_name
         type: string
         nullable: true
         comment: BEA table identifier (e.g., SQINC1, SQINC35)
-      - name: LineCode
+      - name: line_code
         type: string
         nullable: true
         comment: BEA line code for specific metric
-      - name: IndustryClassification
+      - name: industry_classification
         type: string
         nullable: true
         comment: Industry classification code
-      - name: Description
+      - name: description
         type: string
         nullable: true
         comment: Description of the metric
-      - name: Unit
+      - name: unit
         type: string
         nullable: true
         comment: Unit of measurement
-      - name: Year
+      - name: year
         type: string
         nullable: true
         comment: Year/Quarter (unpivoted from column headers, e.g., 2020Q1)
-      - name: DataValue
+      - name: data_value
         type: double
         nullable: true
         comment: Value for this period (unpivoted from wide format)
 
     constraints:
-      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      primaryKey: [geo_fips, table_name, line_code, year]
       foreignKeys:
-        - columns: [TableName, LineCode]
+        - columns: [table_name, line_code]
           targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
           targetTable: regional_linecodes
           targetColumns: [tablename, LineCode]
@@ -3064,9 +3082,18 @@ partitionedTables:
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
         valueColumnPattern: "^\\d{4}(Q[1-4])?$"  # Match years and quarters (2020, 2020Q1)
-        keyColumnName: Year
-        valueColumnName: DataValue
+        keyColumnName: year
+        valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        columnMapping:
+          GeoFIPS: geo_fips
+          GeoName: geo_name
+          Region: region
+          TableName: table_name
+          LineCode: line_code
+          IndustryClassification: industry_classification
+          Description: description
+          Unit: unit
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -3111,51 +3138,51 @@ partitionedTables:
         - state_quarterly_gdp
 
     columns:
-      - name: GeoFIPS
+      - name: geo_fips
         type: string
         nullable: true
         comment: FIPS code for the geographic area
-      - name: GeoName
+      - name: geo_name
         type: string
         nullable: true
         comment: Name of the geographic area (state name)
-      - name: Region
+      - name: region
         type: string
         nullable: true
         comment: Census region
-      - name: TableName
+      - name: table_name
         type: string
         nullable: true
         comment: BEA table identifier (e.g., SQGDP1, SQGDP2)
-      - name: LineCode
+      - name: line_code
         type: string
         nullable: true
         comment: BEA line code for specific metric
-      - name: IndustryClassification
+      - name: industry_classification
         type: string
         nullable: true
         comment: Industry classification code
-      - name: Description
+      - name: description
         type: string
         nullable: true
         comment: Description of the metric
-      - name: Unit
+      - name: unit
         type: string
         nullable: true
         comment: Unit of measurement
-      - name: Year
+      - name: year
         type: string
         nullable: true
         comment: Year/Quarter (unpivoted from column headers, e.g., 2020Q1)
-      - name: DataValue
+      - name: data_value
         type: double
         nullable: true
         comment: Value for this period (unpivoted from wide format)
 
     constraints:
-      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      primaryKey: [geo_fips, table_name, line_code, year]
       foreignKeys:
-        - columns: [TableName, LineCode]
+        - columns: [table_name, line_code]
           targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
           targetTable: regional_linecodes
           targetColumns: [tablename, LineCode]
@@ -3174,9 +3201,18 @@ partitionedTables:
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
         valueColumnPattern: "^\\d{4}(Q[1-4])?$"
-        keyColumnName: Year
-        valueColumnName: DataValue
+        keyColumnName: year
+        valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        columnMapping:
+          GeoFIPS: geo_fips
+          GeoName: geo_name
+          Region: region
+          TableName: table_name
+          LineCode: line_code
+          IndustryClassification: industry_classification
+          Description: description
+          Unit: unit
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -3221,51 +3257,51 @@ partitionedTables:
         - state_consumption
 
     columns:
-      - name: GeoFIPS
+      - name: geo_fips
         type: string
         nullable: true
         comment: FIPS code for the geographic area
-      - name: GeoName
+      - name: geo_name
         type: string
         nullable: true
         comment: Name of the geographic area (state name)
-      - name: Region
+      - name: region
         type: string
         nullable: true
         comment: Census region
-      - name: TableName
+      - name: table_name
         type: string
         nullable: true
         comment: BEA table identifier (e.g., SAPCE1, SAPCE2)
-      - name: LineCode
+      - name: line_code
         type: string
         nullable: true
         comment: BEA line code for specific metric
-      - name: IndustryClassification
+      - name: industry_classification
         type: string
         nullable: true
         comment: Industry classification code
-      - name: Description
+      - name: description
         type: string
         nullable: true
         comment: Description of the metric
-      - name: Unit
+      - name: unit
         type: string
         nullable: true
         comment: Unit of measurement
-      - name: Year
+      - name: year
         type: string
         nullable: true
         comment: Year (unpivoted from column headers)
-      - name: DataValue
+      - name: data_value
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
 
     constraints:
-      primaryKey: [GeoFIPS, TableName, LineCode, Year]
+      primaryKey: [geo_fips, table_name, line_code, year]
       foreignKeys:
-        - columns: [TableName, LineCode]
+        - columns: [table_name, line_code]
           targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
           targetTable: regional_linecodes
           targetColumns: [tablename, LineCode]
@@ -3284,9 +3320,18 @@ partitionedTables:
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
         valueColumnPattern: "^\\d{4}$"
-        keyColumnName: Year
-        valueColumnName: DataValue
+        keyColumnName: year
+        valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        columnMapping:
+          GeoFIPS: geo_fips
+          GeoName: geo_name
+          Region: region
+          TableName: table_name
+          LineCode: line_code
+          IndustryClassification: industry_classification
+          Description: description
+          Unit: unit
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -3345,28 +3390,34 @@ partitionedTables:
           referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/source=econ/ECON_REFERENCE}"
 
     columns:
-      - name: GeoFips
+      - name: geo_fips
         type: string
+        source: GeoFips
         nullable: true
         comment: FIPS code for the geographic area (e.g., '01000' for Alabama)
-      - name: GeoName
+      - name: geo_name
         type: string
+        source: GeoName
         nullable: true
         comment: Name of the geographic area
-      - name: TimePeriod
+      - name: time_period
         type: string
+        source: TimePeriod
         nullable: true
         comment: Year or Quarter - e.g. 2020 or 2023Q1
-      - name: CL_UNIT
+      - name: cl_unit
         type: string
+        source: CL_UNIT
         nullable: true
         comment: Income metric type (e.g., 'Personal Income', 'Per Capita Income')
-      - name: UNIT_MULT
+      - name: unit_mult
         type: string
+        source: UNIT_MULT
         nullable: true
         comment: Unit multiplier (e.g., thousands, millions)
-      - name: DataValue
+      - name: data_value
         type: double
+        source: DataValue
         nullable: true
         comment: Income value in thousands of dollars or dollars (depending on metric)
       # Partition columns - types must match what DuckDB infers when writing
@@ -3656,44 +3707,54 @@ partitionedTables:
     comment: >
       International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.
     columns:
-      - name: DataValue
+      - name: data_value
         type: double
+        source: DataValue
         nullable: true
         comment: Transaction value
-      - name: AreaOrCountry
+      - name: area_or_country
         type: string
+        source: AreaOrCountry
         nullable: true
         comment: Geographic area or country name for the transaction
-      - name: TimeSeriesDescription
+      - name: time_series_description
         type: string
+        source: TimeSeriesDescription
         nullable: true
         comment: Description of the time series
-      - name: SeriesCode
+      - name: series_code
         type: string
+        source: SeriesCode
         nullable: true
         comment: Unique identifier for the time series
-      - name: TimePeriod
+      - name: time_period
         type: string
+        source: TimePeriod
         nullable: true
         comment: Time period for the data point (e.g., '2022', '2022Q1')
-      - name: CL_UNIT
+      - name: cl_unit
         type: string
+        source: CL_UNIT
         nullable: true
         comment: Classification unit (e.g., 'USD')
-      - name: UNIT_MULT
+      - name: unit_mult
         type: string
+        source: UNIT_MULT
         nullable: true
         comment: Unit multiplier (e.g., '6' for millions)
-      - name: METRIC_NAME
+      - name: metric_name
         type: string
+        source: METRIC_NAME
         nullable: true
         comment: Type of metric (e.g., 'Current Dollars')
-      - name: Frequency
+      - name: frequency
         type: string
+        source: Frequency
         nullable: true
         comment: Data frequency ('A' for Annual, 'Q' for Quarterly)
-      - name: NoteRef
+      - name: note_ref
         type: string
+        source: NoteRef
         nullable: true
         comment: Reference to explanatory notes
 
