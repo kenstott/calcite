@@ -1730,9 +1730,11 @@ partitionedTables:
       geography: *all_geographies
 
     # Columns match Census ACS API response field names (B12001 table = Sex by Marital Status)
+    # snake_case names with source mapping to original Census API variable codes
     columns:
-      - name: NAME
+      - name: name
         type: string
+        source: NAME
         nullable: true
         comment: Geographic area name from Census API
       - name: state
@@ -1743,48 +1745,59 @@ partitionedTables:
         type: string
         nullable: true
         comment: County FIPS code (3 digits, within state)
-      - name: B12001_001E
+      - name: b12001_001e
         type: string
+        source: B12001_001E
         nullable: true
         comment: Population 15 years and over (total)
-      - name: B12001_003E
+      - name: b12001_003e
         type: string
+        source: B12001_003E
         nullable: true
         comment: Male never married
-      - name: B12001_004E
+      - name: b12001_004e
         type: string
+        source: B12001_004E
         nullable: true
         comment: Male now married (excluding separated)
-      - name: B12001_006E
+      - name: b12001_006e
         type: string
+        source: B12001_006E
         nullable: true
         comment: Male separated
-      - name: B12001_009E
+      - name: b12001_009e
         type: string
+        source: B12001_009E
         nullable: true
         comment: Male widowed
-      - name: B12001_010E
+      - name: b12001_010e
         type: string
+        source: B12001_010E
         nullable: true
         comment: Male divorced
-      - name: B12001_012E
+      - name: b12001_012e
         type: string
+        source: B12001_012E
         nullable: true
         comment: Female never married
-      - name: B12001_013E
+      - name: b12001_013e
         type: string
+        source: B12001_013E
         nullable: true
         comment: Female now married (excluding separated)
-      - name: B12001_015E
+      - name: b12001_015e
         type: string
+        source: B12001_015E
         nullable: true
         comment: Female separated
-      - name: B12001_018E
+      - name: b12001_018e
         type: string
+        source: B12001_018E
         nullable: true
         comment: Female widowed
-      - name: B12001_019E
+      - name: b12001_019e
         type: string
+        source: B12001_019E
         nullable: true
         comment: Female divorced
 
@@ -3175,39 +3188,46 @@ partitionedTables:
         - 'fl'
         - 'ga'
 
-    # Columns match LODES WAC CSV file column names
+    # Columns match LODES WAC CSV file column names (snake_case with source mapping)
     # Data from https://lehd.ces.census.gov/data/lodes/
     columns:
       - name: w_geocode
         type: string
         nullable: true
         comment: Workplace census block code (15 digits)
-      - name: C000
+      - name: c000
         type: string
+        source: C000
         nullable: true
         comment: Total number of jobs
-      - name: CA01
+      - name: ca01
         type: string
+        source: CA01
         nullable: true
         comment: Jobs for workers age 29 or younger
-      - name: CA02
+      - name: ca02
         type: string
+        source: CA02
         nullable: true
         comment: Jobs for workers age 30 to 54
-      - name: CA03
+      - name: ca03
         type: string
+        source: CA03
         nullable: true
         comment: Jobs for workers age 55 or older
-      - name: CE01
+      - name: ce01
         type: string
+        source: CE01
         nullable: true
         comment: Jobs with monthly earnings $1,250 or less
-      - name: CE02
+      - name: ce02
         type: string
+        source: CE02
         nullable: true
         comment: Jobs with monthly earnings $1,251 to $3,333
-      - name: CE03
+      - name: ce03
         type: string
+        source: CE03
         nullable: true
         comment: Jobs with monthly earnings $3,333 or more
 

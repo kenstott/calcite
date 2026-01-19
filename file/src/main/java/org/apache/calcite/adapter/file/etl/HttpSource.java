@@ -1264,7 +1264,7 @@ public class HttpSource implements DataSource {
 
           // Wide-to-narrow transformation: one input row -> N output rows
           if (wideToNarrow != null && wideToNarrow.isEnabled()) {
-            // Build base row with key columns
+            // Build base row with key columns (applying column name mapping if configured)
             Map<String, Object> baseRow = new LinkedHashMap<String, Object>();
             for (int idx : keyColumnIndices) {
               if (idx < values.length) {
@@ -1273,7 +1273,9 @@ public class HttpSource implements DataSource {
                 if (value.startsWith("\"") && value.endsWith("\"")) {
                   value = value.substring(1, value.length() - 1);
                 }
-                baseRow.put(header, parseValue(value));
+                // Apply column name mapping: source name -> output name
+                String outputName = wideToNarrow.getOutputColumnName(header);
+                baseRow.put(outputName, parseValue(value));
               }
             }
 

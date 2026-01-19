@@ -1914,34 +1914,41 @@ partitionedTables:
       than county-level RUCC, based on population density and commuting patterns.
       Primary codes (1-10) with secondary subdivision codes.
 
-    # Columns match USDA RUCA CSV file column names
+    # Columns match USDA RUCA CSV file column names (snake_case with source mapping)
     columns:
-      - name: TractFIPS20
+      - name: tract_fips_20
         type: string
+        source: TractFIPS20
         nullable: true
         comment: 11-digit census tract FIPS code (2020)
-      - name: StateFIPS20
+      - name: state_fips_20
         type: string
+        source: StateFIPS20
         nullable: true
         comment: 2-digit state FIPS code
-      - name: CountyFIPS20
+      - name: county_fips_20
         type: string
+        source: CountyFIPS20
         nullable: true
         comment: 5-digit county FIPS code (state + county)
-      - name: PrimaryRUCA
+      - name: primary_ruca
         type: int
+        source: PrimaryRUCA
         nullable: true
         comment: Primary RUCA code (1-10)
-      - name: SecondaryRUCA
+      - name: secondary_ruca
         type: double
+        source: SecondaryRUCA
         nullable: true
         comment: Secondary RUCA code for subdivision
-      - name: PrimaryRUCADescription
+      - name: primary_ruca_description
         type: string
+        source: PrimaryRUCADescription
         nullable: true
         comment: Description of the primary RUCA category
-      - name: Population
+      - name: population
         type: int
+        source: Population
         nullable: true
         comment: Tract population from Census
 

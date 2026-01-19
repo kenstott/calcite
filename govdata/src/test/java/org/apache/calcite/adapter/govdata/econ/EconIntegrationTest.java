@@ -451,19 +451,19 @@ public class EconIntegrationTest {
         if (found > 0) {
           // Verify data structure for state_personal_income
           LOGGER.info("\n2. Verifying state_personal_income data structure:");
-          String structQuery = "SELECT \"GeoFIPS\", \"GeoName\", \"TableName\", \"LineCode\", \"Year\", \"DataValue\" "
+          String structQuery = "SELECT geo_fips, geo_name, table_name, line_code, \"year\", data_value "
               + "FROM \"ECON\".state_personal_income LIMIT 5";
           try (ResultSet rs = stmt.executeQuery(structQuery)) {
             int rows = 0;
             while (rs.next()) {
               rows++;
-              LOGGER.info("  Row {}: GeoFIPS={}, GeoName={}, TableName={}, Year={}, DataValue={}",
+              LOGGER.info("  Row {}: geo_fips={}, geo_name={}, table_name={}, year={}, data_value={}",
                   rows,
-                  rs.getString("GeoFIPS"),
-                  rs.getString("GeoName"),
-                  rs.getString("TableName"),
-                  rs.getString("Year"),
-                  rs.getDouble("DataValue"));
+                  rs.getString("geo_fips"),
+                  rs.getString("geo_name"),
+                  rs.getString("table_name"),
+                  rs.getString("year"),
+                  rs.getDouble("data_value"));
             }
             assertTrue(rows > 0, "state_personal_income should have data rows");
           }
