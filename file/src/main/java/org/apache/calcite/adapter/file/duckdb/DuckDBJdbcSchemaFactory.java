@@ -1043,30 +1043,15 @@ public class DuckDBJdbcSchemaFactory {
                          tableName, record.sourceFile, icebergTablePath);
             }
 
-            // For Iceberg tables, try iceberg_scan
-            // Check if view exists - if it does but uses wrong format or wrong path, recreate it
+            // For Iceberg tables, check if view exists first for fast start (no S3 calls)
+            // Schema updates are handled during ETL when TTL expires - not on startup
             if (viewExists(conn, duckdbSchema, tableName)) {
-              String existingViewSql = getViewSql(conn, duckdbSchema, tableName);
-              boolean usesIcebergScan = existingViewSql != null && existingViewSql.toLowerCase().contains("iceberg_scan");
-              boolean usesCorrectPath = existingViewSql != null && existingViewSql.contains(icebergTablePath);
-
-              if (usesIcebergScan && usesCorrectPath) {
-                LOGGER.debug("⚡ Iceberg view exists with correct format and path, skipped: {}.{}", duckdbSchema, tableName);
-              } else {
-                // View exists but with wrong format or path - drop and recreate
-                String reason = !usesIcebergScan ? "wrong format (not iceberg_scan)" : "wrong path";
-                LOGGER.info("Dropping existing view to recreate as Iceberg ({}): {}.{}", reason, duckdbSchema, tableName);
-                try {
-                  conn.createStatement().execute(
-                      String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"", duckdbSchema, tableName));
-                } catch (SQLException dropError) {
-                  LOGGER.warn("Failed to drop old view: {}", dropError.getMessage());
-                }
-              }
+              LOGGER.debug("⚡ Iceberg view exists, skipping (fast start): {}.{}", duckdbSchema, tableName);
+              continue;
             }
 
-            if (!viewExists(conn, duckdbSchema, tableName)) {
-              // View doesn't exist - create it
+            // View doesn't exist - create it (this will access S3)
+            {
               String sql =
                   String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, icebergTablePath);
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",

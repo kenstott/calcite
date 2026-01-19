@@ -197,6 +197,9 @@ public class ConversionMetadata {
     public PartitionBaseline baseline;   // Cached partition snapshot for fast change detection
     public Long lastChangeCheck;         // When we last checked for changes
 
+    // === VIEW REFRESH FLAG ===
+    public Boolean viewNeedsRefresh;     // True if DuckDB view needs recreation (e.g., after schema change)
+
     public ConversionRecord() {} // For Jackson
 
     public ConversionRecord(String originalFile, String convertedFile,
