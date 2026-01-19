@@ -79,6 +79,9 @@ public class EtlPipelineConfig {
   /** Source type identifier for YAML constants sources. */
   public static final String SOURCE_TYPE_CONSTANTS = "constants";
 
+  /** Source type identifier for document-based sources (XBRL, HTML filings, etc.). */
+  public static final String SOURCE_TYPE_DOCUMENT = "document";
+
   private final String name;
   private final String sourceType;
   private final HttpSourceConfig source;

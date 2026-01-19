@@ -17,6 +17,9 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
+import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
+import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
@@ -129,6 +132,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
 
   @Override public String getSchemaResourceName() {
+    // TODO: Migrate to sec-schema.yaml when document-based ETL integration is complete
     return "/sec/sec-schema.json";
   }
 
@@ -588,302 +592,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                     mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
       }
 
-      // Pre-define partitioned tables using the partitionedTables format
-      // These will be resolved by FileSchemaFactory after downloads complete
-      LOGGER.info("Defining partitioned tables...");
-      List<Map<String, Object>> partitionedTables = new ArrayList<>();
+      // Load table definitions from sec-schema.yaml (no fallback to hardcoded)
+      LOGGER.info("Loading partitioned tables from sec-schema.yaml...");
+      List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
 
-      // Define partition configuration (shared by both tables)
-      LOGGER.info("Creating partition config...");
-      Map<String, Object> partitionConfig = new HashMap<>();
-      partitionConfig.put("style", "hive");  // Use Hive-style partitioning (key=value)
-
-    // Define partition columns
-    List<Map<String, Object>> columnDefs = new ArrayList<>();
-
-    Map<String, Object> cikCol = new HashMap<>();
-    cikCol.put("name", "cik");
-    cikCol.put("type", "VARCHAR");
-    columnDefs.add(cikCol);
-
-    Map<String, Object> filingTypeCol = new HashMap<>();
-    filingTypeCol.put("name", "filing_type");
-    filingTypeCol.put("type", "VARCHAR");
-    columnDefs.add(filingTypeCol);
-
-    Map<String, Object> yearCol = new HashMap<>();
-    yearCol.put("name", "year");
-    yearCol.put("type", "INTEGER");
-    columnDefs.add(yearCol);
-
-    partitionConfig.put("columnDefinitions", columnDefs);
-
-    // Define financial_line_items as a partitioned table with constraints
-    Map<String, Object> financialLineItems = new HashMap<>();
-    financialLineItems.put("name", "financial_line_items");
-    financialLineItems.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_facts.parquet");
-    financialLineItems.put("partitions", partitionConfig);
-
-    // Add constraint definitions if enabled
-    Boolean enableConstraints = (Boolean) mutableOperand.get("enableConstraints");
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      // Primary key: (cik, filing_type, year, filing_date, concept, context_ref)
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "concept", "context_ref"));
-
-      // Foreign key to filing_contexts table
-      Map<String, Object> fk = new HashMap<>();
-      fk.put("sourceTable", Arrays.asList("SEC", "financial_line_items"));
-      fk.put("columns", Arrays.asList("cik", "filing_type", "year", "filing_date", "context_ref"));
-      fk.put("targetTable", Arrays.asList("SEC", "filing_contexts"));
-      fk.put("targetColumns", Arrays.asList("cik", "filing_type", "year", "filing_date", "context_id"));
-      constraints.put("foreignKeys", Arrays.asList(fk));
-
-      financialLineItems.put("constraints", constraints);
-    }
-
-    partitionedTables.add(financialLineItems);
-
-    // Define filing_metadata as a partitioned table with filing-level information
-    Map<String, Object> filingMetadata = new HashMap<>();
-    filingMetadata.put("name", "filing_metadata");
-    filingMetadata.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_metadata.parquet");
-    filingMetadata.put("partitions", partitionConfig);
-
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      // Primary key: (cik, filing_type, year, accession_number)
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year", "accession_number"));
-      constraints.put("unique", Arrays.asList(Arrays.asList("accession_number")));
-
-      // Cross-domain FK to GEO schema is now handled in GovDataSchemaFactory.defineCrossDomainConstraintsForSec()
-      // This ensures it's only added when both SEC and GEO schemas are present
-
-      filingMetadata.put("constraints", constraints);
-    }
-
-    partitionedTables.add(filingMetadata);
-
-    // Define filing_contexts as a partitioned table with constraints
-    Map<String, Object> filingContexts = new HashMap<>();
-    filingContexts.put("name", "filing_contexts");
-    filingContexts.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_contexts.parquet");
-    filingContexts.put("partitions", partitionConfig);
-
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      // Primary key: (cik, filing_type, year, filing_date, context_id)
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "context_id"));
-      filingContexts.put("constraints", constraints);
-    }
-
-    partitionedTables.add(filingContexts);
-
-    // Define mda_sections as a partitioned table for MD&A paragraphs
-    Map<String, Object> mdaSections = new HashMap<>();
-    mdaSections.put("name", "mda_sections");
-    mdaSections.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_mda.parquet");
-    mdaSections.put("partitions", partitionConfig);
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "section_id"));
-      mdaSections.put("constraints", constraints);
-    }
-    partitionedTables.add(mdaSections);
-
-    // Define xbrl_relationships as a partitioned table
-    Map<String, Object> xbrlRelationships = new HashMap<>();
-    xbrlRelationships.put("name", "xbrl_relationships");
-    xbrlRelationships.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_relationships.parquet");
-    xbrlRelationships.put("partitions", partitionConfig);
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "relationship_id"));
-      xbrlRelationships.put("constraints", constraints);
-    }
-    partitionedTables.add(xbrlRelationships);
-
-    // Define insider_transactions table for Forms 3, 4, 5
-    Map<String, Object> insiderTransactions = new HashMap<>();
-    insiderTransactions.put("name", "insider_transactions");
-    insiderTransactions.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_insider.parquet");
-    insiderTransactions.put("partitions", partitionConfig);
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "transaction_id"));
-      insiderTransactions.put("constraints", constraints);
-    }
-    partitionedTables.add(insiderTransactions);
-
-    // Define earnings_transcripts table for 8-K exhibits
-    Map<String, Object> earningsTranscripts = new HashMap<>();
-    earningsTranscripts.put("name", "earnings_transcripts");
-    earningsTranscripts.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_earnings.parquet");
-    earningsTranscripts.put("partitions", partitionConfig);
-    if (enableConstraints == null || enableConstraints) {
-      Map<String, Object> constraints = new HashMap<>();
-      constraints.put(
-          "primaryKey", Arrays.asList("cik", "filing_type", "year",
-          "filing_date", "transcript_id"));
-      earningsTranscripts.put("constraints", constraints);
-    }
-    partitionedTables.add(earningsTranscripts);
-
-    // Add vectorized_blobs table when text similarity is enabled
-    Map<String, Object> textSimilarityConfig = (Map<String, Object>) operand.get("textSimilarity");
-    if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
-      Map<String, Object> vectorizedBlobsTable = new HashMap<>();
-      vectorizedBlobsTable.put("name", "vectorized_blobs");
-      // Pattern matches files like: cik=0000320193/filing_type=10K/year=2023/0000320193_0001628280-23-000106_vectorized.parquet
-      // Uses [!.]* to exclude hidden files (like .conversions.json)
-      vectorizedBlobsTable.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_vectorized.parquet");
-      vectorizedBlobsTable.put("partitions", partitionConfig);
-      partitionedTables.add(vectorizedBlobsTable);
-      LOGGER.debug("Added vectorized_blobs table configuration for text similarity");
-    }
-
-    // Add partitioned tables to operand
-    mutableOperand.put("partitionedTables", partitionedTables);
-
-    // Set the directory for FileSchemaFactory to search
-    // Use the unified secParquetDir directly
-    mutableOperand.put("directory", secParquetDir);
-
-    LOGGER.debug("Pre-defined {} partitioned table patterns", partitionedTables.size());
-
-    // Log parquet directory (may be local or S3)
-    LOGGER.info("Using SEC parquet directory: {}", secParquetDir);
-
-    // Don't use File operations for directory checks - path may be S3
-    // FileSchemaFactory will handle directory scanning via StorageProvider
-
-    // Don't set execution engine - let GovDataSchemaFactory control it
-    // The parent factory will set it based on global configuration
-
-    // Preserve text similarity configuration if present, or enable it by default
-    // This ensures COSINE_SIMILARITY and other vector functions are registered
-    Map<String, Object> textSimConfig = (Map<String, Object>) mutableOperand.get("textSimilarity");
-    if (textSimConfig == null) {
-      textSimConfig = new HashMap<>();
-      textSimConfig.put("enabled", true);
-      mutableOperand.put("textSimilarity", textSimConfig);
-    } else if (!Boolean.TRUE.equals(textSimConfig.get("enabled"))) {
-      // Ensure it's enabled even if config exists but disabled
-      textSimConfig.put("enabled", true);
-    }
-    if (LOGGER.isDebugEnabled()) {
-      LOGGER.debug("Text similarity functions configuration: {}", textSimConfig);
-    }
-
-    // Start RSS monitor if configured
-    Map<String, Object> refreshConfig = (Map<String, Object>) mutableOperand.get("refreshMonitoring");
-    if (refreshConfig != null && Boolean.TRUE.equals(refreshConfig.get("enabled"))) {
-      if (rssMonitor == null) {
-        LOGGER.info("Starting RSS refresh monitor");
-        rssMonitor = new RSSRefreshMonitor(mutableOperand);
-        rssMonitor.start();
-      }
-    }
-
-    // Merge default constraints with provided constraints
-    Map<String, Map<String, Object>> allConstraints = defineSecTableConstraints();
-
-    // Add any model-provided constraints, overriding defaults where specified
-    if (!tableConstraints.isEmpty()) {
-      LOGGER.debug("Merging {} model-provided constraints with defaults", tableConstraints.size());
-      for (Map.Entry<String, Map<String, Object>> entry : tableConstraints.entrySet()) {
-        String tableName = entry.getKey();
-        Map<String, Object> modelConstraints = entry.getValue();
-
-        if (allConstraints.containsKey(tableName)) {
-          // Merge with existing defaults
-          Map<String, Object> defaultConstraints = allConstraints.get(tableName);
-          Map<String, Object> merged = new HashMap<>(defaultConstraints);
-          merged.putAll(modelConstraints);  // Model constraints override defaults
-          allConstraints.put(tableName, merged);
-        } else {
-          // New table not in defaults
-          allConstraints.put(tableName, modelConstraints);
-        }
-      }
-    }
-
-    // Add constraint metadata to operand if we have any
-    if (!allConstraints.isEmpty()) {
-      LOGGER.debug("Adding constraint metadata for {} tables to operand", allConstraints.size());
-      mutableOperand.put("tableConstraints", allConstraints);
-    }
-
-    // Create conversion metadata with viewScanPatterns for DuckDB Hive optimization
-    // This allows DuckDB to use efficient pattern-based scanning without enumerating all files
-    Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords =
-        new HashMap<>();
-
-    for (Object tableObj : partitionedTables) {
-      Map<String, Object> table = (Map<String, Object>) tableObj;
-      String tableName = (String) table.get("name");
-      String pattern = (String) table.get("pattern");
-
-      if (tableName != null && pattern != null) {
-        // Convert relative pattern to full viewScanPattern
-        // Pattern format: "cik=*/filing_type=*/year=*/[!.]*_line_items.parquet"
-        // Full pattern: "{secParquetDir}/{tableName}/{pattern}"
-        String viewScanPattern =
-            storageProvider.resolvePath(storageProvider.resolvePath(secParquetDir, tableName),
-            pattern);
-
-        org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
-            new org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord();
-        record.viewScanPattern = viewScanPattern;
-        record.originalFile = tableName; // Use table name as identifier
-        record.conversionType = "SEC_XBRL_TO_PARQUET";
-        record.tableName = tableName; // Set table name for consistency
-        record.tableConfig = table; // Preserve table configuration including partition info
-
-        conversionRecords.put(tableName, record);
-
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Registered viewScanPattern for table '{}': {} (partitions: {})",
-              tableName, viewScanPattern, table.get("partitions"));
-        }
-      }
-    }
-
-    // Add conversion records to operand for FileSchema to access
-    if (!conversionRecords.isEmpty()) {
-      mutableOperand.put("conversionRecords", conversionRecords);
-      LOGGER.info("Registered viewScanPatterns for {} SEC tables", conversionRecords.size());
-    }
-
-    // Disable cache priming for SEC adapter - we have millions of files and don't need
-    // statistics preloaded at startup. DuckDB will handle statistics on-demand efficiently.
-    // This dramatically improves startup time from minutes to seconds.
-    mutableOperand.put("primeCache", false);
-    LOGGER.info("Disabled cache priming for SEC schema (too many files, DuckDB handles stats on-demand)");
-
-      // Add schema-level comment from JSON metadata
-      String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
-      if (schemaComment != null) {
-        mutableOperand.put("comment", schemaComment);
+      if (partitionedTables.isEmpty()) {
+        throw new IllegalStateException(
+            "Failed to load table definitions from sec-schema.yaml - file missing or invalid");
       }
 
-      // Pass storage provider instance through operand (for FileSchema to reuse)
-      if (this.storageProvider != null) {
-        mutableOperand.put("_storageProvider", this.storageProvider);
-      }
-
-      // Return the configured operand for GovDataSchemaFactory to use
-      LOGGER.info("SEC schema operand configuration complete");
+      LOGGER.info("Using {} table definitions from sec-schema.yaml", partitionedTables.size());
+      mutableOperand.put("partitionedTables", partitionedTables);
+      skipHardcodedTableDefinitions(mutableOperand, partitionedTables, secParquetDir);
       return mutableOperand;
     } catch (Exception e) {
       LOGGER.error("ERROR in SecSchemaFactory.buildOperand(): {}", e.getMessage(), e);
@@ -891,6 +611,79 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+
+  /**
+   * Completes operand setup when using YAML table definitions.
+   *
+   * <p>This method handles the remainder of buildOperand() when tables are loaded
+   * from sec-schema.yaml instead of being hardcoded.
+   */
+  @SuppressWarnings("unchecked")
+  private void skipHardcodedTableDefinitions(Map<String, Object> operand,
+      List<Map<String, Object>> partitionedTables, String secParquetDir) {
+    LOGGER.info("Completing operand setup with {} YAML table definitions", partitionedTables.size());
+
+    // Set the directory for FileSchemaFactory to search
+    operand.put("directory", secParquetDir);
+
+    // Preserve text similarity configuration if present, or enable it by default
+    Map<String, Object> textSimConfig = (Map<String, Object>) operand.get("textSimilarity");
+    if (textSimConfig == null) {
+      textSimConfig = new HashMap<String, Object>();
+      textSimConfig.put("enabled", true);
+      operand.put("textSimilarity", textSimConfig);
+    } else if (!Boolean.TRUE.equals(textSimConfig.get("enabled"))) {
+      textSimConfig.put("enabled", true);
+    }
+
+    // Create conversion metadata with viewScanPatterns
+    Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>
+        conversionRecords = new HashMap<String,
+            org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>();
+
+    for (Map<String, Object> table : partitionedTables) {
+      String tableName = (String) table.get("name");
+      String pattern = (String) table.get("pattern");
+
+      if (tableName != null && pattern != null) {
+        String viewScanPattern =
+            storageProvider.resolvePath(storageProvider.resolvePath(secParquetDir, tableName),
+                pattern);
+
+        org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
+            new org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord();
+        record.viewScanPattern = viewScanPattern;
+        record.originalFile = tableName;
+        record.conversionType = "SEC_XBRL_TO_PARQUET";
+        record.tableName = tableName;
+        record.tableConfig = table;
+
+        conversionRecords.put(tableName, record);
+        LOGGER.debug("Registered viewScanPattern for table '{}': {}", tableName, viewScanPattern);
+      }
+    }
+
+    if (!conversionRecords.isEmpty()) {
+      operand.put("conversionRecords", conversionRecords);
+      LOGGER.info("Registered viewScanPatterns for {} SEC tables", conversionRecords.size());
+    }
+
+    // Disable cache priming for SEC adapter
+    operand.put("primeCache", false);
+
+    // Add schema-level comment
+    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
+    if (schemaComment != null) {
+      operand.put("comment", schemaComment);
+    }
+
+    // Pass storage provider instance through operand
+    if (this.storageProvider != null) {
+      operand.put("_storageProvider", this.storageProvider);
+    }
+
+    LOGGER.info("SEC schema operand configuration complete (using YAML definitions)");
+  }
 
   private boolean shouldDownloadData(Map<String, Object> operand) {
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
@@ -1194,58 +987,28 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
 
-      // Get CIKs to download
-      LOGGER.info("Resolving CIKs from configuration...");
-      List<String> ciks = getCiksFromConfig(operand);
-      LOGGER.info("Resolved {} CIKs", ciks.size());
-      List<String> filingTypes = getFilingTypes(operand);
-      LOGGER.debug("Filing types: {}", filingTypes);
-      int startYear = (Integer) operand.getOrDefault("startYear", 2020);
-      int endYear = (Integer) operand.getOrDefault("endYear", 2023);
-      LOGGER.debug("Year range: {} - {}", startYear, endYear);
+      // Use document-based ETL model (default, no fallback to legacy)
+      LOGGER.info("Using document-based ETL model");
+      DocumentETLProcessor.DocumentETLResult result = downloadSecDataUsingDocumentEtl(operand);
 
-      // Use SEC storage provider to download filings
-      SecHttpStorageProvider provider = SecHttpStorageProvider.forEdgar();
-
-      LOGGER.info("Starting CIK filing downloads for {} companies (year range: {}-{})", ciks.size(), startYear, endYear);
-      int cikCounter = 0;
-      for (String cik : ciks) {
-        cikCounter++;
-        LOGGER.info("Processing CIK {}/{}: {}", cikCounter, ciks.size(), cik);
-        downloadCikFilings(provider, cik, filingTypes, startYear, endYear);
-      }
-      LOGGER.info("Completed processing all {} CIKs", ciks.size());
-
-      // Wait for all downloads AND immediate processing to complete
-      if (!filingProcessingFutures.isEmpty()) {
-        LOGGER.info("Waiting for {} filing download and processing tasks to complete...", filingProcessingFutures.size());
-        CompletableFuture<Void> allTasks =
-            CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
-        try {
-          allTasks.get(Integer.MAX_VALUE, TimeUnit.MINUTES); // Effectively no timeout
-          LOGGER.info("All filing processing completed: {} files processed", completedFilingProcessing.get());
-        } catch (Exception e) {
-          LOGGER.warn("Some processing tasks may have failed: " + e.getMessage());
-        }
+      // Log results
+      if (result.isSuccess()) {
+        LOGGER.info("Document ETL completed successfully: {} documents processed",
+            result.getDocumentsProcessed());
       } else {
-        LOGGER.info("No filing processing futures to wait for");
+        LOGGER.warn("Document ETL completed with {} failures", result.getDocumentsFailed());
+        for (String error : result.getErrors()) {
+          LOGGER.warn("  Error: {}", error);
+        }
       }
 
-      // All XBRL/HTML files are now converted to Parquet inline during download
-      // No batch processing needed - inline conversion works for both local and S3 cache
-
-      // Download or create stock prices if enabled
+      // Download stock prices (still needed as separate step)
       boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
-      Boolean testModeObj = (Boolean) operand.get("testMode");
-      boolean isTestMode = testModeObj != null && testModeObj;
       if (fetchStockPrices) {
-        if (isTestMode) {
-          LOGGER.debug("Creating mock stock prices for testing (testMode=true)");
-          createMockStockPrices(this.secCacheDirectory, ciks, startYear, endYear);
-        } else {
-          LOGGER.info("Downloading stock prices for configured CIKs");
-          downloadStockPrices(this.secCacheDirectory, ciks, startYear, endYear);
-        }
+        List<String> ciks = getCiksFromConfig(operand);
+        int startYear = (Integer) operand.getOrDefault("startYear", 2020);
+        int endYear = (Integer) operand.getOrDefault("endYear", Year.now().getValue());
+        downloadStockPrices(this.secCacheDirectory, ciks, startYear, endYear);
       }
 
       // Save SecCacheManifest after all downloads complete
@@ -1268,6 +1031,266 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     }
+  }
+
+  /**
+   * Downloads SEC data using the document-based ETL model.
+   *
+   * <p>This method uses {@link DocumentETLProcessor} to process SEC filings,
+   * delegating to the XbrlToParquetConverter for document conversion.
+   *
+   * @param operand Schema operand with configuration
+   * @return Processing result with statistics
+   */
+  private DocumentETLProcessor.DocumentETLResult downloadSecDataUsingDocumentEtl(
+      Map<String, Object> operand) {
+    LOGGER.info("Starting SEC data download using DocumentETLProcessor");
+
+    try {
+      // Get CIKs from configuration
+      List<String> ciks = getCiksFromConfig(operand);
+      if (ciks.isEmpty()) {
+        LOGGER.warn("No CIKs configured for document-based ETL");
+        return new DocumentETLProcessor.DocumentETLResult(
+            0, 0, 0, new ArrayList<File>(), new ArrayList<String>(), 0);
+      }
+
+      // Get filing types and year range
+      List<String> filingTypes = getFilingTypes(operand);
+      int startYear = (Integer) operand.getOrDefault("startYear", 2020);
+      int endYear = (Integer) operand.getOrDefault("endYear", Year.now().getValue());
+
+      // Get parquet directory for output
+      String govdataParquetDir = GovDataUtils.getParquetDir(operand);
+      String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+
+      // Create HttpSourceConfig from YAML-style configuration
+      HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes);
+
+      // Get or create document converter
+      FileConverter documentConverter = getOrCreateXbrlConverter();
+
+      // Create processor
+      DocumentETLProcessor processor = new DocumentETLProcessor(
+          httpSourceConfig,
+          storageProvider,
+          secParquetDir,
+          new File(this.secCacheDirectory),
+          documentConverter);
+
+      // Build entity list with CIKs and year range
+      List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
+      for (String cik : ciks) {
+        String normalizedCik = normalizeCik(cik);
+        for (int year = startYear; year <= endYear; year++) {
+          Map<String, String> entity = new HashMap<String, String>();
+          entity.put("cik", normalizedCik);
+          entity.put("year", String.valueOf(year));
+          entities.add(entity);
+        }
+      }
+
+      LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
+          ciks.size(), (endYear - startYear + 1), entities.size());
+
+      // Process all entities
+      DocumentETLProcessor.DocumentETLResult result = processor.processEntities(entities);
+
+      LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
+          result.getDocumentsProcessed(),
+          result.getDocumentsSkipped(),
+          result.getDocumentsFailed(),
+          result.getDurationMs());
+
+      return result;
+
+    } catch (Exception e) {
+      LOGGER.error("Document ETL failed: {}", e.getMessage(), e);
+      List<String> errors = new ArrayList<String>();
+      errors.add(e.getMessage());
+      return new DocumentETLProcessor.DocumentETLResult(
+          0, 0, 1, new ArrayList<File>(), errors, 0);
+    }
+  }
+
+  /**
+   * Creates HttpSourceConfig from operand for DocumentETLProcessor.
+   */
+  private HttpSourceConfig createHttpSourceConfig(Map<String, Object> operand,
+      List<String> filingTypes) {
+    // Create DocumentSourceConfig using fromMap
+    Map<String, Object> docSourceMap = new HashMap<String, Object>();
+    docSourceMap.put("metadataUrl", "https://data.sec.gov/submissions/CIK{cik}.json");
+    docSourceMap.put("documentUrl",
+        "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}");
+    docSourceMap.put("documentTypes", filingTypes);
+    docSourceMap.put("extractionType", "xbrl");
+    docSourceMap.put("documentConverter",
+        "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
+    docSourceMap.put("responseTransformer",
+        "org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer");
+
+    HttpSourceConfig.DocumentSourceConfig docConfig =
+        HttpSourceConfig.DocumentSourceConfig.fromMap(docSourceMap);
+
+    // Create rate limit config using fromMap
+    Map<String, Object> rateLimitMap = new HashMap<String, Object>();
+    rateLimitMap.put("requestsPerSecond", SEC_RATE_LIMIT_PER_SECOND);
+    rateLimitMap.put("retryOn", Arrays.asList(429, 503));
+    rateLimitMap.put("maxRetries", 5);
+    rateLimitMap.put("retryBackoffMs", 5000L);
+    HttpSourceConfig.RateLimitConfig rateLimitConfig =
+        HttpSourceConfig.RateLimitConfig.fromMap(rateLimitMap);
+
+    // Create headers
+    Map<String, String> headers = new HashMap<String, String>();
+    headers.put("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
+    headers.put("Accept-Encoding", "gzip, deflate");
+
+    // Build HttpSourceConfig
+    return new HttpSourceConfig.Builder()
+        .documentSource(docConfig)
+        .rateLimit(rateLimitConfig)
+        .headers(headers)
+        .build();
+  }
+
+  /**
+   * Loads partitioned table definitions from sec-schema.yaml.
+   *
+   * <p>When using the document-based ETL model, table definitions come from
+   * the YAML schema file instead of being hardcoded.
+   *
+   * @return List of table configurations
+   */
+  @SuppressWarnings("unchecked")
+  private List<Map<String, Object>> loadPartitionedTablesFromYaml() {
+    List<Map<String, Object>> partitionedTables = new ArrayList<Map<String, Object>>();
+
+    try (InputStream is = getClass().getResourceAsStream("/sec/sec-schema.yaml")) {
+      if (is == null) {
+        LOGGER.warn("sec-schema.yaml not found, using hardcoded table definitions");
+        return partitionedTables;
+      }
+
+      // Load YAML with high alias limit for complex schemas
+      org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
+      loaderOptions.setMaxAliasesForCollections(500);
+      org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(loaderOptions);
+      Map<String, Object> config = yaml.load(is);
+
+      // Extract tables array from YAML
+      Object tablesObj = config.get("tables");
+      if (!(tablesObj instanceof List)) {
+        LOGGER.warn("No 'tables' array found in sec-schema.yaml");
+        return partitionedTables;
+      }
+
+      List<?> tables = (List<?>) tablesObj;
+      for (Object tableObj : tables) {
+        if (!(tableObj instanceof Map)) {
+          continue;
+        }
+
+        Map<String, Object> tableConfig = (Map<String, Object>) tableObj;
+        String tableName = (String) tableConfig.get("name");
+        String pattern = (String) tableConfig.get("pattern");
+        Object partitionsObj = tableConfig.get("partitions");
+
+        if (tableName == null || pattern == null) {
+          continue;
+        }
+
+        // Create table definition compatible with FileSchemaFactory
+        Map<String, Object> tableDefinition = new HashMap<String, Object>();
+        tableDefinition.put("name", tableName);
+        tableDefinition.put("pattern", pattern);
+
+        // Process partitions
+        if (partitionsObj instanceof Map) {
+          Map<String, Object> partitions = (Map<String, Object>) partitionsObj;
+          Map<String, Object> partitionConfig = new HashMap<String, Object>();
+
+          // Copy partition style
+          String style = (String) partitions.get("style");
+          if (style != null) {
+            partitionConfig.put("style", style);
+          }
+
+          // Process column definitions
+          Object columnDefsObj = partitions.get("columnDefinitions");
+          if (columnDefsObj instanceof List) {
+            List<?> columnDefs = (List<?>) columnDefsObj;
+            List<Map<String, Object>> processedCols = new ArrayList<Map<String, Object>>();
+
+            for (Object colObj : columnDefs) {
+              if (colObj instanceof Map) {
+                Map<String, Object> col = (Map<String, Object>) colObj;
+                Map<String, Object> colDef = new HashMap<String, Object>();
+                colDef.put("name", col.get("name"));
+                colDef.put("type", col.get("type"));
+                processedCols.add(colDef);
+              }
+            }
+
+            partitionConfig.put("columnDefinitions", processedCols);
+          }
+
+          tableDefinition.put("partitions", partitionConfig);
+        }
+
+        // Process constraints if present
+        Object constraintsObj = tableConfig.get("constraints");
+        if (constraintsObj instanceof Map) {
+          tableDefinition.put("constraints", constraintsObj);
+        }
+
+        partitionedTables.add(tableDefinition);
+        LOGGER.debug("Loaded table definition from YAML: {}", tableName);
+      }
+
+      LOGGER.info("Loaded {} table definitions from sec-schema.yaml", partitionedTables.size());
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to load table definitions from sec-schema.yaml: {}", e.getMessage());
+    }
+
+    return partitionedTables;
+  }
+
+  /**
+   * Gets or creates the XBRL to Parquet converter.
+   */
+  private FileConverter getOrCreateXbrlConverter() {
+    try {
+      Class<?> clazz = Class.forName(
+          "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
+
+      // Try constructor with StorageProvider
+      try {
+        return (FileConverter) clazz
+            .getConstructor(StorageProvider.class)
+            .newInstance(storageProvider);
+      } catch (NoSuchMethodException e) {
+        // Try default constructor
+        return (FileConverter) clazz.getDeclaredConstructor().newInstance();
+      }
+    } catch (Exception e) {
+      LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Normalizes a CIK to 10-digit zero-padded format.
+   */
+  private String normalizeCik(String cik) {
+    if (cik == null || cik.isEmpty()) {
+      return cik;
+    }
+    // Remove non-numeric characters and pad to 10 digits
+    String numericCik = cik.replaceAll("[^0-9]", "");
+    return String.format("%010d", Long.parseLong(numericCik));
   }
 
   private void downloadCikFilings(SecHttpStorageProvider provider, String cik,
