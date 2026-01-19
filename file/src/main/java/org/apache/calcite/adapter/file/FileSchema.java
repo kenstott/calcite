@@ -5239,6 +5239,28 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Notifies all pattern-aware listeners that an Iceberg table has been refreshed.
+   * This is called after ETL materializes or recreates an Iceberg table,
+   * allowing DuckDB views to be updated with the new schema.
+   *
+   * @param tableName The table name
+   * @param tableLocation The Iceberg table location (e.g., s3://bucket/warehouse/table)
+   */
+  public void notifyIcebergTableRefreshed(String tableName, String tableLocation) {
+    for (org.apache.calcite.adapter.file.refresh.TableRefreshListener listener : refreshListeners) {
+      try {
+        if (listener instanceof org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener) {
+          ((org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener) listener)
+              .onIcebergTableRefreshed(tableName, tableLocation);
+          LOGGER.debug("Notified listener for Iceberg table '{}' at: {}", tableName, tableLocation);
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error notifying Iceberg refresh listener for table '{}': {}", tableName, e.getMessage(), e);
+      }
+    }
+  }
+
+  /**
    * Gets the baseline snapshot for a table from conversion metadata.
    * Used by DuckDB+Hive optimization for fast change detection.
    *

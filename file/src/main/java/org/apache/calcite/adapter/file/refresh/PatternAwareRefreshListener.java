@@ -31,4 +31,16 @@ public interface PatternAwareRefreshListener extends TableRefreshListener {
    * @param pattern the file pattern (glob) for the table
    */
   void onTableRefreshedWithPattern(String tableName, String pattern);
+
+  /**
+   * Called when an Iceberg table has been refreshed or recreated.
+   * This is used to update DuckDB views that use iceberg_scan() when
+   * the underlying Iceberg table schema has changed.
+   *
+   * @param tableName the name of the table that was refreshed
+   * @param tableLocation the Iceberg table location (e.g., s3://bucket/warehouse/table)
+   */
+  default void onIcebergTableRefreshed(String tableName, String tableLocation) {
+    // Default no-op for backward compatibility
+  }
 }

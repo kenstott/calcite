@@ -76,6 +76,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
           recreateViewWithPattern(tableName, pattern);
         }
+
+        @Override public void onIcebergTableRefreshed(String tableName, String tableLocation) {
+          recreateIcebergView(tableName, tableLocation);
+        }
       });
       LOGGER.info("Registered pattern-aware refresh listener with FileSchema");
     }
@@ -144,6 +148,31 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       LOGGER.info("Successfully recreated pattern-based view for table '{}'", tableName);
     } catch (Exception e) {
       LOGGER.error("Failed to recreate pattern-based view for table '{}': {}", tableName, e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Recreates a DuckDB view for an Iceberg table when it has been refreshed or recreated.
+   * This is called when ETL recreates an Iceberg table (e.g., due to schema changes),
+   * ensuring the DuckDB view stays in sync with the underlying table schema.
+   */
+  private void recreateIcebergView(String tableName, String tableLocation) {
+    try {
+      // Use CREATE OR REPLACE to handle schema changes atomically
+      String viewSql = String.format(
+          "CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')",
+          schemaName, tableName, tableLocation);
+
+      LOGGER.info("Recreating DuckDB Iceberg view after ETL: \"{}.{}\" -> {}",
+                  schemaName, tableName, tableLocation);
+
+      try (Statement stmt = persistentConnection.createStatement()) {
+        stmt.execute(viewSql);
+      }
+
+      LOGGER.info("Successfully recreated Iceberg view for table '{}'", tableName);
+    } catch (Exception e) {
+      LOGGER.error("Failed to recreate Iceberg view for table '{}': {}", tableName, e.getMessage(), e);
     }
   }
 
