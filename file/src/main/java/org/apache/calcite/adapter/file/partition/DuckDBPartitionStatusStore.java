@@ -876,9 +876,46 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     }
   }
 
+  @Override public void markTableCompleteWithSourceWatermark(String pipelineName, String configHash,
+      String dimensionSignature, long rowCount, long sourceFileWatermark) {
+    // Ensure the table_completion table exists
+    try {
+      ensureTableCompletionTableExists();
+    } catch (SQLException e) {
+      LOGGER.error("Failed to create table_completion table: {}", e.getMessage());
+      return;
+    }
+
+    long now = System.currentTimeMillis();
+    String sql = "INSERT INTO table_completion "
+        + "(pipeline_name, signature, config_hash, row_count, source_file_watermark, completed_at) "
+        + "VALUES (?, ?, ?, ?, ?, ?) "
+        + "ON CONFLICT (pipeline_name) DO UPDATE SET "
+        + "signature = EXCLUDED.signature, "
+        + "config_hash = EXCLUDED.config_hash, "
+        + "row_count = EXCLUDED.row_count, "
+        + "source_file_watermark = EXCLUDED.source_file_watermark, "
+        + "completed_at = EXCLUDED.completed_at";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      stmt.setString(2, dimensionSignature);
+      stmt.setString(3, configHash);
+      stmt.setLong(4, rowCount);
+      stmt.setLong(5, sourceFileWatermark);
+      stmt.setLong(6, now);
+      stmt.executeUpdate();
+      LOGGER.debug("Marked pipeline {} as complete with configHash={}, signature={}, rows={}, watermark={}",
+          pipelineName, configHash, dimensionSignature, rowCount, sourceFileWatermark);
+    } catch (SQLException e) {
+      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+    }
+  }
+
   @Override public CachedCompletion getCachedCompletion(String pipelineName) {
-    String sql = "SELECT config_hash, signature, row_count, completed_at FROM table_completion "
-        + "WHERE pipeline_name = ?";
+    String sql = "SELECT config_hash, signature, row_count, completed_at, "
+        + "COALESCE(source_file_watermark, 0) as source_file_watermark "
+        + "FROM table_completion WHERE pipeline_name = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, pipelineName);
       try (ResultSet rs = stmt.executeQuery()) {
@@ -887,8 +924,9 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
           String signature = rs.getString("signature");
           long rowCount = rs.getLong("row_count");
           long completedAt = rs.getLong("completed_at");
+          long sourceFileWatermark = rs.getLong("source_file_watermark");
           if (configHash != null) {
-            return new CachedCompletion(configHash, signature, rowCount, completedAt);
+            return new CachedCompletion(configHash, signature, rowCount, completedAt, sourceFileWatermark);
           }
         }
       }
@@ -933,7 +971,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
   }
 
   /**
-   * Ensures the table_completion table exists with config hash support.
+   * Ensures the table_completion table exists with config hash and source watermark support.
    */
   private void ensureTableCompletionTableExists() throws SQLException {
     String sql = "CREATE TABLE IF NOT EXISTS table_completion ("
@@ -941,6 +979,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
         + "signature VARCHAR NOT NULL, "
         + "config_hash VARCHAR, "
         + "row_count BIGINT DEFAULT 0, "
+        + "source_file_watermark BIGINT DEFAULT 0, "
         + "completed_at BIGINT NOT NULL)";
     try (Statement stmt = getConnection().createStatement()) {
       stmt.execute(sql);
@@ -948,6 +987,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
       try {
         stmt.execute("ALTER TABLE table_completion ADD COLUMN IF NOT EXISTS config_hash VARCHAR");
         stmt.execute("ALTER TABLE table_completion ADD COLUMN IF NOT EXISTS row_count BIGINT DEFAULT 0");
+        stmt.execute("ALTER TABLE table_completion ADD COLUMN IF NOT EXISTS source_file_watermark BIGINT DEFAULT 0");
       } catch (SQLException e) {
         // Ignore if columns already exist or syntax not supported
         LOGGER.debug("Column migration: {}", e.getMessage());

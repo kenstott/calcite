@@ -88,11 +88,10 @@ public class MockSecDataGenerator {
           int filingCount = filingType.equals("10-K") ? 1 : 4;
 
           for (int quarter = 1; quarter <= filingCount; quarter++) {
-            // Create partition directory
+            // Create partition directory - uses year-only partitioning
             File partitionDir =
                 new File(
-                    baseDirectory, String.format("cik=%s/filing_type=%s/year=%d",
-                    cik, filingType.replace("-", ""), year));
+                    baseDirectory, String.format("year=%d", year));
             partitionDir.mkdirs();
 
             // Create Parquet file

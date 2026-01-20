@@ -164,9 +164,10 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
 
     // Get row count from ConversionRecord (stored during ETL materialization)
     Long rowCount = record.rowCount;
-    if (rowCount == null) {
+    if (rowCount == null || rowCount == 0L) {
       // Self-heal: read row count from Iceberg metadata and cache it
-      LOGGER.info("[ICEBERG COUNT*]: No cached row count for '{}' - attempting to read from Iceberg metadata", tableName);
+      // Also heal when rowCount is 0 - this can happen when table was registered before data was committed
+      LOGGER.info("[ICEBERG COUNT*]: No valid cached row count for '{}' (current: {}) - attempting to read from Iceberg metadata", tableName, rowCount);
       String tableLocation = record.getSourceFile();
       if (tableLocation != null) {
         rowCount = readRowCountFromIcebergDirect(tableLocation, fileSchema.getStorageProvider());
