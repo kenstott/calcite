@@ -125,7 +125,9 @@ public class DocumentETLProcessor {
    * @throws IOException If processing fails
    */
   public DocumentETLResult processEntity(Map<String, String> entityVariables) throws IOException {
-    DocumentSource documentSource = new DocumentSource(config, cacheDirectory);
+    // Use storage provider path for cache directory
+    String cacheDir = cacheDirectory != null ? cacheDirectory.getPath() : null;
+    DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDir);
 
     long startTime = System.currentTimeMillis();
     int documentsProcessed = 0;
@@ -153,14 +155,14 @@ public class DocumentETLProcessor {
             continue;
           }
 
-          // Download document
-          File documentFile = documentSource.downloadDocument(docVariables);
+          // Download document - returns storage provider path (can be S3)
+          String documentPath = documentSource.downloadDocument(docVariables);
 
-          // Convert document
+          // Convert document using String-based method for S3 compatibility
           ConversionMetadata conversionMetadata = new ConversionMetadata(outputDirectory);
           List<File> converted = documentConverter.convert(
-              documentFile,
-              new File(outputDirectory),
+              documentPath,
+              outputDirectory,
               conversionMetadata);
 
           outputFiles.addAll(converted);
@@ -421,10 +423,33 @@ public class DocumentETLProcessor {
 
           Map<String, String> doc = new HashMap<String, String>();
           doc.putAll(baseVariables);
-          doc.put("accession", accessionNumbers.get(i));
+          String accession = accessionNumbers.get(i);
+          doc.put("accession", accession);
+          // SEC URLs require accession without dashes
+          doc.put("accession_url", accession.replace("-", ""));
+          // SEC URLs require CIK without leading zeros
+          String cik = baseVariables.get("cik");
+          if (cik != null) {
+            doc.put("cik_url", cik.replaceFirst("^0+", ""));
+          }
           doc.put("form", form);
           doc.put("filingDate", filingDates.get(i));
-          doc.put("document", primaryDocuments.get(i));
+
+          // For Form 3/4/5 (insider trading), SEC returns XSL-transformed path
+          // like "xslF345X03/wf-form4_xxx.xml" but we need raw XML at "wf-form4_xxx.xml"
+          String document = primaryDocuments.get(i);
+          if (form != null && (form.equals("3") || form.equals("4") || form.equals("5")
+              || form.startsWith("3/") || form.startsWith("4/") || form.startsWith("5/"))) {
+            if (document.startsWith("xslF345X")) {
+              // Strip XSL prefix: "xslF345X03/wf-form4_xxx.xml" -> "wf-form4_xxx.xml"
+              int slashIdx = document.indexOf('/');
+              if (slashIdx > 0) {
+                document = document.substring(slashIdx + 1);
+                LOGGER.debug("Stripped XSL prefix from Form {} document: {}", form, document);
+              }
+            }
+          }
+          doc.put("document", document);
 
           result.add(doc);
         }

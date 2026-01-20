@@ -211,9 +211,12 @@ public class ModelLifecycleProcessor {
     // Set shared storage providers
     if (materializedStorage != null) {
       builder.storageProvider(materializedStorage);
+      // Also put in operand so configureHooks() can access it
+      def.operand.put("_storageProvider", materializedStorage);
     }
     if (sourceStorage != null) {
       builder.cacheStorageProvider(sourceStorage);
+      def.operand.put("_cacheStorageProvider", sourceStorage);
     }
 
     // Use schema-specific tracker (captured when addSchema was called)

@@ -50,6 +50,25 @@ public interface FileConverter {
       ConversionMetadata metadata) throws IOException;
 
   /**
+   * Converts a source file to the target format using path strings.
+   *
+   * <p>This method supports storage provider paths (e.g., S3 URLs) that cannot be
+   * represented as File objects. Default implementation wraps paths as Files,
+   * which works for local paths but not for S3/cloud storage.
+   *
+   * @param sourcePath The source file path (can be S3 URL or local path)
+   * @param targetDirectory The directory to write converted files to
+   * @param metadata Optional metadata about the conversion
+   * @return List of generated files
+   * @throws IOException if conversion fails
+   */
+  default List<File> convert(String sourcePath, String targetDirectory,
+      ConversionMetadata metadata) throws IOException {
+    // Default implementation wraps as Files - override for S3 support
+    return convert(new File(sourcePath), new File(targetDirectory), metadata);
+  }
+
+  /**
    * Gets the source format this converter reads.
    *
    * @return The source format name

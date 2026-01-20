@@ -16,10 +16,13 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -77,7 +80,8 @@ public class DocumentSource {
   private final HttpSourceConfig config;
   private final HttpSourceConfig.DocumentSourceConfig documentConfig;
   private final Map<String, String> defaultHeaders;
-  private final File cacheDirectory;
+  private final StorageProvider storageProvider;
+  private final String cacheDirectory;
   private final long minRequestIntervalMs;
 
   // Last request timestamp for rate limiting
@@ -87,11 +91,14 @@ public class DocumentSource {
    * Creates a DocumentSource from configuration.
    *
    * @param config The HTTP source configuration
-   * @param cacheDirectory Local directory for caching downloaded files
+   * @param storageProvider Storage provider for caching downloaded files
+   * @param cacheDirectory Directory path for caching (can be S3 or local)
    */
-  public DocumentSource(HttpSourceConfig config, File cacheDirectory) {
+  public DocumentSource(HttpSourceConfig config, StorageProvider storageProvider,
+      String cacheDirectory) {
     this.config = config;
     this.documentConfig = config.getDocumentSource();
+    this.storageProvider = storageProvider;
     this.cacheDirectory = cacheDirectory;
 
     // Set up default headers
@@ -136,33 +143,33 @@ public class DocumentSource {
    * Downloads a document file from the configured document URL.
    *
    * @param variables Variable values for URL substitution (cik, accession, document)
-   * @return Downloaded file path in cache directory
+   * @return Downloaded file path in cache directory (storage provider path)
    * @throws IOException If download fails
    */
-  public File downloadDocument(Map<String, String> variables) throws IOException {
+  public String downloadDocument(Map<String, String> variables) throws IOException {
     if (documentConfig == null || documentConfig.getDocumentUrl() == null) {
       throw new IllegalStateException("No document URL configured");
     }
 
     String url = substituteVariables(documentConfig.getDocumentUrl(), variables);
 
-    // Build cache file path
+    // Build cache file path using storage provider
     String cacheKey = buildCacheKey(variables);
-    File cacheFile = new File(cacheDirectory, cacheKey);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, cacheKey);
 
-    // Return cached file if it exists and is valid
-    if (cacheFile.exists() && cacheFile.length() > 0) {
-      LOGGER.debug("Using cached document: {}", cacheFile);
-      return cacheFile;
+    // Return cached path if it exists and is valid
+    if (storageProvider.exists(cachePath)) {
+      long size = storageProvider.getMetadata(cachePath).getSize();
+      if (size > 0) {
+        LOGGER.debug("Using cached document: {}", cachePath);
+        return cachePath;
+      }
     }
 
-    // Ensure parent directories exist
-    cacheFile.getParentFile().mkdirs();
-
     LOGGER.debug("Downloading document from: {}", url);
-    downloadToFile(url, cacheFile);
+    downloadToPath(url, cachePath);
 
-    return cacheFile;
+    return cachePath;
   }
 
   /**
@@ -290,9 +297,9 @@ public class DocumentSource {
   }
 
   /**
-   * Downloads content from a URL to a file.
+   * Downloads content from a URL to a storage provider path.
    */
-  private void downloadToFile(String urlStr, File targetFile) throws IOException {
+  private void downloadToPath(String urlStr, String targetPath) throws IOException {
     enforceRateLimit();
 
     URL url = new URL(urlStr);
@@ -318,7 +325,7 @@ public class DocumentSource {
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
-        downloadToFile(urlStr, targetFile);
+        downloadToPath(urlStr, targetPath);
         return;
       }
 
@@ -337,16 +344,19 @@ public class DocumentSource {
         inputStream = new GZIPInputStream(inputStream);
       }
 
-      // Write to file
-      try (FileOutputStream fos = new FileOutputStream(targetFile)) {
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-          fos.write(buffer, 0, bytesRead);
-        }
+      // Read content to byte array
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      byte[] buffer = new byte[8192];
+      int bytesRead;
+      while ((bytesRead = inputStream.read(buffer)) != -1) {
+        baos.write(buffer, 0, bytesRead);
       }
+      byte[] content = baos.toByteArray();
 
-      LOGGER.debug("Downloaded {} bytes to {}", targetFile.length(), targetFile);
+      // Write via storage provider
+      storageProvider.writeFile(targetPath, content);
+
+      LOGGER.debug("Downloaded {} bytes to {}", content.length, targetPath);
 
     } finally {
       conn.disconnect();
@@ -413,9 +423,9 @@ public class DocumentSource {
   }
 
   /**
-   * Returns the cache directory.
+   * Returns the cache directory path.
    */
-  public File getCacheDirectory() {
+  public String getCacheDirectory() {
     return cacheDirectory;
   }
 

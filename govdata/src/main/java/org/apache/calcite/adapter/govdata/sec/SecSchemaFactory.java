@@ -132,15 +132,54 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
 
   @Override public String getSchemaResourceName() {
-    // TODO: Migrate to sec-schema.yaml when document-based ETL integration is complete
-    return "/sec/sec-schema.json";
+    return "/sec/sec-schema.yaml";
   }
 
   @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for SEC schema");
-    // SEC schema uses custom download logic in buildOperand() rather than standard ETL hooks
-    // No additional hooks needed - enablement is controlled via operand parameters
+
+    // Initialize storage provider from operand if available
+    StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
+    if (sp != null && this.storageProvider == null) {
+      this.storageProvider = sp;
+    }
+
+    // Trigger document download IMMEDIATELY during hook configuration
+    // This must happen BEFORE the ETL loop starts (not in beforeSource hook)
+    // because isEnabled returns false for all tables, skipping beforeSource
+    if (!downloadTriggered) {
+      downloadTriggered = true;
+      Boolean autoDownload = (Boolean) operand.get("autoDownload");
+      if (autoDownload != null && autoDownload) {
+        LOGGER.info("Triggering SEC document download (autoDownload=true)");
+
+        // Set up cache directory
+        String cacheDir = (String) operand.get("cacheDirectory");
+        if (cacheDir != null && storageProvider != null) {
+          this.secCacheDirectory = storageProvider.resolvePath(cacheDir, "sec");
+        } else if (cacheDir != null) {
+          this.secCacheDirectory = cacheDir + "/sec";
+        }
+
+        // Download SEC data using DocumentETLProcessor
+        downloadSecDataUsingDocumentEtl(operand);
+      }
+    }
+
+    // SEC tables are populated by DocumentETLProcessor, not standard ETL
+    // Use isEnabled hook to skip standard ETL processing for all tables
+    // The hook returns false during ETL (to skip source fetching), but tables
+    // will still be created from existing Parquet files
+    builder.isEnabled("*", context -> {
+      // Skip ETL processing - tables are populated by DocumentETLProcessor
+      LOGGER.debug("Skipping standard ETL for table '{}' - populated by DocumentETLProcessor",
+          context.getTableName());
+      return false;
+    });
   }
+
+  // Flag to ensure download only runs once
+  private volatile boolean downloadTriggered = false;
 
   private synchronized void initializeExecutors() {
     if (downloadExecutor == null || downloadExecutor.isShutdown()) {
@@ -626,6 +665,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Set the directory for FileSchemaFactory to search
     operand.put("directory", secParquetDir);
 
+    // Set materializeDirectory if not already set (required by SchemaLifecycleProcessor)
+    if (!operand.containsKey("materializeDirectory")) {
+      operand.put("materializeDirectory", secParquetDir);
+    }
+
     // Preserve text similarity configuration if present, or enable it by default
     Map<String, Object> textSimConfig = (Map<String, Object>) operand.get("textSimilarity");
     if (textSimConfig == null) {
@@ -1057,8 +1101,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Get filing types and year range
       List<String> filingTypes = getFilingTypes(operand);
-      int startYear = (Integer) operand.getOrDefault("startYear", 2020);
-      int endYear = (Integer) operand.getOrDefault("endYear", Year.now().getValue());
+      int startYear = getIntValue(operand, "startYear", 2020);
+      int endYear = getIntValue(operand, "endYear", Year.now().getValue());
+      LOGGER.info("Year range: {} to {}", startYear, endYear);
 
       // Get parquet directory for output
       String govdataParquetDir = GovDataUtils.getParquetDir(operand);
@@ -1114,6 +1159,28 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
+   * Extracts an integer value from operand, handling both Integer and Number types.
+   */
+  private int getIntValue(Map<String, Object> operand, String key, int defaultValue) {
+    Object value = operand.get(key);
+    if (value == null) {
+      return defaultValue;
+    }
+    if (value instanceof Number) {
+      return ((Number) value).intValue();
+    }
+    if (value instanceof String) {
+      try {
+        return Integer.parseInt((String) value);
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Invalid integer value for {}: {}", key, value);
+        return defaultValue;
+      }
+    }
+    return defaultValue;
+  }
+
+  /**
    * Creates HttpSourceConfig from operand for DocumentETLProcessor.
    */
   private HttpSourceConfig createHttpSourceConfig(Map<String, Object> operand,
@@ -1121,8 +1188,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Create DocumentSourceConfig using fromMap
     Map<String, Object> docSourceMap = new HashMap<String, Object>();
     docSourceMap.put("metadataUrl", "https://data.sec.gov/submissions/CIK{cik}.json");
+    // SEC URLs require CIK without leading zeros and accession without dashes
     docSourceMap.put("documentUrl",
-        "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}");
+        "https://www.sec.gov/Archives/edgar/data/{cik_url}/{accession_url}/{document}");
     docSourceMap.put("documentTypes", filingTypes);
     docSourceMap.put("extractionType", "xbrl");
     docSourceMap.put("documentConverter",
