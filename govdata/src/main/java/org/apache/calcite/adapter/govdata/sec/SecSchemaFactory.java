@@ -1318,20 +1318,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @return Number of files committed
    */
   @SuppressWarnings("unchecked")
-  private int commitStagingFilesToIceberg(String tableName, String stagingBaseDir,
+  private int commitStagingFilesToIceberg(String tableName, String sourceBaseDir,
       String pattern, Map<String, Object> catalogConfig,
       Map<String, Object> tableConfig) throws IOException {
 
-    // List staging files matching the pattern
-    List<String> stagingFiles = listFilesMatchingPattern(stagingBaseDir, pattern);
-
-    if (stagingFiles.isEmpty()) {
-      LOGGER.debug("No staging files found for table '{}' with pattern '{}'", tableName, pattern);
-      return 0;
-    }
-
-    LOGGER.info("Found {} staging files for table '{}' with pattern '{}'",
-        stagingFiles.size(), tableName, pattern);
+    // Build full source pattern for reading parquet files
+    String sourcePattern = storageProvider.resolvePath(sourceBaseDir, pattern);
+    LOGGER.info("Materializing table '{}' from source pattern: {}", tableName, sourcePattern);
 
     // Load or create Iceberg table using file adapter's IcebergCatalogManager
     org.apache.iceberg.Table table;
@@ -1367,21 +1360,97 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Use IcebergTableWriter from file adapter to commit staging files
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, hadoopConf);
+    // Create staging directory for DuckDB output
+    String stagingPath = storageProvider.getStagingDirectory("sec-iceberg-" + tableName);
+    LOGGER.debug("Using staging path: {}", stagingPath);
 
-    // Get staging directory (parent of pattern) and commit
-    String stagingDir = stagingBaseDir;
-    if (pattern.contains("/")) {
-      // Pattern has directory component, construct full staging path
-      String patternDir = pattern.substring(0, pattern.lastIndexOf('/'));
-      stagingDir = storageProvider.resolvePath(stagingBaseDir, patternDir);
+    int filesCommitted = 0;
+    try {
+      // Use DuckDB to read source parquet files and write to staging
+      // This follows the same pattern as IcebergMaterializer.processBatch()
+      try (java.sql.Connection conn = getDuckDBConnection()) {
+        configureS3ForDuckDB(conn);
+
+        // Build partition columns list
+        List<String> partitionCols = extractPartitionColumnsFromConfig(tableConfig);
+        String partitionClause = partitionCols.isEmpty() ? ""
+            : ", PARTITION_BY (" + String.join(", ", partitionCols) + ")";
+
+        String sql = "COPY (\n"
+            + "  SELECT * FROM read_parquet('" + sourcePattern + "', "
+            + "hive_partitioning=true, union_by_name=true)\n"
+            + ") TO '" + stagingPath + "' (FORMAT PARQUET" + partitionClause + ")";
+
+        LOGGER.debug("Executing DuckDB SQL: {}", sql);
+        long startTime = System.currentTimeMillis();
+        try (java.sql.Statement stmt = conn.createStatement()) {
+          stmt.execute(sql);
+        }
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("DuckDB transformation completed in {}ms for table '{}'", elapsed, tableName);
+      }
+
+      // Commit from staging to Iceberg
+      IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, hadoopConf);
+      writer.commitFromStaging(stagingPath, null);
+
+      // Count files in staging (already moved by commitFromStaging)
+      filesCommitted = 1; // At least one batch was committed
+      LOGGER.info("Committed staging files to Iceberg table '{}'", tableName);
+
+    } catch (java.sql.SQLException e) {
+      LOGGER.error("DuckDB error materializing table '{}': {}", tableName, e.getMessage());
+      throw new IOException("DuckDB materialization failed: " + e.getMessage(), e);
+    } finally {
+      // Cleanup staging directory
+      try {
+        storageProvider.delete(stagingPath);
+      } catch (Exception e) {
+        LOGGER.debug("Failed to cleanup staging path {}: {}", stagingPath, e.getMessage());
+      }
     }
 
-    writer.commitFromStaging(stagingDir, null);
-    LOGGER.info("Committed staging files from '{}' to Iceberg table '{}'", stagingDir, tableName);
+    return filesCommitted;
+  }
 
-    return stagingFiles.size();
+  /**
+   * Gets a DuckDB connection for materialization.
+   */
+  private java.sql.Connection getDuckDBConnection() throws java.sql.SQLException {
+    return java.sql.DriverManager.getConnection("jdbc:duckdb:");
+  }
+
+  /**
+   * Configures S3 credentials for DuckDB if using S3 storage.
+   */
+  private void configureS3ForDuckDB(java.sql.Connection conn) throws java.sql.SQLException {
+    Map<String, String> s3Config = storageProvider.getS3Config();
+    if (s3Config == null) {
+      return;
+    }
+
+    try (java.sql.Statement stmt = conn.createStatement()) {
+      stmt.execute("INSTALL httpfs");
+      stmt.execute("LOAD httpfs");
+
+      String accessKeyId = s3Config.get("accessKeyId");
+      String secretAccessKey = s3Config.get("secretAccessKey");
+      String endpoint = s3Config.get("endpoint");
+      String region = s3Config.get("region");
+
+      if (accessKeyId != null && secretAccessKey != null) {
+        stmt.execute("SET s3_access_key_id='" + accessKeyId + "'");
+        stmt.execute("SET s3_secret_access_key='" + secretAccessKey + "'");
+      }
+      if (region != null) {
+        stmt.execute("SET s3_region='" + region + "'");
+      }
+      if (endpoint != null) {
+        // For R2/MinIO, need to set endpoint and URL style
+        stmt.execute("SET s3_endpoint='" + endpoint.replace("https://", "") + "'");
+        stmt.execute("SET s3_url_style='path'");
+      }
+    }
   }
 
   /**
