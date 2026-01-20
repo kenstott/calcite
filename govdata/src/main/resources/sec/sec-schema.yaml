@@ -788,35 +788,35 @@ partitionedTables:
         comment: Title of the officer (if applicable)
       - name: transaction_date
         type: string
-        nullable: false
-        comment: Date of the transaction (ISO 8601 format)
+        nullable: true
+        comment: Date of the transaction (ISO 8601 format) - null for holdings
       - name: transaction_code
         type: string
-        nullable: false
-        comment: Transaction code (P=purchase, S=sale, A=award, etc.)
+        nullable: true
+        comment: Transaction code (P=purchase, S=sale, A=award, H=holding)
       - name: security_title
         type: string
-        nullable: false
+        nullable: true
         comment: Title of the security transacted
       - name: shares_transacted
         type: double
-        nullable: false
-        comment: Number of shares bought or sold
+        nullable: true
+        comment: Number of shares bought or sold (null for holdings)
       - name: price_per_share
         type: double
         nullable: true
         comment: Price per share in the transaction
       - name: shares_owned_after
         type: double
-        nullable: false
+        nullable: true
         comment: Shares beneficially owned after the transaction
       - name: acquired_disposed_code
         type: string
-        nullable: false
-        comment: Whether shares were acquired (A) or disposed (D)
+        nullable: true
+        comment: Whether shares were acquired (A) or disposed (D) - null for holdings
       - name: ownership_type
         type: string
-        nullable: false
+        nullable: true
         comment: Type of ownership (direct or indirect)
       - name: footnotes
         type: string
@@ -824,7 +824,7 @@ partitionedTables:
         comment: Additional footnotes and explanations
 
     constraints:
-      primaryKey: [cik, accession_number, reporting_person_cik, transaction_date, transaction_code]
+      primaryKey: [cik, accession_number, reporting_person_cik, security_title, transaction_code]
       foreignKeys:
         - columns: [cik]
           targetTable: filing_metadata
@@ -937,7 +937,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: stock_prices
-    enabled: false  # Disabled pending URL encoding fixes
+    enabled: true
     pattern: "stock_prices/ticker=*/year=*/*_prices.parquet"
     partitions: *stock_partitions
     hooks:
@@ -1098,7 +1098,7 @@ partitionedTables:
       - name: embedding
         type: string
         nullable: false
-        comment: Vector embedding (JSON array of floats, 256-dimensional)
+        comment: Vector embedding (JSON array of floats, 1024-dimensional using BAAI/bge-large-en-v1.5)
       - name: parent_section
         type: string
         nullable: true
@@ -1132,8 +1132,8 @@ partitionedTables:
       extractionType: vectorization
       embeddingConfig:
         provider: duckdb_quackformers
-        model: "sentence-transformers/all-MiniLM-L6-v2"
-        dimension: 256
+        model: "BAAI/bge-large-en-v1.5"
+        dimension: 1024
         maxTextLength: 8192
 
     dimensions:

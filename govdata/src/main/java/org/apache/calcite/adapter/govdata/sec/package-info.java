@@ -37,7 +37,7 @@
  * <p>The adapter consists of:
  * <ul>
  *   <li>{@link org.apache.calcite.adapter.govdata.GovDataSchemaFactory} - Entry point that extends FileSchemaFactory</li>
- *   <li>{@link org.apache.calcite.adapter.sec.SecToParquetConverter} - Converts XBRL to Parquet</li>
+ *   <li>{@link org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter} - Converts XBRL to Parquet</li>
  *   <li>{@link org.apache.calcite.adapter.sec.EdgarPartitionStrategy} - Implements CIK/type/date partitioning</li>
  * </ul>
  *

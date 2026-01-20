@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -40,33 +41,34 @@ public interface FileConverter {
   /**
    * Converts a source file to the target format.
    *
+   * <p>This method accepts File objects for backward compatibility with local
+   * file systems. For S3/cloud storage support, use the String-based method.
+   *
    * @param sourceFile The source file to convert
    * @param targetDirectory The directory to write converted files to
    * @param metadata Optional metadata about the conversion
-   * @return List of generated files
+   * @return List of generated file paths
    * @throws IOException if conversion fails
    */
-  List<File> convert(File sourceFile, File targetDirectory,
-      ConversionMetadata metadata) throws IOException;
+  default List<String> convert(File sourceFile, File targetDirectory,
+      ConversionMetadata metadata) throws IOException {
+    return convert(sourceFile.getAbsolutePath(), targetDirectory.getAbsolutePath(), metadata);
+  }
 
   /**
    * Converts a source file to the target format using path strings.
    *
-   * <p>This method supports storage provider paths (e.g., S3 URLs) that cannot be
-   * represented as File objects. Default implementation wraps paths as Files,
-   * which works for local paths but not for S3/cloud storage.
+   * <p>This is the primary conversion method that supports both local paths
+   * and storage provider paths (e.g., S3 URLs).
    *
    * @param sourcePath The source file path (can be S3 URL or local path)
    * @param targetDirectory The directory to write converted files to
    * @param metadata Optional metadata about the conversion
-   * @return List of generated files
+   * @return List of generated file paths
    * @throws IOException if conversion fails
    */
-  default List<File> convert(String sourcePath, String targetDirectory,
-      ConversionMetadata metadata) throws IOException {
-    // Default implementation wraps as Files - override for S3 support
-    return convert(new File(sourcePath), new File(targetDirectory), metadata);
-  }
+  List<String> convert(String sourcePath, String targetDirectory,
+      ConversionMetadata metadata) throws IOException;
 
   /**
    * Gets the source format this converter reads.

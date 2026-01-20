@@ -73,10 +73,10 @@ public class FileConversionManager {
    * @param targetDirectory The target directory
    * @param sourceFormat The source format
    * @param targetFormat The target format
-   * @return List of converted files
+   * @return List of converted file paths
    * @throws IOException if conversion fails
    */
-  public List<File> convert(File sourceFile, File targetDirectory,
+  public List<String> convert(File sourceFile, File targetDirectory,
       String sourceFormat, String targetFormat) throws IOException {
 
     String key = sourceFormat + "->" + targetFormat;

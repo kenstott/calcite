@@ -68,8 +68,9 @@ dependencies {
     implementation("com.jcraft:jsch:0.1.55")
 
     // Apache Iceberg support
+    // iceberg-api is exposed as api() so dependent modules can use Iceberg Table type
+    api("org.apache.iceberg:iceberg-api:1.4.0")
     implementation("org.apache.iceberg:iceberg-core:1.4.0")
-    implementation("org.apache.iceberg:iceberg-api:1.4.0")
     implementation("org.apache.iceberg:iceberg-common:1.4.0")
     implementation("org.apache.iceberg:iceberg-parquet:1.4.0")
     implementation("org.apache.iceberg:iceberg-data:1.4.0")

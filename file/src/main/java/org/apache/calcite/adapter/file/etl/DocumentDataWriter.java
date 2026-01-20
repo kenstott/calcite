@@ -65,7 +65,7 @@ public class DocumentDataWriter implements DataWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(DocumentDataWriter.class);
 
   private final StorageProvider storageProvider;
-  private final File cacheDirectory;
+  private final String cacheDirectory;
   private final String outputDirectory;
   private final FileConverter documentConverter;
 
@@ -76,12 +76,12 @@ public class DocumentDataWriter implements DataWriter {
    * Creates a document data writer.
    *
    * @param storageProvider Storage provider for output files
-   * @param cacheDirectory Local cache directory for downloaded documents
-   * @param outputDirectory Output directory for converted Parquet files
+   * @param cacheDirectory Cache directory for downloaded documents (can be S3 or local path)
+   * @param outputDirectory Output directory for converted Parquet files (can be S3 or local path)
    * @param documentConverter Converter for document processing (e.g., XbrlToParquetConverter)
    */
   public DocumentDataWriter(StorageProvider storageProvider,
-      File cacheDirectory, String outputDirectory, FileConverter documentConverter) {
+      String cacheDirectory, String outputDirectory, FileConverter documentConverter) {
     this.storageProvider = storageProvider;
     this.cacheDirectory = cacheDirectory;
     this.outputDirectory = outputDirectory;
@@ -173,11 +173,11 @@ public class DocumentDataWriter implements DataWriter {
   }
 
   /**
-   * Returns the cache directory.
+   * Returns the cache directory path.
    *
-   * @return Cache directory for downloaded documents
+   * @return Cache directory path for downloaded documents (can be S3 or local)
    */
-  public File getCacheDirectory() {
+  public String getCacheDirectory() {
     return cacheDirectory;
   }
 

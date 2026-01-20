@@ -16,17 +16,21 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.govdata.YamlUtils;
+
 /**
  * Abstract base class for securities data downloaders.
  * Provides common infrastructure for metadata-driven schema generation.
  */
 public abstract class AbstractSecDataDownloader {
 
-  protected static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
-      new com.fasterxml.jackson.databind.ObjectMapper();
+  private static final String SCHEMA_RESOURCE = "/sec/sec-schema.yaml";
 
   /**
-   * Loads column metadata for a table from sec-schema.json.
+   * Loads column metadata for a table from sec-schema.yaml.
+   *
+   * <p>Uses YamlUtils to parse the YAML file with full anchor/alias resolution,
+   * allowing column templates like {@code *cik_column} to be expanded.
    *
    * @param tableName The name of the table to load column metadata for
    * @return List of table column definitions
@@ -35,21 +39,22 @@ public abstract class AbstractSecDataDownloader {
   protected static java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
     try {
-      // Load sec-schema.json from resources
+      // Load sec-schema.yaml from resources
       java.io.InputStream schemaStream =
-          AbstractSecDataDownloader.class.getResourceAsStream("/sec/sec-schema.json");
+          AbstractSecDataDownloader.class.getResourceAsStream(SCHEMA_RESOURCE);
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "/sec/sec-schema.json not found in resources");
+            SCHEMA_RESOURCE + " not found in resources");
       }
 
-      // Parse JSON
-      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+      // Parse YAML with anchor/alias resolution via YamlUtils
+      com.fasterxml.jackson.databind.JsonNode root =
+          YamlUtils.parseYamlOrJson(schemaStream, SCHEMA_RESOURCE);
 
       // Find the table in the "partitionedTables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         throw new IllegalArgumentException(
-            "Invalid sec-schema.json: missing 'partitionedTables' array");
+            "Invalid " + SCHEMA_RESOURCE + ": missing 'partitionedTables' array");
       }
 
       for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("partitionedTables")) {
@@ -58,7 +63,7 @@ public abstract class AbstractSecDataDownloader {
           // Found the table - extract columns
           if (!tableNode.has("columns") || !tableNode.get("columns").isArray()) {
             throw new IllegalArgumentException(
-                "Table '" + tableName + "' has no 'columns' array in sec-schema.json");
+                "Table '" + tableName + "' has no 'columns' array in " + SCHEMA_RESOURCE);
           }
 
           java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
@@ -83,7 +88,7 @@ public abstract class AbstractSecDataDownloader {
 
       // Table not found
       throw new IllegalArgumentException(
-          "Table '" + tableName + "' not found in sec-schema.json");
+          "Table '" + tableName + "' not found in " + SCHEMA_RESOURCE);
 
     } catch (java.io.IOException e) {
       throw new IllegalArgumentException(
