@@ -279,9 +279,12 @@ partitionedTables:
     partitions: *sec_partitions
 
     comment: >
-      SEC filing metadata including form types (10-K, 10-Q, 8-K), company information,
-      filing dates, and document URLs. Core reference table for all SEC data.
-      Extracted from SEC EDGAR submissions.json API.
+      SEC filing metadata for all public company submissions. Forms include:
+      10-K (annual report with audited financials), 10-Q (quarterly report),
+      8-K (current report for material events like earnings, M&A, executive changes),
+      DEF 14A (proxy statement for shareholder meetings), and Form 3/4/5 (insider trading).
+      Use for: identifying available filings, filtering by company/date/type, joining to
+      other SEC tables, and tracking filing history.
 
     columns:
       - *cik_column
@@ -408,9 +411,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      XBRL financial statement data including balance sheet, income statement,
-      and cash flow line items from SEC filings. Includes quarterly and annual
-      data with standard GAAP classifications. Extracted from XBRL instance documents.
+      XBRL financial facts extracted from 10-K (annual) and 10-Q (quarterly) filings.
+      Contains structured data for balance sheet, income statement, and cash flow items
+      using standardized US-GAAP taxonomy (e.g., Assets, Revenue, NetIncome).
+      Use for: financial ratio analysis, trend analysis across quarters/years, peer
+      comparisons, screening for specific metrics, and building financial models.
 
     columns:
       - *cik_column
@@ -501,9 +506,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      XBRL context metadata defining reporting periods, business segments, and
-      dimensional qualifiers for financial data. Links financial facts to their
-      reporting context.
+      XBRL context definitions from 10-K and 10-Q filings that specify the reporting
+      period and entity for each financial fact. Contexts define whether a value is
+      a point-in-time snapshot (instant) or covers a duration (e.g., fiscal quarter).
+      Use for: understanding the time period of financial data, segment-level analysis,
+      and resolving dimensional breakdowns (e.g., revenue by geography or product line).
 
     columns:
       - *cik_column
@@ -580,9 +587,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Management Discussion and Analysis (MD&A) sections extracted from 10-K
-      and 10-Q filings. Contains management narrative about company performance
-      and outlook. Extracted using multi-strategy HTML parsing.
+      Management Discussion & Analysis (MD&A) text from 10-K (Item 7) and 10-Q (Item 2)
+      filings. MD&A is a required narrative section where management explains the
+      company's financial condition, results of operations, and known risks/uncertainties.
+      Use for: sentiment analysis, risk factor monitoring, NLP-based insights, comparing
+      management tone across periods, and identifying forward-looking statements.
 
     columns:
       - *cik_column
@@ -655,9 +664,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      XBRL calculation and presentation linkbase relationships showing how
-      financial concepts relate to each other in SEC filings. Enables
-      financial statement reconstruction and validation.
+      XBRL linkbase relationships from 10-K and 10-Q filings showing how financial
+      concepts connect (e.g., Assets = CurrentAssets + NoncurrentAssets). Includes
+      calculation links (mathematical rollups) and presentation links (display order).
+      Use for: validating financial statement math, reconstructing statement hierarchy,
+      understanding concept relationships, and building automated financial models.
 
     columns:
       - *cik_column
@@ -740,9 +751,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Form 3/4/5 insider trading transactions by company officers, directors,
-      and 10% shareholders. Includes buy/sell transactions with prices and
-      volumes. Extracted from HTML tables in insider filings.
+      Insider trading transactions from Form 3 (initial ownership), Form 4 (changes in
+      ownership within 2 days), and Form 5 (annual summary). Required filings by company
+      officers, directors, and 10%+ shareholders showing their buy/sell activity.
+      Use for: tracking insider sentiment, identifying unusual trading patterns, corporate
+      governance analysis, and generating buy/sell signals based on insider activity.
 
     columns:
       - *cik_column
@@ -853,8 +866,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Quarterly earnings data extracted from 8-K filings. Contains earnings
-      paragraphs and exhibits including prepared remarks and Q&A sessions.
+      Earnings-related content from 8-K filings (Item 2.02 - Results of Operations).
+      8-K forms are "current reports" filed within 4 days of material events; Item 2.02
+      covers earnings releases with quarterly results, guidance, and press release text.
+      Use for: earnings surprise analysis, guidance tracking, management commentary on
+      results, and correlating announcements with stock price movements.
 
     columns:
       - *cik_column
@@ -928,9 +944,11 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Daily stock price data including open, high, low, close, and volume for
-      SEC-reporting companies. Historical equity market data from Yahoo Finance
-      and AlphaVantage APIs.
+      Daily stock price data (OHLCV) for SEC-reporting companies. Not from SEC filings
+      but from market data providers (Yahoo Finance, AlphaVantage). Linked to SEC data
+      via ticker symbol to enable correlation of filings with market reactions.
+      Use for: event studies around filing dates, correlating insider trades with price
+      moves, backtesting strategies, and calculating market-based metrics (beta, volatility).
 
     columns:
       - *cik_column
@@ -1047,9 +1065,11 @@ partitionedTables:
     enabled: "${ENABLE_VECTORIZATION:false}"
 
     comment: >
-      Text embeddings and vector representations of SEC filing content for
-      semantic search and analysis. Optional table for AI/ML applications.
-      Uses DuckDB quackformers extension for embedding generation.
+      Vector embeddings of text from 10-K and 10-Q filings for semantic search.
+      Derived from MD&A sections, footnotes, and risk factors using sentence transformers.
+      Not a standard SEC form but a computed artifact for AI/ML applications.
+      Use for: semantic similarity search ("find filings discussing supply chain risks"),
+      clustering companies by disclosure topics, and RAG-based Q&A over filings.
 
     columns:
       - *cik_column
