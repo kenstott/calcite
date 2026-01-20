@@ -25,7 +25,8 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -149,17 +150,17 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     // If no directory specified, default to "sec-data/parquet" in working directory
     if (directory == null || directory.isEmpty()) {
       if (dataDirectory != null) {
-        directory = new File(dataDirectory, "parquet").getPath();
+        directory = Paths.get(dataDirectory, "parquet").toString();
       } else {
-        directory = new File(System.getProperty("user.dir"), "sec-data/parquet").getPath();
+        directory = Paths.get(System.getProperty("user.dir"), "sec-data", "parquet").toString();
       }
       config.put("directory", directory);
       LOGGER.info("Using default directory: " + directory);
-    } else if (dataDirectory != null && !new File(directory).isAbsolute()) {
+    } else if (dataDirectory != null && !Paths.get(directory).isAbsolute()) {
       // Combine dataDirectory with relative directory path
-      File fullPath = new File(dataDirectory, directory);
-      config.put("directory", fullPath.getAbsolutePath());
-      LOGGER.info("Resolved directory path: " + fullPath.getAbsolutePath());
+      Path fullPath = Paths.get(dataDirectory, directory);
+      config.put("directory", fullPath.toAbsolutePath().toString());
+      LOGGER.info("Resolved directory path: " + fullPath.toAbsolutePath());
     }
 
     // Log effective configuration

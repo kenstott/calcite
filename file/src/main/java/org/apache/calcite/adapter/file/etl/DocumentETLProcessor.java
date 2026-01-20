@@ -23,7 +23,6 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,7 +69,7 @@ public class DocumentETLProcessor {
   private final HttpSourceConfig config;
   private final StorageProvider storageProvider;
   private final String outputDirectory;
-  private final File cacheDirectory;
+  private final String cacheDirectory;
   private final FileConverter documentConverter;
   private final ProgressListener progressListener;
 
@@ -79,15 +78,15 @@ public class DocumentETLProcessor {
    *
    * @param config HTTP source configuration with document settings
    * @param storageProvider Storage provider for output files
-   * @param outputDirectory Directory for converted Parquet files
-   * @param cacheDirectory Local cache directory for downloaded documents
+   * @param outputDirectory Directory for converted Parquet files (can be S3 or local path)
+   * @param cacheDirectory Cache directory for downloaded documents (can be S3 or local path)
    * @param documentConverter Converter for document processing
    */
   public DocumentETLProcessor(
       HttpSourceConfig config,
       StorageProvider storageProvider,
       String outputDirectory,
-      File cacheDirectory,
+      String cacheDirectory,
       FileConverter documentConverter) {
     this(config, storageProvider, outputDirectory, cacheDirectory, documentConverter, null);
   }
@@ -97,8 +96,8 @@ public class DocumentETLProcessor {
    *
    * @param config HTTP source configuration with document settings
    * @param storageProvider Storage provider for output files
-   * @param outputDirectory Directory for converted Parquet files
-   * @param cacheDirectory Local cache directory for downloaded documents
+   * @param outputDirectory Directory for converted Parquet files (can be S3 or local path)
+   * @param cacheDirectory Cache directory for downloaded documents (can be S3 or local path)
    * @param documentConverter Converter for document processing
    * @param progressListener Listener for progress updates
    */
@@ -106,7 +105,7 @@ public class DocumentETLProcessor {
       HttpSourceConfig config,
       StorageProvider storageProvider,
       String outputDirectory,
-      File cacheDirectory,
+      String cacheDirectory,
       FileConverter documentConverter,
       ProgressListener progressListener) {
     this.config = config;
@@ -125,15 +124,14 @@ public class DocumentETLProcessor {
    * @throws IOException If processing fails
    */
   public DocumentETLResult processEntity(Map<String, String> entityVariables) throws IOException {
-    // Use storage provider path for cache directory
-    String cacheDir = cacheDirectory != null ? cacheDirectory.getPath() : null;
-    DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDir);
+    // Pass cache directory path directly to DocumentSource (supports S3 or local paths)
+    DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDirectory);
 
     long startTime = System.currentTimeMillis();
     int documentsProcessed = 0;
     int documentsSkipped = 0;
     int documentsFailed = 0;
-    List<File> outputFiles = new ArrayList<File>();
+    List<String> outputFiles = new ArrayList<String>();
     List<String> errors = new ArrayList<String>();
 
     try {
@@ -160,7 +158,7 @@ public class DocumentETLProcessor {
 
           // Convert document using String-based method for S3 compatibility
           ConversionMetadata conversionMetadata = new ConversionMetadata(outputDirectory);
-          List<File> converted = documentConverter.convert(
+          List<String> converted = documentConverter.convert(
               documentPath,
               outputDirectory,
               conversionMetadata);
@@ -211,7 +209,7 @@ public class DocumentETLProcessor {
     int totalProcessed = 0;
     int totalSkipped = 0;
     int totalFailed = 0;
-    List<File> allOutputFiles = new ArrayList<File>();
+    List<String> allOutputFiles = new ArrayList<String>();
     List<String> allErrors = new ArrayList<String>();
 
     for (Map<String, String> entityVariables : entities) {
@@ -313,12 +311,12 @@ public class DocumentETLProcessor {
     private final int documentsProcessed;
     private final int documentsSkipped;
     private final int documentsFailed;
-    private final List<File> outputFiles;
+    private final List<String> outputFiles;
     private final List<String> errors;
     private final long durationMs;
 
     public DocumentETLResult(int documentsProcessed, int documentsSkipped,
-        int documentsFailed, List<File> outputFiles,
+        int documentsFailed, List<String> outputFiles,
         List<String> errors, long durationMs) {
       this.documentsProcessed = documentsProcessed;
       this.documentsSkipped = documentsSkipped;
@@ -340,7 +338,7 @@ public class DocumentETLProcessor {
       return documentsFailed;
     }
 
-    public List<File> getOutputFiles() {
+    public List<String> getOutputFiles() {
       return outputFiles;
     }
 
@@ -404,8 +402,30 @@ public class DocumentETLProcessor {
             Math.min(forms.size(),
                 Math.min(filingDates.size(), primaryDocuments.size())));
 
+        // Get year range for filtering
+        Integer startYear = docConfig != null ? docConfig.getStartYear() : null;
+        Integer endYear = docConfig != null ? docConfig.getEndYear() : null;
+
         for (int i = 0; i < count; i++) {
           String form = forms.get(i);
+          String filingDate = filingDates.get(i);
+
+          // Filter by year range if configured
+          if (startYear != null || endYear != null) {
+            try {
+              int filingYear = Integer.parseInt(filingDate.substring(0, 4));
+              if (startYear != null && filingYear < startYear) {
+                continue;
+              }
+              if (endYear != null && filingYear > endYear) {
+                continue;
+              }
+            } catch (Exception e) {
+              // If date parsing fails, skip this filing
+              LOGGER.debug("Skipping filing with unparseable date: {}", filingDate);
+              continue;
+            }
+          }
 
           // Filter by document types if configured
           if (documentTypes != null && !documentTypes.isEmpty()) {

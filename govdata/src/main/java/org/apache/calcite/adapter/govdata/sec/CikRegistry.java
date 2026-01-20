@@ -319,6 +319,8 @@ public class CikRegistry {
     TICKER_TO_CIK.put("META", "0001326801");
     TICKER_TO_CIK.put("TSLA", "0001318605");
     TICKER_TO_CIK.put("NVDA", "0001045810");
+    TICKER_TO_CIK.put("BAC", "0000070858");  // Bank of America
+    TICKER_TO_CIK.put("CAT", "0000018230");  // Caterpillar
 
     // Basic groups
     GROUP_TO_CIKS.put(
@@ -412,25 +414,17 @@ public class CikRegistry {
 
   /**
    * Get ticker symbols for a given CIK.
+   * Uses SEC EDGAR's company_tickers.json as the authoritative source.
+   *
    * @param cik The CIK to look up (can be with or without leading zeros)
    * @return List of ticker symbols associated with this CIK, or empty list if none found
    */
   public static List<String> getTickersForCik(String cik) {
-    loadRegistry();
-
     // Normalize CIK to 10 digits with leading zeros
     String normalizedCik = normalizeCik(cik);
 
-    List<String> tickers = new ArrayList<>();
-
-    // Search through all ticker mappings to find matches
-    for (Map.Entry<String, String> entry : TICKER_TO_CIK.entrySet()) {
-      if (normalizeCik(entry.getValue()).equals(normalizedCik)) {
-        tickers.add(entry.getKey());
-      }
-    }
-
-    return tickers;
+    // Use SEC EDGAR as the single source of truth (~10,000 tickers)
+    return SecDataFetcher.getTickersForCik(normalizedCik);
   }
 
   /**

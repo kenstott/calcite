@@ -2890,6 +2890,57 @@ public class SecDataFetcher {
     }
   }
 
+  // Cache for CIK-to-tickers reverse mapping
+  private static Map<String, List<String>> cikToTickersCache = null;
+  private static long cikToTickersCacheTime = 0;
+  private static final long CIK_TO_TICKERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000L; // 24 hours
+
+  /**
+   * Get all ticker symbols for a given CIK from SEC EDGAR data.
+   * This is a reverse lookup from the company_tickers.json file which contains
+   * all ~10,000 ticker-to-CIK mappings.
+   *
+   * @param cik The CIK to look up (can be with or without leading zeros)
+   * @return List of ticker symbols associated with this CIK, or empty list if none found
+   */
+  public static List<String> getTickersForCik(String cik) {
+    // Normalize CIK to 10 digits
+    String normalizedCik = cik.replaceAll("[^0-9]", "");
+    while (normalizedCik.length() < 10) {
+      normalizedCik = "0" + normalizedCik;
+    }
+
+    // Build reverse mapping cache if needed
+    long now = System.currentTimeMillis();
+    if (cikToTickersCache == null || (now - cikToTickersCacheTime) > CIK_TO_TICKERS_CACHE_TTL_MS) {
+      try {
+        Map<String, String> tickerToCik = fetchTickerToCikMap();
+        Map<String, List<String>> newCache = new HashMap<>();
+
+        // Build reverse mapping
+        for (Map.Entry<String, String> entry : tickerToCik.entrySet()) {
+          String ticker = entry.getKey();
+          String entryCik = entry.getValue();
+          newCache.computeIfAbsent(entryCik, k -> new ArrayList<>()).add(ticker);
+        }
+
+        cikToTickersCache = newCache;
+        cikToTickersCacheTime = now;
+        LOGGER.info("Built CIK-to-tickers reverse mapping with {} CIKs", newCache.size());
+
+      } catch (IOException e) {
+        LOGGER.warn("Failed to fetch SEC ticker data: " + e.getMessage());
+        if (cikToTickersCache == null) {
+          return new ArrayList<>();
+        }
+        // Use stale cache
+      }
+    }
+
+    List<String> tickers = cikToTickersCache.get(normalizedCik);
+    return tickers != null ? new ArrayList<>(tickers) : new ArrayList<>();
+  }
+
   /**
    * Clear all caches (memory and disk).
    */

@@ -525,9 +525,8 @@ public abstract class AbstractGovDataDownloader {
     this.startYear = startYear;
     this.endYear = endYear;
     this.defaultParquetFilename = defaultParquetFilename != null ? defaultParquetFilename : "data_0";
-    // Determine schema file extension: econ uses YAML, others still use JSON
-    String schemaExtension = "econ".equals(schemaName) ? ".yaml" : ".json";
-    this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema" + schemaExtension;
+    // All schemas now use YAML format with anchor/alias support via YamlUtils
+    this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema.yaml";
     // Initialize JSON-only mapper (YAML parsing uses YamlUtils for proper anchor resolution)
     this.MAPPER = new ObjectMapper();
     this.httpClient = HttpClient.newBuilder()

@@ -1573,12 +1573,14 @@ public class HttpSourceConfig {
     private final java.util.List<String> extractionStrategies;
     private final java.util.List<String> itemFilter;
     private final EmbeddingConfig embeddingConfig;
+    private final Integer startYear;
+    private final Integer endYear;
 
     private DocumentSourceConfig(String metadataUrl, String documentUrl,
         java.util.List<String> documentTypes, String extractionType,
         String documentConverter, String responseTransformer,
         java.util.List<String> extractionStrategies, java.util.List<String> itemFilter,
-        EmbeddingConfig embeddingConfig) {
+        EmbeddingConfig embeddingConfig, Integer startYear, Integer endYear) {
       this.metadataUrl = metadataUrl;
       this.documentUrl = documentUrl;
       this.documentTypes = documentTypes != null
@@ -1594,6 +1596,8 @@ public class HttpSourceConfig {
           ? Collections.unmodifiableList(new java.util.ArrayList<String>(itemFilter))
           : Collections.<String>emptyList();
       this.embeddingConfig = embeddingConfig;
+      this.startYear = startYear;
+      this.endYear = endYear;
     }
 
     @SuppressWarnings("unchecked")
@@ -1640,9 +1644,21 @@ public class HttpSourceConfig {
         embeddingConfig = EmbeddingConfig.fromMap((Map<String, Object>) embeddingObj);
       }
 
+      Integer startYear = null;
+      Object startYearObj = map.get("startYear");
+      if (startYearObj instanceof Number) {
+        startYear = ((Number) startYearObj).intValue();
+      }
+
+      Integer endYear = null;
+      Object endYearObj = map.get("endYear");
+      if (endYearObj instanceof Number) {
+        endYear = ((Number) endYearObj).intValue();
+      }
+
       return new DocumentSourceConfig(metadataUrl, documentUrl, documentTypes,
           extractionType, documentConverter, responseTransformer,
-          extractionStrategies, itemFilter, embeddingConfig);
+          extractionStrategies, itemFilter, embeddingConfig, startYear, endYear);
     }
 
     /**
@@ -1714,6 +1730,22 @@ public class HttpSourceConfig {
      */
     public EmbeddingConfig getEmbeddingConfig() {
       return embeddingConfig;
+    }
+
+    /**
+     * Returns the start year for filtering documents (inclusive).
+     * Returns null if no year filtering is configured.
+     */
+    public Integer getStartYear() {
+      return startYear;
+    }
+
+    /**
+     * Returns the end year for filtering documents (inclusive).
+     * Returns null if no year filtering is configured.
+     */
+    public Integer getEndYear() {
+      return endYear;
     }
 
     /**

@@ -157,12 +157,12 @@ public class DocumentTableLifecycleListener implements TableLifecycleListener {
 
     HttpSourceConfig sourceConfig = context.getTableConfig().getSource();
 
-    // Create processor
+    // Create processor - cacheDirectory supports S3 or local paths
     DocumentETLProcessor processor = new DocumentETLProcessor(
         sourceConfig,
         storageProvider,
         outputDirectory,
-        new File(cacheDirectory),
+        cacheDirectory,
         documentConverter);
 
     // Build entity list from dimensions

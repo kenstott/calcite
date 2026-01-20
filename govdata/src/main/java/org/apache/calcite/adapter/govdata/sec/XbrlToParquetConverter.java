@@ -35,7 +35,6 @@ import org.w3c.dom.NodeList;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -107,13 +106,7 @@ public class XbrlToParquetConverter implements FileConverter {
         && "parquet".equalsIgnoreCase(targetFormat);
   }
 
-  @Override public List<File> convert(File sourceFile, File targetDirectory,
-      ConversionMetadata metadata) throws IOException {
-    // Delegate to String-based method for S3 compatibility
-    return convertInternal(sourceFile.getAbsolutePath(), targetDirectory.getAbsolutePath(), metadata);
-  }
-
-  @Override public List<File> convert(String sourcePath, String targetDirectory,
+  @Override public List<String> convert(String sourcePath, String targetDirectory,
       ConversionMetadata metadata) throws IOException {
     // Direct String-based method for S3 paths - no File wrapping
     return convertInternal(sourcePath, targetDirectory, metadata);
@@ -122,16 +115,16 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Converts XBRL/HTML file to Parquet format using String paths (S3-compatible).
    *
-   * @param sourceFilePath Path to source XBRL/HTML file (local filesystem only)
-   * @param targetDirectoryPath Path to target directory (may be S3 URI)
+   * @param sourceFilePath Path to source XBRL/HTML file (can be local or S3 path)
+   * @param targetDirectoryPath Path to target directory (can be local or S3 URI)
    * @param metadata Conversion metadata tracker
-   * @return List of created files (File objects are placeholders for S3 paths)
+   * @return List of created file paths (supports S3 URIs)
    * @throws IOException If conversion fails
    */
-  public List<File> convertInternal(String sourceFilePath, String targetDirectoryPath,
+  public List<String> convertInternal(String sourceFilePath, String targetDirectoryPath,
       ConversionMetadata metadata) throws IOException {
     LOGGER.debug(" XbrlToParquetConverter.convert() START for file: " + sourceFilePath);
-    List<File> outputFiles = new ArrayList<>();
+    List<String> outputFiles = new ArrayList<>();
 
     // Extract accession from metadata if available
     String accession = null;
@@ -143,6 +136,12 @@ public class XbrlToParquetConverter implements FileConverter {
           break;
         }
       }
+    }
+
+    // Fallback: extract accession from source path if not in metadata
+    // Path pattern: s3://bucket/sec/{cik}/{accession}/{filename} or /path/sec/{cik}/{accession}/{filename}
+    if (accession == null || accession.isEmpty()) {
+      accession = extractAccessionFromPath(sourceFilePath);
     }
 
     // Extract filename from path (works for both local and S3 paths)
@@ -188,26 +187,13 @@ public class XbrlToParquetConverter implements FileConverter {
         } catch (Exception e) {
           LOGGER.warn("Inline XBRL extraction failed: " + e.getMessage());
           // Get the full stack trace for debugging
-          java.io.StringWriter sw = new java.io.StringWriter();
-          e.printStackTrace(new java.io.PrintWriter(sw));
-          String fullStackTrace = sw.toString();
-
-          // Track the actual exception with stack trace
-          trackParsingError(sourceFilePath, "inline_xbrl_extraction_exception",
-              "Exception: " + e.getClass().getName() + " - " + e.getMessage() + "\nStack trace:\n"
-  + fullStackTrace);
+          LOGGER.debug("Stack trace for inline XBRL extraction exception", e);
         }
 
         // If still no document, don't create minimal parquet files
         // Let the parsing failure be properly reported and track for offline review
         if (doc == null) {
-          LOGGER.warn("Failed to extract XBRL data from inline XBRL file - parsing error for: " + fileName);
-
-          // Only track generic failure if we didn't already track the exception
-          // (this happens when parseInlineXbrl returns null without throwing)
-          trackParsingError(sourceFilePath, "inline_xbrl_returned_null",
-              "parseInlineXbrl() returned null without throwing an exception");
-
+          LOGGER.warn("Failed to extract XBRL data from inline XBRL file - parsing error for: {}", fileName);
           // Return empty output files list to indicate failure
           return outputFiles;
         }
@@ -267,7 +253,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
-        List<File> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
+        List<String> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
         outputFiles.addAll(extraFiles);
       }
 
@@ -299,37 +285,35 @@ public class XbrlToParquetConverter implements FileConverter {
       // Convert financial facts to Parquet
       LOGGER.debug(" Starting facts.parquet generation for: " + fileName + " -> " + factsPath);
       try {
-        writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, sourceFilePath);
+        writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, accession, sourceFilePath);
         // Paths are already full paths from storageProvider.resolvePath()
-        outputFiles.add(new File(factsPath));
+        outputFiles.add(factsPath);
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
       } catch (Exception e) {
-        LOGGER.error("DEBUG: Exception during facts.parquet creation for " + fileName + ": " + e.getMessage());
-        trackConversionError(sourceFilePath, "facts_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
+        LOGGER.error("Exception during facts.parquet creation for {}: {}", fileName, e.getMessage());
         throw e;
       }
 
       // Write filing metadata
       writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, sourceFilePath);
-      outputFiles.add(new File(metadataPath));
+      outputFiles.add(metadataPath);
 
       // Convert contexts to Parquet
-      writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate);
-      outputFiles.add(new File(contextsPath));
+      writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate, accession);
+      outputFiles.add(contextsPath);
 
       // Extract and write MD&A
       writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, sourceFilePath);
-      outputFiles.add(new File(mdaPath));
+      outputFiles.add(mdaPath);
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
       try {
         writeRelationshipsToParquet(doc, relationshipsPath, cik, filingType, filingDate, sourceFilePath);
-        outputFiles.add(new File(relationshipsPath));
+        outputFiles.add(relationshipsPath);
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
-        LOGGER.error("DEBUG: Exception during relationships.parquet creation for " + fileName + ": " + e.getMessage());
-        trackConversionError(sourceFilePath, "relationships_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
+        LOGGER.error("Exception during relationships.parquet creation for {}: {}", fileName, e.getMessage());
         throw e;
       }
 
@@ -338,7 +322,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String vectorizedPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
         writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFilePath);
-        outputFiles.add(new File(vectorizedPath));
+        outputFiles.add(vectorizedPath);
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
@@ -678,7 +662,7 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private void writeFactsToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String sourcePath) throws IOException {
+      String cik, String filingType, String filingDate, String accession, String sourcePath) throws IOException {
 
     LOGGER.debug("writeFactsToParquet called for " + outputPath +
                 " (CIK: " + cik + ", Type: " + filingType + ", Date: " + filingDate + ")");
@@ -729,7 +713,9 @@ public class XbrlToParquetConverter implements FileConverter {
         }
 
         Map<String, Object> data = new HashMap<>();
-        // Partition columns (cik, filing_type) are NOT added - they're in the directory path
+        // Required data columns
+        data.put("cik", cik);
+        data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
         data.put("filing_date", filingDate);
 
         // For inline XBRL, concept is in 'name' attribute; for regular XBRL, it's the element name
@@ -840,12 +826,8 @@ public class XbrlToParquetConverter implements FileConverter {
         if (tagName.contains("dei:")) deiCount++;
       }
 
-      LOGGER.warn("DEBUG: Inline XBRL elements: " + ixElements.getLength() +
-                     ", us-gaap elements: " + usGaapCount +
-                     ", dei elements: " + deiCount);
-
-      trackConversionError(sourcePath, "no_facts_extracted",
-                         "No recognizable facts found despite " + allElements.getLength() + " elements");
+      LOGGER.warn("Inline XBRL elements: {}, us-gaap elements: {}, dei elements: {}",
+          ixElements.getLength(), usGaapCount, deiCount);
     }
 
     // Use consolidated StorageProvider method for Parquet writing
@@ -863,9 +845,7 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Successfully wrote " + dataList.size() + " facts to " + outputPath);
 
     } catch (Exception e) {
-      LOGGER.error("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
-      trackConversionError(sourcePath, "facts_write_exception",
-                         "Exception: " + e.getClass().getName() + " - " + e.getMessage());
+      LOGGER.error("Failed to write facts parquet file for {} (CIK: {}): {}", filingDate, cik, e.getMessage());
       throw new IOException("Failed to write facts to parquet: " + e.getMessage(), e);
     }
   }
@@ -990,7 +970,7 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private void writeContextsToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate) throws IOException {
+      String cik, String filingType, String filingDate, String accession) throws IOException {
 
     // Load column metadata from sec-schema.json
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -1004,7 +984,9 @@ public class XbrlToParquetConverter implements FileConverter {
       Element context = (Element) contexts.item(i);
       Map<String, Object> data = new HashMap<>();
 
-      // Partition columns (cik, filing_type) are NOT added - they're in the directory path
+      // Required data columns (cik and accession_number are in schema)
+      data.put("cik", cik);
+      data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
       data.put("filing_date", filingDate);
       data.put("context_id", context.getAttribute("id"));
 
@@ -1912,9 +1894,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
     } catch (Exception e) {
-      LOGGER.error("Failed to write relationships parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
-      trackConversionError(sourcePath, "relationships_write_exception",
-                         "Exception: " + e.getClass().getName() + " - " + e.getMessage());
+      LOGGER.error("Failed to write relationships parquet file for {} (CIK: {}): {}", filingDate, cik, e.getMessage());
       throw new IOException("Failed to write relationships to parquet: " + e.getMessage(), e);
     }
   }
@@ -2598,11 +2578,11 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Convert Form 3/4/5 insider trading forms to Parquet.
    */
-  private List<File> convertInsiderForm(Document doc, String sourcePath, String targetDirectoryPath,
+  private List<String> convertInsiderForm(Document doc, String sourcePath, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession) throws IOException {
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     LOGGER.debug(" convertInsiderForm() START for " + filename + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
-    List<File> outputFiles = new ArrayList<>();
+    List<String> outputFiles = new ArrayList<>();
 
     try {
       // Validate and parse year from filing date
@@ -2628,7 +2608,7 @@ public class XbrlToParquetConverter implements FileConverter {
           String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // Extract insider transactions
-      List<Map<String, Object>> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
+      List<Map<String, Object>> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate, accession);
       LOGGER.debug(" Extracted " + transactions.size() + " insider transactions from " + filename);
 
       // Always write insider.parquet file (even if empty) to indicate processing completed
@@ -2648,7 +2628,7 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
 
       // CRITICAL: Add insider file to outputFiles so addToManifest() can detect it
-      outputFiles.add(new File(outputPath));
+      outputFiles.add(outputPath);
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Added insider file to outputFiles: {}", outputPath);
       }
@@ -2667,7 +2647,7 @@ public class XbrlToParquetConverter implements FileConverter {
         try {
           writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourcePath, accession);
           // CRITICAL: Add vectorized file to outputFiles so addToManifest() can detect it
-          outputFiles.add(new File(vectorizedPath));
+          outputFiles.add(vectorizedPath);
           if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Added vectorized file to outputFiles: {}", vectorizedPath);
           }
@@ -2687,7 +2667,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract insider transactions from Form 3/4/5.
    */
   private List<Map<String, Object>> extractInsiderTransactions(Document doc, String cik,
-      String filingType, String filingDate) {
+      String filingType, String filingDate, String accession) {
     List<Map<String, Object>> dataList = new ArrayList<>();
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadInsiderTransactionColumns();
 
@@ -2711,13 +2691,13 @@ public class XbrlToParquetConverter implements FileConverter {
         String officerTitle = getElementText(reportingOwner, "officerTitle");
 
         // Process all transaction and holding types for this reporting owner
-        addNonDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+        addNonDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-        addNonDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+        addNonDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-        addDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+        addDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-        addDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+        addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       }
     } else {
@@ -2730,13 +2710,13 @@ public class XbrlToParquetConverter implements FileConverter {
       boolean isTenPercentOwner = "1".equals(getElementText(doc, "isTenPercentOwner"));
       String officerTitle = getElementText(doc, "officerTitle");
 
-      addNonDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+      addNonDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-      addNonDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+      addNonDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-      addDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+      addDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
-      addDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
+      addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
     }
 
@@ -2747,7 +2727,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Add non-derivative transactions for a specific reporting owner.
    */
   private void addNonDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
-      String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
+      String accession, String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
       boolean isTenPercentOwner, String officerTitle,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> dataList) {
@@ -2757,6 +2737,7 @@ public class XbrlToParquetConverter implements FileConverter {
       Element trans = (Element) nonDerivTrans.item(i);
 
       Map<String, Object> data = new HashMap<>();
+      data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
@@ -2808,7 +2789,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Add non-derivative holdings for a specific reporting owner.
    */
   private void addNonDerivativeHoldings(Document doc, String cik, String filingType, String filingDate,
-      String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
+      String accession, String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
       boolean isTenPercentOwner, String officerTitle,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> dataList) {
@@ -2818,6 +2799,7 @@ public class XbrlToParquetConverter implements FileConverter {
       Element holding = (Element) holdings.item(i);
 
       Map<String, Object> data = new HashMap<>();
+      data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
@@ -2854,7 +2836,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Add derivative transactions for a specific reporting owner.
    */
   private void addDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
-      String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
+      String accession, String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
       boolean isTenPercentOwner, String officerTitle,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> dataList) {
@@ -2864,6 +2846,7 @@ public class XbrlToParquetConverter implements FileConverter {
       Element trans = (Element) derivTrans.item(i);
 
       Map<String, Object> data = new HashMap<>();
+      data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
@@ -2935,7 +2918,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Add derivative holdings for a specific reporting owner.
    */
   private void addDerivativeHoldings(Document doc, String cik, String filingType, String filingDate,
-      String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
+      String accession, String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
       boolean isTenPercentOwner, String officerTitle,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> dataList) {
@@ -2945,6 +2928,7 @@ public class XbrlToParquetConverter implements FileConverter {
       Element holding = (Element) derivHoldings.item(i);
 
       Map<String, Object> data = new HashMap<>();
+      data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
@@ -3149,9 +3133,9 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
 
-  private List<File> extract8KExhibits(String sourcePath, String targetDirectoryPath,
+  private List<String> extract8KExhibits(String sourcePath, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession) {
-    List<File> outputFiles = new ArrayList<>();
+    List<String> outputFiles = new ArrayList<>();
 
     try {
       // Parse the 8-K filing to find exhibits
@@ -3166,7 +3150,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Check if this file contains exhibit content directly
       if (fileContent.contains("EX-99.1") || fileContent.contains("EX-99.2")) {
-        earningsRecords.addAll(extractEarningsFromExhibit(fileContent, cik, filingType, filingDate));
+        earningsRecords.addAll(extractEarningsFromExhibit(fileContent, cik, filingType, filingDate, accession));
       }
 
       // Also check for earnings-related content patterns
@@ -3179,6 +3163,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
         for (int i = 0; i < paragraphs.size(); i++) {
           Map<String, Object> data = new HashMap<>();
+          data.put("accession_number", accession);
           data.put("cik", cik);
           data.put("filing_date", filingDate);
           data.put("filing_type", filingType);
@@ -3234,7 +3219,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract earnings content from exhibit text.
    */
   private List<Map<String, Object>> extractEarningsFromExhibit(String exhibitContent,
-      String cik, String filingType, String filingDate) {
+      String cik, String filingType, String filingDate, String accession) {
     List<Map<String, Object>> dataList = new ArrayList<>();
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadEarningsTranscriptColumns();
 
@@ -3262,6 +3247,7 @@ public class XbrlToParquetConverter implements FileConverter {
       paragraphNum++;
 
       Map<String, Object> data = new HashMap<>();
+      data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
@@ -3694,35 +3680,42 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private String findAssociatedHtmlFiling(String xbrlPath) {
     // Look for 10-K or 10-Q HTML in same directory
-    // This method is limited to local filesystem operations
-    // For cloud storage, associated filings would need to be tracked differently
     String parentPath = xbrlPath.substring(0, xbrlPath.lastIndexOf('/'));
 
-    // Only attempt directory listing for local filesystem paths
-    if (parentPath.contains("://")) {
-      // Cloud storage - cannot easily list directory contents
-      // Would need to use StorageProvider.listFiles() if that method exists
-      return null;
-    }
+    try {
+      // Use StorageProvider for both local and cloud storage
+      if (!storageProvider.exists(parentPath) || !storageProvider.isDirectory(parentPath)) {
+        return null;
+      }
 
-    java.io.File parentDir = new java.io.File(parentPath);
-    if (parentDir.exists() && parentDir.isDirectory()) {
-      java.io.File[] htmlFiles = parentDir.listFiles((dir, name) ->
-        (name.endsWith(".htm") || name.endsWith(".html")) &&
-        !name.contains("_cal") && !name.contains("_def") && !name.contains("_lab") &&
-        !name.contains("_pre") && !name.contains("_ref"));
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(parentPath, false);
+      List<StorageProvider.FileEntry> htmlFiles = new ArrayList<>();
 
-      if (htmlFiles != null && htmlFiles.length > 0) {
+      for (StorageProvider.FileEntry file : files) {
+        if (file.isDirectory()) {
+          continue;
+        }
+        String name = file.getName();
+        if ((name.endsWith(".htm") || name.endsWith(".html")) &&
+            !name.contains("_cal") && !name.contains("_def") && !name.contains("_lab") &&
+            !name.contains("_pre") && !name.contains("_ref")) {
+          htmlFiles.add(file);
+        }
+      }
+
+      if (!htmlFiles.isEmpty()) {
         // Prefer files with 10-K or 10-Q in name
-        for (java.io.File file : htmlFiles) {
+        for (StorageProvider.FileEntry file : htmlFiles) {
           String name = file.getName().toLowerCase();
           if (name.contains("10-k") || name.contains("10k") ||
               name.contains("10-q") || name.contains("10q")) {
-            return file.getAbsolutePath();
+            return file.getPath();
           }
         }
-        return htmlFiles[0].getAbsolutePath();  // Return first HTML file if no specific match
+        return htmlFiles.get(0).getPath();  // Return first HTML file if no specific match
       }
+    } catch (IOException e) {
+      LOGGER.debug("Could not list files in {}: {}", parentPath, e.getMessage());
     }
     return null;
   }
@@ -4033,138 +4026,6 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
-  private String extractFilingDateFromHtml(File htmlFile) {
-    try {
-      String content = Files.readString(htmlFile.toPath());
-
-      // Try various patterns to find the period end date in iXBRL
-      // Pattern 1: ix:nonnumeric with name containing PeriodEndDate
-      Pattern pattern1 = Pattern.compile("name=\"[^\"]*PeriodEndDate[^\"]*\"[^>]*>([^<]+)</");
-      Matcher matcher1 = pattern1.matcher(content);
-      if (matcher1.find()) {
-        String dateStr = matcher1.group(1).trim();
-        return normalizeDate(dateStr);
-      }
-
-      // Pattern 2: contextRef with period end date
-      Pattern pattern2 = Pattern.compile("contextref=\"[^\"]*\"[^>]*>\\s*(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}/\\d{1,2}/\\d{4})");
-      Matcher matcher2 = pattern2.matcher(content);
-      if (matcher2.find()) {
-        String dateStr = matcher2.group(1).trim();
-        return normalizeDate(dateStr);
-      }
-
-      // Pattern 3: Look for dei:DocumentPeriodEndDate
-      Pattern pattern3 = Pattern.compile("dei:DocumentPeriodEndDate[^>]*>([^<]+)</");
-      Matcher matcher3 = pattern3.matcher(content);
-      if (matcher3.find()) {
-        String dateStr = matcher3.group(1).trim();
-        return normalizeDate(dateStr);
-      }
-
-      // Pattern 4: Look for period end in meta tags
-      Pattern pattern4 = Pattern.compile("<meta[^>]*name=\"[^\"]*period[^\"]*\"[^>]*content=\"([^\"]+)\"");
-      Matcher matcher4 = pattern4.matcher(content);
-      if (matcher4.find()) {
-        String dateStr = matcher4.group(1).trim();
-        return normalizeDate(dateStr);
-      }
-
-    } catch (IOException e) {
-      LOGGER.warn("Failed to read HTML file for date extraction: " + e.getMessage());
-    }
-    return null;
-  }
-
-  private Map<String, String> extractCompanyInfoFromHtml(File htmlFile) {
-    Map<String, String> info = new HashMap<>();
-    try {
-      String content = Files.readString(htmlFile.toPath());
-
-      // Extract company name
-      Pattern namePattern = Pattern.compile("dei:EntityRegistrantName[^>]*>([^<]+)</");
-      Matcher nameMatcher = namePattern.matcher(content);
-      if (nameMatcher.find()) {
-        info.put("company_name", nameMatcher.group(1).trim());
-      }
-
-      // Extract state of incorporation
-      Pattern statePattern = Pattern.compile("dei:EntityIncorporationStateCountryCode[^>]*>([^<]+)</");
-      Matcher stateMatcher = statePattern.matcher(content);
-      if (stateMatcher.find()) {
-        info.put("state_of_incorporation", stateMatcher.group(1).trim());
-      }
-
-      // Extract fiscal year end
-      Pattern fyPattern = Pattern.compile("dei:CurrentFiscalYearEndDate[^>]*>([^<]+)</");
-      Matcher fyMatcher = fyPattern.matcher(content);
-      if (fyMatcher.find()) {
-        info.put("fiscal_year_end", fyMatcher.group(1).trim());
-      }
-
-      // Extract SIC code
-      Pattern sicPattern = Pattern.compile("dei:EntityStandardIndustrialClassificationCode[^>]*>([^<]+)</");
-      Matcher sicMatcher = sicPattern.matcher(content);
-      if (sicMatcher.find()) {
-        info.put("sic_code", sicMatcher.group(1).trim());
-      }
-
-    } catch (IOException e) {
-      LOGGER.warn("Failed to read HTML file for company info extraction: " + e.getMessage());
-    }
-    return info;
-  }
-
-  private String normalizeDate(String dateStr) {
-    if (dateStr == null || dateStr.isEmpty()) {
-      return null;
-    }
-
-    // Already in YYYY-MM-DD format
-    if (dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
-      return dateStr;
-    }
-
-    // MM/DD/YYYY format
-    if (dateStr.matches("\\d{1,2}/\\d{1,2}/\\d{4}")) {
-      String[] parts = dateStr.split("/");
-      return String.format("%s-%02d-%02d", parts[2],
-          Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-    }
-
-    // YYYYMMDD format
-    if (dateStr.matches("\\d{8}")) {
-      return dateStr.substring(0, 4) + "-" + dateStr.substring(4, 6) + "-" + dateStr.substring(6, 8);
-    }
-
-    // Month DD, YYYY format (e.g., "September 30, 2024")
-    Pattern monthDayYear = Pattern.compile("(\\w+)\\s+(\\d{1,2}),\\s+(\\d{4})");
-    Matcher matcher = monthDayYear.matcher(dateStr);
-    if (matcher.find()) {
-      String month = matcher.group(1);
-      String day = matcher.group(2);
-      String year = matcher.group(3);
-      int monthNum = getMonthNumber(month);
-      if (monthNum > 0) {
-        return String.format("%s-%02d-%02d", year, monthNum, Integer.parseInt(day));
-      }
-    }
-
-    return null;
-  }
-
-  private int getMonthNumber(String month) {
-    String[] months = {"january", "february", "march", "april", "may", "june",
-                       "july", "august", "september", "october", "november", "december"};
-    String monthLower = month.toLowerCase();
-    for (int i = 0; i < months.length; i++) {
-      if (months[i].startsWith(monthLower.substring(0, Math.min(3, monthLower.length())))) {
-        return i + 1;
-      }
-    }
-    return 0;
-  }
-
   private void createEnhancedMetadata(String sourcePath, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession, Map<String, String> companyInfo) throws IOException {
     // Build partition path
@@ -4285,64 +4146,6 @@ public class XbrlToParquetConverter implements FileConverter {
     } catch (Exception e) {
       LOGGER.warn("Error extracting period end date: " + e.getMessage());
       return null;
-    }
-  }
-
-  /**
-   * Track parsing errors to a file for offline review.
-   * This helps identify which documents are failing to parse and why.
-   */
-  private void trackParsingError(String sourcePath, String errorType, String errorMessage) {
-    try {
-      // Create error log file in /tmp for easy access
-      File errorLogFile = new File("/tmp/xbrl_parsing_errors.log");
-
-      // Format: timestamp | file_path | error_type | error_message
-      String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
-      String logEntry =
-          String.format("%s | %s | %s | %s%n", timestamp,
-          sourcePath,
-          errorType,
-          errorMessage);
-
-      // Append to file
-      java.nio.file.Files.write(
-          errorLogFile.toPath(),
-          logEntry.getBytes(),
-          java.nio.file.StandardOpenOption.CREATE,
-          java.nio.file.StandardOpenOption.APPEND);
-
-      LOGGER.debug("Tracked parsing error to: " + errorLogFile.getAbsolutePath());
-
-    } catch (IOException e) {
-      LOGGER.warn("Failed to track parsing error: " + e.getMessage());
-    }
-  }
-
-  private void trackConversionError(String sourcePath, String errorType, String errorMessage) {
-    try {
-      // Create error log file in /tmp for easy access
-      File errorLogFile = new File("/tmp/xbrl_conversion_errors.log");
-
-      // Format: timestamp | file_path | error_type | error_message
-      String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
-      String logEntry =
-          String.format("%s | %s | %s | %s%n", timestamp,
-          sourcePath,
-          errorType,
-          errorMessage);
-
-      // Append to file
-      java.nio.file.Files.write(
-          errorLogFile.toPath(),
-          logEntry.getBytes(),
-          java.nio.file.StandardOpenOption.CREATE,
-          java.nio.file.StandardOpenOption.APPEND);
-
-      LOGGER.debug("Tracked conversion error to: " + errorLogFile.getAbsolutePath());
-
-    } catch (IOException e) {
-      LOGGER.warn("Failed to track conversion error: " + e.getMessage());
     }
   }
 }

@@ -60,7 +60,6 @@
     <logger name="org.apache.calcite.adapter.sec.SecSchema" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.sec.EdgarDownloader" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.sec.CikRegistry" level="DEBUG"/>
-    <logger name="org.apache.calcite.adapter.sec.SecToParquetConverter" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.sec" level="INFO"/>
     <!-- Also enable file adapter logging since SEC extends it -->
     <logger name="org.apache.calcite.adapter.file.FileSchemaFactory" level="DEBUG"/>

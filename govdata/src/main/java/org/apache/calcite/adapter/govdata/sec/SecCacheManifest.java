@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -42,7 +41,6 @@ import java.util.concurrent.TimeUnit;
 public class SecCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String LEGACY_MANIFEST_FILENAME = "cache_manifest.json";
 
   /** DuckDB-based cache store. */
   private final DuckDBCacheStore store;
@@ -175,76 +173,15 @@ public class SecCacheManifest extends AbstractCacheManifest {
 
   /**
    * Load manifest from DuckDB cache store.
-   * Automatically migrates from JSON if a legacy manifest exists.
    */
   public static SecCacheManifest load(String cacheDir) {
     SecCacheManifest manifest = new SecCacheManifest(cacheDir);
-
-    // Check for legacy JSON manifest and migrate if present
-    File legacyFile = new File(cacheDir, LEGACY_MANIFEST_FILENAME);
-    if (legacyFile.exists()) {
-      manifest.migrateFromJson(legacyFile);
-    }
 
     int[] stats = manifest.store.getStats();
     LOGGER.info("Loaded SEC cache manifest from DuckDB with {} entries ({} fresh, {} expired)",
         stats[0], stats[1], stats[2]);
 
     return manifest;
-  }
-
-  /**
-   * Migrate data from legacy JSON manifest to DuckDB.
-   */
-  private void migrateFromJson(File legacyFile) {
-    LOGGER.info("Found legacy JSON manifest at {}, migrating to DuckDB...", legacyFile.getAbsolutePath());
-
-    try {
-      LegacyManifest legacy = MAPPER.readValue(legacyFile, LegacyManifest.class);
-
-      // Migrate submission entries
-      int migratedSubmissions = 0;
-      if (legacy.entries != null) {
-        for (java.util.Map.Entry<String, LegacySubmissionEntry> entry : legacy.entries.entrySet()) {
-          String cik = entry.getKey();
-          LegacySubmissionEntry subEntry = entry.getValue();
-
-          String key = "submission:" + cik;
-          store.upsertEntry(key, "submission", cik, subEntry.filePath,
-              subEntry.fileSize, subEntry.refreshAfter,
-              subEntry.refreshReason != null ? subEntry.refreshReason : "migrated");
-
-          // Migrate fully processed status
-          if (subEntry.fullyProcessed && subEntry.totalFilingsWhenProcessed != null) {
-            markCikFullyProcessed(cik, subEntry.totalFilingsWhenProcessed);
-          }
-
-          migratedSubmissions++;
-        }
-      }
-
-      // Migrate filing entries to sec_filings table
-      int migratedFilings = 0;
-      if (legacy.filings != null) {
-        for (java.util.Map.Entry<String, LegacyFilingEntry> entry : legacy.filings.entrySet()) {
-          LegacyFilingEntry filingEntry = entry.getValue();
-          store.markFiling(filingEntry.cik, filingEntry.accession, filingEntry.fileName,
-              filingEntry.state, filingEntry.reason);
-          migratedFilings++;
-        }
-      }
-
-      LOGGER.info("Migrated {} submission entries and {} filing entries from JSON to DuckDB",
-          migratedSubmissions, migratedFilings);
-
-      File backupFile = new File(legacyFile.getParent(), LEGACY_MANIFEST_FILENAME + ".migrated");
-      if (legacyFile.renameTo(backupFile)) {
-        LOGGER.info("Renamed legacy manifest to {}", backupFile.getName());
-      }
-
-    } catch (IOException e) {
-      LOGGER.error("Failed to migrate legacy JSON manifest: {}", e.getMessage());
-    }
   }
 
   /**
@@ -381,36 +318,5 @@ public class SecCacheManifest extends AbstractCacheManifest {
           "SEC Cache stats: %d submissions (%d with ETag, %d without ETag, %d expired), %d filings (%d not found)",
           totalEntries, entriesWithETag, entriesWithoutETag, expiredEntries, totalFilings, notFoundFilings);
     }
-  }
-
-  // ===== Legacy JSON classes for migration =====
-
-  private static class LegacyManifest {
-    public java.util.Map<String, LegacySubmissionEntry> entries;
-    public java.util.Map<String, LegacyFilingEntry> filings;
-    public String version;
-    public long lastUpdated;
-  }
-
-  private static class LegacySubmissionEntry {
-    public String cik;
-    public String filePath;
-    public String etag;
-    public long fileSize;
-    public long downloadedAt;
-    public long refreshAfter;
-    public String refreshReason;
-    public boolean fullyProcessed;
-    public Long fullyProcessedAt;
-    public Integer totalFilingsWhenProcessed;
-  }
-
-  private static class LegacyFilingEntry {
-    public String cik;
-    public String accession;
-    public String fileName;
-    public String state;
-    public String reason;
-    public long checkedAt;
   }
 }

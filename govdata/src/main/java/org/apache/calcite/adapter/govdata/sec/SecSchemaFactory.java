@@ -20,10 +20,14 @@ import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
+import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
+import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataUtils;
+
+import org.apache.hadoop.conf.Configuration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,14 +37,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -101,8 +100,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private final ConcurrentLinkedQueue<CompletableFuture<Void>> filingProcessingFutures = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<CompletableFuture<Void>> conversionFutures = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<FilingToDownload> retryQueue = new ConcurrentLinkedQueue<>();
-  private final List<File> scheduledForReconversion = new ArrayList<>();
-  private final List<File> scheduledForInlineXbrlProcessing = new ArrayList<>();
+  private final List<String> scheduledForReconversion = new ArrayList<>();
+  private final List<String> scheduledForInlineXbrlProcessing = new ArrayList<>();
   private final Set<String> downloadedInThisCycle = java.util.concurrent.ConcurrentHashMap.newKeySet();
   private final AtomicInteger totalFilingsToProcess = new AtomicInteger(0);
   private final AtomicInteger completedFilingProcessing = new AtomicInteger(0);
@@ -580,9 +579,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     this.cacheManifest = SecCacheManifest.load(this.secOperatingDirectory);
     LOGGER.debug("Loaded SEC cache manifest from {}", this.secOperatingDirectory);
 
-    // Migrate legacy .notfound markers to manifest
-    migrateNotFoundMarkers(secCacheDir);
-
     // SEC data directories - NEVER concatenate paths, always use storageProvider.resolvePath
     String secRawDir = storageProvider.resolvePath(govdataCacheDir, "sec");
     String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
@@ -612,9 +608,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Data download needed - starting download...");
       // Get base directory from operand
       if (configuredDir != null) {
-        File baseDir = new File(configuredDir);
         // Rebuild manifest from existing files first
-        rebuildManifestFromExistingFiles(baseDir);
+        rebuildManifestFromExistingFiles(configuredDir);
       }
         LOGGER.info("Calling downloadSecData...");
         downloadSecData(mutableOperand);
@@ -765,7 +760,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  private void addToManifest(String xbrlFilePath, String secParquetDirPath, List<File> outputFiles) {
+  private void addToManifest(String xbrlFilePath, String secParquetDirPath, List<String> outputFiles) {
     try {
       // Extract CIK and accession from file path
       // Path structure: cacheDir/{cik}/{accession}/{file}
@@ -787,8 +782,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Check if vectorized files were created by looking at outputFiles list
       boolean hasVectorized = false;
       if (outputFiles != null) {
-        for (File f : outputFiles) {
-          if (f.getName().endsWith("_vectorized.parquet")) {
+        for (String filePath : outputFiles) {
+          if (filePath.endsWith("_vectorized.parquet")) {
             hasVectorized = true;
             break;
           }
@@ -810,9 +805,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
       // Use per-CIK manifest for better organization and no lock contention
-      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
-      cikManifestDir.mkdirs();
-      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
+      String cikManifestDir = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+      storageProvider.createDirectories(cikManifestDir);
+      String manifestPath = storageProvider.resolvePath(cikManifestDir, "processed_filings.manifest");
 
       synchronized (("manifest_" + cik).intern()) {
         if (LOGGER.isDebugEnabled()) {
@@ -823,8 +818,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Check if this entry already exists in the manifest (prevent duplicates)
         boolean alreadyExists = false;
         String existingEntry = null;
-        if (manifestFile.exists()) {
-          try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+        boolean manifestExists = storageProvider.exists(manifestPath);
+        if (manifestExists) {
+          try (BufferedReader reader = new BufferedReader(
+              new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
             String line;
             while ((line = reader.readLine()) != null) {
               if (line.startsWith(entryPrefix)) {
@@ -860,9 +857,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Only write if new or needs upgrade
         if (!alreadyExists) {
           // If upgrading, we need to rewrite the entire manifest to remove old entry
-          if (manifestFile.exists()) {
+          if (manifestExists) {
             List<String> updatedLines = new ArrayList<>();
-            try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+            try (BufferedReader reader = new BufferedReader(
+                new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 // Skip old entries for this CIK|ACCESSION
@@ -875,11 +873,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             updatedLines.add(manifestKey);
 
             // Write all lines back
-            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, false))) {
-              for (String line : updatedLines) {
-                pw.println(line);
-              }
+            StringBuilder sb = new StringBuilder();
+            for (String line : updatedLines) {
+              sb.append(line).append("\n");
             }
+            storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("addToManifest: WROTE {} lines to manifest (updated entry for {}) thread={}",
@@ -887,9 +885,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
           } else {
             // New manifest file
-            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-              pw.println(manifestKey);
-            }
+            storageProvider.writeFile(manifestPath, (manifestKey + "\n").getBytes(StandardCharsets.UTF_8));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("addToManifest: CREATED new manifest with entry '{}' thread={}",
@@ -914,65 +910,87 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
 
-  private void rebuildManifestFromExistingFiles(File baseDirectory) {
+  private void rebuildManifestFromExistingFiles(String baseDirectory) {
     // Rebuild manifest from existing files on startup
-    File manifestFile = new File(baseDirectory, "processed_filings.manifest");
-    if (manifestFile.exists()) {
-      try {
-        long count = Files.lines(manifestFile.toPath()).count();
-        LOGGER.debug("Manifest already exists with {} entries", count);
-        return;
-      } catch (Exception e) {
-        LOGGER.warn("Could not read manifest: " + e.getMessage());
+    String manifestPath = storageProvider.resolvePath(baseDirectory, "processed_filings.manifest");
+    try {
+      if (storageProvider.exists(manifestPath)) {
+        try (BufferedReader reader = new BufferedReader(
+            new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
+          long count = 0;
+          while (reader.readLine() != null) {
+            count++;
+          }
+          LOGGER.debug("Manifest already exists with {} entries", count);
+          return;
+        }
       }
+    } catch (Exception e) {
+      LOGGER.warn("Could not read manifest: " + e.getMessage());
     }
 
     LOGGER.debug("Building manifest from existing files...");
     Set<String> processedFilings = new HashSet<>();
 
-    File secCacheDir = new File(baseDirectory, "sec-cache");
-    if (secCacheDir.exists() && secCacheDir.isDirectory()) {
-      File rawDir = new File(secCacheDir, "raw");
-      if (rawDir.exists()) {
-        // Scan all CIK directories
-        File[] cikDirs = rawDir.listFiles(File::isDirectory);
-        if (cikDirs != null) {
-          for (File cikDir : cikDirs) {
-            String cik = cikDir.getName();
+    try {
+      String secCacheDir = storageProvider.resolvePath(baseDirectory, "sec-cache");
+      if (storageProvider.exists(secCacheDir) && storageProvider.isDirectory(secCacheDir)) {
+        String rawDir = storageProvider.resolvePath(secCacheDir, "raw");
+        if (storageProvider.exists(rawDir)) {
+          // Scan all CIK directories
+          List<StorageProvider.FileEntry> cikDirs = storageProvider.listFiles(rawDir, false);
+          for (StorageProvider.FileEntry cikEntry : cikDirs) {
+            if (!cikEntry.isDirectory()) {
+              continue;
+            }
+            String cik = cikEntry.getName();
             // Scan all accession directories
-            File[] accessionDirs = cikDir.listFiles(File::isDirectory);
-            if (accessionDirs != null) {
-              for (File accessionDir : accessionDirs) {
-                String accession = accessionDir.getName();
-                // Format accession with dashes
-                if (accession.length() == 18) {
-                  accession = accession.substring(0, 10) + "-" +
-                             accession.substring(10, 12) + "-" +
-                             accession.substring(12);
-                }
+            List<StorageProvider.FileEntry> accessionDirs =
+                storageProvider.listFiles(cikEntry.getPath(), false);
+            for (StorageProvider.FileEntry accessionEntry : accessionDirs) {
+              if (!accessionEntry.isDirectory()) {
+                continue;
+              }
+              String accession = accessionEntry.getName();
+              // Format accession with dashes
+              if (accession.length() == 18) {
+                accession = accession.substring(0, 10) + "-" +
+                           accession.substring(10, 12) + "-" +
+                           accession.substring(12);
+              }
 
-                // Check for HTML files (indicates a filing was downloaded)
-                // Exclude macOS metadata files
-                File[] htmlFiles = accessionDir.listFiles((dir, name) ->
-                    !name.startsWith("._") && (name.endsWith(".htm") || name.endsWith(".html")));
-                if (htmlFiles != null && htmlFiles.length > 0) {
-                  // For now, add with generic form/date - actual values would need parsing
-                  String manifestKey = cik + "|" + accession + "|UNKNOWN|UNKNOWN";
-                  processedFilings.add(manifestKey);
+              // Check for HTML files (indicates a filing was downloaded)
+              List<StorageProvider.FileEntry> htmlFiles =
+                  storageProvider.listFiles(accessionEntry.getPath(), false);
+              boolean hasHtmlFiles = false;
+              for (StorageProvider.FileEntry f : htmlFiles) {
+                String name = f.getName();
+                if (!name.startsWith("._") && (name.endsWith(".htm") || name.endsWith(".html"))) {
+                  hasHtmlFiles = true;
+                  break;
                 }
+              }
+              if (hasHtmlFiles) {
+                // For now, add with generic form/date - actual values would need parsing
+                String manifestKey = cik + "|" + accession + "|UNKNOWN|UNKNOWN";
+                processedFilings.add(manifestKey);
               }
             }
           }
         }
       }
+    } catch (Exception e) {
+      LOGGER.warn("Could not scan existing files: " + e.getMessage());
     }
 
     // Write manifest
     if (!processedFilings.isEmpty()) {
-      try (PrintWriter pw = new PrintWriter(manifestFile)) {
+      try {
+        StringBuilder sb = new StringBuilder();
         for (String filing : processedFilings) {
-          pw.println(filing);
+          sb.append(filing).append("\n");
         }
+        storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
         LOGGER.debug("Created manifest with {} existing filings", processedFilings.size());
       } catch (Exception e) {
         LOGGER.warn("Could not create manifest: " + e.getMessage());
@@ -1096,7 +1114,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (ciks.isEmpty()) {
         LOGGER.warn("No CIKs configured for document-based ETL");
         return new DocumentETLProcessor.DocumentETLResult(
-            0, 0, 0, new ArrayList<File>(), new ArrayList<String>(), 0);
+            0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
       }
 
       // Get filing types and year range
@@ -1110,17 +1128,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
 
       // Create HttpSourceConfig from YAML-style configuration
-      HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes);
+      HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
 
       // Get or create document converter
       FileConverter documentConverter = getOrCreateXbrlConverter();
 
-      // Create processor
+      // Create processor - pass cache directory as String to support S3 paths
       DocumentETLProcessor processor = new DocumentETLProcessor(
           httpSourceConfig,
           storageProvider,
           secParquetDir,
-          new File(this.secCacheDirectory),
+          this.secCacheDirectory,
           documentConverter);
 
       // Build entity list with CIKs and year range
@@ -1147,6 +1165,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           result.getDocumentsFailed(),
           result.getDurationMs());
 
+      // Materialize staging parquet files to Iceberg tables if configured
+      if (result.getDocumentsProcessed() > 0) {
+        materializeStagingFilesToIceberg(operand, secParquetDir);
+      }
+
       return result;
 
     } catch (Exception e) {
@@ -1154,8 +1177,412 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       List<String> errors = new ArrayList<String>();
       errors.add(e.getMessage());
       return new DocumentETLProcessor.DocumentETLResult(
-          0, 0, 1, new ArrayList<File>(), errors, 0);
+          0, 0, 1, new ArrayList<String>(), errors, 0);
     }
+  }
+
+  /**
+   * Materializes staging parquet files to Iceberg tables using the file adapter's
+   * IcebergTableWriter. This method is called after DocumentETLProcessor completes
+   * to commit the staging parquet files to their corresponding Iceberg tables.
+   *
+   * @param operand Schema operand with configuration
+   * @param secParquetDir Base directory for SEC parquet files
+   */
+  @SuppressWarnings("unchecked")
+  private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir) {
+    LOGGER.info("Starting Iceberg materialization for SEC tables");
+
+    // Load table definitions from YAML
+    List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
+    if (partitionedTables.isEmpty()) {
+      LOGGER.warn("No partitioned tables found for Iceberg materialization");
+      return;
+    }
+
+    // Get warehouse path from operand or compute from base directory
+    String warehousePath = (String) operand.get("warehousePath");
+    if (warehousePath == null) {
+      warehousePath = secParquetDir + "/SEC";
+    }
+    LOGGER.info("Iceberg warehouse path: {}", warehousePath);
+
+    // Build catalog config with S3 credentials from storage provider
+    Map<String, Object> catalogConfig = buildIcebergCatalogConfig(warehousePath);
+
+    int tablesProcessed = 0;
+    int totalFilesCommitted = 0;
+
+    // Process each table configured for Iceberg materialization
+    for (Map<String, Object> tableConfig : partitionedTables) {
+      String tableName = (String) tableConfig.get("name");
+      Map<String, Object> materializeConfig = (Map<String, Object>) tableConfig.get("materialize");
+
+      if (materializeConfig == null || !Boolean.TRUE.equals(materializeConfig.get("enabled"))) {
+        LOGGER.debug("Skipping table '{}' - materialization not enabled", tableName);
+        continue;
+      }
+
+      String format = (String) materializeConfig.get("format");
+      if (!"iceberg".equals(format)) {
+        LOGGER.debug("Skipping table '{}' - format is '{}', not iceberg", tableName, format);
+        continue;
+      }
+
+      try {
+        // Get staging directory path for this table
+        String pattern = (String) tableConfig.get("pattern");
+        if (pattern == null) {
+          LOGGER.warn("No pattern defined for table '{}'", tableName);
+          continue;
+        }
+
+        // Get Iceberg table name from config
+        Map<String, Object> icebergConfig = (Map<String, Object>) materializeConfig.get("iceberg");
+        String icebergTableName = icebergConfig != null
+            ? (String) icebergConfig.get("tableName")
+            : tableName;
+        if (icebergTableName == null) {
+          icebergTableName = tableName;
+        }
+
+        // Use IcebergTableWriter.commitFromStaging to commit staging files
+        int filesCommitted = commitStagingFilesToIceberg(
+            icebergTableName, secParquetDir, pattern, catalogConfig, tableConfig);
+
+        if (filesCommitted > 0) {
+          tablesProcessed++;
+          totalFilesCommitted += filesCommitted;
+          LOGGER.info("Materialized {} files to Iceberg table '{}'", filesCommitted, icebergTableName);
+        }
+      } catch (Exception e) {
+        LOGGER.error("Failed to materialize table '{}' to Iceberg: {}", tableName, e.getMessage());
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Stack trace:", e);
+        }
+      }
+    }
+
+    LOGGER.info("Iceberg materialization complete: {} tables, {} files committed",
+        tablesProcessed, totalFilesCommitted);
+  }
+
+  /**
+   * Builds Iceberg catalog configuration with S3 credentials from storage provider.
+   */
+  private Map<String, Object> buildIcebergCatalogConfig(String warehousePath) {
+    Map<String, Object> catalogConfig = new HashMap<String, Object>();
+    catalogConfig.put("catalog", "hadoop");
+
+    // Normalize warehouse path for Hadoop
+    String normalizedWarehouse = warehousePath;
+    if (normalizedWarehouse != null && normalizedWarehouse.startsWith("s3://")) {
+      normalizedWarehouse = "s3a://" + normalizedWarehouse.substring(5);
+    }
+    catalogConfig.put("warehousePath", normalizedWarehouse);
+
+    // Add S3 credentials from storage provider
+    if (storageProvider != null) {
+      Map<String, String> s3Config = storageProvider.getS3Config();
+      if (s3Config != null) {
+        Map<String, String> hadoopConfig = new HashMap<String, String>();
+        if (s3Config.containsKey("accessKeyId")) {
+          hadoopConfig.put("fs.s3a.access.key", s3Config.get("accessKeyId"));
+        }
+        if (s3Config.containsKey("secretAccessKey")) {
+          hadoopConfig.put("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
+        }
+        if (s3Config.containsKey("endpoint")) {
+          hadoopConfig.put("fs.s3a.endpoint", s3Config.get("endpoint"));
+          hadoopConfig.put("fs.s3a.path.style.access", "true");
+        }
+        if (!hadoopConfig.isEmpty()) {
+          catalogConfig.put("hadoopConfig", hadoopConfig);
+        }
+      }
+    }
+
+    return catalogConfig;
+  }
+
+  /**
+   * Commits staging parquet files to an Iceberg table using the file adapter's
+   * IcebergTableWriter. If the table doesn't exist, it will be created using
+   * columns and partition spec from the tableConfig.
+   *
+   * @param tableName Iceberg table name
+   * @param stagingBaseDir Base directory containing staging parquet files
+   * @param pattern Pattern to match staging files
+   * @param catalogConfig Iceberg catalog configuration
+   * @param tableConfig Table configuration from YAML containing columns and partitions
+   * @return Number of files committed
+   */
+  @SuppressWarnings("unchecked")
+  private int commitStagingFilesToIceberg(String tableName, String stagingBaseDir,
+      String pattern, Map<String, Object> catalogConfig,
+      Map<String, Object> tableConfig) throws IOException {
+
+    // List staging files matching the pattern
+    List<String> stagingFiles = listFilesMatchingPattern(stagingBaseDir, pattern);
+
+    if (stagingFiles.isEmpty()) {
+      LOGGER.debug("No staging files found for table '{}' with pattern '{}'", tableName, pattern);
+      return 0;
+    }
+
+    LOGGER.info("Found {} staging files for table '{}' with pattern '{}'",
+        stagingFiles.size(), tableName, pattern);
+
+    // Load or create Iceberg table using file adapter's IcebergCatalogManager
+    org.apache.iceberg.Table table;
+    if (IcebergCatalogManager.tableExists(catalogConfig, tableName)) {
+      table = IcebergCatalogManager.loadTable(catalogConfig, tableName);
+      LOGGER.info("Loaded existing Iceberg table: {}", tableName);
+    } else {
+      LOGGER.info("Creating new Iceberg table: {}", tableName);
+
+      // Extract columns from tableConfig
+      List<IcebergCatalogManager.ColumnDef> columnDefs = extractColumnsFromConfig(tableConfig);
+      if (columnDefs.isEmpty()) {
+        LOGGER.warn("No columns defined for table '{}', cannot create Iceberg table", tableName);
+        return 0;
+      }
+
+      // Extract partition column names from tableConfig
+      List<String> partitionColumnNames = extractPartitionColumnsFromConfig(tableConfig);
+
+      // Create the table
+      table = IcebergCatalogManager.createTableFromColumns(
+          catalogConfig, tableName, columnDefs, partitionColumnNames);
+      LOGGER.info("Created Iceberg table '{}' with {} columns, partitioned by {}",
+          tableName, columnDefs.size(), partitionColumnNames);
+    }
+
+    // Build Hadoop configuration from catalog config
+    Configuration hadoopConf = new Configuration();
+    Map<String, String> hadoopConfigMap = (Map<String, String>) catalogConfig.get("hadoopConfig");
+    if (hadoopConfigMap != null) {
+      for (Map.Entry<String, String> entry : hadoopConfigMap.entrySet()) {
+        hadoopConf.set(entry.getKey(), entry.getValue());
+      }
+    }
+
+    // Use IcebergTableWriter from file adapter to commit staging files
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, hadoopConf);
+
+    // Get staging directory (parent of pattern) and commit
+    String stagingDir = stagingBaseDir;
+    if (pattern.contains("/")) {
+      // Pattern has directory component, construct full staging path
+      String patternDir = pattern.substring(0, pattern.lastIndexOf('/'));
+      stagingDir = storageProvider.resolvePath(stagingBaseDir, patternDir);
+    }
+
+    writer.commitFromStaging(stagingDir, null);
+    LOGGER.info("Committed staging files from '{}' to Iceberg table '{}'", stagingDir, tableName);
+
+    return stagingFiles.size();
+  }
+
+  /**
+   * Extracts column definitions from table config for Iceberg table creation.
+   *
+   * @param tableConfig Table configuration from YAML
+   * @return List of column definitions for IcebergCatalogManager
+   */
+  @SuppressWarnings("unchecked")
+  private List<IcebergCatalogManager.ColumnDef> extractColumnsFromConfig(
+      Map<String, Object> tableConfig) {
+    List<IcebergCatalogManager.ColumnDef> columnDefs =
+        new ArrayList<IcebergCatalogManager.ColumnDef>();
+
+    Object columnsObj = tableConfig.get("columns");
+    if (!(columnsObj instanceof List)) {
+      return columnDefs;
+    }
+
+    List<?> columns = (List<?>) columnsObj;
+    for (Object colObj : columns) {
+      if (!(colObj instanceof Map)) {
+        continue;
+      }
+
+      Map<String, Object> col = (Map<String, Object>) colObj;
+      String name = (String) col.get("name");
+      String type = (String) col.get("type");
+      String comment = (String) col.get("comment");
+
+      if (name == null || type == null) {
+        continue;
+      }
+
+      // Map YAML types to Iceberg types
+      String icebergType = mapYamlTypeToIceberg(type);
+      columnDefs.add(new IcebergCatalogManager.ColumnDef(name, icebergType, comment));
+    }
+
+    return columnDefs;
+  }
+
+  /**
+   * Extracts partition column names from table config.
+   *
+   * @param tableConfig Table configuration from YAML
+   * @return List of partition column names
+   */
+  @SuppressWarnings("unchecked")
+  private List<String> extractPartitionColumnsFromConfig(Map<String, Object> tableConfig) {
+    List<String> partitionColumnNames = new ArrayList<String>();
+
+    Object partitionsObj = tableConfig.get("partitions");
+    if (!(partitionsObj instanceof Map)) {
+      return partitionColumnNames;
+    }
+
+    Map<String, Object> partitions = (Map<String, Object>) partitionsObj;
+    Object columnDefsObj = partitions.get("columnDefinitions");
+    if (!(columnDefsObj instanceof List)) {
+      return partitionColumnNames;
+    }
+
+    List<?> columnDefs = (List<?>) columnDefsObj;
+    for (Object colObj : columnDefs) {
+      if (!(colObj instanceof Map)) {
+        continue;
+      }
+
+      Map<String, Object> col = (Map<String, Object>) colObj;
+      String name = (String) col.get("name");
+      if (name != null) {
+        partitionColumnNames.add(name);
+      }
+    }
+
+    return partitionColumnNames;
+  }
+
+  /**
+   * Maps YAML schema types to Iceberg types.
+   */
+  private String mapYamlTypeToIceberg(String yamlType) {
+    if (yamlType == null) {
+      return "STRING";
+    }
+    String upperType = yamlType.toUpperCase();
+    switch (upperType) {
+      case "STRING":
+      case "VARCHAR":
+        return "STRING";
+      case "INT":
+      case "INTEGER":
+        return "INT";
+      case "LONG":
+      case "BIGINT":
+        return "LONG";
+      case "DOUBLE":
+      case "FLOAT":
+        return "DOUBLE";
+      case "BOOLEAN":
+        return "BOOLEAN";
+      case "DATE":
+        return "DATE";
+      case "TIMESTAMP":
+        return "TIMESTAMP";
+      default:
+        return "STRING";
+    }
+  }
+
+  /**
+   * Lists files matching a glob pattern relative to a base directory.
+   *
+   * @param baseDir Base directory to search in
+   * @param pattern Glob pattern with wildcards (e.g., "cik=*&#47;year=*&#47;*.parquet")
+   * @return List of file paths matching the pattern
+   */
+  private List<String> listFilesMatchingPattern(String baseDir, String pattern) {
+    List<String> matchingFiles = new ArrayList<String>();
+
+    try {
+      // Convert glob pattern to regex
+      String regexPattern = globToRegex(pattern);
+      Pattern compiledPattern = Pattern.compile(regexPattern);
+
+      // List all files recursively
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(baseDir, true);
+
+      for (StorageProvider.FileEntry file : files) {
+        if (file.isDirectory()) {
+          continue;
+        }
+
+        // Get relative path from base directory
+        String relativePath = file.getPath();
+        if (relativePath.startsWith(baseDir)) {
+          relativePath = relativePath.substring(baseDir.length());
+          if (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
+          }
+        }
+
+        // Check if path matches pattern
+        if (compiledPattern.matcher(relativePath).matches()) {
+          matchingFiles.add(file.getPath());
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to list files matching pattern '{}' in '{}': {}",
+          pattern, baseDir, e.getMessage());
+    }
+
+    return matchingFiles;
+  }
+
+  /**
+   * Converts a glob pattern to a regex pattern.
+   * Supports * (any chars except /) and ** (any chars including /).
+   */
+  private String globToRegex(String glob) {
+    StringBuilder regex = new StringBuilder();
+    int i = 0;
+    while (i < glob.length()) {
+      char c = glob.charAt(i);
+      switch (c) {
+        case '*':
+          if (i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
+            // ** matches anything including /
+            regex.append(".*");
+            i++;
+          } else {
+            // * matches anything except /
+            regex.append("[^/]*");
+          }
+          break;
+        case '?':
+          regex.append("[^/]");
+          break;
+        case '.':
+        case '(':
+        case ')':
+        case '+':
+        case '|':
+        case '^':
+        case '$':
+        case '@':
+        case '%':
+        case '{':
+        case '}':
+        case '[':
+        case ']':
+        case '\\':
+          regex.append('\\').append(c);
+          break;
+        default:
+          regex.append(c);
+      }
+      i++;
+    }
+    return regex.toString();
   }
 
   /**
@@ -1184,7 +1611,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Creates HttpSourceConfig from operand for DocumentETLProcessor.
    */
   private HttpSourceConfig createHttpSourceConfig(Map<String, Object> operand,
-      List<String> filingTypes) {
+      List<String> filingTypes, int startYear, int endYear) {
     // Create DocumentSourceConfig using fromMap
     Map<String, Object> docSourceMap = new HashMap<String, Object>();
     docSourceMap.put("metadataUrl", "https://data.sec.gov/submissions/CIK{cik}.json");
@@ -1197,6 +1624,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
     docSourceMap.put("responseTransformer",
         "org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer");
+    // Year range for filtering filings
+    docSourceMap.put("startYear", startYear);
+    docSourceMap.put("endYear", endYear);
 
     HttpSourceConfig.DocumentSourceConfig docConfig =
         HttpSourceConfig.DocumentSourceConfig.fromMap(docSourceMap);
@@ -1247,10 +1677,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(loaderOptions);
       Map<String, Object> config = yaml.load(is);
 
-      // Extract tables array from YAML
-      Object tablesObj = config.get("tables");
+      // Extract partitionedTables array from YAML
+      Object tablesObj = config.get("partitionedTables");
       if (!(tablesObj instanceof List)) {
-        LOGGER.warn("No 'tables' array found in sec-schema.yaml");
+        LOGGER.warn("No 'partitionedTables' array found in sec-schema.yaml");
         return partitionedTables;
       }
 
@@ -1311,6 +1741,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         Object constraintsObj = tableConfig.get("constraints");
         if (constraintsObj instanceof Map) {
           tableDefinition.put("constraints", constraintsObj);
+        }
+
+        // Process columns if present (needed for Iceberg table creation)
+        Object columnsObj = tableConfig.get("columns");
+        if (columnsObj instanceof List) {
+          tableDefinition.put("columns", columnsObj);
+        }
+
+        // Process materialize config if present (needed for Iceberg)
+        Object materializeObj = tableConfig.get("materialize");
+        if (materializeObj instanceof Map) {
+          tableDefinition.put("materialize", materializeObj);
         }
 
         partitionedTables.add(tableDefinition);
@@ -1374,17 +1816,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("  Normalized CIK: {}", normalizedCik);
 
       // Metadata (submissions.json and processed_filings.manifest) goes to operating directory
-      File cikMetadataDir = new File(this.secOperatingDirectory, "cik=" + normalizedCik);
-      cikMetadataDir.mkdirs();
-      LOGGER.info("  CIK metadata directory: {}", cikMetadataDir.getAbsolutePath());
+      String cikMetadataDir = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
+      storageProvider.createDirectories(cikMetadataDir);
+      LOGGER.info("  CIK metadata directory: {}", cikMetadataDir);
 
       // Raw content (XBRL/HTML files) goes to cache directory
       String cikCachePath = storageProvider.resolvePath(this.secCacheDirectory, normalizedCik);
       LOGGER.info("  CIK cache directory: {}", cikCachePath);
 
       // Download submissions metadata with ETag-based caching
-      File submissionsFile = new File(cikMetadataDir, "submissions.json");
-      LOGGER.info("  Checking submissions file: {} (exists={})", submissionsFile.getAbsolutePath(), submissionsFile.exists());
+      String submissionsPath = storageProvider.resolvePath(cikMetadataDir, "submissions.json");
+      boolean submissionsExists = storageProvider.exists(submissionsPath);
+      LOGGER.info("  Checking submissions file: {} (exists={})", submissionsPath, submissionsExists);
 
       // OPTIMIZATION: Check if this CIK is fully processed before doing any individual filing checks
       if (cacheManifest != null && cacheManifest.isCikFullyProcessed(normalizedCik)) {
@@ -1397,7 +1840,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (cacheManifest != null && cacheManifest.isCached(normalizedCik)) {
         LOGGER.info("  Cache manifest indicates CIK {} is cached", normalizedCik);
         String cachedFilePath = cacheManifest.getFilePath(normalizedCik);
-        if (cachedFilePath != null && submissionsFile.exists()) {
+        if (cachedFilePath != null && submissionsExists) {
           // Check if we should use conditional GET with ETag
           String cachedETag = cacheManifest.getETag(normalizedCik);
           if (cachedETag != null && !cachedETag.isEmpty()) {
@@ -1457,13 +1900,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             String newETag = conn.getHeaderField("ETag");
             String lastModified = conn.getHeaderField("Last-Modified");
 
-            try (InputStream is = conn.getInputStream();
-                 FileOutputStream fos = new FileOutputStream(submissionsFile)) {
-              byte[] buffer = new byte[8192];
-              int bytesRead;
-              while ((bytesRead = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, bytesRead);
-              }
+            try (InputStream is = conn.getInputStream()) {
+              // Use StorageProvider to write file
+              storageProvider.writeFile(submissionsPath, is);
             }
 
             // Clean up macOS metadata files after writing
@@ -1471,7 +1910,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
             // Update manifest with ETag or Last-Modified
             if (cacheManifest != null) {
-              long fileSize = submissionsFile.length();
+              long fileSize = storageProvider.getMetadata(submissionsPath).getSize();
               // Prefer ETag, fallback to Last-Modified, final fallback to 24-hour TTL
               String refreshReason;
               long refreshAfter;
@@ -1490,7 +1929,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               // Invalidate fully_processed flag since submissions.json changed
               cacheManifest.invalidateCikFullyProcessed(normalizedCik);
 
-              cacheManifest.markCached(normalizedCik, submissionsFile.getAbsolutePath(),
+              cacheManifest.markCached(normalizedCik, submissionsPath,
                                       newETag, fileSize, refreshAfter, refreshReason);
 
               // Save manifest immediately to avoid losing cache metadata on interruption
@@ -1518,7 +1957,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Parse submissions.json to get filing details
       ObjectMapper mapper = new ObjectMapper();
-      JsonNode submissionsJson = mapper.readTree(submissionsFile);
+      JsonNode submissionsJson;
+      try (InputStream submissionsInputStream = storageProvider.openInputStream(submissionsPath)) {
+        submissionsJson = mapper.readTree(submissionsInputStream);
+      }
       JsonNode filings = submissionsJson.get("filings");
 
       if (filings == null || !filings.has("recent")) {
@@ -1633,14 +2075,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Load per-CIK manifest (huge performance improvement over global manifest)
-      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + normalizedCik);
-      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
+      String cikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
+      String manifestFilePath = storageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
       Set<String> processedFilingsManifest = new HashSet<>();
-      if (manifestFile.exists()) {
-        try {
-          Set<String> rawEntries = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+      if (storageProvider.exists(manifestFilePath)) {
+        try (BufferedReader reader = new BufferedReader(
+            new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+          Set<String> rawEntries = new HashSet<>();
+          String line;
+          while ((line = reader.readLine()) != null) {
+            rawEntries.add(line);
+          }
           // Migrate old manifest entries to current format if needed
-          processedFilingsManifest = migrateManifestIfNeeded(manifestFile, rawEntries);
+          processedFilingsManifest = migrateManifestIfNeeded(manifestFilePath, rawEntries);
 
           if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Loaded {} entries from manifest for CIK {}", processedFilingsManifest.size(), normalizedCik);
@@ -1793,7 +2240,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   // Check filing status - manifest, Parquet files, source files
   private FilingStatus checkFilingStatus(String cik, String accession, String form,
-                                          String filingDate, File manifestFile) {
+                                          String filingDate, String manifestPath) {
     // Create cache key
     String cacheKey = cik + "|" + accession + "|" + form + "|" + filingDate;
 
@@ -1820,15 +2267,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Check manifest first
-      if (manifestFile.exists()) {
-        Set<String> rawEntries = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+      if (storageProvider.exists(manifestPath)) {
+        Set<String> rawEntries = new HashSet<>();
+        try (BufferedReader reader = new BufferedReader(
+            new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
+          String line;
+          while ((line = reader.readLine()) != null) {
+            rawEntries.add(line);
+          }
+        }
         // Migrate old manifest entries to current format if needed
-        Set<String> processedFilings = migrateManifestIfNeeded(manifestFile, rawEntries);
+        Set<String> processedFilings = migrateManifestIfNeeded(manifestPath, rawEntries);
 
         String searchPrefix = cik + "|" + accession + "|";
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("checkFilingStatus: searching manifest for prefix='{}' in {} entries from {}",
-              searchPrefix, processedFilings.size(), manifestFile.getAbsolutePath());
+              searchPrefix, processedFilings.size(), manifestPath);
         }
 
         boolean isInManifest = false;
@@ -1946,11 +2400,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * preventing unnecessary reprocessing of filings that were already converted
    * in previous code versions.
    *
-   * @param manifestFile The manifest file (used for saving migrated entries)
+   * @param manifestPath The manifest file path (used for saving migrated entries)
    * @param entries The raw manifest entries loaded from disk
    * @return Migrated entries in current format
    */
-  private Set<String> migrateManifestIfNeeded(File manifestFile, Set<String> entries) {
+  private Set<String> migrateManifestIfNeeded(String manifestPath, Set<String> entries) {
     Set<String> migrated = new HashSet<>();
     int v0Count = 0; // CIK|ACCESSION
     int v1Count = 0; // CIK|ACCESSION|STATUS
@@ -1992,13 +2446,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Save migrated manifest if any entries were upgraded
     if (v0Count > 0 || v1Count > 0) {
+      String manifestName = manifestPath.substring(manifestPath.lastIndexOf('/') + 1);
       LOGGER.info("Migrating manifest {} - v0: {}, v1: {}, v2: {}, total: {}",
-          manifestFile.getName(), v0Count, v1Count, v2Count, migrated.size());
+          manifestName, v0Count, v1Count, v2Count, migrated.size());
       try {
         // Write sorted entries for better readability
         List<String> sortedEntries = new ArrayList<>(migrated);
         Collections.sort(sortedEntries);
-        Files.write(manifestFile.toPath(), sortedEntries);
+        StringBuilder sb = new StringBuilder();
+        for (String line : sortedEntries) {
+          sb.append(line).append("\n");
+        }
+        storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
         LOGGER.info("Successfully migrated manifest to current format");
       } catch (IOException e) {
         LOGGER.error("Failed to save migrated manifest: {}", e.getMessage());
@@ -2176,61 +2635,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  // Process a single filing immediately after download
-  private void processSingleFiling(File sourceFile, File baseDir) {
-    try {
-      // Get parquet directory from interface method
-      String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
-      // Don't create File or call mkdirs() for parquet directory - it may be S3
-      // StorageProvider will create directories as needed when writing files
-
-      // Check if text similarity is enabled from operand
-      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-      boolean enableVectorization = textSimilarityConfig != null &&
-          Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-
-      XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
-
-      // Source files are now in operating directory: .aperio/sec/raw/CIK/ACCESSION/file.xml
-      // Metadata (.conversions.json) goes in same directory as source file
-      File sourceParentDir = sourceFile.getParentFile();
-      if (!sourceParentDir.exists()) {
-        sourceParentDir.mkdirs();
-      }
-      ConversionMetadata metadata = new ConversionMetadata(sourceParentDir);
-      ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
-      record.originalFile = sourceFile.getAbsolutePath();
-      record.sourceFile = sourceFile.getParentFile().getName();  // accession number
-      metadata.recordConversion(sourceFile, record);
-
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Processing filing immediately: {}", sourceFile.getName());
-      }
-
-      // Use S3-compatible convertInternal method
-      List<File> outputFiles = converter.convertInternal(sourceFile.getAbsolutePath(), secParquetDirPath, metadata);
-
-      if (outputFiles.isEmpty()) {
-        LOGGER.warn("No parquet files created for " + sourceFile.getName());
-      } else {
-        // Add to manifest after successful conversion
-        addToManifest(sourceFile.getAbsolutePath(), secParquetDirPath, outputFiles);
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Successfully processed filing: {} - created {} parquet files",
-              sourceFile.getName(), outputFiles.size());
-        }
-      }
-    } catch (java.nio.channels.OverlappingFileLockException e) {
-      // Non-fatal: Another thread is processing this file
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Skipping {} - already being processed by another thread", sourceFile.getName());
-      }
-    } catch (Exception e) {
-      LOGGER.error("Failed to process filing immediately: " + sourceFile.getName(), e);
-    }
-  }
-
   private void downloadFilingDocumentWithRateLimit(SecHttpStorageProvider provider, FilingToDownload filing) {
     int maxAttempts = 3;
     int attempt = 0;
@@ -2283,12 +2687,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String accession, String primaryDoc, String form, String filingDate, String reportDate, String cikCachePath, boolean hasInlineXBRL) {
     try {
       // Check per-CIK manifest first to see if this filing was already fully processed
-      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
-      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
+      String cikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+      String manifestFilePath = storageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
       String manifestKey = cik + "|" + accession + "|" + form + "|" + filingDate;
 
       // Check if already in manifest or has all required Parquet files
-      FilingStatus status = checkFilingStatus(cik, accession, form, filingDate, manifestFile);
+      FilingStatus status = checkFilingStatus(cik, accession, form, filingDate, manifestFilePath);
 
       // Track if we need to reprocess for vectorization
       boolean needsVectorizationReprocessing = false;
@@ -2317,15 +2721,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       } else if (status == FilingStatus.HAS_ALL_PARQUET) {
         // Has all Parquet files but not in manifest - add to manifest
         try {
-          cikManifestDir.mkdirs();
+          storageProvider.createDirectories(cikManifestDirPath);
           synchronized (("manifest_" + cik).intern()) {
             String entryPrefix = cik + "|" + accession + "|";
             String manifestEntry = entryPrefix + "PROCESSED|" + System.currentTimeMillis();
 
-            // Write to manifest
-            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-              pw.println(manifestEntry);
+            // Append to manifest using StorageProvider
+            StringBuilder sb = new StringBuilder();
+            if (storageProvider.exists(manifestFilePath)) {
+              try (BufferedReader reader = new BufferedReader(
+                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                  sb.append(line).append("\n");
+                }
+              }
             }
+            sb.append(manifestEntry).append("\n");
+            storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("Added filing to manifest (has all Parquet files): {} {}", form, filingDate);
@@ -2485,22 +2898,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
         // Add to manifest so future runs don't need to check S3
         try {
-          cikManifestDir.mkdirs();
+          storageProvider.createDirectories(cikManifestDirPath);
           synchronized (("manifest_" + cik).intern()) {
             String entryPrefix = cik + "|" + accession + "|";
 
             // Check if this entry already exists in the manifest (prevent duplicates)
             boolean alreadyExists = false;
-            if (manifestFile.exists()) {
-              try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+            List<String> existingLines = new ArrayList<>();
+            if (storageProvider.exists(manifestFilePath)) {
+              try (BufferedReader reader = new BufferedReader(
+                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                  existingLines.add(line);
                   if (line.startsWith(entryPrefix)) {
                     alreadyExists = true;
                     if (LOGGER.isDebugEnabled()) {
                       LOGGER.debug("Manifest entry already exists: {}", line);
                     }
-                    break;
                   }
                 }
               }
@@ -2520,10 +2935,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               String fileTypes = vectorizationEnabled ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
               String manifestEntry = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
-              // Write to manifest
-              try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-                pw.println(manifestEntry);
+              // Append to manifest using StorageProvider
+              StringBuilder sb = new StringBuilder();
+              for (String existingLine : existingLines) {
+                sb.append(existingLine).append("\n");
               }
+              sb.append(manifestEntry).append("\n");
+              storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
 
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Added cached filing to manifest: {} {}", form, filingDate);
@@ -2733,29 +3151,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               LOGGER.debug("Filing {} {} has no processable XBRL data - adding to manifest as NO_XBRL", form, filingDate);
             }
             try {
-              cikManifestDir.mkdirs();
+              storageProvider.createDirectories(cikManifestDirPath);
               synchronized (("manifest_" + cik).intern()) {
                 String entryPrefix = cik + "|" + accession + "|";
                 String manifestEntry = entryPrefix + "NO_XBRL|" + System.currentTimeMillis();
 
                 // Check if entry already exists
                 boolean alreadyExists = false;
-                if (manifestFile.exists()) {
-                  try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+                List<String> existingLines = new ArrayList<>();
+                if (storageProvider.exists(manifestFilePath)) {
+                  try (BufferedReader reader = new BufferedReader(
+                      new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
+                      existingLines.add(line);
                       if (line.startsWith(entryPrefix)) {
                         alreadyExists = true;
-                        break;
                       }
                     }
                   }
                 }
 
                 if (!alreadyExists) {
-                  try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-                    pw.println(manifestEntry);
+                  StringBuilder sb = new StringBuilder();
+                  for (String existingLine : existingLines) {
+                    sb.append(existingLine).append("\n");
                   }
+                  sb.append(manifestEntry).append("\n");
+                  storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
                   if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Added NO_XBRL entry to manifest: {}", manifestEntry);
                   }
@@ -2791,7 +3214,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Convert using String paths (works for both local and S3)
-            List<java.io.File> outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
+            List<String> outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("INLINE CONVERSION: Conversion completed, outputFiles.size={}",
@@ -2820,12 +3243,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Write FAILED entry to manifest so we don't keep retrying this filing
         try {
-          cikManifestDir.mkdirs();
+          storageProvider.createDirectories(cikManifestDirPath);
           synchronized (("manifest_" + cik).intern()) {
             String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
-            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-              pw.println(manifestEntry);
+            // Append to manifest using StorageProvider
+            StringBuilder sb = new StringBuilder();
+            if (storageProvider.exists(manifestFilePath)) {
+              try (BufferedReader reader = new BufferedReader(
+                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                  sb.append(line).append("\n");
+                }
+              }
             }
+            sb.append(manifestEntry).append("\n");
+            storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
             LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
           }
         } catch (IOException ioe) {
@@ -2838,15 +3271,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Write FAILED entry to manifest so we don't keep retrying this filing
       try {
-        File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
-        File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
-        cikManifestDir.mkdirs();
+        String outerCikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+        String outerManifestFilePath = storageProvider.resolvePath(outerCikManifestDirPath, "processed_filings.manifest");
+        storageProvider.createDirectories(outerCikManifestDirPath);
 
         synchronized (("manifest_" + cik).intern()) {
           String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
-          try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-            pw.println(manifestEntry);
+          // Append to manifest using StorageProvider
+          StringBuilder sb = new StringBuilder();
+          if (storageProvider.exists(outerManifestFilePath)) {
+            try (BufferedReader reader = new BufferedReader(
+                new java.io.InputStreamReader(storageProvider.openInputStream(outerManifestFilePath)))) {
+              String line;
+              while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+              }
+            }
           }
+          sb.append(manifestEntry).append("\n");
+          storageProvider.writeFile(outerManifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
           LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
         }
       } catch (IOException ioe) {
@@ -3050,16 +3493,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private void downloadInlineXbrl(SecHttpStorageProvider provider, String cik,
-      String accession, String primaryDoc, String form, String filingDate, File cikDir) throws Exception {
+      String accession, String primaryDoc, String form, String filingDate, String cikDirPath) throws Exception {
     // Some filings use inline XBRL embedded in HTML
     // Try to download the HTML and extract XBRL data
     String accessionClean = accession.replace("-", "");
-    File accessionDir = new File(cikDir, accessionClean);
+    String accessionDirPath = storageProvider.resolvePath(cikDirPath, accessionClean);
 
-    File outputFile = new File(accessionDir, primaryDoc);
+    String outputFilePath = storageProvider.resolvePath(accessionDirPath, primaryDoc);
 
     // Check if file already exists - XBRL files are immutable
-    if (outputFile.exists() && outputFile.length() > 0) {
+    if (storageProvider.exists(outputFilePath) && storageProvider.getMetadata(outputFilePath).getSize() > 0) {
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Inline XBRL filing already cached: {} {} ({})", form, filingDate, primaryDoc);
       }
@@ -3070,7 +3513,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
         cik, accessionClean, primaryDoc);
     try (InputStream is = provider.openInputStream(htmlUrl)) {
-      storageProvider.writeFile(outputFile.getAbsolutePath(), is);
+      storageProvider.writeFile(outputFilePath, is);
     }
 
     if (LOGGER.isDebugEnabled()) {
@@ -3088,125 +3531,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
 
 
-
-
-
-
-
-
-  private void createSecFilingsTable(File baseDir, Map<String, Object> operand) {
-    try {
-      File secRawDir = new File(baseDir, "sec-raw");
-      // Get parquet directory from interface method
-      String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
-      // Don't create File or call mkdirs() - parquet path may be S3
-      // StorageProvider will create directories as needed when writing files
-
-      if (!secRawDir.exists() || !secRawDir.isDirectory()) {
-        LOGGER.warn("No sec-raw directory found: " + secRawDir);
-        return;
-      }
-
-      // Load column metadata from sec-schema.json
-      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-          AbstractSecDataDownloader.loadTableColumns("filing_metadata");
-
-      List<Map<String, Object>> dataList = new ArrayList<>();
-      ObjectMapper mapper = new ObjectMapper();
-
-      // Process each CIK directory
-      File[] cikDirs = secRawDir.listFiles(File::isDirectory);
-      if (cikDirs != null) {
-        for (File cikDir : cikDirs) {
-          File submissionsFile = new File(cikDir, "submissions.json");
-          if (!submissionsFile.exists()) {
-            continue;
-          }
-
-          try {
-            JsonNode submissionsJson = mapper.readTree(submissionsFile);
-            String cik = cikDir.getName();
-            String companyName = submissionsJson.path("name").asText("");
-
-            JsonNode filings = submissionsJson.get("filings");
-            if (filings == null || !filings.has("recent")) {
-              continue;
-            }
-
-            JsonNode recent = filings.get("recent");
-            JsonNode accessionNumbers = recent.get("accessionNumber");
-            JsonNode filingDates = recent.get("filingDate");
-            JsonNode forms = recent.get("form");
-            JsonNode primaryDocuments = recent.get("primaryDocument");
-            JsonNode periodsOfReport = recent.get("reportDate");
-            JsonNode acceptanceDatetimes = recent.get("acceptanceDateTime");
-            JsonNode fileSizes = recent.get("size");
-
-            if (accessionNumbers == null || !accessionNumbers.isArray()) {
-              continue;
-            }
-
-            for (int i = 0; i < accessionNumbers.size(); i++) {
-              Map<String, Object> data = new HashMap<>();
-              data.put("cik", cik);
-              data.put("accession_number", accessionNumbers.get(i).asText());
-              data.put("filing_type", forms.get(i).asText());
-              data.put("filing_date", filingDates.get(i).asText());
-              data.put("primary_document", primaryDocuments.get(i).asText(""));
-              data.put("company_name", companyName);
-              data.put("period_of_report", periodsOfReport != null && i < periodsOfReport.size()
-                  ? periodsOfReport.get(i).asText("") : "");
-              data.put("acceptance_datetime", acceptanceDatetimes != null && i < acceptanceDatetimes.size()
-                  ? acceptanceDatetimes.get(i).asText("") : "");
-              data.put("file_size", fileSizes != null && i < fileSizes.size()
-                  ? fileSizes.get(i).asLong(0L) : 0L);
-
-              String filingDate = filingDates.get(i).asText();
-              int fiscalYear = filingDate.length() >= 4 ?
-                  Integer.parseInt(filingDate.substring(0, 4)) : 0;
-              data.put("fiscal_year", fiscalYear);
-
-              dataList.add(data);
-            }
-          } catch (Exception e) {
-            LOGGER.warn("Failed to process submissions for CIK " + cikDir.getName() + ": " + e.getMessage());
-          }
-        }
-      }
-
-      // Write consolidated SEC filings table
-      String outputFilePath = storageProvider.resolvePath(secParquetDirPath, "sec_filings.parquet");
-      // Use StorageProvider for parquet writing
-      storageProvider.writeAvroParquet(outputFilePath, columns, dataList, "SecFiling", "SecFiling");
-      LOGGER.info("Created SEC filings table with " + dataList.size() + " records: " + outputFilePath);
-
-    } catch (Exception e) {
-      LOGGER.warn("Failed to create SEC filings table: " + e.getMessage());
-      e.printStackTrace();
-    }
-  }
-
-
-  private List<File> findXbrlFiles(File directory) {
-    List<File> xbrlFiles = new ArrayList<>();
-    File[] files = directory.listFiles();
-
-    if (files != null) {
-      for (File file : files) {
-        if (file.isDirectory()) {
-          xbrlFiles.addAll(findXbrlFiles(file));
-        } else if (file.getName().endsWith(".xml") || file.getName().endsWith(".xbrl")) {
-          xbrlFiles.add(file);
-        } else if (file.getName().endsWith(".htm") || file.getName().endsWith(".html")) {
-          // Include HTML files - XbrlToParquetConverter can handle inline XBRL
-          xbrlFiles.add(file);
-        }
-      }
-    }
-
-    return xbrlFiles;
-  }
 
   /**
    * Creates mock stock prices for testing.
@@ -3248,61 +3572,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     } catch (Exception e) {
       LOGGER.warn("Failed to create mock stock prices: " + e.getMessage());
-    }
-  }
-
-  /**
-   * Creates a mock Parquet file with sample stock price data.
-   */
-  @SuppressWarnings("deprecation")
-  private void createMockPriceParquetFile(File parquetFile, String ticker, String cik, int year)
-      throws IOException {
-    // Note: ticker and year are partition columns from directory structure,
-    // so they are NOT in the Parquet file. CIK is included as a regular column for joins.
-    String schemaString = "{"
-        + "\"type\": \"record\","
-        + "\"name\": \"StockPrice\","
-        + "\"fields\": ["
-        + "{\"name\": \"cik\", \"type\": \"string\"},"
-        + "{\"name\": \"date\", \"type\": \"string\"},"
-        + "{\"name\": \"open\", \"type\": [\"null\", \"double\"], \"default\": null},"
-        + "{\"name\": \"high\", \"type\": [\"null\", \"double\"], \"default\": null},"
-        + "{\"name\": \"low\", \"type\": [\"null\", \"double\"], \"default\": null},"
-        + "{\"name\": \"close\", \"type\": [\"null\", \"double\"], \"default\": null},"
-        + "{\"name\": \"adj_close\", \"type\": [\"null\", \"double\"], \"default\": null},"
-        + "{\"name\": \"volume\", \"type\": [\"null\", \"long\"], \"default\": null}"
-        + "]"
-        + "}";
-
-    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse(schemaString);
-
-    try (org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer =
-        org.apache.parquet.avro.AvroParquetWriter
-            .<org.apache.avro.generic.GenericRecord>builder(
-                new org.apache.hadoop.fs.Path(parquetFile.getAbsolutePath()))
-            .withSchema(schema)
-            .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
-            .build()) {
-
-      // Create a few sample records
-      double basePrice = 100.0 + (ticker.hashCode() % 100);
-      for (int month = 1; month <= 3; month++) { // Just 3 months of data for testing
-        String date = String.format("%04d-%02d-%02d", year, month, 15);
-
-        org.apache.avro.generic.GenericRecord record =
-            new org.apache.avro.generic.GenericData.Record(schema);
-        // Include CIK as regular column, ticker and year come from directory structure
-        record.put("cik", cik);
-        record.put("date", date);
-        record.put("open", basePrice + month);
-        record.put("high", basePrice + month + 2);
-        record.put("low", basePrice + month - 1);
-        record.put("close", basePrice + month + 1);
-        record.put("adj_close", basePrice + month + 0.5);
-        record.put("volume", 1000000L * month);
-
-        writer.write(record);
-      }
     }
   }
 
@@ -3737,31 +4006,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return false;
   }
 
-  private void cleanupPartialParquetFiles(File yearDir, String cik, String accessionClean) {
-    if (!yearDir.exists()) {
-      return;
-    }
-
-    String prefix = cik + "_" + accessionClean + "_";
-    File[] parquetFiles = yearDir.listFiles((dir, name) ->
-        name.startsWith(prefix) && name.endsWith(".parquet"));
-
-    if (parquetFiles != null && parquetFiles.length > 0) {
-      LOGGER.debug("Cleaning up {} partial parquet files for filing {}", parquetFiles.length, accessionClean);
-      for (File file : parquetFiles) {
-        try {
-          if (file.delete()) {
-            LOGGER.debug("Deleted partial parquet file: {}", file.getPath());
-          } else {
-            LOGGER.warn("Failed to delete partial parquet file: {}", file.getPath());
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Error deleting partial parquet file {}: {}", file.getPath(), e.getMessage());
-        }
-      }
-    }
-  }
-
   private String getPartitionYear(String filingType, String filingDate) {
     String normalizedType = filingType.replace("-", "").replace("/", "");
 
@@ -3789,71 +4033,4 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.debug("Partition year calculation: {} {} → filing year {} (non-10Q/10K)", filingType, filingDate, partitionYear);
     return partitionYear;
   }
-
-  /**
-   * Migrate legacy .notfound marker files to SecCacheManifest entries.
-   * This allows us to deprecate the .notfound file mechanism in favor of manifest-based tracking.
-   */
-  private void migrateNotFoundMarkers(String secCacheDir) {
-    try {
-      if (!storageProvider.exists(secCacheDir)) {
-        return;
-      }
-    } catch (IOException e) {
-      return;
-    }
-
-    // Migration only works for local filesystem (uses java.nio.file.Files.walk)
-    // For remote storage, .notfound markers were never used, so no migration needed
-    java.io.File cacheRootFile = new java.io.File(secCacheDir);
-    if (!cacheRootFile.exists()) {
-      return;
-    }
-
-    int migratedCount = 0;
-    int deletedCount = 0;
-
-    try {
-      java.nio.file.Files.walk(cacheRootFile.toPath())
-          .filter(path -> path.toString().endsWith(".notfound"))
-          .forEach(notFoundPath -> {
-            try {
-              File notFoundFile = notFoundPath.toFile();
-              String fileName = notFoundFile.getName();
-              String xbrlFileName = fileName.replace(".notfound", "");
-
-              // Extract CIK and accession from path
-              // Path structure: secCacheDir/CIK/ACCESSION/file.notfound
-              File accessionDir = notFoundFile.getParentFile();
-              File cikDir = accessionDir.getParentFile();
-
-              if (cikDir != null && accessionDir != null) {
-                String cik = cikDir.getName();
-                String accession = accessionDir.getName();
-
-                // Migrate to manifest
-                cacheManifest.markFileNotFound(cik, accession, xbrlFileName, "migrated_from_notfound_marker");
-
-                // Delete the old marker file
-                if (notFoundFile.delete()) {
-                  LOGGER.debug("Migrated and deleted .notfound marker: {}/{}/{}", cik, accession, xbrlFileName);
-                } else {
-                  LOGGER.warn("Failed to delete .notfound marker after migration: {}", notFoundPath);
-                }
-              }
-            } catch (Exception e) {
-              LOGGER.warn("Failed to migrate .notfound marker {}: {}", notFoundPath, e.getMessage());
-            }
-          });
-
-      // Save manifest with migrated entries
-      if (migratedCount > 0) {
-        cacheManifest.save(secCacheDir);
-        LOGGER.info("Migrated {} .notfound markers to manifest, deleted {} files", migratedCount, deletedCount);
-      }
-    } catch (IOException e) {
-      LOGGER.warn("Error during .notfound marker migration: {}", e.getMessage());
-    }
-  }
-
 }
