@@ -130,18 +130,17 @@ column_templates:
     type: VARCHAR
 
   # --- Standard SEC Partition Set ---
+  # Partition by year only for optimal 128MB file sizes.
+  # CIK filtering uses Parquet/Iceberg statistics on sorted data.
 
   sec_partitions: &sec_partitions
     style: hive
     columnDefinitions:
-      - *partition_cik
-      - *partition_filing_type
       - *partition_year
 
   stock_partitions: &stock_partitions
     style: hive
     columnDefinitions:
-      - *partition_ticker
       - *partition_year
 
 # ============================================================================
@@ -275,7 +274,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: filing_metadata
-    pattern: "cik=*/filing_type=*/year=*/*_metadata.parquet"
+    pattern: "year=*/*_metadata.parquet"
     partitions: *sec_partitions
 
     comment: >
@@ -389,14 +388,15 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: filing_metadata
-        batchPartitionColumns: [cik, year]
-        incrementalKeys: [cik, year]
+        sortOrder: [cik, accession_number]
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
 
   # ==========================================================================
   # FINANCIAL LINE ITEMS
@@ -405,7 +405,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: financial_line_items
-    pattern: "cik=*/filing_type=*/year=*/*_facts.parquet"
+    pattern: "year=*/*_facts.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -485,13 +485,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: financial_line_items
-        batchPartitionColumns: [cik, year]
+        sortOrder: [cik, accession_number, concept]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # FILING CONTEXTS
@@ -500,7 +501,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: filing_contexts
-    pattern: "cik=*/filing_type=*/year=*/*_contexts.parquet"
+    pattern: "year=*/*_contexts.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -567,12 +568,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: filing_contexts
+        sortOrder: [cik, accession_number, context_id]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # MD&A SECTIONS
@@ -581,7 +584,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: mda_sections
-    pattern: "cik=*/filing_type=*/year=*/*_mda.parquet"
+    pattern: "year=*/*_mda.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -644,12 +647,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: mda_sections
+        sortOrder: [cik, accession_number, section, paragraph_number]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # XBRL RELATIONSHIPS
@@ -658,7 +663,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: xbrl_relationships
-    pattern: "cik=*/filing_type=*/year=*/*_relationships.parquet"
+    pattern: "year=*/*_relationships.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -731,12 +736,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: xbrl_relationships
+        sortOrder: [cik, accession_number, linkbase_type, from_concept]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # INSIDER TRANSACTIONS
@@ -745,7 +752,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: insider_transactions
-    pattern: "cik=*/filing_type=*/year=*/*_insider.parquet"
+    pattern: "year=*/*_insider.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -846,12 +853,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: insider_transactions
+        sortOrder: [cik, transaction_date, reporting_person_cik]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # EARNINGS TRANSCRIPTS
@@ -860,7 +869,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: earnings_transcripts
-    pattern: "cik=*/filing_type=*/year=*/*_earnings.parquet"
+    pattern: "year=*/*_earnings.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -923,12 +932,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: earnings_transcripts
+        sortOrder: [cik, accession_number, section_type, paragraph_number]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # STOCK PRICES
@@ -938,7 +949,7 @@ partitionedTables:
 
   - name: stock_prices
     enabled: true
-    pattern: "stock_prices/ticker=*/year=*/*_prices.parquet"
+    pattern: "stock_prices/year=*/*_prices.parquet"
     partitions: *stock_partitions
     hooks:
       enabled: false
@@ -1043,13 +1054,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "stock_prices/ticker=*/year=*/"
+        pattern: "stock_prices/year=*/"
       partition:
-        columns: [ticker, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: stock_prices
-        batchPartitionColumns: [ticker, year]
+        sortOrder: [ticker, date]
+        batchPartitionColumns: [year]
 
   # ==========================================================================
   # VECTORIZED BLOBS (Optional)
@@ -1058,7 +1070,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: vectorized_blobs
-    pattern: "cik=*/filing_type=*/year=*/*_vectorized.parquet"
+    pattern: "year=*/*_vectorized.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1147,12 +1159,14 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       output:
-        pattern: "cik=*/filing_type=*/year=*/"
+        pattern: "year=*/"
       partition:
-        columns: [cik, filing_type, year]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: vectorized_blobs
+        sortOrder: [cik, accession_number, vector_id]
+        batchPartitionColumns: [year]
 
 # ============================================================================
 # CROSS-TABLE CONSTRAINTS

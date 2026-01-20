@@ -252,23 +252,72 @@ public interface IncrementalTracker {
   }
 
   /**
+   * Marks a pipeline as complete with source file watermark for incremental detection.
+   *
+   * <p>The source file watermark is the max lastModified timestamp of all source files
+   * at the time of processing. On subsequent runs, if any source file has a newer
+   * lastModified, the table will be reprocessed.
+   *
+   * @param pipelineName The pipeline name
+   * @param configHash Hash of dimension configuration
+   * @param dimensionSignature Hash of all dimension values
+   * @param rowCount Total row count in the table
+   * @param sourceFileWatermark Max lastModified timestamp of source files (0 to disable)
+   */
+  default void markTableCompleteWithSourceWatermark(String pipelineName, String configHash,
+      String dimensionSignature, long rowCount, long sourceFileWatermark) {
+    // Default: fall back to config-only tracking (ignores watermark)
+    markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, rowCount);
+  }
+
+  /**
+   * Checks if source files have been modified since last processing.
+   *
+   * <p>This enables true incremental processing where only new/changed source files
+   * trigger re-processing, not just changes to config or dimension values.
+   *
+   * @param pipelineName The pipeline name
+   * @param currentSourceWatermark Current max lastModified of source files
+   * @return true if source files have been modified since last completion
+   */
+  default boolean isSourceFilesModified(String pipelineName, long currentSourceWatermark) {
+    CachedCompletion completion = getCachedCompletion(pipelineName);
+    if (completion == null) {
+      return true; // Never processed, treat as "modified"
+    }
+    return completion.isSourceFilesModified(currentSourceWatermark);
+  }
+
+  /**
    * Cached completion info for fast-path skip.
+   *
+   * <p>Includes source file watermark tracking to detect when source files have been
+   * modified since the last successful processing. This enables true incremental
+   * processing where only new/changed source files trigger re-processing.
    */
   class CachedCompletion {
     public final String configHash;
     public final String signature;
     public final long rowCount;
     public final long completedAt;
+    /** Max lastModified timestamp of source files when processing completed (0 if not tracked). */
+    public final long sourceFileWatermark;
 
     public CachedCompletion(String configHash, String signature, long rowCount) {
-      this(configHash, signature, rowCount, System.currentTimeMillis());
+      this(configHash, signature, rowCount, System.currentTimeMillis(), 0L);
     }
 
     public CachedCompletion(String configHash, String signature, long rowCount, long completedAt) {
+      this(configHash, signature, rowCount, completedAt, 0L);
+    }
+
+    public CachedCompletion(String configHash, String signature, long rowCount,
+        long completedAt, long sourceFileWatermark) {
       this.configHash = configHash;
       this.signature = signature;
       this.rowCount = rowCount;
       this.completedAt = completedAt;
+      this.sourceFileWatermark = sourceFileWatermark;
     }
 
     /**
@@ -281,6 +330,19 @@ public interface IncrementalTracker {
         return false; // Not empty or no TTL configured
       }
       return System.currentTimeMillis() > completedAt + emptyResultTtlMillis;
+    }
+
+    /**
+     * Check if source files have been modified since this completion was recorded.
+     *
+     * @param currentSourceWatermark The current max lastModified of source files
+     * @return true if source files have been modified and reprocessing is needed
+     */
+    public boolean isSourceFilesModified(long currentSourceWatermark) {
+      if (sourceFileWatermark <= 0 || currentSourceWatermark <= 0) {
+        return false; // Watermarking not enabled
+      }
+      return currentSourceWatermark > sourceFileWatermark;
     }
   }
 

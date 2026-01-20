@@ -258,13 +258,12 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Create partitioned output path - BUILD RELATIVE PATHS
-      // Normalize filing type: remove hyphens and slashes
-      String normalizedFilingType = filingType.replace("-", "").replace("/", "");
+      // Year-only partitioning for optimal 128MB file sizes
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
       // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
-      String relativePartitionPath =
-          String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+      // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
+      String relativePartitionPath = String.format("year=%s", partitionYear);
 
       // For local filesystem only, create actual directories (S3 doesn't need directory creation)
       if (!targetDirectoryPath.contains("://")) {
@@ -2599,13 +2598,12 @@ public class XbrlToParquetConverter implements FileConverter {
         year = java.time.Year.now().getValue();
       }
 
-      // Normalize filing type: remove both slashes and hyphens
-      String normalizedFilingType = filingType.replace("/", "").replace("-", "");
+      // Year-only partitioning for optimal 128MB file sizes
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
       // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
-      String relativePartitionPath =
-          String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+      // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
+      String relativePartitionPath = String.format("year=%s", partitionYear);
 
       // Extract insider transactions
       List<Map<String, Object>> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate, accession);
@@ -3194,12 +3192,11 @@ public class XbrlToParquetConverter implements FileConverter {
           year = java.time.Year.now().getValue();
         }
 
-        String normalizedFilingType = filingType.replace("/", "").replace("-", "");
         String partitionYear = filingDate.substring(0, 4); // 8-K filings use filing year
 
         // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
-        String relativePartitionPath =
-            String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+        // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
+        String relativePartitionPath = String.format("year=%s", partitionYear);
         String outputPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
@@ -4028,10 +4025,9 @@ public class XbrlToParquetConverter implements FileConverter {
 
   private void createEnhancedMetadata(String sourcePath, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession, Map<String, String> companyInfo) throws IOException {
-    // Build partition path
-    String normalizedFilingType = filingType.replace("-", "").replace("/", "");
+    // Build partition path - uses year-only partitioning
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
-    String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+    String relativePartitionPath = String.format("year=%s", partitionYear);
 
     // Build metadata file path with FULL path from StorageProvider
     String metadataPath =
@@ -4062,10 +4058,9 @@ public class XbrlToParquetConverter implements FileConverter {
 
   private void createMinimalMetadata(String sourcePath, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession) throws IOException {
-    // Build partition path
-    String normalizedFilingType = filingType.replace("-", "").replace("/", "");
+    // Build partition path - uses year-only partitioning
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
-    String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+    String relativePartitionPath = String.format("year=%s", partitionYear);
 
     // Build metadata file path with FULL path from StorageProvider
     String metadataPath =

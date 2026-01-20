@@ -357,6 +357,31 @@ public class IcebergMaterializer {
     LOGGER.info("Starting materialization for '{}' -> '{}'",
         config.getDescription(), config.getTargetTableId());
 
+    // Compute current source file watermark (0 if watermarking disabled)
+    long currentSourceWatermark = 0;
+    boolean enableSourceWatermark = isSourceWatermarkEnabled(config);
+    if (enableSourceWatermark) {
+      currentSourceWatermark = getSourceFileWatermark(
+          config.getSourcePattern(), config.getSourceFormat());
+      LOGGER.debug("Current source file watermark: {}", currentSourceWatermark);
+    }
+
+    // Fast-path: check if source files have been modified since last run
+    if (enableSourceWatermark && currentSourceWatermark > 0) {
+      IncrementalTracker.CachedCompletion cached =
+          incrementalTracker.getCachedCompletion(config.getTargetTableId());
+      if (cached != null && cached.sourceFileWatermark > 0
+          && !cached.isSourceFilesModified(currentSourceWatermark)) {
+        long durationMs = System.currentTimeMillis() - startTime;
+        LOGGER.info("Skipping materialization for '{}' - no source file changes since {} (watermark={})",
+            config.getTargetTableId(),
+            new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
+                new java.util.Date(cached.completedAt)),
+            cached.sourceFileWatermark);
+        return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
+      }
+    }
+
     // Ensure Iceberg table exists
     Table table = ensureTableExists(config);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
@@ -419,9 +444,21 @@ public class IcebergMaterializer {
 
     LOGGER.info("Materialization complete: {}", result);
 
-    // Run maintenance if successful
+    // Run maintenance and record watermark if successful
     if (result.isFullySuccessful()) {
       writer.runMaintenance(7, 1);
+
+      // Track source file watermark for future incremental runs
+      if (enableSourceWatermark && currentSourceWatermark > 0) {
+        incrementalTracker.markTableCompleteWithSourceWatermark(
+            config.getTargetTableId(),
+            "auto", // config hash - use constant for watermark-only tracking
+            IncrementalTracker.computeDimensionSignature(batches),
+            successCount,
+            currentSourceWatermark);
+        LOGGER.info("Recorded source file watermark {} for '{}'",
+            currentSourceWatermark, config.getTargetTableId());
+      }
     }
 
     return result;
@@ -619,6 +656,71 @@ public class IcebergMaterializer {
         config.getTargetTableId(),
         columns,
         config.getPartitionColumnNames());
+  }
+
+  /**
+   * Source file watermarking is always enabled - no configuration needed.
+   *
+   * <p>Watermarking tracks the max lastModified timestamp of source files.
+   * On subsequent runs, if any source file has been modified (new files added
+   * or existing files updated), the table will be reprocessed.
+   *
+   * <p>This is essential for document-based ETL (like SEC filings) where new
+   * files are continually added to the source directory.
+   *
+   * @param config The materialization config (unused - watermarking is always enabled)
+   * @return always true - source watermarking is mandatory
+   */
+  private boolean isSourceWatermarkEnabled(MaterializationConfig config) {
+    return true; // Source file change detection is always enabled
+  }
+
+  /**
+   * Computes the max lastModified timestamp from source files.
+   *
+   * <p>This is used for source file watermarking - detecting when new files
+   * have been added or existing files modified since last processing.
+   *
+   * @param sourcePattern Glob pattern for source files
+   * @param sourceFormat Format of source files (JSON or PARQUET)
+   * @return Max lastModified timestamp in milliseconds, or 0 if no files or error
+   */
+  public long getSourceFileWatermark(String sourcePattern, SourceFormat sourceFormat) {
+    long maxLastModified = 0;
+
+    try (Connection conn = getDuckDBConnection(1);
+         Statement stmt = conn.createStatement()) {
+      // Use DuckDB's file_glob function to list matching files
+      String ext = sourceFormat == SourceFormat.JSON ? ".json" : ".parquet";
+
+      // For patterns like s3://bucket/path/**/*.parquet, extract the base path
+      // and let DuckDB handle the glob
+      String globPattern = sourcePattern;
+      if (!globPattern.endsWith(ext) && !globPattern.contains("*")) {
+        globPattern = globPattern + "/**/*" + ext;
+      }
+
+      String sql = "SELECT filename, last_modified FROM glob('" + globPattern + "')";
+      LOGGER.debug("Getting source file watermark with pattern: {}", globPattern);
+
+      try (ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          java.sql.Timestamp ts = rs.getTimestamp("last_modified");
+          if (ts != null) {
+            long lastModified = ts.getTime();
+            if (lastModified > maxLastModified) {
+              maxLastModified = lastModified;
+            }
+          }
+        }
+      }
+      LOGGER.debug("Source file watermark: {} (pattern: {})", maxLastModified, sourcePattern);
+    } catch (SQLException e) {
+      LOGGER.warn("Failed to compute source file watermark for {}: {}",
+          sourcePattern, e.getMessage());
+    }
+
+    return maxLastModified;
   }
 
   /**
