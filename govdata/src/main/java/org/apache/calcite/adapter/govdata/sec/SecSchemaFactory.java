@@ -1223,8 +1223,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         continue;
       }
 
-      String format = (String) materializeConfig.get("format");
-      if (!"iceberg".equals(format)) {
+      String format = resolveEnvVariable((String) materializeConfig.get("format"));
+      if (format == null || (!format.equals("iceberg") && !format.contains("iceberg"))) {
         LOGGER.debug("Skipping table '{}' - format is '{}', not iceberg", tableName, format);
         continue;
       }
@@ -1583,6 +1583,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       i++;
     }
     return regex.toString();
+  }
+
+  /**
+   * Resolves environment variable placeholders in a string.
+   * Supports format: ${VAR_NAME:default_value}
+   *
+   * @param value String that may contain env variable placeholders
+   * @return Resolved value with env variables substituted
+   */
+  private String resolveEnvVariable(String value) {
+    if (value == null) {
+      return null;
+    }
+
+    // Pattern: ${VAR_NAME:default_value} or ${VAR_NAME}
+    java.util.regex.Matcher matcher =
+        java.util.regex.Pattern.compile("\\$\\{([^:}]+)(?::([^}]*))?}").matcher(value);
+
+    StringBuffer result = new StringBuffer();
+    while (matcher.find()) {
+      String varName = matcher.group(1);
+      String defaultValue = matcher.group(2);
+
+      // Try system property first, then environment variable
+      String resolved = System.getProperty(varName);
+      if (resolved == null) {
+        resolved = System.getenv(varName);
+      }
+      if (resolved == null) {
+        resolved = defaultValue != null ? defaultValue : "";
+      }
+
+      matcher.appendReplacement(result, java.util.regex.Matcher.quoteReplacement(resolved));
+    }
+    matcher.appendTail(result);
+
+    return result.toString();
   }
 
   /**
