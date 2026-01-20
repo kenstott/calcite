@@ -182,6 +182,7 @@ public class SecIntegrationTest {
         + "      \"ephemeralCache\": false,"
         + "      \"cacheDirectory\": \"" + cacheDir + "\","
         + "      \"directory\": \"" + parquetDir + "\","
+        + "      \"materializeDirectory\": \"" + parquetDir + "\","
         + "      " + s3ConfigJson
         + "      \"startYear\": " + START_YEAR + ","
         + "      \"endYear\": " + END_YEAR + ","
@@ -276,8 +277,8 @@ public class SecIntegrationTest {
          Statement stmt = conn.createStatement()) {
 
       String sql = "SELECT "
-          + "  MIN(CAST(SUBSTR(filing_date, 1, 4) AS INTEGER)) as min_year, "
-          + "  MAX(CAST(SUBSTR(filing_date, 1, 4) AS INTEGER)) as max_year, "
+          + "  MIN(CAST(SUBSTRING(filing_date, 1, 4) AS INTEGER)) as min_year, "
+          + "  MAX(CAST(SUBSTRING(filing_date, 1, 4) AS INTEGER)) as max_year, "
           + "  COUNT(*) as filing_count "
           + "FROM \"SEC\".filing_metadata "
           + "WHERE cik IN ('" + APPLE_CIK + "', '" + BANK_OF_AMERICA_CIK + "', '"
@@ -407,7 +408,7 @@ public class SecIntegrationTest {
          Statement stmt = conn.createStatement()) {
 
       String sql = "SELECT section, subsection, paragraph_number, "
-          + "  SUBSTR(paragraph_text, 1, 100) as text_preview "
+          + "  SUBSTRING(paragraph_text, 1, 100) as text_preview "
           + "FROM \"SEC\".mda_sections "
           + "WHERE cik = '" + APPLE_CIK + "' "
           + "ORDER BY section, paragraph_number "
@@ -480,10 +481,10 @@ public class SecIntegrationTest {
     try (Connection conn = createConnection();
          Statement stmt = conn.createStatement()) {
 
-      String sql = "SELECT ticker, date, open, high, low, close, volume "
+      String sql = "SELECT ticker, \"date\", \"open\", high, low, \"close\", volume "
           + "FROM \"SEC\".stock_prices "
           + "WHERE ticker = 'AAPL' "
-          + "ORDER BY date DESC "
+          + "ORDER BY \"date\" DESC "
           + "LIMIT 10";
 
       try (ResultSet rs = stmt.executeQuery(sql)) {
@@ -554,11 +555,11 @@ public class SecIntegrationTest {
       String sql = "SELECT "
           + "  fm.company_name, "
           + "  fm.filing_date, "
-          + "  sp.close as close_price, "
+          + "  sp.\"close\" as close_price, "
           + "  sp.volume "
           + "FROM \"SEC\".filing_metadata fm "
           + "INNER JOIN \"SEC\".stock_prices sp "
-          + "  ON fm.ticker = sp.ticker AND fm.filing_date = sp.date "
+          + "  ON fm.ticker = sp.ticker AND fm.filing_date = sp.\"date\" "
           + "WHERE fm.cik = '" + APPLE_CIK + "' "
           + "  AND fm.filing_type = '10-K' "
           + "ORDER BY fm.filing_date DESC "
@@ -591,21 +592,21 @@ public class SecIntegrationTest {
 
       String sql = "SELECT "
           + "  filing_type, "
-          + "  CAST(SUBSTR(filing_date, 1, 4) AS INTEGER) as year, "
+          + "  CAST(SUBSTRING(filing_date, 1, 4) AS INTEGER) as filing_year, "
           + "  COUNT(*) as filing_count "
           + "FROM \"SEC\".filing_metadata "
           + "WHERE cik IN ('" + APPLE_CIK + "', '" + BANK_OF_AMERICA_CIK + "', '"
           + CATERPILLAR_CIK + "') "
-          + "GROUP BY filing_type, CAST(SUBSTR(filing_date, 1, 4) AS INTEGER) "
-          + "ORDER BY year DESC, filing_type";
+          + "GROUP BY filing_type, CAST(SUBSTRING(filing_date, 1, 4) AS INTEGER) "
+          + "ORDER BY filing_year DESC, filing_type";
 
       try (ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {
           String filingType = rs.getString("filing_type");
-          int year = rs.getInt("year");
+          int filingYear = rs.getInt("filing_year");
           long filingCount = rs.getLong("filing_count");
 
-          LOGGER.info("  {} {}: {} filings", year, filingType, filingCount);
+          LOGGER.info("  {} {}: {} filings", filingYear, filingType, filingCount);
         }
       }
     }

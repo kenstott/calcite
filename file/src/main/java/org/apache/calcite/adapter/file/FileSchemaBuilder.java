@@ -298,9 +298,20 @@ public class FileSchemaBuilder {
       throw new IllegalStateException("Schema config must be set before running ETL");
     }
 
-    // Build SchemaConfig from the loaded config
-    SchemaConfig schemaConfig = SchemaConfig.fromMap(config);
+    // Merge operand overrides into config for ETL
+    Map<String, Object> mergedConfig = new HashMap<>(config);
+    mergedConfig.putAll(operandOverrides);
+
+    // Build SchemaConfig from the merged config
+    SchemaConfig schemaConfig = SchemaConfig.fromMap(mergedConfig);
     etlBuilder.config(schemaConfig);
+
+    // If operand has materializeDirectory, set it on builder to override YAML
+    String materializeDir = (String) operandOverrides.get("materializeDirectory");
+    if (materializeDir != null && !materializeDir.isEmpty()) {
+      etlBuilder.materializeDirectory(materializeDir);
+      LOGGER.debug("Using materializeDirectory from operand: {}", materializeDir);
+    }
 
     try {
       SchemaResult result = etlBuilder.build().process();

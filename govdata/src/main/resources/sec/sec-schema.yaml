@@ -261,8 +261,11 @@ parquet_defaults: &parquet_defaults
 # ============================================================================
 # TABLES
 # ============================================================================
+# Note: Uses "partitionedTables" key as required by FileSchemaFactory for
+# Hive-style partitioned tables with pattern-based file discovery.
+# ============================================================================
 
-tables:
+partitionedTables:
 
   # ==========================================================================
   # FILING METADATA
@@ -360,8 +363,10 @@ tables:
       <<: *document_source_defaults
       extractionType: metadata
 
+    # Skip standard ETL - tables are populated by DocumentETLProcessor
     # Custom hooks for SEC dimension resolution
     hooks:
+      enabled: false
       dimensionResolver: "org.apache.calcite.adapter.govdata.sec.CikResolver"
 
     dimensions:
@@ -399,6 +404,8 @@ tables:
   - name: financial_line_items
     pattern: "cik=*/filing_type=*/year=*/*_facts.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       XBRL financial statement data including balance sheet, income statement,
@@ -490,6 +497,8 @@ tables:
   - name: filing_contexts
     pattern: "cik=*/filing_type=*/year=*/*_contexts.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       XBRL context metadata defining reporting periods, business segments, and
@@ -567,6 +576,8 @@ tables:
   - name: mda_sections
     pattern: "cik=*/filing_type=*/year=*/*_mda.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       Management Discussion and Analysis (MD&A) sections extracted from 10-K
@@ -640,6 +651,8 @@ tables:
   - name: xbrl_relationships
     pattern: "cik=*/filing_type=*/year=*/*_relationships.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       XBRL calculation and presentation linkbase relationships showing how
@@ -723,6 +736,8 @@ tables:
   - name: insider_transactions
     pattern: "cik=*/filing_type=*/year=*/*_insider.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       Form 3/4/5 insider trading transactions by company officers, directors,
@@ -834,6 +849,8 @@ tables:
   - name: earnings_transcripts
     pattern: "cik=*/filing_type=*/year=*/*_earnings.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
 
     comment: >
       Quarterly earnings data extracted from 8-K filings. Contains earnings
@@ -907,6 +924,8 @@ tables:
     enabled: false  # Disabled pending URL encoding fixes
     pattern: "stock_prices/ticker=*/year=*/*_prices.parquet"
     partitions: *stock_partitions
+    hooks:
+      enabled: false
 
     comment: >
       Daily stock price data including open, high, low, close, and volume for
@@ -1023,6 +1042,8 @@ tables:
   - name: vectorized_blobs
     pattern: "cik=*/filing_type=*/year=*/*_vectorized.parquet"
     partitions: *sec_partitions
+    hooks:
+      enabled: false
     enabled: "${ENABLE_VECTORIZATION:false}"
 
     comment: >

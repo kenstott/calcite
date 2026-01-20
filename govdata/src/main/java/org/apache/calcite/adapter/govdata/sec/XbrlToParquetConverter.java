@@ -113,6 +113,12 @@ public class XbrlToParquetConverter implements FileConverter {
     return convertInternal(sourceFile.getAbsolutePath(), targetDirectory.getAbsolutePath(), metadata);
   }
 
+  @Override public List<File> convert(String sourcePath, String targetDirectory,
+      ConversionMetadata metadata) throws IOException {
+    // Direct String-based method for S3 paths - no File wrapping
+    return convertInternal(sourcePath, targetDirectory, metadata);
+  }
+
   /**
    * Converts XBRL/HTML file to Parquet format using String paths (S3-compatible).
    *
@@ -785,8 +791,16 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("footnote_refs", footnoteRefs);
 
         // Store element ID for relationship tracking
+        // Generate synthetic ID if element lacks one (required for primary key)
         String elementId = element.getAttribute("id");
-        data.put("element_id", elementId.isEmpty() ? null : elementId);
+        if (elementId == null || elementId.isEmpty()) {
+          // Generate synthetic ID from concept + context_ref + hash
+          String conceptName = concept != null ? concept : "";
+          String ctxRef = element.getAttribute("contextRef");
+          ctxRef = ctxRef != null ? ctxRef : "";
+          elementId = "gen_" + Math.abs((conceptName + "_" + ctxRef + "_" + dataList.size()).hashCode());
+        }
+        data.put("element_id", elementId);
 
         // Try to parse as numeric (using cleaned value)
         try {
