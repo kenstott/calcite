@@ -124,7 +124,8 @@ public class SecIntegrationTest {
         + "      \"endYear\": " + END_YEAR + ","
         + "      \"ciks\": " + ciksJson + ","
         + "      \"filingTypes\": [\"10-K\", \"10-Q\", \"8-K\", \"4\"],"
-        + "      \"autoDownload\": true"
+        + "      \"autoDownload\": true,"
+        + "      \"textSimilarity\": {\"enabled\": true}"
         + "    }"
         + "  }]"
         + "}";

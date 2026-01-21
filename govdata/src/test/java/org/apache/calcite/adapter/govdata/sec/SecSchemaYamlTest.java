@@ -65,29 +65,36 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
   }
 
   @Test
-  void testLoadVectorizedBlobsColumns() {
-    List<TableColumn> columns = loadTableColumns("vectorized_blobs");
+  void testLoadVectorizedChunksColumns() {
+    List<TableColumn> columns = loadTableColumns("vectorized_chunks");
 
     assertNotNull(columns, "Columns should not be null");
     assertFalse(columns.isEmpty(), "Columns should not be empty");
 
     // Verify cik column exists (from YAML template)
     TableColumn cikColumn = findColumn(columns, "cik");
-    assertNotNull(cikColumn, "cik column should exist in vectorized_blobs");
+    assertNotNull(cikColumn, "cik column should exist in vectorized_chunks");
 
     // Verify accession_number column exists (from YAML template)
     TableColumn accessionColumn = findColumn(columns, "accession_number");
-    assertNotNull(accessionColumn, "accession_number column should exist in vectorized_blobs");
+    assertNotNull(accessionColumn, "accession_number column should exist in vectorized_chunks");
 
-    // Verify vector_id column exists
-    TableColumn vectorIdColumn = findColumn(columns, "vector_id");
-    assertNotNull(vectorIdColumn, "vector_id column should exist");
+    // Verify chunk_id column exists
+    TableColumn chunkIdColumn = findColumn(columns, "chunk_id");
+    assertNotNull(chunkIdColumn, "chunk_id column should exist");
+
+    // Verify embedding column exists and is computed
+    TableColumn embeddingColumn = findColumn(columns, "embedding");
+    assertNotNull(embeddingColumn, "embedding column should exist");
+    assertEquals("array<double>", embeddingColumn.getType(), "embedding should be array<double>");
+    assertTrue(embeddingColumn.isComputed(), "embedding should be a computed column");
 
     // Print columns for debugging
-    System.out.println("vectorized_blobs columns (" + columns.size() + "):");
+    System.out.println("vectorized_chunks columns (" + columns.size() + "):");
     for (TableColumn col : columns) {
       System.out.println("  - " + col.getName() + " (" + col.getType()
-          + ", nullable=" + col.isNullable() + ")");
+          + ", nullable=" + col.isNullable()
+          + (col.isComputed() ? ", computed" : "") + ")");
     }
   }
 
@@ -101,7 +108,7 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
         "xbrl_relationships",
         "insider_transactions",
         "earnings_transcripts",
-        "vectorized_blobs"
+        "vectorized_chunks"
     };
 
     for (String tableName : tableNames) {

@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
 
@@ -685,9 +679,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String pattern = (String) table.get("pattern");
 
       if (tableName != null && pattern != null) {
+        // SEC parquet files are stored directly under secParquetDir with year= partitions
+        // NOT in table-specific subdirectories (e.g., /vectorized_chunks/year=*)
         String viewScanPattern =
-            storageProvider.resolvePath(storageProvider.resolvePath(secParquetDir, tableName),
-                pattern);
+            storageProvider.resolvePath(secParquetDir, pattern);
 
         org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
             new org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord();
@@ -698,7 +693,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         record.tableConfig = table;
 
         conversionRecords.put(tableName, record);
-        LOGGER.debug("Registered viewScanPattern for table '{}': {}", tableName, viewScanPattern);
+        LOGGER.info("Registered viewScanPattern for table '{}': {} (pattern='{}')", tableName, viewScanPattern, pattern);
       }
     }
 
@@ -783,7 +778,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean hasVectorized = false;
       if (outputFiles != null) {
         for (String filePath : outputFiles) {
-          if (filePath.endsWith("_vectorized.parquet")) {
+          if (filePath.endsWith("_chunks.parquet")) {
             hasVectorized = true;
             break;
           }
@@ -1130,8 +1125,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Create HttpSourceConfig from YAML-style configuration
       HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
 
-      // Get or create document converter
-      FileConverter documentConverter = getOrCreateXbrlConverter();
+      // Get or create document converter with vectorization enabled if configured
+      FileConverter documentConverter = getOrCreateXbrlConverter(operand);
 
       // Create processor - pass cache directory as String to support S3 paths
       DocumentETLProcessor processor = new DocumentETLProcessor(
@@ -1880,20 +1875,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Gets or creates the XBRL to Parquet converter.
+   *
+   * @param operand Schema operand with configuration (may contain textSimilarity config)
    */
-  private FileConverter getOrCreateXbrlConverter() {
+  @SuppressWarnings("unchecked")
+  private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand) {
     try {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
 
-      // Try constructor with StorageProvider
+      // Check if text similarity/vectorization is enabled
+      boolean enableVectorization = false;
+      if (operand != null) {
+        Map<String, Object> textSimilarityConfig = (Map<String, Object>) operand.get("textSimilarity");
+        enableVectorization = textSimilarityConfig != null &&
+            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+      }
+      LOGGER.info("Creating XbrlToParquetConverter with enableVectorization={}", enableVectorization);
+
+      // Try constructor with StorageProvider and enableVectorization
       try {
+        return (FileConverter) clazz
+            .getConstructor(StorageProvider.class, boolean.class)
+            .newInstance(storageProvider, enableVectorization);
+      } catch (NoSuchMethodException e) {
+        // Fall back to single-arg constructor (vectorization disabled)
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class)
             .newInstance(storageProvider);
-      } catch (NoSuchMethodException e) {
-        // Try default constructor
-        return (FileConverter) clazz.getDeclaredConstructor().newInstance();
       }
     } catch (Exception e) {
       LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
@@ -2714,7 +2723,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         if (supportsVectorization(form)) {
           String vectorizedPath =
-              storageProvider.resolvePath(yearDirPath, String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+              storageProvider.resolvePath(yearDirPath, String.format("%s_%s_chunks.parquet", cik, uniqueId));
           try {
             StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
             if (vectorizedMetadata.getSize() == 0) {

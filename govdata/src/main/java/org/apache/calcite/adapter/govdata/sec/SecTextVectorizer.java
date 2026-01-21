@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
 
@@ -492,57 +486,111 @@ public class SecTextVectorizer {
   /**
    * Create individual chunks for footnotes, MD&A paragraphs, and earnings content.
    * This is the enhanced version that includes earnings content.
+   *
+   * @deprecated Use {@link #createIndividualChunks(List, List, List, Map, Map, String, String)}
+   *             which includes filing context for text normalization.
    */
+  @Deprecated
   public List<ContextualChunk> createIndividualChunks(
       List<TextBlob> footnotes,
       List<TextBlob> mdaParagraphs,
       List<TextBlob> earningsBlobs,
       Map<String, List<String>> references,
       Map<String, FinancialFact> facts) {
+    // Delegate to new method with null filing context (no normalization)
+    return createIndividualChunks(footnotes, mdaParagraphs, earningsBlobs,
+        references, facts, null, null);
+  }
+
+  /**
+   * Create individual chunks for footnotes, MD&A paragraphs, and earnings content.
+   * Applies text normalization for consistent embeddings.
+   *
+   * <p>This method enriches text with contextual tags and cross-references, then
+   * normalizes temporal and monetary expressions for better embedding quality.
+   * Embeddings are NOT generated here - use DuckDB's embed_jina() computed column.
+   *
+   * @param footnotes      List of footnote text blobs
+   * @param mdaParagraphs  List of MD&A paragraph text blobs
+   * @param earningsBlobs  List of earnings call text blobs
+   * @param references     Map of blob ID to list of referencing blob IDs
+   * @param facts          Map of financial facts by concept name
+   * @param filingDate     Filing date (YYYY-MM-DD) for resolving relative dates
+   * @param periodEnd      Period end date (YYYY-MM-DD) for context
+   * @return List of contextual chunks with enriched and normalized text
+   */
+  public List<ContextualChunk> createIndividualChunks(
+      List<TextBlob> footnotes,
+      List<TextBlob> mdaParagraphs,
+      List<TextBlob> earningsBlobs,
+      Map<String, List<String>> references,
+      Map<String, FinancialFact> facts,
+      String filingDate,
+      String periodEnd) {
 
     List<ContextualChunk> chunks = new ArrayList<>();
     SecTokenManager tokenManager = new SecTokenManager();
 
+    // Create text normalizer for this filing's context
+    TextNormalizer normalizer = (filingDate != null)
+        ? TextNormalizer.forFiling(filingDate, periodEnd)
+        : new TextNormalizer();
+
     // Vectorize each footnote with its relationships
     for (TextBlob footnote : footnotes) {
-      ContextualChunk chunk =
-                                                vectorizeFootnote(footnote, references, mdaParagraphs, facts, tokenManager);
+      ContextualChunk chunk = vectorizeFootnote(footnote, references,
+          mdaParagraphs, facts, tokenManager);
       if (chunk != null) {
-        // Generate real semantic embedding using configured provider
-        double[] embedding = generateRealEmbedding(chunk.text);
-        chunk =
-                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
+        // Apply text normalization and store both original and normalized text
+        chunk = applyNormalization(chunk, normalizer);
         chunks.add(chunk);
       }
     }
 
     // Vectorize each MD&A paragraph with referenced footnotes
     for (TextBlob mdaPara : mdaParagraphs) {
-      ContextualChunk chunk =
-                                                    vectorizeMDAParagraph(mdaPara, references, footnotes, facts, tokenManager);
+      ContextualChunk chunk = vectorizeMDAParagraph(mdaPara, references,
+          footnotes, facts, tokenManager);
       if (chunk != null) {
-        // Generate real semantic embedding using configured provider
-        double[] embedding = generateRealEmbedding(chunk.text);
-        chunk =
-                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
+        chunk = applyNormalization(chunk, normalizer);
         chunks.add(chunk);
       }
     }
 
     // Vectorize each earnings paragraph with referenced footnotes
     for (TextBlob earningsBlob : earningsBlobs) {
-      ContextualChunk chunk =
-                                                         vectorizeEarningsParagraph(earningsBlob, references, footnotes, facts, tokenManager);
+      ContextualChunk chunk = vectorizeEarningsParagraph(earningsBlob, references,
+          footnotes, facts, tokenManager);
       if (chunk != null) {
-        // Generate real semantic embedding using configured provider
-        double[] embedding = generateRealEmbedding(chunk.text);
-        chunk =
-                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
+        chunk = applyNormalization(chunk, normalizer);
         chunks.add(chunk);
       }
     }
 
     return chunks;
+  }
+
+  /**
+   * Apply text normalization to a chunk's enriched text.
+   * Stores original text in metadata and returns chunk with normalized text.
+   */
+  private ContextualChunk applyNormalization(ContextualChunk chunk, TextNormalizer normalizer) {
+    // Store original enriched text in metadata
+    Map<String, Object> metadata = new HashMap<>(chunk.metadata);
+    metadata.put("original_enriched_text", chunk.text);
+
+    // Normalize the text for better embedding quality
+    String normalizedText = normalizer.normalize(chunk.text);
+
+    // Return new chunk with normalized text (no embedding - will be computed by DuckDB)
+    return new ContextualChunk(
+        chunk.context,
+        normalizedText,
+        chunk.blobType,
+        chunk.originalBlobId,
+        metadata,
+        null  // No embedding - use DuckDB embed_jina() computed column
+    );
   }
 
   /**
