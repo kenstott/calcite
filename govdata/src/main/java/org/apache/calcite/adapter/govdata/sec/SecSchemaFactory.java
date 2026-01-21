@@ -1364,6 +1364,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     String stagingPath = storageProvider.getStagingDirectory("sec-iceberg-" + tableName);
     LOGGER.debug("Using staging path: {}", stagingPath);
 
+    // Clean up old empty parquet files that can cause DuckDB union_by_name issues
+    // Empty parquet files (schema only, no data) are typically < 1KB
+    cleanupEmptyParquetFiles(sourceBaseDir, pattern, 1024);
+
     int filesCommitted = 0;
     try {
       // Use DuckDB to read source parquet files and write to staging
@@ -4021,6 +4025,55 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
     return 24; // Default: 24 hours
+  }
+
+  /**
+   * Clean up empty parquet files that can cause DuckDB union_by_name issues.
+   * Empty parquet files (schema only, no data) cause schema conflicts when DuckDB
+   * tries to union them with files containing data.
+   *
+   * @param baseDir Base directory to search
+   * @param pattern Glob pattern to match files (e.g., "year=*\/*_mda.parquet")
+   * @param minSizeBytes Minimum file size - files smaller than this are considered empty
+   */
+  private void cleanupEmptyParquetFiles(String baseDir, String pattern, long minSizeBytes) {
+    try {
+      LOGGER.debug("Cleaning up empty parquet files in {} matching: {}", baseDir, pattern);
+
+      // Extract the file suffix from pattern (e.g., "_mda.parquet" from "year=*/*_mda.parquet")
+      String suffix = pattern;
+      int lastSlash = pattern.lastIndexOf('/');
+      if (lastSlash >= 0) {
+        suffix = pattern.substring(lastSlash + 1);
+      }
+      // Remove glob wildcards to get the actual suffix
+      suffix = suffix.replace("*", "");
+
+      final String fileSuffix = suffix;
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(baseDir, true);
+      int deletedCount = 0;
+
+      for (StorageProvider.FileEntry file : files) {
+        // Check if file matches pattern suffix and is small (empty)
+        if (!file.isDirectory()
+            && file.getPath().endsWith(fileSuffix)
+            && file.getSize() < minSizeBytes) {
+          try {
+            storageProvider.delete(file.getPath());
+            deletedCount++;
+            LOGGER.debug("Deleted empty parquet file: {} (size: {} bytes)", file.getPath(), file.getSize());
+          } catch (IOException e) {
+            LOGGER.warn("Failed to delete empty file {}: {}", file.getPath(), e.getMessage());
+          }
+        }
+      }
+
+      if (deletedCount > 0) {
+        LOGGER.info("Cleaned up {} empty parquet files matching pattern: {}", deletedCount, pattern);
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Error listing files for cleanup: {}", e.getMessage());
+    }
   }
 
   /**
