@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
 
@@ -308,7 +302,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
       try {
-        writeRelationshipsToParquet(doc, relationshipsPath, cik, filingType, filingDate, sourceFilePath);
+        writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, filingDate, sourceFilePath);
         outputFiles.add(relationshipsPath);
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
@@ -316,12 +310,12 @@ public class XbrlToParquetConverter implements FileConverter {
         throw e;
       }
 
-      // Create vectorized blobs with contextual enrichment if enabled
+      // Create vectorized chunks with contextual enrichment if enabled
       if (enableVectorization) {
-        String vectorizedPath =
-            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
-        writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFilePath);
-        outputFiles.add(vectorizedPath);
+        String chunksPath =
+            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
+        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath);
+        outputFiles.add(chunksPath);
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
@@ -2028,7 +2022,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * - Convert relationships to Parquet records with proper linkbase_type classification
    */
   private void writeRelationshipsToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String sourcePath) throws IOException {
+      String cik, String accession, String filingType, String filingDate, String sourcePath) throws IOException {
 
     LOGGER.debug(String.format("DEBUG: writeRelationshipsToParquet START for CIK %s filing type %s date %s", cik, filingType, filingDate));
     LOGGER.debug(String.format("DEBUG: Document is null? %s", doc == null));
@@ -2077,6 +2071,8 @@ public class XbrlToParquetConverter implements FileConverter {
       Element arc = (Element) arcs.item(i);
 
       Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("accession_number", accession);
       data.put("filing_date", filingDate);
 
       // Determine linkbase type from namespace or arc role
@@ -2125,7 +2121,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // Also extract relationships from inline XBRL if present
     int beforeInlineCount = dataList.size();
     LOGGER.debug(String.format("DEBUG: Before inline extraction, have %d relationships", beforeInlineCount));
-    extractInlineXBRLRelationships(doc, columns, dataList, filingDate, sourcePath);
+    extractInlineXBRLRelationships(doc, columns, dataList, cik, accession, filingDate, sourcePath);
     int inlineRelationships = dataList.size() - beforeInlineCount;
     LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, dataList.size()));
 
@@ -2183,7 +2179,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void extractInlineXBRLRelationships(Document doc,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String filingDate, String sourcePath) {
+      List<Map<String, Object>> dataList, String cik, String accession, String filingDate, String sourcePath) {
 
     String fileName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     LOGGER.debug(" extractInlineXBRLRelationships START");
@@ -2193,7 +2189,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // First, try to download and parse external linkbase files
     // These contain the actual relationship definitions for inline XBRL
     try {
-      downloadAndParseLinkbases(sourcePath, columns, dataList, filingDate);
+      downloadAndParseLinkbases(sourcePath, columns, dataList, cik, accession, filingDate);
     } catch (Exception e) {
       LOGGER.debug("Failed to download/parse linkbase files: " + e.getMessage());
     }
@@ -2260,6 +2256,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
             if (!processedRelationships.contains(relationshipKey)) {
               Map<String, Object> data = new HashMap<>();
+              data.put("cik", cik);
+              data.put("accession_number", accession);
               data.put("filing_date", filingDate);
               data.put("linkbase_type", determineLinkbaseType(arcrole));
               data.put("arc_role", arcrole);
@@ -2304,6 +2302,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
               if (!processedRelationships.contains(relationshipKey)) {
                 Map<String, Object> data = new HashMap<>();
+                data.put("cik", cik);
+                data.put("accession_number", accession);
                 data.put("filing_date", filingDate);
                 data.put("linkbase_type", "reference");
                 data.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
@@ -2350,6 +2350,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
                 if (!processedRelationships.contains(relationshipKey)) {
                   Map<String, Object> data = new HashMap<>();
+                  data.put("cik", cik);
+                  data.put("accession_number", accession);
                   data.put("filing_date", filingDate);
                   data.put("linkbase_type", "presentation");
                   data.put("arc_role", "table-structure");
@@ -2391,6 +2393,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
           if (!processedRelationships.contains(relationshipKey)) {
             Map<String, Object> data = new HashMap<>();
+            data.put("cik", cik);
+            data.put("accession_number", accession);
             data.put("filing_date", filingDate);
             data.put("linkbase_type", "calculation");
             data.put("arc_role", "summation-item");
@@ -2414,7 +2418,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void downloadAndParseLinkbases(String htmlPath,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String filingDate) throws Exception {
+      List<Map<String, Object>> dataList, String cik, String accession, String filingDate) throws Exception {
 
     LOGGER.debug("Looking for linkbase references in inline XBRL document");
 
@@ -2547,7 +2551,7 @@ public class XbrlToParquetConverter implements FileConverter {
         linkbaseFactory.setNamespaceAware(true);
         DocumentBuilder linkbaseBuilder = linkbaseFactory.newDocumentBuilder();
         Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
-        extractLinkbaseRelationships(linkbaseDoc, columns, dataList, filingDate, linkbaseType);
+        extractLinkbaseRelationships(linkbaseDoc, columns, dataList, cik, accession, filingDate, linkbaseType);
       } catch (Exception e) {
         LOGGER.warn("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
       }
@@ -2559,7 +2563,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void extractLinkbaseRelationships(Document linkbaseDoc,
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String filingDate, String linkbaseType) {
+      List<Map<String, Object>> dataList, String cik, String accession, String filingDate, String linkbaseType) {
 
     // Find arc elements in the linkbase
     NodeList arcs = linkbaseDoc.getElementsByTagName("*");
@@ -2583,6 +2587,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
         if (from != null && !from.isEmpty() && to != null && !to.isEmpty()) {
           Map<String, Object> data = new HashMap<>();
+          data.put("cik", cik);
+          data.put("accession_number", accession);
           data.put("filing_date", filingDate);
           data.put("linkbase_type", linkbaseType);
 
@@ -2886,23 +2892,23 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
           + transactions.size() + " records");
 
-      // Create vectorized blobs for insider forms if text similarity is enabled
+      // Create vectorized chunks for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
       if (enableVectorization) {
         // Reuse uniqueId from above - build FULL path with StorageProvider
-        String vectorizedPath =
-            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+        String chunksPath =
+            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
 
         try {
-          writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourcePath, accession);
-          // CRITICAL: Add vectorized file to outputFiles so addToManifest() can detect it
-          outputFiles.add(vectorizedPath);
+          writeInsiderVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourcePath, accession);
+          // CRITICAL: Add chunks file to outputFiles so addToManifest() can detect it
+          outputFiles.add(chunksPath);
           if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Added vectorized file to outputFiles: {}", vectorizedPath);
+            LOGGER.debug("Added chunks file to outputFiles: {}", chunksPath);
           }
         } catch (Exception ve) {
-          LOGGER.warn("Failed to create vectorized blobs for insider form: " + ve.getMessage());
+          LOGGER.warn("Failed to create vectorized chunks for insider form: " + ve.getMessage());
         }
       }
 
@@ -3309,17 +3315,29 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract 8-K exhibits (particularly 99.1 and 99.2 for earnings).
    */
   /**
-   * Write vectorized blobs for insider forms (Form 3/4/5).
+   * Write vectorized chunks for insider forms (Form 3/4/5).
    * Creates minimal vectors for remarks and transaction descriptions.
+   * Uses the vectorized_chunks schema for consistency.
    */
-  private void writeInsiderVectorizedBlobsToParquet(Document doc, String outputPath,
+  private void writeInsiderVectorizedChunksToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath, String accession) throws IOException {
 
-    // Load schema from metadata
+    // Load schema from metadata - use vectorized_chunks for consistency
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        AbstractSecDataDownloader.loadTableColumns("vectorized_blobs");
+        AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
 
     List<Map<String, Object>> dataList = new ArrayList<>();
+    int sequence = 0;
+
+    // Extract year from filing date for Iceberg partitioning
+    int year = 0;
+    if (filingDate != null && filingDate.length() >= 4) {
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Could not parse year from filing date: {}", filingDate);
+      }
+    }
 
     // Extract remarks and footnotes from insider forms
     NodeList remarks = doc.getElementsByTagName("remarks");
@@ -3330,21 +3348,19 @@ public class XbrlToParquetConverter implements FileConverter {
       String remarkText = remarks.item(i).getTextContent().trim();
       if (!remarkText.isEmpty() && remarkText.length() > 20) {
         Map<String, Object> data = new HashMap<>();
-        String vectorId = UUID.randomUUID().toString();
-        data.put("vector_id", vectorId);
-        data.put("original_blob_id", "remark_" + i);
-        data.put("blob_type", "insider_remark");
-        data.put("blob_content", remarkText);
-
-        // Generate simple embedding for insider forms
-        // For now, use a simple hash-based approach as these are short texts
-        List<Float> embedding = generateSimpleEmbedding(remarkText, 384);
-        data.put("embedding", embedding);
-
         data.put("cik", cik);
-        data.put("filing_date", filingDate);
-        data.put("filing_type", filingType);
         data.put("accession_number", accession);
+        data.put("year", year);  // Required for Iceberg partitioning
+        data.put("chunk_id", "remark_" + i);
+        data.put("source_type", "insider_remark");
+        data.put("section", "Form " + filingType);
+        data.put("sequence", sequence++);
+        data.put("filing_date", filingDate);
+        data.put("chunk_text", remarkText);
+        data.put("enriched_text", remarkText); // No enrichment for simple remarks
+        // embedding computed by DuckDB at materialization time
+        data.put("content_type", "remark");
+        data.put("financial_concepts", null);
 
         dataList.add(data);
       }
@@ -3355,31 +3371,30 @@ public class XbrlToParquetConverter implements FileConverter {
       String footnoteText = footnotes.item(i).getTextContent().trim();
       if (!footnoteText.isEmpty() && footnoteText.length() > 20) {
         Map<String, Object> data = new HashMap<>();
-        String vectorId = UUID.randomUUID().toString();
-        data.put("vector_id", vectorId);
-        data.put("original_blob_id", "footnote_" + i);
-        data.put("blob_type", "insider_footnote");
-        data.put("blob_content", footnoteText);
-
-        // Generate simple embedding for insider forms
-        List<Float> embedding = generateSimpleEmbedding(footnoteText, 384);
-        data.put("embedding", embedding);
-
         data.put("cik", cik);
-        data.put("filing_date", filingDate);
-        data.put("filing_type", filingType);
         data.put("accession_number", accession);
+        data.put("year", year);  // Required for Iceberg partitioning
+        data.put("chunk_id", "footnote_" + i);
+        data.put("source_type", "insider_footnote");
+        data.put("section", "Form " + filingType);
+        data.put("sequence", sequence++);
+        data.put("filing_date", filingDate);
+        data.put("chunk_text", footnoteText);
+        data.put("enriched_text", footnoteText); // No enrichment for simple footnotes
+        // embedding computed by DuckDB at materialization time
+        data.put("content_type", "footnote");
+        data.put("financial_concepts", null);
 
         dataList.add(data);
       }
     }
 
     // Always write the file, even if empty, to satisfy cache validation
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedBlob", "vectorized_blobs");
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedChunk", "vectorized_chunks");
     if (!dataList.isEmpty()) {
-      LOGGER.info("Wrote " + dataList.size() + " vectorized insider blobs to " + outputPath);
+      LOGGER.info("Wrote " + dataList.size() + " vectorized insider chunks to " + outputPath);
     } else {
-      LOGGER.info("Created empty vectorized file (no content > 20 chars) for " + outputPath);
+      LOGGER.info("Created empty chunks file (no content > 20 chars) for " + outputPath);
     }
   }
 
@@ -3634,17 +3649,25 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Write vectorized blobs with contextual enrichment to Parquet.
+   * Write vectorized chunks with contextual enrichment to Parquet.
    * Creates individual vectors for footnotes and MD&A paragraphs with relationships.
+   * Text is enriched with context tags and normalized for consistent embeddings.
+   * Embeddings are NOT stored here - they are computed by DuckDB at materialization time.
    */
-  private void writeVectorizedBlobsToParquet(Document doc, String outputPath,
+  private void writeVectorizedChunksToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath) throws IOException {
 
-    // Load schema from metadata
+    // Load schema from metadata (now vectorized_chunks)
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        AbstractSecDataDownloader.loadTableColumns("vectorized_blobs");
+        AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
 
     List<Map<String, Object>> dataList = new ArrayList<>();
+
+    // Extract period end date for text normalization context
+    String periodEnd = extractPeriodEndDateFromDocument(doc);
+    if (periodEnd == null) {
+      periodEnd = filingDate; // Fall back to filing date
+    }
 
     // Extract footnotes as TextBlobs
     List<SecTextVectorizer.TextBlob> footnoteBlobs = extractFootnoteBlobs(doc);
@@ -3661,9 +3684,11 @@ public class XbrlToParquetConverter implements FileConverter {
     // Create vectorizer instance
     SecTextVectorizer vectorizer = new SecTextVectorizer();
 
-    // Generate individual enriched chunks
+    // Generate individual enriched chunks with filing context for text normalization
+    // filingDate and periodEnd allow TextNormalizer to resolve relative dates
     List<SecTextVectorizer.ContextualChunk> individualChunks =
-        vectorizer.createIndividualChunks(footnoteBlobs, mdaBlobs, references, facts);
+        vectorizer.createIndividualChunks(footnoteBlobs, mdaBlobs,
+            new ArrayList<>(), references, facts, filingDate, periodEnd);
 
     // Also generate concept group chunks (existing functionality)
     List<SecTextVectorizer.ContextualChunk> conceptChunks =
@@ -3674,68 +3699,113 @@ public class XbrlToParquetConverter implements FileConverter {
     allChunks.addAll(individualChunks);
     allChunks.addAll(conceptChunks);
 
+    // Extract accession number from output path (e.g., CIK_ACCESSION_chunks.parquet)
+    String accessionNumber = null;
+    String filename = outputPath.substring(outputPath.lastIndexOf('/') + 1);
+    if (filename.contains("_")) {
+      String[] parts = filename.replace("_chunks.parquet", "").split("_");
+      if (parts.length >= 2) {
+        accessionNumber = parts[1];
+      }
+    }
+
+    // Extract year from filing date for Iceberg partitioning
+    int year = 0;
+    if (filingDate != null && filingDate.length() >= 4) {
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Could not parse year from filing date: {}", filingDate);
+      }
+    }
+
     // Convert chunks to Parquet records
+    int sequence = 0;
     for (SecTextVectorizer.ContextualChunk chunk : allChunks) {
       Map<String, Object> data = new HashMap<>();
 
-      data.put("vector_id", chunk.context);
-      data.put("original_blob_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
-      data.put("blob_type", chunk.blobType);
+      // Required identifiers for Iceberg materialization
+      data.put("cik", cik);
+      data.put("accession_number", accessionNumber != null ? accessionNumber : cik + "-" + filingDate);
+      data.put("year", year);
+
+      // Core identifiers
+      data.put("chunk_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
+      data.put("source_type", chunk.blobType);
+      data.put("section", chunk.metadata.get("parent_section"));
+      data.put("sequence", sequence++);
       data.put("filing_date", filingDate);
 
-      // Truncate texts if they're too long for Parquet
-      String originalText = chunk.metadata.containsKey("original_text") ?
-          (String) chunk.metadata.get("original_text") : "";
-      data.put("original_text", truncateText(originalText, 32000));
-      data.put("enriched_text", truncateText(chunk.text, 32000));
+      // Text columns - chunk_text is original before normalization, enriched_text is normalized
+      // The applyNormalization method stores original enriched text in metadata
+      String originalEnrichedText = chunk.metadata.containsKey("original_enriched_text") ?
+          (String) chunk.metadata.get("original_enriched_text") : chunk.text;
+      data.put("chunk_text", truncateText(originalEnrichedText, 32000));
+      data.put("enriched_text", truncateText(chunk.text, 32000));  // This is the normalized text
 
-      // Extract metadata
-      data.put("parent_section", chunk.metadata.get("parent_section"));
-
-      // Convert relationships to JSON string
-      if (chunk.metadata.containsKey("referenced_by") || chunk.metadata.containsKey("references_footnotes")) {
-        Map<String, Object> relationships = new HashMap<>();
-        if (chunk.metadata.containsKey("referenced_by")) {
-          relationships.put("referenced_by", chunk.metadata.get("referenced_by"));
-        }
-        if (chunk.metadata.containsKey("references_footnotes")) {
-          relationships.put("references", chunk.metadata.get("references_footnotes"));
-        }
-        data.put("relationships", toJsonString(relationships));
-      }
+      // Content type classification
+      data.put("content_type", inferContentType(chunk.text));
 
       // Financial concepts
       if (chunk.metadata.containsKey("financial_concepts")) {
+        @SuppressWarnings("unchecked")
         List<String> concepts = (List<String>) chunk.metadata.get("financial_concepts");
         data.put("financial_concepts", String.join(",", concepts));
       }
 
-      // Token usage
-      if (chunk.metadata.containsKey("tokens_used")) {
-        data.put("tokens_used", chunk.metadata.get("tokens_used"));
-      }
-      if (chunk.metadata.containsKey("token_budget")) {
-        data.put("token_budget", chunk.metadata.get("token_budget"));
-      }
-
-      // Add embedding vector (convert double[] to List<Float> for Avro)
-      if (chunk.embedding != null && chunk.embedding.length > 0) {
-        List<Float> embeddingList = new ArrayList<>();
-        for (double value : chunk.embedding) {
-          embeddingList.add((float) value);
-        }
-        data.put("embedding", embeddingList);
-      } else {
-        throw new IllegalStateException("Chunk missing embedding vector: " + chunk.context +
-            " (type: " + chunk.blobType + ")");
-      }
+      // Note: embedding column is NOT set here - it's a computed column
+      // that will be populated by DuckDB quackformers at materialization time:
+      // expression: "embed_jina(enriched_text)::FLOAT[768]"
 
       dataList.add(data);
     }
 
     // Always write file, even if empty (zero rows) to ensure cache consistency
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedBlob", "vectorized_blobs");
-    LOGGER.info("Successfully wrote " + dataList.size() + " vectorized blobs to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedChunk", "vectorized_chunks");
+    LOGGER.info("Successfully wrote " + dataList.size() + " vectorized chunks to " + outputPath);
+  }
+
+  /**
+   * Infer content type from text structure.
+   *
+   * @param text The text to analyze
+   * @return Content type: paragraph, table, list, heading, or mixed
+   */
+  private String inferContentType(String text) {
+    if (text == null || text.isEmpty()) {
+      return "paragraph";
+    }
+
+    // Check for table indicators (multiple columns, alignment)
+    if (text.contains("\t") || text.matches(".*\\|.*\\|.*")
+        || (text.contains("$") && text.split("\\$").length > 3)) {
+      return "table";
+    }
+
+    // Check for list indicators
+    if (text.matches("(?s).*^\\s*[•\\-\\*\\d]+[.\\)]\\s+.*")
+        || text.contains("\n• ") || text.contains("\n- ") || text.contains("\n* ")) {
+      return "list";
+    }
+
+    // Check for heading indicators (short, ends without period, possibly all caps)
+    if (text.length() < 100 && !text.endsWith(".") && !text.endsWith(",")) {
+      String trimmed = text.trim();
+      if (trimmed.equals(trimmed.toUpperCase()) || trimmed.matches("^(Item|Note|Part)\\s+\\d+.*")) {
+        return "heading";
+      }
+    }
+
+    // Check if mixed content (contains multiple types)
+    int indicators = 0;
+    if (text.contains("\t") || text.contains("|")) indicators++;
+    if (text.contains("\n• ") || text.contains("\n- ")) indicators++;
+    if (text.split("\n").length > 5) indicators++;
+    if (indicators >= 2) {
+      return "mixed";
+    }
+
+    return "paragraph";
   }
 
   /**

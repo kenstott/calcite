@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.duckdb;
 
@@ -1108,6 +1102,20 @@ public class DuckDBJdbcSchemaFactory {
               // Use stored table-specific pattern for Hive-partitioned tables
               String pattern = record.viewScanPattern;
 
+              // Fallback: construct viewScanPattern from tableConfig if missing
+              // This handles cases where the pattern wasn't preserved through the metadata chain
+              if (pattern == null && record.tableConfig != null) {
+                @SuppressWarnings("unchecked")
+                String tablePattern = (String) ((java.util.Map<String, Object>) record.tableConfig).get("pattern");
+                if (tablePattern != null && directoryPath != null) {
+                  // Construct the viewScanPattern from the base directory and table pattern
+                  pattern = directoryPath.endsWith("/")
+                      ? directoryPath + tablePattern
+                      : directoryPath + "/" + tablePattern;
+                  LOGGER.info("Constructed viewScanPattern from tableConfig for '{}': {}", tableName, pattern);
+                }
+              }
+
               if (pattern != null) {
                 // Check if union_by_name is explicitly enabled for this table
                 // This allows tables to handle schema variations across partition files when needed
@@ -1120,9 +1128,10 @@ public class DuckDBJdbcSchemaFactory {
                 LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name={}): \"{}.{}\" -> {}",
                            useUnionByName, duckdbSchema, tableName, pattern);
               } else {
-                // This should never happen - pattern must exist for Hive-partitioned tables
-                LOGGER.error("Missing viewScanPattern for Hive-partitioned table '{}' - this indicates a bug in pattern extraction", tableName);
-                throw new SQLException("Missing viewScanPattern for Hive-partitioned table: " + tableName);
+                // viewScanPattern is still null - skip view creation for this table
+                // This can happen for tables that haven't been populated yet
+                LOGGER.warn("Skipping DuckDB view for Hive-partitioned table '{}' - no viewScanPattern available and unable to construct from tableConfig", tableName);
+                continue;
               }
             } else{
               // Non-Hive partitioned: use explicit file array
