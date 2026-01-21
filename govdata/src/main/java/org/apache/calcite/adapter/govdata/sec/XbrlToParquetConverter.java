@@ -302,7 +302,7 @@ public class XbrlToParquetConverter implements FileConverter {
       outputFiles.add(contextsPath);
 
       // Extract and write MD&A
-      writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, sourceFilePath);
+      writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, accession, sourceFilePath);
       outputFiles.add(mdaPath);
 
       // Extract and write XBRL relationships
@@ -1425,10 +1425,11 @@ public class XbrlToParquetConverter implements FileConverter {
 
   /**
    * Extract and write MD&A (Management Discussion & Analysis) to Parquet.
-   * Each paragraph becomes a separate record for better querying.
+   * Uses semantic chunking to create optimal text chunks for downstream processing.
    */
   private void writeMDAToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String sourcePath) throws IOException {
+      String cik, String filingType, String filingDate, String accession, String sourcePath)
+      throws IOException {
 
     // Load column metadata from sec-schema.json
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -1436,14 +1437,19 @@ public class XbrlToParquetConverter implements FileConverter {
 
     List<Map<String, Object>> dataList = new ArrayList<>();
 
-    // Look for MD&A content in different ways
-    // 1. Look for Item 7 and Item 7A in inline XBRL
+    // Format accession_number consistently (10-digit-CIK-YY-NNNNNN format)
+    String accessionNumber = accession != null ? accession : cik + "-" + filingDate;
+
+    // Use semantic chunker for optimal text extraction
+    SemanticTextChunker chunker = SemanticTextChunker.forMDA();
+
+    // 1. Extract MD&A from HTML using semantic chunking
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     if (filename.endsWith(".htm") || filename.endsWith(".html")) {
-      extractMDAFromHTML(sourcePath, dataList, filingDate);
+      extractMDAWithChunker(sourcePath, dataList, cik, accessionNumber, filingDate, chunker);
     }
 
-    // 2. Look for MD&A-related TextBlocks in XBRL
+    // 2. Also extract from XBRL TextBlocks (if present)
     NodeList allElements = doc.getElementsByTagName("*");
     for (int i = 0; i < allElements.getLength(); i++) {
       Element element = (Element) allElements.item(i);
@@ -1454,8 +1460,21 @@ public class XbrlToParquetConverter implements FileConverter {
         // Check if this is an MD&A-related concept
         if (isMDAConcept(concept)) {
           String text = element.getTextContent().trim();
-          if (text.length() > 50) {  // Skip if just a title
-            extractParagraphs(text, concept, dataList, filingDate);
+          if (!text.isEmpty()) {
+            // Use chunker for XBRL TextBlock content
+            List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(text);
+            for (SemanticTextChunker.Chunk chunk : chunks) {
+              Map<String, Object> data = new HashMap<>();
+              data.put("cik", cik);
+              data.put("accession_number", accessionNumber);
+              data.put("filing_date", filingDate);
+              data.put("section", "XBRL MD&A");
+              data.put("subsection", concept);
+              data.put("paragraph_number", dataList.size() + 1);
+              data.put("paragraph_text", chunk.getText());
+              data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
+              dataList.add(data);
+            }
           }
         }
       }
@@ -1464,18 +1483,240 @@ public class XbrlToParquetConverter implements FileConverter {
     // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
     if (!dataList.isEmpty()) {
       storageProvider.writeAvroParquet(outputPath, columns, dataList, "MDASection", "MDASection");
-      LOGGER.info("Successfully wrote " + dataList.size() + " MD&A paragraphs to " + outputPath);
+      LOGGER.info("Successfully wrote " + dataList.size() + " MD&A chunks to " + outputPath);
     } else {
       LOGGER.debug("Skipping empty MD&A file: " + outputPath);
     }
   }
 
   /**
+   * Formats footnote references list as comma-separated string.
+   */
+  private String formatFootnoteRefs(List<String> refs) {
+    if (refs == null || refs.isEmpty()) {
+      return null;
+    }
+    return String.join(", ", refs);
+  }
+
+  /**
+   * Extract MD&A from HTML using semantic chunking.
+   * Finds Item 7 and Item 7A sections and extracts content using optimal chunk sizes.
+   */
+  private void extractMDAWithChunker(String htmlPath, List<Map<String, Object>> dataList,
+      String cik, String accessionNumber, String filingDate, SemanticTextChunker chunker) {
+    try {
+      org.jsoup.nodes.Document doc;
+      try (InputStream is = storageProvider.openInputStream(htmlPath)) {
+        doc = Jsoup.parse(is, "UTF-8", "");
+      }
+
+      // Find Item 7 and Item 7A sections
+      List<MDASection> sections = findMDASections(doc);
+
+      for (MDASection section : sections) {
+        // Use semantic chunker to extract content
+        List<SemanticTextChunker.Chunk> chunks = chunker.chunkFromElement(
+            section.startElement,
+            "(?i)item\\s*(8|9)\\b"  // Stop at Item 8 or 9
+        );
+
+        for (SemanticTextChunker.Chunk chunk : chunks) {
+          Map<String, Object> data = new HashMap<>();
+          data.put("cik", cik);
+          data.put("accession_number", accessionNumber);
+          data.put("filing_date", filingDate);
+          data.put("section", section.sectionName);
+          data.put("subsection", chunk.getContentType().name());
+          data.put("paragraph_number", dataList.size() + 1);
+          data.put("paragraph_text", chunk.getText());
+          data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
+          dataList.add(data);
+        }
+      }
+
+      // If no structured sections found, try aggressive text extraction
+      if (dataList.isEmpty()) {
+        extractMDAAggressively(doc, dataList, cik, accessionNumber, filingDate, chunker);
+      }
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to extract MD&A from HTML using chunker: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Helper class to hold MD&A section info.
+   */
+  private static class MDASection {
+    final String sectionName;
+    final org.jsoup.nodes.Element startElement;
+
+    MDASection(String sectionName, org.jsoup.nodes.Element startElement) {
+      this.sectionName = sectionName;
+      this.startElement = startElement;
+    }
+  }
+
+  /**
+   * Finds MD&A sections (Item 7 and Item 7A) in the document.
+   */
+  private List<MDASection> findMDASections(org.jsoup.nodes.Document doc) {
+    List<MDASection> sections = new ArrayList<>();
+
+    // Strategy 1: Look for Item 7 text in various formats
+    org.jsoup.select.Elements elements = doc.select("*:matchesOwn((?i)item\\s*7[A]?\\b)");
+
+    // Strategy 2: Also look for Management's Discussion and Analysis directly
+    if (elements.isEmpty()) {
+      elements = doc.select("*:matchesOwn((?i)management.{0,5}discussion.{0,5}analysis)");
+    }
+
+    // Strategy 3: Look for specific HTML patterns common in SEC filings
+    if (elements.isEmpty()) {
+      elements = doc.select("td:matchesOwn((?i)item\\s*7), div:matchesOwn((?i)item\\s*7)");
+    }
+
+    for (org.jsoup.nodes.Element element : elements) {
+      String text = element.text();
+
+      // Validate this is actually Item 7 or 7A (not Item 17, 27, etc.)
+      if (!text.matches("(?i).*item\\s*7[A]?\\b.*") ||
+          text.matches("(?i).*item\\s*[1-6]?7[0-9].*")) {
+        continue;
+      }
+
+      // Skip table of contents entries
+      if (text.length() < 100 &&
+          (text.matches("(?i).*page.*") || text.matches(".*\\d+$"))) {
+        continue;
+      }
+
+      String sectionName = text.contains("7A") || text.contains("7a") ? "Item 7A" : "Item 7";
+
+      // Find content start - may be this element or a sibling
+      org.jsoup.nodes.Element contentStart = findContentStart(element);
+      if (contentStart != null) {
+        sections.add(new MDASection(sectionName, contentStart));
+      }
+    }
+
+    return sections;
+  }
+
+  /**
+   * Finds the actual content start element (may be after a header).
+   */
+  private org.jsoup.nodes.Element findContentStart(org.jsoup.nodes.Element headerElement) {
+    // If the element itself has substantial content, use it
+    if (headerElement.text().length() > 200) {
+      return headerElement;
+    }
+
+    // Look at parent's next sibling
+    org.jsoup.nodes.Element parent = headerElement.parent();
+    if (parent != null) {
+      org.jsoup.nodes.Element nextSibling = parent.nextElementSibling();
+      if (nextSibling != null && nextSibling.text().length() > 200) {
+        return nextSibling;
+      }
+    }
+
+    // Try direct next sibling
+    org.jsoup.nodes.Element nextSibling = headerElement.nextElementSibling();
+    if (nextSibling != null && nextSibling.text().length() > 200) {
+      return nextSibling;
+    }
+
+    // Fall back to the header element itself
+    return headerElement;
+  }
+
+  /**
+   * Aggressive MD&A extraction when structured sections aren't found.
+   * Searches for MD&A-related content throughout the document.
+   */
+  private void extractMDAAggressively(org.jsoup.nodes.Document doc, List<Map<String, Object>> dataList,
+      String cik, String accessionNumber, String filingDate, SemanticTextChunker chunker) {
+
+    org.jsoup.select.Elements textBlocks = doc.select("div, p, td");
+    boolean inMDA = false;
+    String currentSection = "";
+    StringBuilder contentBuffer = new StringBuilder();
+
+    for (org.jsoup.nodes.Element block : textBlocks) {
+      String text = block.text();
+
+      // Check if we're entering MD&A section
+      if (text.matches("(?i).*item\\s*7[^0-9].*management.*discussion.*") ||
+          text.matches("(?i).*management.*discussion.*analysis.*")) {
+        inMDA = true;
+        currentSection = "Item 7";
+        continue;
+      }
+
+      // Check if we're entering Item 7A
+      if (text.matches("(?i).*item\\s*7A.*")) {
+        // Flush any accumulated content
+        if (contentBuffer.length() > 0 && !currentSection.isEmpty()) {
+          addChunkedContent(contentBuffer.toString(), currentSection, dataList,
+              cik, accessionNumber, filingDate, chunker);
+          contentBuffer = new StringBuilder();
+        }
+        inMDA = true;
+        currentSection = "Item 7A";
+        continue;
+      }
+
+      // Check if we're leaving MD&A section
+      if (inMDA && text.matches("(?i).*item\\s*[89]\\b.*")) {
+        break;
+      }
+
+      // Accumulate content if we're in MD&A
+      if (inMDA && !text.isEmpty()) {
+        if (contentBuffer.length() > 0) {
+          contentBuffer.append("\n\n");
+        }
+        contentBuffer.append(text);
+      }
+    }
+
+    // Flush remaining content
+    if (contentBuffer.length() > 0 && !currentSection.isEmpty()) {
+      addChunkedContent(contentBuffer.toString(), currentSection, dataList,
+          cik, accessionNumber, filingDate, chunker);
+    }
+  }
+
+  /**
+   * Helper to add chunked content to the data list.
+   */
+  private void addChunkedContent(String content, String section, List<Map<String, Object>> dataList,
+      String cik, String accessionNumber, String filingDate, SemanticTextChunker chunker) {
+
+    List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(content);
+    for (SemanticTextChunker.Chunk chunk : chunks) {
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("accession_number", accessionNumber);
+      data.put("filing_date", filingDate);
+      data.put("section", section);
+      data.put("subsection", "General");
+      data.put("paragraph_number", dataList.size() + 1);
+      data.put("paragraph_text", chunk.getText());
+      data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
+      dataList.add(data);
+    }
+  }
+
+  /**
    * Extract MD&A from HTML file by looking for Item 7 and Item 7A sections.
+   * @deprecated Use extractMDAWithChunker instead for semantic chunking.
    * Enhanced to handle inline XBRL documents where Item 7 may be embedded in tags.
    */
   private void extractMDAFromHTML(String htmlPath,
-      List<Map<String, Object>> dataList, String filingDate) {
+      List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
     try {
       org.jsoup.nodes.Document doc;
       try (InputStream is = storageProvider.openInputStream(htmlPath)) {
@@ -1537,7 +1778,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
 
         // Extract content
-        extractMDAContent(contentStart, sectionName, dataList, filingDate);
+        extractMDAContent(contentStart, sectionName, dataList, cik, accessionNumber, filingDate);
       }
 
       // If we still didn't find any MD&A, try a more aggressive approach
@@ -1572,7 +1813,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
           // Extract content if we're in MD&A
           if (inMDA && text.length() > 100) {
-            extractTextAsParagraphs(text, currentSection, dataList, filingDate);
+            extractTextAsParagraphs(text, currentSection, dataList, cik, accessionNumber, filingDate);
           }
         }
       }
@@ -1586,7 +1827,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract MD&A content starting from a given element.
    */
   private void extractMDAContent(org.jsoup.nodes.Element startElement, String sectionName,
-      List<Map<String, Object>> dataList, String filingDate) {
+      List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
 
     String subsection = "Overview";
     int paragraphNum = 1;
@@ -1619,6 +1860,8 @@ public class XbrlToParquetConverter implements FileConverter {
         for (String paragraph : paragraphs) {
           if (paragraph.trim().length() > 50) {
             Map<String, Object> data = new HashMap<>();
+            data.put("cik", cik);
+            data.put("accession_number", accessionNumber);
             data.put("filing_date", filingDate);
             data.put("section", sectionName);
             data.put("subsection", subsection);
@@ -1638,7 +1881,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract text as paragraphs for aggressive MD&A extraction.
    */
   private void extractTextAsParagraphs(String text, String sectionName,
-      List<Map<String, Object>> dataList, String filingDate) {
+      List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
 
     // Split into sentences or natural paragraphs
     String[] paragraphs = text.split("(?<=[.!?])\\s+(?=[A-Z])");
@@ -1655,6 +1898,8 @@ public class XbrlToParquetConverter implements FileConverter {
         String paragraphText = currentParagraph.toString().trim();
         if (paragraphText.length() > 100) {
           Map<String, Object> data = new HashMap<>();
+          data.put("cik", cik);
+          data.put("accession_number", accessionNumber);
           data.put("filing_date", filingDate);
           data.put("section", sectionName);
           data.put("subsection", "General");
@@ -1672,6 +1917,8 @@ public class XbrlToParquetConverter implements FileConverter {
     String remaining = currentParagraph.toString().trim();
     if (remaining.length() > 100) {
       Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("accession_number", accessionNumber);
       data.put("filing_date", filingDate);
       data.put("section", sectionName);
       data.put("subsection", "General");
@@ -1721,7 +1968,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract paragraphs from text block.
    */
   private void extractParagraphs(String text, String concept,
-      List<Map<String, Object>> dataList, String filingDate) {
+      List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
 
     // Split into paragraphs
     String[] paragraphs = text.split("\\n\\n+");
@@ -1730,6 +1977,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String paragraph = paragraphs[i].trim();
       if (paragraph.length() > 50) {  // Skip very short paragraphs
         Map<String, Object> data = new HashMap<>();
+        data.put("cik", cik);
+        data.put("accession_number", accessionNumber);
         data.put("filing_date", filingDate);
         data.put("section", "XBRL MD&A");
         data.put("subsection", concept);
