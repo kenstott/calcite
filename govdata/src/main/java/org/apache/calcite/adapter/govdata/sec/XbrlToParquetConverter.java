@@ -1028,9 +1028,13 @@ public class XbrlToParquetConverter implements FileConverter {
       dataList.add(data);
     }
 
-    // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlContext", "XbrlContext");
-    LOGGER.info("Successfully wrote " + dataList.size() + " context records to " + outputPath);
+    // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
+    if (!dataList.isEmpty()) {
+      storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlContext", "XbrlContext");
+      LOGGER.info("Successfully wrote " + dataList.size() + " context records to " + outputPath);
+    } else {
+      LOGGER.debug("Skipping empty contexts file: " + outputPath);
+    }
   }
 
   @Override public String getSourceFormat() {
@@ -1457,9 +1461,13 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Always write file, even if empty (zero rows) to ensure cache consistency
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "MDASection", "MDASection");
-    LOGGER.info("Successfully wrote " + dataList.size() + " MD&A paragraphs to " + outputPath);
+    // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
+    if (!dataList.isEmpty()) {
+      storageProvider.writeAvroParquet(outputPath, columns, dataList, "MDASection", "MDASection");
+      LOGGER.info("Successfully wrote " + dataList.size() + " MD&A paragraphs to " + outputPath);
+    } else {
+      LOGGER.debug("Skipping empty MD&A file: " + outputPath);
+    }
   }
 
   /**
@@ -1872,7 +1880,7 @@ public class XbrlToParquetConverter implements FileConverter {
     int inlineRelationships = dataList.size() - beforeInlineCount;
     LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, dataList.size()));
 
-    // Always write the parquet file, even if empty, to satisfy cache validation
+    // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
     try {
       LOGGER.debug(" About to write " + dataList.size() + " relationship records to " + outputPath);
 
@@ -1882,14 +1890,9 @@ public class XbrlToParquetConverter implements FileConverter {
             String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
             dataList.size(), beforeInlineCount, inlineRelationships, outputPath));
       } else {
-        // Create an empty parquet file to indicate that relationship extraction was completed
-        // This is important for cache validation - without this file, the system will think
-        // the filing hasn't been fully processed and will attempt to reprocess it
-        // NOTE: Inline XBRL filings will typically have empty relationship files since
-        // relationships are in separate linkbase files that we don't currently download
-        LOGGER.debug(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
-        storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlRelationship", "xbrl_relationships"); // Write empty records list
-        LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputPath));
+        // Skip empty files - inline XBRL filings typically have no relationships since
+        // they're in separate linkbase files that we don't currently download
+        LOGGER.debug(String.format("Skipping empty relationships file for CIK %s filing type %s (expected for inline XBRL)", cik, filingType));
       }
 
     } catch (Exception e) {

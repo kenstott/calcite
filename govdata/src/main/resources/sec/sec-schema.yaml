@@ -1074,7 +1074,7 @@ partitionedTables:
     partitions: *sec_partitions
     hooks:
       enabled: false
-    enabled: "${ENABLE_VECTORIZATION:false}"
+    enabled: "${ENABLE_VECTORIZATION:true}"
 
     comment: >
       Vector embeddings of text from 10-K and 10-Q filings for semantic search.
