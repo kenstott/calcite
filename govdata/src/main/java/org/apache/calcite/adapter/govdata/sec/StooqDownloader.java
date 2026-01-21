@@ -235,13 +235,12 @@ public class StooqDownloader {
 
     for (int year = startYear; year <= endYear; year++) {
       // Build the path using StorageProvider.resolvePath for S3 compatibility
+      // Uses year-only partitioning to match sec-schema.yaml pattern
       String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
-      String tickerDir =
-          storageProvider.resolvePath(stockPricesDir, String.format("ticker=%s", pair.ticker.toUpperCase()));
-      String yearDir = storageProvider.resolvePath(tickerDir, String.format("year=%d", year));
+      String yearDir = storageProvider.resolvePath(stockPricesDir, String.format("year=%d", year));
 
       String fullPath =
-          storageProvider.resolvePath(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
+          storageProvider.resolvePath(yearDir, String.format("%s_%s_prices.parquet", pair.cik, pair.ticker.toLowerCase()));
 
       // Check if data already exists and determine if refresh is needed
       boolean needsDownload;
