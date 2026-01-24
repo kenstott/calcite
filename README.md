@@ -21,24 +21,25 @@ This is a fork of Apache Calcite with significant enhancements and new adapters 
   - Built-in caching system (in-memory and Redis)
   - Comprehensive type system mapping
 
+### Replaced Adapters (Complete Rewrites)
+
+- **File Adapter**: Complete replacement of the original Calcite file adapter
+  - Multi-engine support: DuckDB, Arrow, and Parquet backends
+  - S3/GCS/Azure protocol support for cloud storage
+  - Declarative YAML schema definitions
+  - Entity caching with Redis support
+  - File formats: CSV, JSON, Parquet, XLSX, YAML, HML
+  - Recursive file discovery and pattern matching
+  - Iceberg table materialization
+
+- **Splunk Adapter**: Complete replacement of the original Calcite Splunk adapter
+  - HTTP timeout configuration and connection pooling
+  - Token expiration retry logic
+  - Support for Common Information Models (CIM)
+  - Full predicate pushdown with field comparisons
+  - Nullable field handling
+
 ### Enhanced Existing Adapters
-
-#### File Adapter Enhancements
-- **Entity Caching**: Redis-based caching for improved performance
-- **New File Formats**:
-  - XLSX (Excel) files with automatic sheet detection
-  - YAML files as data sources
-  - HML (metadata) files
-- **S3 Protocol Support**: Direct querying of files in S3 buckets
-- **Recursive File Search**: Automatic discovery of files in nested directories
-- **Improved JSON/CSV handling**: Better type inference and streaming
-
-#### Splunk Adapter Improvements
-- HTTP timeout configuration and handling
-- Token expiration retry logic
-- Support for Common Information Models (CIM)
-- Enhanced field comparison operations
-- Nullable field handling improvements
 
 #### Additional Database Support
 - **SQLite**: Native SQLite database connectivity
