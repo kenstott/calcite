@@ -457,17 +457,90 @@ erDiagram
 
 ---
 
-## ECON Schema ERD
+## ECON & ECON_REFERENCE Combined ERD
 
-The ECON schema contains 28 tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank. Tables link to GEO for geographic context and to ECON_REFERENCE for dimension lookups.
+The ECON schema contains 28 fact tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank. The ECON_REFERENCE schema contains 7 dimension tables providing lookups for industry codes, geography mappings, and data catalogs. Together they form a comprehensive star schema for economic analytics.
+
+### ECON Reference Dimension Tables (7 tables)
 
 ```mermaid
 erDiagram
     %% ===================================
-    %% ECON SCHEMA (28 tables, 23 FKs)
+    %% ECON_REFERENCE SCHEMA (7 dimension tables)
     %% ===================================
 
-    %% State-level tables with GEO FKs
+    jolts_industries {
+        string type PK
+        string industry_code
+        string industry_name
+    }
+
+    jolts_dataelements {
+        string type PK
+        string dataelement_code
+        string dataelement_text
+    }
+
+    bls_geographies {
+        string type PK
+        string geo_code PK
+        string geo_name
+        string geo_type
+        string state_fips FK
+        string cbsa_code FK
+        string metro_cpi_area_code
+        string metro_bls_area_code
+    }
+
+    naics_sectors {
+        string type PK
+        string supersector_code PK
+        string supersector_name
+    }
+
+    nipa_tables {
+        string type PK
+        string table_name
+        string description
+    }
+
+    regional_linecodes {
+        string type PK
+        string tablename PK
+        string LineCode PK
+        string desc
+    }
+
+    fred_series {
+        string type PK
+        int category PK
+        string series PK
+        string title
+        string frequency
+        string units
+    }
+
+    GEO_states {
+        string state_fips PK
+    }
+
+    GEO_cbsa {
+        string cbsa_fips PK
+    }
+
+    %% ECON_REFERENCE → GEO relationships
+    bls_geographies }o--|| GEO_states : "state_fips"
+    bls_geographies }o--|| GEO_cbsa : "cbsa_code → cbsa_fips"
+```
+
+### ECON Fact Tables - State Level
+
+```mermaid
+erDiagram
+    %% ===================================
+    %% ECON STATE-LEVEL FACT TABLES
+    %% ===================================
+
     state_wages {
         string type PK
         string frequency PK
@@ -498,7 +571,6 @@ erDiagram
         string area_code FK
     }
 
-    %% BEA Regional tables
     regional_income {
         string geo_fips PK
         string table_name PK
@@ -536,7 +608,49 @@ erDiagram
         int year PK
     }
 
-    %% County-level
+    GEO_states {
+        string state_fips PK
+    }
+
+    naics_sectors {
+        string supersector_code PK
+    }
+
+    regional_linecodes {
+        string tablename PK
+        string LineCode PK
+    }
+
+    bls_geographies {
+        string geo_code PK
+    }
+
+    %% State-level → GEO relationships
+    state_wages }o--|| GEO_states : "state_fips"
+    state_industry }o--|| GEO_states : "state_fips"
+    jolts_state }o--|| GEO_states : "state_fips"
+    regional_employment }o--|| GEO_states : "state_fips"
+    regional_income }o--|| GEO_states : "geo_fips"
+    state_gdp }o--|| GEO_states : "geo_fips"
+
+    %% State-level → ECON_REF relationships
+    state_industry }o--|| naics_sectors : "industry_code"
+    regional_employment }o--|| bls_geographies : "area_code"
+    regional_income }o--|| regional_linecodes : "table_name, line_code"
+    state_gdp }o--|| regional_linecodes : "table_name, line_code"
+    quarterly_income }o--|| regional_linecodes : "table_name, line_code"
+    quarterly_gdp }o--|| regional_linecodes : "table_name, line_code"
+    state_consumption }o--|| regional_linecodes : "table_name, line_code"
+```
+
+### ECON Fact Tables - County and Metro Level
+
+```mermaid
+erDiagram
+    %% ===================================
+    %% ECON COUNTY/METRO FACT TABLES
+    %% ===================================
+
     county_qcew {
         string type PK
         string frequency PK
@@ -552,7 +666,6 @@ erDiagram
         string state_fips FK
     }
 
-    %% Metro-level
     metro_cpi {
         string type PK
         string frequency PK
@@ -575,7 +688,44 @@ erDiagram
         string metro_code FK
     }
 
-    %% FRED and reference
+    GEO_states {
+        string state_fips PK
+    }
+
+    GEO_counties {
+        string county_fips PK
+    }
+
+    bls_geographies {
+        string geo_code PK
+        string metro_cpi_area_code
+        string metro_bls_area_code
+    }
+
+    naics_sectors {
+        string supersector_code PK
+    }
+
+    %% County-level → GEO relationships
+    county_qcew }o--|| GEO_counties : "area_fips"
+    county_wages }o--|| GEO_counties : "county_fips"
+    county_wages }o--|| GEO_states : "state_fips"
+
+    %% Metro-level → ECON_REF relationships
+    metro_cpi }o--|| bls_geographies : "area_code"
+    metro_industry }o--|| bls_geographies : "metro_code"
+    metro_industry }o--|| naics_sectors : "industry_code"
+    metro_wages }o--|| bls_geographies : "metro_code"
+```
+
+### ECON Fact Tables - National and FRED
+
+```mermaid
+erDiagram
+    %% ===================================
+    %% ECON NATIONAL/FRED FACT TABLES
+    %% ===================================
+
     fred_indicators {
         string type PK
         string series PK
@@ -590,63 +740,85 @@ erDiagram
         string frequency PK
     }
 
-    %% Reference tables (from ECON_REFERENCE schema)
-    GEO_states {
-        string state_fips PK
+    employment_statistics {
+        string type PK
+        string frequency PK
+        int year PK
     }
 
-    GEO_counties {
-        string county_fips PK
+    inflation_metrics {
+        string type PK
+        string frequency PK
+        int year PK
     }
 
-    ECON_REF_bls_geographies {
-        string geo_code PK
-        string metro_cpi_area_code
-        string metro_bls_area_code
+    gdp_statistics {
+        string type PK
+        string frequency PK
+        int year PK
     }
 
-    ECON_REF_regional_linecodes {
-        string tablename PK
-        string LineCode PK
+    treasury_yields {
+        string type PK
+        string frequency PK
+        int year PK
     }
 
-    ECON_REF_naics_sectors {
-        string supersector_code PK
+    federal_debt {
+        string type PK
+        string frequency PK
+        int year PK
     }
 
-    ECON_REF_fred_series {
+    trade_statistics {
+        string type PK
+        string frequency PK
+        int year PK
+    }
+
+    world_indicators {
+        string type PK
+        string frequency PK
+        int year PK
+    }
+
+    fred_series {
+        string type PK
+        int category PK
         string series PK
     }
 
-    ECON_REF_nipa_tables {
-        string TableName PK
+    nipa_tables {
+        string type PK
+        string table_name
     }
 
-    %% GEO relationships
-    state_wages }o--|| GEO_states : "state_fips"
-    state_industry }o--|| GEO_states : "state_fips"
-    jolts_state }o--|| GEO_states : "state_fips"
-    regional_employment }o--|| GEO_states : "area_code"
-    regional_income }o--|| GEO_states : "geo_fips"
-    state_gdp }o--|| GEO_states : "geo_fips"
-    county_qcew }o--|| GEO_counties : "area_fips"
-    county_wages }o--|| GEO_counties : "county_fips"
-    county_wages }o--|| GEO_states : "state_fips"
-
-    %% ECON_REFERENCE relationships
-    state_industry }o--|| ECON_REF_naics_sectors : "industry_code"
-    metro_cpi }o--|| ECON_REF_bls_geographies : "area_code"
-    metro_industry }o--|| ECON_REF_bls_geographies : "metro_code"
-    metro_industry }o--|| ECON_REF_naics_sectors : "industry_code"
-    metro_wages }o--|| ECON_REF_bls_geographies : "metro_code"
-    fred_indicators }o--|| ECON_REF_fred_series : "series"
-    national_accounts }o--|| ECON_REF_nipa_tables : "table_id"
-    regional_income }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
-    state_gdp }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
-    quarterly_income }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
-    quarterly_gdp }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
-    state_consumption }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+    %% FRED/National → ECON_REF relationships
+    fred_indicators }o--|| fred_series : "series"
+    national_accounts }o--|| nipa_tables : "table_id → table_name"
 ```
+
+### Combined Table Summary
+
+| Schema | Tables | Description |
+|--------|--------|-------------|
+| ECON | 28 | Fact tables: BLS wages/employment, BEA income/GDP, FRED indicators, Treasury, World Bank |
+| ECON_REFERENCE | 7 | Dimension tables: industry codes, geography mappings, line code catalogs, series metadata |
+| **Total** | **35** | Combined star schema for economic analytics |
+
+### Relationship Summary
+
+| Source Table | Target Table | Join Column(s) | Relationship Type |
+|--------------|--------------|----------------|-------------------|
+| `bls_geographies` | `geo.states` | `state_fips` | Dimension → GEO |
+| `bls_geographies` | `geo.cbsa` | `cbsa_code` → `cbsa_fips` | Dimension → GEO |
+| State-level facts | `geo.states` | `state_fips` or `geo_fips` | Fact → GEO |
+| County facts | `geo.counties` | `county_fips` or `area_fips` | Fact → GEO |
+| BEA tables | `regional_linecodes` | `table_name, line_code` | Fact → Dimension |
+| Industry tables | `naics_sectors` | `industry_code` | Fact → Dimension |
+| Metro tables | `bls_geographies` | `area_code` or `metro_code` | Fact → Dimension |
+| FRED tables | `fred_series` | `series` | Fact → Dimension |
+| NIPA tables | `nipa_tables` | `table_id` | Fact → Dimension |
 
 ---
 
