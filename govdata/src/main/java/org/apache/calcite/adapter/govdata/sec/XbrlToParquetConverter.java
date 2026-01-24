@@ -288,15 +288,16 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Write filing metadata
-      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, sourceFilePath);
+      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
       outputFiles.add(metadataPath);
 
       // Convert contexts to Parquet
       writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate, accession);
       outputFiles.add(contextsPath);
 
-      // Extract and write MD&A
-      writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, accession, sourceFilePath);
+      // Extract MD&A ONCE and use for both mda_sections and vectorized_chunks
+      List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, filingDate, accession, sourceFilePath);
+      writeMDAToParquetFromData(mdaData, mdaPath);
       outputFiles.add(mdaPath);
 
       // Extract and write XBRL relationships
@@ -311,10 +312,11 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Create vectorized chunks with contextual enrichment if enabled
+      // Uses the SAME mdaData extracted above for consistency
       if (enableVectorization) {
         String chunksPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
-        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath);
+        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath, mdaData);
         outputFiles.add(chunksPath);
       }
 
@@ -844,7 +846,7 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private void writeMetadataToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String sourcePath) throws IOException {
+      String cik, String filingType, String filingDate, String accession, String sourcePath) throws IOException {
 
     // Load column metadata from sec-schema.json
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -853,11 +855,18 @@ public class XbrlToParquetConverter implements FileConverter {
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
 
-    // Extract accession number from filename
+    // Use passed accession, or try to extract from filename, or generate fallback
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    String accessionNumber = extractAccessionNumber(filename);
+    String accessionNumber = accession;
+    if (accessionNumber == null || accessionNumber.isEmpty()) {
+      accessionNumber = extractAccessionNumber(filename);
+    }
+    if (accessionNumber == null || accessionNumber.isEmpty()) {
+      // Generate fallback accession number from cik and filing date
+      accessionNumber = cik + "-" + filingDate.replace("-", "").substring(2);
+    }
     data.put("cik", cik);
-    data.put("accession_number", accessionNumber != null ? accessionNumber : "");
+    data.put("accession_number", accessionNumber);
     data.put("filing_type", filingType);
     data.put("filing_date", filingDate);
 
@@ -1418,23 +1427,14 @@ public class XbrlToParquetConverter implements FileConverter {
 
 
   /**
-   * Extract and write MD&A (Management Discussion & Analysis) to Parquet.
-   * Uses semantic chunking to create optimal text chunks for downstream processing.
+   * Extract MD&A data from document. This is the SINGLE source of truth for MD&A text.
+   * Used by both mda_sections table and vectorized_chunks for embeddings.
    */
-  private void writeMDAToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String accession, String sourcePath)
-      throws IOException {
-
-    // Load column metadata from sec-schema.json
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        AbstractSecDataDownloader.loadTableColumns("mda_sections");
+  private List<Map<String, Object>> extractMDAData(Document doc,
+      String cik, String filingType, String filingDate, String accession, String sourcePath) {
 
     List<Map<String, Object>> dataList = new ArrayList<>();
-
-    // Format accession_number consistently (10-digit-CIK-YY-NNNNNN format)
     String accessionNumber = accession != null ? accession : cik + "-" + filingDate;
-
-    // Use semantic chunker for optimal text extraction
     SemanticTextChunker chunker = SemanticTextChunker.forMDA();
 
     // 1. Extract MD&A from HTML using semantic chunking
@@ -1451,11 +1451,9 @@ public class XbrlToParquetConverter implements FileConverter {
       if (element.hasAttribute("contextRef")) {
         String concept = extractConceptName(element);
 
-        // Check if this is an MD&A-related concept
         if (isMDAConcept(concept)) {
           String text = element.getTextContent().trim();
           if (!text.isEmpty()) {
-            // Use chunker for XBRL TextBlock content
             List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(text);
             for (SemanticTextChunker.Chunk chunk : chunks) {
               Map<String, Object> data = new HashMap<>();
@@ -1474,12 +1472,22 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
-    if (!dataList.isEmpty()) {
-      storageProvider.writeAvroParquet(outputPath, columns, dataList, "MDASection", "MDASection");
-      LOGGER.info("Successfully wrote " + dataList.size() + " MD&A chunks to " + outputPath);
+    LOGGER.info("Extracted {} MD&A paragraphs from {}", dataList.size(), sourcePath);
+    return dataList;
+  }
+
+  /**
+   * Write pre-extracted MD&A data to Parquet file.
+   */
+  private void writeMDAToParquetFromData(List<Map<String, Object>> mdaData, String outputPath)
+      throws IOException {
+    if (!mdaData.isEmpty()) {
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          AbstractSecDataDownloader.loadTableColumns("mda_sections");
+      storageProvider.writeAvroParquet(outputPath, columns, mdaData, "MDASection", "MDASection");
+      LOGGER.info("Wrote {} MD&A chunks to {}", mdaData.size(), outputPath);
     } else {
-      LOGGER.debug("Skipping empty MD&A file: " + outputPath);
+      LOGGER.debug("Skipping empty MD&A file: {}", outputPath);
     }
   }
 
@@ -3653,9 +3661,12 @@ public class XbrlToParquetConverter implements FileConverter {
    * Creates individual vectors for footnotes and MD&A paragraphs with relationships.
    * Text is enriched with context tags and normalized for consistent embeddings.
    * Embeddings are NOT stored here - they are computed by DuckDB at materialization time.
+   *
+   * @param mdaData Pre-extracted MD&A data from extractMDAData() - single source of truth
    */
   private void writeVectorizedChunksToParquet(Document doc, String outputPath,
-      String cik, String filingType, String filingDate, String sourcePath) throws IOException {
+      String cik, String filingType, String filingDate, String sourcePath,
+      List<Map<String, Object>> mdaData) throws IOException {
 
     // Load schema from metadata (now vectorized_chunks)
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -3672,8 +3683,8 @@ public class XbrlToParquetConverter implements FileConverter {
     // Extract footnotes as TextBlobs
     List<SecTextVectorizer.TextBlob> footnoteBlobs = extractFootnoteBlobs(doc);
 
-    // Extract MD&A paragraphs as TextBlobs
-    List<SecTextVectorizer.TextBlob> mdaBlobs = extractMDABlobs(doc, sourcePath);
+    // Convert pre-extracted MDA data to TextBlobs (uses SAME text as mda_sections)
+    List<SecTextVectorizer.TextBlob> mdaBlobs = convertMDADataToBlobs(mdaData);
 
     // Build relationship map (who references whom)
     Map<String, List<String>> references = buildReferenceMap(footnoteBlobs, mdaBlobs);
@@ -3913,193 +3924,31 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Extract MD&A paragraphs as TextBlob objects.
+   * Convert pre-extracted MDA data to TextBlobs for vectorization.
+   * This ensures vectorized_chunks uses the EXACT same text as mda_sections.
    */
-  private List<SecTextVectorizer.TextBlob> extractMDABlobs(Document xbrlDoc, String sourcePath) {
+  private List<SecTextVectorizer.TextBlob> convertMDADataToBlobs(List<Map<String, Object>> mdaData) {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
 
-    // Extract MD&A from both traditional XBRL and inline XBRL (iXBRL)
-    NodeList mdaElements = xbrlDoc.getElementsByTagName("*");
-    int mdaCounter = 0;
+    int counter = 0;
+    for (Map<String, Object> data : mdaData) {
+      String text = (String) data.get("paragraph_text");
+      if (text != null && text.length() > 50) {
+        String id = "mda_para_" + (++counter);
+        String section = (String) data.getOrDefault("section", "Item 7");
+        String subsection = (String) data.getOrDefault("subsection", "PARAGRAPH");
 
-    for (int i = 0; i < mdaElements.getLength(); i++) {
-      Element element = (Element) mdaElements.item(i);
-      String localName = element.getLocalName();
-      String namespaceURI = element.getNamespaceURI();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("source", "mda_sections");
 
-      String elementName = null;
-      String text = null;
-
-      // Check for traditional XBRL MD&A elements
-      if (localName != null &&
-          (localName.contains("ManagementDiscussionAndAnalysis") ||
-           localName.contains("MDAndA") ||
-           localName.contains("Item7"))) {
-        text = element.getTextContent().trim();
-        elementName = localName;
-      }
-      // Check for inline XBRL (iXBRL) MD&A elements
-      else if ("nonNumeric".equals(localName) && namespaceURI != null
-               && namespaceURI.contains("xbrl")) {
-        String name = element.getAttribute("name");
-        if (name != null &&
-            (name.contains("ManagementDiscussionAndAnalysis") ||
-             name.contains("MDAndA") ||
-             name.contains("Item7"))) {
-          text = element.getTextContent().trim();
-          // Extract element name from the name attribute
-          elementName = name.contains(":") ? name.substring(name.indexOf(":") + 1) : name;
-        }
-      }
-
-      // Process extracted text if found
-      if (text != null && text.length() > 200) {
-        // Split into paragraphs for better vectorization
-        String[] paragraphs = text.split("\\n\\n+|(?<=\\.)\\s+(?=[A-Z])");
-
-        for (String paragraph : paragraphs) {
-          paragraph = paragraph.trim();
-          if (paragraph.length() > 100 && !paragraph.startsWith("<")) {
-            String id = "mda_para_" + (++mdaCounter);
-            String parentSection = "Management Discussion and Analysis";
-            String subsection = detectMDASubsection(paragraph);
-
-            Map<String, String> attributes = new HashMap<>();
-            attributes.put("source", "xbrl");
-            attributes.put("element", elementName != null ? elementName : "");
-
-            SecTextVectorizer.TextBlob blob =
-                new SecTextVectorizer.TextBlob(id, "mda_paragraph", paragraph, parentSection, subsection, attributes);
-            blobs.add(blob);
-          }
-        }
+        SecTextVectorizer.TextBlob blob =
+            new SecTextVectorizer.TextBlob(id, "mda_paragraph", text,
+                "Management Discussion and Analysis", subsection, attributes);
+        blobs.add(blob);
       }
     }
 
-    // If no MD&A in XBRL and source is HTML, extract from HTML
-    String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    if (blobs.isEmpty() && (filename.endsWith(".htm") || filename.endsWith(".html"))) {
-      blobs.addAll(extractMDAFromHtml(sourcePath));
-    }
-
-    // If still no MD&A and this is XBRL, look for associated HTML filing
-    if (blobs.isEmpty() && filename.endsWith(".xml")) {
-      String htmlPath = findAssociatedHtmlFiling(sourcePath);
-      if (htmlPath != null) {
-        blobs.addAll(extractMDAFromHtml(htmlPath));
-      }
-    }
-
-    LOGGER.info("Extracted " + blobs.size() + " MD&A paragraphs");
-    return blobs;
-  }
-
-  /**
-   * Find the associated HTML filing for an XBRL file.
-   */
-  private String findAssociatedHtmlFiling(String xbrlPath) {
-    // Look for 10-K or 10-Q HTML in same directory
-    String parentPath = xbrlPath.substring(0, xbrlPath.lastIndexOf('/'));
-
-    try {
-      // Use StorageProvider for both local and cloud storage
-      if (!storageProvider.exists(parentPath) || !storageProvider.isDirectory(parentPath)) {
-        return null;
-      }
-
-      List<StorageProvider.FileEntry> files = storageProvider.listFiles(parentPath, false);
-      List<StorageProvider.FileEntry> htmlFiles = new ArrayList<>();
-
-      for (StorageProvider.FileEntry file : files) {
-        if (file.isDirectory()) {
-          continue;
-        }
-        String name = file.getName();
-        if ((name.endsWith(".htm") || name.endsWith(".html")) &&
-            !name.contains("_cal") && !name.contains("_def") && !name.contains("_lab") &&
-            !name.contains("_pre") && !name.contains("_ref")) {
-          htmlFiles.add(file);
-        }
-      }
-
-      if (!htmlFiles.isEmpty()) {
-        // Prefer files with 10-K or 10-Q in name
-        for (StorageProvider.FileEntry file : htmlFiles) {
-          String name = file.getName().toLowerCase();
-          if (name.contains("10-k") || name.contains("10k") ||
-              name.contains("10-q") || name.contains("10q")) {
-            return file.getPath();
-          }
-        }
-        return htmlFiles.get(0).getPath();  // Return first HTML file if no specific match
-      }
-    } catch (IOException e) {
-      LOGGER.debug("Could not list files in {}: {}", parentPath, e.getMessage());
-    }
-    return null;
-  }
-
-  /**
-   * Extract MD&A from HTML filing.
-   */
-  private List<SecTextVectorizer.TextBlob> extractMDAFromHtml(String htmlPath) {
-    List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
-
-    try {
-      org.jsoup.nodes.Document htmlDoc;
-      try (InputStream is = storageProvider.openInputStream(htmlPath)) {
-        htmlDoc = Jsoup.parse(is, "UTF-8", "");
-      }
-
-      // Find Item 7 or MD&A sections
-      Elements mdaSections =
-        htmlDoc.select("*:matchesOwn((?i)(item\\s*7[^0-9]|management.*discussion.*analysis))");
-
-      int paraCounter = 0;
-      for (org.jsoup.nodes.Element section : mdaSections) {
-        // Skip if this is table of contents
-        if (section.parents().select("table").size() > 0) continue;
-
-        // Extract following content until next major item
-        org.jsoup.nodes.Element current = section;
-        int localCounter = 0;
-        boolean inMDA = true;
-
-        while (current != null && localCounter < 200 && inMDA) {
-          current = current.nextElementSibling();
-          if (current == null) break;
-
-          String text = current.text().trim();
-
-          // Stop at next item
-          if (isNextItem(text)) {
-            inMDA = false;
-            break;
-          }
-
-          // Extract meaningful paragraphs
-          if (text.length() > 100 && !isBoilerplate(text)) {
-            String id = "mda_para_" + (++paraCounter);
-            String parentSection = "Management Discussion and Analysis";
-            String subsection = detectMDASubsection(text);
-
-            Map<String, String> attributes = new HashMap<>();
-            attributes.put("source", "html");
-            String fileName = htmlPath.substring(htmlPath.lastIndexOf('/') + 1);
-            attributes.put("file", fileName);
-
-            SecTextVectorizer.TextBlob blob =
-                new SecTextVectorizer.TextBlob(id, "mda_paragraph", text, parentSection, subsection, attributes);
-            blobs.add(blob);
-          }
-
-          localCounter++;
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.warn("Failed to parse HTML for MD&A: " + e.getMessage());
-    }
-
+    LOGGER.debug("Converted {} MDA records to TextBlobs", blobs.size());
     return blobs;
   }
 
