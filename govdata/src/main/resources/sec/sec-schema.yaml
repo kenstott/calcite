@@ -459,9 +459,10 @@ partitionedTables:
         - columns: [cik, accession_number]
           targetTable: filing_metadata
           targetColumns: [cik, accession_number]
-        - columns: [context_ref]
+        - columns: [cik, accession_number, context_ref]
           targetTable: filing_contexts
-          targetColumns: [context_id]
+          targetColumns: [cik, accession_number, context_id]
+          comment: Context IDs are only unique within a filing, requires composite FK
 
     source:
       <<: *document_source_defaults
@@ -833,9 +834,10 @@ partitionedTables:
     constraints:
       primaryKey: [cik, accession_number, reporting_person_cik, security_title, transaction_code]
       foreignKeys:
-        - columns: [cik]
+        - columns: [cik, accession_number]
           targetTable: filing_metadata
-          targetColumns: [cik]
+          targetColumns: [cik, accession_number]
+          comment: Each Form 3/4/5 is a distinct filing with its own accession number
 
     source:
       <<: *document_source_defaults
@@ -1121,8 +1123,8 @@ partitionedTables:
       - name: embedding
         type: array<double>
         nullable: true
-        comment: 768-dim Jina embedding of enriched_text via quackformers
-        expression: "embed_jina(enriched_text)::FLOAT[768]"
+        comment: 384-dim all-MiniLM-L6-v2 embedding of enriched_text via quackformers
+        expression: "embed(enriched_text)::FLOAT[384]"
       - name: content_type
         type: string
         nullable: true

@@ -17,144 +17,127 @@ erDiagram
     %% SEC SCHEMA (Financial Data)
     %% ===========================
 
-    %% SEC.financial_line_items
-    financial_line_items {
-        string cik PK
-        string filing_type PK
-        int year PK
-        string accession_number PK
-        string concept PK
-        string period PK
-        string context_ref FK
-        decimal value
-        string unit
-        string segment
-        date filing_date
-    }
-
-    %% SEC.filing_contexts
-    filing_contexts {
-        string cik PK
-        string filing_type PK
-        int year PK
-        string accession_number PK
-        string context_id PK
-        date start_date
-        date end_date
-        boolean instant
-        string segment
-        date filing_date
-    }
-
     %% SEC.filing_metadata (central reference table)
     filing_metadata {
         string cik PK
-        string filing_type PK
-        int year PK
         string accession_number PK
+        string filing_type
+        string filing_date
         string company_name
+        string ticker
         string sic_code
         string state_of_incorporation FK
         string fiscal_year_end
         string business_address
-        string business_phone
-        date filing_date
+        string irs_number
+    }
+
+    %% SEC.financial_line_items
+    financial_line_items {
+        string cik PK_FK
+        string accession_number PK_FK
+        string element_id PK
+        string concept
+        string context_ref FK
+        string unit_ref
+        double numeric_value
+        string period_start
+        string period_end
+        boolean is_instant
+    }
+
+    %% SEC.filing_contexts
+    filing_contexts {
+        string cik PK_FK
+        string accession_number PK_FK
+        string context_id PK
+        string entity_identifier
+        string period_start
+        string period_end
+        string period_instant
+        string segment
+        string scenario
     }
 
     %% SEC.mda_sections
     mda_sections {
-        string cik PK,FK
-        string filing_type PK,FK
-        int year PK,FK
-        string accession_number PK,FK
-        string section_id PK
-        string section_text
-        int section_order
-        date filing_date
-    }
-
-    %% SEC.footnotes
-    footnotes {
-        string cik PK,FK
-        string filing_type PK,FK
-        int year PK,FK
-        string accession_number PK,FK
-        string footnote_id PK
-        string footnote_text
-        string referenced_concept
-        int footnote_number
-        date filing_date
+        string cik PK_FK
+        string accession_number PK_FK
+        string section PK
+        int paragraph_number PK
+        string subsection
+        string paragraph_text
+        string footnote_refs
     }
 
     %% SEC.xbrl_relationships
     xbrl_relationships {
-        string cik PK
-        string filing_type PK
-        int year PK
-        string accession_number PK
-        string relationship_id PK
-        string from_concept
-        string to_concept
+        string cik PK_FK
+        string accession_number PK_FK
+        string linkbase_type PK
+        string from_concept PK
+        string to_concept PK
         string arc_role
-        date filing_date
+        double weight
+        double order
     }
 
     %% SEC.insider_transactions
     insider_transactions {
-        string cik PK
-        string filing_type PK
-        int year PK
-        string accession_number PK
-        string transaction_id PK
-        string insider_cik
-        string insider_name
-        date transaction_date
-        string transaction_type
-        decimal shares
-        decimal price_per_share
-        date filing_date
+        string cik PK_FK
+        string accession_number PK_FK
+        string reporting_person_cik PK
+        string security_title PK
+        string transaction_code PK
+        string reporting_person_name
+        boolean is_director
+        boolean is_officer
+        double shares_transacted
+        double price_per_share
     }
 
     %% SEC.earnings_transcripts
     earnings_transcripts {
-        string cik PK,FK
-        string filing_type PK,FK
-        int year PK,FK
-        string accession_number PK,FK
-        string speaker
-        string text
-        int sequence
-        date filing_date
+        string cik PK_FK
+        string accession_number PK_FK
+        string section_type PK
+        int paragraph_number PK
+        string filing_type
+        string exhibit_number
+        string paragraph_text
+        string speaker_name
+        string speaker_role
     }
 
     %% SEC.stock_prices
     stock_prices {
         string ticker PK
-        date date PK
-        string cik
-        decimal open
-        decimal high
-        decimal low
-        decimal close
+        string date PK
+        string cik FK
+        double open
+        double high
+        double low
+        double close
         bigint volume
-        decimal adjusted_close
+        double adjusted_close
+        double split_coefficient
+        double dividend
     }
 
-    %% SEC.vectorized_blobs
-    vectorized_blobs {
-        string cik PK,FK
-        string filing_type PK,FK
-        int year PK,FK
-        string accession_number PK,FK
-        string blob_id PK
-        string blob_type
-        string source_table
-        string source_id FK
-        string content
+    %% SEC.vectorized_chunks
+    vectorized_chunks {
+        string cik PK_FK
+        string accession_number PK_FK
+        string chunk_id PK
+        int year
+        string source_type
+        string section
+        int sequence
+        string chunk_text
+        string enriched_text
         array embedding
-        int start_offset
-        int end_offset
-        date filing_date
+        string content_type
+        string financial_concepts
     }
 
     %% =============================
@@ -356,20 +339,18 @@ erDiagram
     }
 
     %% Relationships within SEC domain
-    financial_line_items ||--o{ filing_contexts : "has context"
-    financial_line_items }o--|| filing_metadata : "belongs to filing"
+    financial_line_items }o--|| filing_metadata : "belongs to filing (cik, accession_number)"
+    financial_line_items }o--|| filing_contexts : "context_ref → context_id (scoped to filing)"
+    filing_contexts }o--|| filing_metadata : "belongs to filing"
     mda_sections }o--|| filing_metadata : "extracted from filing"
-    footnotes }o--|| filing_metadata : "part of filing"
-    footnotes }o--|| financial_line_items : "explains line item"
-    footnotes }o--|| xbrl_relationships : "references relationships"
+    xbrl_relationships }o--|| filing_metadata : "from filing"
     earnings_transcripts }o--|| filing_metadata : "from 8-K filing"
-    insider_transactions }o--|| filing_metadata : "reported in filing"
+    insider_transactions }o--|| filing_metadata : "Form 3/4/5 filing (cik, accession_number)"
 
-    %% Vectorized blobs relationships (contains embeddings of text content)
-    vectorized_blobs }o--|| filing_metadata : "text from filing"
-    vectorized_blobs }o--|| mda_sections : "vectorizes MD&A text"
-    vectorized_blobs }o--|| footnotes : "vectorizes footnote text"
-    vectorized_blobs }o--|| earnings_transcripts : "vectorizes transcript text"
+    %% Vectorized chunks relationships (contains embeddings of text content)
+    vectorized_chunks }o--|| filing_metadata : "text from filing"
+    vectorized_chunks }o--|| mda_sections : "chunks MD&A text"
+    vectorized_chunks }o--|| earnings_transcripts : "chunks transcript text"
 
     %% Relationships within ECON domain
     employment_statistics }o--|| fred_indicators : "series_id → series_id (BLS to FRED overlap)"
@@ -426,14 +407,18 @@ This allows true referential integrity without requiring data transformation.
 #### Implemented Within-Schema FKs
 
 **SEC Schema Internal FKs (to filing_metadata)**:
-1. **financial_line_items** → **filing_metadata** (cik, filing_type, year, accession_number)
-2. **footnotes** → **filing_metadata** (cik, filing_type, year, accession_number)
-3. **insider_transactions** → **filing_metadata** (cik, filing_type, year, accession_number)
-4. **earnings_transcripts** → **filing_metadata** (cik, filing_type, year, accession_number)
-5. **vectorized_blobs** → **filing_metadata** (cik, filing_type, year, accession_number)
-6. **mda_sections** → **filing_metadata** (cik, filing_type, year, accession_number)
-7. **xbrl_relationships** → **filing_metadata** (cik, filing_type, year, accession_number)
-8. **filing_contexts** → **filing_metadata** (cik, filing_type, year, accession_number)
+1. **financial_line_items** → **filing_metadata** (cik, accession_number)
+2. **filing_contexts** → **filing_metadata** (cik, accession_number)
+3. **mda_sections** → **filing_metadata** (cik, accession_number)
+4. **xbrl_relationships** → **filing_metadata** (cik, accession_number)
+5. **insider_transactions** → **filing_metadata** (cik, accession_number)
+6. **earnings_transcripts** → **filing_metadata** (cik, accession_number)
+7. **vectorized_chunks** → **filing_metadata** (cik, accession_number)
+8. **stock_prices** → **filing_metadata** (cik) - partial, spans multiple filings
+
+**SEC Schema Internal FKs (context linkage)**:
+9. **financial_line_items** → **filing_contexts** (cik, accession_number, context_ref) → (cik, accession_number, context_id)
+   - Context IDs are only unique within a filing, so composite FK required
 
 **ECON Schema Internal FKs**:
 1. **employment_statistics.series_id** → **fred_indicators.series_id** (partial overlap)
@@ -468,17 +453,16 @@ This allows true referential integrity without requiring data transformation.
 
 ## Table Categories
 
-### SEC Tables (Partitioned by cik/filing_type/year)
-- **financial_line_items**: XBRL financial statement data
-- **filing_contexts**: XBRL context definitions
-- **filing_metadata**: Company and filing information (central reference table)
+### SEC Tables (Partitioned by year)
+- **filing_metadata**: Company and filing information (central reference table, PK: cik, accession_number)
+- **financial_line_items**: XBRL financial statement data (FK to filing_metadata and filing_contexts)
+- **filing_contexts**: XBRL context definitions (FK to filing_metadata)
 - **mda_sections**: Management Discussion & Analysis text (FK to filing_metadata)
-- **footnotes**: Financial statement footnotes (FK to filing_metadata)
-- **xbrl_relationships**: Concept relationships and calculations
+- **xbrl_relationships**: Concept relationships and calculations (FK to filing_metadata)
 - **insider_transactions**: Forms 3, 4, 5 insider trading data (FK to filing_metadata)
 - **earnings_transcripts**: 8-K earnings call transcripts (FK to filing_metadata)
-- **stock_prices**: Daily stock price data (partitioned by ticker/year)
-- **vectorized_blobs**: Text embeddings for semantic search (vectorizes content from mda_sections, footnotes, and earnings_transcripts)
+- **stock_prices**: Daily stock price data (PK: ticker, date; weak FK to filing_metadata via cik)
+- **vectorized_chunks**: Text embeddings for semantic search (chunks content from mda_sections and earnings_transcripts)
 
 ### GEO Tables (Static or slowly changing)
 - **states**: State boundaries and metadata
@@ -610,14 +594,21 @@ ORDER BY wage_growth_rate DESC;
 ## Implementation Notes
 
 ### Primary Keys
-- All SEC tables use composite PKs including partition columns (cik, filing_type, year)
-- GEO tables use natural keys (FIPS codes, ZIP codes, etc.)
-- ECON tables use composite PKs of date + series/area identifiers
+- **SEC tables**: Use (cik, accession_number) as the base composite key, with additional columns for child tables:
+  - filing_metadata: (cik, accession_number)
+  - financial_line_items: (cik, accession_number, element_id)
+  - filing_contexts: (cik, accession_number, context_id)
+  - mda_sections: (cik, accession_number, section, paragraph_number)
+  - insider_transactions: (cik, accession_number, reporting_person_cik, security_title, transaction_code)
+  - stock_prices: (ticker, date) - not filing-based
+- **GEO tables**: Use natural keys (FIPS codes, ZIP codes, etc.)
+- **ECON tables**: Use composite PKs of date + series/area identifiers
 
 ### Foreign Keys
-- Within-domain FKs are strongly typed and enforced via metadata
-- Cross-domain FKs require data transformation or parsing
-- State codes need standardization (2-letter vs FIPS)
+- SEC tables reference filing_metadata via (cik, accession_number)
+- financial_line_items → filing_contexts uses composite FK (cik, accession_number, context_ref) since context_id is only unique within a filing
+- Cross-domain FKs use stable identifiers (state_abbr, not dates)
+- State codes use 2-letter abbreviations for cross-schema joins
 - ECON area codes can map to both FIPS (counties) and MSA codes
 
 ### Data Freshness
