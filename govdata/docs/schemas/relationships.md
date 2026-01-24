@@ -113,8 +113,8 @@ erDiagram
     }
 
     financial_line_items {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string element_id PK
         string concept "XBRL concept name"
         string context_ref FK
@@ -125,8 +125,8 @@ erDiagram
     }
 
     filing_contexts {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string context_id PK
         string entity_identifier
         string period_start
@@ -136,8 +136,8 @@ erDiagram
     }
 
     mda_sections {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string section PK "Item 7, Item 7A, etc."
         int paragraph_number PK
         string subsection
@@ -145,8 +145,8 @@ erDiagram
     }
 
     xbrl_relationships {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string linkbase_type PK
         string from_concept PK
         string to_concept PK
@@ -155,8 +155,8 @@ erDiagram
     }
 
     insider_transactions {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string reporting_person_cik PK
         string security_title PK
         string transaction_code PK
@@ -166,8 +166,8 @@ erDiagram
     }
 
     earnings_transcripts {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string section_type PK
         int paragraph_number PK
         string speaker_name
@@ -184,8 +184,8 @@ erDiagram
     }
 
     vectorized_chunks {
-        string cik PK_FK
-        string accession_number PK_FK
+        string cik PK
+        string accession_number PK
         string chunk_id PK
         string source_type
         string chunk_text
@@ -386,7 +386,7 @@ erDiagram
     }
 
     state_wages {
-        string state_fips PK_FK
+        string state_fips PK
         int year PK
         string industry_code PK
         double avg_weekly_wage
