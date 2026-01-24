@@ -1394,8 +1394,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         stmt.execute("LOAD parquet");
         stmt.execute("INSTALL json");
         stmt.execute("LOAD json");
+        stmt.execute("INSTALL quackformers FROM community");
+        stmt.execute("LOAD quackformers");
       } catch (SQLException e) {
-        LOGGER.debug("Extensions already loaded or built-in");
+        LOGGER.debug("Extensions already loaded or built-in: {}", e.getMessage());
       }
 
       // Configure S3 if needed

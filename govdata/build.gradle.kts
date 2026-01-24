@@ -61,11 +61,11 @@ dependencies {
     implementation("ai.djl.huggingface:tokenizers:0.25.0")
 
     // DuckDB for JSON to Parquet conversion
-    implementation("org.duckdb:duckdb_jdbc:1.4.1.0")
+    implementation("org.duckdb:duckdb_jdbc:1.4.3.0")
 
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.1.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")

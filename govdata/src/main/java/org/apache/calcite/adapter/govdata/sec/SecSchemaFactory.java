@@ -15,6 +15,8 @@ import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
+import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -1178,7 +1180,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Materializes staging parquet files to Iceberg tables using the file adapter's
-   * IcebergTableWriter. This method is called after DocumentETLProcessor completes
+   * IcebergMaterializer. This method is called after DocumentETLProcessor completes
    * to commit the staging parquet files to their corresponding Iceberg tables.
    *
    * @param operand Schema operand with configuration
@@ -1186,7 +1188,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir) {
-    LOGGER.info("Starting Iceberg materialization for SEC tables");
+    LOGGER.info("Starting Iceberg materialization for SEC tables using IcebergMaterializer");
 
     // Load table definitions from YAML
     List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
@@ -1200,13 +1202,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (warehousePath == null) {
       warehousePath = secParquetDir + "/SEC";
     }
+    // Normalize for Hadoop
+    if (warehousePath.startsWith("s3://")) {
+      warehousePath = "s3a://" + warehousePath.substring(5);
+    }
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
-    // Build catalog config with S3 credentials from storage provider
-    Map<String, Object> catalogConfig = buildIcebergCatalogConfig(warehousePath);
+    // Create IcebergMaterializer using file adapter
+    IcebergMaterializer materializer = new IcebergMaterializer(
+        warehousePath, storageProvider, null);
 
     int tablesProcessed = 0;
-    int totalFilesCommitted = 0;
+    int totalBatchesSuccessful = 0;
 
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
@@ -1241,14 +1248,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           icebergTableName = tableName;
         }
 
-        // Use IcebergTableWriter.commitFromStaging to commit staging files
-        int filesCommitted = commitStagingFilesToIceberg(
-            icebergTableName, secParquetDir, pattern, catalogConfig, tableConfig);
+        // Build MaterializationConfig from table config
+        IcebergMaterializer.MaterializationConfig config =
+            buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern, tableConfig);
 
-        if (filesCommitted > 0) {
+        // Clean up old empty parquet files that can cause DuckDB union_by_name issues
+        cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
+
+        // Materialize using IcebergMaterializer
+        IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+
+        if (result.getSuccessCount() > 0) {
           tablesProcessed++;
-          totalFilesCommitted += filesCommitted;
-          LOGGER.info("Materialized {} files to Iceberg table '{}'", filesCommitted, icebergTableName);
+          totalBatchesSuccessful += result.getSuccessCount();
+          LOGGER.info("Materialized table '{}': {} batches successful, {} failed, {} skipped",
+              icebergTableName, result.getSuccessCount(), result.getFailedCount(), result.getSkippedCount());
         }
       } catch (Exception e) {
         LOGGER.error("Failed to materialize table '{}' to Iceberg: {}", tableName, e.getMessage());
@@ -1258,198 +1272,109 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    LOGGER.info("Iceberg materialization complete: {} tables, {} files committed",
-        tablesProcessed, totalFilesCommitted);
+    LOGGER.info("Iceberg materialization complete: {} tables, {} batches successful",
+        tablesProcessed, totalBatchesSuccessful);
   }
 
   /**
-   * Builds Iceberg catalog configuration with S3 credentials from storage provider.
-   */
-  private Map<String, Object> buildIcebergCatalogConfig(String warehousePath) {
-    Map<String, Object> catalogConfig = new HashMap<String, Object>();
-    catalogConfig.put("catalog", "hadoop");
-
-    // Normalize warehouse path for Hadoop
-    String normalizedWarehouse = warehousePath;
-    if (normalizedWarehouse != null && normalizedWarehouse.startsWith("s3://")) {
-      normalizedWarehouse = "s3a://" + normalizedWarehouse.substring(5);
-    }
-    catalogConfig.put("warehousePath", normalizedWarehouse);
-
-    // Add S3 credentials from storage provider
-    if (storageProvider != null) {
-      Map<String, String> s3Config = storageProvider.getS3Config();
-      if (s3Config != null) {
-        Map<String, String> hadoopConfig = new HashMap<String, String>();
-        if (s3Config.containsKey("accessKeyId")) {
-          hadoopConfig.put("fs.s3a.access.key", s3Config.get("accessKeyId"));
-        }
-        if (s3Config.containsKey("secretAccessKey")) {
-          hadoopConfig.put("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
-        }
-        if (s3Config.containsKey("endpoint")) {
-          hadoopConfig.put("fs.s3a.endpoint", s3Config.get("endpoint"));
-          hadoopConfig.put("fs.s3a.path.style.access", "true");
-        }
-        if (!hadoopConfig.isEmpty()) {
-          catalogConfig.put("hadoopConfig", hadoopConfig);
-        }
-      }
-    }
-
-    return catalogConfig;
-  }
-
-  /**
-   * Commits staging parquet files to an Iceberg table using the file adapter's
-   * IcebergTableWriter. If the table doesn't exist, it will be created using
-   * columns and partition spec from the tableConfig.
-   *
-   * @param tableName Iceberg table name
-   * @param stagingBaseDir Base directory containing staging parquet files
-   * @param pattern Pattern to match staging files
-   * @param catalogConfig Iceberg catalog configuration
-   * @param tableConfig Table configuration from YAML containing columns and partitions
-   * @return Number of files committed
+   * Builds MaterializationConfig from YAML table configuration.
    */
   @SuppressWarnings("unchecked")
-  private int commitStagingFilesToIceberg(String tableName, String sourceBaseDir,
-      String pattern, Map<String, Object> catalogConfig,
-      Map<String, Object> tableConfig) throws IOException {
+  private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
+      String tableName, String icebergTableName, String baseDir, String pattern,
+      Map<String, Object> tableConfig) {
 
-    // Build full source pattern for reading parquet files
-    String sourcePattern = storageProvider.resolvePath(sourceBaseDir, pattern);
-    LOGGER.info("Materializing table '{}' from source pattern: {}", tableName, sourcePattern);
+    // Build source pattern
+    String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
 
-    // Load or create Iceberg table using file adapter's IcebergCatalogManager
-    org.apache.iceberg.Table table;
-    if (IcebergCatalogManager.tableExists(catalogConfig, tableName)) {
-      table = IcebergCatalogManager.loadTable(catalogConfig, tableName);
-      LOGGER.info("Loaded existing Iceberg table: {}", tableName);
-    } else {
-      LOGGER.info("Creating new Iceberg table: {}", tableName);
+    // Extract partition columns
+    List<PartitionedTableConfig.ColumnDefinition> partitionColumns =
+        extractPartitionColumnDefinitions(tableConfig);
 
-      // Extract columns from tableConfig
-      List<IcebergCatalogManager.ColumnDef> columnDefs = extractColumnsFromConfig(tableConfig);
-      if (columnDefs.isEmpty()) {
-        LOGGER.warn("No columns defined for table '{}', cannot create Iceberg table", tableName);
-        return 0;
-      }
+    // Extract batch partition columns and computed columns
+    List<String> batchPartitionCols = extractBatchPartitionColumns(tableConfig);
+    Map<String, String> computedColumns = extractComputedColumns(tableConfig);
 
-      // Extract partition column names from tableConfig
-      List<String> partitionColumnNames = extractPartitionColumnsFromConfig(tableConfig);
-
-      // Create the table
-      table = IcebergCatalogManager.createTableFromColumns(
-          catalogConfig, tableName, columnDefs, partitionColumnNames);
-      LOGGER.info("Created Iceberg table '{}' with {} columns, partitioned by {}",
-          tableName, columnDefs.size(), partitionColumnNames);
-    }
-
-    // Build Hadoop configuration from catalog config
-    Configuration hadoopConf = new Configuration();
-    Map<String, String> hadoopConfigMap = (Map<String, String>) catalogConfig.get("hadoopConfig");
-    if (hadoopConfigMap != null) {
-      for (Map.Entry<String, String> entry : hadoopConfigMap.entrySet()) {
-        hadoopConf.set(entry.getKey(), entry.getValue());
-      }
-    }
-
-    // Create staging directory for DuckDB output
-    String stagingPath = storageProvider.getStagingDirectory("sec-iceberg-" + tableName);
-    LOGGER.debug("Using staging path: {}", stagingPath);
-
-    // Clean up old empty parquet files that can cause DuckDB union_by_name issues
-    // Empty parquet files (schema only, no data) are typically < 1KB
-    cleanupEmptyParquetFiles(sourceBaseDir, pattern, 1024);
-
-    int filesCommitted = 0;
-    try {
-      // Use DuckDB to read source parquet files and write to staging
-      // This follows the same pattern as IcebergMaterializer.processBatch()
-      try (java.sql.Connection conn = getDuckDBConnection()) {
-        configureS3ForDuckDB(conn);
-
-        // Build partition columns list
-        List<String> partitionCols = extractPartitionColumnsFromConfig(tableConfig);
-        String partitionClause = partitionCols.isEmpty() ? ""
-            : ", PARTITION_BY (" + String.join(", ", partitionCols) + ")";
-
-        String sql = "COPY (\n"
-            + "  SELECT * FROM read_parquet('" + sourcePattern + "', "
-            + "hive_partitioning=true, union_by_name=true)\n"
-            + ") TO '" + stagingPath + "' (FORMAT PARQUET" + partitionClause + ")";
-
-        LOGGER.debug("Executing DuckDB SQL: {}", sql);
-        long startTime = System.currentTimeMillis();
-        try (java.sql.Statement stmt = conn.createStatement()) {
-          stmt.execute(sql);
+    // Get year range from dimensions config
+    int startYear = 2020;
+    int endYear = java.time.Year.now().getValue();
+    Map<String, Object> dimensions = (Map<String, Object>) tableConfig.get("dimensions");
+    if (dimensions != null) {
+      Map<String, Object> yearDim = (Map<String, Object>) dimensions.get("year");
+      if (yearDim != null) {
+        Object start = yearDim.get("start");
+        Object end = yearDim.get("end");
+        if (start instanceof Number) {
+          startYear = ((Number) start).intValue();
         }
-        long elapsed = System.currentTimeMillis() - startTime;
-        LOGGER.info("DuckDB transformation completed in {}ms for table '{}'", elapsed, tableName);
-      }
-
-      // Commit from staging to Iceberg
-      IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, hadoopConf);
-      writer.commitFromStaging(stagingPath, null);
-
-      // Count files in staging (already moved by commitFromStaging)
-      filesCommitted = 1; // At least one batch was committed
-      LOGGER.info("Committed staging files to Iceberg table '{}'", tableName);
-
-    } catch (java.sql.SQLException e) {
-      LOGGER.error("DuckDB error materializing table '{}': {}", tableName, e.getMessage());
-      throw new IOException("DuckDB materialization failed: " + e.getMessage(), e);
-    } finally {
-      // Cleanup staging directory
-      try {
-        storageProvider.delete(stagingPath);
-      } catch (Exception e) {
-        LOGGER.debug("Failed to cleanup staging path {}: {}", stagingPath, e.getMessage());
+        if (end instanceof Number) {
+          endYear = ((Number) end).intValue();
+        } else if (end instanceof String) {
+          String endStr = resolveEnvVariable((String) end);
+          try {
+            endYear = Integer.parseInt(endStr);
+          } catch (NumberFormatException e) {
+            // Keep default
+          }
+        }
       }
     }
 
-    return filesCommitted;
+    // Determine row batch size for expensive computed columns (embeddings)
+    int rowBatchSize = 0;
+    if (!computedColumns.isEmpty()) {
+      // Check if any computed column is an embedding function
+      for (String expression : computedColumns.values()) {
+        if (expression.contains("embed(") || expression.contains("embed_jina")) {
+          rowBatchSize = 20;  // Reduced batch size for quackformers to prevent OOM
+          break;
+        }
+      }
+    }
+
+    return IcebergMaterializer.MaterializationConfig.builder()
+        .sourcePattern(sourcePattern)
+        .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
+        .targetTableId(icebergTableName)
+        .sourceTableName(tableName)
+        .partitionColumns(partitionColumns)
+        .batchPartitionColumns(batchPartitionCols)
+        .yearRange(startYear, endYear)
+        .computedColumns(computedColumns)
+        .rowBatchSize(rowBatchSize)
+        .description(tableName)
+        .build();
   }
 
   /**
-   * Gets a DuckDB connection for materialization.
+   * Extracts partition column definitions from table config.
    */
-  private java.sql.Connection getDuckDBConnection() throws java.sql.SQLException {
-    return java.sql.DriverManager.getConnection("jdbc:duckdb:");
-  }
+  @SuppressWarnings("unchecked")
+  private List<PartitionedTableConfig.ColumnDefinition> extractPartitionColumnDefinitions(
+      Map<String, Object> tableConfig) {
+    List<PartitionedTableConfig.ColumnDefinition> partitionColumns =
+        new ArrayList<PartitionedTableConfig.ColumnDefinition>();
 
-  /**
-   * Configures S3 credentials for DuckDB if using S3 storage.
-   */
-  private void configureS3ForDuckDB(java.sql.Connection conn) throws java.sql.SQLException {
-    Map<String, String> s3Config = storageProvider.getS3Config();
-    if (s3Config == null) {
-      return;
+    List<String> partitionColNames = extractPartitionColumnsFromConfig(tableConfig);
+    List<Map<String, Object>> columns = (List<Map<String, Object>>) tableConfig.get("columns");
+
+    for (String colName : partitionColNames) {
+      String colType = "string";  // Default type
+      if (columns != null) {
+        for (Map<String, Object> col : columns) {
+          if (colName.equals(col.get("name"))) {
+            colType = (String) col.get("type");
+            if (colType == null) {
+              colType = "string";
+            }
+            break;
+          }
+        }
+      }
+      partitionColumns.add(new PartitionedTableConfig.ColumnDefinition(colName, colType));
     }
 
-    try (java.sql.Statement stmt = conn.createStatement()) {
-      stmt.execute("INSTALL httpfs");
-      stmt.execute("LOAD httpfs");
-
-      String accessKeyId = s3Config.get("accessKeyId");
-      String secretAccessKey = s3Config.get("secretAccessKey");
-      String endpoint = s3Config.get("endpoint");
-      String region = s3Config.get("region");
-
-      if (accessKeyId != null && secretAccessKey != null) {
-        stmt.execute("SET s3_access_key_id='" + accessKeyId + "'");
-        stmt.execute("SET s3_secret_access_key='" + secretAccessKey + "'");
-      }
-      if (region != null) {
-        stmt.execute("SET s3_region='" + region + "'");
-      }
-      if (endpoint != null) {
-        // For R2/MinIO, need to set endpoint and URL style
-        stmt.execute("SET s3_endpoint='" + endpoint.replace("https://", "") + "'");
-        stmt.execute("SET s3_url_style='path'");
-      }
-    }
+    return partitionColumns;
   }
 
   /**
@@ -1527,6 +1452,74 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     return partitionColumnNames;
+  }
+
+  /**
+   * Extracts computed columns (columns with 'expression' property) from table config.
+   *
+   * @param tableConfig Table configuration from YAML
+   * @return Map of column name to expression
+   */
+  @SuppressWarnings("unchecked")
+  private Map<String, String> extractComputedColumns(Map<String, Object> tableConfig) {
+    Map<String, String> computedColumns = new java.util.LinkedHashMap<String, String>();
+
+    Object columnsObj = tableConfig.get("columns");
+    if (!(columnsObj instanceof List)) {
+      return computedColumns;
+    }
+
+    List<?> columns = (List<?>) columnsObj;
+    for (Object colObj : columns) {
+      if (!(colObj instanceof Map)) {
+        continue;
+      }
+
+      Map<String, Object> col = (Map<String, Object>) colObj;
+      String name = (String) col.get("name");
+      String expression = (String) col.get("expression");
+
+      if (name != null && expression != null && !expression.trim().isEmpty()) {
+        computedColumns.put(name, expression);
+      }
+    }
+
+    return computedColumns;
+  }
+
+  /**
+   * Extracts batch partition columns from the materialize.iceberg config.
+   * These columns determine how data is batched during materialization to avoid OOM.
+   *
+   * @param tableConfig Table configuration from YAML
+   * @return List of batch partition column names
+   */
+  @SuppressWarnings("unchecked")
+  private List<String> extractBatchPartitionColumns(Map<String, Object> tableConfig) {
+    List<String> batchPartitionCols = new ArrayList<String>();
+
+    Object materializeObj = tableConfig.get("materialize");
+    if (!(materializeObj instanceof Map)) {
+      return batchPartitionCols;
+    }
+
+    Map<String, Object> materialize = (Map<String, Object>) materializeObj;
+    Object icebergObj = materialize.get("iceberg");
+    if (!(icebergObj instanceof Map)) {
+      return batchPartitionCols;
+    }
+
+    Map<String, Object> iceberg = (Map<String, Object>) icebergObj;
+    Object batchColsObj = iceberg.get("batchPartitionColumns");
+    if (batchColsObj instanceof List) {
+      for (Object col : (List<?>) batchColsObj) {
+        if (col instanceof String) {
+          batchPartitionCols.add((String) col);
+        }
+      }
+    }
+
+    return batchPartitionCols;
   }
 
   /**

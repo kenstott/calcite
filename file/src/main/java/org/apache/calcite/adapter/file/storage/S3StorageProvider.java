@@ -383,6 +383,63 @@ public class S3StorageProvider implements StorageProvider {
       // Convert relative path to full S3 URI if needed
       String fullPath = toFullPath(path);
       S3Uri s3Uri = parseS3Uri(fullPath);
+
+      // Check if path contains glob patterns
+      if (s3Uri.key.contains("*")) {
+        // Use prefix-based listing for glob patterns
+        // Extract the most specific prefix possible
+        // For pattern like "year=*/0000320193_xxx_*.parquet", we want to find
+        // a more specific prefix after the wildcard if possible
+        String globPattern = s3Uri.key;
+
+        // Find the part after the wildcard that's constant (e.g., the CIK/accession)
+        // Pattern: year=*/0000320193_0000320193-24-000132_*.parquet
+        // We can search for "year=2020/...", "year=2021/...", etc.
+        int wildcardIndex = globPattern.indexOf('*');
+        String beforeWildcard = globPattern.substring(0, wildcardIndex);
+        String afterWildcard = globPattern.substring(wildcardIndex + 1);
+
+        // If afterWildcard starts with a constant part, use it for better filtering
+        // e.g., "/0000320193_0000320193-24-000132_"
+        int nextSlash = afterWildcard.indexOf('/');
+        String constantPart = "";
+        if (nextSlash >= 0) {
+          // Extract the constant filename prefix after the slash
+          String filenamePattern = afterWildcard.substring(nextSlash + 1);
+          int filenameWildcard = filenamePattern.indexOf('*');
+          if (filenameWildcard > 0) {
+            constantPart = filenamePattern.substring(0, filenameWildcard);
+          }
+        }
+
+        // Convert glob pattern to regex for matching
+        String regex = globPattern
+            .replace(".", "\\.")
+            .replace("*", ".*");
+
+        // Try each year from 2016 to current year
+        int currentYear = java.time.Year.now().getValue();
+        for (int year = currentYear; year >= 2016; year--) {
+          String yearPrefix = beforeWildcard + year + afterWildcard.substring(0, nextSlash >= 0 ? nextSlash + 1 : 0) + constantPart;
+
+          ListObjectsV2Request request = new ListObjectsV2Request()
+              .withBucketName(s3Uri.bucket)
+              .withPrefix(yearPrefix)
+              .withMaxKeys(10);
+
+          ListObjectsV2Result result = s3Client.listObjectsV2(request);
+          for (S3ObjectSummary obj : result.getObjectSummaries()) {
+            if (obj.getKey().matches(regex)) {
+              LOGGER.debug("S3 exists check (glob): {} -> true (matched {})", path, obj.getKey());
+              return true;
+            }
+          }
+        }
+        LOGGER.debug("S3 exists check (glob): {} -> false", path);
+        return false;
+      }
+
+      // Standard exact path check
       boolean exists = s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
       LOGGER.debug("S3 exists check: {} -> {}", path, exists);
       return exists;

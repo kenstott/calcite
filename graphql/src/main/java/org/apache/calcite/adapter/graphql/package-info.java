@@ -10,10 +10,10 @@
  */
 
 /**
- * Hasura GraphQL adapter for Apache Calcite.
+ * GraphQL adapter for Apache Calcite.
  *
- * <p>This adapter enables Apache Calcite to query Hasura GraphQL endpoints
- * using SQL. It provides a bridge between SQL and Hasura's GraphQL API
- * by translating SQL queries into Hasura's GraphQL query format.
+ * <p>This adapter enables Apache Calcite to query GraphQL endpoints
+ * using SQL. It provides a bridge between SQL and GraphQL APIs
+ * by translating SQL queries into GraphQL query format.
  */
 package org.apache.calcite.adapter.graphql;

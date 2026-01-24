@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -31,7 +32,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -197,6 +200,85 @@ public class SecIntegrationTest {
       LOGGER.info("Tables with data: {}/{}", tablesWithData, tables.size());
 
       assertTrue(totalRows > 0, "Should have downloaded and processed some data");
+    }
+  }
+
+  @Test
+  void testRecreateVectorizedChunks() throws SQLException {
+    LOGGER.info("=== Recreating vectorized_chunks Iceberg table ===");
+
+    String parquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
+    assertNotNull(parquetDir, "GOVDATA_PARQUET_DIR must be set");
+
+    // Build Iceberg catalog config
+    Map<String, Object> icebergConfig = new HashMap<>();
+    icebergConfig.put("catalog", "hadoop");
+    icebergConfig.put("warehouse", parquetDir + "/source=sec/SEC");
+
+    // S3 configuration - both Iceberg S3FileIO and Hadoop S3A settings
+    String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");
+    String awsSecretAccessKey = TestEnvironmentLoader.getEnv("AWS_SECRET_ACCESS_KEY");
+    String awsEndpointOverride = TestEnvironmentLoader.getEnv("AWS_ENDPOINT_OVERRIDE");
+    String awsRegion = TestEnvironmentLoader.getEnv("AWS_REGION");
+
+    // Iceberg S3FileIO settings
+    if (awsAccessKeyId != null) {
+      icebergConfig.put("s3.access-key-id", awsAccessKeyId);
+    }
+    if (awsSecretAccessKey != null) {
+      icebergConfig.put("s3.secret-access-key", awsSecretAccessKey);
+    }
+    if (awsEndpointOverride != null) {
+      icebergConfig.put("s3.endpoint", awsEndpointOverride);
+    }
+    if (awsRegion != null) {
+      icebergConfig.put("s3.region", awsRegion);
+    }
+
+    // Hadoop S3A filesystem settings (required for HadoopCatalog with S3)
+    // These must be in a nested "hadoopConfig" map as per IcebergCatalogManager
+    Map<String, String> hadoopConfig = new HashMap<>();
+    hadoopConfig.put("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+    hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+    if (awsAccessKeyId != null) {
+      hadoopConfig.put("fs.s3a.access.key", awsAccessKeyId);
+    }
+    if (awsSecretAccessKey != null) {
+      hadoopConfig.put("fs.s3a.secret.key", awsSecretAccessKey);
+    }
+    if (awsEndpointOverride != null) {
+      hadoopConfig.put("fs.s3a.endpoint", awsEndpointOverride);
+    }
+    hadoopConfig.put("fs.s3a.path.style.access", "true");
+    icebergConfig.put("hadoopConfig", hadoopConfig);
+
+    // Drop existing table with purge (deletes data files)
+    String tableId = "vectorized_chunks";
+    boolean dropped = IcebergCatalogManager.dropTable(icebergConfig, tableId, true);
+    LOGGER.info("Dropped vectorized_chunks table: {}", dropped);
+
+    // Now run the main test which will trigger materialization
+    LOGGER.info("Running table row counts (will trigger re-materialization)...");
+    testAllTablesRowCounts();
+
+    // Verify vectorized_chunks has MDA content
+    try (Connection conn = createConnection();
+         Statement stmt = conn.createStatement()) {
+      String sql = "SELECT source_type, COUNT(*) as cnt FROM \"SEC\".\"vectorized_chunks\" "
+          + "GROUP BY source_type ORDER BY source_type";
+      LOGGER.info("Verifying vectorized_chunks content:");
+      try (ResultSet rs = stmt.executeQuery(sql)) {
+        int mdaCount = 0;
+        while (rs.next()) {
+          String sourceType = rs.getString(1);
+          long count = rs.getLong(2);
+          LOGGER.info("  {}: {}", sourceType, count);
+          if ("mda_paragraph".equals(sourceType)) {
+            mdaCount = (int) count;
+          }
+        }
+        assertTrue(mdaCount > 0, "vectorized_chunks should have mda_paragraph entries");
+      }
     }
   }
 }

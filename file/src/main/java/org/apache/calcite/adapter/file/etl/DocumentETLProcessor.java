@@ -271,16 +271,52 @@ public class DocumentETLProcessor {
       return false;
     }
 
-    // Check if facts file exists (primary output)
-    String factsPattern = String.format("cik=%s/**/year=*/%s_%s_facts.parquet",
-        cik, cik, accession);
+    // Extract year from accession number (format: XXXXXXXXXX-YY-NNNNNN where YY is 2-digit year)
+    // Examples: 0000320193-24-000132 -> 2024, 0001104659-23-014712 -> 2023
+    String year = extractYearFromAccession(accession);
+    if (year == null) {
+      return false;
+    }
+
+    // Check for specific parquet files using direct path (no glob)
+    // Try common output types: _insider (Form 3/4/5), _facts (10-K/10-Q), _metadata
+    String basePath = String.format("%s/year=%s/%s_%s", outputDirectory, year, cik, accession);
+    String[] suffixes = {"_insider.parquet", "_facts.parquet", "_metadata.parquet"};
 
     try {
-      // Use storage provider to check existence
-      return storageProvider.exists(outputDirectory + "/" + factsPattern);
+      for (String suffix : suffixes) {
+        if (storageProvider.exists(basePath + suffix)) {
+          return true;
+        }
+      }
+      return false;
     } catch (Exception e) {
       // If check fails, assume not processed
       return false;
+    }
+  }
+
+  /**
+   * Extract 4-digit year from SEC accession number.
+   * Accession format: XXXXXXXXXX-YY-NNNNNN where YY is 2-digit year.
+   */
+  private String extractYearFromAccession(String accession) {
+    if (accession == null || accession.length() < 13) {
+      return null;
+    }
+    // Find the year part after first dash
+    int dashIndex = accession.indexOf('-');
+    if (dashIndex < 0 || dashIndex + 3 > accession.length()) {
+      return null;
+    }
+    String twoDigitYear = accession.substring(dashIndex + 1, dashIndex + 3);
+    try {
+      int yy = Integer.parseInt(twoDigitYear);
+      // Assume 00-50 is 2000-2050, 51-99 is 1951-1999
+      int year = yy <= 50 ? 2000 + yy : 1900 + yy;
+      return String.valueOf(year);
+    } catch (NumberFormatException e) {
+      return null;
     }
   }
 
