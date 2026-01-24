@@ -246,7 +246,7 @@ ENV PROMETHEUS_PORT="9090"
 - Prometheus/Grafana (if using monitoring)
 
 ### Network Requirements
-- HTTP/HTTPS access to Hasura endpoint
+- HTTP/HTTPS access to GraphQL endpoint
 - Redis port (if using Redis cache)
 - Metrics port (if using monitoring)
 - Management port
@@ -264,7 +264,7 @@ ENV PROMETHEUS_PORT="9090"
 - SSL/TLS client authentication (optional)
 
 ### Authorization
-- Hasura permissions model
+- GraphQL permissions model
 - Row-level security
 - Column-level security
 

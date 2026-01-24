@@ -1,6 +1,6 @@
-# Hasura Fork of Apache Calcite
+# Extended Apache Calcite
 
-This is a fork of Apache Calcite customized for integration with Hasura DDN (Data Delivery Network). This fork includes significant enhancements and new adapters to support a wider range of data sources and improved functionality.
+This is a fork of Apache Calcite with significant enhancements and new adapters to support a wider range of data sources and improved functionality.
 
 ## Key Differences from Upstream Apache Calcite
 
@@ -15,7 +15,7 @@ This is a fork of Apache Calcite customized for integration with Hasura DDN (Dat
   - Support for parameterized API calls
   - Response transformation and type mapping
 
-- **GraphQL Adapter**: Native Hasura GraphQL endpoint support
+- **GraphQL Adapter**: Query GraphQL endpoints using SQL
   - SQL:2003 compliant query translation to GraphQL
   - Support for window functions, CTEs, and set operations
   - Built-in caching system (in-memory and Redis)
@@ -28,7 +28,7 @@ This is a fork of Apache Calcite customized for integration with Hasura DDN (Dat
 - **New File Formats**:
   - XLSX (Excel) files with automatic sheet detection
   - YAML files as data sources
-  - HML (Hasura Metadata Language) files
+  - HML (metadata) files
 - **S3 Protocol Support**: Direct querying of files in S3 buckets
 - **Recursive File Search**: Automatic discovery of files in nested directories
 - **Improved JSON/CSV handling**: Better type inference and streaming

@@ -467,7 +467,7 @@ COPY config/ /app/config/
 
 # Set environment
 ENV JAVA_OPTS="-Xmx2g -XX:+UseG1GC"
-ENV GRAPHQL_ENDPOINT="http://hasura:8080/v1/graphql"
+ENV GRAPHQL_ENDPOINT="http://graphql-server:8080/v1/graphql"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s \
