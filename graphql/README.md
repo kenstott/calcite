@@ -15,9 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# Apache Calcite Hasura GraphQL Adapter
+# Apache Calcite GraphQL Adapter
 
-This adapter enables Apache Calcite to query Hasura GraphQL endpoints using SQL. It provides a bridge between SQL and Hasura's GraphQL API by translating SQL queries into Hasura's GraphQL query format.
+This adapter enables Apache Calcite to query GraphQL endpoints using SQL. It provides a bridge between SQL and GraphQL APIs by translating SQL queries into GraphQL query format.
 
 ## Quick Links
 - [Features and SQL Support](docs/features.md)
@@ -33,7 +33,7 @@ This adapter enables Apache Calcite to query Hasura GraphQL endpoints using SQL.
 
 ## Overview
 
-The Apache Calcite Hasura GraphQL Adapter is a SQL:2003 compliant system that enables SQL queries against Hasura GraphQL endpoints. It supports a wide range of SQL features including window functions, common table expressions, and set operations, while providing efficient caching mechanisms and comprehensive query optimization.
+The Apache Calcite GraphQL Adapter is a SQL:2003 compliant system that enables SQL queries against GraphQL endpoints. It supports a wide range of SQL features including window functions, common table expressions, and set operations, while providing efficient caching mechanisms and comprehensive query optimization.
 
 ### Key Features Highlights
 - SQL:2003 compliance with extensive feature support
@@ -51,7 +51,7 @@ See [Features and SQL Support](docs/features.md) for detailed information.
 ```xml
 <dependency>
     <groupId>org.apache.calcite</groupId>
-    <artifactId>calcite-hasura</artifactId>
+    <artifactId>calcite-graphql</artifactId>
     <version>${calcite.version}</version>
 </dependency>
 ```
@@ -60,14 +60,14 @@ See [Features and SQL Support](docs/features.md) for detailed information.
 ```json
 {
   "version": "1.0",
-  "defaultSchema": "hasura",
+  "defaultSchema": "graphql",
   "schemas": [
     {
-      "name": "hasura",
+      "name": "graphql",
       "type": "custom",
       "factory": "org.apache.calcite.adapter.graphql.GraphQLSchemaFactory",
       "operand": {
-        "endpoint": "https://your-hasura-instance.hasura.app/v1/graphql"
+        "endpoint": "https://your-graphql-endpoint.example.com/graphql"
       }
     }
   ]

@@ -33,16 +33,16 @@ Create a model file `model.json`:
 ```json
 {
   "version": "1.0",
-  "defaultSchema": "hasura",
+  "defaultSchema": "graphql",
   "schemas": [
     {
-      "name": "hasura",
+      "name": "graphql",
       "type": "custom",
       "factory": "org.apache.calcite.adapter.graphql.GraphQLSchemaFactory",
       "operand": {
-        "endpoint": "https://your-hasura-instance.hasura.app/v1/graphql",
-        "role": "admin",           // Optional: Hasura role
-        "user": "user-id",         // Optional: Hasura user
+        "endpoint": "https://your-graphql-endpoint.example.com/graphql",
+        "role": "admin",           // Optional: Role for authorization
+        "user": "user-id",         // Optional: User identifier
         "auth": "Bearer token",    // Optional: Authorization header
         "maxConnections": 10,      // Optional: Connection pool size
         "timeout": 30000,          // Optional: Query timeout in ms
@@ -56,11 +56,11 @@ Create a model file `model.json`:
 ### Environment Variables
 ```bash
 # Required
-export HASURA_ENDPOINT=https://your-hasura-instance.hasura.app/v1/graphql
+export GRAPHQL_ENDPOINT=https://your-graphql-endpoint.example.com/graphql
 
 # Authentication
-export HASURA_ADMIN_SECRET=your-admin-secret
-export HASURA_JWT_TOKEN=your-jwt-token
+export GRAPHQL_ADMIN_SECRET=your-admin-secret
+export GRAPHQL_JWT_TOKEN=your-jwt-token
 
 # Cache Configuration
 export GRAPHQL_CACHE_TYPE=memory|redis
