@@ -347,18 +347,6 @@ partitionedTables:
         nullable: true
         comment: Stock ticker symbol (if available)
 
-    constraints:
-      primaryKey: [cik, accession_number]
-      indexes:
-        - [filing_date]
-        - [company_name]
-        - [ticker]
-      foreignKeys:
-        - columns: [state_of_incorporation]
-          targetSchema: "${GEO_SCHEMA_NAME:GEO}"
-          targetTable: states
-          targetColumns: [state_abbr]
-          comment: Links filing state of incorporation to geographic state data
 
     # Metadata is extracted from submissions.json API
     source:
@@ -453,16 +441,6 @@ partitionedTables:
         nullable: true
         comment: Scale factor applied to the value
 
-    constraints:
-      primaryKey: [cik, accession_number, element_id]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
-        - columns: [cik, accession_number, context_ref]
-          targetTable: filing_contexts
-          targetColumns: [cik, accession_number, context_id]
-          comment: Context IDs are only unique within a filing, requires composite FK
 
     source:
       <<: *document_source_defaults
@@ -545,12 +523,6 @@ partitionedTables:
         nullable: true
         comment: Scenario dimension information (XML fragment)
 
-    constraints:
-      primaryKey: [cik, accession_number, context_id]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
 
     source:
       <<: *document_source_defaults
@@ -616,12 +588,6 @@ partitionedTables:
       - *paragraph_text
       - *footnote_refs
 
-    constraints:
-      primaryKey: [cik, accession_number, section, paragraph_number]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
 
     source:
       <<: *document_source_defaults
@@ -709,12 +675,6 @@ partitionedTables:
         nullable: true
         comment: Preferred label role for presentation
 
-    constraints:
-      primaryKey: [cik, accession_number, linkbase_type, from_concept, to_concept]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
 
     source:
       <<: *document_source_defaults
@@ -831,13 +791,6 @@ partitionedTables:
         nullable: true
         comment: Additional footnotes and explanations
 
-    constraints:
-      primaryKey: [cik, accession_number, reporting_person_cik, security_title, transaction_code]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
-          comment: Each Form 3/4/5 is a distinct filing with its own accession number
 
     source:
       <<: *document_source_defaults
@@ -910,12 +863,6 @@ partitionedTables:
         nullable: true
         comment: Role/title of the speaker
 
-    constraints:
-      primaryKey: [cik, accession_number, section_type, paragraph_number]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
 
     source:
       <<: *document_source_defaults
@@ -1006,12 +953,6 @@ partitionedTables:
         nullable: true
         comment: Dividend amount paid on this date (if any)
 
-    constraints:
-      primaryKey: [ticker, date]
-      foreignKeys:
-        - columns: [cik]
-          targetTable: filing_metadata
-          targetColumns: [cik]
 
     # Stock prices use standard HTTP API source (not document)
     source:
@@ -1134,12 +1075,6 @@ partitionedTables:
         nullable: true
         comment: Comma-separated list of referenced financial concepts
 
-    constraints:
-      primaryKey: [cik, accession_number, chunk_id]
-      foreignKeys:
-        - columns: [cik, accession_number]
-          targetTable: filing_metadata
-          targetColumns: [cik, accession_number]
 
     source:
       <<: *document_source_defaults
@@ -1167,27 +1102,99 @@ partitionedTables:
         batchPartitionColumns: [year]
 
 # ============================================================================
-# CROSS-TABLE CONSTRAINTS
+# CONSTRAINTS
+# ============================================================================
+# Table constraints (metadata only - not enforced by database).
+# Consolidated at schema level for consistency with census/econ schemas.
+# Primary keys document unique row identifiers.
+# Foreign keys document relationships to guide query optimization.
 # ============================================================================
 
 constraints:
+
+  filing_metadata:
+    primaryKey: [cik, accession_number]
+    indexes:
+      - [filing_date]
+      - [company_name]
+      - [ticker]
+      - [sic_code]
+      - [state_of_incorporation]
+    foreignKeys:
+      - columns: [state_of_incorporation]
+        targetSchema: "${GEO_SCHEMA_NAME:GEO}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links filing state of incorporation to geographic state data
+
   financial_line_items:
+    primaryKey: [cik, accession_number, element_id]
     indexes:
       - [concept]
       - [period_end]
       - [numeric_value]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+      - columns: [cik, accession_number, context_ref]
+        targetTable: filing_contexts
+        targetColumns: [cik, accession_number, context_id]
+        comment: Context IDs are only unique within a filing, requires composite FK
 
-  filing_metadata:
-    indexes:
-      - [company_name]
-      - [sic_code]
-      - [state_of_incorporation]
+  filing_contexts:
+    primaryKey: [cik, accession_number, context_id]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  mda_sections:
+    primaryKey: [cik, accession_number, section, paragraph_number]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  xbrl_relationships:
+    primaryKey: [cik, accession_number, linkbase_type, from_concept, to_concept]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
 
   insider_transactions:
+    primaryKey: [cik, accession_number, reporting_person_cik, security_title, transaction_code]
     indexes:
       - [transaction_date]
       - [reporting_person_name]
       - [transaction_code]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+        comment: Each Form 3/4/5 is a distinct filing with its own accession number
+
+  earnings_transcripts:
+    primaryKey: [cik, accession_number, section_type, paragraph_number]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  stock_prices:
+    primaryKey: [ticker, date]
+    foreignKeys:
+      - columns: [cik]
+        targetTable: filing_metadata
+        targetColumns: [cik]
+
+  vectorized_chunks:
+    primaryKey: [cik, accession_number, chunk_id]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
 
 # ============================================================================
 # VIEWS

@@ -14,7 +14,7 @@ This document provides a comprehensive reference for all relationships between G
 
 ## Cross-Schema Overview ERD
 
-This diagram shows only the cross-schema foreign key relationships, providing a high-level view of how the four main schemas connect.
+This diagram shows the cross-schema foreign key relationships, providing a high-level view of how the four main schemas connect via the GEO schema as the central geographic reference.
 
 ```mermaid
 erDiagram
@@ -22,7 +22,19 @@ erDiagram
     %% CROSS-SCHEMA RELATIONSHIPS OVERVIEW
     %% ===================================
 
-    %% Key tables from each schema that have cross-schema FKs
+    GEO_states {
+        string state_fips PK
+        string state_abbr UK
+        string state_name
+        int year PK
+    }
+
+    GEO_counties {
+        string county_fips PK
+        string state_fips FK
+        string county_name
+        int year PK
+    }
 
     SEC_filing_metadata {
         string cik PK
@@ -32,61 +44,68 @@ erDiagram
         string ticker
     }
 
-    GEO_states {
-        string state_fips PK
-        string state_abbr UK
-        string state_name
-        int year PK
-    }
-
     ECON_state_wages {
         string state_fips FK
         int year
-        string industry_code
         double avg_weekly_wage
     }
 
-    ECON_state_personal_income {
-        string state_fips FK
+    ECON_state_gdp {
+        string geo_fips FK
+        string table_name
         int year
-        double personal_income
+        double data_value
     }
 
-    ECON_state_gdp {
+    ECON_county_wages {
+        string county_fips FK
         string state_fips FK
         int year
-        double gdp
     }
 
     CENSUS_acs_population {
-        string geo_id
+        string state FK
+        string county_fips FK
         int year
         int total_population
     }
 
     CENSUS_acs_income {
-        string geo_id
+        string state FK
+        string county_fips FK
         int year
         double median_income
     }
 
+    ECON_REF_bls_geographies {
+        string geo_code PK
+        string cbsa_code
+        string state_fips
+    }
+
     %% Cross-schema relationships
-    SEC_filing_metadata }o--|| GEO_states : "state_of_incorporation → state_abbr"
-    ECON_state_wages }o--|| GEO_states : "state_fips → state_fips"
-    ECON_state_personal_income }o--|| GEO_states : "state_fips → state_fips"
-    ECON_state_gdp }o--|| GEO_states : "state_fips → state_fips"
-    CENSUS_acs_population }o--o| GEO_states : "geo_id prefix → state_fips (implicit)"
-    CENSUS_acs_income }o--o| GEO_states : "geo_id prefix → state_fips (implicit)"
+    SEC_filing_metadata }o--|| GEO_states : "state_of_incorporation"
+    ECON_state_wages }o--|| GEO_states : "state_fips"
+    ECON_state_gdp }o--|| GEO_states : "geo_fips"
+    ECON_county_wages }o--|| GEO_counties : "county_fips"
+    ECON_county_wages }o--|| GEO_states : "state_fips"
+    CENSUS_acs_population }o--|| GEO_states : "state"
+    CENSUS_acs_population }o--|| GEO_counties : "county_fips"
+    CENSUS_acs_income }o--|| GEO_states : "state"
+    CENSUS_acs_income }o--|| GEO_counties : "county_fips"
+    GEO_counties }o--|| GEO_states : "state_fips"
 ```
 
-**Key Cross-Schema Relationships:**
-| Source | Target | Join Columns | Notes |
-|--------|--------|--------------|-------|
-| `sec.filing_metadata` | `geo.states` | `state_of_incorporation` → `state_abbr` | Company incorporation state |
-| `econ.state_wages` | `geo.states` | `state_fips` → `state_fips` | State-level wage data |
-| `econ.state_personal_income` | `geo.states` | `state_fips` → `state_fips` | State income statistics |
-| `econ.state_gdp` | `geo.states` | `state_fips` → `state_fips` | State GDP data |
-| `census.*` | `geo.states` | `geo_id[0:2]` → `state_fips` | Implicit via FIPS prefix |
+**Cross-Schema Relationship Summary:**
+
+| Source Schema | Tables with Cross-Schema FKs | Target Schema | Join Pattern |
+|---------------|------------------------------|---------------|--------------|
+| SEC | `filing_metadata` | GEO | `state_of_incorporation` → `states.state_abbr` |
+| ECON | `state_wages`, `state_industry`, `jolts_state`, `regional_employment`, `regional_income`, `state_gdp` | GEO | `state_fips` or `geo_fips` → `states.state_fips` |
+| ECON | `county_qcew`, `county_wages` | GEO | `county_fips` or `area_fips` → `counties.county_fips` |
+| ECON | `metro_*` tables | ECON_REF | `metro_code` → `bls_geographies` |
+| ECON | `*_income`, `*_gdp`, `state_consumption` | ECON_REF | `table_name, line_code` → `regional_linecodes` |
+| Census | All 26 ACS/Decennial tables | GEO | `state` → `states.state_fips`, `county_fips` → `counties.county_fips` |
 
 ---
 
@@ -97,31 +116,29 @@ The SEC schema contains 9 tables for financial filings and company data. All tab
 ```mermaid
 erDiagram
     %% ===================================
-    %% SEC SCHEMA (9 tables)
+    %% SEC SCHEMA (9 tables, 10 FKs)
     %% ===================================
 
     filing_metadata {
-        string cik PK "Central Index Key"
-        string accession_number PK "Unique filing ID"
-        string filing_type "10-K, 10-Q, 8-K, etc."
+        string cik PK
+        string accession_number PK
+        string filing_type
         string filing_date
         string company_name
         string ticker
         string state_of_incorporation FK
         string sic_code
-        string irs_number
     }
 
     financial_line_items {
         string cik PK
         string accession_number PK
         string element_id PK
-        string concept "XBRL concept name"
+        string concept
         string context_ref FK
         double numeric_value
         string period_start
         string period_end
-        boolean is_instant
     }
 
     filing_contexts {
@@ -131,14 +148,12 @@ erDiagram
         string entity_identifier
         string period_start
         string period_end
-        string period_instant
-        string segment
     }
 
     mda_sections {
         string cik PK
         string accession_number PK
-        string section PK "Item 7, Item 7A, etc."
+        string section PK
         int paragraph_number PK
         string subsection
         string paragraph_text
@@ -162,7 +177,6 @@ erDiagram
         string transaction_code PK
         string reporting_person_name
         double shares_transacted
-        double price_per_share
     }
 
     earnings_transcripts {
@@ -189,15 +203,12 @@ erDiagram
         string chunk_id PK
         string source_type
         string chunk_text
-        string enriched_text
         array embedding
     }
 
-    %% GEO schema table (included for cross-schema reference)
     GEO_states {
         string state_fips PK
         string state_abbr UK
-        string state_name
     }
 
     %% SEC internal relationships
@@ -210,8 +221,6 @@ erDiagram
     earnings_transcripts }o--|| filing_metadata : "cik, accession_number"
     stock_prices }o--|| filing_metadata : "cik"
     vectorized_chunks }o--|| filing_metadata : "cik, accession_number"
-
-    %% Cross-schema relationship
     filing_metadata }o--|| GEO_states : "state_of_incorporation → state_abbr"
 ```
 
@@ -219,26 +228,24 @@ erDiagram
 
 ## GEO Schema ERD
 
-The GEO schema contains 32 tables organized into geographic boundaries and crosswalk tables. The `states` table serves as the central reference point.
+The GEO schema contains 32 tables organized into geographic boundaries, crosswalks, and watershed hierarchies. The `states` table is the root of the geographic hierarchy.
 
 ```mermaid
 erDiagram
     %% ===================================
-    %% GEO SCHEMA (32 tables)
+    %% GEO SCHEMA (32 tables, 28 FKs)
     %% ===================================
 
-    %% Core Geographic Hierarchy
     states {
-        string state_fips PK "2-digit FIPS"
+        string state_fips PK
         int year PK
-        string state_abbr UK "CA, TX, etc."
-        string state_name
-        string region
+        string state_code UK
+        string state_name UK
         geometry boundary
     }
 
     counties {
-        string county_fips PK "5-digit FIPS"
+        string county_fips PK
         int year PK
         string state_fips FK
         string county_name
@@ -246,90 +253,82 @@ erDiagram
     }
 
     places {
-        string place_fips PK "7-digit FIPS"
+        string place_fips PK
         int year PK
         string state_fips FK
         string place_name
         string place_type
-        geometry boundary
     }
 
     census_tracts {
-        string tract_fips PK "11-digit FIPS"
+        string tract_fips PK
         int year PK
         string county_fips FK
         geometry boundary
     }
 
     block_groups {
-        string block_group_fips PK "12-digit FIPS"
+        string block_group_fips PK
         int year PK
         string tract_fips FK
         geometry boundary
     }
 
     zctas {
-        string zcta PK "ZIP Code Tabulation Area"
+        string zcta PK
         int year PK
         geometry boundary
     }
 
     cbsa {
-        string cbsa_code PK "Metro area code"
+        string cbsa_fips PK
         int year PK
-        string cbsa_name
-        string cbsa_type "Metro or Micro"
+        string cbsa_name UK
+        string cbsa_type
     }
 
     congressional_districts {
         string cd_fips PK
         int year PK
         string state_fips FK
-        int district_number
         geometry boundary
     }
 
     school_districts {
-        string sd_fips PK
+        string sd_lea PK
         int year PK
         string state_fips FK
         string district_name
-        string district_type
     }
 
-    %% Crosswalk Tables
-    zip_county_crosswalk {
-        string zip PK
+    state_legislative_lower {
+        string sldl_fips PK
+        int year PK
+        string state_fips FK
+    }
+
+    state_legislative_upper {
+        string sldu_fips PK
+        int year PK
+        string state_fips FK
+    }
+
+    county_subdivisions {
+        string cousub_fips PK
+        int year PK
         string county_fips FK
-        double res_ratio
-        double bus_ratio
     }
 
-    zip_cbsa_crosswalk {
-        string zip PK
-        string cbsa_code FK
-        double res_ratio
+    pumas {
+        string state_fips PK
+        string puma_code PK
+        int year PK
     }
 
-    tract_zip_crosswalk {
-        string tract_fips FK
-        string zip
-        double res_ratio
-    }
-
-    %% Rural-Urban Classifications
-    rural_urban_continuum {
+    voting_districts {
+        string vtd_code PK
+        int year PK
         string county_fips FK
-        int year
-        int rucc_code
-        string description
-    }
-
-    ruca_codes {
-        string tract_fips FK
-        int year
-        int primary_ruca
-        int secondary_ruca
     }
 
     %% Geographic hierarchy
@@ -339,332 +338,453 @@ erDiagram
     block_groups }o--|| census_tracts : "tract_fips"
     congressional_districts }o--|| states : "state_fips"
     school_districts }o--|| states : "state_fips"
+    state_legislative_lower }o--|| states : "state_fips"
+    state_legislative_upper }o--|| states : "state_fips"
+    county_subdivisions }o--|| counties : "county_fips"
+    pumas }o--|| states : "state_fips"
+    voting_districts }o--|| counties : "county_fips"
+```
 
-    %% Crosswalk relationships
+### GEO Crosswalk Tables
+
+```mermaid
+erDiagram
+    %% Crosswalk tables
+    zip_county_crosswalk {
+        string zip PK
+        string county_fips PK
+        int year PK
+        double res_ratio
+    }
+
+    zip_cbsa_crosswalk {
+        string zip PK
+        string cbsa_code PK
+        int year PK
+        double res_ratio
+    }
+
+    tract_zip_crosswalk {
+        string tract_fips PK
+        string zip PK
+        int year PK
+    }
+
+    zip_tract_crosswalk {
+        string zip PK
+        string tract_fips PK
+        int year PK
+    }
+
+    zip_cd_crosswalk {
+        string zip PK
+        string cd_fips PK
+        int year PK
+    }
+
+    rural_urban_continuum {
+        string county_fips PK
+        int year PK
+        int rucc_code
+    }
+
+    ruca_codes {
+        string tract_fips PK
+        int year PK
+        int ruca_primary
+    }
+
+    counties {
+        string county_fips PK
+    }
+
+    census_tracts {
+        string tract_fips PK
+    }
+
+    cbsa {
+        string cbsa_fips PK
+    }
+
+    congressional_districts {
+        string cd_fips PK
+    }
+
     zip_county_crosswalk }o--|| counties : "county_fips"
-    zip_cbsa_crosswalk }o--|| cbsa : "cbsa_code"
+    zip_cbsa_crosswalk }o--|| cbsa : "cbsa_code → cbsa_fips"
     tract_zip_crosswalk }o--|| census_tracts : "tract_fips"
+    zip_tract_crosswalk }o--|| census_tracts : "tract_fips"
+    zip_cd_crosswalk }o--|| congressional_districts : "cd_fips"
     rural_urban_continuum }o--|| counties : "county_fips"
     ruca_codes }o--|| census_tracts : "tract_fips"
 ```
 
-**Additional GEO Tables (not shown for clarity):**
-- `state_legislative_lower`, `state_legislative_upper` - State legislature districts
-- `county_subdivisions` - Minor civil divisions
-- `tribal_areas` - American Indian reservations
-- `urban_areas` - Urbanized areas
-- `pumas` - Public Use Microdata Areas
-- `voting_districts` - Voting precincts
-- `gazetteer_*` - Place name gazetteers
-- `watersheds_huc*` - Watershed boundaries (HUC 2/4/8/12)
+### GEO Watershed Hierarchy
+
+```mermaid
+erDiagram
+    watersheds_huc2 {
+        string huc2 PK
+        int year PK
+        string name
+    }
+
+    watersheds_huc4 {
+        string huc4 PK
+        int year PK
+        string huc2 FK
+        string name
+    }
+
+    watersheds_huc8 {
+        string huc8 PK
+        int year PK
+        string huc4 FK
+        string name
+    }
+
+    watersheds_huc12 {
+        string huc12 PK
+        int year PK
+        string huc8 FK
+        string name
+    }
+
+    watersheds_huc4 }o--|| watersheds_huc2 : "huc2"
+    watersheds_huc8 }o--|| watersheds_huc4 : "huc4"
+    watersheds_huc12 }o--|| watersheds_huc8 : "huc8"
+```
 
 ---
 
 ## ECON Schema ERD
 
-The ECON schema contains 28 tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank.
+The ECON schema contains 28 tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank. Tables link to GEO for geographic context and to ECON_REFERENCE for dimension lookups.
 
 ```mermaid
 erDiagram
     %% ===================================
-    %% ECON SCHEMA (28 tables)
+    %% ECON SCHEMA (28 tables, 23 FKs)
     %% ===================================
 
-    %% Employment & Labor
-    employment_statistics {
-        string series_id PK
-        date observation_date PK
-        double value
-        string frequency
-    }
-
-    regional_employment {
-        string area_code PK
-        date observation_date PK
-        double unemployment_rate
-        bigint labor_force
-    }
-
+    %% State-level tables with GEO FKs
     state_wages {
-        string state_fips PK
+        string type PK
+        string frequency PK
         int year PK
-        string industry_code PK
+        string state_fips FK
         double avg_weekly_wage
-        bigint employment
     }
 
     state_industry {
-        string state_fips
-        int year
-        string industry_code
-        double output
+        string type PK
+        string frequency PK
+        int year PK
+        string state_fips FK
+        string industry_code FK
     }
 
-    %% Inflation & Prices
-    inflation_metrics {
-        string series_id PK
-        date observation_date PK
-        double cpi_value
-        double pct_change_yoy
+    jolts_state {
+        string type PK
+        string frequency PK
+        int year PK
+        string state_fips FK
     }
 
-    regional_cpi {
-        string area_code PK
-        date observation_date PK
-        double cpi_value
+    regional_employment {
+        string type PK
+        int year PK
+        string state_fips PK
+        string area_code FK
     }
 
-    %% GDP & Income
+    %% BEA Regional tables
+    regional_income {
+        string geo_fips PK
+        string table_name PK
+        string line_code PK
+        int year PK
+        double data_value
+    }
+
     state_gdp {
-        string state_fips FK
+        string geo_fips PK
+        string table_name PK
+        string line_code PK
         int year PK
-        string industry_code PK
-        double gdp
+        double data_value
     }
 
-    state_personal_income {
-        string state_fips FK
+    quarterly_income {
+        string geo_fips PK
+        string table_name PK
+        string line_code PK
         int year PK
-        double personal_income
-        double per_capita_income
+    }
+
+    quarterly_gdp {
+        string geo_fips PK
+        string table_name PK
+        string line_code PK
+        int year PK
+    }
+
+    state_consumption {
+        string geo_fips PK
+        string table_name PK
+        string line_code PK
+        int year PK
+    }
+
+    %% County-level
+    county_qcew {
+        string type PK
+        string frequency PK
+        int year PK
+        string area_fips FK
+    }
+
+    county_wages {
+        string type PK
+        string frequency PK
+        int year PK
+        string county_fips FK
+        string state_fips FK
+    }
+
+    %% Metro-level
+    metro_cpi {
+        string type PK
+        string frequency PK
+        int year PK
+        string area_code FK
+    }
+
+    metro_industry {
+        string type PK
+        string frequency PK
+        int year PK
+        string metro_code FK
+        string industry_code FK
+    }
+
+    metro_wages {
+        string type PK
+        string frequency PK
+        int year PK
+        string metro_code FK
+    }
+
+    %% FRED and reference
+    fred_indicators {
+        string type PK
+        string series PK
+        int year PK
+        double value
     }
 
     national_accounts {
         string table_id PK
         int line_number PK
         int year PK
-        string description
-        double value
+        string frequency PK
     }
 
-    %% Treasury & Federal
-    treasury_yields {
-        date observation_date PK
-        string maturity PK
-        double yield_rate
-    }
-
-    federal_debt {
-        date observation_date PK
-        string debt_type PK
-        double amount
-    }
-
-    %% FRED Indicators
-    fred_indicators {
-        string series_id PK
-        date observation_date PK
-        double value
-        string units
-    }
-
-    %% World Bank
-    world_indicators {
-        string country_code PK
-        string indicator_code PK
-        int year PK
-        double value
-    }
-
-    %% GEO reference (for cross-schema)
+    %% Reference tables (from ECON_REFERENCE schema)
     GEO_states {
         string state_fips PK
-        string state_abbr
     }
 
-    %% State-level FK relationships
-    state_wages }o--|| GEO_states : "state_fips"
-    state_gdp }o--|| GEO_states : "state_fips"
-    state_personal_income }o--|| GEO_states : "state_fips"
-    state_industry }o--o| GEO_states : "state_fips (implicit)"
-```
+    GEO_counties {
+        string county_fips PK
+    }
 
-**Additional ECON Tables (not shown for clarity):**
-- `metro_cpi`, `metro_industry`, `metro_wages` - Metro-level statistics
-- `county_qcew`, `county_wages` - County-level data
-- `jolts_*` - Job Openings and Labor Turnover Survey
-- `wage_growth` - Wage growth trends
-- `state_quarterly_*` - Quarterly state statistics
-- `state_consumption` - State consumption expenditure
-- `regional_income` - Regional income data
-- `ita_data` - International Trade Administration
-- `gdp_statistics`, `industry_gdp` - GDP breakdowns
-- `*_enriched` - Enriched views with metadata
+    ECON_REF_bls_geographies {
+        string geo_code PK
+        string metro_cpi_area_code
+        string metro_bls_area_code
+    }
+
+    ECON_REF_regional_linecodes {
+        string tablename PK
+        string LineCode PK
+    }
+
+    ECON_REF_naics_sectors {
+        string supersector_code PK
+    }
+
+    ECON_REF_fred_series {
+        string series PK
+    }
+
+    ECON_REF_nipa_tables {
+        string TableName PK
+    }
+
+    %% GEO relationships
+    state_wages }o--|| GEO_states : "state_fips"
+    state_industry }o--|| GEO_states : "state_fips"
+    jolts_state }o--|| GEO_states : "state_fips"
+    regional_employment }o--|| GEO_states : "area_code"
+    regional_income }o--|| GEO_states : "geo_fips"
+    state_gdp }o--|| GEO_states : "geo_fips"
+    county_qcew }o--|| GEO_counties : "area_fips"
+    county_wages }o--|| GEO_counties : "county_fips"
+    county_wages }o--|| GEO_states : "state_fips"
+
+    %% ECON_REFERENCE relationships
+    state_industry }o--|| ECON_REF_naics_sectors : "industry_code"
+    metro_cpi }o--|| ECON_REF_bls_geographies : "area_code"
+    metro_industry }o--|| ECON_REF_bls_geographies : "metro_code"
+    metro_industry }o--|| ECON_REF_naics_sectors : "industry_code"
+    metro_wages }o--|| ECON_REF_bls_geographies : "metro_code"
+    fred_indicators }o--|| ECON_REF_fred_series : "series"
+    national_accounts }o--|| ECON_REF_nipa_tables : "table_id"
+    regional_income }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+    state_gdp }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+    quarterly_income }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+    quarterly_gdp }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+    state_consumption }o--|| ECON_REF_regional_linecodes : "table_name, line_code"
+```
 
 ---
 
 ## Census Schema ERD
 
-The Census schema contains 39 tables for demographic data from ACS, Decennial Census, and other Census Bureau surveys.
+The Census schema contains 34 tables for demographic data from ACS 5-year, ACS 1-year, Decennial Census, and other Census Bureau surveys. All tables have explicit FKs to GEO schema via `state` and `county_fips` columns.
 
 ```mermaid
 erDiagram
     %% ===================================
-    %% CENSUS SCHEMA (39 tables)
+    %% CENSUS SCHEMA (34 tables, 64 FKs)
     %% ===================================
 
-    %% American Community Survey (ACS) 5-Year
-    acs_population {
-        string geo_id PK
-        int year PK
-        int total_population
-        int male_population
-        int female_population
-    }
-
-    acs_income {
-        string geo_id PK
-        int year PK
-        double median_household_income
-        double per_capita_income
-        double mean_household_income
-    }
-
-    acs_housing {
-        string geo_id PK
-        int year PK
-        int total_housing_units
-        int occupied_units
-        int vacant_units
-        double median_home_value
-    }
-
-    acs_education {
-        string geo_id PK
-        int year PK
-        int high_school_graduates
-        int bachelors_degree
-        int graduate_degree
-    }
-
-    acs_employment {
-        string geo_id PK
-        int year PK
-        int labor_force
-        int employed
-        int unemployed
-    }
-
-    acs_poverty {
-        string geo_id PK
-        int year PK
-        int poverty_universe
-        int below_poverty
-        double poverty_rate
-    }
-
-    acs_race_ethnicity {
-        string geo_id PK
-        int year PK
-        int white_alone
-        int black_alone
-        int asian_alone
-        int hispanic_latino
-    }
-
-    acs_age {
-        string geo_id PK
-        int year PK
-        int under_18
-        int age_18_64
-        int age_65_plus
-        double median_age
-    }
-
-    %% Decennial Census
-    decennial_population {
-        string geo_id PK
-        int year PK
-        int total_population
-        int urban_population
-        int rural_population
-    }
-
-    decennial_housing {
-        string geo_id PK
-        int year PK
-        int total_units
-        int occupied_units
-    }
-
-    %% Population Estimates
-    pep_population {
-        string geo_id PK
-        int year PK
-        int population_estimate
-        int births
-        int deaths
-        int net_migration
-    }
-
-    %% Business Data
-    cbp_establishments {
-        string geo_id PK
-        int year PK
-        string naics_code PK
-        int establishments
-        int employees
-        double annual_payroll
-    }
-
-    economic_census {
-        string geo_id PK
-        int year PK
-        string naics_code PK
-        int establishments
-        double sales_revenue
-    }
-
-    %% Poverty & Insurance Estimates
-    saipe_poverty {
-        string geo_id PK
-        int year PK
-        int all_ages_poverty
-        int children_poverty
-        double poverty_rate
-    }
-
-    sahie_insurance {
-        string geo_id PK
-        int year PK
-        int uninsured
-        double uninsured_rate
-    }
-
-    %% GEO reference (for cross-schema)
+    %% GEO reference tables
     GEO_states {
         string state_fips PK
-        string state_abbr
+        string state_name
     }
 
     GEO_counties {
         string county_fips PK
-        string state_fips FK
+        string county_name
     }
 
-    %% Implicit geographic relationships (via geo_id prefix)
-    acs_population }o--o| GEO_states : "geo_id[0:2] → state_fips"
-    acs_income }o--o| GEO_states : "geo_id[0:2] → state_fips"
-    acs_housing }o--o| GEO_counties : "geo_id → county_fips"
-    decennial_population }o--o| GEO_states : "geo_id[0:2] → state_fips"
+    %% ACS 5-Year Tables (sample showing FK pattern)
+    acs_population {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+        int total_population
+    }
+
+    acs_income {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+        double median_household_income
+    }
+
+    acs_housing {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+        int total_housing_units
+    }
+
+    acs_education {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    acs_employment {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    acs_poverty {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    acs_race_ethnicity {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    acs_age_distribution {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    %% Decennial Census
+    decennial_population {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    decennial_housing {
+        string geography PK
+        int year PK
+        string state FK
+        string county_fips FK
+    }
+
+    %% ACS 1-Year (state-level only)
+    acs1_population {
+        string geography PK
+        int year PK
+        string state FK
+    }
+
+    acs1_income {
+        string geography PK
+        int year PK
+        string state FK
+    }
+
+    %% FK relationships to GEO
+    acs_population }o--|| GEO_states : "state → state_fips"
+    acs_population }o--|| GEO_counties : "county_fips"
+    acs_income }o--|| GEO_states : "state → state_fips"
+    acs_income }o--|| GEO_counties : "county_fips"
+    acs_housing }o--|| GEO_states : "state → state_fips"
+    acs_housing }o--|| GEO_counties : "county_fips"
+    acs_education }o--|| GEO_states : "state → state_fips"
+    acs_education }o--|| GEO_counties : "county_fips"
+    acs_employment }o--|| GEO_states : "state → state_fips"
+    acs_employment }o--|| GEO_counties : "county_fips"
+    acs_poverty }o--|| GEO_states : "state → state_fips"
+    acs_poverty }o--|| GEO_counties : "county_fips"
+    acs_race_ethnicity }o--|| GEO_states : "state → state_fips"
+    acs_race_ethnicity }o--|| GEO_counties : "county_fips"
+    acs_age_distribution }o--|| GEO_states : "state → state_fips"
+    acs_age_distribution }o--|| GEO_counties : "county_fips"
+    decennial_population }o--|| GEO_states : "state → state_fips"
+    decennial_population }o--|| GEO_counties : "county_fips"
+    decennial_housing }o--|| GEO_states : "state → state_fips"
+    decennial_housing }o--|| GEO_counties : "county_fips"
+    acs1_population }o--|| GEO_states : "state → state_fips"
+    acs1_income }o--|| GEO_states : "state → state_fips"
 ```
 
-**Additional Census Tables (not shown for clarity):**
-- `acs_commuting`, `acs_health_insurance`, `acs_language` - More ACS topics
-- `acs_disability`, `acs_veterans`, `acs_migration` - Special populations
-- `acs_occupation`, `acs_industry` - Employment details
-- `acs_internet`, `acs_nativity` - Technology and citizenship
-- `acs_marital_status`, `acs_household_type` - Household composition
-- `acs_housing_tenure`, `acs_income_distribution` - Housing and income
-- `acs1_*` - ACS 1-Year estimates (larger areas only)
-- `bds_dynamics` - Business Dynamics Statistics
-- `abs_characteristics` - Annual Business Survey
-- `nonemployer_statistics` - Nonemployer businesses
-- `building_permits` - Construction permits
-- `qwi_employment` - Quarterly Workforce Indicators
-- `lodes_workplace` - LEHD Origin-Destination data
-- `trade_exports`, `trade_imports` - Trade statistics
-- Summary views: `population_summary`, `income_summary`, `poverty_rate`, `education_attainment`, `unemployment_rate`
+**Note:** All 26 ACS/Decennial tables follow the same FK pattern with `state` → `geo.states.state_fips` and `county_fips` → `geo.counties.county_fips`.
 
 ---
 
@@ -694,28 +814,28 @@ erDiagram
 | `zctas` | `zcta, year` | - | ZIP Code Tabulation Areas |
 | `census_tracts` | `tract_fips, year` | → `counties` | Census tract boundaries |
 | `block_groups` | `block_group_fips, year` | → `census_tracts` | Census block groups |
-| `cbsa` | `cbsa_code, year` | - | Metro/micro statistical areas |
+| `cbsa` | `cbsa_fips, year` | - | Metro/micro statistical areas |
 | `congressional_districts` | `cd_fips, year` | → `states` | Congressional districts |
-| `school_districts` | `sd_fips, year` | → `states` | School district boundaries |
+| `school_districts` | `sd_lea, year` | → `states` | School district boundaries |
 | `state_legislative_lower` | `sldl_fips, year` | → `states` | State house districts |
 | `state_legislative_upper` | `sldu_fips, year` | → `states` | State senate districts |
 | `county_subdivisions` | `cousub_fips, year` | → `counties` | Minor civil divisions |
-| `tribal_areas` | `aiannh_fips, year` | - | American Indian reservations |
-| `urban_areas` | `ua_fips, year` | - | Urbanized areas |
-| `pumas` | `puma_fips, year` | → `states` | Public Use Microdata Areas |
-| `voting_districts` | `vtd_fips, year` | → `counties` | Voting precincts |
-| `zip_county_crosswalk` | `zip, county_fips` | → `counties` | ZIP to county mapping |
-| `zip_cbsa_crosswalk` | `zip, cbsa_code` | → `cbsa` | ZIP to metro mapping |
-| `tract_zip_crosswalk` | `tract_fips, zip` | → `census_tracts` | Tract to ZIP mapping |
-| `zip_tract_crosswalk` | `zip, tract_fips` | → `census_tracts` | ZIP to tract mapping |
-| `zip_cd_crosswalk` | `zip, cd_fips` | → `congressional_districts` | ZIP to congressional district |
-| `county_zip_crosswalk` | `county_fips, zip` | → `counties` | County to ZIP mapping |
-| `cd_zip_crosswalk` | `cd_fips, zip` | → `congressional_districts` | Congressional district to ZIP |
+| `tribal_areas` | `aiannhce, year` | - | American Indian reservations |
+| `urban_areas` | `uace, year` | - | Urbanized areas |
+| `pumas` | `state_fips, puma_code, year` | → `states` | Public Use Microdata Areas |
+| `voting_districts` | `vtd_code, year` | → `counties` | Voting precincts |
+| `zip_county_crosswalk` | `zip, county_fips, year` | → `counties` | ZIP to county mapping |
+| `zip_cbsa_crosswalk` | `zip, cbsa_code, year` | → `cbsa` | ZIP to metro mapping |
+| `tract_zip_crosswalk` | `tract_fips, zip, year` | → `census_tracts` | Tract to ZIP mapping |
+| `zip_tract_crosswalk` | `zip, tract_fips, year` | → `census_tracts` | ZIP to tract mapping |
+| `zip_cd_crosswalk` | `zip, cd_fips, year` | → `congressional_districts` | ZIP to congressional district |
+| `county_zip_crosswalk` | `county_fips, zip, year` | → `counties` | County to ZIP mapping |
+| `cd_zip_crosswalk` | `cd_fips, zip, year` | → `congressional_districts` | Congressional district to ZIP |
 | `rural_urban_continuum` | `county_fips, year` | → `counties` | RUCC codes |
 | `ruca_codes` | `tract_fips, year` | → `census_tracts` | Rural-Urban Commuting Areas |
-| `gazetteer_counties` | `county_fips` | → `counties` | County place names |
-| `gazetteer_places` | `place_fips` | → `places` | Place name gazetteer |
-| `gazetteer_zctas` | `zcta` | → `zctas` | ZCTA gazetteer |
+| `gazetteer_counties` | `county_fips, year` | → `counties`, → `states` | County place names |
+| `gazetteer_places` | `place_fips, year` | → `places`, → `states` | Place name gazetteer |
+| `gazetteer_zctas` | `zcta, year` | → `zctas` | ZCTA gazetteer |
 | `watersheds_huc2` | `huc2, year` | - | 2-digit watershed regions |
 | `watersheds_huc4` | `huc4, year` | → `watersheds_huc2` | 4-digit sub-regions |
 | `watersheds_huc8` | `huc8, year` | → `watersheds_huc4` | 8-digit sub-basins |
@@ -725,114 +845,123 @@ erDiagram
 
 | Table | Primary Key | Foreign Keys | Description |
 |-------|-------------|--------------|-------------|
-| `employment_statistics` | `series_id, date` | - | BLS national employment |
-| `inflation_metrics` | `series_id, date` | - | CPI/PPI inflation data |
-| `regional_cpi` | `area_code, date` | - | Regional CPI |
-| `metro_cpi` | `cbsa_code, date` | - | Metro area CPI |
-| `state_industry` | `state_fips, year, industry` | - | State industry output |
-| `state_wages` | `state_fips, year, industry_code` | → `geo.states` | State wage data |
-| `metro_industry` | `cbsa_code, year, industry` | - | Metro industry data |
-| `metro_wages` | `cbsa_code, year, industry_code` | - | Metro wage data |
-| `county_qcew` | `county_fips, year, industry_code` | - | County employment/wages |
-| `county_wages` | `county_fips, year` | - | County wage summaries |
-| `jolts_regional` | `region, date` | - | JOLTS by region |
-| `jolts_state` | `state_fips, date` | - | JOLTS by state |
-| `wage_growth` | `series_id, date` | - | Wage growth trends |
-| `regional_employment` | `area_code, date` | - | Regional labor statistics |
-| `treasury_yields` | `date, maturity` | - | Treasury yield curves |
-| `federal_debt` | `date, debt_type` | - | Federal debt statistics |
-| `world_indicators` | `country_code, indicator_code, year` | - | World Bank data |
-| `fred_indicators` | `series_id, date` | - | FRED time series |
-| `national_accounts` | `table_id, line_number, year` | - | NIPA tables |
-| `state_personal_income` | `state_fips, year` | → `geo.states` | State personal income |
-| `state_gdp` | `state_fips, year, industry_code` | → `geo.states` | State GDP |
-| `state_quarterly_income` | `state_fips, year, quarter` | → `geo.states` | Quarterly state income |
-| `state_quarterly_gdp` | `state_fips, year, quarter` | → `geo.states` | Quarterly state GDP |
-| `state_consumption` | `state_fips, year` | → `geo.states` | State consumption |
-| `regional_income` | `geo_fips, year` | - | Regional income data |
-| `ita_data` | `series_id, date` | - | International trade data |
-| `gdp_statistics` | `table_id, line, year` | - | GDP statistics |
-| `industry_gdp` | `industry_code, year` | - | GDP by industry |
+| `employment_statistics` | `type, frequency, year` | → `fred_indicators` | BLS national employment |
+| `inflation_metrics` | `type, frequency, year` | → `regional_employment` | CPI/PPI inflation data |
+| `regional_cpi` | `type, frequency, year` | - | Regional CPI |
+| `metro_cpi` | `type, frequency, year` | → `econ_ref.bls_geographies` | Metro area CPI |
+| `state_industry` | `type, frequency, year` | → `geo.states`, → `econ_ref.naics_sectors` | State industry output |
+| `state_wages` | `type, frequency, year` | → `geo.states` | State wage data |
+| `metro_industry` | `type, frequency, year` | → `econ_ref.bls_geographies`, → `econ_ref.naics_sectors` | Metro industry data |
+| `metro_wages` | `type, frequency, year` | → `econ_ref.bls_geographies` | Metro wage data |
+| `county_qcew` | `type, frequency, year` | → `geo.counties` | County employment/wages |
+| `county_wages` | `type, frequency, year` | → `geo.counties`, → `geo.states` | County wage summaries |
+| `jolts_regional` | `type, frequency, year` | - | JOLTS by region |
+| `jolts_state` | `type, frequency, year` | → `geo.states` | JOLTS by state |
+| `wage_growth` | `type, frequency, year` | - | Wage growth trends |
+| `regional_employment` | `type, year, state_fips` | → `geo.states` | Regional labor statistics |
+| `treasury_yields` | `type, frequency, year` | - | Treasury yield curves |
+| `federal_debt` | `type, frequency, year` | - | Federal debt statistics |
+| `world_indicators` | `type, frequency, year` | - | World Bank data |
+| `fred_indicators` | `type, series, year` | → `econ_ref.fred_series` | FRED time series |
+| `national_accounts` | `table_id, line_number, year, frequency` | → `econ_ref.nipa_tables` | NIPA tables |
+| `gdp_statistics` | `type, frequency, year` | - | GDP statistics |
+| `regional_income` | `geo_fips, table_name, line_code, year` | → `geo.states`, → `econ_ref.regional_linecodes` | BEA regional income |
+| `state_gdp` | `geo_fips, table_name, line_code, year` | → `geo.states`, → `econ_ref.regional_linecodes` | BEA state GDP |
+| `quarterly_income` | `geo_fips, table_name, line_code, year` | → `econ_ref.regional_linecodes` | BEA quarterly income |
+| `quarterly_gdp` | `geo_fips, table_name, line_code, year` | → `econ_ref.regional_linecodes` | BEA quarterly GDP |
+| `state_consumption` | `geo_fips, table_name, line_code, year` | → `econ_ref.regional_linecodes` | BEA state consumption |
+| `trade_statistics` | `type, frequency, year` | - | Trade statistics |
+| `ita_data` | `type, frequency, year` | - | International trade data |
+| `industry_gdp` | `type, frequency, year` | - | GDP by industry |
 
-### Census Schema (39 tables)
+### Census Schema (34 tables)
 
 | Table | Primary Key | Foreign Keys | Description |
 |-------|-------------|--------------|-------------|
-| `acs_population` | `geo_id, year` | - | ACS 5-year population |
-| `acs_income` | `geo_id, year` | - | ACS 5-year income |
-| `acs_housing` | `geo_id, year` | - | ACS 5-year housing |
-| `acs_education` | `geo_id, year` | - | ACS 5-year education |
-| `acs_employment` | `geo_id, year` | - | ACS 5-year employment |
-| `acs_poverty` | `geo_id, year` | - | ACS 5-year poverty |
-| `acs_race_ethnicity` | `geo_id, year` | - | ACS 5-year race/ethnicity |
-| `acs_age` | `geo_id, year` | - | ACS 5-year age distribution |
-| `acs_commuting` | `geo_id, year` | - | ACS 5-year commuting |
-| `acs_health_insurance` | `geo_id, year` | - | ACS 5-year health insurance |
-| `acs_language` | `geo_id, year` | - | ACS 5-year language |
-| `acs_disability` | `geo_id, year` | - | ACS 5-year disability |
-| `acs_veterans` | `geo_id, year` | - | ACS 5-year veterans |
-| `acs_migration` | `geo_id, year` | - | ACS 5-year migration |
-| `acs_occupation` | `geo_id, year` | - | ACS 5-year occupation |
-| `acs_industry` | `geo_id, year` | - | ACS 5-year industry |
-| `acs_internet` | `geo_id, year` | - | ACS 5-year internet access |
-| `acs_nativity` | `geo_id, year` | - | ACS 5-year citizenship |
-| `acs_marital_status` | `geo_id, year` | - | ACS 5-year marital status |
-| `acs_household_type` | `geo_id, year` | - | ACS 5-year household types |
-| `acs_housing_tenure` | `geo_id, year` | - | ACS 5-year housing tenure |
-| `acs_income_distribution` | `geo_id, year` | - | ACS 5-year income brackets |
-| `acs1_population` | `geo_id, year` | - | ACS 1-year population |
-| `acs1_income` | `geo_id, year` | - | ACS 1-year income |
-| `decennial_population` | `geo_id, year` | - | Decennial Census population |
-| `decennial_housing` | `geo_id, year` | - | Decennial Census housing |
-| `pep_population` | `geo_id, year` | - | Population estimates |
-| `cbp_establishments` | `geo_id, year, naics_code` | - | County Business Patterns |
-| `economic_census` | `geo_id, year, naics_code` | - | Economic Census |
-| `saipe_poverty` | `geo_id, year` | - | Small Area Income/Poverty |
-| `sahie_insurance` | `geo_id, year` | - | Small Area Health Insurance |
-| `bds_dynamics` | `geo_id, year` | - | Business Dynamics Statistics |
-| `abs_characteristics` | `geo_id, year` | - | Annual Business Survey |
-| `nonemployer_statistics` | `geo_id, year, naics_code` | - | Nonemployer businesses |
-| `building_permits` | `geo_id, year` | - | Building permits |
-| `qwi_employment` | `geo_id, year, quarter` | - | Quarterly Workforce Indicators |
-| `lodes_workplace` | `geo_id, year` | - | LEHD workplace data |
-| `trade_exports` | `geo_id, year` | - | Export statistics |
-| `trade_imports` | `geo_id, year` | - | Import statistics |
-
-### Census Schema - Summary Views (5 views)
-
-| View | Description |
-|------|-------------|
-| `population_summary` | State-level population aggregates |
-| `income_summary` | State-level income aggregates |
-| `poverty_rate` | State-level poverty rates |
-| `education_attainment` | State-level education metrics |
-| `unemployment_rate` | State-level unemployment rates |
+| `acs_population` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year population |
+| `acs_income` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year income |
+| `acs_housing` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year housing |
+| `acs_education` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year education |
+| `acs_employment` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year employment |
+| `acs_poverty` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year poverty |
+| `acs_race_ethnicity` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year race/ethnicity |
+| `acs_age_distribution` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year age |
+| `acs_commute` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year commuting |
+| `acs_occupation` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year occupation |
+| `acs_language` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year language |
+| `acs_disability` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year disability |
+| `acs_veterans` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year veterans |
+| `acs_migration` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year migration |
+| `acs_industry_employment` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year industry emp |
+| `acs_industry_wages` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year industry wages |
+| `acs_internet` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year internet access |
+| `acs_citizenship` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year citizenship |
+| `acs_marital_status` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year marital status |
+| `acs_households` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year household types |
+| `acs_housing_tenure` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year housing tenure |
+| `acs_income_distribution` | `geography, year` | → `geo.states`, → `geo.counties` | ACS 5-year income brackets |
+| `decennial_population` | `geography, year` | → `geo.states`, → `geo.counties` | Decennial population |
+| `decennial_housing` | `geography, year` | → `geo.states`, → `geo.counties` | Decennial housing |
+| `population_estimates` | `geography, year` | → `geo.states`, → `geo.counties` | PEP population estimates |
+| `cbp_establishments` | `geography, year, naics` | → `geo.states`, → `geo.counties` | County Business Patterns |
+| `economic_census` | `geography, year, naics` | → `geo.states`, → `geo.counties` | Economic Census |
+| `saipe` | `geography, year` | → `geo.states`, → `geo.counties` | Small Area Poverty Est |
+| `sahie` | `geography, year` | → `geo.states`, → `geo.counties` | Small Area Health Ins Est |
+| `bds` | `geography, year` | → `geo.states` | Business Dynamics Stats |
+| `abs` | `geography, year` | → `geo.states` | Annual Business Survey |
+| `nonemp` | `geography, year, naics` | → `geo.states`, → `geo.counties` | Nonemployer statistics |
+| `acs1_population` | `geography, year` | → `geo.states` | ACS 1-year population |
+| `acs1_income` | `geography, year` | → `geo.states` | ACS 1-year income |
 
 ---
 
 ## Implementation Notes
 
-### Primary Keys
+### Constraint Definition Standard
+
+All schemas use the **schema-level** `constraints:` block pattern for consistency:
+
+```yaml
+# At end of YAML file, top-level key
+constraints:
+  table_name:
+    primaryKey: [col1, col2]
+    foreignKeys:
+      - columns: [fk_col]
+        targetSchema: schema_name  # optional, defaults to current schema
+        targetTable: ref_table
+        targetColumns: [pk_col]
+        comment: Optional description
+    indexes:
+      - [index_col]
+    unique:
+      - [unique_col1, unique_col2]
+```
+
+### Primary Key Patterns
 - **SEC**: Uses `(cik, accession_number)` as base composite key
 - **GEO**: Uses FIPS codes with `year` for versioned boundaries
-- **ECON**: Uses `(series_id, date)` or `(state_fips, year)` patterns
-- **Census**: Uses `(geo_id, year)` where geo_id is a FIPS code
+- **ECON**: Uses `(type, frequency, year)` for time series, or `(geo_fips, table_name, line_code, year)` for BEA tables
+- **Census**: Uses `(geography, year)` where geography contains FIPS codes
 
 ### Foreign Key Patterns
 - SEC tables reference `filing_metadata` via `(cik, accession_number)`
 - GEO tables form a hierarchy: states → counties → tracts → block_groups
-- ECON state tables reference `geo.states` via `state_fips`
-- Census tables use `geo_id` which can be joined to GEO tables by FIPS prefix
+- ECON state tables reference `geo.states` via `state_fips` or `geo_fips`
+- ECON tables reference `econ_reference` for dimension lookups
+- Census tables use `state` and `county_fips` columns to join to GEO
 
 ### Geographic Identifier Standards
 - **state_fips**: 2-digit (e.g., "06" for California)
 - **county_fips**: 5-digit (state + county, e.g., "06037" for LA County)
 - **tract_fips**: 11-digit (state + county + tract)
 - **state_abbr**: 2-letter postal code (e.g., "CA")
-- **geo_id**: Variable length FIPS used in Census tables
 
-### Data Freshness
-- **SEC**: Continuously updated via EDGAR RSS feeds
-- **GEO**: Annual updates (Census TIGER releases)
-- **ECON**: Monthly (BLS), quarterly (BEA), or annual depending on series
-- **Census**: Annual (ACS) or decennial
+### FK Count Summary
+| Schema | Internal FKs | Cross-Schema FKs | Total |
+|--------|--------------|------------------|-------|
+| SEC | 9 | 1 (→ GEO) | 10 |
+| GEO | 28 | 0 | 28 |
+| ECON | 2 | 21 (→ GEO, → ECON_REF) | 23 |
+| Census | 0 | 64 (→ GEO) | 64 |
+| **Total** | 39 | 86 | **125** |
