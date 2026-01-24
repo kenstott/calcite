@@ -236,12 +236,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [state_fips, year]
-      unique:
-        - [state_code, year]
-        - [state_name, year]
-
     dimensions:
       type:
         - boundary
@@ -299,13 +293,6 @@ partitionedTables:
       - <<: *geometry_column
 
     partitions: *boundary_partitions
-
-    constraints:
-      primaryKey: [county_fips, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -366,13 +353,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [place_fips, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
-
     dimensions:
       type:
         - boundary
@@ -424,9 +404,6 @@ partitionedTables:
       - <<: *geometry_column
 
     partitions: *boundary_partitions
-
-    constraints:
-      primaryKey: [zcta, year]
 
     dimensions:
       type:
@@ -485,12 +462,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [tract_fips, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
 
     dimensions:
       type:
@@ -550,12 +521,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [block_group_fips, year]
-      foreignKeys:
-        - columns: [tract_fips]
-          targetTable: census_tracts
-          targetColumns: [tract_fips]
 
     dimensions:
       type:
@@ -617,10 +582,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [cbsa_fips, year]
-      unique:
-        - [cbsa_name, year]
 
     dimensions:
       type:
@@ -678,12 +639,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [cd_fips, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -751,12 +706,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [sd_lea, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -815,12 +764,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [sldl_fips, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -881,12 +824,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [sldu_fips, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -950,12 +887,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [cousub_fips, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
 
     dimensions:
       type:
@@ -1020,8 +951,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [aiannhce, year]
 
     dimensions:
       type:
@@ -1082,8 +1011,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [uace, year]
 
     dimensions:
       type:
@@ -1140,12 +1067,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [state_fips, puma_code, year]
-      foreignKeys:
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
 
     dimensions:
       type:
@@ -1209,12 +1130,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [vtd_code, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
 
     dimensions:
       type:
@@ -1293,15 +1208,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [zip, county_fips, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
-      indexes:
-        - [zip]
-        - [county_fips]
 
     dimensions:
       type:
@@ -1374,15 +1280,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [zip, cbsa_code, year]
-      foreignKeys:
-        - columns: [cbsa_code]
-          targetTable: cbsa
-          targetColumns: [cbsa_fips]
-      indexes:
-        - [zip]
-        - [cbsa_code]
 
     dimensions:
       type:
@@ -1455,15 +1352,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [tract_fips, zip, year]
-      foreignKeys:
-        - columns: [tract_fips]
-          targetTable: census_tracts
-          targetColumns: [tract_fips]
-      indexes:
-        - [tract_fips]
-        - [zip]
 
     dimensions:
       type:
@@ -1537,15 +1425,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [zip, tract_fips, year]
-      foreignKeys:
-        - columns: [tract_fips]
-          targetTable: census_tracts
-          targetColumns: [tract_fips]
-      indexes:
-        - [zip]
-        - [tract_fips]
 
     dimensions:
       type:
@@ -1618,15 +1497,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [zip, cd_fips, year]
-      foreignKeys:
-        - columns: [cd_fips]
-          targetTable: congressional_districts
-          targetColumns: [cd_fips]
-      indexes:
-        - [zip]
-        - [cd_fips]
 
     dimensions:
       type:
@@ -1696,15 +1566,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [county_fips, zip, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
-      indexes:
-        - [county_fips]
-        - [zip]
 
     dimensions:
       type:
@@ -1777,15 +1638,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [cd_fips, zip, year]
-      foreignKeys:
-        - columns: [cd_fips]
-          targetTable: congressional_districts
-          targetColumns: [cd_fips]
-      indexes:
-        - [cd_fips]
-        - [zip]
 
     dimensions:
       type:
@@ -1861,15 +1713,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [county_fips, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
-      indexes:
-        - [rucc_code]
-        - [metro_nonmetro]
 
     dimensions:
       type:
@@ -1954,15 +1797,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [tract_fips, year]
-      foreignKeys:
-        - columns: [tract_fips]
-          targetTable: census_tracts
-          targetColumns: [tract_fips]
-      indexes:
-        - [ruca_primary]
-        - [county_fips]
 
     dimensions:
       type:
@@ -2037,20 +1871,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [county_fips, year]
-      foreignKeys:
-        - columns: [county_fips]
-          targetTable: counties
-          targetColumns: [county_fips]
-          comment: Links gazetteer county metadata to county boundaries
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
-          comment: Links gazetteer county to state
-      indexes:
-        - [state_fips]
-        - [county_name]
 
     dimensions:
       type:
@@ -2132,20 +1952,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [place_fips, year]
-      foreignKeys:
-        - columns: [place_fips]
-          targetTable: places
-          targetColumns: [place_fips]
-          comment: Links gazetteer place metadata to place boundaries
-        - columns: [state_fips]
-          targetTable: states
-          targetColumns: [state_fips]
-          comment: Links gazetteer place to state
-      indexes:
-        - [state_fips]
-        - [place_name]
 
     dimensions:
       type:
@@ -2218,15 +2024,6 @@ partitionedTables:
 
     partitions: *crosswalk_partitions
 
-    constraints:
-      primaryKey: [zcta, year]
-      foreignKeys:
-        - columns: [zcta]
-          targetTable: zctas
-          targetColumns: [zcta]
-          comment: Links gazetteer ZCTA metadata to ZCTA boundaries
-      indexes:
-        - [zcta]
 
     dimensions:
       type:
@@ -2288,8 +2085,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [huc2, year]
 
     dimensions:
       type:
@@ -2351,12 +2146,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [huc4, year]
-      foreignKeys:
-        - columns: [huc2]
-          targetTable: watersheds_huc2
-          targetColumns: [huc2]
 
     dimensions:
       type:
@@ -2418,12 +2207,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [huc8, year]
-      foreignKeys:
-        - columns: [huc4]
-          targetTable: watersheds_huc4
-          targetColumns: [huc4]
 
     dimensions:
       type:
@@ -2485,12 +2268,6 @@ partitionedTables:
 
     partitions: *boundary_partitions
 
-    constraints:
-      primaryKey: [huc12, year]
-      foreignKeys:
-        - columns: [huc8]
-          targetTable: watersheds_huc8
-          targetColumns: [huc8]
 
     dimensions:
       type:
@@ -2521,3 +2298,275 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         compactionSmallFileSizeBytes: 10485760
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# Table constraints (metadata only - not enforced by database).
+# Consolidated at schema level for consistency with census/econ schemas.
+# Primary keys document unique row identifiers.
+# Foreign keys document relationships to guide query optimization.
+# ============================================================================
+
+constraints:
+
+  # --- TIGER Boundary Tables ---
+
+  states:
+    primaryKey: [state_fips, year]
+    unique:
+      - [state_code, year]
+      - [state_name, year]
+
+  counties:
+    primaryKey: [county_fips, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  places:
+    primaryKey: [place_fips, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  zctas:
+    primaryKey: [zcta, year]
+
+  census_tracts:
+    primaryKey: [tract_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  block_groups:
+    primaryKey: [block_group_fips, year]
+    foreignKeys:
+      - columns: [tract_fips]
+        targetTable: census_tracts
+        targetColumns: [tract_fips]
+
+  cbsa:
+    primaryKey: [cbsa_fips, year]
+    unique:
+      - [cbsa_name, year]
+
+  congressional_districts:
+    primaryKey: [cd_fips, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  school_districts:
+    primaryKey: [sd_lea, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  state_legislative_lower:
+    primaryKey: [sldl_fips, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  state_legislative_upper:
+    primaryKey: [sldu_fips, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  county_subdivisions:
+    primaryKey: [cousub_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  tribal_areas:
+    primaryKey: [aiannhce, year]
+
+  urban_areas:
+    primaryKey: [uace, year]
+
+  pumas:
+    primaryKey: [state_fips, puma_code, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+
+  voting_districts:
+    primaryKey: [vtd_code, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  # --- HUD Crosswalk Tables ---
+
+  zip_county_crosswalk:
+    primaryKey: [zip, county_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+    indexes:
+      - [zip]
+      - [county_fips]
+
+  zip_cbsa_crosswalk:
+    primaryKey: [zip, cbsa_code, year]
+    foreignKeys:
+      - columns: [cbsa_code]
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
+    indexes:
+      - [zip]
+      - [cbsa_code]
+
+  tract_zip_crosswalk:
+    primaryKey: [tract_fips, zip, year]
+    foreignKeys:
+      - columns: [tract_fips]
+        targetTable: census_tracts
+        targetColumns: [tract_fips]
+    indexes:
+      - [tract_fips]
+      - [zip]
+
+  zip_tract_crosswalk:
+    primaryKey: [zip, tract_fips, year]
+    foreignKeys:
+      - columns: [tract_fips]
+        targetTable: census_tracts
+        targetColumns: [tract_fips]
+    indexes:
+      - [zip]
+      - [tract_fips]
+
+  zip_cd_crosswalk:
+    primaryKey: [zip, cd_fips, year]
+    foreignKeys:
+      - columns: [cd_fips]
+        targetTable: congressional_districts
+        targetColumns: [cd_fips]
+    indexes:
+      - [zip]
+      - [cd_fips]
+
+  county_zip_crosswalk:
+    primaryKey: [county_fips, zip, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+    indexes:
+      - [county_fips]
+      - [zip]
+
+  cd_zip_crosswalk:
+    primaryKey: [cd_fips, zip, year]
+    foreignKeys:
+      - columns: [cd_fips]
+        targetTable: congressional_districts
+        targetColumns: [cd_fips]
+    indexes:
+      - [cd_fips]
+      - [zip]
+
+  # --- USDA Rural-Urban Classification Tables ---
+
+  rural_urban_continuum:
+    primaryKey: [county_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+    indexes:
+      - [rucc_code]
+      - [metro_nonmetro]
+
+  ruca_codes:
+    primaryKey: [tract_fips, year]
+    foreignKeys:
+      - columns: [tract_fips]
+        targetTable: census_tracts
+        targetColumns: [tract_fips]
+    indexes:
+      - [ruca_primary]
+      - [county_fips]
+
+  # --- Census Gazetteer Reference Tables ---
+
+  gazetteer_counties:
+    primaryKey: [county_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links gazetteer county metadata to county boundaries
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links gazetteer county to state
+    indexes:
+      - [state_fips]
+      - [county_name]
+
+  gazetteer_places:
+    primaryKey: [place_fips, year]
+    foreignKeys:
+      - columns: [place_fips]
+        targetTable: places
+        targetColumns: [place_fips]
+        comment: Links gazetteer place metadata to place boundaries
+      - columns: [state_fips]
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links gazetteer place to state
+    indexes:
+      - [state_fips]
+      - [place_name]
+
+  gazetteer_zctas:
+    primaryKey: [zcta, year]
+    foreignKeys:
+      - columns: [zcta]
+        targetTable: zctas
+        targetColumns: [zcta]
+        comment: Links gazetteer ZCTA metadata to ZCTA boundaries
+    indexes:
+      - [zcta]
+
+  # --- USGS Watershed Boundary Tables ---
+
+  watersheds_huc2:
+    primaryKey: [huc2, year]
+
+  watersheds_huc4:
+    primaryKey: [huc4, year]
+    foreignKeys:
+      - columns: [huc2]
+        targetTable: watersheds_huc2
+        targetColumns: [huc2]
+
+  watersheds_huc8:
+    primaryKey: [huc8, year]
+    foreignKeys:
+      - columns: [huc4]
+        targetTable: watersheds_huc4
+        targetColumns: [huc4]
+
+  watersheds_huc12:
+    primaryKey: [huc12, year]
+    foreignKeys:
+      - columns: [huc8]
+        targetTable: watersheds_huc8
+        targetColumns: [huc8]
