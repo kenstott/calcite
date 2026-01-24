@@ -615,10 +615,11 @@ public class ConversionMetadata {
       if (existingRecord != null) {
         LOGGER.info("Updating existing record fields...");
 
-        // IMPORTANT: Check if this is a conversion record (has convertedFile set)
-        // If so, don't overwrite the conversion information
-        boolean isConversionRecord = existingRecord.convertedFile != null &&
-                                     existingRecord.conversionType != null &&
+        // IMPORTANT: Check if this is a conversion record that should be preserved
+        // A conversion record is one that has a non-DIRECT conversionType (e.g., SEC_XBRL_TO_PARQUET, ICEBERG_PARQUET)
+        // OR has viewScanPattern set (for SEC adapter tables that register patterns directly)
+        // We preserve these records instead of overwriting them with DIRECT discovery
+        boolean isConversionRecord = existingRecord.conversionType != null &&
                                      !"DIRECT".equals(existingRecord.conversionType);
 
         if (isConversionRecord) {

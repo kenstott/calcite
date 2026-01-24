@@ -108,6 +108,28 @@ public class IcebergMaterializer {
     this.catalogConfig = new HashMap<String, Object>();
     this.catalogConfig.put("catalog", "hadoop");
     this.catalogConfig.put("warehousePath", warehousePath);
+
+    // Add S3 credentials from storage provider for Hadoop/Iceberg
+    if (storageProvider != null) {
+      Map<String, String> s3Config = storageProvider.getS3Config();
+      if (s3Config != null && !s3Config.isEmpty()) {
+        Map<String, String> hadoopConfig = new HashMap<String, String>();
+        if (s3Config.containsKey("accessKeyId")) {
+          hadoopConfig.put("fs.s3a.access.key", s3Config.get("accessKeyId"));
+        }
+        if (s3Config.containsKey("secretAccessKey")) {
+          hadoopConfig.put("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
+        }
+        if (s3Config.containsKey("endpoint")) {
+          hadoopConfig.put("fs.s3a.endpoint", s3Config.get("endpoint"));
+          hadoopConfig.put("fs.s3a.path.style.access", "true");
+        }
+        if (!hadoopConfig.isEmpty()) {
+          this.catalogConfig.put("hadoopConfig", hadoopConfig);
+          LOGGER.debug("Configured S3 credentials for Iceberg from StorageProvider");
+        }
+      }
+    }
   }
 
   /**
@@ -125,6 +147,8 @@ public class IcebergMaterializer {
     private final int endYear;
     private final int threads;
     private final String description;
+    private final Map<String, String> computedColumns;
+    private final int rowBatchSize;
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -141,6 +165,9 @@ public class IcebergMaterializer {
       this.endYear = builder.endYear;
       this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
       this.description = builder.description;
+      this.computedColumns = builder.computedColumns != null
+          ? builder.computedColumns : Collections.<String, String>emptyMap();
+      this.rowBatchSize = builder.rowBatchSize;
     }
 
     public String getSourcePattern() {
@@ -195,6 +222,23 @@ public class IcebergMaterializer {
       return description != null ? description : targetTableId;
     }
 
+    /**
+     * Returns computed columns map (column name -> SQL expression).
+     * Computed columns are evaluated by DuckDB during materialization.
+     */
+    public Map<String, String> getComputedColumns() {
+      return computedColumns;
+    }
+
+    /**
+     * Returns the row batch size for expensive computed columns.
+     * When > 0, data is processed in batches of this size to prevent OOM.
+     * Use for expensive operations like ML embeddings.
+     */
+    public int getRowBatchSize() {
+      return rowBatchSize;
+    }
+
     public boolean supportsIncremental() {
       return !incrementalKeys.isEmpty();
     }
@@ -218,6 +262,8 @@ public class IcebergMaterializer {
       private int endYear;
       private int threads;
       private String description;
+      private Map<String, String> computedColumns;
+      private int rowBatchSize;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -267,6 +313,26 @@ public class IcebergMaterializer {
 
       public Builder description(String description) {
         this.description = description;
+        return this;
+      }
+
+      /**
+       * Sets computed columns (column name -> SQL expression).
+       * These columns are evaluated by DuckDB during materialization.
+       * For example: {"embedding": "embed_jina(text)::FLOAT[768]"}
+       */
+      public Builder computedColumns(Map<String, String> computedColumns) {
+        this.computedColumns = computedColumns;
+        return this;
+      }
+
+      /**
+       * Sets the row batch size for expensive computed columns.
+       * When > 0, data is processed in batches of this size to prevent OOM.
+       * Use for expensive operations like ML embeddings (e.g., 30 rows at a time).
+       */
+      public Builder rowBatchSize(int rowBatchSize) {
+        this.rowBatchSize = rowBatchSize;
         return this;
       }
 
@@ -500,6 +566,8 @@ public class IcebergMaterializer {
 
   /**
    * Processes a single batch: DuckDB transform -> staging -> Iceberg commit.
+   * When rowBatchSize > 0 and computedColumns are present, uses row-level batching
+   * to prevent OOM during expensive operations like ML embeddings.
    */
   private void processBatch(MaterializationConfig config, Table table,
       Map<String, String> batch) throws SQLException, IOException {
@@ -516,16 +584,26 @@ public class IcebergMaterializer {
             sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
 
-      // Build DuckDB SQL
-      String sql = buildDuckDBSql(config, sourcePattern, stagingPath.toString(), batch);
-      LOGGER.debug("Executing DuckDB SQL: {}", sql);
+      // Check if row-level batching is needed for expensive computed columns
+      int rowBatchSize = config.getRowBatchSize();
+      boolean needsRowBatching = rowBatchSize > 0
+          && config.getComputedColumns() != null
+          && !config.getComputedColumns().isEmpty();
 
-      long startTime = System.currentTimeMillis();
-      try (Statement stmt = conn.createStatement()) {
-        stmt.execute(sql);
+      if (needsRowBatching) {
+        processWithRowBatching(config, conn, sourcePattern, stagingPath, batch, rowBatchSize);
+      } else {
+        // Standard processing - all rows at once
+        String sql = buildDuckDBSql(config, sourcePattern, stagingPath, batch, -1, -1);
+        LOGGER.debug("Executing DuckDB SQL: {}", sql);
+
+        long startTime = System.currentTimeMillis();
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute(sql);
+        }
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("DuckDB transformation completed in {}ms", elapsed);
       }
-      long elapsed = System.currentTimeMillis() - startTime;
-      LOGGER.info("DuckDB transformation completed in {}ms", elapsed);
 
       // Commit from staging to Iceberg
       IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
@@ -548,13 +626,107 @@ public class IcebergMaterializer {
   }
 
   /**
+   * Processes data using row-level batching to avoid OOM during expensive computations.
+   */
+  private void processWithRowBatching(MaterializationConfig config, Connection conn,
+      String sourcePattern, String stagingPath, Map<String, String> batch, int rowBatchSize)
+      throws SQLException {
+    // First, count total rows to process
+    String countSql = buildCountSql(config, sourcePattern);
+    long totalRows = 0;
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(countSql)) {
+      if (rs.next()) {
+        totalRows = rs.getLong(1);
+      }
+    }
+
+    if (totalRows == 0) {
+      LOGGER.debug("No rows to process in batch: {}", batch);
+      return;
+    }
+
+    LOGGER.info("Row batching: processing {} rows in batches of {} for {}",
+        totalRows, rowBatchSize, batch);
+
+    // Process in row batches
+    long processedRows = 0;
+    int batchNum = 0;
+    long totalStartTime = System.currentTimeMillis();
+
+    while (processedRows < totalRows) {
+      batchNum++;
+
+      // Build staging path for this row batch - preserve partition structure
+      StringBuilder rowBatchPath = new StringBuilder(stagingPath);
+      for (Map.Entry<String, String> entry : batch.entrySet()) {
+        rowBatchPath.append("/").append(entry.getKey()).append("=").append(entry.getValue());
+      }
+      rowBatchPath.append("/batch_").append(batchNum).append(".parquet");
+
+      String sql = buildDuckDBSql(config, sourcePattern, rowBatchPath.toString(),
+          batch, rowBatchSize, (int) processedRows);
+      LOGGER.debug("Row batch {}: rows {} to {} ({})",
+          batchNum, processedRows, Math.min(processedRows + rowBatchSize, totalRows), sql);
+
+      long startTime = System.currentTimeMillis();
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute(sql);
+      }
+      long elapsed = System.currentTimeMillis() - startTime;
+      LOGGER.debug("Row batch {} completed in {}ms", batchNum, elapsed);
+
+      processedRows += rowBatchSize;
+    }
+
+    long totalElapsed = System.currentTimeMillis() - totalStartTime;
+    LOGGER.info("Row batching completed: {} batches, {} rows in {}ms",
+        batchNum, totalRows, totalElapsed);
+  }
+
+  /**
+   * Builds a COUNT(*) SQL for getting total rows in source.
+   */
+  private String buildCountSql(MaterializationConfig config, String sourcePattern) {
+    StringBuilder sql = new StringBuilder();
+    sql.append("SELECT COUNT(*) FROM ");
+    if (config.getSourceFormat() == SourceFormat.JSON) {
+      sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
+    } else {
+      sql.append("read_parquet('").append(sourcePattern)
+          .append("', hive_partitioning=true, union_by_name=true)");
+    }
+    return sql.toString();
+  }
+
+  /**
    * Builds the DuckDB COPY SQL statement.
+   *
+   * @param config The materialization config
+   * @param sourcePattern The source file pattern
+   * @param targetPath The target path for output
+   * @param batch The batch parameters
+   * @param limit Row limit for batching (-1 for no limit)
+   * @param offset Row offset for batching (-1 for no offset)
+   * @return The SQL statement
    */
   private String buildDuckDBSql(MaterializationConfig config, String sourcePattern,
-      String targetPath, Map<String, String> batch) {
+      String targetPath, Map<String, String> batch, int limit, int offset) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");
-    sql.append("  SELECT * FROM ");
+
+    // Build SELECT clause - include computed columns if present
+    Map<String, String> computedCols = config.getComputedColumns();
+    if (computedCols == null || computedCols.isEmpty()) {
+      sql.append("  SELECT * FROM ");
+    } else {
+      // SELECT * plus computed column expressions
+      sql.append("  SELECT *");
+      for (Map.Entry<String, String> entry : computedCols.entrySet()) {
+        sql.append(", ").append(entry.getValue()).append(" AS ").append(entry.getKey());
+      }
+      sql.append(" FROM ");
+    }
 
     // Use appropriate reader based on source format
     if (config.getSourceFormat() == SourceFormat.JSON) {
@@ -563,30 +735,43 @@ public class IcebergMaterializer {
       sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
     }
 
+    // Add LIMIT/OFFSET for row batching
+    if (limit > 0) {
+      sql.append(" LIMIT ").append(limit);
+      if (offset > 0) {
+        sql.append(" OFFSET ").append(offset);
+      }
+    }
+
     sql.append("\n) TO '").append(targetPath).append("'");
     sql.append(" (FORMAT PARQUET");
 
-    // Add partition columns
-    List<String> partitionCols = config.getPartitionColumnNames();
-    if (!partitionCols.isEmpty()) {
-      sql.append(", PARTITION_BY (");
-      StringBuilder colList = new StringBuilder();
-      for (String col : partitionCols) {
-        if (colList.length() > 0) {
-          colList.append(", ");
+    // Skip partition columns and filename pattern for row batching
+    // since we're writing to specific file paths
+    if (limit <= 0) {
+      // Add partition columns
+      List<String> partitionCols = config.getPartitionColumnNames();
+      if (!partitionCols.isEmpty()) {
+        sql.append(", PARTITION_BY (");
+        StringBuilder colList = new StringBuilder();
+        for (String col : partitionCols) {
+          if (colList.length() > 0) {
+            colList.append(", ");
+          }
+          colList.append(col);
         }
-        colList.append(col);
+        sql.append(colList).append(")");
       }
-      sql.append(colList).append(")");
+
+      // Add filename pattern if batch keys are not in partition columns
+      if (needsFilenameEmbedding(config, batch)) {
+        String filenamePattern = buildFilenamePattern(batch);
+        sql.append(", FILENAME_PATTERN '").append(filenamePattern).append("'");
+      }
+
+      sql.append(", OVERWRITE_OR_IGNORE");
     }
 
-    // Add filename pattern if batch keys are not in partition columns
-    if (needsFilenameEmbedding(config, batch)) {
-      String filenamePattern = buildFilenamePattern(batch);
-      sql.append(", FILENAME_PATTERN '").append(filenamePattern).append("'");
-    }
-
-    sql.append(", OVERWRITE_OR_IGNORE");
     sql.append(");");
 
     return sql.toString();
@@ -951,6 +1136,15 @@ public class IcebergMaterializer {
         stmt.execute("LOAD parquet");
       } catch (SQLException e) {
         LOGGER.debug("Parquet extension already loaded or built-in");
+      }
+
+      // Load quackformers extension for embedding functions (embed_jina, etc.)
+      try {
+        stmt.execute("INSTALL quackformers FROM community");
+        stmt.execute("LOAD quackformers");
+        LOGGER.debug("Loaded quackformers extension for embedding functions");
+      } catch (SQLException e) {
+        LOGGER.debug("Quackformers extension not available: {}", e.getMessage());
       }
 
       // Configure S3 if available

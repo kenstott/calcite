@@ -1102,20 +1102,6 @@ public class DuckDBJdbcSchemaFactory {
               // Use stored table-specific pattern for Hive-partitioned tables
               String pattern = record.viewScanPattern;
 
-              // Fallback: construct viewScanPattern from tableConfig if missing
-              // This handles cases where the pattern wasn't preserved through the metadata chain
-              if (pattern == null && record.tableConfig != null) {
-                @SuppressWarnings("unchecked")
-                String tablePattern = (String) ((java.util.Map<String, Object>) record.tableConfig).get("pattern");
-                if (tablePattern != null && directoryPath != null) {
-                  // Construct the viewScanPattern from the base directory and table pattern
-                  pattern = directoryPath.endsWith("/")
-                      ? directoryPath + tablePattern
-                      : directoryPath + "/" + tablePattern;
-                  LOGGER.info("Constructed viewScanPattern from tableConfig for '{}': {}", tableName, pattern);
-                }
-              }
-
               if (pattern != null) {
                 // Check if union_by_name is explicitly enabled for this table
                 // This allows tables to handle schema variations across partition files when needed
@@ -1128,9 +1114,9 @@ public class DuckDBJdbcSchemaFactory {
                 LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name={}): \"{}.{}\" -> {}",
                            useUnionByName, duckdbSchema, tableName, pattern);
               } else {
-                // viewScanPattern is still null - skip view creation for this table
+                // viewScanPattern is null - skip view creation for this table
                 // This can happen for tables that haven't been populated yet
-                LOGGER.warn("Skipping DuckDB view for Hive-partitioned table '{}' - no viewScanPattern available and unable to construct from tableConfig", tableName);
+                LOGGER.warn("Skipping DuckDB view for Hive-partitioned table '{}' - no viewScanPattern available", tableName);
                 continue;
               }
             } else{
