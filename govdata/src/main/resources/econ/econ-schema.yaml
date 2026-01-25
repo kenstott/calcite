@@ -1892,6 +1892,10 @@ partitionedTables:
         condition: "CAST(year AS VARCHAR) = '{year}' AND SUBSTRING(series_id, 4, 2) ~ '^[0-9]{2}$' AND SUBSTRING(series_id, 4, 2) != '00'"
         maxRows: 100000  # Safety limit per year/metric combination (51 states x ~12 months)
 
+    # Custom hooks for JOLTS state data transformation
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.JoltsStateTransformer"
+
     # Materialization configuration
     materialize:
       enabled: true
@@ -2711,7 +2715,7 @@ partitionedTables:
 
     # Custom hooks for BEA response handling
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.NationalAccountsTransformer"
 
     # Dimension definitions for ETL iteration
     dimensions:
@@ -3797,7 +3801,7 @@ partitionedTables:
 
     # Custom hooks for BEA response handling
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.ItaDataTransformer"
 
     # Dimension definitions for ETL iteration
     dimensions:
@@ -4076,7 +4080,7 @@ partitionedTables:
 
     # Custom hooks for BEA response handling
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.IndustryGdpTransformer"
 
     # Materialization configuration
     materialize:

@@ -1137,3 +1137,51 @@ constraints:
 | ECON | 2 | 21 (→ GEO, → ECON_REF) | 23 |
 | Census | 0 | 64 (→ GEO) | 64 |
 | **Total** | 39 | 86 | **125** |
+
+### Schema Conformance & Year-Aware Transformers
+
+Tables conform to canonical schemas using **year-aware transformers** that handle schema evolution across data vintages. This approach is preferred over `union_by_name` for tables with column renames or semantic changes.
+
+#### ECON Schema Transformers
+
+| Table | Transformer | Schema Breaks Handled |
+|-------|-------------|----------------------|
+| `ita_data` | `ItaDataTransformer` | BEA 2023 restructure, TimePeriod format changes |
+| `industry_gdp` | `IndustryGdpTransformer` | NAICS 2022 rebasing, DataValue format variations |
+| `national_accounts` | `NationalAccountsTransformer` | DataValue formats, LineNumber revisions |
+| `jolts_state` | `JoltsStateTransformer` | Series ID format pre/post 2010, industry encoding |
+
+#### GEO Schema Field Normalizers
+
+| Table | Normalizer | Schema Breaks Handled |
+|-------|------------|----------------------|
+| `zctas` | `TigerFieldNormalizer` | ZCTA5CE10 → ZCTA5CE20 field rename |
+| `urban_areas` | `TigerFieldNormalizer` | UACE10/20, NAME10/20, UATYP semantic change |
+| `pumas` | `TigerFieldNormalizer` | PUMACE10 → PUMACE20 field rename |
+| `voting_districts` | `TigerFieldNormalizer` | VTD10/VTD20 + URL structure changes |
+
+#### Transformer Design Pattern
+
+```java
+public class ExampleTransformer implements ResponseTransformer {
+  public String transform(String response, RequestContext context) {
+    int year = Integer.parseInt(context.getDimensionValues().get("year"));
+
+    // Year-aware transformation to canonical schema
+    if (year < 2020) {
+      return transformLegacyFormat(response);
+    }
+    return transformCurrentFormat(response);
+  }
+}
+```
+
+#### When Transformers Are Needed
+
+| Scenario | Transformer Required? |
+|----------|----------------------|
+| Stable schema across all years | No |
+| Additive columns only (union valid) | No |
+| Column renamed between years | **Yes** |
+| Column type changed | **Yes** |
+| Column semantics changed | **Yes** |

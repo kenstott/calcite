@@ -421,6 +421,16 @@ partitionedTables:
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+      # Field normalizer handles vintage-specific field names (2010 vs 2020 census):
+      # - ZCTA5CE10/ZCTA5CE20 -> zcta (5-digit ZCTA code)
+      # Note: Field names change based on census vintage
+      fieldNormalizer:
+        type: vintage
+        table: zctas
+        mappings:
+          zcta: [ZCTA5CE20, ZCTA5CE10, GEOID20, GEOID]
+          land_area: [ALAND20, ALAND]
+          water_area: [AWATER20, AWATER]
 
     materialize:
       format: iceberg
@@ -1027,6 +1037,20 @@ partitionedTables:
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+      # Field normalizer handles vintage-specific field names (2010 vs 2020 census):
+      # - UACE10/UACE20 -> uace (urban area code)
+      # - NAME10/NAME20 -> name
+      # - UATYP10/UATYP20 -> urban_type (U=Urbanized Area, C=Urban Cluster)
+      # Note: 2020 Census eliminated UA/UC distinction
+      fieldNormalizer:
+        type: vintage
+        table: urban_areas
+        mappings:
+          uace: [UACE20, UACE10, GEOID]
+          name: [NAME20, NAME10, NAME]
+          urban_type: [UATYP20, UATYP10]
+          land_area: [ALAND20, ALAND]
+          water_area: [AWATER20, AWATER]
 
     materialize:
       format: iceberg
@@ -1084,6 +1108,19 @@ partitionedTables:
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+      # Field normalizer handles vintage-specific field names (2010 vs 2020 census):
+      # - GEOID10/GEOID20 -> puma_code
+      # - STATEFP10/STATEFP20 -> state_fips
+      # - NAMELSAD10/NAMELSAD20 -> puma_name
+      fieldNormalizer:
+        type: vintage
+        table: pumas
+        mappings:
+          puma_code: [GEOID20, GEOID10, GEOID]
+          state_fips: [STATEFP20, STATEFP10, STATEFP]
+          puma_name: [NAMELSAD20, NAMELSAD10, NAMELSAD]
+          land_area: [ALAND20, ALAND]
+          water_area: [AWATER20, AWATER]
 
     materialize:
       format: iceberg
@@ -1155,6 +1192,20 @@ partitionedTables:
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
       dimensionResolver: "org.apache.calcite.adapter.govdata.geo.TigerVtdDimensionResolver"
+      # Field normalizer handles vintage-specific field names:
+      # - 2010 vintage (TIGER2012): GEOID10, STATEFP10, COUNTYFP10, NAME10
+      # - 2020 vintage (TIGER2020PL): GEOID20, STATEFP20, COUNTYFP20, NAME20
+      # Note: VTD also has different URL patterns per vintage (handled in TigerDataProvider)
+      fieldNormalizer:
+        type: vintage
+        table: voting_districts
+        mappings:
+          vtd_code: [GEOID20, GEOID10, GEOID]
+          state_fips: [STATEFP20, STATEFP10, STATEFP]
+          county_fips: [COUNTYFP20, COUNTYFP10, COUNTYFP]
+          vtd_name: [NAME20, NAME10, NAME]
+          land_area: [ALAND20, ALAND10, ALAND]
+          water_area: [AWATER20, AWATER10, AWATER]
 
     materialize:
       format: iceberg
