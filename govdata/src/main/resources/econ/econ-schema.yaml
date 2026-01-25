@@ -1815,20 +1815,18 @@ partitionedTables:
     comment: >
       Job Openings and Labor Turnover Survey (JOLTS) data for all 51 U.S. jurisdictions (50 states + DC). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate at state level. Provides state-specific insights into labor market dynamics, worker mobility, and employment trends for state-level policy analysis.
     columns:
-      # BLS TSV columns: series_id, year, period, value, footnote_codes
-      # Series ID format for state data: JTS{state}{industry}{dataelement} (e.g., JTS01000000JOR)
+      # Columns mapped from JoltsStateTransformer output
+      # Transformer parses BLS series_id format and outputs canonical fields
       - name: state_fips
         type: string
         nullable: true
-        comment: State FIPS code
-        # Extract state FIPS from series_id positions 4-5 (after JTS prefix)
-        expression: "SUBSTRING(series_id, 4, 2)"
+        comment: State FIPS code (extracted from series_id by transformer)
+        source: state_fips
       - name: state_name
         type: string
         nullable: true
-        comment: State name (derived from FIPS)
-        # NULL for now - can be joined with geo.states table
-        expression: "NULL"
+        comment: State name (join with geo.states table)
+        # Transformer doesn't provide this - will be null until joined
       - name: year
         type: int
         nullable: true
@@ -1837,20 +1835,18 @@ partitionedTables:
       - name: date
         type: string
         nullable: true
-        comment: Observation date (ISO 8601 format)
-        # Construct date from year + period (e.g., 2020 + M01 -> 2020-01-01)
-        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+        comment: Observation date (ISO 8601 format, e.g., 2020-01-01)
+        source: date
       - name: series
         type: string
         nullable: true
         comment: BLS series identifier
-        source: series_id
+        source: series
       - name: metric_type
         type: string
         nullable: true
         comment: JOLTS metric (hires, separations, openings, quits, layoffs)
-        # Extract data element code from series_id (last 3 chars like JOR, HIR, etc.)
-        expression: "CASE RIGHT(series_id, 3) WHEN 'JOR' THEN 'JobOpenings' WHEN 'HIR' THEN 'Hires' WHEN 'TSR' THEN 'TotalSeparations' WHEN 'QUR' THEN 'Quits' WHEN 'LDR' THEN 'LayoffsDischarges' ELSE RIGHT(series_id, 3) END"
+        source: metric_type
       - name: value
         type: double
         nullable: true
@@ -2584,50 +2580,50 @@ partitionedTables:
     comment: >
       National Income and Product Accounts (NIPA) data from BEA covering comprehensive economic statistics. Includes ALL NIPA tables across 8 sections: 1=Domestic Product & Income (GDP, national income), 2=Personal Income & Outlays (wages, consumer spending), 3=Government (receipts, expenditures), 4=Foreign Transactions (exports, imports), 5=Saving & Investment (capital formation), 6=Industry (sectoral data), 7=Supplemental (per capita, additional details), 8=Not Seasonally Adjusted. Tables dynamically discovered from BEA reference catalog.
     columns:
-      # Source columns from BEA NIPA API response (snake_case with source mapping)
+      # Source columns from NationalAccountsTransformer output (snake_case)
       - name: table_name
         type: string
-        source: TableName
+        source: table_name
         nullable: true
         comment: BEA table identifier (e.g., 'T10101')
       - name: line_number_raw
         type: string
-        source: LineNumber
+        source: line_number_raw
         nullable: true
         comment: Line number within the BEA table (raw string)
       - name: line_description
         type: string
-        source: LineDescription
+        source: line_description
         nullable: true
         comment: Description of the GDP component
       - name: series_code
         type: string
-        source: SeriesCode
+        source: series_code
         nullable: true
         comment: BEA series code for this component
       - name: time_period
         type: string
-        source: TimePeriod
+        source: time_period
         nullable: true
         comment: BEA time period (e.g., '2023' for annual, '2023Q1' for quarterly)
       - name: data_value
         type: string
-        source: DataValue
+        source: data_value
         nullable: true
         comment: Raw data value from BEA API
       - name: cl_unit
         type: string
-        source: CL_UNIT
+        source: cl_unit
         nullable: true
         comment: Units of measurement (e.g., 'Millions of Dollars')
       - name: unit_mult
         type: string
-        source: UNIT_MULT
+        source: unit_mult
         nullable: true
         comment: Unit multiplier
       - name: note_ref
         type: string
-        source: NoteRef
+        source: note_ref
         nullable: true
         comment: Note reference
       # Computed columns derived from source columns
@@ -3670,54 +3666,55 @@ partitionedTables:
     comment: >
       International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.
     columns:
+      # Source columns from ItaDataTransformer output (snake_case)
       - name: data_value
         type: double
-        source: DataValue
+        source: data_value
         nullable: true
         comment: Transaction value
       - name: area_or_country
         type: string
-        source: AreaOrCountry
+        source: area_or_country
         nullable: true
         comment: Geographic area or country name for the transaction
       - name: time_series_description
         type: string
-        source: TimeSeriesDescription
+        source: time_series_description
         nullable: true
         comment: Description of the time series
       - name: series_code
         type: string
-        source: SeriesCode
+        source: series_code
         nullable: true
         comment: Unique identifier for the time series
       - name: time_period
         type: string
-        source: TimePeriod
+        source: time_period
         nullable: true
         comment: Time period for the data point (e.g., '2022', '2022Q1')
       - name: cl_unit
         type: string
-        source: CL_UNIT
+        source: cl_unit
         nullable: true
         comment: Classification unit (e.g., 'USD')
       - name: unit_mult
         type: string
-        source: UNIT_MULT
+        source: unit_mult
         nullable: true
         comment: Unit multiplier (e.g., '6' for millions)
       - name: metric_name
         type: string
-        source: METRIC_NAME
+        source: metric_name
         nullable: true
         comment: Type of metric (e.g., 'Current Dollars')
       - name: frequency
         type: string
-        source: Frequency
+        source: frequency
         nullable: true
         comment: Data frequency ('A' for Annual, 'Q' for Quarterly)
       - name: note_ref
         type: string
-        source: NoteRef
+        source: note_ref
         nullable: true
         comment: Reference to explanatory notes
 
@@ -3974,40 +3971,40 @@ partitionedTables:
     comment: >
       GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.
     columns:
-      # Map BEA GDPbyIndustry API field names to our column names
+      # Source columns from IndustryGdpTransformer output (snake_case)
       - name: table_id
         type: string
-        source: TableID
+        source: table_id
         nullable: true
         comment: BEA table identifier for industry GDP data
       - name: quarter
         type: string
+        source: quarter
         nullable: true
-        expression: "CASE WHEN Quarter IS NOT NULL THEN Quarter ELSE NULL END"
         comment: Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data
       - name: industry_code
         type: string
-        source: Industry
+        source: industry_code
         nullable: true
         comment: NAICS industry code
       - name: industry_description
         type: string
-        source: IndusDesc
+        source: industry_description
         nullable: true
         comment: Full description of the industry
       - name: value
         type: double
+        source: value
         nullable: true
-        expression: "CAST(REPLACE(DataValue, ',', '') AS DOUBLE)"
         comment: GDP value for the industry in millions of dollars
       - name: units
         type: string
-        source: CL_UNIT
+        source: units
         nullable: true
         comment: Units of measurement (e.g., 'Millions of Dollars')
       - name: note_ref
         type: string
-        source: NoteRef
+        source: note_ref
         nullable: true
         comment: Reference to footnotes or data quality notes
 
