@@ -239,7 +239,7 @@ public class JoltsStateTransformer implements ResponseTransformer {
     }
 
     seriesId = seriesId.trim();
-    result.put("series_id", seriesId);
+    result.put("series", seriesId);  // Output as 'series' to match schema column name
 
     // Parse the series ID based on year/format
     SeriesIdComponents components = parseSeriesId(seriesId, year);
@@ -273,7 +273,22 @@ public class JoltsStateTransformer implements ResponseTransformer {
     }
 
     // Period: Direct mapping
-    result.put("period", getTextValue(record, "period"));
+    String period = getTextValue(record, "period");
+    result.put("period", period);
+
+    // Date: Construct ISO date from year + period (e.g., 2020 + M01 -> 2020-01-01)
+    int yearValue = result.has("year") && !result.get("year").isNull()
+        ? result.get("year").asInt() : year;
+    if (period != null && period.length() >= 3 && period.startsWith("M")) {
+      try {
+        int month = Integer.parseInt(period.substring(1, 3));
+        result.put("date", String.format("%d-%02d-01", yearValue, month));
+      } catch (NumberFormatException e) {
+        result.putNull("date");
+      }
+    } else {
+      result.putNull("date");
+    }
 
     // Value: Parse and normalize
     String value = getTextValue(record, "value");
