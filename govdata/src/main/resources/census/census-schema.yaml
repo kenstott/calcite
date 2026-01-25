@@ -106,12 +106,11 @@ dimension_values:
 
   # --- Year Range for ACS (starts 2009) ---
   # ACS 5-year estimates available from 2009 onwards
-  # Default to 2010 for broader coverage; use GOVDATA_START_YEAR to override
+  # Override: CENSUS_START_YEAR for Census-only, GOVDATA_START_YEAR for all schemas
   # lagYears: 3 because ACS 5-year data is released ~2 years after the survey year
-  # (e.g., 2023 ACS data released in late 2024)
   acs_year_range: &acs_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
+    start: "${CENSUS_START_YEAR:${GOVDATA_START_YEAR:2000}}"
     lagYears: 3
 
   # --- Year Values for Decennial Census ---

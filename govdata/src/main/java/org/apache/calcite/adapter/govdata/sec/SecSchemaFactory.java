@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
@@ -1518,7 +1519,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Resolves environment variable placeholders in a string.
-   * Supports format: ${VAR_NAME:default_value}
+   * Supports nested variables: ${VAR1:${VAR2:default}}
    *
    * @param value String that may contain env variable placeholders
    * @return Resolved value with env variables substituted
@@ -1527,30 +1528,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (value == null) {
       return null;
     }
-
-    // Pattern: ${VAR_NAME:default_value} or ${VAR_NAME}
-    java.util.regex.Matcher matcher =
-        java.util.regex.Pattern.compile("\\$\\{([^:}]+)(?::([^}]*))?}").matcher(value);
-
-    StringBuffer result = new StringBuffer();
-    while (matcher.find()) {
-      String varName = matcher.group(1);
-      String defaultValue = matcher.group(2);
-
-      // Try system property first, then environment variable
-      String resolved = System.getProperty(varName);
-      if (resolved == null) {
-        resolved = System.getenv(varName);
-      }
-      if (resolved == null) {
-        resolved = defaultValue != null ? defaultValue : "";
-      }
-
-      matcher.appendReplacement(result, java.util.regex.Matcher.quoteReplacement(resolved));
-    }
-    matcher.appendTail(result);
-
-    return result.toString();
+    return VariableResolver.resolveEnvVars(value);
   }
 
   /**
