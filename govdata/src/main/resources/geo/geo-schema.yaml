@@ -106,12 +106,13 @@ column_templates:
 dimension_values:
 
   # --- Year Range for TIGER data ---
-  # TIGER files available from 2007+; dataLag accounts for publication delay
+  # TIGER files released around September of following year (e.g., TIGER 2024 ~Sep 2025)
+  # dataLag: 1 means data available through (current_year - 1)
   # Override: GEO_START_YEAR for GEO-only, GOVDATA_START_YEAR for all schemas
   tiger_year_range: &tiger_year_range
     type: yearRange
     start: "${GEO_START_YEAR:${GOVDATA_START_YEAR:2000}}"
-    dataLag: 3
+    dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
   # HUD crosswalk updates quarterly with ~3 year lag
