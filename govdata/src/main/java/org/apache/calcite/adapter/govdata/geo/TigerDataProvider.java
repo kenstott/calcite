@@ -95,7 +95,8 @@ public class TigerDataProvider implements DataProvider {
       }
 
       // Parse shapefile
-      TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName);
+      int yearInt = Integer.parseInt(year);
+      TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName, yearInt);
       List<Object[]> records = TigerShapefileParser.parseShapefile(
           tempDir.toFile(), prefix, mapper);
 
@@ -364,7 +365,7 @@ public class TigerDataProvider implements DataProvider {
     return null;
   }
 
-  private TigerShapefileParser.AttributeMapper getMapperForTable(String tableName) {
+  private TigerShapefileParser.AttributeMapper getMapperForTable(String tableName, int year) {
     switch (tableName) {
     case "states":
       return feature -> {
@@ -407,30 +408,14 @@ public class TigerDataProvider implements DataProvider {
       };
 
     case "zctas":
+      // Uses TigerFieldNormalizer for vintage-aware field resolution
+      final TigerFieldNormalizer zctaNormalizer = TigerFieldNormalizer.forTable("zctas", year);
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
-        String zcta = getAttrString(feature, "ZCTA5CE20");
-        if (zcta == null) {
-          zcta = getAttrString(feature, "ZCTA5CE10");
-        }
-        if (zcta == null) {
-          zcta = getAttrString(feature, "GEOID20");
-        }
-        if (zcta == null) {
-          zcta = getAttrString(feature, "GEOID");
-        }
-        Double landArea = getAttrDouble(feature, "ALAND20");
-        if (landArea == null) {
-          landArea = getAttrDouble(feature, "ALAND");
-        }
-        Double waterArea = getAttrDouble(feature, "AWATER20");
-        if (waterArea == null) {
-          waterArea = getAttrDouble(feature, "AWATER");
-        }
         return new Object[]{
-            zcta,
-            landArea,
-            waterArea,
+            zctaNormalizer.getStringField(feature, "zcta"),
+            zctaNormalizer.getDoubleField(feature, "land_area"),
+            zctaNormalizer.getDoubleField(feature, "water_area"),
             geom != null ? geom.toText() : null
         };
       };
@@ -562,117 +547,48 @@ public class TigerDataProvider implements DataProvider {
       };
 
     case "urban_areas":
+      // Uses TigerFieldNormalizer for vintage-aware field resolution
+      final TigerFieldNormalizer urbanNormalizer = TigerFieldNormalizer.forTable("urban_areas", year);
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
-        String uace = getAttrString(feature, "UACE20");
-        if (uace == null) {
-          uace = getAttrString(feature, "UACE10");
-        }
-        if (uace == null) {
-          uace = getAttrString(feature, "GEOID");
-        }
-        Double aland = getAttrDouble(feature, "ALAND20");
-        if (aland == null) {
-          aland = getAttrDouble(feature, "ALAND");
-        }
-        Double awater = getAttrDouble(feature, "AWATER20");
-        if (awater == null) {
-          awater = getAttrDouble(feature, "AWATER");
-        }
         return new Object[]{
-            uace,
-            getAttrString(feature, "NAME20") != null
-                ? getAttrString(feature, "NAME20") : getAttrString(feature, "NAME10"),
-            getAttrString(feature, "UATYP20") != null
-                ? getAttrString(feature, "UATYP20") : getAttrString(feature, "UATYP10"),
-            aland,
-            awater,
+            urbanNormalizer.getStringField(feature, "uace"),
+            urbanNormalizer.getStringField(feature, "name"),
+            urbanNormalizer.getStringField(feature, "urban_type"),
+            urbanNormalizer.getDoubleField(feature, "land_area"),
+            urbanNormalizer.getDoubleField(feature, "water_area"),
             geom != null ? geom.toText() : null
         };
       };
 
     case "pumas":
+      // Uses TigerFieldNormalizer for vintage-aware field resolution
+      final TigerFieldNormalizer pumaNormalizer = TigerFieldNormalizer.forTable("pumas", year);
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
-        String pumace = getAttrString(feature, "PUMACE20");
-        if (pumace == null) {
-          pumace = getAttrString(feature, "PUMACE10");
-        }
-        Double aland = getAttrDouble(feature, "ALAND20");
-        if (aland == null) {
-          aland = getAttrDouble(feature, "ALAND");
-        }
-        Double awater = getAttrDouble(feature, "AWATER20");
-        if (awater == null) {
-          awater = getAttrDouble(feature, "AWATER");
-        }
         return new Object[]{
-            getAttrString(feature, "GEOID20") != null
-                ? getAttrString(feature, "GEOID20") : getAttrString(feature, "GEOID"),
-            getAttrString(feature, "STATEFP20") != null
-                ? getAttrString(feature, "STATEFP20") : getAttrString(feature, "STATEFP"),
-            getAttrString(feature, "NAMELSAD20") != null
-                ? getAttrString(feature, "NAMELSAD20") : getAttrString(feature, "NAMELSAD"),
-            aland,
-            awater,
+            pumaNormalizer.getStringField(feature, "puma_code"),
+            pumaNormalizer.getStringField(feature, "state_fips"),
+            pumaNormalizer.getStringField(feature, "puma_name"),
+            pumaNormalizer.getDoubleField(feature, "land_area"),
+            pumaNormalizer.getDoubleField(feature, "water_area"),
             geom != null ? geom.toText() : null
         };
       };
 
     case "voting_districts":
+      // Uses TigerFieldNormalizer for vintage-aware field resolution
+      // Note: VTD data has different URL patterns between vintages (handled in buildDownloadUrl)
+      final TigerFieldNormalizer vtdNormalizer = TigerFieldNormalizer.forTable("voting_districts", year);
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
-        // Normalize attributes from both 2010 (vtd10) and 2020 (vtd20) census vintages
-        // Try 2020 attributes first, then 2010, then unversioned
-        String geoid = getAttrString(feature, "GEOID20");
-        if (geoid == null) {
-          geoid = getAttrString(feature, "GEOID10");
-        }
-        if (geoid == null) {
-          geoid = getAttrString(feature, "GEOID");
-        }
-        String stateFips = getAttrString(feature, "STATEFP20");
-        if (stateFips == null) {
-          stateFips = getAttrString(feature, "STATEFP10");
-        }
-        if (stateFips == null) {
-          stateFips = getAttrString(feature, "STATEFP");
-        }
-        String countyFips = getAttrString(feature, "COUNTYFP20");
-        if (countyFips == null) {
-          countyFips = getAttrString(feature, "COUNTYFP10");
-        }
-        if (countyFips == null) {
-          countyFips = getAttrString(feature, "COUNTYFP");
-        }
-        String name = getAttrString(feature, "NAME20");
-        if (name == null) {
-          name = getAttrString(feature, "NAME10");
-        }
-        if (name == null) {
-          name = getAttrString(feature, "NAME");
-        }
-        Double aland = getAttrDouble(feature, "ALAND20");
-        if (aland == null) {
-          aland = getAttrDouble(feature, "ALAND10");
-        }
-        if (aland == null) {
-          aland = getAttrDouble(feature, "ALAND");
-        }
-        Double awater = getAttrDouble(feature, "AWATER20");
-        if (awater == null) {
-          awater = getAttrDouble(feature, "AWATER10");
-        }
-        if (awater == null) {
-          awater = getAttrDouble(feature, "AWATER");
-        }
         return new Object[]{
-            geoid,
-            stateFips,
-            countyFips,
-            name,
-            aland,
-            awater,
+            vtdNormalizer.getStringField(feature, "vtd_code"),
+            vtdNormalizer.getStringField(feature, "state_fips"),
+            vtdNormalizer.getStringField(feature, "county_fips"),
+            vtdNormalizer.getStringField(feature, "vtd_name"),
+            vtdNormalizer.getDoubleField(feature, "land_area"),
+            vtdNormalizer.getDoubleField(feature, "water_area"),
             geom != null ? geom.toText() : null
         };
       };
