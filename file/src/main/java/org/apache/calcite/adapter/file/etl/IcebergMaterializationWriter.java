@@ -759,13 +759,28 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return null;
     }
 
-    // Pattern: src."FIELDNAME" or src.FIELDNAME
+    // Pattern: src."FIELDNAME" or src.FIELDNAME (with src. prefix)
     java.util.regex.Pattern srcFieldPattern = java.util.regex.Pattern.compile(
         "^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
     java.util.regex.Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
     if (srcFieldMatcher.matches()) {
       String fieldName = srcFieldMatcher.group(1);
       return getValueCaseInsensitive(row, fieldName);
+    }
+
+    // Pattern: bare field name (without src. prefix) - e.g., "table_name" or "field_name"
+    java.util.regex.Pattern bareFieldPattern = java.util.regex.Pattern.compile(
+        "^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
+    java.util.regex.Matcher bareFieldMatcher = bareFieldPattern.matcher(expr);
+    if (bareFieldMatcher.matches()) {
+      String fieldName = bareFieldMatcher.group(1);
+      // Only treat as field reference if the field exists in the row
+      Object value = getValueCaseInsensitive(row, fieldName);
+      if (value != null || row.keySet().stream()
+          .anyMatch(k -> k.equalsIgnoreCase(fieldName))) {
+        return value;
+      }
+      // Fall through to other patterns if field doesn't exist
     }
 
     // Pattern: TRY_CAST(src."FIELDNAME" AS TYPE) or CAST(src."FIELDNAME" AS TYPE)
@@ -776,6 +791,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (castMatcher.matches()) {
       String fieldName = castMatcher.group(1);
       String targetType = castMatcher.group(2).toUpperCase(java.util.Locale.ROOT);
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      return castValue(sourceValue, targetType);
+    }
+
+    // Pattern: CAST(FIELDNAME AS TYPE) without src. prefix
+    java.util.regex.Pattern bareCastPattern = java.util.regex.Pattern.compile(
+        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher bareCastMatcher = bareCastPattern.matcher(expr);
+    if (bareCastMatcher.matches()) {
+      String fieldName = bareCastMatcher.group(1);
+      String targetType = bareCastMatcher.group(2).toUpperCase(java.util.Locale.ROOT);
       Object sourceValue = getValueCaseInsensitive(row, fieldName);
       return castValue(sourceValue, targetType);
     }
@@ -810,6 +837,47 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       if (sourceValue != null) {
         String replaced = sourceValue.toString().replace(oldStr, newStr);
         return castValue(replaced, targetType);
+      }
+      return null;
+    }
+
+    // Pattern: SUBSTRING(src."FIELDNAME", start, length) - extract substring
+    java.util.regex.Pattern substringPattern = java.util.regex.Pattern.compile(
+        "^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher substringMatcher = substringPattern.matcher(expr);
+    if (substringMatcher.matches()) {
+      String fieldName = substringMatcher.group(1);
+      int start = Integer.parseInt(substringMatcher.group(2));
+      int length = Integer.parseInt(substringMatcher.group(3));
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      if (sourceValue != null) {
+        String str = sourceValue.toString();
+        // SQL SUBSTRING is 1-based, Java is 0-based
+        int javaStart = start - 1;
+        if (javaStart >= 0 && javaStart < str.length()) {
+          int end = Math.min(javaStart + length, str.length());
+          return str.substring(javaStart, end);
+        }
+      }
+      return null;
+    }
+
+    // Pattern: RIGHT(src."FIELDNAME", length) - extract rightmost characters
+    java.util.regex.Pattern rightPattern = java.util.regex.Pattern.compile(
+        "^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher rightMatcher = rightPattern.matcher(expr);
+    if (rightMatcher.matches()) {
+      String fieldName = rightMatcher.group(1);
+      int length = Integer.parseInt(rightMatcher.group(2));
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      if (sourceValue != null) {
+        String str = sourceValue.toString();
+        if (length >= str.length()) {
+          return str;
+        }
+        return str.substring(str.length() - length);
       }
       return null;
     }
