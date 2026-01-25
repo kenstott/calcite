@@ -313,17 +313,24 @@ dimension_values:
     - 46   # Nonfarm Income
 
   # --- Year Range Dimensions ---
-  # Common year range configurations with YAML anchors
+  # Override: ECON_START_YEAR for ECON-only, GOVDATA_START_YEAR for all schemas
+  # Note: Per-table overrides exist for data availability (QCEW from 1990, JOLTS from 2001)
+
+  year_range_default: &year_range_default
+    type: yearRange
+    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    end: current
+    dataLag: 1
 
   year_range_from_2020: &year_range_from_2020
     type: yearRange
-    start: "{env:GOVDATA_START_YEAR:2020}"
+    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
     end: current
     dataLag: 1
 
   year_range_from_2000: &year_range_from_2000
     type: yearRange
-    start: "{env:GOVDATA_START_YEAR:2000}"
+    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
     end: current
     dataLag: 1
 

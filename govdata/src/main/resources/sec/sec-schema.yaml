@@ -186,13 +186,13 @@ dimension_values:
     - "424B5"
 
   # --- Year Range ---
-  # Default: last 5 years of filings
-  # Can be overridden via startYear/endYear in schema operand
+  # SEC defaults to 2010 (vs global 2000) due to XBRL adoption timeline
+  # Override: SEC_START_YEAR for SEC-only, GOVDATA_START_YEAR for all schemas
 
   year_range: &year_range
     type: yearRange
-    start: "${START_YEAR:2020}"
-    end: "${END_YEAR:${CURRENT_YEAR}}"
+    start: "${SEC_START_YEAR:2010}"
+    end: "${SEC_END_YEAR:${CURRENT_YEAR}}"
 
 # ============================================================================
 # DOCUMENT SOURCE CONFIGURATION
