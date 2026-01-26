@@ -4,6 +4,171 @@
 
 The GEO schema provides geographic boundary data and spatial relationships from the U.S. Census Bureau's TIGER/Line database and HUD's USPS ZIP Code Crosswalk files. This schema serves as the geographic foundation for cross-domain analysis, enabling location-based joins with SEC, ECON, and CENSUS data.
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    %% Core Geographic Hierarchy
+    states {
+        VARCHAR state_fips PK
+        VARCHAR state_code
+        VARCHAR state_name
+        VARCHAR state_abbr UK
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    counties {
+        VARCHAR county_fips PK
+        VARCHAR state_fips FK
+        VARCHAR county_name
+        VARCHAR county_code
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    places {
+        VARCHAR place_fips PK
+        VARCHAR state_fips FK
+        VARCHAR place_name
+        VARCHAR place_type
+        VARCHAR geometry
+    }
+
+    census_tracts {
+        VARCHAR tract_fips PK
+        VARCHAR county_fips FK
+        VARCHAR state_fips
+        VARCHAR tract_name
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    block_groups {
+        VARCHAR block_group_fips PK
+        VARCHAR tract_fips FK
+        VARCHAR county_fips
+        VARCHAR state_fips
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    %% Special Geographies
+    zctas {
+        VARCHAR zcta PK
+        DOUBLE land_area
+        DOUBLE water_area
+        VARCHAR geometry
+    }
+
+    cbsa {
+        VARCHAR cbsa_fips PK
+        VARCHAR cbsa_name UK
+        VARCHAR metro_micro
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    congressional_districts {
+        VARCHAR cd_fips PK
+        VARCHAR state_fips FK
+        VARCHAR cd_name
+        DOUBLE land_area
+        VARCHAR geometry
+    }
+
+    school_districts {
+        VARCHAR sd_lea PK
+        VARCHAR state_fips FK
+        VARCHAR sd_name
+        VARCHAR sd_type
+        VARCHAR geometry
+    }
+
+    %% Demographic Summary Tables
+    population_demographics {
+        VARCHAR geo_id PK
+        INTEGER year PK
+        INTEGER total_population
+        INTEGER male_population
+        INTEGER female_population
+    }
+
+    housing_characteristics {
+        VARCHAR geo_id PK
+        INTEGER year PK
+        INTEGER total_housing_units
+        INTEGER occupied_units
+        DOUBLE median_home_value
+    }
+
+    economic_indicators {
+        VARCHAR geo_id PK
+        INTEGER year PK
+        DOUBLE median_household_income
+        INTEGER labor_force
+        INTEGER employed
+    }
+
+    %% ZIP Code Crosswalks
+    zip_county_crosswalk {
+        VARCHAR zip PK
+        VARCHAR county_fips PK,FK
+        DOUBLE res_ratio
+        DOUBLE bus_ratio
+        DOUBLE tot_ratio
+    }
+
+    zip_cbsa_crosswalk {
+        VARCHAR zip PK
+        VARCHAR cbsa_code PK,FK
+        DOUBLE res_ratio
+        DOUBLE bus_ratio
+        DOUBLE tot_ratio
+    }
+
+    tract_zip_crosswalk {
+        VARCHAR tract_fips PK,FK
+        VARCHAR zip PK
+        DOUBLE res_ratio
+        DOUBLE bus_ratio
+        DOUBLE tot_ratio
+    }
+
+    %% External Schema References
+    sec_filing_metadata {
+        VARCHAR cik PK
+        VARCHAR state_of_incorporation FK
+    }
+
+    census_acs_population {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_population
+    }
+
+    %% Geographic Hierarchy (internal)
+    states ||--o{ counties : "contains"
+    states ||--o{ places : "contains"
+    states ||--o{ congressional_districts : "contains"
+    states ||--o{ school_districts : "contains"
+    counties ||--o{ census_tracts : "contains"
+    census_tracts ||--o{ block_groups : "contains"
+
+    %% Crosswalk relationships
+    counties ||--o{ zip_county_crosswalk : "mapped"
+    cbsa ||--o{ zip_cbsa_crosswalk : "mapped"
+    census_tracts ||--o{ tract_zip_crosswalk : "mapped"
+
+    %% Cross-schema relationships (from other schemas)
+    states ||--o{ sec_filing_metadata : "state_abbr = state_of_incorporation"
+    states ||--o{ census_acs_population : "state_fips = geoid"
+    counties ||--o{ census_acs_population : "county_fips = geoid"
+
+    %% Demographic summary to Census
+    population_demographics ||--|| census_acs_population : "geo_id,year"
+```
+
 ## Architecture Note: FileSchema Delegation
 
 The GEO schema operates as a **declarative data pipeline** that:

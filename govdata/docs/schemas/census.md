@@ -4,6 +4,163 @@
 
 The CENSUS schema provides access to U.S. Census Bureau demographic and population data including decennial census results, American Community Survey (ACS) estimates, population projections, and economic indicators. It supports comprehensive demographic analysis at national, state, county, and census tract levels.
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    %% ACS Survey Tables (all share geoid, year key)
+    acs_population {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_population
+        DOUBLE median_age
+        INTEGER male_population
+        INTEGER female_population
+    }
+
+    acs_demographics {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_households
+        INTEGER family_households
+        DOUBLE average_household_size
+    }
+
+    acs_income {
+        VARCHAR geoid PK
+        INTEGER year PK
+        DOUBLE median_household_income
+        DOUBLE per_capita_income
+        INTEGER households_100k_plus
+    }
+
+    acs_poverty {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER below_poverty_level
+        DOUBLE poverty_rate
+        DOUBLE children_poverty_rate
+    }
+
+    acs_employment {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER labor_force
+        INTEGER employed
+        DOUBLE unemployment_rate
+    }
+
+    acs_education {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER bachelors_degree
+        DOUBLE bachelors_or_higher_pct
+        INTEGER graduate_degree
+    }
+
+    acs_housing {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_housing_units
+        INTEGER owner_occupied
+        DOUBLE homeownership_rate
+    }
+
+    acs_housing_costs {
+        VARCHAR geoid PK
+        INTEGER year PK
+        DOUBLE median_home_value
+        DOUBLE median_gross_rent
+        DOUBLE renter_cost_burden_pct
+    }
+
+    %% Decennial Census Tables
+    decennial_population {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_population
+        INTEGER urban_population
+        INTEGER rural_population
+    }
+
+    decennial_demographics {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER male_population
+        INTEGER female_population
+        INTEGER white_alone
+        INTEGER hispanic_latino
+    }
+
+    decennial_housing {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER total_housing_units
+        INTEGER occupied_units
+        INTEGER vacant_units
+    }
+
+    %% Economic Tables
+    economic_census {
+        VARCHAR geoid PK
+        VARCHAR naics_code PK
+        INTEGER year PK
+        INTEGER establishments
+        INTEGER employment
+        BIGINT revenue
+    }
+
+    county_business_patterns {
+        VARCHAR geoid PK
+        VARCHAR naics_code PK
+        INTEGER year PK
+        INTEGER establishments
+        INTEGER employment
+        BIGINT annual_payroll
+    }
+
+    population_estimates {
+        VARCHAR geoid PK
+        INTEGER year PK
+        INTEGER population_estimate
+        INTEGER births
+        INTEGER deaths
+        INTEGER net_domestic_migration
+    }
+
+    %% GEO Schema (external reference)
+    geo_states {
+        VARCHAR state_fips PK
+        VARCHAR state_abbr
+        VARCHAR state_name
+    }
+
+    geo_counties {
+        VARCHAR county_fips PK
+        VARCHAR state_fips FK
+        VARCHAR county_name
+    }
+
+    %% Cross-schema relationships to GEO
+    geo_states ||--o{ acs_population : "geoid = state_fips"
+    geo_states ||--o{ acs_income : "geoid = state_fips"
+    geo_states ||--o{ acs_employment : "geoid = state_fips"
+    geo_states ||--o{ decennial_population : "geoid = state_fips"
+    geo_states ||--o{ population_estimates : "geoid = state_fips"
+    geo_counties ||--o{ acs_population : "geoid = county_fips"
+    geo_counties ||--o{ county_business_patterns : "geoid = county_fips"
+    geo_counties ||--o{ economic_census : "geoid = county_fips"
+
+    %% Internal relationships (same geography across tables)
+    acs_population ||--|| acs_demographics : "same geoid,year"
+    acs_population ||--|| acs_income : "same geoid,year"
+    acs_population ||--|| acs_poverty : "same geoid,year"
+    acs_population ||--|| acs_employment : "same geoid,year"
+    acs_population ||--|| acs_education : "same geoid,year"
+    acs_population ||--|| acs_housing : "same geoid,year"
+    acs_housing ||--|| acs_housing_costs : "same geoid,year"
+```
+
 ## Architecture Note: FileSchema Delegation
 
 The CENSUS schema operates as a **declarative data pipeline** that:
