@@ -263,19 +263,21 @@ public class TigerDataProvider implements DataProvider {
           TIGER_BASE_URL, tigerPath, year, aiannhSuffix);
 
     case "urban_areas":
-      // UAC files are in UAC/ directory (not UAC20/) but use uac20 suffix
+      // UAC directory and suffix both have vintage indicator (UAC10 for 2010, UAC20 for 2020+)
       String uacSuffix = (yearInt == 2010) ? "uac10" : "uac20";
-      return String.format("%s/%s/UAC/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, uacSuffix);
+      String uacDir = (yearInt == 2010) ? "UAC10" : "UAC20";
+      return String.format("%s/%s/%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, uacDir, year, uacSuffix);
 
     case "pumas":
       if (stateFips == null) {
         return null;
       }
-      // PUMA files are in PUMA/ directory (not PUMA20/) but use puma20 suffix
+      // PUMA directory and suffix both have vintage indicator (PUMA10 for 2010, PUMA20 for 2020+)
       String pumaSuffix = (yearInt == 2010) ? "puma10" : "puma20";
-      return String.format("%s/%s/PUMA/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, pumaSuffix);
+      String pumaDir = (yearInt == 2010) ? "PUMA10" : "PUMA20";
+      return String.format("%s/%s/%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, pumaDir, year, stateFips, pumaSuffix);
 
     case "voting_districts":
       if (stateFips == null) {
