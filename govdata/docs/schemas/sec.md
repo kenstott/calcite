@@ -4,6 +4,112 @@
 
 The SEC schema provides access to financial filings from the U.S. Securities and Exchange Commission's EDGAR system, including XBRL data, company metadata, narrative text, and stock prices.
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    filing_metadata {
+        VARCHAR cik PK
+        VARCHAR accession_number PK
+        VARCHAR filing_type
+        VARCHAR filing_date
+        VARCHAR company_name
+        VARCHAR ticker
+        VARCHAR state_of_incorporation FK
+        VARCHAR sic_code
+    }
+
+    financial_line_items {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR element_id PK
+        VARCHAR concept
+        VARCHAR context_ref FK
+        DOUBLE numeric_value
+        VARCHAR period_start
+        VARCHAR period_end
+    }
+
+    filing_contexts {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR context_id PK
+        VARCHAR entity_identifier
+        VARCHAR period_start
+        VARCHAR period_end
+        VARCHAR period_instant
+    }
+
+    mda_sections {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR section PK
+        INTEGER paragraph_number PK
+        VARCHAR paragraph_text
+        VARCHAR subsection
+    }
+
+    earnings_transcripts {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR section_type PK
+        INTEGER paragraph_number PK
+        VARCHAR paragraph_text
+        VARCHAR speaker_name
+    }
+
+    insider_transactions {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR reporting_person_cik PK
+        VARCHAR security_title PK
+        VARCHAR transaction_code PK
+        DOUBLE shares_transacted
+        DOUBLE price_per_share
+    }
+
+    stock_prices {
+        VARCHAR ticker PK
+        VARCHAR date PK
+        VARCHAR cik FK
+        DOUBLE open
+        DOUBLE high
+        DOUBLE low
+        DOUBLE close
+        BIGINT volume
+    }
+
+    xbrl_relationships {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR linkbase_type PK
+        VARCHAR from_concept PK
+        VARCHAR to_concept PK
+        DOUBLE weight
+        DOUBLE order
+    }
+
+    vectorized_chunks {
+        VARCHAR cik PK,FK
+        VARCHAR accession_number PK,FK
+        VARCHAR chunk_id PK
+        VARCHAR source_type
+        VARCHAR chunk_text
+        VARCHAR enriched_text
+        ARRAY embedding
+    }
+
+    filing_metadata ||--o{ financial_line_items : "has facts"
+    filing_metadata ||--o{ filing_contexts : "defines contexts"
+    filing_metadata ||--o{ mda_sections : "contains MD&A"
+    filing_metadata ||--o{ earnings_transcripts : "has earnings"
+    filing_metadata ||--o{ insider_transactions : "has insider trades"
+    filing_metadata ||--o{ stock_prices : "has prices"
+    filing_metadata ||--o{ xbrl_relationships : "has relationships"
+    filing_metadata ||--o{ vectorized_chunks : "has chunks"
+    filing_contexts ||--o{ financial_line_items : "context for facts"
+```
+
 ## Architecture Note: FileSchema Delegation
 
 The SEC schema operates as a **declarative data pipeline** that:

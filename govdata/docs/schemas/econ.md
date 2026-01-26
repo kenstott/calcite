@@ -4,6 +4,197 @@
 
 The ECON schema provides unified access to economic indicators from multiple U.S. government sources including the Bureau of Labor Statistics (BLS), Federal Reserve Economic Data (FRED), Treasury Direct, Bureau of Economic Analysis (BEA), and World Bank.
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    %% BLS Employment & Labor Tables
+    employment_statistics {
+        DATE date PK
+        VARCHAR series_id PK
+        DECIMAL value
+        VARCHAR unit
+        BOOLEAN seasonally_adjusted
+    }
+
+    regional_employment {
+        DATE date PK
+        VARCHAR area_code PK
+        VARCHAR state_code FK
+        DECIMAL unemployment_rate
+        BIGINT employment_level
+        BIGINT labor_force
+    }
+
+    state_industry {
+        DATE date PK
+        VARCHAR state_fips PK,FK
+        VARCHAR supersector_code PK
+        VARCHAR supersector_name
+        INTEGER employment
+    }
+
+    state_wages {
+        DATE date PK
+        VARCHAR state_fips PK,FK
+        DECIMAL average_weekly_wage
+        INTEGER total_employment
+    }
+
+    metro_industry {
+        DATE date PK
+        VARCHAR metro_area_code PK
+        VARCHAR supersector_code PK
+        VARCHAR supersector_name
+        INTEGER employment
+    }
+
+    metro_wages {
+        INTEGER year PK
+        VARCHAR qtr PK
+        VARCHAR metro_area_code PK
+        DECIMAL average_weekly_wage
+        DECIMAL average_annual_pay
+    }
+
+    county_qcew {
+        VARCHAR area_fips PK,FK
+        VARCHAR own_code PK
+        VARCHAR industry_code PK
+        VARCHAR agglvl_code PK
+        INTEGER annual_avg_emplvl
+        INTEGER annual_avg_wkly_wage
+    }
+
+    jolts_regional {
+        DATE date PK
+        VARCHAR region_code PK
+        VARCHAR metric PK
+        DECIMAL value
+        DECIMAL rate
+    }
+
+    %% BLS Price Tables
+    inflation_metrics {
+        DATE date PK
+        VARCHAR index_type PK
+        VARCHAR item_code PK
+        VARCHAR area_code PK
+        DECIMAL index_value
+        DECIMAL percent_change_year
+    }
+
+    regional_cpi {
+        DATE date PK
+        VARCHAR region_code PK
+        DECIMAL cpi_value
+        DECIMAL percent_change_year
+    }
+
+    metro_cpi {
+        DATE date PK
+        VARCHAR metro_area_code PK
+        DECIMAL cpi_value
+        DECIMAL percent_change_year
+    }
+
+    %% Treasury Tables
+    treasury_yields {
+        DATE date PK
+        INTEGER maturity_months PK
+        DECIMAL yield_rate
+        VARCHAR treasury_type
+    }
+
+    federal_debt {
+        DATE date PK
+        VARCHAR debt_type PK
+        DECIMAL debt_amount
+        DECIMAL interest_rate
+    }
+
+    %% FRED Tables
+    fred_indicators {
+        VARCHAR series_id PK
+        DATE date PK
+        DECIMAL value
+        VARCHAR unit
+        VARCHAR frequency
+    }
+
+    reference_fred_series {
+        VARCHAR series PK
+        VARCHAR title
+        VARCHAR frequency
+        VARCHAR units
+        INTEGER popularity
+    }
+
+    %% BEA Tables
+    gdp_components {
+        VARCHAR table_id PK
+        INTEGER line_number PK
+        INTEGER year PK
+        VARCHAR component_name
+        DECIMAL value
+    }
+
+    regional_income {
+        VARCHAR geo_fips PK,FK
+        VARCHAR metric PK
+        INTEGER year PK
+        DECIMAL value
+        DECIMAL per_capita_value
+    }
+
+    state_gdp {
+        VARCHAR geo_fips PK,FK
+        INTEGER line_code PK
+        INTEGER year PK
+        DECIMAL value
+    }
+
+    industry_gdp {
+        VARCHAR industry_code PK
+        INTEGER year PK
+        INTEGER quarter PK
+        DECIMAL value
+    }
+
+    %% World Bank
+    world_indicators {
+        VARCHAR country_code PK
+        VARCHAR indicator_code PK
+        INTEGER year PK
+        DECIMAL value
+        VARCHAR region
+    }
+
+    %% GEO Schema (external reference)
+    geo_states {
+        VARCHAR state_fips PK
+        VARCHAR state_abbr
+        VARCHAR state_name
+    }
+
+    geo_counties {
+        VARCHAR county_fips PK
+        VARCHAR state_fips FK
+        VARCHAR county_name
+    }
+
+    %% Cross-schema relationships to GEO
+    geo_states ||--o{ regional_employment : "state_code = state_abbr"
+    geo_states ||--o{ state_industry : "state_fips"
+    geo_states ||--o{ state_wages : "state_fips"
+    geo_states ||--o{ regional_income : "geo_fips = state_fips"
+    geo_states ||--o{ state_gdp : "geo_fips = state_fips"
+    geo_counties ||--o{ county_qcew : "area_fips = county_fips"
+
+    %% Internal relationships
+    reference_fred_series ||--o{ fred_indicators : "series = series_id"
+```
+
 The schema includes comprehensive regional economic data covering 1,845 BLS data series across state, metro, and Census region geographic levels:
 - Regional CPI (4 regions), Metro CPI (27 metros)
 - State Industry Employment (1,122 series), State Wages (51 series)
