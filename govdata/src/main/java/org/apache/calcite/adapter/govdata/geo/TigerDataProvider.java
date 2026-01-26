@@ -167,6 +167,15 @@ public class TigerDataProvider implements DataProvider {
 
   private String buildDownloadUrl(String tableName, String year, String stateFips) {
     int yearInt = Integer.parseInt(year);
+
+    // TIGER 2000-2001 files don't exist on Census Bureau servers
+    // Data availability starts from TIGER2002
+    if (yearInt >= 2000 && yearInt <= 2001) {
+      LOGGER.debug("TIGER {} data not available for year {} - Census Bureau only has 2002+",
+          tableName, year);
+      return null;
+    }
+
     String tigerPath = "TIGER" + year;
 
     switch (tableName) {
