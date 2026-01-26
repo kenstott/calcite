@@ -3057,7 +3057,7 @@ partitionedTables:
         format: csv
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
-        valueColumnPattern: "^\\d{4}(Q[1-4])?$"  # Match years and quarters (2020, 2020Q1)
+        valueColumnPattern: "^\\d{4}:Q[1-4]$"  # Match BEA quarterly columns (1948:Q1, 2024:Q2)
         keyColumnName: year
         valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
@@ -3168,7 +3168,7 @@ partitionedTables:
         format: csv
       wideToNarrow:
         keyColumns: [GeoFIPS, GeoName, Region, TableName, LineCode, IndustryClassification, Description, Unit]
-        valueColumnPattern: "^\\d{4}(Q[1-4])?$"
+        valueColumnPattern: "^\\d{4}:Q[1-4]$"
         keyColumnName: year
         valueColumnName: data_value
         skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
