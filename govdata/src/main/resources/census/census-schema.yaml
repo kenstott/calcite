@@ -104,14 +104,22 @@ column_templates:
 
 dimension_values:
 
-  # --- Year Range for ACS (starts 2009) ---
-  # ACS 5-year estimates available from 2009 onwards
-  # Override: CENSUS_START_YEAR for Census-only, GOVDATA_START_YEAR for all schemas
+  # --- Year Range for ACS 5-year (starts 2009) ---
+  # ACS 5-year estimates only available from 2009 onwards (Census API limitation)
+  # Pre-2009 data does not exist - API returns errors for earlier years
   # lagYears: 3 because ACS 5-year data is released ~2 years after the survey year
   acs_year_range: &acs_year_range
     type: yearRange
-    start: "${CENSUS_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: 2009
     lagYears: 3
+
+  # --- Year Range for ACS 1-year (starts 2006) ---
+  # ACS 1-year estimates available from 2006 onwards (only for areas with 65,000+ population)
+  # lagYears: 2 because ACS 1-year data is released ~1 year after the survey year
+  acs1_year_range: &acs1_year_range
+    type: yearRange
+    start: 2006
+    lagYears: 2
 
   # --- Year Values for Decennial Census ---
   decennial_years: &decennial_years
@@ -2327,10 +2335,7 @@ partitionedTables:
     dimensions:
       type:
         - acs1
-      year:
-        - '2022'
-        - '2023'
-        - '2024'
+      year: *acs1_year_range
       geography:
         - state
 
@@ -2396,10 +2401,7 @@ partitionedTables:
     dimensions:
       type:
         - acs1
-      year:
-        - '2022'
-        - '2023'
-        - '2024'
+      year: *acs1_year_range
       geography:
         - state
 

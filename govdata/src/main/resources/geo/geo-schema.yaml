@@ -108,10 +108,11 @@ dimension_values:
   # --- Year Range for TIGER data ---
   # TIGER files released around September of following year (e.g., TIGER 2024 ~Sep 2025)
   # dataLag: 1 means data available through (current_year - 1)
+  # NOTE: TIGER 2000-2001 files don't exist on Census Bureau - data starts from TIGER2002
   # Override: GEO_START_YEAR for GEO-only, GOVDATA_START_YEAR for all schemas
   tiger_year_range: &tiger_year_range
     type: yearRange
-    start: "${GEO_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GEO_START_YEAR:${GOVDATA_START_YEAR:2002}}"
     dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
