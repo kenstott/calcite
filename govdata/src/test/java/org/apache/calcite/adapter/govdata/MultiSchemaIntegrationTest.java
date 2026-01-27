@@ -46,12 +46,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Integration test combining ECON, ECON_REFERENCE, GEO, and CENSUS schemas
+ * Integration test combining ECON, ECON_REFERENCE, GEO, CENSUS, and SEC schemas
  * into a unified model to validate cross-schema interoperability.
  *
  * <p>This test validates:
  * <ul>
- *   <li>All four schemas can be loaded simultaneously</li>
+ *   <li>All five schemas can be loaded simultaneously</li>
  *   <li>Tables are discoverable via information_schema</li>
  *   <li>Basic queries work across all schemas</li>
  *   <li>Cross-schema joins function correctly</li>
@@ -78,7 +78,7 @@ public class MultiSchemaIntegrationTest {
   }
 
   /**
-   * Creates a connection with all four schemas: ECON, ECON_REFERENCE, GEO, CENSUS.
+   * Creates a connection with all five schemas: ECON, ECON_REFERENCE, GEO, CENSUS, SEC.
    * Uses autoDownload: true to materialize tables from API sources on first access.
    */
   private Connection createUnifiedConnection() throws SQLException {
@@ -202,6 +202,24 @@ public class MultiSchemaIntegrationTest {
         "        \"endYear\": " + endYear + "," +
         "        \"autoDownload\": true" +
         "      }" +
+        "    }," +
+        "    {" +
+        "      \"name\": \"SEC\"," +
+        "      \"type\": \"custom\"," +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "      \"operand\": {" +
+        "        \"dataSource\": \"sec\"," +
+        "        \"refreshInterval\": \"PT1H\"," +
+        "        \"executionEngine\": \"" + executionEngine + "\"," +
+        "        \"database_filename\": \"shared.duckdb\"," +
+        "        \"ephemeralCache\": false," +
+        "        \"cacheDirectory\": \"" + cacheDir + "\"," +
+        "        \"directory\": \"" + parquetDir + "\"," +
+        "        " + s3ConfigJson +
+        "        \"startYear\": " + startYear + "," +
+        "        \"endYear\": " + endYear + "," +
+        "        \"autoDownload\": true" +
+        "      }" +
         "    }" +
         "  ]" +
         "}";
@@ -215,13 +233,13 @@ public class MultiSchemaIntegrationTest {
   }
 
   /**
-   * Main integration test validating all four schemas work together.
+   * Main integration test validating all five schemas work together.
    */
   @Test
   void testUnifiedSchemaModel() throws SQLException {
     LOGGER.info("\n" + repeat("=", 80));
     LOGGER.info(" MULTI-SCHEMA INTEGRATION TEST");
-    LOGGER.info(" Testing ECON + ECON_REFERENCE + GEO + CENSUS unified model");
+    LOGGER.info(" Testing ECON + ECON_REFERENCE + GEO + CENSUS + SEC unified model");
     LOGGER.info(repeat("=", 80));
 
     Map<String, SchemaTestResult> results = new HashMap<>();
@@ -235,6 +253,7 @@ public class MultiSchemaIntegrationTest {
       results.put("ECON_REFERENCE", validateSchema(connection, "ECON_REFERENCE"));
       results.put("GEO", validateSchema(connection, "GEO"));
       results.put("CENSUS", validateSchema(connection, "CENSUS"));
+      results.put("SEC", validateSchema(connection, "SEC"));
 
       // Test cross-schema queries
       boolean crossSchemaSuccess = testCrossSchemaQueries(connection);
@@ -414,12 +433,32 @@ public class MultiSchemaIntegrationTest {
           + "FROM \"CENSUS\".acs_population "
           + "LIMIT 5");
 
+      // Test 5a: SEC filing_metadata query
+      allPassed &= testQuery(stmt, "SEC filing_metadata query",
+          "SELECT cik, company_name, filing_type, filing_date "
+          + "FROM \"SEC\".filing_metadata "
+          + "LIMIT 5");
+
+      // Test 5b: SEC financial_line_items query
+      allPassed &= testQuery(stmt, "SEC financial_line_items query",
+          "SELECT cik, accession_number, concept, numeric_value "
+          + "FROM \"SEC\".financial_line_items "
+          + "WHERE numeric_value IS NOT NULL "
+          + "LIMIT 5");
+
+      // Test 5c: SEC vectorized_chunks query
+      allPassed &= testQuery(stmt, "SEC vectorized_chunks query",
+          "SELECT cik, accession_number, source_type, chunk_id "
+          + "FROM \"SEC\".vectorized_chunks "
+          + "LIMIT 5");
+
       // Test 6: Multi-schema count query
       allPassed &= testQuery(stmt, "Multi-schema analytical query",
           "SELECT "
           + "  (SELECT COUNT(*) FROM \"ECON\".state_gdp) as econ_rows, "
           + "  (SELECT COUNT(*) FROM \"GEO\".states) as geo_rows, "
-          + "  (SELECT COUNT(*) FROM \"ECON_REFERENCE\".fred_series) as ref_rows");
+          + "  (SELECT COUNT(*) FROM \"ECON_REFERENCE\".fred_series) as ref_rows, "
+          + "  (SELECT COUNT(*) FROM \"SEC\".filing_metadata) as sec_rows");
 
       // Test 7: ECON + ECON_REFERENCE - join economic data with reference catalog
       allPassed &= testQuery(stmt, "ECON + ECON_REFERENCE reference table query",
@@ -434,6 +473,30 @@ public class MultiSchemaIntegrationTest {
           + "INNER JOIN \"ECON\".state_gdp e ON g.state_fips = e.geo_fips "
           + "WHERE g.state_fips = '06' "
           + "LIMIT 5");
+
+      // Test 8a: Cross-schema join - GEO states with SEC filing_metadata
+      allPassed &= testQuery(stmt, "GEO + SEC cross-schema join",
+          "SELECT g.state_name, s.company_name, s.filing_type, s.filing_date "
+          + "FROM \"GEO\".states g "
+          + "INNER JOIN \"SEC\".filing_metadata s ON g.state_abbr = s.state_of_incorporation "
+          + "LIMIT 10");
+
+      // Test 8b: SEC internal join - filing_metadata with financial_line_items
+      allPassed &= testQuery(stmt, "SEC filing_metadata + financial_line_items join",
+          "SELECT f.company_name, f.filing_type, l.concept, l.numeric_value "
+          + "FROM \"SEC\".filing_metadata f "
+          + "INNER JOIN \"SEC\".financial_line_items l "
+          + "  ON f.cik = l.cik AND f.accession_number = l.accession_number "
+          + "WHERE l.numeric_value IS NOT NULL "
+          + "LIMIT 10");
+
+      // Test 8c: SEC filing_metadata with vectorized_chunks join
+      allPassed &= testQuery(stmt, "SEC filing_metadata + vectorized_chunks join",
+          "SELECT f.company_name, f.filing_type, v.source_type, v.chunk_id "
+          + "FROM \"SEC\".filing_metadata f "
+          + "INNER JOIN \"SEC\".vectorized_chunks v "
+          + "  ON f.cik = v.cik AND f.accession_number = v.accession_number "
+          + "LIMIT 10");
 
       // =========================================================================
       // COMPLEX FILTER TESTS
@@ -760,7 +823,7 @@ public class MultiSchemaIntegrationTest {
     boolean overallSuccess = totalQueryable > 0;
     LOGGER.info("\n" + repeat("=", 80));
     if (overallSuccess) {
-      LOGGER.info(" OVERALL RESULT: PASS - {} tables queryable across 4 schemas!", totalQueryable);
+      LOGGER.info(" OVERALL RESULT: PASS - {} tables queryable across 5 schemas!", totalQueryable);
     } else {
       LOGGER.error(" OVERALL RESULT: FAIL - No queryable tables found");
       LOGGER.error(" Ensure data has been materialized to GOVDATA_PARQUET_DIR");
@@ -806,7 +869,7 @@ public class MultiSchemaIntegrationTest {
     LOGGER.info(" Sampling rows from all tables to verify data integrity");
     LOGGER.info(repeat("=", 80));
 
-    String[] schemas = {"ECON", "ECON_REFERENCE", "GEO", "CENSUS"};
+    String[] schemas = {"ECON", "ECON_REFERENCE", "GEO", "CENSUS", "SEC"};
     int totalTables = 0;
     int tablesWithGoodData = 0;
     int tablesWithProblems = 0;
