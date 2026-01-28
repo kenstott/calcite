@@ -97,6 +97,10 @@ erDiagram
         VARCHAR chunk_text
         VARCHAR enriched_text
         ARRAY embedding
+        VARCHAR exhibit_number FK
+        VARCHAR speaker_name
+        VARCHAR speaker_role
+        INTEGER paragraph_number FK
     }
 
     filing_metadata ||--o{ financial_line_items : "has facts"
@@ -108,6 +112,7 @@ erDiagram
     filing_metadata ||--o{ xbrl_relationships : "has relationships"
     filing_metadata ||--o{ vectorized_chunks : "has chunks"
     filing_contexts ||--o{ financial_line_items : "context for facts"
+    earnings_transcripts ||--o{ vectorized_chunks : "vectorized for search"
 ```
 
 ## Architecture Note: FileSchema Delegation
@@ -306,7 +311,13 @@ XBRL linkbase relationships from 10-K and 10-Q filings showing how financial con
 #### `vectorized_chunks`
 Primary key: `(cik, accession_number, chunk_id)`
 
-Semantic text chunks from 10-K and 10-Q filings with embeddings for similarity search. Text is chunked, enriched with context tags and cross-references, then normalized for temporal/monetary consistency.
+Semantic text chunks from SEC filings with embeddings for similarity search. Includes:
+- **MD&A paragraphs** from 10-K and 10-Q filings
+- **Footnotes** extracted from XBRL
+- **Insider form remarks** from Form 4 filings
+- **Earnings transcripts** from 8-K filings (with speaker attribution)
+
+Text is chunked, enriched with context tags and cross-references, then normalized for temporal/monetary consistency. Earnings chunks can be joined back to `earnings_transcripts` via `accession_number` + `paragraph_number`.
 
 | Column | Type | Nullable | Description |
 |--------|------|----------|-------------|
@@ -323,6 +334,10 @@ Semantic text chunks from 10-K and 10-Q filings with embeddings for similarity s
 | embedding | ARRAY\<DOUBLE\> | Yes | 384-dim all-MiniLM-L6-v2 embedding of enriched_text via DuckDB quackformers |
 | content_type | VARCHAR | Yes | Content classification (paragraph, table, list, heading, mixed) |
 | financial_concepts | VARCHAR | Yes | Comma-separated list of referenced financial concepts |
+| exhibit_number | VARCHAR | Yes | Exhibit number (for earnings source_type, links to earnings_transcripts) |
+| speaker_name | VARCHAR | Yes | Speaker name for Q&A earnings sections |
+| speaker_role | VARCHAR | Yes | Role/title of speaker (CEO, CFO, Analyst, etc.) |
+| paragraph_number | INTEGER | Yes | Original paragraph number in earnings_transcripts for traceability |
 
 **Text Enrichment Pipeline:**
 1. **SemanticTextChunker** - Splits text into semantic units

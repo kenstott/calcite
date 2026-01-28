@@ -91,13 +91,10 @@ public class MultiSchemaIntegrationTest {
 
     String startYear = TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR");
     if (startYear == null || startYear.isEmpty()) {
-      startYear = "2020";
+      startYear = "2019";
     }
 
-    String endYear = TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR");
-    if (endYear == null || endYear.isEmpty()) {
-      endYear = "2024";
-    }
+    // endYear defaults to current year if not specified in schema config
 
     // S3 configuration for MinIO or AWS S3
     String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");
@@ -149,7 +146,6 @@ public class MultiSchemaIntegrationTest {
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
         "        \"startYear\": " + startYear + "," +
-        "        \"endYear\": " + endYear + "," +
         "        \"autoDownload\": true" +
         "      }" +
         "    }," +
@@ -199,7 +195,6 @@ public class MultiSchemaIntegrationTest {
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
         "        \"startYear\": " + startYear + "," +
-        "        \"endYear\": " + endYear + "," +
         "        \"autoDownload\": true" +
         "      }" +
         "    }," +
@@ -217,7 +212,8 @@ public class MultiSchemaIntegrationTest {
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
         "        \"startYear\": " + startYear + "," +
-        "        \"endYear\": " + endYear + "," +
+        "        \"ciks\": [\"0000320193\", \"0000018230\", \"0000789019\"]," +
+        "        \"filingTypes\": [\"10-K\", \"10-Q\", \"8-K\", \"4\"]," +
         "        \"autoDownload\": true" +
         "      }" +
         "    }" +

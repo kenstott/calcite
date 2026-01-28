@@ -107,6 +107,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private final AtomicInteger rateLimitHits = new AtomicInteger(0);
   private Map<String, Object> currentOperand; // Store operand for table auto-discovery
   private RSSRefreshMonitor rssMonitor; // RSS monitor for automatic refresh
+  // Track Iceberg tables that were recreated due to schema changes
+  // DuckDB views for these tables need to be recreated
+  private final List<String> recreatedIcebergTables = new ArrayList<>();
 
   /**
    * Helper to get cache directory using stored operand.
@@ -159,6 +162,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Download SEC data using DocumentETLProcessor
         downloadSecDataUsingDocumentEtl(operand);
+
+        // Pass recreated tables to operand so DuckDB can refresh views
+        if (!recreatedIcebergTables.isEmpty()) {
+          operand.put("_recreatedIcebergTables", new ArrayList<>(recreatedIcebergTables));
+          LOGGER.info("Passing {} recreated Iceberg tables to DuckDB for view refresh: {}",
+              recreatedIcebergTables.size(), recreatedIcebergTables);
+        }
       }
     }
 
@@ -1135,6 +1145,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.info("Materialized table '{}': {} batches successful, {} failed, {} skipped",
               icebergTableName, result.getSuccessCount(), result.getFailedCount(), result.getSkippedCount());
         }
+
+        // Track tables that were recreated due to schema changes
+        // DuckDB views for these tables need to be recreated with new schema
+        if (result.isTableRecreated()) {
+          synchronized (recreatedIcebergTables) {
+            recreatedIcebergTables.add(tableName);
+          }
+          LOGGER.info("Table '{}' was recreated - DuckDB view needs refresh", tableName);
+        }
       } catch (Exception e) {
         LOGGER.error("Failed to materialize table '{}' to Iceberg: {}", tableName, e.getMessage());
         if (LOGGER.isDebugEnabled()) {
@@ -1203,12 +1222,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
+    // Extract full table columns from YAML config for Iceberg table creation
+    List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
+    LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
+
     return IcebergMaterializer.MaterializationConfig.builder()
         .sourcePattern(sourcePattern)
         .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
         .targetTableId(icebergTableName)
         .sourceTableName(tableName)
         .partitionColumns(partitionColumns)
+        .tableColumns(tableColumns)
         .batchPartitionColumns(batchPartitionCols)
         .yearRange(startYear, endYear)
         .computedColumns(computedColumns)

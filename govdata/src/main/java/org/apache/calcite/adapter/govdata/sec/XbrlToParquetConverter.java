@@ -3476,8 +3476,16 @@ public class XbrlToParquetConverter implements FileConverter {
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
         storageProvider.writeAvroParquet(outputPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
+        outputFiles.add(outputPath);
 
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
+
+        // Also write earnings to vectorized_chunks for semantic search
+        String chunksPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik,
+                (accession != null && !accession.isEmpty()) ? accession : filingDate));
+        writeEarningsVectorizedChunks(earningsRecords, chunksPath, cik, filingDate, accession, year);
+        outputFiles.add(chunksPath);
       }
 
     } catch (Exception e) {
@@ -3485,6 +3493,54 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     return outputFiles;
+  }
+
+  /**
+   * Write earnings records to vectorized_chunks for semantic search.
+   * Links back to earnings_transcripts via exhibit_number, paragraph_number.
+   */
+  private void writeEarningsVectorizedChunks(List<Map<String, Object>> earningsRecords,
+      String outputPath, String cik, String filingDate, String accession, int year) throws IOException {
+
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
+
+    List<Map<String, Object>> chunksList = new ArrayList<>();
+    int sequence = 0;
+
+    for (Map<String, Object> earnings : earningsRecords) {
+      String paragraphText = (String) earnings.get("paragraph_text");
+      if (paragraphText == null || paragraphText.length() < 20) {
+        continue;
+      }
+
+      Map<String, Object> chunk = new HashMap<>();
+      chunk.put("cik", cik);
+      chunk.put("accession_number", accession);
+      chunk.put("year", year);
+      chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+      chunk.put("source_type", "earnings");
+      chunk.put("section", earnings.get("section_type"));
+      chunk.put("sequence", sequence++);
+      chunk.put("filing_date", filingDate);
+      chunk.put("chunk_text", paragraphText);
+      chunk.put("enriched_text", paragraphText); // Basic enrichment - could enhance later
+      chunk.put("content_type", "paragraph");
+      chunk.put("financial_concepts", null);
+      // Earnings-specific columns for linking back
+      chunk.put("exhibit_number", earnings.get("exhibit_number"));
+      chunk.put("speaker_name", earnings.get("speaker_name"));
+      chunk.put("speaker_role", earnings.get("speaker_role"));
+      chunk.put("paragraph_number", earnings.get("paragraph_number"));
+
+      chunksList.add(chunk);
+    }
+
+    storageProvider.writeAvroParquet(outputPath, columns, chunksList, "VectorizedChunk", "vectorized_chunks");
+
+    if (!chunksList.isEmpty()) {
+      LOGGER.info("Wrote " + chunksList.size() + " earnings chunks to vectorized_chunks: " + outputPath);
+    }
   }
 
   /**

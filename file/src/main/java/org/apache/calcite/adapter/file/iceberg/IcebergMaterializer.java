@@ -141,6 +141,7 @@ public class IcebergMaterializer {
     private final String targetTableId;
     private final String sourceTableName;
     private final List<PartitionedTableConfig.ColumnDefinition> partitionColumns;
+    private final List<IcebergCatalogManager.ColumnDef> tableColumns;
     private final List<String> batchPartitionColumns;
     private final List<String> incrementalKeys;
     private final int startYear;
@@ -157,6 +158,8 @@ public class IcebergMaterializer {
       this.sourceTableName = builder.sourceTableName;
       this.partitionColumns = builder.partitionColumns != null
           ? builder.partitionColumns : Collections.<PartitionedTableConfig.ColumnDefinition>emptyList();
+      this.tableColumns = builder.tableColumns != null
+          ? builder.tableColumns : Collections.<IcebergCatalogManager.ColumnDef>emptyList();
       this.batchPartitionColumns = builder.batchPartitionColumns != null
           ? builder.batchPartitionColumns : Collections.<String>emptyList();
       this.incrementalKeys = builder.incrementalKeys != null
@@ -188,6 +191,14 @@ public class IcebergMaterializer {
 
     public List<PartitionedTableConfig.ColumnDefinition> getPartitionColumns() {
       return partitionColumns;
+    }
+
+    /**
+     * Returns the full table column definitions for Iceberg table creation.
+     * If empty, the schema will be inferred from partition columns only (legacy behavior).
+     */
+    public List<IcebergCatalogManager.ColumnDef> getTableColumns() {
+      return tableColumns;
     }
 
     public List<String> getPartitionColumnNames() {
@@ -256,6 +267,7 @@ public class IcebergMaterializer {
       private String targetTableId;
       private String sourceTableName;
       private List<PartitionedTableConfig.ColumnDefinition> partitionColumns;
+      private List<IcebergCatalogManager.ColumnDef> tableColumns;
       private List<String> batchPartitionColumns;
       private List<String> incrementalKeys;
       private int startYear;
@@ -287,6 +299,16 @@ public class IcebergMaterializer {
 
       public Builder partitionColumns(List<PartitionedTableConfig.ColumnDefinition> partitionColumns) {
         this.partitionColumns = partitionColumns;
+        return this;
+      }
+
+      /**
+       * Sets the full table column definitions for Iceberg table creation.
+       * This should include ALL columns from the YAML schema, including data columns.
+       * If not set, only partition columns will be used (legacy behavior).
+       */
+      public Builder tableColumns(List<IcebergCatalogManager.ColumnDef> tableColumns) {
+        this.tableColumns = tableColumns;
         return this;
       }
 
@@ -365,14 +387,21 @@ public class IcebergMaterializer {
     private final int failedCount;
     private final int skippedCount;
     private final long durationMs;
+    private final boolean tableRecreated;
 
     public MaterializationResult(String tableId, int successCount, int failedCount,
         int skippedCount, long durationMs) {
+      this(tableId, successCount, failedCount, skippedCount, durationMs, false);
+    }
+
+    public MaterializationResult(String tableId, int successCount, int failedCount,
+        int skippedCount, long durationMs, boolean tableRecreated) {
       this.tableId = tableId;
       this.successCount = successCount;
       this.failedCount = failedCount;
       this.skippedCount = skippedCount;
       this.durationMs = durationMs;
+      this.tableRecreated = tableRecreated;
     }
 
     public String getTableId() {
@@ -399,9 +428,17 @@ public class IcebergMaterializer {
       return failedCount == 0;
     }
 
+    /**
+     * Returns true if the Iceberg table was recreated due to schema changes.
+     * When this is true, DuckDB views need to be recreated to reflect the new schema.
+     */
+    public boolean isTableRecreated() {
+      return tableRecreated;
+    }
+
     @Override public String toString() {
-      return String.format("MaterializationResult{table=%s, success=%d, failed=%d, skipped=%d, duration=%dms}",
-          tableId, successCount, failedCount, skippedCount, durationMs);
+      return String.format("MaterializationResult{table=%s, success=%d, failed=%d, skipped=%d, duration=%dms, recreated=%s}",
+          tableId, successCount, failedCount, skippedCount, durationMs, tableRecreated);
     }
   }
 
@@ -443,7 +480,13 @@ public class IcebergMaterializer {
     }
 
     // Ensure Iceberg table exists
-    Table table = ensureTableExists(config);
+    TableSetupResult setupResult = ensureTableExists(config);
+    Table table = setupResult.table;
+    boolean tableWasRecreated = setupResult.wasRecreated;
+    if (tableWasRecreated) {
+      LOGGER.info("Iceberg table '{}' was recreated due to schema changes - DuckDB views need refresh",
+          config.getTargetTableId());
+    }
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Build batch combinations
@@ -500,7 +543,8 @@ public class IcebergMaterializer {
 
     long durationMs = System.currentTimeMillis() - startTime;
     MaterializationResult result =
-        new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount, durationMs);
+        new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount,
+            durationMs, tableWasRecreated);
 
     LOGGER.info("Materialization complete: {}", result);
 
@@ -809,32 +853,90 @@ public class IcebergMaterializer {
   }
 
   /**
-   * Ensures the target Iceberg table exists, creating it if necessary.
+   * Result of ensuring a table exists, including whether it was recreated.
    */
-  private Table ensureTableExists(MaterializationConfig config) {
-    // Infer schema from source if no columns specified
-    List<IcebergCatalogManager.ColumnDef> columns = new ArrayList<IcebergCatalogManager.ColumnDef>();
-    if (!config.getPartitionColumns().isEmpty()) {
-      // Use partition columns as schema for now
-      // In a full implementation, we would infer the complete schema from source files
+  private static class TableSetupResult {
+    final Table table;
+    final boolean wasRecreated;
+
+    TableSetupResult(Table table, boolean wasRecreated) {
+      this.table = table;
+      this.wasRecreated = wasRecreated;
+    }
+  }
+
+  /**
+   * Ensures the target Iceberg table exists, creating it if necessary.
+   *
+   * <p>Uses tableColumns if provided (full schema from YAML config),
+   * otherwise falls back to partition columns only (legacy behavior).
+   *
+   * <p>If the table exists but has fewer columns than expected (e.g., only
+   * partition columns from a previous buggy run), it will be dropped and
+   * recreated with the correct schema.
+   *
+   * @return TableSetupResult containing the table and whether it was recreated
+   */
+  private TableSetupResult ensureTableExists(MaterializationConfig config) {
+    // Use tableColumns if provided, otherwise fall back to partition columns
+    List<IcebergCatalogManager.ColumnDef> columns;
+    if (!config.getTableColumns().isEmpty()) {
+      // Full table schema provided - use it
+      columns = new ArrayList<IcebergCatalogManager.ColumnDef>(config.getTableColumns());
+      LOGGER.debug("Using {} table columns from config for table '{}'",
+          columns.size(), config.getTargetTableId());
+    } else if (!config.getPartitionColumns().isEmpty()) {
+      // Legacy behavior: use partition columns as schema
+      columns = new ArrayList<IcebergCatalogManager.ColumnDef>();
       for (PartitionedTableConfig.ColumnDefinition colDef : config.getPartitionColumns()) {
         columns.add(new IcebergCatalogManager.ColumnDef(colDef.getName(), colDef.getType()));
       }
+      LOGGER.debug("Using {} partition columns as schema for table '{}' (legacy mode)",
+          columns.size(), config.getTargetTableId());
+    } else {
+      columns = new ArrayList<IcebergCatalogManager.ColumnDef>();
     }
 
-    // If table exists, load it
+    // If table exists, check if it has the expected columns
     if (IcebergCatalogManager.tableExists(catalogConfig, config.getTargetTableId())) {
-      LOGGER.debug("Loading existing table: {}", config.getTargetTableId());
-      return IcebergCatalogManager.loadTable(catalogConfig, config.getTargetTableId());
+      Table existingTable = IcebergCatalogManager.loadTable(catalogConfig, config.getTargetTableId());
+
+      // Check if existing table has fewer columns than expected (buggy previous run)
+      int existingColumnCount = existingTable.schema().columns().size();
+      int expectedColumnCount = columns.size();
+
+      if (expectedColumnCount > 0 && existingColumnCount < expectedColumnCount) {
+        LOGGER.warn("Existing Iceberg table '{}' has {} columns but expected {}. "
+            + "Dropping and recreating with correct schema.",
+            config.getTargetTableId(), existingColumnCount, expectedColumnCount);
+        IcebergCatalogManager.dropTable(catalogConfig, config.getTargetTableId(), true);
+        // Fall through to create new table with wasRecreated = true
+      } else {
+        LOGGER.debug("Loading existing table: {} ({} columns)",
+            config.getTargetTableId(), existingColumnCount);
+        return new TableSetupResult(existingTable, false);
+      }
+    } else {
+      // Table doesn't exist - this is a new table, not a recreation
+      LOGGER.info("Creating new Iceberg table: {} with {} columns, partitioned by {}",
+          config.getTargetTableId(), columns.size(), config.getPartitionColumnNames());
+      Table newTable = IcebergCatalogManager.createTableFromColumns(
+          catalogConfig,
+          config.getTargetTableId(),
+          columns,
+          config.getPartitionColumnNames());
+      return new TableSetupResult(newTable, false);
     }
 
-    // Create new table with partition spec
-    LOGGER.info("Creating new Iceberg table: {}", config.getTargetTableId());
-    return IcebergCatalogManager.createTableFromColumns(
+    // Create new table with partition spec (table was dropped due to schema mismatch)
+    LOGGER.info("Recreating Iceberg table: {} with {} columns, partitioned by {}",
+        config.getTargetTableId(), columns.size(), config.getPartitionColumnNames());
+    Table recreatedTable = IcebergCatalogManager.createTableFromColumns(
         catalogConfig,
         config.getTargetTableId(),
         columns,
         config.getPartitionColumnNames());
+    return new TableSetupResult(recreatedTable, true);
   }
 
   /**

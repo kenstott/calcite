@@ -1074,6 +1074,23 @@ partitionedTables:
         type: string
         nullable: true
         comment: Comma-separated list of referenced financial concepts
+      # Earnings-specific columns for linking back to earnings_transcripts
+      - name: exhibit_number
+        type: string
+        nullable: true
+        comment: Exhibit number within the filing (for earnings source_type)
+      - name: speaker_name
+        type: string
+        nullable: true
+        comment: Name of speaker for Q&A earnings sections
+      - name: speaker_role
+        type: string
+        nullable: true
+        comment: Role/title of speaker (CEO, CFO, Analyst, etc.)
+      - name: paragraph_number
+        type: int
+        nullable: true
+        comment: Original paragraph number in earnings_transcripts for traceability
 
 
     source:

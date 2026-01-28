@@ -192,7 +192,7 @@ public class DuckDBJdbcSchemaFactory {
           // Reuse existing database connection
           LOGGER.info("Reusing existing DuckDB database: {} for schema: {}", catalogPath, schemaName);
           return createSchemaInSharedDatabase(sharedInfo, parentSchema, schemaName, directoryPath,
-                                             recursive, fileSchema);
+                                             recursive, fileSchema, operand);
         }
 
         // Use persistent file-based catalog
@@ -336,10 +336,25 @@ public class DuckDBJdbcSchemaFactory {
       setupConn.createStatement().execute(createSchemaSQL);
       LOGGER.info("Created DuckDB schema: \"{}\"", duckdbSchema);
 
+      // Get list of Iceberg tables that were recreated due to schema changes
+      // Views for these tables need to be dropped and recreated with new schema
+      java.util.Set<String> recreatedIcebergTables = new java.util.HashSet<>();
+      if (operand != null) {
+        @SuppressWarnings("unchecked")
+        java.util.List<String> recreatedList =
+            (java.util.List<String>) operand.get("_recreatedIcebergTables");
+        if (recreatedList != null && !recreatedList.isEmpty()) {
+          recreatedIcebergTables.addAll(recreatedList);
+          LOGGER.info("Found {} Iceberg tables to refresh in DuckDB: {}",
+              recreatedList.size(), recreatedList);
+        }
+      }
+
       // Register Parquet files as views
       // FileSchemaFactory has already run conversions via FileSchema
       // Pass the FileSchema to use its unique instance ID for cache lookup
-      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName, fileSchema);
+      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
+          fileSchema, recreatedIcebergTables);
 
       // Register SQL views from schema JSON definitions
       // These views may reference the Parquet views created above
@@ -442,7 +457,8 @@ public class DuckDBJdbcSchemaFactory {
                                                          String schemaName,
                                                          String directoryPath,
                                                          boolean recursive,
-                                                         org.apache.calcite.adapter.file.FileSchema fileSchema) {
+                                                         org.apache.calcite.adapter.file.FileSchema fileSchema,
+                                                         Map<String, Object> operand) {
     try {
       Connection setupConn = sharedInfo.setupConnection;
 
@@ -453,11 +469,25 @@ public class DuckDBJdbcSchemaFactory {
       setupConn.createStatement().execute(createSchemaSQL);
       LOGGER.info("Created DuckDB schema: \"{}\"", duckdbSchema);
 
+      // Get list of Iceberg tables that were recreated due to schema changes
+      java.util.Set<String> recreatedIcebergTables = new java.util.HashSet<>();
+      if (operand != null) {
+        @SuppressWarnings("unchecked")
+        java.util.List<String> recreatedList =
+            (java.util.List<String>) operand.get("_recreatedIcebergTables");
+        if (recreatedList != null && !recreatedList.isEmpty()) {
+          recreatedIcebergTables.addAll(recreatedList);
+          LOGGER.info("Found {} Iceberg tables to refresh in shared DuckDB: {}",
+              recreatedList.size(), recreatedList);
+        }
+      }
+
       // Register similarity functions for this schema (macros are database-level, so only once)
       // Note: Macros are global in DuckDB, so they're already registered from the first schema
 
       // Register Parquet files as views in this schema
-      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName, fileSchema);
+      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
+          fileSchema, recreatedIcebergTables);
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
@@ -880,10 +910,20 @@ public class DuckDBJdbcSchemaFactory {
   /**
    * Registers tables from the FileSchema's conversion registry as DuckDB views.
    * This ensures all tables discovered by FileSchema are available in DuckDB.
+   *
+   * @param conn DuckDB connection
+   * @param directoryPath Base directory path
+   * @param recursive Whether to search recursively
+   * @param duckdbSchema DuckDB schema name
+   * @param calciteSchemaName Calcite schema name
+   * @param fileSchema FileSchema containing table metadata
+   * @param recreatedIcebergTables List of Iceberg tables that were recreated due to schema changes
+   *                              Views for these tables will be dropped and recreated
    */
   private static void registerFilesAsViews(Connection conn, String directoryPath, boolean recursive,
                                           String duckdbSchema, String calciteSchemaName,
-                                          org.apache.calcite.adapter.file.FileSchema fileSchema)
+                                          org.apache.calcite.adapter.file.FileSchema fileSchema,
+                                          java.util.Set<String> recreatedIcebergTables)
       throws SQLException {
     LOGGER.info("=== Starting DuckDB table registration from FileSchema registry for schema '{}' ===", calciteSchemaName);
 
@@ -1035,6 +1075,21 @@ public class DuckDBJdbcSchemaFactory {
               icebergTablePath = directoryPath + "/" + calciteSchemaName + "/" + tableName;
               LOGGER.warn("ICEBERG_PARQUET table '{}' has unexpected sourceFile '{}', using computed path: {}",
                          tableName, record.sourceFile, icebergTablePath);
+            }
+
+            // For Iceberg tables that were recreated (schema changed), drop existing stale view
+            // This ensures DuckDB views stay in sync with Iceberg table schema changes
+            if (recreatedIcebergTables.contains(tableName)) {
+              if (viewExists(conn, duckdbSchema, tableName)) {
+                String dropSql = String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"", duckdbSchema, tableName);
+                LOGGER.info("Dropping stale Iceberg view for recreated table: {}.{}", duckdbSchema, tableName);
+                try {
+                  conn.createStatement().execute(dropSql);
+                  LOGGER.info("Dropped stale view: {}.{}", duckdbSchema, tableName);
+                } catch (SQLException dropError) {
+                  LOGGER.warn("Failed to drop stale view {}.{}: {}", duckdbSchema, tableName, dropError.getMessage());
+                }
+              }
             }
 
             // For Iceberg tables, check if view exists first for fast start (no S3 calls)
