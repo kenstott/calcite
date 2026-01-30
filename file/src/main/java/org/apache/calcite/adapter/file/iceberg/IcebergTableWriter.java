@@ -652,9 +652,51 @@ public class IcebergTableWriter {
           return ((java.sql.Timestamp) value).getTime() * 1000;
         }
         return value;
+      case LIST:
+        // Convert SQL arrays (including DuckDBArray) to Java List for Iceberg
+        org.apache.iceberg.types.Types.ListType listType =
+            (org.apache.iceberg.types.Types.ListType) type;
+        org.apache.iceberg.types.Type elementType = listType.elementType();
+
+        if (value instanceof java.sql.Array) {
+          try {
+            Object arrayData = ((java.sql.Array) value).getArray();
+            return convertArrayToList(arrayData, elementType);
+          } catch (java.sql.SQLException e) {
+            LOGGER.warn("Failed to convert SQL Array: {}", e.getMessage());
+            return null;
+          }
+        }
+        if (value instanceof java.util.List) {
+          // Already a list, just coerce elements
+          java.util.List<?> inputList = (java.util.List<?>) value;
+          java.util.List<Object> result = new java.util.ArrayList<>(inputList.size());
+          for (Object elem : inputList) {
+            result.add(coerceValue(elem, elementType));
+          }
+          return result;
+        }
+        if (value.getClass().isArray()) {
+          return convertArrayToList(value, elementType);
+        }
+        return value;
       default:
         return value;
     }
+  }
+
+  /**
+   * Converts a Java array to a List, coercing elements to the target Iceberg type.
+   */
+  private java.util.List<Object> convertArrayToList(Object arrayData,
+      org.apache.iceberg.types.Type elementType) {
+    int length = java.lang.reflect.Array.getLength(arrayData);
+    java.util.List<Object> result = new java.util.ArrayList<>(length);
+    for (int i = 0; i < length; i++) {
+      Object elem = java.lang.reflect.Array.get(arrayData, i);
+      result.add(coerceValue(elem, elementType));
+    }
+    return result;
   }
 
   /**

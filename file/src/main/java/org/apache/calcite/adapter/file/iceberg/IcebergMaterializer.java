@@ -609,16 +609,18 @@ public class IcebergMaterializer {
   }
 
   /**
-   * Processes a single batch: DuckDB transform -> staging -> Iceberg commit.
-   * When rowBatchSize > 0 and computedColumns are present, uses row-level batching
+   * Processes a single batch: DuckDB SELECT -> Iceberg native parquet writer.
+   *
+   * <p>Uses Iceberg's native Parquet writer (via IcebergTableWriter.writeRecords)
+   * to embed proper field IDs in the parquet schema. This is required for
+   * DuckDB's iceberg_scan extension to correctly map columns.
+   *
+   * <p>When rowBatchSize > 0 and computedColumns are present, uses row-level batching
    * to prevent OOM during expensive operations like ML embeddings.
    */
   private void processBatch(MaterializationConfig config, Table table,
       Map<String, String> batch) throws SQLException, IOException {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
-
-    // Create staging path
-    String stagingPath = createStagingPath();
 
     try (Connection conn = getDuckDBConnection(config.getThreads())) {
       // Build source pattern with batch filters applied
@@ -628,45 +630,101 @@ public class IcebergMaterializer {
             sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
 
-      // Check if row-level batching is needed for expensive computed columns
-      int rowBatchSize = config.getRowBatchSize();
-      boolean needsRowBatching = rowBatchSize > 0
-          && config.getComputedColumns() != null
-          && !config.getComputedColumns().isEmpty();
+      // Build SELECT SQL (not COPY TO) to fetch data into memory
+      String sql = buildSelectSql(config, sourcePattern, batch);
+      LOGGER.debug("Executing DuckDB SELECT: {}", sql);
 
-      if (needsRowBatching) {
-        processWithRowBatching(config, conn, sourcePattern, stagingPath, batch, rowBatchSize);
-      } else {
-        // Standard processing - all rows at once
-        String sql = buildDuckDBSql(config, sourcePattern, stagingPath, batch, -1, -1);
-        LOGGER.debug("Executing DuckDB SQL: {}", sql);
+      long startTime = System.currentTimeMillis();
 
-        long startTime = System.currentTimeMillis();
-        try (Statement stmt = conn.createStatement()) {
-          stmt.execute(sql);
+      // Fetch data into memory
+      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        java.sql.ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+        while (rs.next()) {
+          Map<String, Object> row = new HashMap<String, Object>();
+          for (int i = 1; i <= colCount; i++) {
+            String colName = meta.getColumnName(i);
+            Object value = rs.getObject(i);
+            if (value != null) {
+              row.put(colName, value);
+            }
+          }
+          rows.add(row);
         }
-        long elapsed = System.currentTimeMillis() - startTime;
-        LOGGER.info("DuckDB transformation completed in {}ms", elapsed);
       }
 
-      // Commit from staging to Iceberg
+      long fetchElapsed = System.currentTimeMillis() - startTime;
+      LOGGER.info("DuckDB SELECT completed: {} rows in {}ms", rows.size(), fetchElapsed);
+
+      if (rows.isEmpty()) {
+        LOGGER.debug("No rows to write for batch: {}", batch);
+        return;
+      }
+
+      // Write using Iceberg's native Parquet writer with proper field IDs
       IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-      Map<String, Object> partitionFilter = new HashMap<String, Object>();
+      Map<String, String> partitionValues = new HashMap<String, String>();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
-        // Only add to filter if it's a partition column
         if (config.getPartitionColumnNames().contains(entry.getKey())) {
-          partitionFilter.put(
-              entry.getKey(), coerceValue(entry.getValue(),
-              findColumnType(config.getPartitionColumns(), entry.getKey())));
+          partitionValues.put(entry.getKey(), entry.getValue());
         }
       }
 
-      writer.commitFromStaging(stagingPath, partitionFilter.isEmpty() ? null : partitionFilter);
+      long writeStart = System.currentTimeMillis();
+      org.apache.iceberg.DataFile dataFile = writer.writeRecords(rows, partitionValues);
+      long writeElapsed = System.currentTimeMillis() - writeStart;
 
-    } finally {
-      // Cleanup staging directory (files should already be moved)
-      cleanupStagingDirectory(stagingPath);
+      if (dataFile != null) {
+        // Commit the data file - coerce partition values to proper types
+        Map<String, Object> typedPartitionFilter = null;
+        if (!partitionValues.isEmpty()) {
+          typedPartitionFilter = new HashMap<String, Object>();
+          for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
+            String colName = entry.getKey();
+            String strValue = entry.getValue();
+            // Find the column type from config and coerce
+            Object typedValue = coerceValue(strValue,
+                findColumnType(config.getPartitionColumns(), colName));
+            typedPartitionFilter.put(colName, typedValue);
+          }
+        }
+        writer.commitDataFiles(Collections.singletonList(dataFile), typedPartitionFilter);
+        LOGGER.info("Wrote and committed {} rows to Iceberg in {}ms",
+            rows.size(), writeElapsed);
+      }
     }
+  }
+
+  /**
+   * Builds a SELECT SQL statement (not COPY TO) for fetching data into memory.
+   */
+  private String buildSelectSql(MaterializationConfig config, String sourcePattern,
+      Map<String, String> batch) {
+    StringBuilder sql = new StringBuilder();
+
+    // Build SELECT clause - include computed columns if present
+    Map<String, String> computedCols = config.getComputedColumns();
+    if (computedCols == null || computedCols.isEmpty()) {
+      sql.append("SELECT * FROM ");
+    } else {
+      // SELECT * plus computed column expressions
+      sql.append("SELECT *");
+      for (Map.Entry<String, String> entry : computedCols.entrySet()) {
+        sql.append(", ").append(entry.getValue()).append(" AS ").append(entry.getKey());
+      }
+      sql.append(" FROM ");
+    }
+
+    // Use appropriate reader based on source format
+    if (config.getSourceFormat() == SourceFormat.JSON) {
+      sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
+    } else {
+      sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
+    }
+
+    return sql.toString();
   }
 
   /**
@@ -981,7 +1039,15 @@ public class IcebergMaterializer {
         globPattern = globPattern + "/**/*" + ext;
       }
 
-      String sql = "SELECT filename, last_modified FROM glob('" + globPattern + "')";
+      // DuckDB glob() returns 'file' column; 'last_modified' only available for local files
+      // For S3 paths, we skip watermark optimization (always re-check)
+      boolean isS3 = globPattern.startsWith("s3://") || globPattern.startsWith("s3a://");
+      if (isS3) {
+        LOGGER.debug("S3 path detected, skipping watermark (not available): {}", globPattern);
+        return 0;  // No watermark for S3 - always check for changes
+      }
+
+      String sql = "SELECT file, last_modified FROM glob('" + globPattern + "')";
       LOGGER.debug("Getting source file watermark with pattern: {}", globPattern);
 
       try (ResultSet rs = stmt.executeQuery(sql)) {
