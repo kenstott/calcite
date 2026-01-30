@@ -75,19 +75,23 @@ public class StooqDownloader {
   // Parallel downloads - keep low to avoid triggering rate limits
   private static final int MAX_PARALLEL_DOWNLOADS = 1;  // Sequential recommended
 
-  // Avro schema for stock price records (same as AlphaVantageDownloader for compatibility)
+  // Avro schema for stock price records - matches sec-schema.yaml stock_prices table
   private static final String STOCK_PRICE_SCHEMA = "{"
       + "\"type\": \"record\","
       + "\"name\": \"StockPrice\","
       + "\"fields\": ["
       + "{\"name\": \"cik\", \"type\": \"string\"},"
+      + "{\"name\": \"ticker\", \"type\": \"string\"},"
       + "{\"name\": \"date\", \"type\": \"string\"},"
+      + "{\"name\": \"year\", \"type\": \"int\"},"
       + "{\"name\": \"open\", \"type\": [\"null\", \"double\"], \"default\": null},"
       + "{\"name\": \"high\", \"type\": [\"null\", \"double\"], \"default\": null},"
       + "{\"name\": \"low\", \"type\": [\"null\", \"double\"], \"default\": null},"
       + "{\"name\": \"close\", \"type\": [\"null\", \"double\"], \"default\": null},"
-      + "{\"name\": \"adj_close\", \"type\": [\"null\", \"double\"], \"default\": null},"
-      + "{\"name\": \"volume\", \"type\": [\"null\", \"long\"], \"default\": null}"
+      + "{\"name\": \"volume\", \"type\": [\"null\", \"long\"], \"default\": null},"
+      + "{\"name\": \"adjusted_close\", \"type\": [\"null\", \"double\"], \"default\": null},"
+      + "{\"name\": \"split_coefficient\", \"type\": [\"null\", \"double\"], \"default\": null},"
+      + "{\"name\": \"dividend\", \"type\": [\"null\", \"double\"], \"default\": null}"
       + "]"
       + "}";
 
@@ -98,6 +102,7 @@ public class StooqDownloader {
   private final ExecutorService downloadExecutor;
   private final RateLimiter rateLimiter;
   private final List<String> failedTickers = new ArrayList<String>();
+  private SecCacheManifest cacheManifest;  // Optional, for tracking unavailable tickers
 
   /**
    * Creates a StooqDownloader with default rate limiting configuration.
@@ -217,6 +222,12 @@ public class StooqDownloader {
                                   int startYear, int endYear) {
     LOGGER.debug("downloadTickerData called for ticker {} with basePath: {}", pair.ticker, basePath);
 
+    // Check if this ticker is marked as unavailable (doesn't exist on Stooq)
+    if (cacheManifest != null && cacheManifest.isTickerUnavailable(pair.ticker)) {
+      LOGGER.debug("Skipping ticker {} - marked as unavailable in cache", pair.ticker);
+      return;
+    }
+
     // Get current time in EST (market timezone)
     ZoneId estZone = ZoneId.of("America/New_York");
     ZonedDateTime nowEst = ZonedDateTime.now(estZone);
@@ -260,7 +271,7 @@ public class StooqDownloader {
         }
 
         // Write to Parquet using StorageProvider
-        writeToParquet(fullPath, prices, pair.cik);
+        writeToParquet(fullPath, prices, pair.cik, pair.ticker, year);
 
         LOGGER.info("Downloaded {} price records for {} year {}",
             prices.size(), pair.ticker, year);
@@ -317,6 +328,7 @@ public class StooqDownloader {
 
     int attempts = 0;
     IOException lastException = null;
+    int emptyResponseCount = 0;  // Track consecutive empty/no-data responses
 
     while (attempts < rateLimiter.getMaxRetries()) {
       attempts++;
@@ -330,15 +342,6 @@ public class StooqDownloader {
         conn = createConnection(url);
         int responseCode = conn.getResponseCode();
 
-        // Reactive: detect rate limiting
-        if (isRateLimited(conn, responseCode)) {
-          LOGGER.warn("Rate limited on attempt {}/{} for ticker {}",
-              attempts, rateLimiter.getMaxRetries(), ticker);
-          rateLimiter.onRateLimited();
-          conn.disconnect();
-          continue;  // Retry with increased backoff
-        }
-
         // Server error - not recoverable
         if (responseCode >= 500) {
           LOGGER.error("Server error {} for ticker {}", responseCode, ticker);
@@ -346,9 +349,49 @@ public class StooqDownloader {
         }
 
         // Client error (except 429) - not recoverable
-        if (responseCode >= 400) {
+        if (responseCode >= 400 && responseCode != 429) {
           LOGGER.error("Client error {} for ticker {}", responseCode, ticker);
           throw new IOException("Client error: " + responseCode);
+        }
+
+        // Explicit 429 Too Many Requests - rate limited
+        if (responseCode == 429) {
+          LOGGER.warn("Rate limited (429) on attempt {}/{} for ticker {}",
+              attempts, rateLimiter.getMaxRetries(), ticker);
+          rateLimiter.onRateLimited();
+          conn.disconnect();
+          continue;
+        }
+
+        // Check for small response - could be rate limiting OR no data
+        String contentLength = conn.getHeaderField("Content-Length");
+        if (contentLength != null) {
+          try {
+            long length = Long.parseLong(contentLength);
+            // Very small response (< 50 bytes) - could be no data or rate limit
+            if (length < 50) {
+              emptyResponseCount++;
+              // If we get multiple empty responses (2+), likely no data (not rate limiting)
+              // Rate limiting would eventually succeed after backoff
+              if (emptyResponseCount >= 2) {
+                LOGGER.info("Ticker {} appears to have no data on Stooq ({}B response, attempt {})",
+                    ticker, length, attempts);
+                // Mark as unavailable if we have a cache manifest
+                if (cacheManifest != null) {
+                  cacheManifest.markTickerUnavailable(ticker, "no_data_from_stooq");
+                }
+                return new ArrayList<StockPriceRecord>();  // Return empty, don't throw
+              }
+              // First empty response - might be rate limiting, retry
+              LOGGER.debug("Small response ({}B) for {}, may be rate limited, retrying",
+                  length, ticker);
+              rateLimiter.onRateLimited();
+              conn.disconnect();
+              continue;
+            }
+          } catch (NumberFormatException e) {
+            // Ignore, not rate limiting
+          }
         }
 
         // Success - parse response
@@ -361,6 +404,15 @@ public class StooqDownloader {
         } finally {
           if (reader != null) {
             reader.close();
+          }
+        }
+
+        // If we got a 200 but no records, the ticker may not exist for this year
+        if (records.isEmpty()) {
+          emptyResponseCount++;
+          if (emptyResponseCount >= 2) {
+            LOGGER.info("Ticker {} has no price data for year {} on Stooq", ticker, year);
+            // Don't mark as unavailable for single year - might have data for other years
           }
         }
 
@@ -384,6 +436,11 @@ public class StooqDownloader {
       }
     }
 
+    // If we exhausted retries with mostly empty responses, mark ticker as unavailable
+    if (emptyResponseCount > 0 && cacheManifest != null) {
+      cacheManifest.markTickerUnavailable(ticker, "no_data_after_retries");
+    }
+
     throw new IOException("Failed after " + attempts + " attempts: "
         + (lastException != null ? lastException.getMessage() : "rate limited"));
   }
@@ -398,7 +455,10 @@ public class StooqDownloader {
    */
   String buildStooqUrl(String ticker, Integer startYear, Integer endYear) {
     StringBuilder url = new StringBuilder(STOOQ_BASE_URL);
-    url.append("?s=").append(ticker.toLowerCase()).append(".us");
+    // Stooq uses underscores instead of dashes in ticker symbols (e.g., BAC_PE not BAC-PE)
+    // and requires uppercase ticker symbols with .US suffix
+    String stooqTicker = ticker.replace("-", "_").toUpperCase();
+    url.append("?s=").append(stooqTicker).append(".US");
     url.append("&i=d");  // Daily interval
 
     if (startYear != null) {
@@ -542,20 +602,24 @@ public class StooqDownloader {
   /**
    * Writes stock price data to a Parquet file using StorageProvider.
    */
-  private void writeToParquet(String path, List<StockPriceRecord> prices, String cik)
-      throws IOException {
+  private void writeToParquet(String path, List<StockPriceRecord> prices,
+      String cik, String ticker, int year) throws IOException {
     List<GenericRecord> records = new ArrayList<GenericRecord>();
 
     for (StockPriceRecord price : prices) {
       GenericRecord record = new GenericData.Record(priceSchema);
       record.put("cik", cik);
+      record.put("ticker", ticker);
       record.put("date", price.date);
+      record.put("year", year);
       record.put("open", price.open);
       record.put("high", price.high);
       record.put("low", price.low);
       record.put("close", price.close);
-      record.put("adj_close", price.adjClose);
       record.put("volume", price.volume);
+      record.put("adjusted_close", price.adjClose);
+      record.put("split_coefficient", null);  // Not available from Stooq
+      record.put("dividend", null);  // Not available from Stooq
       records.add(record);
     }
 
@@ -568,6 +632,17 @@ public class StooqDownloader {
    */
   public List<String> getFailedTickers() {
     return new ArrayList<String>(failedTickers);
+  }
+
+  /**
+   * Set the cache manifest for tracking unavailable tickers.
+   * When set, tickers that return no data from Stooq will be marked as unavailable
+   * and skipped on subsequent runs.
+   *
+   * @param cacheManifest The SEC cache manifest
+   */
+  public void setCacheManifest(SecCacheManifest cacheManifest) {
+    this.cacheManifest = cacheManifest;
   }
 
   /**

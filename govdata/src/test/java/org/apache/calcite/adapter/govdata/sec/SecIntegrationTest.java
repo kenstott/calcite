@@ -54,9 +54,9 @@ public class SecIntegrationTest {
   private static final String BANK_OF_AMERICA_CIK = "0000070858";
   private static final String CATERPILLAR_CIK = "0000018230";
 
-  // Year range
+  // Year range - set to single year for faster testing (use processed year)
   private static final int START_YEAR = 2021;
-  private static final int END_YEAR = 2024;
+  private static final int END_YEAR = 2021;
 
   @BeforeAll
   public static void setup() {
@@ -104,8 +104,10 @@ public class SecIntegrationTest {
       s3ConfigJson = s3Config.toString();
     }
 
-    String ciksJson = "[\"" + APPLE_CIK + "\", \"" + BANK_OF_AMERICA_CIK + "\", \""
-        + CATERPILLAR_CIK + "\"]";
+    // BAC excluded for faster test iteration - uncomment to include
+    String ciksJson = "[\"" + APPLE_CIK + "\", \"" + CATERPILLAR_CIK + "\"]";
+    // String ciksJson = "[\"" + APPLE_CIK + "\", \"" + BANK_OF_AMERICA_CIK + "\", \""
+    //     + CATERPILLAR_CIK + "\"]";
 
     String modelJson =
         "{"

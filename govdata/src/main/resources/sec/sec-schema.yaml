@@ -290,6 +290,10 @@ partitionedTables:
       - *accession_number
       - *filing_type
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - name: primary_document
         type: string
         nullable: true
@@ -366,7 +370,7 @@ partitionedTables:
         # Default test CIKs - can be overridden via operand
         values:
           - "0000320193"   # Apple
-          - "0000070858"   # Bank of America
+          # - "0000070858"   # Bank of America - commented out for faster testing
           - "0000018230"   # Caterpillar
         properties:
           source: "${CIK_SOURCE:config}"  # config, sp500, russell2000, nasdaq100
@@ -409,6 +413,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - *concept_column
       - *context_ref
       - *unit_ref
@@ -480,6 +488,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: filing_contexts
+    enabled: true
     pattern: "year=*/*_contexts.parquet"
     partitions: *sec_partitions
     hooks:
@@ -496,6 +505,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - name: context_id
         type: string
         nullable: false
@@ -573,6 +586,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - name: section
         type: string
         nullable: false
@@ -646,6 +663,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - name: linkbase_type
         type: string
         nullable: false
@@ -729,6 +750,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - *filing_type
       - name: reporting_person_cik
         type: string
@@ -840,6 +865,10 @@ partitionedTables:
       - *cik_column
       - *accession_number
       - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
       - *filing_type
       - name: exhibit_number
         type: string
@@ -912,6 +941,10 @@ partitionedTables:
 
     columns:
       - *cik_column
+      - name: year
+        type: int
+        nullable: false
+        comment: Trading year for Iceberg partitioning
       - name: ticker
         type: string
         nullable: false

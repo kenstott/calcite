@@ -694,6 +694,24 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
+   * Delete all cache entries with a given key prefix.
+   *
+   * @param keyPrefix The prefix to match (e.g., "doc:0000320193:")
+   * @return Number of entries deleted
+   */
+  public int deleteEntriesWithPrefix(String keyPrefix) {
+    String sql = "DELETE FROM cache_entries WHERE cache_key LIKE ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, keyPrefix + "%");
+      int deleted = stmt.executeUpdate();
+      return deleted;
+    } catch (SQLException e) {
+      LOGGER.warn("Error deleting cache entries with prefix {}: {}", keyPrefix, e.getMessage());
+      return 0;
+    }
+  }
+
+  /**
    * Remove expired entries based on refresh_after timestamp.
    *
    * @return Number of entries removed

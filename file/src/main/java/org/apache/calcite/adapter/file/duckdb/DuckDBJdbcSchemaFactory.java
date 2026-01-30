@@ -1111,31 +1111,12 @@ public class DuckDBJdbcSchemaFactory {
                 viewCount++;
                 LOGGER.info("✅ Created Iceberg view: {}.{}", duckdbSchema, tableName);
               } catch (SQLException scanError) {
-                // iceberg_scan failed - probably an empty table
-                LOGGER.debug("iceberg_scan failed for table '{}': {}", tableName, scanError.getMessage());
-
-                // Create an empty view as a fallback
-                try {
-                  String emptyViewSql =
-                      String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS " +
-                      "SELECT " +
-                      "NULL::INT AS order_id, " +
-                      "NULL::VARCHAR AS customer_id, " +
-                      "NULL::VARCHAR AS product_id, " +
-                      "NULL::DOUBLE AS amount, " +
-                      "NULL::TIMESTAMP AS snapshot_time " +
-                      "WHERE 1=0",
-                      duckdbSchema, tableName);
-
-                  LOGGER.info("Creating empty view for Iceberg table '{}' (fallback)", tableName);
-                  conn.createStatement().execute(emptyViewSql);
-                  viewCount++;
-                  LOGGER.info("✅ Created empty Iceberg view: {}.{}", duckdbSchema, tableName);
-                } catch (SQLException fallbackError) {
-                  LOGGER.warn("Failed to create fallback empty view for table '{}': {}",
-                             tableName, fallbackError.getMessage());
-                  throw fallbackError;
-                }
+                // iceberg_scan failed - Iceberg table doesn't exist or is corrupted
+                // No fallbacks - fail fast so the error is visible
+                LOGGER.error("Failed to create Iceberg view for table '{}' at '{}': {}",
+                    tableName, icebergTablePath, scanError.getMessage());
+                throw new RuntimeException("Iceberg table '" + tableName + "' at '" + icebergTablePath +
+                    "' does not exist or is corrupted. Run ETL to create the table.", scanError);
               }
             }
           } catch (SQLException e) {

@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
+import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
@@ -1011,13 +1012,39 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Get or create document converter with vectorization enabled if configured
       FileConverter documentConverter = getOrCreateXbrlConverter(operand);
 
+      // Initialize cache manifest if not yet done (for document tracking)
+      if (this.cacheManifest == null) {
+        String opDir = (String) operand.get("operatingDirectory");
+        if (opDir != null) {
+          this.secOperatingDirectory = opDir;
+          this.cacheManifest = SecCacheManifest.load(opDir);
+          LOGGER.debug("Initialized cache manifest from operatingDirectory: {}", opDir);
+        }
+      }
+
+      // Create document tracker using SecCacheManifest to avoid S3 checks
+      final SecCacheManifest manifest = this.cacheManifest;
+      ProcessedDocumentTracker documentTracker = manifest != null
+          ? new ProcessedDocumentTracker() {
+            @Override public boolean isProcessed(String cik, String accession) {
+              return manifest.isDocumentProcessed(cik, accession);
+            }
+            @Override public void markProcessed(String cik, String accession, int outputFileCount) {
+              manifest.markDocumentProcessed(cik, accession, outputFileCount);
+            }
+          }
+          : null;
+      LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no manifest)");
+
       // Create processor - pass cache directory as String to support S3 paths
       DocumentETLProcessor processor = new DocumentETLProcessor(
           httpSourceConfig,
           storageProvider,
           secParquetDir,
           this.secCacheDirectory,
-          documentConverter);
+          documentConverter,
+          null,  // progressListener
+          documentTracker);
 
       // Build entity list with CIKs and year range
       List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
@@ -1043,8 +1070,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           result.getDocumentsFailed(),
           result.getDurationMs());
 
+      // Download stock prices via Stooq (separate from EDGAR filings)
+      Object fetchStockPricesObj = operand.get("fetchStockPrices");
+      boolean fetchStockPrices = fetchStockPricesObj == null ? true
+          : Boolean.parseBoolean(fetchStockPricesObj.toString());
+      if (fetchStockPrices) {
+        LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
+            ciks.size(), startYear, endYear);
+        // Pass the already-computed govdataParquetDir to avoid null from getGovDataParquetDir()
+        downloadStockPrices(govdataParquetDir, ciks, startYear, endYear);
+      }
+
       // Materialize staging parquet files to Iceberg tables if configured
-      if (result.getDocumentsProcessed() > 0) {
+      if (result.getDocumentsProcessed() > 0 || fetchStockPrices) {
         materializeStagingFilesToIceberg(operand, secParquetDir);
       }
 
@@ -1131,7 +1169,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Build MaterializationConfig from table config
         IcebergMaterializer.MaterializationConfig config =
-            buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern, tableConfig);
+            buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern, tableConfig, operand);
 
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
@@ -1168,11 +1206,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Builds MaterializationConfig from YAML table configuration.
+   *
+   * @param operand Schema operand containing year range overrides from test config
    */
   @SuppressWarnings("unchecked")
   private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
       String tableName, String icebergTableName, String baseDir, String pattern,
-      Map<String, Object> tableConfig) {
+      Map<String, Object> tableConfig, Map<String, Object> operand) {
 
     // Build source pattern
     String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
@@ -1185,29 +1225,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     List<String> batchPartitionCols = extractBatchPartitionColumns(tableConfig);
     Map<String, String> computedColumns = extractComputedColumns(tableConfig);
 
-    // Get year range from dimensions config
-    int startYear = 2020;
-    int endYear = java.time.Year.now().getValue();
-    Map<String, Object> dimensions = (Map<String, Object>) tableConfig.get("dimensions");
-    if (dimensions != null) {
-      Map<String, Object> yearDim = (Map<String, Object>) dimensions.get("year");
-      if (yearDim != null) {
-        Object start = yearDim.get("start");
-        Object end = yearDim.get("end");
-        if (start instanceof Number) {
-          startYear = ((Number) start).intValue();
-        }
-        if (end instanceof Number) {
-          endYear = ((Number) end).intValue();
-        } else if (end instanceof String) {
-          String endStr = resolveEnvVariable((String) end);
-          try {
-            endYear = Integer.parseInt(endStr);
-          } catch (NumberFormatException e) {
-            // Keep default
+    // Get year range from operand (test config), falling back to YAML dimensions
+    int startYear = getIntValue(operand, "startYear", -1);
+    int endYear = getIntValue(operand, "endYear", -1);
+
+    // If not set in operand, try dimensions config from YAML
+    if (startYear < 0 || endYear < 0) {
+      Map<String, Object> dimensions = (Map<String, Object>) tableConfig.get("dimensions");
+      if (dimensions != null) {
+        Map<String, Object> yearDim = (Map<String, Object>) dimensions.get("year");
+        if (yearDim != null) {
+          Object start = yearDim.get("start");
+          Object end = yearDim.get("end");
+          if (startYear < 0 && start instanceof Number) {
+            startYear = ((Number) start).intValue();
+          }
+          if (endYear < 0) {
+            if (end instanceof Number) {
+              endYear = ((Number) end).intValue();
+            } else if (end instanceof String) {
+              String endStr = resolveEnvVariable((String) end);
+              try {
+                endYear = Integer.parseInt(endStr);
+              } catch (NumberFormatException e) {
+                // Keep default
+              }
+            }
           }
         }
       }
+    }
+
+    // Final fallback defaults
+    if (startYear < 0) {
+      startYear = 2020;
+    }
+    if (endYear < 0) {
+      endYear = java.time.Year.now().getValue();
     }
 
     // Determine row batch size for expensive computed columns (embeddings)
@@ -1304,9 +1358,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         continue;
       }
 
-      // Map YAML types to Iceberg types
-      String icebergType = mapYamlTypeToIceberg(type);
-      columnDefs.add(new IcebergCatalogManager.ColumnDef(name, icebergType, comment));
+      // Pass raw YAML type - IcebergCatalogManager.mapToIcebergType handles conversion
+      columnDefs.add(new IcebergCatalogManager.ColumnDef(name, type, comment));
     }
 
     return columnDefs;
@@ -1415,38 +1468,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     return batchPartitionCols;
-  }
-
-  /**
-   * Maps YAML schema types to Iceberg types.
-   */
-  private String mapYamlTypeToIceberg(String yamlType) {
-    if (yamlType == null) {
-      return "STRING";
-    }
-    String upperType = yamlType.toUpperCase();
-    switch (upperType) {
-      case "STRING":
-      case "VARCHAR":
-        return "STRING";
-      case "INT":
-      case "INTEGER":
-        return "INT";
-      case "LONG":
-      case "BIGINT":
-        return "LONG";
-      case "DOUBLE":
-      case "FLOAT":
-        return "DOUBLE";
-      case "BOOLEAN":
-        return "BOOLEAN";
-      case "DATE":
-        return "DATE";
-      case "TIMESTAMP":
-        return "TIMESTAMP";
-      default:
-        return "STRING";
-    }
   }
 
   /**
@@ -3613,9 +3634,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
     try {
       // Use the parquet directory for stock prices - same as other SEC data
+      // Try getGovDataParquetDir() first, but fall back to passed baseDirPath if null
       String govdataParquetDir = getGovDataParquetDir();
       if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-        LOGGER.warn("GOVDATA_PARQUET_DIR not set, skipping stock price download");
+        govdataParquetDir = baseDirPath;
+      }
+      if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
+        LOGGER.warn("GOVDATA_PARQUET_DIR not set and no baseDirPath provided, skipping stock price download");
         return;
       }
       String basePath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
@@ -3670,7 +3695,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (!tickerCikPairs.isEmpty()) {
         // Determine which stock price source to use
         // Priority: 1) operand, 2) STOCK_PRICE_SOURCE env var, 3) default to "stooq"
-        String stockPriceSource = (String) currentOperand.get("stockPriceSource");
+        String stockPriceSource = currentOperand != null
+            ? (String) currentOperand.get("stockPriceSource") : null;
         if (stockPriceSource == null || stockPriceSource.isEmpty()) {
           stockPriceSource = System.getenv("STOCK_PRICE_SOURCE");
         }
@@ -3686,6 +3712,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
           LOGGER.info("Downloading stock prices for {} tickers using Stooq", tickerCikPairs.size());
           StooqDownloader downloader = new StooqDownloader(storageProvider, stooqUsername, stooqPassword);
+          // Set cache manifest for tracking unavailable tickers (skips tickers that don't exist on Stooq)
+          if (cacheManifest != null) {
+            downloader.setCacheManifest(cacheManifest);
+          }
           downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
 
         } else if ("alphavantage".equals(stockPriceSource)) {
@@ -3721,7 +3751,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private boolean areStockPricesCached(String basePath, List<String> ciks, int startYear, int endYear) {
     try {
       // Get TTL configuration from operand (default 24 hours)
-      Integer stockPriceTtlHours = (Integer) currentOperand.get("stockPriceTtlHours");
+      Integer stockPriceTtlHours = currentOperand != null
+          ? (Integer) currentOperand.get("stockPriceTtlHours") : null;
       if (stockPriceTtlHours == null) {
         stockPriceTtlHours = 24;
       }

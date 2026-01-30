@@ -224,6 +224,8 @@ public class ModelLifecycleProcessor {
         ? def.operatingDirectory : this.operatingDirectory;
     if (schemaOpDir != null) {
       builder.operand("operatingDirectory", schemaOpDir);
+      // Also add to operand so configureHooks can access it
+      def.operand.put("operatingDirectory", schemaOpDir);
     }
 
     // Apply factory's hooks

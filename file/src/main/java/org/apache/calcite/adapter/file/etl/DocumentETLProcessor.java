@@ -20,9 +20,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Orchestrates document-based ETL processing for SEC filings and similar sources.
@@ -66,6 +68,11 @@ public class DocumentETLProcessor {
   private final String cacheDirectory;
   private final FileConverter documentConverter;
   private final ProgressListener progressListener;
+  private final ProcessedDocumentTracker documentTracker;
+
+  // In-memory cache fallback to avoid repeated S3 exists() checks when no tracker provided
+  private final Set<String> existsCache = new HashSet<String>();
+  private final Set<String> notExistsCache = new HashSet<String>();
 
   /**
    * Creates a new document ETL processor.
@@ -82,7 +89,7 @@ public class DocumentETLProcessor {
       String outputDirectory,
       String cacheDirectory,
       FileConverter documentConverter) {
-    this(config, storageProvider, outputDirectory, cacheDirectory, documentConverter, null);
+    this(config, storageProvider, outputDirectory, cacheDirectory, documentConverter, null, null);
   }
 
   /**
@@ -102,12 +109,36 @@ public class DocumentETLProcessor {
       String cacheDirectory,
       FileConverter documentConverter,
       ProgressListener progressListener) {
+    this(config, storageProvider, outputDirectory, cacheDirectory, documentConverter,
+        progressListener, null);
+  }
+
+  /**
+   * Creates a new document ETL processor with progress listener and document tracker.
+   *
+   * @param config HTTP source configuration with document settings
+   * @param storageProvider Storage provider for output files
+   * @param outputDirectory Directory for converted Parquet files (can be S3 or local path)
+   * @param cacheDirectory Cache directory for downloaded documents (can be S3 or local path)
+   * @param documentConverter Converter for document processing
+   * @param progressListener Listener for progress updates
+   * @param documentTracker Tracker for processed documents (avoids S3 checks)
+   */
+  public DocumentETLProcessor(
+      HttpSourceConfig config,
+      StorageProvider storageProvider,
+      String outputDirectory,
+      String cacheDirectory,
+      FileConverter documentConverter,
+      ProgressListener progressListener,
+      ProcessedDocumentTracker documentTracker) {
     this.config = config;
     this.storageProvider = storageProvider;
     this.outputDirectory = outputDirectory;
     this.cacheDirectory = cacheDirectory;
     this.documentConverter = documentConverter;
     this.progressListener = progressListener;
+    this.documentTracker = documentTracker;
   }
 
   /**
@@ -159,6 +190,15 @@ public class DocumentETLProcessor {
 
           outputFiles.addAll(converted);
           documentsProcessed++;
+
+          // Mark document as processed to avoid future S3 checks
+          if (documentTracker != null && !converted.isEmpty()) {
+            String cik = docVariables.get("cik");
+            String accession = docVariables.get("accession");
+            if (cik != null && accession != null) {
+              documentTracker.markProcessed(cik, accession, converted.size());
+            }
+          }
 
           if (progressListener != null) {
             progressListener.onProgress(documentsProcessed, -1,
@@ -258,12 +298,13 @@ public class DocumentETLProcessor {
 
   /**
    * Checks if a document has already been processed.
+   * Uses documentTracker if available (no S3 checks), otherwise falls back to
+   * in-memory cache and S3 exists checks.
    *
    * @param docVariables Document variables
    * @return true if already processed
    */
   protected boolean isAlreadyProcessed(Map<String, String> docVariables) {
-    // Check for existence of output files for this document
     String cik = docVariables.get("cik");
     String accession = docVariables.get("accession");
 
@@ -271,27 +312,43 @@ public class DocumentETLProcessor {
       return false;
     }
 
-    // Extract year from accession number (format: XXXXXXXXXX-YY-NNNNNN where YY is 2-digit year)
-    // Examples: 0000320193-24-000132 -> 2024, 0001104659-23-014712 -> 2023
+    // Use document tracker if available (no S3 checks needed)
+    if (documentTracker != null) {
+      return documentTracker.isProcessed(cik, accession);
+    }
+
+    // Fallback: check S3 for output files (slower)
     String year = extractYearFromAccession(accession);
     if (year == null) {
       return false;
     }
 
-    // Check for specific parquet files using direct path (no glob)
-    // Try common output types: _insider (Form 3/4/5), _facts (10-K/10-Q), _metadata
     String basePath = String.format("%s/year=%s/%s_%s", outputDirectory, year, cik, accession);
     String[] suffixes = {"_insider.parquet", "_facts.parquet", "_metadata.parquet"};
 
     try {
       for (String suffix : suffixes) {
-        if (storageProvider.exists(basePath + suffix)) {
+        String fullPath = basePath + suffix;
+
+        // Check in-memory cache first to avoid S3 calls
+        if (existsCache.contains(fullPath)) {
           return true;
+        }
+        if (notExistsCache.contains(fullPath)) {
+          continue;
+        }
+
+        // Not in cache - check storage and cache the result
+        boolean exists = storageProvider.exists(fullPath);
+        if (exists) {
+          existsCache.add(fullPath);
+          return true;
+        } else {
+          notExistsCache.add(fullPath);
         }
       }
       return false;
     } catch (Exception e) {
-      // If check fails, assume not processed
       return false;
     }
   }

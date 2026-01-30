@@ -713,6 +713,17 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
         data.put("filing_date", filingDate);
 
+        // Extract year for Iceberg partitioning
+        int year = 0;
+        if (filingDate != null && filingDate.length() >= 4) {
+          try {
+            year = Integer.parseInt(filingDate.substring(0, 4));
+          } catch (NumberFormatException e) {
+            LOGGER.warn("Failed to parse year from filing date: {}", filingDate);
+          }
+        }
+        data.put("year", year);
+
         // For inline XBRL, concept is in 'name' attribute; for regular XBRL, it's the element name
         String concept;
         if (element.hasAttribute("name")) {
@@ -870,6 +881,17 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("filing_type", filingType);
     data.put("filing_date", filingDate);
 
+    // Extract year for Iceberg partitioning
+    int year = 0;
+    if (filingDate != null && filingDate.length() >= 4) {
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Failed to parse year from filing date: {}", filingDate);
+      }
+    }
+    data.put("year", year);
+
     // Extract DEI (Document and Entity Information) elements
     // Try different namespaces and formats
     String companyName = extractDeiValue(doc, "EntityRegistrantName", "RegistrantName");
@@ -971,6 +993,21 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
+  /**
+   * Extract year from filing date string (YYYY-MM-DD format).
+   * Returns 0 if parsing fails.
+   */
+  private int extractYearFromDate(String filingDate) {
+    if (filingDate != null && filingDate.length() >= 4) {
+      try {
+        return Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Failed to parse year from filing date: {}", filingDate);
+      }
+    }
+    return 0;
+  }
+
   private void writeContextsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String accession) throws IOException {
 
@@ -979,8 +1016,11 @@ public class XbrlToParquetConverter implements FileConverter {
         AbstractSecDataDownloader.loadTableColumns("filing_contexts");
 
     // Extract context elements
+    // Use getElementsByTagName (not getElementsByTagNameNS) because inline XBRL parsing
+    // creates context elements without a namespace, and some DOM implementations don't
+    // return null-namespace elements when using getElementsByTagNameNS("*", ...)
     List<Map<String, Object>> dataList = new ArrayList<>();
-    NodeList contexts = doc.getElementsByTagNameNS("*", "context");
+    NodeList contexts = doc.getElementsByTagName("context");
 
     for (int i = 0; i < contexts.getLength(); i++) {
       Element context = (Element) contexts.item(i);
@@ -990,23 +1030,37 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
       data.put("filing_date", filingDate);
+
+      // Extract year for Iceberg partitioning
+      int year = 0;
+      if (filingDate != null && filingDate.length() >= 4) {
+        try {
+          year = Integer.parseInt(filingDate.substring(0, 4));
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Failed to parse year from filing date: {}", filingDate);
+        }
+      }
+      data.put("year", year);
       data.put("context_id", context.getAttribute("id"));
 
       // Extract entity information
-      NodeList identifiers = context.getElementsByTagNameNS("*", "identifier");
+      // Use getElementsByTagName (not getElementsByTagNameNS) since inline XBRL parsing
+      // creates elements without namespaces
+      NodeList identifiers = context.getElementsByTagName("identifier");
       if (identifiers.getLength() > 0) {
         Element identifier = (Element) identifiers.item(0);
         data.put("entity_identifier", identifier.getTextContent());
         data.put("entity_scheme", identifier.getAttribute("scheme"));
       } else {
-        data.put("entity_identifier", null);
-        data.put("entity_scheme", null);
+        // Fallback to CIK since entity_identifier is required (nullable: false)
+        data.put("entity_identifier", cik);
+        data.put("entity_scheme", "http://www.sec.gov/CIK");
       }
 
       // Extract period information
-      NodeList startDates = context.getElementsByTagNameNS("*", "startDate");
-      NodeList endDates = context.getElementsByTagNameNS("*", "endDate");
-      NodeList instants = context.getElementsByTagNameNS("*", "instant");
+      NodeList startDates = context.getElementsByTagName("startDate");
+      NodeList endDates = context.getElementsByTagName("endDate");
+      NodeList instants = context.getElementsByTagName("instant");
 
       if (startDates.getLength() > 0) {
         data.put("period_start", startDates.item(0).getTextContent());
@@ -1460,6 +1514,16 @@ public class XbrlToParquetConverter implements FileConverter {
               data.put("cik", cik);
               data.put("accession_number", accessionNumber);
               data.put("filing_date", filingDate);
+              // Extract year for Iceberg partitioning
+              int year = 0;
+              if (filingDate != null && filingDate.length() >= 4) {
+                try {
+                  year = Integer.parseInt(filingDate.substring(0, 4));
+                } catch (NumberFormatException e) {
+                  // ignore
+                }
+              }
+              data.put("year", year);
               data.put("section", "XBRL MD&A");
               data.put("subsection", concept);
               data.put("paragraph_number", dataList.size() + 1);
@@ -1528,6 +1592,16 @@ public class XbrlToParquetConverter implements FileConverter {
           data.put("cik", cik);
           data.put("accession_number", accessionNumber);
           data.put("filing_date", filingDate);
+          // Extract year for Iceberg partitioning
+          int year = 0;
+          if (filingDate != null && filingDate.length() >= 4) {
+            try {
+              year = Integer.parseInt(filingDate.substring(0, 4));
+            } catch (NumberFormatException e) {
+              // ignore
+            }
+          }
+          data.put("year", year);
           data.put("section", section.sectionName);
           data.put("subsection", chunk.getContentType().name());
           data.put("paragraph_number", dataList.size() + 1);
@@ -1703,6 +1777,16 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("accession_number", accessionNumber);
       data.put("filing_date", filingDate);
+      // Extract year for Iceberg partitioning
+      int year = 0;
+      if (filingDate != null && filingDate.length() >= 4) {
+        try {
+          year = Integer.parseInt(filingDate.substring(0, 4));
+        } catch (NumberFormatException e) {
+          // ignore
+        }
+      }
+      data.put("year", year);
       data.put("section", section);
       data.put("subsection", "General");
       data.put("paragraph_number", dataList.size() + 1);
@@ -1922,6 +2006,7 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("accession_number", accessionNumber);
       data.put("filing_date", filingDate);
+      data.put("year", extractYearFromDate(filingDate));
       data.put("section", sectionName);
       data.put("subsection", "General");
       data.put("paragraph_number", paragraphNum);
@@ -1982,6 +2067,7 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("cik", cik);
         data.put("accession_number", accessionNumber);
         data.put("filing_date", filingDate);
+        data.put("year", extractYearFromDate(filingDate));
         data.put("section", "XBRL MD&A");
         data.put("subsection", concept);
         data.put("paragraph_number", i + 1);
@@ -2082,6 +2168,16 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("accession_number", accession);
       data.put("filing_date", filingDate);
+      // Extract year for Iceberg partitioning
+      int year = 0;
+      if (filingDate != null && filingDate.length() >= 4) {
+        try {
+          year = Integer.parseInt(filingDate.substring(0, 4));
+        } catch (NumberFormatException e) {
+          // ignore
+        }
+      }
+      data.put("year", year);
 
       // Determine linkbase type from namespace or arc role
       String arcRole = arc.getAttribute("arcrole");
@@ -2267,6 +2363,7 @@ public class XbrlToParquetConverter implements FileConverter {
               data.put("cik", cik);
               data.put("accession_number", accession);
               data.put("filing_date", filingDate);
+              data.put("year", extractYearFromDate(filingDate));
               data.put("linkbase_type", determineLinkbaseType(arcrole));
               data.put("arc_role", arcrole);
               data.put("from_concept", cleanConceptName(fromRef));
@@ -2313,6 +2410,7 @@ public class XbrlToParquetConverter implements FileConverter {
                 data.put("cik", cik);
                 data.put("accession_number", accession);
                 data.put("filing_date", filingDate);
+                data.put("year", extractYearFromDate(filingDate));
                 data.put("linkbase_type", "reference");
                 data.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
                 data.put("from_concept", cleanConceptName(concept));
@@ -2361,6 +2459,7 @@ public class XbrlToParquetConverter implements FileConverter {
                   data.put("cik", cik);
                   data.put("accession_number", accession);
                   data.put("filing_date", filingDate);
+                  data.put("year", extractYearFromDate(filingDate));
                   data.put("linkbase_type", "presentation");
                   data.put("arc_role", "table-structure");
                   data.put("from_concept", cleanConceptName(lastParentConcept));
@@ -2404,6 +2503,7 @@ public class XbrlToParquetConverter implements FileConverter {
             data.put("cik", cik);
             data.put("accession_number", accession);
             data.put("filing_date", filingDate);
+            data.put("year", extractYearFromDate(filingDate));
             data.put("linkbase_type", "calculation");
             data.put("arc_role", "summation-item");
             data.put("from_concept", cleanConceptName(parentConcept));
@@ -2598,6 +2698,7 @@ public class XbrlToParquetConverter implements FileConverter {
           data.put("cik", cik);
           data.put("accession_number", accession);
           data.put("filing_date", filingDate);
+          data.put("year", extractYearFromDate(filingDate));
           data.put("linkbase_type", linkbaseType);
 
           // Get arc role
@@ -2749,8 +2850,8 @@ public class XbrlToParquetConverter implements FileConverter {
       conn.setConnectTimeout(10000);
       conn.setReadTimeout(10000);
       // SEC.gov requires proper User-Agent identifying automated tools with contact info
-      // See: https://www.sec.gov/os/accessing-edgar-data
-      String userAgent = "Apache Calcite GovData Adapter 1.0 (kenstott@github.com)";
+      // Format: "Company Name admin@email.com" - see: https://www.sec.gov/os/accessing-edgar-data
+      String userAgent = "Apache Calcite SEC Adapter apache-calcite@apache.org";
       conn.setRequestProperty("User-Agent", userAgent);
       conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
       conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
@@ -3005,6 +3106,8 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
+      // Extract year for Iceberg partitioning
+      data.put("year", extractYearFromDate(filingDate));
       data.put("reporting_person_cik", reportingPersonCik);
       data.put("reporting_person_name", reportingPersonName);
       data.put("is_director", isDirector);
@@ -3067,6 +3170,8 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
+      // Extract year for Iceberg partitioning
+      data.put("year", extractYearFromDate(filingDate));
       data.put("reporting_person_cik", reportingPersonCik);
       data.put("reporting_person_name", reportingPersonName);
       data.put("is_director", isDirector);
@@ -3114,6 +3219,8 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
+      // Extract year for Iceberg partitioning
+      data.put("year", extractYearFromDate(filingDate));
       data.put("reporting_person_cik", reportingPersonCik);
       data.put("reporting_person_name", reportingPersonName);
       data.put("is_director", isDirector);
@@ -3196,6 +3303,8 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("cik", cik);
       data.put("filing_date", filingDate);
       data.put("filing_type", filingType);
+      // Extract year for Iceberg partitioning
+      data.put("year", extractYearFromDate(filingDate));
       data.put("reporting_person_cik", reportingPersonCik);
       data.put("reporting_person_name", reportingPersonName);
       data.put("is_director", isDirector);

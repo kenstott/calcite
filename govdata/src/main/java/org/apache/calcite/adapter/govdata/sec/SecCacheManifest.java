@@ -165,6 +165,52 @@ public class SecCacheManifest extends AbstractCacheManifest {
     return store.cleanupExpiredEntries();
   }
 
+  // ===== Document-level (cik+accession) tracking =====
+  // For tracking individual SEC filings that have been processed to parquet
+
+  /**
+   * Check if a document (filing) has already been processed to parquet.
+   * This avoids expensive S3 exists checks by tracking processing state in DuckDB.
+   *
+   * @param cik The CIK
+   * @param accession The accession number (e.g., "0000320193-24-000088")
+   * @return true if the document has been processed, false otherwise
+   */
+  public boolean isDocumentProcessed(String cik, String accession) {
+    String key = "doc:" + cik + ":" + accession;
+    return store.isCached(key);
+  }
+
+  /**
+   * Mark a document (filing) as successfully processed to parquet.
+   *
+   * @param cik The CIK
+   * @param accession The accession number
+   * @param outputFileCount Number of parquet files created
+   */
+  public void markDocumentProcessed(String cik, String accession, int outputFileCount) {
+    String key = "doc:" + cik + ":" + accession;
+    // Store with Long.MAX_VALUE refresh (immutable once processed)
+    store.upsertEntry(key, "document_processed", String.valueOf(outputFileCount),
+        null, outputFileCount, Long.MAX_VALUE, "immutable");
+    LOGGER.trace("Marked document {}:{} as processed ({} files)", cik, accession, outputFileCount);
+  }
+
+  /**
+   * Invalidate all processed documents for a CIK (e.g., when submissions.json changes).
+   * This is rarely needed but ensures consistency if SEC updates past filings.
+   *
+   * @param cik The CIK
+   */
+  public void invalidateDocumentsForCik(String cik) {
+    // Delete all entries matching the pattern "doc:{cik}:*"
+    String keyPrefix = "doc:" + cik + ":";
+    int deleted = store.deleteEntriesWithPrefix(keyPrefix);
+    if (deleted > 0) {
+      LOGGER.debug("Invalidated {} processed document entries for CIK {}", deleted, cik);
+    }
+  }
+
   /**
    * Load manifest from DuckDB cache store.
    */
@@ -213,6 +259,34 @@ public class SecCacheManifest extends AbstractCacheManifest {
 
   @Override public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
     LOGGER.warn("markApiError called on SecCacheManifest - not implemented for SEC adapter");
+  }
+
+  // ===== Stock ticker availability tracking =====
+
+  /**
+   * Check if a stock ticker is marked as unavailable (doesn't exist on Stooq).
+   *
+   * @param ticker The stock ticker symbol
+   * @return true if ticker is unavailable and should not be retried
+   */
+  public boolean isTickerUnavailable(String ticker) {
+    String key = "ticker_unavailable:" + ticker.toUpperCase();
+    return store.isUnavailable(key);
+  }
+
+  /**
+   * Mark a stock ticker as unavailable (doesn't exist on Stooq).
+   * Uses Long.MAX_VALUE TTL so it's essentially permanent until manually cleared.
+   *
+   * @param ticker The stock ticker symbol
+   * @param reason Reason for unavailability (e.g., "no_data_from_stooq")
+   */
+  public void markTickerUnavailable(String ticker, String reason) {
+    String key = "ticker_unavailable:" + ticker.toUpperCase();
+    // Use max retry days to make this essentially permanent
+    // 365000 days = ~1000 years, effectively permanent
+    store.markApiError(key, "ticker_availability", reason, 365000);
+    LOGGER.info("Marked ticker {} as unavailable: {}", ticker, reason);
   }
 
   // ===== Filing tracking methods =====

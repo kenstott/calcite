@@ -362,14 +362,25 @@ public class IcebergCatalogManager {
 
   /**
    * Maps a string type name to an Iceberg Type.
+   * Supports basic types and array types (e.g., "array&lt;double&gt;").
    *
-   * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "BIGINT")
+   * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "array&lt;double&gt;")
    * @return The corresponding Iceberg type
    */
   private static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
     if (typeName == null) {
       return Types.StringType.get();
     }
+
+    // Handle array types: array<element_type>
+    String lowerType = typeName.toLowerCase();
+    if (lowerType.startsWith("array<") && lowerType.endsWith(">")) {
+      String elementType = typeName.substring(6, typeName.length() - 1).trim();
+      org.apache.iceberg.types.Type elementIcebergType = mapToIcebergType(elementType);
+      // Use element ID of 100 for list elements (standard convention)
+      return Types.ListType.ofOptional(100, elementIcebergType);
+    }
+
     String upperType = typeName.toUpperCase();
     switch (upperType) {
       case "INTEGER":
