@@ -433,6 +433,24 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("Set GOVDATA_PARQUET_DIR={}", directory);
     }
 
+    // Set year range properties from operand for YAML variable substitution
+    // This allows ${GOVDATA_START_YEAR}, ${SEC_START_YEAR}, etc. to resolve from model config
+    Object startYearObj = operand.get("startYear");
+    if (startYearObj != null) {
+      String startYear = String.valueOf(startYearObj);
+      System.setProperty("GOVDATA_START_YEAR", startYear);
+      // Also set schema-specific properties (SEC_START_YEAR, etc.)
+      System.setProperty(dataSource.toUpperCase() + "_START_YEAR", startYear);
+      LOGGER.debug("Set GOVDATA_START_YEAR={}, {}_START_YEAR={}", startYear, dataSource.toUpperCase(), startYear);
+    }
+    Object endYearObj = operand.get("endYear");
+    if (endYearObj != null) {
+      String endYear = String.valueOf(endYearObj);
+      System.setProperty("GOVDATA_END_YEAR", endYear);
+      System.setProperty(dataSource.toUpperCase() + "_END_YEAR", endYear);
+      LOGGER.debug("Set GOVDATA_END_YEAR={}, {}_END_YEAR={}", endYear, dataSource.toUpperCase(), endYear);
+    }
+
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
   }
 
