@@ -137,6 +137,22 @@ tasks.shadowJar {
     exclude("META-INF/*.RSA")
 
     manifest {
-        attributes["Main-Class"] = "org.apache.calcite.jdbc.Driver"
+        attributes["Main-Class"] = "org.apache.calcite.adapter.govdata.etl.EtlRunner"
     }
+}
+
+// Task to run ETL runner directly from Gradle
+tasks.register<JavaExec>("etlRunner") {
+    group = "application"
+    description = "Run the ETL runner for downloading historical government data"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.apache.calcite.adapter.govdata.etl.EtlRunner")
+
+    // Default JVM memory settings for processing large datasets
+    minHeapSize = "1g"
+    maxHeapSize = "4g"
+
+    // Pass through any command line arguments
+    // Usage: ./gradlew :govdata:etlRunner --args="--model path/to/model.json"
 }

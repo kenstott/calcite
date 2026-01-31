@@ -94,6 +94,12 @@ public class MultiSchemaIntegrationTest {
       startYear = "2019";
     }
 
+    // SEC-specific start year (SEC data starts from 2019 in test environment)
+    String secStartYear = TestEnvironmentLoader.getEnv("SEC_START_YEAR");
+    if (secStartYear == null || secStartYear.isEmpty()) {
+      secStartYear = "2019";
+    }
+
     // endYear defaults to current year if not specified in schema config
 
     // S3 configuration for MinIO or AWS S3
@@ -211,7 +217,7 @@ public class MultiSchemaIntegrationTest {
         "        \"cacheDirectory\": \"" + cacheDir + "\"," +
         "        \"directory\": \"" + parquetDir + "\"," +
         "        " + s3ConfigJson +
-        "        \"startYear\": " + startYear + "," +
+        "        \"startYear\": " + secStartYear + "," +
         "        \"ciks\": [\"0000320193\", \"0000018230\", \"0000789019\"]," +
         "        \"filingTypes\": [\"10-K\", \"10-Q\", \"8-K\", \"4\"]," +
         "        \"autoDownload\": true" +
