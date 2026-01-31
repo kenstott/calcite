@@ -283,4 +283,73 @@ public class SecIntegrationTest {
       }
     }
   }
+
+  @Test
+  void testSecToSecJoins() throws SQLException {
+    LOGGER.info("=== SEC Single-Table and Join Tests ===");
+
+    try (Connection conn = createConnection();
+         Statement stmt = conn.createStatement()) {
+
+      // Test 0: Simple single-table SELECT with actual data
+      LOGGER.info("Test 0: Single table SELECT with actual data (not just COUNT)");
+      String sql0 = "SELECT cik, company_name, filing_type FROM \"SEC\".\"filing_metadata\" LIMIT 3";
+
+      int rows0 = 0;
+      try (ResultSet rs = stmt.executeQuery(sql0)) {
+        while (rs.next()) {
+          LOGGER.info("  CIK={}, Company={}, Type={}",
+              rs.getString("cik"),
+              rs.getString("company_name"),
+              rs.getString("filing_type"));
+          rows0++;
+        }
+      }
+      LOGGER.info("  Result: {} rows returned", rows0);
+      assertTrue(rows0 > 0, "Single table SELECT should return data");
+
+      // Test 0b: Another table with data
+      LOGGER.info("Test 0b: Single table SELECT on insider_transactions");
+      String sql0b = "SELECT cik, reporting_person_name, transaction_code FROM \"SEC\".\"insider_transactions\" LIMIT 3";
+
+      int rows0b = 0;
+      try (ResultSet rs = stmt.executeQuery(sql0b)) {
+        while (rs.next()) {
+          LOGGER.info("  CIK={}, Person={}, Code={}",
+              rs.getString("cik"),
+              rs.getString("reporting_person_name"),
+              rs.getString("transaction_code"));
+          rows0b++;
+        }
+      }
+      LOGGER.info("  Result: {} rows returned", rows0b);
+      assertTrue(rows0b > 0, "insider_transactions SELECT should return data");
+
+      // Test 1: Join filing_metadata with financial_line_items
+      // (insider_transactions has Form 4 filings with different accession numbers)
+      LOGGER.info("Test 1: filing_metadata JOIN financial_line_items");
+      String sql1 = "SELECT fm.company_name, fm.filing_type, COUNT(*) as line_count "
+          + "FROM \"SEC\".\"filing_metadata\" fm "
+          + "JOIN \"SEC\".\"financial_line_items\" fli "
+          + "  ON fm.cik = fli.cik AND fm.accession_number = fli.accession_number "
+          + "GROUP BY fm.company_name, fm.filing_type "
+          + "ORDER BY line_count DESC "
+          + "LIMIT 5";
+
+      int rows1 = 0;
+      try (ResultSet rs = stmt.executeQuery(sql1)) {
+        while (rs.next()) {
+          LOGGER.info("  {} | {} | {} line items",
+              rs.getString("company_name"),
+              rs.getString("filing_type"),
+              rs.getLong("line_count"));
+          rows1++;
+        }
+      }
+      LOGGER.info("  Result: {} rows returned", rows1);
+      assertTrue(rows1 > 0, "filing_metadata JOIN financial_line_items should return data");
+
+      LOGGER.info("=== SEC tests PASSED ===");
+    }
+  }
 }
