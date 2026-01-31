@@ -894,10 +894,10 @@ public class SecDataFetcher {
       }
     }
 
-    // Fetch fresh data
+    // Fetch fresh data using LLM (more reliable than web scraping)
     LOGGER.info("Fetching DJIA constituents...");
     try {
-      List<String> ciks = fetchDJIAFromWikipedia();
+      List<String> ciks = fetchDJIAFromLLM();
 
       if (ciks.isEmpty()) {
         if (TEST_MODE || !FALLBACK_ENABLED) {
@@ -961,13 +961,15 @@ public class SecDataFetcher {
   +
           "    \"operand\": {\n"
   +
+          "      \"storageType\": \"local\",\n"
+  +
           "      \"tables\": [{\n"
   +
           "        \"name\": \"djia_constituents\",\n"
   +
           "        \"url\": \"https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average\",\n"
   +
-          "        \"selector\": \"table.wikitable:first\",\n"
+          "        \"selector\": \"table.wikitable\",\n"
   +
           "        \"index\": 0\n"
   +
@@ -1039,40 +1041,144 @@ public class SecDataFetcher {
   }
 
   /**
+   * Fetch DJIA constituents using LLM.
+   * DJIA has exactly 30 components so this is a simple single-call fetch.
+   */
+  private static List<String> fetchDJIAFromLLM() {
+    List<String> ciks = new ArrayList<>();
+
+    String apiKey = System.getenv("ANTHROPIC_API_KEY");
+    String apiUrl = System.getenv().getOrDefault("ANTHROPIC_API_URL",
+        "https://api.anthropic.com/v1/messages");
+
+    if (apiKey == null || apiKey.isEmpty()) {
+      LOGGER.warn("ANTHROPIC_API_KEY not set, cannot fetch DJIA from LLM");
+      return ciks;
+    }
+
+    String prompt = "List all 30 current Dow Jones Industrial Average (DJIA) component stocks. "
+        + "For each company, provide the stock ticker symbol and SEC CIK number (10-digit format with leading zeros). "
+        + "Return ONLY a JSON array with no other text. "
+        + "Format: [{\"ticker\":\"AAPL\",\"cik\":\"0000320193\",\"name\":\"Apple Inc.\"},...] "
+        + "Include all 30 companies.";
+
+    try {
+      URI uri = URI.create(apiUrl);
+      HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+      conn.setRequestMethod("POST");
+      conn.setRequestProperty("Content-Type", "application/json");
+      conn.setRequestProperty("x-api-key", apiKey);
+      conn.setRequestProperty("anthropic-version", "2023-06-01");
+      conn.setDoOutput(true);
+      conn.setConnectTimeout(60000);
+      conn.setReadTimeout(120000);
+
+      String requestBody = "{"
+          + "\"model\": \"claude-sonnet-4-20250514\","
+          + "\"max_tokens\": 4096,"
+          + "\"temperature\": 0,"
+          + "\"messages\": [{\"role\": \"user\", \"content\": \"" + prompt.replace("\"", "\\\"") + "\"}]"
+          + "}";
+
+      try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(conn.getOutputStream())) {
+        writer.write(requestBody);
+        writer.flush();
+      }
+
+      int responseCode = conn.getResponseCode();
+      if (responseCode != 200) {
+        try (BufferedReader errorReader =
+            new BufferedReader(new InputStreamReader(conn.getErrorStream()))) {
+          String errorResponse = errorReader.lines().collect(Collectors.joining("\n"));
+          LOGGER.warn("LLM API returned status " + responseCode + " for DJIA: " + errorResponse);
+        } catch (Exception e) {
+          LOGGER.warn("LLM API returned status " + responseCode + " for DJIA");
+        }
+        return ciks;
+      }
+
+      // Parse response
+      try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+        JsonNode response = MAPPER.readTree(reader);
+
+        if (response.has("content") && response.get("content").isArray()
+            && response.get("content").size() > 0) {
+          String content = response.get("content").get(0).get("text").asText();
+
+          // Parse the JSON array from the content
+          JsonNode companies = MAPPER.readTree(content);
+
+          if (companies.isArray()) {
+            Map<String, String> tickerToCik = fetchTickerToCikMap();
+
+            for (JsonNode company : companies) {
+              String ticker = company.has("ticker") ? company.get("ticker").asText() : "";
+              String cik = company.has("cik") ? company.get("cik").asText() : "";
+
+              // If CIK is provided and valid, use it
+              if (!cik.isEmpty() && cik.matches("\\d{10}")) {
+                if (!ciks.contains(cik)) {
+                  ciks.add(cik);
+                }
+              }
+              // Otherwise, try to map ticker to CIK
+              else if (!ticker.isEmpty()) {
+                String mappedCik = tickerToCik.get(ticker.toUpperCase());
+                if (mappedCik != null && !ciks.contains(mappedCik)) {
+                  ciks.add(mappedCik);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      LOGGER.debug("Fetched " + ciks.size() + " DJIA constituents from LLM");
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to fetch DJIA from LLM: " + e.getMessage());
+    }
+
+    return ciks;
+  }
+
+  /**
    * Get hardcoded DJIA CIKs as fallback.
    * Current Dow 30 constituents as of 2024.
    */
   private static List<String> getHardcodedDJIACIKs() {
     List<String> ciks = new ArrayList<>();
-    // Current Dow Jones Industrial Average 30 companies
+    // Current Dow Jones Industrial Average 30 companies (as of 2024)
     ciks.add("0000320193"); // AAPL - Apple
+    ciks.add("0001018724"); // AMZN - Amazon (added 2024)
     ciks.add("0000004962"); // AXP - American Express
     ciks.add("0000012927"); // BA - Boeing
     ciks.add("0000018230"); // CAT - Caterpillar
     ciks.add("0000093410"); // CVX - Chevron
+    ciks.add("0000858877"); // CSCO - Cisco
     ciks.add("0000021344"); // KO - Coca-Cola
     ciks.add("0001744489"); // DIS - Disney
     ciks.add("0000886982"); // GS - Goldman Sachs
     ciks.add("0000354950"); // HD - Home Depot
     ciks.add("0000773840"); // HON - Honeywell
     ciks.add("0000051143"); // IBM - IBM
-    ciks.add("0000050863"); // INTC - Intel
     ciks.add("0000200406"); // JNJ - Johnson & Johnson
     ciks.add("0000019617"); // JPM - JPMorgan Chase
     ciks.add("0000063908"); // MCD - McDonald's
     ciks.add("0000310158"); // MRK - Merck
     ciks.add("0000789019"); // MSFT - Microsoft
-    ciks.add("0000066740"); // MMM - 3M
     ciks.add("0000320187"); // NKE - Nike
+    ciks.add("0001045810"); // NVDA - NVIDIA (added 2024)
     ciks.add("0000080424"); // PG - Procter & Gamble
     ciks.add("0001108524"); // CRM - Salesforce
+    ciks.add("0000089800"); // SHW - Sherwin-Williams (replaced 3M)
     ciks.add("0000086312"); // TRV - Travelers
     ciks.add("0000731766"); // UNH - UnitedHealth
     ciks.add("0000732712"); // VZ - Verizon
     ciks.add("0001403161"); // V - Visa
     ciks.add("0001618921"); // WBA - Walgreens
     ciks.add("0000104169"); // WMT - Walmart
-    // Note: Dow recently changed, some companies may be different
+    ciks.add("0000034088"); // DOW - Dow Inc.
 
     LOGGER.info("Using hardcoded list of " + ciks.size() + " DJIA companies");
     return ciks;
@@ -1704,7 +1810,7 @@ public class SecDataFetcher {
 
       // Build request body
       String requestBody = "{"
-          + "\"model\": \"claude-3-5-sonnet-20241022\","
+          + "\"model\": \"claude-sonnet-4-20250514\","
           + "\"max_tokens\": 8192,"
           + "\"temperature\": 0,"
           + "\"messages\": [{\"role\": \"user\", \"content\": \"" + prompt.replace("\"", "\\\"") + "\"}]"
@@ -2122,7 +2228,7 @@ public class SecDataFetcher {
 
     String requestBody =
       String.format("{" +
-      "  \"model\": \"claude-3-5-sonnet-20241022\"," +
+      "  \"model\": \"claude-sonnet-4-20250514\"," +
       "  \"max_tokens\": 8192," +
       "  \"temperature\": 0," +
       "  \"messages\": [{" +
