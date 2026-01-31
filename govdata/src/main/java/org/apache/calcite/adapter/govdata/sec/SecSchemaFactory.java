@@ -1834,10 +1834,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean submissionsExists = storageProvider.exists(submissionsPath);
       LOGGER.info("  Checking submissions file: {} (exists={})", submissionsPath, submissionsExists);
 
-      // OPTIMIZATION: Check if this CIK is fully processed before doing any individual filing checks
-      if (cacheManifest != null && cacheManifest.isCikFullyProcessed(normalizedCik)) {
-        LOGGER.info("CIK {} is fully processed and submissions.json unchanged - skipping entire CIK (FAST PATH)", normalizedCik);
-        return; // Skip this entire CIK - no need to check individual filings
+      // OPTIMIZATION: Check if this CIK is fully processed for ALL year+type combinations
+      // Only use fast path when processing a single year (common case in ETL)
+      if (cacheManifest != null && startYear == endYear && !filingTypes.isEmpty()) {
+        boolean allProcessed = true;
+        for (String filingType : filingTypes) {
+          if (!cacheManifest.isCikFullyProcessed(normalizedCik, startYear, filingType)) {
+            allProcessed = false;
+            break;
+          }
+        }
+        if (allProcessed) {
+          LOGGER.info("CIK {} is fully processed for year {} and types {} - skipping (FAST PATH)",
+              normalizedCik, startYear, filingTypes);
+          return; // Skip this entire CIK for this year/types - no need to check individual filings
+        }
       }
 
       // Check if submissions are cached using manifest
@@ -1931,8 +1942,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
                 refreshReason = "daily_fallback_no_metadata";
               }
-              // Invalidate fully_processed flag since submissions.json changed
-              cacheManifest.invalidateCikFullyProcessed(normalizedCik);
+              // Invalidate all fully_processed flags since submissions.json changed
+              cacheManifest.invalidateAllCikProcessed(normalizedCik);
 
               cacheManifest.markCached(normalizedCik, submissionsPath,
                                       newETag, fileSize, refreshAfter, refreshReason);
@@ -2120,13 +2131,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         if (allFilingsProcessed) {
           LOGGER.info("All {} filings for CIK {} are already fully processed - skipping entire CIK", filingsToDownload.size(), normalizedCik);
 
-          // Mark this CIK as fully processed in the cache manifest for future runs
-          if (cacheManifest != null) {
-            cacheManifest.markCikFullyProcessed(normalizedCik, filingsToDownload.size());
-            String cacheDir = getGovDataCacheDir();
-            if (cacheDir != null) {
-              cacheManifest.save(this.secOperatingDirectory);
+          // Mark this CIK as fully processed for each year+type combination
+          if (cacheManifest != null && startYear == endYear) {
+            // Group filings by type and mark each type as processed
+            Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+            for (FilingToDownload f : filingsToDownload) {
+              filingCountsByType.merge(f.form, 1, Integer::sum);
             }
+            for (Map.Entry<String, Integer> entry : filingCountsByType.entrySet()) {
+              cacheManifest.markCikFullyProcessed(normalizedCik, startYear, entry.getKey(), entry.getValue());
+            }
+            cacheManifest.save(this.secOperatingDirectory);
           }
 
           return; // Skip this entire CIK
@@ -2175,14 +2190,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Scheduling {} filings for download/processing for CIK {}", filingsNeedingProcessing.size(), normalizedCik);
       } else {
         // If we scheduled 0 filings, it means all filings are already processed
-        // Mark this CIK as fully processed for future runs
-        if (cacheManifest != null && filingsToDownload.size() > 0) {
+        // Mark this CIK as fully processed for each year+type combination
+        if (cacheManifest != null && filingsToDownload.size() > 0 && startYear == endYear) {
           LOGGER.info("All {} filings for CIK {} are already processed - marking as fully processed", filingsToDownload.size(), normalizedCik);
-          cacheManifest.markCikFullyProcessed(normalizedCik, filingsToDownload.size());
-          String cacheDir = getGovDataCacheDir();
-          if (cacheDir != null) {
-            cacheManifest.save(this.secOperatingDirectory);
+          // Group filings by type and mark each type as processed
+          Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+          for (FilingToDownload f : filingsToDownload) {
+            filingCountsByType.merge(f.form, 1, Integer::sum);
           }
+          for (Map.Entry<String, Integer> entry : filingCountsByType.entrySet()) {
+            cacheManifest.markCikFullyProcessed(normalizedCik, startYear, entry.getKey(), entry.getValue());
+          }
+          cacheManifest.save(this.secOperatingDirectory);
         }
       }
 

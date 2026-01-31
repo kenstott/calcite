@@ -51,41 +51,70 @@ public class SecCacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Check if a CIK has been fully processed (all filings converted to parquet).
+   * Check if a CIK has been fully processed for a specific year and filing type.
    * This is valid only if the submissions.json has not changed since processing.
    *
    * @param cik The CIK to check
-   * @return true if the CIK is fully processed and submissions.json hasn't changed
+   * @param year The filing year
+   * @param filingType The filing type (e.g., "10-K", "10-Q")
+   * @return true if the CIK is fully processed for this year/type
    */
-  public boolean isCikFullyProcessed(String cik) {
-    // Check in cache_entries table using special key pattern
-    String key = "cik_processed:" + cik;
+  public boolean isCikFullyProcessed(String cik, int year, String filingType) {
+    // Key includes year and filing type for targeted caching
+    String key = buildCikProcessedKey(cik, year, filingType);
     return store.isCached(key);
   }
 
   /**
-   * Mark a CIK as fully processed (all filings have been converted to parquet).
+   * Mark a CIK as fully processed for a specific year and filing type.
    *
    * @param cik The CIK
+   * @param year The filing year
+   * @param filingType The filing type (e.g., "10-K", "10-Q")
    * @param totalFilings Total number of filings that were processed
    */
-  public void markCikFullyProcessed(String cik, int totalFilings) {
-    String key = "cik_processed:" + cik;
+  public void markCikFullyProcessed(String cik, int year, String filingType, int totalFilings) {
+    String key = buildCikProcessedKey(cik, year, filingType);
     // Store with Long.MAX_VALUE refresh (until explicitly invalidated)
     store.upsertEntry(key, "cik_processed", String.valueOf(totalFilings),
         null, totalFilings, Long.MAX_VALUE, "fully_processed");
-    LOGGER.info("Marked CIK {} as fully processed ({} filings)", cik, totalFilings);
+    LOGGER.info("Marked CIK {} as fully processed for {}/{} ({} filings)",
+        cik, year, filingType, totalFilings);
   }
 
   /**
-   * Invalidate the fully processed flag for a CIK (e.g., when submissions.json changes).
+   * Invalidate the fully processed flag for a CIK/year/type combination.
+   *
+   * @param cik The CIK
+   * @param year The filing year
+   * @param filingType The filing type
+   */
+  public void invalidateCikFullyProcessed(String cik, int year, String filingType) {
+    String key = buildCikProcessedKey(cik, year, filingType);
+    store.deleteEntry(key);
+    LOGGER.debug("Invalidated fully_processed flag for CIK {}/{}/{}", cik, year, filingType);
+  }
+
+  /**
+   * Invalidate all fully processed flags for a CIK (e.g., when submissions.json changes).
+   * This clears all year/type combinations for the CIK.
    *
    * @param cik The CIK
    */
-  public void invalidateCikFullyProcessed(String cik) {
-    String key = "cik_processed:" + cik;
-    store.deleteEntry(key);
-    LOGGER.debug("Invalidated fully_processed flag for CIK {}", cik);
+  public void invalidateAllCikProcessed(String cik) {
+    String keyPrefix = "cik_processed:" + cik + ":";
+    int deleted = store.deleteEntriesWithPrefix(keyPrefix);
+    if (deleted > 0) {
+      LOGGER.debug("Invalidated {} fully_processed flags for CIK {}", deleted, cik);
+    }
+  }
+
+  /**
+   * Build the cache key for cik_processed entries.
+   * Format: cik_processed:{cik}:{year}:{filingType}
+   */
+  private String buildCikProcessedKey(String cik, int year, String filingType) {
+    return "cik_processed:" + cik + ":" + year + ":" + filingType;
   }
 
   /**
