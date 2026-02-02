@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -14,7 +20,6 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -68,8 +73,7 @@ public class FileSource implements DataSource {
     this.config = config;
   }
 
-  @Override
-  public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
+  @Override public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
     String path = substituteVariables(config.getPath(), variables);
     String format = config.getFormat();
 
@@ -99,8 +103,7 @@ public class FileSource implements DataSource {
     }
   }
 
-  @Override
-  public String getType() {
+  @Override public String getType() {
     return "file";
   }
 
@@ -172,8 +175,8 @@ public class FileSource implements DataSource {
    */
   private Iterator<Map<String, Object>> readDelimited(String path, char delimiter)
       throws IOException {
-    String sql = String.format(
-        "SELECT * FROM read_csv('%s', delim='%c', header=true, auto_detect=true)",
+    String sql =
+        String.format("SELECT * FROM read_csv('%s', delim='%c', header=true, auto_detect=true)",
         escapePath(path), delimiter);
     return executeDuckDbQuery(sql);
   }
@@ -357,13 +360,11 @@ public class FileSource implements DataSource {
       }
     }
 
-    @Override
-    public boolean hasNext() {
+    @Override public boolean hasNext() {
       return next != null;
     }
 
-    @Override
-    public Map<String, Object> next() {
+    @Override public Map<String, Object> next() {
       if (next == null) {
         throw new NoSuchElementException();
       }

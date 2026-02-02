@@ -1,0 +1,445 @@
+{
+  "runs" : [ {
+    "runId" : "20260201-122700-etl-model-v9PS52",
+    "model" : "etl-model-v9PS52.json",
+    "started" : "2026-02-01T12:27:00Z",
+    "completed" : "2026-02-01T12:27:01Z",
+    "status" : "FAILED",
+    "results" : {
+      "schemasFailed" : 1,
+      "schemasSucceeded" : 0,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : false,
+          "elapsedMs" : 487
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-123141-etl-model-HriwwC",
+    "model" : "etl-model-HriwwC.json",
+    "started" : "2026-02-01T12:31:41Z",
+    "completed" : "2026-02-01T12:33:25Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 103537
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-123839-etl-model-CQlrOf",
+    "model" : "etl-model-CQlrOf.json",
+    "started" : "2026-02-01T12:38:39Z",
+    "completed" : "2026-02-01T12:38:46Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 6575
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-123847-etl-model-88OQ32",
+    "model" : "etl-model-88OQ32.json",
+    "started" : "2026-02-01T12:38:47Z",
+    "completed" : "2026-02-01T12:42:25Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 218576
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-125640-etl-model-hmWB7X",
+    "model" : "etl-model-hmWB7X.json",
+    "started" : "2026-02-01T12:56:40Z",
+    "completed" : "2026-02-01T13:00:19Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 218812
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-130021-etl-model-R7YYeN",
+    "model" : "etl-model-R7YYeN.json",
+    "started" : "2026-02-01T13:00:21Z",
+    "completed" : "2026-02-01T13:04:35Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 253615
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-130437-etl-model-IcdwHE",
+    "model" : "etl-model-IcdwHE.json",
+    "started" : "2026-02-01T13:04:37Z",
+    "completed" : "2026-02-01T13:08:29Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 231327
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-130831-etl-model-EoJGSj",
+    "model" : "etl-model-EoJGSj.json",
+    "started" : "2026-02-01T13:08:31Z",
+    "completed" : "2026-02-01T13:12:15Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 223930
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-131217-etl-model-x1uj0Q",
+    "model" : "etl-model-x1uj0Q.json",
+    "started" : "2026-02-01T13:12:17Z",
+    "completed" : "2026-02-01T13:16:32Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 255193
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-131634-etl-model-IlHrDN",
+    "model" : "etl-model-IlHrDN.json",
+    "started" : "2026-02-01T13:16:34Z",
+    "completed" : "2026-02-01T13:19:27Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 172931
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-131930-etl-model-mqA2zR",
+    "model" : "etl-model-mqA2zR.json",
+    "started" : "2026-02-01T13:19:30Z",
+    "completed" : "2026-02-01T13:21:31Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 121709
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132134-etl-model-Cn1f2h",
+    "model" : "etl-model-Cn1f2h.json",
+    "started" : "2026-02-01T13:21:34Z",
+    "completed" : "2026-02-01T13:23:11Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 97155
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132313-etl-model-5QrfCQ",
+    "model" : "etl-model-5QrfCQ.json",
+    "started" : "2026-02-01T13:23:13Z",
+    "completed" : "2026-02-01T13:24:22Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 68774
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132424-etl-model-pnZemc",
+    "model" : "etl-model-pnZemc.json",
+    "started" : "2026-02-01T13:24:24Z",
+    "completed" : "2026-02-01T13:25:32Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 68569
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132534-etl-model-bpIV72",
+    "model" : "etl-model-bpIV72.json",
+    "started" : "2026-02-01T13:25:34Z",
+    "completed" : "2026-02-01T13:26:38Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 63736
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132640-etl-model-SJU6bt",
+    "model" : "etl-model-SJU6bt.json",
+    "started" : "2026-02-01T13:26:40Z",
+    "completed" : "2026-02-01T13:26:49Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 9304
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132650-etl-model-dn7C62",
+    "model" : "etl-model-dn7C62.json",
+    "started" : "2026-02-01T13:26:50Z",
+    "completed" : "2026-02-01T13:26:58Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 7942
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132659-etl-model-dXSDyk",
+    "model" : "etl-model-dXSDyk.json",
+    "started" : "2026-02-01T13:26:59Z",
+    "completed" : "2026-02-01T13:27:08Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 8399
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132709-etl-model-5ahwTB",
+    "model" : "etl-model-5ahwTB.json",
+    "started" : "2026-02-01T13:27:09Z",
+    "completed" : "2026-02-01T13:27:17Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 8047
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-132718-etl-model-b51BVB",
+    "model" : "etl-model-b51BVB.json",
+    "started" : "2026-02-01T13:27:18Z",
+    "completed" : "2026-02-01T13:30:34Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 195951
+        }
+      }
+    }
+  }, {
+    "runId" : "20260201-133036-etl-model-Iq65fB",
+    "model" : "etl-model-Iq65fB.json",
+    "started" : "2026-02-01T13:30:36Z",
+    "completed" : "2026-02-01T14:12:03Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 2487284
+        }
+      }
+    }
+  }, {
+    "runId" : "20260202-132815-etl-model-dGqw7S",
+    "model" : "etl-model-dGqw7S.json",
+    "started" : "2026-02-02T13:28:15Z",
+    "completed" : "2026-02-02T13:29:20Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 65102
+        }
+      }
+    }
+  }, {
+    "runId" : "20260202-151040-etl-model-xPp6Gr",
+    "model" : "etl-model-xPp6Gr.json",
+    "started" : "2026-02-02T15:10:40Z",
+    "completed" : "2026-02-02T15:11:59Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 78404
+        }
+      }
+    }
+  }, {
+    "runId" : "20260202-224826-etl-model-PROTV3",
+    "model" : "etl-model-PROTV3.json",
+    "started" : "2026-02-02T22:48:26Z",
+    "completed" : "2026-02-02T22:49:49Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 83142
+        }
+      }
+    }
+  }, {
+    "runId" : "20260202-224951-etl-model-4zIPHS",
+    "model" : "etl-model-4zIPHS.json",
+    "started" : "2026-02-02T22:49:51Z",
+    "completed" : "2026-02-02T22:51:19Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 88417
+        }
+      }
+    }
+  }, {
+    "runId" : "20260202-225121-etl-model-4aMzAl",
+    "model" : "etl-model-4aMzAl.json",
+    "started" : "2026-02-02T22:51:21Z",
+    "completed" : "2026-02-02T22:52:38Z",
+    "status" : "SUCCESS",
+    "results" : {
+      "schemasFailed" : 0,
+      "schemasSucceeded" : 1,
+      "schemasProcessed" : 1,
+      "details" : {
+        "sec" : {
+          "success" : true,
+          "elapsedMs" : 77994
+        }
+      }
+    }
+  } ]
+}

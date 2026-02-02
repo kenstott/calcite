@@ -102,8 +102,8 @@ public class PartitionAlternatesIntegrationTest {
       // Create data for year=2020/geo=US
       Path yearGeoDir = baseDir.resolve("year=2020").resolve("geo=US");
       Files.createDirectories(yearGeoDir);
-      String sql = String.format(
-          "COPY (SELECT 1 as id, 'income' as type, 2020 as year, 'US' as geo, 50000.0 as amount) "
+      String sql =
+          String.format("COPY (SELECT 1 as id, 'income' as type, 2020 as year, 'US' as geo, 50000.0 as amount) "
           + "TO '%s' (FORMAT PARQUET)",
           yearGeoDir.resolve("data.parquet").toString());
       stmt.execute(sql);
@@ -111,8 +111,8 @@ public class PartitionAlternatesIntegrationTest {
       // Create data for year=2020/geo=UK
       yearGeoDir = baseDir.resolve("year=2020").resolve("geo=UK");
       Files.createDirectories(yearGeoDir);
-      sql = String.format(
-          "COPY (SELECT 2 as id, 'income' as type, 2020 as year, 'UK' as geo, 40000.0 as amount) "
+      sql =
+          String.format("COPY (SELECT 2 as id, 'income' as type, 2020 as year, 'UK' as geo, 40000.0 as amount) "
           + "TO '%s' (FORMAT PARQUET)",
           yearGeoDir.resolve("data.parquet").toString());
       stmt.execute(sql);
@@ -120,16 +120,15 @@ public class PartitionAlternatesIntegrationTest {
       // Create data for year=2021/geo=US
       yearGeoDir = baseDir.resolve("year=2021").resolve("geo=US");
       Files.createDirectories(yearGeoDir);
-      sql = String.format(
-          "COPY (SELECT 3 as id, 'income' as type, 2021 as year, 'US' as geo, 52000.0 as amount) "
+      sql =
+          String.format("COPY (SELECT 3 as id, 'income' as type, 2021 as year, 'US' as geo, 52000.0 as amount) "
           + "TO '%s' (FORMAT PARQUET)",
           yearGeoDir.resolve("data.parquet").toString());
       stmt.execute(sql);
     }
   }
 
-  @Test
-  void testAlternatePartitionRegistryIntegration() {
+  @Test void testAlternatePartitionRegistryIntegration() {
     AlternatePartitionRegistry registry = new AlternatePartitionRegistry();
 
     // Register alternates for a source table
@@ -158,44 +157,40 @@ public class PartitionAlternatesIntegrationTest {
     assertTrue(yearBest == null);
   }
 
-  @Test
-  void testIcebergTableCreationWithPartitionSpec() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+  @Test void testIcebergTableCreationWithPartitionSpec() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "type", Types.StringType.get()),
         Types.NestedField.optional(3, "year", Types.IntegerType.get()),
         Types.NestedField.optional(4, "geo", Types.StringType.get()),
-        Types.NestedField.optional(5, "amount", Types.DoubleType.get())
-    );
+        Types.NestedField.optional(5, "amount", Types.DoubleType.get()));
 
     // Create alternate table partitioned by geo only
     PartitionSpec geoSpec = PartitionSpec.builderFor(schema)
         .identity("geo")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "default.income_by_geo", schema, geoSpec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "default.income_by_geo", schema, geoSpec);
 
     assertNotNull(table);
     assertEquals(1, table.spec().fields().size());
     assertEquals("geo", table.spec().fields().get(0).name());
   }
 
-  @Test
-  void testIcebergTableWriterIntegration() throws Exception {
+  @Test void testIcebergTableWriterIntegration() throws Exception {
     // Create test table
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()),
-        Types.NestedField.optional(3, "year", Types.IntegerType.get())
-    );
+        Types.NestedField.optional(3, "year", Types.IntegerType.get()));
 
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("year")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "default.writer_test", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "default.writer_test", schema, spec);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, new LocalFileStorageProvider());
     assertNotNull(writer);
@@ -205,8 +200,7 @@ public class PartitionAlternatesIntegrationTest {
     writer.runMaintenance(7, 1);
   }
 
-  @Test
-  void testMaterializerConfigBuilder() {
+  @Test void testMaterializerConfigBuilder() {
     List<ColumnDefinition> partitionCols = new ArrayList<ColumnDefinition>();
     partitionCols.add(new ColumnDefinition("geo", "VARCHAR"));
 
@@ -232,8 +226,7 @@ public class PartitionAlternatesIntegrationTest {
     assertTrue(config.supportsIncremental());
   }
 
-  @Test
-  void testGenerateAlternateName() {
+  @Test void testGenerateAlternateName() {
     // Test random name generation
     String name1 = IcebergCatalogManager.generateAlternateName();
     String name2 = IcebergCatalogManager.generateAlternateName();
@@ -248,8 +241,7 @@ public class PartitionAlternatesIntegrationTest {
     assertFalse(IcebergCatalogManager.isAlternateName("regular_table"));
   }
 
-  @Test
-  void testIncrementalTrackerNoopImplementation() {
+  @Test void testIncrementalTrackerNoopImplementation() {
     // Test NOOP tracker
     IncrementalTracker tracker = IncrementalTracker.NOOP;
 
@@ -263,18 +255,16 @@ public class PartitionAlternatesIntegrationTest {
     tracker.markProcessed("table", "source", keyValues, "_mv_test");
   }
 
-  @Test
-  void testRegistryCoversFiltersLogic() {
+  @Test void testRegistryCoversFiltersLogic() {
     // Test the coversFilters logic
     List<String> partitionKeys = Arrays.asList("geo", "year", "month");
-    AlternateInfo info = new AlternateInfo(
-        "_mv_test",
+    AlternateInfo info =
+        new AlternateInfo("_mv_test",
         "source",
         "pattern",
         partitionKeys,
         null,
-        null
-    );
+        null);
 
     // All keys covered
     Set<String> allCovered = new HashSet<String>(Arrays.asList("geo", "year", "month"));

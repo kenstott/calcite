@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -81,8 +87,7 @@ public class ConstantsSource implements DataSource {
     return new ConstantsSource(ConstantsSourceConfig.fromMap(configMap));
   }
 
-  @Override
-  public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
+  @Override public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
     String resourcePath = config.getFile();
     String keyPath = config.getPath();
     String keyColumn = config.getKeyColumn();
@@ -182,13 +187,11 @@ public class ConstantsSource implements DataSource {
     return current;
   }
 
-  @Override
-  public String getType() {
+  @Override public String getType() {
     return "constants";
   }
 
-  @Override
-  public long estimateRowCount() {
+  @Override public long estimateRowCount() {
     // Could pre-load to estimate, but return -1 for simplicity
     return -1;
   }

@@ -1,17 +1,20 @@
 #!/bin/bash
 #
-# ETL Verifier - Validates ETL results by checking table accessibility and data quality
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Usage:
-#   ./etl-verify.sh --model path/to/model.json
-#   ./etl-verify.sh --model model.json --schema SEC --verbose
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Environment variables:
-#   JVM_OPTS      - JVM options (default: -Xmx2g -Xms512m)
-#   GOVDATA_HOME  - Base directory (default: script directory's parent)
-#   ENV_FILE      - Environment file to load (default: .env.prod)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-
 set -e
 
 # Determine script location

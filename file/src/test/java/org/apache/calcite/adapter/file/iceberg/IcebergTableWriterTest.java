@@ -59,11 +59,10 @@ public class IcebergTableWriterTest {
     catalogConfig.put("warehousePath", warehousePath);
 
     // Create a test table
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()),
-        Types.NestedField.optional(3, "year", Types.IntegerType.get())
-    );
+        Types.NestedField.optional(3, "year", Types.IntegerType.get()));
 
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("year")
@@ -77,22 +76,19 @@ public class IcebergTableWriterTest {
     IcebergCatalogManager.clearCache();
   }
 
-  @Test
-  void testWriterCreation() {
+  @Test void testWriterCreation() {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
     assertNotNull(writer.getTable());
   }
 
-  @Test
-  void testMaintenanceDoesNotThrow() {
+  @Test void testMaintenanceDoesNotThrow() {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw even on empty table
     writer.runMaintenance(7, 1);
   }
 
-  @Test
-  void testCommitFromStagingEmptyDirectory() throws Exception {
+  @Test void testCommitFromStagingEmptyDirectory() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Create an empty staging directory

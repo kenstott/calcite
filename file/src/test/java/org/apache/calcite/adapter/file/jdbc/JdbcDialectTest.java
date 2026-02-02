@@ -45,14 +45,12 @@ public class JdbcDialectTest {
   // DuckDB Dialect Tests
   // =========================================================================
 
-  @Test
-  public void testDuckDBDriverClassName() {
+  @Test public void testDuckDBDriverClassName() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
     assertEquals("org.duckdb.DuckDBDriver", dialect.getDriverClassName());
   }
 
-  @Test
-  public void testDuckDBBuildJdbcUrlDefault() {
+  @Test public void testDuckDBBuildJdbcUrlDefault() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     // Empty config should return in-memory URL
@@ -60,8 +58,7 @@ public class JdbcDialectTest {
     assertEquals("jdbc:duckdb:", url);
   }
 
-  @Test
-  public void testDuckDBBuildJdbcUrlWithPath() {
+  @Test public void testDuckDBBuildJdbcUrlWithPath() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     Map<String, String> config = new HashMap<String, String>();
@@ -71,24 +68,21 @@ public class JdbcDialectTest {
     assertEquals("jdbc:duckdb:/tmp/test.duckdb", url);
   }
 
-  @Test
-  public void testDuckDBBuildJdbcUrlNullConfig() {
+  @Test public void testDuckDBBuildJdbcUrlNullConfig() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String url = dialect.buildJdbcUrl(null);
     assertEquals("jdbc:duckdb:", url);
   }
 
-  @Test
-  public void testDuckDBReadParquetSqlAllColumns() {
+  @Test public void testDuckDBReadParquetSqlAllColumns() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String sql = dialect.readParquetSql("s3://bucket/data/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM read_parquet('s3://bucket/data/*.parquet')", sql);
   }
 
-  @Test
-  public void testDuckDBReadParquetSqlWithColumns() {
+  @Test public void testDuckDBReadParquetSqlWithColumns() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("id", "name", "amount");
@@ -96,16 +90,14 @@ public class JdbcDialectTest {
     assertEquals("SELECT id, name, amount FROM read_parquet('s3://bucket/data/*.parquet')", sql);
   }
 
-  @Test
-  public void testDuckDBReadIcebergSql() {
+  @Test public void testDuckDBReadIcebergSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String sql = dialect.readIcebergSql("s3://bucket/warehouse/table", Collections.emptyList());
     assertEquals("SELECT * FROM iceberg_scan('s3://bucket/warehouse/table')", sql);
   }
 
-  @Test
-  public void testDuckDBReadIcebergSqlWithColumns() {
+  @Test public void testDuckDBReadIcebergSqlWithColumns() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("id", "timestamp");
@@ -113,20 +105,17 @@ public class JdbcDialectTest {
     assertEquals("SELECT id, timestamp FROM iceberg_scan('s3://bucket/warehouse/table')", sql);
   }
 
-  @Test
-  public void testDuckDBSupportsDirectGlob() {
+  @Test public void testDuckDBSupportsDirectGlob() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
     assertTrue(dialect.supportsDirectGlob());
   }
 
-  @Test
-  public void testDuckDBSupportsIceberg() {
+  @Test public void testDuckDBSupportsIceberg() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
     assertTrue(dialect.supportsIceberg());
   }
 
-  @Test
-  public void testDuckDBName() {
+  @Test public void testDuckDBName() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
     assertEquals("DuckDB", dialect.getName());
   }
@@ -135,22 +124,19 @@ public class JdbcDialectTest {
   // Trino Dialect Tests
   // =========================================================================
 
-  @Test
-  public void testTrinoDriverClassName() {
+  @Test public void testTrinoDriverClassName() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
     assertEquals("io.trino.jdbc.TrinoDriver", dialect.getDriverClassName());
   }
 
-  @Test
-  public void testTrinoBuildJdbcUrlDefault() {
+  @Test public void testTrinoBuildJdbcUrlDefault() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     String url = dialect.buildJdbcUrl(Collections.emptyMap());
     assertEquals("jdbc:trino://localhost:8080/hive/default", url);
   }
 
-  @Test
-  public void testTrinoBuildJdbcUrlWithConfig() {
+  @Test public void testTrinoBuildJdbcUrlWithConfig() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     Map<String, String> config = new HashMap<String, String>();
@@ -163,8 +149,7 @@ public class JdbcDialectTest {
     assertEquals("jdbc:trino://trino.example.com:443/iceberg/datalake", url);
   }
 
-  @Test
-  public void testTrinoReadParquetSql() {
+  @Test public void testTrinoReadParquetSql() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     // Trino derives table name from path
@@ -172,8 +157,7 @@ public class JdbcDialectTest {
     assertEquals("SELECT * FROM data", sql);
   }
 
-  @Test
-  public void testTrinoReadParquetSqlWithColumns() {
+  @Test public void testTrinoReadParquetSqlWithColumns() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("id", "name");
@@ -181,20 +165,17 @@ public class JdbcDialectTest {
     assertEquals("SELECT id, name FROM customers", sql);
   }
 
-  @Test
-  public void testTrinoDoesNotSupportDirectGlob() {
+  @Test public void testTrinoDoesNotSupportDirectGlob() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
     assertFalse(dialect.supportsDirectGlob());
   }
 
-  @Test
-  public void testTrinoSupportsIcebergViaCatalog() {
+  @Test public void testTrinoSupportsIcebergViaCatalog() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
     assertTrue(dialect.supportsIceberg());
   }
 
-  @Test
-  public void testTrinoReadIcebergReturnsNull() {
+  @Test public void testTrinoReadIcebergReturnsNull() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     // readIcebergSql returns null because Trino requires catalog registration
@@ -202,16 +183,14 @@ public class JdbcDialectTest {
     assertNull(sql);
   }
 
-  @Test
-  public void testTrinoRegisterTableSql() {
+  @Test public void testTrinoRegisterTableSql() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     String sql = dialect.registerTableSql("my_table", "s3://bucket/data/", "parquet");
     assertEquals("CREATE TABLE IF NOT EXISTS my_table WITH (external_location = 's3://bucket/data/', format = 'PARQUET')", sql);
   }
 
-  @Test
-  public void testTrinoName() {
+  @Test public void testTrinoName() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
     assertEquals("Trino", dialect.getName());
   }
@@ -220,22 +199,19 @@ public class JdbcDialectTest {
   // Spark SQL Dialect Tests
   // =========================================================================
 
-  @Test
-  public void testSparkSqlDriverClassName() {
+  @Test public void testSparkSqlDriverClassName() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
     assertEquals("org.apache.hive.jdbc.HiveDriver", dialect.getDriverClassName());
   }
 
-  @Test
-  public void testSparkSqlBuildJdbcUrlDefault() {
+  @Test public void testSparkSqlBuildJdbcUrlDefault() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
     String url = dialect.buildJdbcUrl(Collections.emptyMap());
     assertEquals("jdbc:hive2://localhost:10000/default", url);
   }
 
-  @Test
-  public void testSparkSqlBuildJdbcUrlWithConfig() {
+  @Test public void testSparkSqlBuildJdbcUrlWithConfig() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
     Map<String, String> config = new HashMap<String, String>();
@@ -247,16 +223,14 @@ public class JdbcDialectTest {
     assertEquals("jdbc:hive2://spark.example.com:10001/analytics", url);
   }
 
-  @Test
-  public void testSparkSqlReadParquetSql() {
+  @Test public void testSparkSqlReadParquetSql() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
     String sql = dialect.readParquetSql("s3://bucket/data/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM parquet.`s3://bucket/data/*.parquet`", sql);
   }
 
-  @Test
-  public void testSparkSqlReadParquetSqlWithColumns() {
+  @Test public void testSparkSqlReadParquetSqlWithColumns() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("id", "name", "created_at");
@@ -264,20 +238,17 @@ public class JdbcDialectTest {
     assertEquals("SELECT id, name, created_at FROM parquet.`hdfs:///data/events/*.parquet`", sql);
   }
 
-  @Test
-  public void testSparkSqlSupportsDirectGlob() {
+  @Test public void testSparkSqlSupportsDirectGlob() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
     assertTrue(dialect.supportsDirectGlob());
   }
 
-  @Test
-  public void testSparkSqlSupportsIcebergViaCatalog() {
+  @Test public void testSparkSqlSupportsIcebergViaCatalog() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
     assertTrue(dialect.supportsIceberg());
   }
 
-  @Test
-  public void testSparkSqlName() {
+  @Test public void testSparkSqlName() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
     assertEquals("Spark SQL", dialect.getName());
   }
@@ -286,22 +257,19 @@ public class JdbcDialectTest {
   // ClickHouse Dialect Tests
   // =========================================================================
 
-  @Test
-  public void testClickHouseDriverClassName() {
+  @Test public void testClickHouseDriverClassName() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
     assertEquals("com.clickhouse.jdbc.ClickHouseDriver", dialect.getDriverClassName());
   }
 
-  @Test
-  public void testClickHouseBuildJdbcUrlDefault() {
+  @Test public void testClickHouseBuildJdbcUrlDefault() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     String url = dialect.buildJdbcUrl(Collections.emptyMap());
     assertEquals("jdbc:clickhouse://localhost:8123/default", url);
   }
 
-  @Test
-  public void testClickHouseBuildJdbcUrlWithConfig() {
+  @Test public void testClickHouseBuildJdbcUrlWithConfig() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     Map<String, String> config = new HashMap<String, String>();
@@ -313,16 +281,14 @@ public class JdbcDialectTest {
     assertEquals("jdbc:clickhouse://clickhouse.example.com:8443/analytics", url);
   }
 
-  @Test
-  public void testClickHouseReadParquetSql() {
+  @Test public void testClickHouseReadParquetSql() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     String sql = dialect.readParquetSql("s3://bucket/data/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM s3('s3://bucket/data/*.parquet', 'Parquet')", sql);
   }
 
-  @Test
-  public void testClickHouseReadParquetSqlWithColumns() {
+  @Test public void testClickHouseReadParquetSqlWithColumns() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("event_id", "user_id", "timestamp");
@@ -330,16 +296,14 @@ public class JdbcDialectTest {
     assertEquals("SELECT event_id, user_id, timestamp FROM s3('s3://bucket/events/*.parquet', 'Parquet')", sql);
   }
 
-  @Test
-  public void testClickHouseReadIcebergSql() {
+  @Test public void testClickHouseReadIcebergSql() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     String sql = dialect.readIcebergSql("s3://bucket/warehouse/table", Collections.emptyList());
     assertEquals("SELECT * FROM iceberg('s3://bucket/warehouse/table')", sql);
   }
 
-  @Test
-  public void testClickHouseReadIcebergSqlWithColumns() {
+  @Test public void testClickHouseReadIcebergSqlWithColumns() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
     List<String> columns = Arrays.asList("id", "data");
@@ -347,20 +311,17 @@ public class JdbcDialectTest {
     assertEquals("SELECT id, data FROM iceberg('s3://bucket/warehouse/events')", sql);
   }
 
-  @Test
-  public void testClickHouseSupportsDirectGlob() {
+  @Test public void testClickHouseSupportsDirectGlob() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
     assertTrue(dialect.supportsDirectGlob());
   }
 
-  @Test
-  public void testClickHouseSupportsIceberg() {
+  @Test public void testClickHouseSupportsIceberg() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
     assertTrue(dialect.supportsIceberg());
   }
 
-  @Test
-  public void testClickHouseName() {
+  @Test public void testClickHouseName() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
     assertEquals("ClickHouse", dialect.getName());
   }
@@ -369,36 +330,31 @@ public class JdbcDialectTest {
   // Factory Tests
   // =========================================================================
 
-  @Test
-  public void testFactoryCreatesDuckDB() {
+  @Test public void testFactoryCreatesDuckDB() {
     JdbcDialect dialect = JdbcDialectFactory.createDialect("duckdb");
     assertNotNull(dialect);
     assertEquals("DuckDB", dialect.getName());
   }
 
-  @Test
-  public void testFactoryCreatesTrino() {
+  @Test public void testFactoryCreatesTrino() {
     JdbcDialect dialect = JdbcDialectFactory.createDialect("trino");
     assertNotNull(dialect);
     assertEquals("Trino", dialect.getName());
   }
 
-  @Test
-  public void testFactoryCreatesSpark() {
+  @Test public void testFactoryCreatesSpark() {
     JdbcDialect dialect = JdbcDialectFactory.createDialect("spark");
     assertNotNull(dialect);
     assertEquals("Spark SQL", dialect.getName());
   }
 
-  @Test
-  public void testFactoryCreatesClickHouse() {
+  @Test public void testFactoryCreatesClickHouse() {
     JdbcDialect dialect = JdbcDialectFactory.createDialect("clickhouse");
     assertNotNull(dialect);
     assertEquals("ClickHouse", dialect.getName());
   }
 
-  @Test
-  public void testFactoryCaseInsensitive() {
+  @Test public void testFactoryCaseInsensitive() {
     JdbcDialect d1 = JdbcDialectFactory.createDialect("DUCKDB");
     JdbcDialect d2 = JdbcDialectFactory.createDialect("DuckDB");
     JdbcDialect d3 = JdbcDialectFactory.createDialect("duckdb");
@@ -407,38 +363,31 @@ public class JdbcDialectTest {
     assertEquals(d2.getName(), d3.getName());
   }
 
-  @Test
-  public void testFactoryThrowsOnUnknownEngine() {
+  @Test public void testFactoryThrowsOnUnknownEngine() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() throws Throwable {
+      @Override public void execute() throws Throwable {
         JdbcDialectFactory.createDialect("unknown_engine");
       }
     });
   }
 
-  @Test
-  public void testFactoryThrowsOnNullEngine() {
+  @Test public void testFactoryThrowsOnNullEngine() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() throws Throwable {
+      @Override public void execute() throws Throwable {
         JdbcDialectFactory.createDialect(null);
       }
     });
   }
 
-  @Test
-  public void testFactoryThrowsOnEmptyEngine() {
+  @Test public void testFactoryThrowsOnEmptyEngine() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() throws Throwable {
+      @Override public void execute() throws Throwable {
         JdbcDialectFactory.createDialect("");
       }
     });
   }
 
-  @Test
-  public void testFactoryIsSupported() {
+  @Test public void testFactoryIsSupported() {
     assertTrue(JdbcDialectFactory.isSupported("duckdb"));
     assertTrue(JdbcDialectFactory.isSupported("TRINO"));
     assertTrue(JdbcDialectFactory.isSupported("Spark"));
@@ -448,8 +397,7 @@ public class JdbcDialectTest {
     assertFalse(JdbcDialectFactory.isSupported(""));
   }
 
-  @Test
-  public void testFactoryGetSupportedEngineTypes() {
+  @Test public void testFactoryGetSupportedEngineTypes() {
     String[] types = JdbcDialectFactory.getSupportedEngineTypes();
     assertEquals(4, types.length);
 
@@ -464,8 +412,7 @@ public class JdbcDialectTest {
   // Edge Case Tests
   // =========================================================================
 
-  @Test
-  public void testReadParquetWithNullColumns() {
+  @Test public void testReadParquetWithNullColumns() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     // null columns should be treated as all columns
@@ -473,8 +420,7 @@ public class JdbcDialectTest {
     assertEquals("SELECT * FROM read_parquet('test.parquet')", sql);
   }
 
-  @Test
-  public void testReadParquetWithSingleColumn() {
+  @Test public void testReadParquetWithSingleColumn() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
     List<String> columns = Collections.singletonList("id");
@@ -482,23 +428,21 @@ public class JdbcDialectTest {
     assertEquals("SELECT id FROM parquet.`data.parquet`", sql);
   }
 
-  @Test
-  public void testTrinoTableNameFromDeepPath() {
+  @Test public void testTrinoTableNameFromDeepPath() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     // Should extract 'events' from the path
-    String sql = dialect.readParquetSql("s3://bucket/warehouse/db/schema/events/*.parquet",
-                                         Collections.emptyList());
+    String sql =
+                                         dialect.readParquetSql("s3://bucket/warehouse/db/schema/events/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM events", sql);
   }
 
-  @Test
-  public void testTrinoTableNameFromPathWithSpecialChars() {
+  @Test public void testTrinoTableNameFromPathWithSpecialChars() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     // Special characters should be replaced with underscores
-    String sql = dialect.readParquetSql("s3://bucket/my-table-2024/*.parquet",
-                                         Collections.emptyList());
+    String sql =
+                                         dialect.readParquetSql("s3://bucket/my-table-2024/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM my_table_2024", sql);
   }
 
@@ -506,180 +450,162 @@ public class JdbcDialectTest {
   // View Creation Tests
   // =========================================================================
 
-  @Test
-  public void testDuckDBCreateParquetViewSql() {
+  @Test public void testDuckDBCreateParquetViewSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/*.parquet", false);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "s3://bucket/data/*.parquet", false);
     assertEquals(
         "CREATE VIEW IF NOT EXISTS \"myschema\".\"mytable\" AS SELECT * FROM read_parquet('s3://bucket/data/*.parquet')",
         sql);
   }
 
-  @Test
-  public void testDuckDBCreateParquetViewSqlWithHivePartitioning() {
+  @Test public void testDuckDBCreateParquetViewSqlWithHivePartitioning() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/**/*.parquet", true);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "s3://bucket/data/**/*.parquet", true);
     assertEquals(
         "CREATE VIEW IF NOT EXISTS \"myschema\".\"mytable\" AS SELECT * FROM read_parquet('s3://bucket/data/**/*.parquet', hive_partitioning = true)",
         sql);
   }
 
-  @Test
-  public void testDuckDBCreateParquetViewSqlNoSchema() {
+  @Test public void testDuckDBCreateParquetViewSqlNoSchema() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql(null, "mytable",
-        "s3://bucket/data/*.parquet", false);
+    String sql =
+        dialect.createParquetViewSql(null, "mytable", "s3://bucket/data/*.parquet", false);
     assertEquals(
         "CREATE VIEW IF NOT EXISTS \"mytable\" AS SELECT * FROM read_parquet('s3://bucket/data/*.parquet')",
         sql);
   }
 
-  @Test
-  public void testDuckDBCreateIcebergViewSql() {
+  @Test public void testDuckDBCreateIcebergViewSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
-    String sql = dialect.createIcebergViewSql("myschema", "mytable",
-        "s3://bucket/warehouse/table");
+    String sql =
+        dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
         "CREATE VIEW IF NOT EXISTS \"myschema\".\"mytable\" AS SELECT * FROM iceberg_scan('s3://bucket/warehouse/table')",
         sql);
   }
 
-  @Test
-  public void testDuckDBCreateOrReplaceParquetViewSql() {
+  @Test public void testDuckDBCreateOrReplaceParquetViewSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
-    String sql = dialect.createOrReplaceParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/*.parquet", false);
+    String sql =
+        dialect.createOrReplaceParquetViewSql("myschema", "mytable", "s3://bucket/data/*.parquet", false);
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM read_parquet('s3://bucket/data/*.parquet')",
         sql);
   }
 
-  @Test
-  public void testTrinoCreateParquetViewSql() {
+  @Test public void testTrinoCreateParquetViewSql() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/", false);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "s3://bucket/data/", false);
     assertEquals(
         "CREATE TABLE IF NOT EXISTS \"myschema\".\"mytable\" WITH (external_location = 's3://bucket/data/', format = 'PARQUET')",
         sql);
   }
 
-  @Test
-  public void testTrinoCreateIcebergViewSql() {
+  @Test public void testTrinoCreateIcebergViewSql() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
-    String sql = dialect.createIcebergViewSql("myschema", "mytable",
-        "s3://bucket/warehouse/table");
+    String sql =
+        dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
         "CALL iceberg.system.register_table('myschema', 'mytable', 's3://bucket/warehouse/table')",
         sql);
   }
 
-  @Test
-  public void testTrinoDropViewSql() {
+  @Test public void testTrinoDropViewSql() {
     JdbcDialect dialect = TrinoDialect.INSTANCE;
 
     String sql = dialect.dropViewSql("myschema", "mytable");
     assertEquals("DROP TABLE IF EXISTS \"myschema\".\"mytable\"", sql);
   }
 
-  @Test
-  public void testSparkSqlCreateParquetViewSql() {
+  @Test public void testSparkSqlCreateParquetViewSql() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/*.parquet", false);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "s3://bucket/data/*.parquet", false);
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM parquet.`s3://bucket/data/*.parquet`",
         sql);
   }
 
-  @Test
-  public void testSparkSqlCreateIcebergViewSql() {
+  @Test public void testSparkSqlCreateIcebergViewSql() {
     JdbcDialect dialect = SparkSqlDialect.INSTANCE;
 
-    String sql = dialect.createIcebergViewSql("myschema", "mytable",
-        "s3://bucket/warehouse/table");
+    String sql =
+        dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM iceberg.`s3://bucket/warehouse/table`",
         sql);
   }
 
-  @Test
-  public void testClickHouseCreateParquetViewSqlS3() {
+  @Test public void testClickHouseCreateParquetViewSqlS3() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "s3://bucket/data/*.parquet", false);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "s3://bucket/data/*.parquet", false);
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM s3('s3://bucket/data/*.parquet', 'Parquet')",
         sql);
   }
 
-  @Test
-  public void testClickHouseCreateParquetViewSqlLocal() {
+  @Test public void testClickHouseCreateParquetViewSqlLocal() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
-    String sql = dialect.createParquetViewSql("myschema", "mytable",
-        "/data/files/*.parquet", false);
+    String sql =
+        dialect.createParquetViewSql("myschema", "mytable", "/data/files/*.parquet", false);
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM file('/data/files/*.parquet', 'Parquet')",
         sql);
   }
 
-  @Test
-  public void testClickHouseCreateIcebergViewSql() {
+  @Test public void testClickHouseCreateIcebergViewSql() {
     JdbcDialect dialect = ClickHouseDialect.INSTANCE;
 
-    String sql = dialect.createIcebergViewSql("myschema", "mytable",
-        "s3://bucket/warehouse/table");
+    String sql =
+        dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
         "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM iceberg('s3://bucket/warehouse/table')",
         sql);
   }
 
-  @Test
-  public void testDefaultDropViewSql() {
+  @Test public void testDefaultDropViewSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String sql = dialect.dropViewSql("myschema", "mytable");
     assertEquals("DROP VIEW IF EXISTS \"myschema\".\"mytable\"", sql);
   }
 
-  @Test
-  public void testDefaultCreateSchemaSql() {
+  @Test public void testDefaultCreateSchemaSql() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String sql = dialect.createSchemaSql("myschema");
     assertEquals("CREATE SCHEMA IF NOT EXISTS \"myschema\"", sql);
   }
 
-  @Test
-  public void testQualifyNameWithSchema() {
+  @Test public void testQualifyNameWithSchema() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String name = dialect.qualifyName("myschema", "mytable");
     assertEquals("\"myschema\".\"mytable\"", name);
   }
 
-  @Test
-  public void testQualifyNameWithoutSchema() {
+  @Test public void testQualifyNameWithoutSchema() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String name = dialect.qualifyName(null, "mytable");
     assertEquals("\"mytable\"", name);
   }
 
-  @Test
-  public void testQualifyNameWithEmptySchema() {
+  @Test public void testQualifyNameWithEmptySchema() {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String name = dialect.qualifyName("", "mytable");

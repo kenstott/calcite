@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -27,8 +33,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -43,6 +47,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * HTTP data source that fetches data from REST APIs.
@@ -1144,8 +1150,8 @@ public class HttpSource implements DataSource {
         HttpSourceConfig.WideToNarrowConfig wideToNarrow) throws IOException {
       this.delimiter = delimiter;
       this.wideToNarrow = wideToNarrow;
-      this.reader = new BufferedReader(
-          new InputStreamReader(provider.openInputStream(cachePath), StandardCharsets.UTF_8));
+      this.reader =
+          new BufferedReader(new InputStreamReader(provider.openInputStream(cachePath), StandardCharsets.UTF_8));
       this.exhausted = false;
       this.lineNumber = 0;
       this.matchedRows = 0;
@@ -1372,13 +1378,11 @@ public class HttpSource implements DataSource {
       }
     }
 
-    @Override
-    public boolean hasNext() {
+    @Override public boolean hasNext() {
       return nextRow != null;
     }
 
-    @Override
-    public Map<String, Object> next() {
+    @Override public Map<String, Object> next() {
       if (nextRow == null) {
         throw new java.util.NoSuchElementException();
       }
@@ -1390,8 +1394,7 @@ public class HttpSource implements DataSource {
       return current;
     }
 
-    @Override
-    public void close() throws IOException {
+    @Override public void close() throws IOException {
       reader.close();
     }
   }

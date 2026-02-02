@@ -1,47 +1,20 @@
 #!/bin/bash
 #
-# ETL Full Schedule - Runs all ETL jobs in priority order
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Usage:
-#   ./etl-full-schedule.sh                    # Run all from start
-#   ./etl-full-schedule.sh --start 50         # Start from job #50
-#   ./etl-full-schedule.sh --start 50 --reset # Start from job #50, clearing cached state first
-#   ./etl-full-schedule.sh --list             # List all jobs without running
-#   ./etl-full-schedule.sh --count            # Show total job count
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# RESTART GUIDANCE:
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-#   Most failures: Just use --start N
-#     - Network timeouts, API rate limits, transient errors
-#     - The ETL is idempotent: it skips already-processed items and retries the failed one
-#     - Example: ./etl-full-schedule.sh --start 50
-#
-#   Use --reset only when you need to REPROCESS already-completed items:
-#     - After fixing a bug in parser/converter code
-#     - After schema changes that require regenerating parquet files
-#     - When stale cache state is causing repeated failures
-#
-#   --reset is TARGETED by year and filing type:
-#     - SEC: Clears cik_processed:{cik}:{year}:{filingType} entries
-#     - Only affects the specific year+type combination for job N
-#     - Other years/types remain cached and won't be re-processed
-#     - ECON/Census/GEO: Also targeted by source+year
-#
-#   If a job keeps failing after --reset:
-#     - Check the error logs for root cause
-#     - The source data may be corrupt or unavailable
-#     - Consider skipping the job: --start $((N+1))
-#
-# Priority Order:
-#   1. SEC 10-K by: CIK (DOW30→SP500→Russell→All) × Year (2026→2010)
-#   2. SEC 10-Q by: CIK (DOW30→SP500→Russell→All) × Year (2026→2010)
-#   3. Stock Prices by: CIK (DOW30→SP500→Russell→All) × Year (2026→2000)
-#   4. ECON by: Source (bea→fred→treasury→worldbank→bls) × Year (2026→2000)
-#   5. CENSUS by: Year (2026→2005)
-#   6. GEO by: Year (2025→2007, plus 2000)
-#   7. SEC 8-K, Form 4, Other by: CIK × Year (lower priority filings)
-#
-
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

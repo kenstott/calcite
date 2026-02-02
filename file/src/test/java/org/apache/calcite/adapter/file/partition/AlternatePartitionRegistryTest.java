@@ -46,8 +46,7 @@ public class AlternatePartitionRegistryTest {
     registry = new AlternatePartitionRegistry();
   }
 
-  @Test
-  void testRegisterAndRetrieve() {
+  @Test void testRegisterAndRetrieve() {
     List<String> partitionKeys = Arrays.asList("geo", "year");
 
     registry.register(
@@ -67,8 +66,7 @@ public class AlternatePartitionRegistryTest {
     assertFalse(info.isMaterialized());
   }
 
-  @Test
-  void testGetAlternatesForSource() {
+  @Test void testGetAlternatesForSource() {
     // Register multiple alternates for same source
     registry.register("source_table", "_mv_alt1", "pattern1", Arrays.asList("col1"), null, null);
     registry.register("source_table", "_mv_alt2", "pattern2", Arrays.asList("col2"), null, null);
@@ -81,8 +79,7 @@ public class AlternatePartitionRegistryTest {
     assertEquals(1, otherAlternates.size());
   }
 
-  @Test
-  void testMarkMaterialized() {
+  @Test void testMarkMaterialized() {
     registry.register("source_table", "_mv_test", "pattern", Arrays.asList("col1"), null, null);
 
     assertFalse(registry.isMaterialized("_mv_test"));
@@ -92,8 +89,7 @@ public class AlternatePartitionRegistryTest {
     assertTrue(registry.isMaterialized("_mv_test"));
   }
 
-  @Test
-  void testCoversFilters() {
+  @Test void testCoversFilters() {
     List<String> partitionKeys = Arrays.asList("geo", "year");
     registry.register("source_table", "_mv_test", "pattern", partitionKeys, null, null);
     registry.markMaterialized("_mv_test");
@@ -117,8 +113,7 @@ public class AlternatePartitionRegistryTest {
     assertFalse(info.coversFilters(empty));
   }
 
-  @Test
-  void testFindBestAlternate() {
+  @Test void testFindBestAlternate() {
     // Register alternates with different partition key counts
     registry.register("source", "_mv_few", "pattern1", Arrays.asList("geo"), null, null);
     registry.markMaterialized("_mv_few");
@@ -135,8 +130,7 @@ public class AlternatePartitionRegistryTest {
     assertEquals(1, best.getPartitionKeys().size());
   }
 
-  @Test
-  void testFindBestAlternateNonMaterialized() {
+  @Test void testFindBestAlternateNonMaterialized() {
     // Register but don't materialize
     registry.register("source", "_mv_test", "pattern", Arrays.asList("geo"), null, null);
 
@@ -147,8 +141,7 @@ public class AlternatePartitionRegistryTest {
     assertNull(best);
   }
 
-  @Test
-  void testUnregister() {
+  @Test void testUnregister() {
     registry.register("source", "_mv_test", "pattern", Arrays.asList("col"), null, null);
 
     assertNotNull(registry.getByName("_mv_test"));
@@ -160,8 +153,7 @@ public class AlternatePartitionRegistryTest {
     assertEquals(0, registry.getAlternates("source").size());
   }
 
-  @Test
-  void testClear() {
+  @Test void testClear() {
     registry.register("source1", "_mv_1", "p1", Arrays.asList("c1"), null, null);
     registry.register("source2", "_mv_2", "p2", Arrays.asList("c2"), null, null);
 
@@ -174,8 +166,7 @@ public class AlternatePartitionRegistryTest {
     assertEquals(0, registry.getSourceTables().size());
   }
 
-  @Test
-  void testReplaceDuplicateRegistration() {
+  @Test void testReplaceDuplicateRegistration() {
     registry.register("source", "_mv_test", "pattern1", Arrays.asList("col1"), null, null);
     registry.register("source", "_mv_test", "pattern2", Arrays.asList("col2", "col3"), null, null);
 
@@ -188,8 +179,7 @@ public class AlternatePartitionRegistryTest {
     assertEquals(2, info.getPartitionKeys().size());
   }
 
-  @Test
-  void testCaseInsensitiveFilterMatching() {
+  @Test void testCaseInsensitiveFilterMatching() {
     registry.register("source", "_mv_test", "pattern", Arrays.asList("Geo", "YEAR"), null, null);
     registry.markMaterialized("_mv_test");
 

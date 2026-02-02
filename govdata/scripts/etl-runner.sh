@@ -1,18 +1,20 @@
 #!/bin/bash
 #
-# ETL Runner - Standalone script for downloading historical government data
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Usage:
-#   ./etl-runner.sh --model src/main/resources/models/historical/sec/sec-10k-2026-all.json
-#   ./etl-runner.sh --dry-run --model sec-10k-2026-all.json
-#   ./etl-runner.sh --verbose --model sec-10k-2026-all.json
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Environment variables:
-#   JVM_OPTS      - JVM options (default: -Xmx4g -Xms1g)
-#   GOVDATA_HOME  - Base directory (default: script directory's parent)
-#   ENV_FILE      - Environment file to load (default: .env.prod)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-
 set -e
 
 # Determine script location

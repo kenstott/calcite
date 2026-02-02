@@ -90,8 +90,7 @@ public class PartitionDistinctRuleTest {
     dir.delete();
   }
 
-  @Test
-  public void testDistinctOnSinglePartitionColumn() throws Exception {
+  @Test public void testDistinctOnSinglePartitionColumn() throws Exception {
     // Query distinct values of a partition column
     String query = "SELECT DISTINCT \"region\" FROM \"files\".\"partitioned_sales\" ORDER BY \"region\"";
 
@@ -109,8 +108,7 @@ public class PartitionDistinctRuleTest {
     assertTrue(results.contains("WEST"), "Should contain WEST");
   }
 
-  @Test
-  public void testGroupByPartitionColumn() throws Exception {
+  @Test public void testGroupByPartitionColumn() throws Exception {
     // GROUP BY on partition column should also work
     String query = "SELECT \"region\" FROM \"files\".\"partitioned_sales\" GROUP BY \"region\" ORDER BY \"region\"";
 
@@ -127,8 +125,7 @@ public class PartitionDistinctRuleTest {
     assertTrue(results.contains("WEST"), "Should contain WEST");
   }
 
-  @Test
-  public void testPartitionDistinctPerformance() throws Exception {
+  @Test public void testPartitionDistinctPerformance() throws Exception {
     // This test verifies the query completes quickly
     String query = "SELECT DISTINCT \"region\" FROM \"files\".\"partitioned_sales\"";
 
@@ -216,8 +213,7 @@ public class PartitionDistinctRuleTest {
     rootSchema.add("files", FileSchemaFactory.INSTANCE.create(rootSchema, "files", operand));
   }
 
-  @Test
-  public void testDistinctOnPartitionColumnWithDuckDB() throws Exception {
+  @Test public void testDistinctOnPartitionColumnWithDuckDB() throws Exception {
     // Close existing connection and recreate with DuckDB
     if (calciteConn != null) {
       calciteConn.close();

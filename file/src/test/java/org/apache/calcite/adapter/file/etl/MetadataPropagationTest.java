@@ -147,8 +147,8 @@ public class MetadataPropagationTest {
     assertNotNull(metadata.get("column_comments"), "Should have column_comments in metadata");
 
     // Parse the JSON column comments
-    Map<String, String> actualColumnComments = MAPPER.readValue(
-        metadata.get("column_comments"),
+    Map<String, String> actualColumnComments =
+        MAPPER.readValue(metadata.get("column_comments"),
         new TypeReference<Map<String, String>>() { });
 
     assertEquals(expectedColumnComments.get("user_id"), actualColumnComments.get("user_id"));
@@ -202,8 +202,8 @@ public class MetadataPropagationTest {
 
     // Verify column comments
     assertNotNull(metadata.get("column_comments"), "Should have column_comments in metadata");
-    Map<String, String> actualColumnComments = MAPPER.readValue(
-        metadata.get("column_comments"),
+    Map<String, String> actualColumnComments =
+        MAPPER.readValue(metadata.get("column_comments"),
         new TypeReference<Map<String, String>>() { });
 
     assertEquals(expectedColumnComments.get("region"), actualColumnComments.get("region"));

@@ -1,24 +1,28 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -327,8 +331,8 @@ public class SchemaLifecycleProcessor {
     // Create and execute the ETL pipeline
     // sourceStorageProvider handles raw cache (has its base path configured)
     // storageProvider handles parquet output
-    EtlPipeline pipeline = new EtlPipeline(
-        effectiveConfig,
+    EtlPipeline pipeline =
+        new EtlPipeline(effectiveConfig,
         context.getStorageProvider(),                       // For parquet output
         context.getSchemaContext().getSourceStorageProvider(),  // For raw cache
         schemaMaterializeDir,
@@ -947,8 +951,8 @@ public class SchemaLifecycleProcessor {
       boolean hasDataHooks = !fetchDataHooks.isEmpty() || !writeDataHooks.isEmpty();
 
       if (hasTableHooks || hasSourceHooks || hasMaterializeHooks || hasDataHooks) {
-        this.defaultTableListener = new DelegatingTableListener(
-            beforeTableHooks, afterTableHooks, errorHooks, dimensionHooks, filterHooks,
+        this.defaultTableListener =
+            new DelegatingTableListener(beforeTableHooks, afterTableHooks, errorHooks, dimensionHooks, filterHooks,
             beforeSourceHooks, afterSourceHooks, sourceErrorHooks,
             beforeMaterializeHooks, afterMaterializeHooks, materializeErrorHooks,
             fetchDataHooks, writeDataHooks,
@@ -1021,8 +1025,7 @@ public class SchemaLifecycleProcessor {
       this.delegate = delegate;
     }
 
-    @Override
-    public void beforeTable(TableContext context) throws Exception {
+    @Override public void beforeTable(TableContext context) throws Exception {
       java.util.function.Consumer<TableContext> hook = beforeHooks.get(context.getTableName());
       if (hook != null) {
         hook.accept(context);
@@ -1031,8 +1034,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public void afterTable(TableContext context, EtlResult result) {
+    @Override public void afterTable(TableContext context, EtlResult result) {
       java.util.function.BiConsumer<TableContext, EtlResult> hook =
           afterHooks.get(context.getTableName());
       if (hook != null) {
@@ -1042,8 +1044,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public boolean onTableError(TableContext context, Exception error) {
+    @Override public boolean onTableError(TableContext context, Exception error) {
       java.util.function.BiFunction<TableContext, Exception, Boolean> hook =
           errorHooks.get(context.getTableName());
       if (hook != null) {
@@ -1054,8 +1055,7 @@ public class SchemaLifecycleProcessor {
       return true; // Continue by default
     }
 
-    @Override
-    public Map<String, DimensionConfig> resolveDimensions(TableContext context,
+    @Override public Map<String, DimensionConfig> resolveDimensions(TableContext context,
         Map<String, DimensionConfig> staticDimensions) {
       java.util.function.BiFunction<TableContext,
           Map<String, DimensionConfig>, Map<String, DimensionConfig>> hook =
@@ -1068,8 +1068,7 @@ public class SchemaLifecycleProcessor {
       return staticDimensions;
     }
 
-    @Override
-    public boolean isTableEnabled(TableContext context) {
+    @Override public boolean isTableEnabled(TableContext context) {
       java.util.function.Predicate<TableContext> hook =
           filterHooks.get(context.getTableName());
       if (hook != null) {
@@ -1080,8 +1079,7 @@ public class SchemaLifecycleProcessor {
       return true;
     }
 
-    @Override
-    public String resolveApiKey(TableContext context, String keyName) {
+    @Override public String resolveApiKey(TableContext context, String keyName) {
       if (delegate != null) {
         return delegate.resolveApiKey(context, keyName);
       }
@@ -1090,8 +1088,7 @@ public class SchemaLifecycleProcessor {
 
     // ========== SOURCE PHASE HOOKS ==========
 
-    @Override
-    public void beforeSource(TableContext context) {
+    @Override public void beforeSource(TableContext context) {
       java.util.function.Consumer<TableContext> hook =
           beforeSourceHooks.get(context.getTableName());
       if (hook != null) {
@@ -1101,8 +1098,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public void afterSource(TableContext context, SourceResult result) {
+    @Override public void afterSource(TableContext context, SourceResult result) {
       java.util.function.BiConsumer<TableContext, SourceResult> hook =
           afterSourceHooks.get(context.getTableName());
       if (hook != null) {
@@ -1112,8 +1108,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public boolean onSourceError(TableContext context, Exception error) {
+    @Override public boolean onSourceError(TableContext context, Exception error) {
       java.util.function.BiFunction<TableContext, Exception, Boolean> hook =
           sourceErrorHooks.get(context.getTableName());
       if (hook != null) {
@@ -1126,8 +1121,7 @@ public class SchemaLifecycleProcessor {
 
     // ========== MATERIALIZE PHASE HOOKS ==========
 
-    @Override
-    public void beforeMaterialize(TableContext context) {
+    @Override public void beforeMaterialize(TableContext context) {
       java.util.function.Consumer<TableContext> hook =
           beforeMaterializeHooks.get(context.getTableName());
       if (hook != null) {
@@ -1137,8 +1131,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public void afterMaterialize(TableContext context, MaterializeResult result) {
+    @Override public void afterMaterialize(TableContext context, MaterializeResult result) {
       java.util.function.BiConsumer<TableContext, MaterializeResult> hook =
           afterMaterializeHooks.get(context.getTableName());
       if (hook != null) {
@@ -1148,8 +1141,7 @@ public class SchemaLifecycleProcessor {
       }
     }
 
-    @Override
-    public boolean onMaterializeError(TableContext context, Exception error) {
+    @Override public boolean onMaterializeError(TableContext context, Exception error) {
       java.util.function.BiFunction<TableContext, Exception, Boolean> hook =
           materializeErrorHooks.get(context.getTableName());
       if (hook != null) {
@@ -1162,8 +1154,7 @@ public class SchemaLifecycleProcessor {
 
     // ========== DATA PROVIDER/WRITER HOOKS ==========
 
-    @Override
-    public java.util.Iterator<java.util.Map<String, Object>> fetchData(
+    @Override public java.util.Iterator<java.util.Map<String, Object>> fetchData(
         TableContext context, java.util.Map<String, String> variables) {
       java.util.function.BiFunction<TableContext, java.util.Map<String, String>,
           java.util.Iterator<java.util.Map<String, Object>>> hook =
@@ -1176,8 +1167,7 @@ public class SchemaLifecycleProcessor {
       return null; // Use default HttpSource
     }
 
-    @Override
-    public long writeData(
+    @Override public long writeData(
         TableContext context,
         java.util.Iterator<java.util.Map<String, Object>> data,
         java.util.Map<String, String> variables) {

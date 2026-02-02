@@ -27,7 +27,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +53,7 @@ class SchemaLifecycleProcessorTest {
     storageProvider = new LocalFileStorageProvider();
   }
 
-  @Test
-  void testLifecycleHooksAreCalled() throws IOException {
+  @Test void testLifecycleHooksAreCalled() throws IOException {
     // Track hook calls
     AtomicBoolean beforeSchemaCalled = new AtomicBoolean(false);
     AtomicBoolean afterSchemaCalled = new AtomicBoolean(false);
@@ -117,8 +115,7 @@ class SchemaLifecycleProcessorTest {
     // afterSchema may not be called if processing fails early
   }
 
-  @Test
-  void testSchemaConfigFromMap() {
+  @Test void testSchemaConfigFromMap() {
     Map<String, Object> schemaMap = new LinkedHashMap<String, Object>();
     schemaMap.put("name", "econ");
 
@@ -145,8 +142,7 @@ class SchemaLifecycleProcessorTest {
     assertEquals(1, config.getTableCount());
   }
 
-  @Test
-  void testSchemaResultAggregation() {
+  @Test void testSchemaResultAggregation() {
     SchemaResult.Builder builder = SchemaResult.builder()
         .schemaName("test");
 

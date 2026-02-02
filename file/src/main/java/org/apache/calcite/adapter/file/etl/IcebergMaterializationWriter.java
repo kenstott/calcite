@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -394,7 +400,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
             }
           }
         }
-        expectedColumns.add(new IcebergCatalogManager.ColumnDef(
+        expectedColumns.add(
+            new IcebergCatalogManager.ColumnDef(
             partitionCol, partitionType, partitionComment));
         expectedColumnNames.add(partitionCol);
         expectedColumnNamesLower.add(partitionColLower);
@@ -760,8 +767,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: src."FIELDNAME" or src.FIELDNAME (with src. prefix)
-    java.util.regex.Pattern srcFieldPattern = java.util.regex.Pattern.compile(
-        "^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
+    java.util.regex.Pattern srcFieldPattern =
+        java.util.regex.Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
     java.util.regex.Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
     if (srcFieldMatcher.matches()) {
       String fieldName = srcFieldMatcher.group(1);
@@ -769,8 +776,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: bare field name (without src. prefix) - e.g., "table_name" or "field_name"
-    java.util.regex.Pattern bareFieldPattern = java.util.regex.Pattern.compile(
-        "^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
+    java.util.regex.Pattern bareFieldPattern =
+        java.util.regex.Pattern.compile("^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
     java.util.regex.Matcher bareFieldMatcher = bareFieldPattern.matcher(expr);
     if (bareFieldMatcher.matches()) {
       String fieldName = bareFieldMatcher.group(1);
@@ -784,8 +791,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(src."FIELDNAME" AS TYPE) or CAST(src."FIELDNAME" AS TYPE)
-    java.util.regex.Pattern castPattern = java.util.regex.Pattern.compile(
-        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+    java.util.regex.Pattern castPattern =
+        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher castMatcher = castPattern.matcher(expr);
     if (castMatcher.matches()) {
@@ -796,8 +803,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: CAST(FIELDNAME AS TYPE) without src. prefix
-    java.util.regex.Pattern bareCastPattern = java.util.regex.Pattern.compile(
-        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+    java.util.regex.Pattern bareCastPattern =
+        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher bareCastMatcher = bareCastPattern.matcher(expr);
     if (bareCastMatcher.matches()) {
@@ -808,8 +815,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: REPLACE(src."FIELDNAME", 'old', 'new') - for comma handling in numbers
-    java.util.regex.Pattern replacePattern = java.util.regex.Pattern.compile(
-        "^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
+    java.util.regex.Pattern replacePattern =
+        java.util.regex.Pattern.compile("^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher replaceMatcher = replacePattern.matcher(expr);
     if (replaceMatcher.matches()) {
@@ -824,8 +831,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(REPLACE(src."FIELDNAME", 'old', 'new') AS TYPE)
-    java.util.regex.Pattern castReplacePattern = java.util.regex.Pattern.compile(
-        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+    java.util.regex.Pattern castReplacePattern =
+        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher castReplaceMatcher = castReplacePattern.matcher(expr);
     if (castReplaceMatcher.matches()) {
@@ -842,8 +849,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: SUBSTRING(src."FIELDNAME", start, length) - extract substring
-    java.util.regex.Pattern substringPattern = java.util.regex.Pattern.compile(
-        "^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+    java.util.regex.Pattern substringPattern =
+        java.util.regex.Pattern.compile("^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher substringMatcher = substringPattern.matcher(expr);
     if (substringMatcher.matches()) {
@@ -864,8 +871,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: RIGHT(src."FIELDNAME", length) - extract rightmost characters
-    java.util.regex.Pattern rightPattern = java.util.regex.Pattern.compile(
-        "^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+    java.util.regex.Pattern rightPattern =
+        java.util.regex.Pattern.compile("^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher rightMatcher = rightPattern.matcher(expr);
     if (rightMatcher.matches()) {
@@ -883,15 +890,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: COALESCE(src."FIELD1", src."FIELD2", ...) - returns first non-null value
-    java.util.regex.Pattern coalescePattern = java.util.regex.Pattern.compile(
-        "^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
+    java.util.regex.Pattern coalescePattern =
+        java.util.regex.Pattern.compile("^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
         java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher coalesceMatcher = coalescePattern.matcher(expr);
     if (coalesceMatcher.matches()) {
       String argsStr = coalesceMatcher.group(1);
       // Split by comma, but handle quoted field names
-      java.util.regex.Pattern argPattern = java.util.regex.Pattern.compile(
-          "src\\.\"?([A-Za-z0-9_]+)\"?");
+      java.util.regex.Pattern argPattern =
+          java.util.regex.Pattern.compile("src\\.\"?([A-Za-z0-9_]+)\"?");
       java.util.regex.Matcher argMatcher = argPattern.matcher(argsStr);
       while (argMatcher.find()) {
         String fieldName = argMatcher.group(1);
@@ -1357,8 +1364,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     String stagingPath;
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
       // Use local temp directory for faster staging
-      java.io.File tempDir = new java.io.File(System.getProperty("java.io.tmpdir"),
-          "iceberg-staging/" + stagingSubpath);
+      java.io.File tempDir =
+          new java.io.File(System.getProperty("java.io.tmpdir"), "iceberg-staging/" + stagingSubpath);
       tempDir.mkdirs();
       stagingPath = tempDir.getAbsolutePath();
       LOGGER.debug("Created local staging path: {}", stagingPath);

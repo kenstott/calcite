@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.govdata.geo;
 
@@ -51,8 +57,7 @@ public class TigerDataProvider implements DataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerDataProvider.class);
   private static final String TIGER_BASE_URL = "https://www2.census.gov/geo/tiger";
 
-  @Override
-  public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config, Map<String, String> variables)
+  @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config, Map<String, String> variables)
       throws IOException {
 
     String tableName = config.getName();
@@ -97,8 +102,8 @@ public class TigerDataProvider implements DataProvider {
       // Parse shapefile
       int yearInt = Integer.parseInt(year);
       TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName, yearInt);
-      List<Object[]> records = TigerShapefileParser.parseShapefile(
-          tempDir.toFile(), prefix, mapper);
+      List<Object[]> records =
+          TigerShapefileParser.parseShapefile(tempDir.toFile(), prefix, mapper);
 
       // Convert to Map records
       List<Map<String, Object>> result = new ArrayList<>();
@@ -120,7 +125,8 @@ public class TigerDataProvider implements DataProvider {
 
       // Cleanup temp directory
       final Path tempDirToClean = tempDir;
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      Runtime.getRuntime().addShutdownHook(
+          new Thread(() -> {
         try {
           Files.walk(tempDirToClean)
               .sorted(Comparator.reverseOrder())
