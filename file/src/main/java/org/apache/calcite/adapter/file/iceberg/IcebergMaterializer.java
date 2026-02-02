@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.file.iceberg;
 
@@ -458,8 +464,8 @@ public class IcebergMaterializer {
     long currentSourceWatermark = 0;
     boolean enableSourceWatermark = isSourceWatermarkEnabled(config);
     if (enableSourceWatermark) {
-      currentSourceWatermark = getSourceFileWatermark(
-          config.getSourcePattern(), config.getSourceFormat());
+      currentSourceWatermark =
+          getSourceFileWatermark(config.getSourcePattern(), config.getSourceFormat());
       LOGGER.debug("Current source file watermark: {}", currentSourceWatermark);
     }
 
@@ -644,8 +650,8 @@ public class IcebergMaterializer {
         for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
           String colName = entry.getKey();
           String strValue = entry.getValue();
-          Object typedValue = coerceValue(strValue,
-              findColumnType(config.getPartitionColumns(), colName));
+          Object typedValue =
+              coerceValue(strValue, findColumnType(config.getPartitionColumns(), colName));
           typedPartitionFilter.put(colName, typedValue);
         }
       }
@@ -699,29 +705,20 @@ public class IcebergMaterializer {
 
   /**
    * Processes data in row batches to prevent OOM for large tables.
+   * Uses streaming iteration instead of COUNT to avoid memory-intensive scans.
    */
   private void processWithRowBatchingToIceberg(MaterializationConfig config, Connection conn,
       Table table, String sourcePattern, Map<String, String> batch,
       Map<String, String> partitionValues, Map<String, Object> typedPartitionFilter,
       int rowBatchSize) throws SQLException, IOException {
 
-    // First count total rows
-    String countSql = buildCountSql(config, sourcePattern);
-    long totalRows = 0;
-    try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(countSql)) {
-      if (rs.next()) {
-        totalRows = rs.getLong(1);
-      }
-    }
+    LOGGER.info("Row batching enabled: processing in batches of {} for {}", rowBatchSize, batch);
 
-    if (totalRows == 0) {
-      LOGGER.debug("No rows to process in batch: {}", batch);
-      return;
+    // Set DuckDB memory limit to prevent OOM
+    try (Statement memStmt = conn.createStatement()) {
+      memStmt.execute("SET memory_limit='2GB'");
+      memStmt.execute("SET temp_directory='/tmp/duckdb_temp'");
     }
-
-    LOGGER.info("Row batching: processing {} rows in batches of {} for {}",
-        totalRows, rowBatchSize, batch);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
@@ -730,13 +727,13 @@ public class IcebergMaterializer {
     int batchNum = 0;
     long totalStartTime = System.currentTimeMillis();
 
-    while (processedRows < totalRows) {
+    // Iterate with LIMIT/OFFSET until no more rows (avoids expensive COUNT)
+    while (true) {
       batchNum++;
 
       // Build SELECT with LIMIT/OFFSET
       String sql = buildSelectSqlWithPaging(config, sourcePattern, batch, rowBatchSize, (int) processedRows);
-      LOGGER.debug("Row batch {}: rows {} to {} ", batchNum, processedRows,
-          Math.min(processedRows + rowBatchSize, totalRows));
+      LOGGER.info("Row batch {}: fetching rows {} to {}", batchNum, processedRows, processedRows + rowBatchSize);
 
       long batchStart = System.currentTimeMillis();
 
@@ -744,6 +741,7 @@ public class IcebergMaterializer {
       List<Map<String, Object>> rows = fetchRows(conn, sql);
 
       if (rows.isEmpty()) {
+        LOGGER.debug("No more rows at offset {}", processedRows);
         break;
       }
 
@@ -753,13 +751,19 @@ public class IcebergMaterializer {
         dataFiles.add(dataFile);
       }
 
+      int rowCount = rows.size();
       long batchElapsed = System.currentTimeMillis() - batchStart;
-      LOGGER.debug("Row batch {} completed: {} rows in {}ms", batchNum, rows.size(), batchElapsed);
+      LOGGER.info("Row batch {} completed: {} rows in {}ms", batchNum, rowCount, batchElapsed);
 
-      processedRows += rows.size();
+      processedRows += rowCount;
 
       // Clear rows for GC
       rows.clear();
+
+      // If we got fewer rows than requested, we're done
+      if (rowCount < rowBatchSize) {
+        break;
+      }
     }
 
     // Commit all data files in a single transaction
@@ -904,8 +908,8 @@ public class IcebergMaterializer {
       }
       rowBatchPath.append("/batch_").append(batchNum).append(".parquet");
 
-      String sql = buildDuckDBSql(config, sourcePattern, rowBatchPath.toString(),
-          batch, rowBatchSize, (int) processedRows);
+      String sql =
+          buildDuckDBSql(config, sourcePattern, rowBatchPath.toString(), batch, rowBatchSize, (int) processedRows);
       LOGGER.debug("Row batch {}: rows {} to {} ({})",
           batchNum, processedRows, Math.min(processedRows + rowBatchSize, totalRows), sql);
 
@@ -1116,8 +1120,8 @@ public class IcebergMaterializer {
       // Table doesn't exist - this is a new table, not a recreation
       LOGGER.info("Creating new Iceberg table: {} with {} columns, partitioned by {}",
           config.getTargetTableId(), columns.size(), config.getPartitionColumnNames());
-      Table newTable = IcebergCatalogManager.createTableFromColumns(
-          catalogConfig,
+      Table newTable =
+          IcebergCatalogManager.createTableFromColumns(catalogConfig,
           config.getTargetTableId(),
           columns,
           config.getPartitionColumnNames());
@@ -1127,8 +1131,8 @@ public class IcebergMaterializer {
     // Create new table with partition spec (table was dropped due to schema mismatch)
     LOGGER.info("Recreating Iceberg table: {} with {} columns, partitioned by {}",
         config.getTargetTableId(), columns.size(), config.getPartitionColumnNames());
-    Table recreatedTable = IcebergCatalogManager.createTableFromColumns(
-        catalogConfig,
+    Table recreatedTable =
+        IcebergCatalogManager.createTableFromColumns(catalogConfig,
         config.getTargetTableId(),
         columns,
         config.getPartitionColumnNames());
