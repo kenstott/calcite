@@ -1,12 +1,18 @@
 /*
- * Copyright (c) 2026 Kenneth Stott
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the Business Source License 1.1
- * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * NOTICE: Use of this software for training artificial intelligence or
- * machine learning models is strictly prohibited without explicit written
- * permission from the copyright holder.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.govdata.geo;
 
@@ -50,23 +56,22 @@ public class TigerStateLegislativeLowerDimensionResolver implements DimensionRes
       LoggerFactory.getLogger(TigerStateLegislativeLowerDimensionResolver.class);
 
   // States/territories WITHOUT lower legislative chambers
-  private static final Set<String> EXCLUDED_STATES = new HashSet<>(
-      Arrays.asList(
+  private static final Set<String> EXCLUDED_STATES =
+      new HashSet<>(
+          Arrays.asList(
           "11", // DC - federal district, no state legislature
           "31"  // Nebraska - unicameral legislature (only Senate/upper chamber)
-      ));
+          ));
 
   // All 50 states + DC (FIPS 01-56, excluding invalid codes)
-  private static final List<String> ALL_STATE_FIPS = Arrays.asList(
-      "01", "02", "04", "05", "06", "08", "09", "10", "11", "12",
+  private static final List<String> ALL_STATE_FIPS =
+      Arrays.asList("01", "02", "04", "05", "06", "08", "09", "10", "11", "12",
       "13", "15", "16", "17", "18", "19", "20", "21", "22", "23",
       "24", "25", "26", "27", "28", "29", "30", "31", "32", "33",
       "34", "35", "36", "37", "38", "39", "40", "41", "42", "44",
-      "45", "46", "47", "48", "49", "50", "51", "53", "54", "55", "56"
-  );
+      "45", "46", "47", "48", "49", "50", "51", "53", "54", "55", "56");
 
-  @Override
-  public List<String> resolve(String dimensionName, DimensionConfig config,
+  @Override public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
 
     if (!"state_fips".equals(dimensionName)) {
