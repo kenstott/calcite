@@ -1264,13 +1264,35 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       endYear = java.time.Year.now().getValue();
     }
 
-    // Determine row batch size for expensive computed columns (embeddings)
+    // Determine row batch size to prevent OOM during materialization
     int rowBatchSize = 0;
+
+    // First check if YAML config specifies rowBatchSize
+    Map<String, Object> materializeConfig = (Map<String, Object>) tableConfig.get("materialize");
+    if (materializeConfig != null) {
+      Object configuredBatchSize = materializeConfig.get("rowBatchSize");
+      if (configuredBatchSize instanceof Number) {
+        rowBatchSize = ((Number) configuredBatchSize).intValue();
+      }
+    }
+
+    // If not configured, apply defaults for known large tables
+    if (rowBatchSize == 0) {
+      // Large tables that can cause OOM without batching
+      if ("financial_line_items".equals(tableName)
+          || "filing_contexts".equals(tableName)
+          || "xbrl_relationships".equals(tableName)) {
+        rowBatchSize = 50000;  // Process 50k rows at a time for large fact tables
+        LOGGER.info("Enabling row batching ({} rows) for large table '{}'", rowBatchSize, tableName);
+      }
+    }
+
+    // Check for expensive computed columns (embeddings) - these need smaller batches
     if (!computedColumns.isEmpty()) {
-      // Check if any computed column is an embedding function
       for (String expression : computedColumns.values()) {
         if (expression.contains("embed(") || expression.contains("embed_jina")) {
           rowBatchSize = 20;  // Reduced batch size for quackformers to prevent OOM
+          LOGGER.info("Using small batch size ({}) for embedding table '{}'", rowBatchSize, tableName);
           break;
         }
       }

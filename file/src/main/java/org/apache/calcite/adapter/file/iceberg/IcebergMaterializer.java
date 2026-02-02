@@ -615,8 +615,7 @@ public class IcebergMaterializer {
    * to embed proper field IDs in the parquet schema. This is required for
    * DuckDB's iceberg_scan extension to correctly map columns.
    *
-   * <p>When rowBatchSize > 0 and computedColumns are present, uses row-level batching
-   * to prevent OOM during expensive operations like ML embeddings.
+   * <p>When rowBatchSize > 0, uses row-level batching to prevent OOM for large tables.
    */
   private void processBatch(MaterializationConfig config, Table table,
       Map<String, String> batch) throws SQLException, IOException {
@@ -630,41 +629,7 @@ public class IcebergMaterializer {
             sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
 
-      // Build SELECT SQL (not COPY TO) to fetch data into memory
-      String sql = buildSelectSql(config, sourcePattern, batch);
-      LOGGER.debug("Executing DuckDB SELECT: {}", sql);
-
-      long startTime = System.currentTimeMillis();
-
-      // Fetch data into memory
-      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-      try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(sql)) {
-        java.sql.ResultSetMetaData meta = rs.getMetaData();
-        int colCount = meta.getColumnCount();
-        while (rs.next()) {
-          Map<String, Object> row = new HashMap<String, Object>();
-          for (int i = 1; i <= colCount; i++) {
-            String colName = meta.getColumnName(i);
-            Object value = rs.getObject(i);
-            if (value != null) {
-              row.put(colName, value);
-            }
-          }
-          rows.add(row);
-        }
-      }
-
-      long fetchElapsed = System.currentTimeMillis() - startTime;
-      LOGGER.info("DuckDB SELECT completed: {} rows in {}ms", rows.size(), fetchElapsed);
-
-      if (rows.isEmpty()) {
-        LOGGER.debug("No rows to write for batch: {}", batch);
-        return;
-      }
-
-      // Write using Iceberg's native Parquet writer with proper field IDs
-      IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+      // Build partition values for Iceberg writer
       Map<String, String> partitionValues = new HashMap<String, String>();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
         if (config.getPartitionColumnNames().contains(entry.getKey())) {
@@ -672,29 +637,202 @@ public class IcebergMaterializer {
         }
       }
 
-      long writeStart = System.currentTimeMillis();
-      org.apache.iceberg.DataFile dataFile = writer.writeRecords(rows, partitionValues);
-      long writeElapsed = System.currentTimeMillis() - writeStart;
-
-      if (dataFile != null) {
-        // Commit the data file - coerce partition values to proper types
-        Map<String, Object> typedPartitionFilter = null;
-        if (!partitionValues.isEmpty()) {
-          typedPartitionFilter = new HashMap<String, Object>();
-          for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
-            String colName = entry.getKey();
-            String strValue = entry.getValue();
-            // Find the column type from config and coerce
-            Object typedValue = coerceValue(strValue,
-                findColumnType(config.getPartitionColumns(), colName));
-            typedPartitionFilter.put(colName, typedValue);
-          }
+      // Build typed partition filter for commit
+      Map<String, Object> typedPartitionFilter = null;
+      if (!partitionValues.isEmpty()) {
+        typedPartitionFilter = new HashMap<String, Object>();
+        for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
+          String colName = entry.getKey();
+          String strValue = entry.getValue();
+          Object typedValue = coerceValue(strValue,
+              findColumnType(config.getPartitionColumns(), colName));
+          typedPartitionFilter.put(colName, typedValue);
         }
-        writer.commitDataFiles(Collections.singletonList(dataFile), typedPartitionFilter);
-        LOGGER.info("Wrote and committed {} rows to Iceberg in {}ms",
-            rows.size(), writeElapsed);
+      }
+
+      // Use row batching for large tables to prevent OOM
+      int rowBatchSize = config.getRowBatchSize();
+      if (rowBatchSize > 0) {
+        processWithRowBatchingToIceberg(config, conn, table, sourcePattern, batch,
+            partitionValues, typedPartitionFilter, rowBatchSize);
+      } else {
+        processAllRowsToIceberg(config, conn, table, sourcePattern, batch,
+            partitionValues, typedPartitionFilter);
       }
     }
+  }
+
+  /**
+   * Processes all rows at once (original behavior for small tables).
+   */
+  private void processAllRowsToIceberg(MaterializationConfig config, Connection conn, Table table,
+      String sourcePattern, Map<String, String> batch, Map<String, String> partitionValues,
+      Map<String, Object> typedPartitionFilter) throws SQLException, IOException {
+
+    String sql = buildSelectSql(config, sourcePattern, batch);
+    LOGGER.debug("Executing DuckDB SELECT: {}", sql);
+
+    long startTime = System.currentTimeMillis();
+
+    // Fetch all data into memory
+    List<Map<String, Object>> rows = fetchRows(conn, sql);
+
+    long fetchElapsed = System.currentTimeMillis() - startTime;
+    LOGGER.info("DuckDB SELECT completed: {} rows in {}ms", rows.size(), fetchElapsed);
+
+    if (rows.isEmpty()) {
+      LOGGER.debug("No rows to write for batch: {}", batch);
+      return;
+    }
+
+    // Write using Iceberg's native Parquet writer
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    long writeStart = System.currentTimeMillis();
+    org.apache.iceberg.DataFile dataFile = writer.writeRecords(rows, partitionValues);
+    long writeElapsed = System.currentTimeMillis() - writeStart;
+
+    if (dataFile != null) {
+      writer.commitDataFiles(Collections.singletonList(dataFile), typedPartitionFilter);
+      LOGGER.info("Wrote and committed {} rows to Iceberg in {}ms", rows.size(), writeElapsed);
+    }
+  }
+
+  /**
+   * Processes data in row batches to prevent OOM for large tables.
+   */
+  private void processWithRowBatchingToIceberg(MaterializationConfig config, Connection conn,
+      Table table, String sourcePattern, Map<String, String> batch,
+      Map<String, String> partitionValues, Map<String, Object> typedPartitionFilter,
+      int rowBatchSize) throws SQLException, IOException {
+
+    // First count total rows
+    String countSql = buildCountSql(config, sourcePattern);
+    long totalRows = 0;
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(countSql)) {
+      if (rs.next()) {
+        totalRows = rs.getLong(1);
+      }
+    }
+
+    if (totalRows == 0) {
+      LOGGER.debug("No rows to process in batch: {}", batch);
+      return;
+    }
+
+    LOGGER.info("Row batching: processing {} rows in batches of {} for {}",
+        totalRows, rowBatchSize, batch);
+
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
+
+    long processedRows = 0;
+    int batchNum = 0;
+    long totalStartTime = System.currentTimeMillis();
+
+    while (processedRows < totalRows) {
+      batchNum++;
+
+      // Build SELECT with LIMIT/OFFSET
+      String sql = buildSelectSqlWithPaging(config, sourcePattern, batch, rowBatchSize, (int) processedRows);
+      LOGGER.debug("Row batch {}: rows {} to {} ", batchNum, processedRows,
+          Math.min(processedRows + rowBatchSize, totalRows));
+
+      long batchStart = System.currentTimeMillis();
+
+      // Fetch this batch of rows
+      List<Map<String, Object>> rows = fetchRows(conn, sql);
+
+      if (rows.isEmpty()) {
+        break;
+      }
+
+      // Write batch to Iceberg
+      org.apache.iceberg.DataFile dataFile = writer.writeRecords(rows, partitionValues);
+      if (dataFile != null) {
+        dataFiles.add(dataFile);
+      }
+
+      long batchElapsed = System.currentTimeMillis() - batchStart;
+      LOGGER.debug("Row batch {} completed: {} rows in {}ms", batchNum, rows.size(), batchElapsed);
+
+      processedRows += rows.size();
+
+      // Clear rows for GC
+      rows.clear();
+    }
+
+    // Commit all data files in a single transaction
+    if (!dataFiles.isEmpty()) {
+      writer.commitDataFiles(dataFiles, typedPartitionFilter);
+      long totalElapsed = System.currentTimeMillis() - totalStartTime;
+      LOGGER.info("Row batching completed: {} batches, {} rows, {} files committed in {}ms",
+          batchNum, processedRows, dataFiles.size(), totalElapsed);
+    }
+  }
+
+  /**
+   * Fetches rows from a SQL query into a list of maps.
+   */
+  private List<Map<String, Object>> fetchRows(Connection conn, String sql) throws SQLException {
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      java.sql.ResultSetMetaData meta = rs.getMetaData();
+      int colCount = meta.getColumnCount();
+      while (rs.next()) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        for (int i = 1; i <= colCount; i++) {
+          String colName = meta.getColumnName(i);
+          Object value = rs.getObject(i);
+          if (value != null) {
+            row.put(colName, value);
+          }
+        }
+        rows.add(row);
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Builds a SELECT SQL with LIMIT/OFFSET for row batching.
+   */
+  private String buildSelectSqlWithPaging(MaterializationConfig config, String sourcePattern,
+      Map<String, String> batch, int limit, int offset) {
+    StringBuilder sql = new StringBuilder();
+
+    // Build SELECT clause
+    Map<String, String> computedCols = config.getComputedColumns();
+    if (computedCols == null || computedCols.isEmpty()) {
+      sql.append("SELECT * FROM ");
+    } else {
+      sql.append("SELECT *, ");
+      boolean first = true;
+      for (Map.Entry<String, String> entry : computedCols.entrySet()) {
+        if (!first) {
+          sql.append(", ");
+        }
+        sql.append(entry.getValue()).append(" AS ").append(entry.getKey());
+        first = false;
+      }
+      sql.append(" FROM ");
+    }
+
+    // Use appropriate reader
+    if (config.getSourceFormat() == SourceFormat.JSON) {
+      sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
+    } else {
+      sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
+    }
+
+    // Add LIMIT/OFFSET
+    sql.append(" LIMIT ").append(limit);
+    if (offset > 0) {
+      sql.append(" OFFSET ").append(offset);
+    }
+
+    return sql.toString();
   }
 
   /**

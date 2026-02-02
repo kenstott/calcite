@@ -480,7 +480,10 @@ public class SemanticTextChunker {
     int lastEnd = 0;
 
     while (matcher.find()) {
-      String sentence = text.substring(lastEnd, matcher.start() + 1).trim();
+      // Clamp end position to avoid StringIndexOutOfBoundsException when
+      // the sentence boundary regex matches at the very end of the string
+      int endPos = Math.min(matcher.start() + 1, text.length());
+      String sentence = text.substring(lastEnd, endPos).trim();
       if (!sentence.isEmpty()) {
         sentences.add(sentence);
       }
