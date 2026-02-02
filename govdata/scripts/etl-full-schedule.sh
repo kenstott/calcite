@@ -300,6 +300,18 @@ while IFS='|' read -r job_num schema source type year cik_group filing_types; do
     # Build the model JSON dynamically
     MODEL_FILE=$(mktemp /tmp/etl-model-XXXXXX.json)
 
+    # Build s3Config JSON if using S3
+    s3_config=""
+    if [[ "$GOVDATA_PARQUET_DIR" == s3://* ]]; then
+        s3_config='"s3Config": {'
+        [[ -n "$AWS_ACCESS_KEY_ID" ]] && s3_config+="\"accessKeyId\": \"$AWS_ACCESS_KEY_ID\","
+        [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && s3_config+="\"secretAccessKey\": \"$AWS_SECRET_ACCESS_KEY\","
+        [[ -n "$AWS_ENDPOINT_OVERRIDE" ]] && s3_config+="\"endpoint\": \"$AWS_ENDPOINT_OVERRIDE\","
+        [[ -n "$AWS_REGION" ]] && s3_config+="\"region\": \"$AWS_REGION\","
+        # Remove trailing comma and close
+        s3_config="${s3_config%,}},"
+    fi
+
     case "$schema" in
         sec)
             # SEC filings
@@ -313,6 +325,9 @@ while IFS='|' read -r job_num schema source type year cik_group filing_types; do
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "sec",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
       "ciks": "$cik_group",
       "filingTypes": ["${filing_types//,/\",\"}"],
       "fetchStockPrices": false,
@@ -336,6 +351,9 @@ EOF
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "sec",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
       "ciks": "$cik_group",
       "filingTypes": [],
       "fetchStockPrices": true,
@@ -360,6 +378,9 @@ EOF
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "econ",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
       "enabledSources": ["$source"],
       "startYear": $year,
       "endYear": $year,
@@ -381,6 +402,9 @@ EOF
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "census",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
       "enabledSources": ["acs"],
       "startYear": $year,
       "endYear": $year,
@@ -402,6 +426,9 @@ EOF
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "geo",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
       "enabledSources": ["tiger", "hud"],
       "tigerYear": $year,
       "autoDownload": true
@@ -414,10 +441,10 @@ EOF
 
     # Run the ETL
     if "$SCRIPT_DIR/etl-runner.sh" --model "$MODEL_FILE"; then
-        ((COMPLETED++))
+        COMPLETED=$((COMPLETED + 1))
         echo "✓ Job $job_num completed successfully"
     else
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         echo "✗ Job $job_num FAILED"
         echo ""
         echo "Options:"

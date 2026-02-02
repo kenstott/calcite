@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "econ",
+  "schemas": [{
+    "name": "econ",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "econ",
+      "enabledSources": ["bea", "fred", "treasury", "worldbank"],
+      "startYear": 2026,
+      "endYear": 2026,
+      "autoDownload": true
+    }
+  }]
+}

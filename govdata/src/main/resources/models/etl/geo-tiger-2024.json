@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "defaultSchema": "geo",
+  "schemas": [{
+    "name": "geo",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "geo",
+      "enabledSources": ["tiger"],
+      "tigerYear": 2024,
+      "autoDownload": true
+    }
+  }]
+}

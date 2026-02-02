@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "census",
+  "schemas": [{
+    "name": "census",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "census",
+      "enabledSources": ["acs"],
+      "startYear": 2026,
+      "endYear": 2026,
+      "autoDownload": true
+    }
+  }]
+}

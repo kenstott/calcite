@@ -69,6 +69,10 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
+
+    // Runtime logging for ETL runner (included in shadow JAR)
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
+    runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
 tasks.register<Delete>("cleanTestLogs") {

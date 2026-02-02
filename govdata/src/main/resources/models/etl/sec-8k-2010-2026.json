@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": "_ALL_EDGAR_FILERS",
+      "filingTypes": ["8-K"],
+      "fetchStockPrices": false,
+      "startYear": 2010,
+      "endYear": 2026,
+      "autoDownload": true
+    }
+  }]
+}
