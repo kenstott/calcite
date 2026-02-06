@@ -473,7 +473,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     this.cacheManifest = SecCacheManifest.load(this.secOperatingDirectory);
     LOGGER.debug("Loaded SEC cache manifest from {}", this.secOperatingDirectory);
 
-    // Initialize unified filing cache
+    // Initialize unified filing cache (close existing one first to release DuckDB lock)
+    if (this.filingCache != null) {
+      try {
+        this.filingCache.close();
+        LOGGER.debug("Closed existing SEC filing cache before reinitializing");
+      } catch (Exception e) {
+        LOGGER.warn("Failed to close existing SEC filing cache: {}", e.getMessage());
+      }
+    }
     this.filingCache = new SecFilingCache(this.secOperatingDirectory, this.storageProvider, govdataParquetDir);
     LOGGER.info("Initialized SEC filing cache at {}", this.secOperatingDirectory);
 
