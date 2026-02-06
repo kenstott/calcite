@@ -18,9 +18,12 @@ import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
+import org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore;
+import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataUtils;
@@ -69,10 +72,9 @@ import java.util.regex.Pattern;
 public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
+  private StorageProvider localStorageProvider; // For local operating directory (.aperio) operations
   private SecCacheManifest cacheManifest; // ETag-based caching for submissions.json
-
-  // Cache filing status decisions to avoid repeated manifest searches
-  private final Map<String, FilingStatus> filingStatusCache = new java.util.concurrent.ConcurrentHashMap<>();
+  private SecFilingCache filingCache; // Unified filing cache with self-healing
 
   // Directory paths following standardized naming
   private String secCacheDirectory;      // Raw XBRL cache: $GOVDATA_CACHE_DIR/sec/
@@ -142,6 +144,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
     if (sp != null && this.storageProvider == null) {
       this.storageProvider = sp;
+    }
+
+    // Initialize operating directory from operand if available
+    // This is needed early because materializeStagingFilesToIceberg uses it
+    String opDir = (String) operand.get("operatingDirectory");
+    if (opDir != null && this.secOperatingDirectory == null) {
+      this.secOperatingDirectory = opDir;
+      LOGGER.debug("Initialized secOperatingDirectory from operand: {}", opDir);
     }
 
     // Trigger document download IMMEDIATELY during hook configuration
@@ -453,9 +463,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
     LOGGER.debug("Received operating directory from parent: {}", this.secOperatingDirectory);
 
+    // Initialize local storage provider for operating directory operations
+    // This is needed because the main storageProvider may be S3-based, but the operating
+    // directory (.aperio) is ALWAYS local filesystem
+    this.localStorageProvider = new LocalFileStorageProvider();
+    LOGGER.debug("Initialized local storage provider for operating directory operations");
+
     // Load SecCacheManifest from operating directory
     this.cacheManifest = SecCacheManifest.load(this.secOperatingDirectory);
     LOGGER.debug("Loaded SEC cache manifest from {}", this.secOperatingDirectory);
+
+    // Initialize unified filing cache
+    this.filingCache = new SecFilingCache(this.secOperatingDirectory, this.storageProvider, govdataParquetDir);
+    LOGGER.info("Initialized SEC filing cache at {}", this.secOperatingDirectory);
 
     // SEC data directories - NEVER concatenate paths, always use storageProvider.resolvePath
     String secRawDir = storageProvider.resolvePath(govdataCacheDir, "sec");
@@ -543,15 +563,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       operand.put("materializeDirectory", secParquetDir);
     }
 
-    // Preserve text similarity configuration if present, or enable it by default
-    Map<String, Object> textSimConfig = (Map<String, Object>) operand.get("textSimilarity");
-    if (textSimConfig == null) {
-      textSimConfig = new HashMap<String, Object>();
-      textSimConfig.put("enabled", true);
-      operand.put("textSimilarity", textSimConfig);
-    } else if (!Boolean.TRUE.equals(textSimConfig.get("enabled"))) {
-      textSimConfig.put("enabled", true);
-    }
+    // Note: Vectorization/text similarity is now controlled by the vectorized_chunks
+    // table 'enabled' setting in sec-schema.yaml, not by operand.textSimilarity
 
     // Create conversion metadata with viewScanPatterns
     Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>
@@ -672,21 +685,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // If vectorization is enabled in config, mark as PROCESSED_WITH_VECTORS even if no
       // vectorized files were created (e.g., no text content to vectorize).
       // This prevents re-checking on every run.
-      boolean vectorizationEnabled = false;
-      if (currentOperand != null) {
-        Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-        vectorizationEnabled = textSimilarityConfig != null &&
-            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-      }
+      boolean vectorizationEnabled = isVectorizedChunksEnabled();
 
       String fileTypes = (hasVectorized || vectorizationEnabled) ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
       String entryPrefix = cik + "|" + accession + "|";
       String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
       // Use per-CIK manifest for better organization and no lock contention
-      String cikManifestDir = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
-      storageProvider.createDirectories(cikManifestDir);
-      String manifestPath = storageProvider.resolvePath(cikManifestDir, "processed_filings.manifest");
+      String cikManifestDir = localStorageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+      localStorageProvider.createDirectories(cikManifestDir);
+      String manifestPath = localStorageProvider.resolvePath(cikManifestDir, "processed_filings.manifest");
 
       synchronized (("manifest_" + cik).intern()) {
         if (LOGGER.isDebugEnabled()) {
@@ -697,10 +705,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Check if this entry already exists in the manifest (prevent duplicates)
         boolean alreadyExists = false;
         String existingEntry = null;
-        boolean manifestExists = storageProvider.exists(manifestPath);
+        boolean manifestExists = localStorageProvider.exists(manifestPath);
         if (manifestExists) {
           try (BufferedReader reader = new BufferedReader(
-              new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
+              new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
             String line;
             while ((line = reader.readLine()) != null) {
               if (line.startsWith(entryPrefix)) {
@@ -739,7 +747,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (manifestExists) {
             List<String> updatedLines = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
+                new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 // Skip old entries for this CIK|ACCESSION
@@ -756,7 +764,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             for (String line : updatedLines) {
               sb.append(line).append("\n");
             }
-            storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
+            localStorageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("addToManifest: WROTE {} lines to manifest (updated entry for {}) thread={}",
@@ -764,7 +772,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
           } else {
             // New manifest file
-            storageProvider.writeFile(manifestPath, (manifestKey + "\n").getBytes(StandardCharsets.UTF_8));
+            localStorageProvider.writeFile(manifestPath, (manifestKey + "\n").getBytes(StandardCharsets.UTF_8));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("addToManifest: CREATED new manifest with entry '{}' thread={}",
@@ -786,6 +794,41 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     } catch (Exception e) {
       LOGGER.error("CRITICAL: Could not update manifest - filing will be reprocessed on next run: {}", e.getMessage(), e);
     }
+  }
+
+  /**
+   * Build FileInventory from list of output file paths.
+   *
+   * @param outputFiles List of output parquet file paths
+   * @return FileInventory tracking which output types were created
+   */
+  private FileInventory buildInventoryFromOutputFiles(List<String> outputFiles) {
+    FileInventory.Builder builder = FileInventory.builder();
+
+    if (outputFiles != null) {
+      for (String path : outputFiles) {
+        String fileName = path.substring(path.lastIndexOf('/') + 1);
+        if (fileName.endsWith("_metadata.parquet")) {
+          builder.hasMetadata(true);
+        } else if (fileName.endsWith("_facts.parquet")) {
+          builder.hasFacts(true);
+        } else if (fileName.endsWith("_contexts.parquet")) {
+          builder.hasContexts(true);
+        } else if (fileName.endsWith("_relationships.parquet")) {
+          builder.hasRelationships(true);
+        } else if (fileName.endsWith("_mda.parquet")) {
+          builder.hasMda(true);
+        } else if (fileName.endsWith("_insider.parquet")) {
+          builder.hasInsider(true);
+        } else if (fileName.endsWith("_earnings.parquet")) {
+          builder.hasEarnings(true);
+        } else if (fileName.endsWith("_chunks.parquet")) {
+          builder.hasChunks(true);
+        }
+      }
+    }
+
+    return builder.build();
   }
 
 
@@ -1012,29 +1055,36 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Get or create document converter with vectorization enabled if configured
       FileConverter documentConverter = getOrCreateXbrlConverter(operand);
 
-      // Initialize cache manifest if not yet done (for document tracking)
-      if (this.cacheManifest == null) {
-        String opDir = (String) operand.get("operatingDirectory");
-        if (opDir != null) {
-          this.secOperatingDirectory = opDir;
-          this.cacheManifest = SecCacheManifest.load(opDir);
-          LOGGER.debug("Initialized cache manifest from operatingDirectory: {}", opDir);
-        }
+      // Initialize filing cache if not yet done
+      // Use govdataParquetDir from operand (already computed above) instead of getGovDataParquetDir()
+      // because this.currentOperand may be null when called from configureHooks
+      if (this.filingCache == null && this.secOperatingDirectory != null) {
+        this.filingCache = new SecFilingCache(this.secOperatingDirectory, this.storageProvider, govdataParquetDir);
+        LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
       }
 
-      // Create document tracker using SecCacheManifest to avoid S3 checks
-      final SecCacheManifest manifest = this.cacheManifest;
-      ProcessedDocumentTracker documentTracker = manifest != null
+      // Create document tracker using SecFilingCache with complete self-healing
+      final SecFilingCache cache = this.filingCache;
+      final boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      ProcessedDocumentTracker documentTracker = cache != null
           ? new ProcessedDocumentTracker() {
             @Override public boolean isProcessed(String cik, String accession) {
-              return manifest.isDocumentProcessed(cik, accession);
+              // Use unified cache with self-healing
+              // Note: form type and filing date will be filled in during markProcessed
+              ProcessingDecision decision = cache.checkFiling(cik, accession, "UNKNOWN", "", vectorizationEnabled);
+              return !decision.shouldProcess();
             }
             @Override public void markProcessed(String cik, String accession, int outputFileCount) {
-              manifest.markDocumentProcessed(cik, accession, outputFileCount);
+              // Build inventory from output count (simplified - will be updated with actual files)
+              FileInventory inventory = FileInventory.builder()
+                  .hasFacts(outputFileCount > 0)
+                  .hasMetadata(outputFileCount > 0)
+                  .build();
+              cache.markComplete(cik, accession, "UNKNOWN", "", vectorizationEnabled, inventory);
             }
           }
           : null;
-      LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no manifest)");
+      LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
 
       // Create processor - pass cache directory as String to support S3 paths
       DocumentETLProcessor processor = new DocumentETLProcessor(
@@ -1082,9 +1132,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Materialize staging parquet files to Iceberg tables if configured
-      if (result.getDocumentsProcessed() > 0 || fetchStockPrices) {
-        materializeStagingFilesToIceberg(operand, secParquetDir);
-      }
+      // Always run materialization - even if no new documents were processed (self-healing case),
+      // existing parquet files still need to be materialized to Iceberg tables
+      materializeStagingFilesToIceberg(operand, secParquetDir);
 
       return result;
 
@@ -1127,9 +1177,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
-    // Create IcebergMaterializer using file adapter
+    // Get incremental tracker for skipping already-materialized partitions
+    IncrementalTracker incrementalTracker = DuckDBPartitionStatusStore.getInstance(this.secOperatingDirectory);
+
+    // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
-        warehousePath, storageProvider, null);
+        warehousePath, storageProvider, incrementalTracker);
 
     int tablesProcessed = 0;
     int totalBatchesSuccessful = 0;
@@ -1137,6 +1190,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
       String tableName = (String) tableConfig.get("name");
+
+      // Check table-level enabled flag (supports env var interpolation)
+      if (!isTableEnabled(tableConfig)) {
+        LOGGER.debug("Skipping table '{}' - table not enabled", tableName);
+        continue;
+      }
+
       Map<String, Object> materializeConfig = (Map<String, Object>) tableConfig.get("materialize");
 
       if (materializeConfig == null || !Boolean.TRUE.equals(materializeConfig.get("enabled"))) {
@@ -1174,7 +1234,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
 
-        // Materialize using IcebergMaterializer
+        // Materialize using IcebergMaterializer (batch-level incremental tracking handles skipping)
         IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
 
         if (result.getSuccessCount() > 0) {
@@ -1310,6 +1370,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .partitionColumns(partitionColumns)
         .tableColumns(tableColumns)
         .batchPartitionColumns(batchPartitionCols)
+        .incrementalKeys(batchPartitionCols)  // Track each partition (e.g., year) separately
         .yearRange(startYear, endYear)
         .computedColumns(computedColumns)
         .rowBatchSize(rowBatchSize)
@@ -1784,7 +1845,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Gets or creates the XBRL to Parquet converter.
    *
-   * @param operand Schema operand with configuration (may contain textSimilarity config)
+   * @param operand Schema operand with configuration
    */
   @SuppressWarnings("unchecked")
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand) {
@@ -1792,13 +1853,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
 
-      // Check if text similarity/vectorization is enabled
-      boolean enableVectorization = false;
-      if (operand != null) {
-        Map<String, Object> textSimilarityConfig = (Map<String, Object>) operand.get("textSimilarity");
-        enableVectorization = textSimilarityConfig != null &&
-            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-      }
+      // Check if vectorization is enabled via YAML table config for vectorized_chunks
+      boolean enableVectorization = isVectorizedChunksEnabled();
       LOGGER.info("Creating XbrlToParquetConverter with enableVectorization={}", enableVectorization);
 
       // Try constructor with StorageProvider and enableVectorization
@@ -1816,6 +1872,89 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
       return null;
     }
+  }
+
+  /**
+   * Checks if a table is enabled based on its config map.
+   * Supports environment variable interpolation like "${VAR_NAME:default}".
+   *
+   * @param tableConfig The table configuration map
+   * @return true if table is enabled (default), false if explicitly disabled
+   */
+  @SuppressWarnings("unchecked")
+  private boolean isTableEnabled(Map<String, Object> tableConfig) {
+    Object enabledObj = tableConfig.get("enabled");
+    if (enabledObj == null) {
+      return true; // Default to enabled if not specified
+    }
+    if (enabledObj instanceof Boolean) {
+      return (Boolean) enabledObj;
+    }
+    if (enabledObj instanceof String) {
+      String enabledStr = (String) enabledObj;
+      // Handle environment variable syntax like "${ENABLE_VECTORIZATION:true}"
+      if (enabledStr.startsWith("${") && enabledStr.endsWith("}")) {
+        String varSpec = enabledStr.substring(2, enabledStr.length() - 1);
+        int colonIdx = varSpec.indexOf(':');
+        String envVar;
+        String defaultValue;
+        if (colonIdx >= 0) {
+          envVar = varSpec.substring(0, colonIdx);
+          defaultValue = varSpec.substring(colonIdx + 1);
+        } else {
+          envVar = varSpec;
+          defaultValue = "true";
+        }
+
+        String envValue = System.getenv(envVar);
+        if (envValue != null && !envValue.isEmpty()) {
+          return Boolean.parseBoolean(envValue);
+        }
+        return Boolean.parseBoolean(defaultValue);
+      }
+      return Boolean.parseBoolean(enabledStr);
+    }
+    return true; // Default to enabled for unexpected types
+  }
+
+  /**
+   * Checks if the vectorized_chunks table is enabled in sec-schema.yaml.
+   * This provides a single source of truth for vectorization enablement.
+   *
+   * @return true if vectorized_chunks table is enabled in YAML
+   */
+  @SuppressWarnings("unchecked")
+  private boolean isVectorizedChunksEnabled() {
+    try (InputStream is = getClass().getResourceAsStream("/sec/sec-schema.yaml")) {
+      if (is == null) {
+        return false;
+      }
+
+      org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
+      loaderOptions.setMaxAliasesForCollections(500);
+      org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(loaderOptions);
+      Map<String, Object> config = yaml.load(is);
+
+      Object tablesObj = config.get("partitionedTables");
+      if (!(tablesObj instanceof List)) {
+        return false;
+      }
+
+      for (Object tableObj : (List<?>) tablesObj) {
+        if (!(tableObj instanceof Map)) {
+          continue;
+        }
+        Map<String, Object> tableConfig = (Map<String, Object>) tableObj;
+        String tableName = (String) tableConfig.get("name");
+
+        if ("vectorized_chunks".equals(tableName)) {
+          return isTableEnabled(tableConfig);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to check vectorized_chunks enabled status: {}", e.getMessage());
+    }
+    return false;
   }
 
   /**
@@ -1843,7 +1982,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("  Normalized CIK: {}", normalizedCik);
 
       // Metadata (submissions.json and processed_filings.manifest) goes to operating directory
-      String cikMetadataDir = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
+      String cikMetadataDir = localStorageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
       storageProvider.createDirectories(cikMetadataDir);
       LOGGER.info("  CIK metadata directory: {}", cikMetadataDir);
 
@@ -2113,12 +2252,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Load per-CIK manifest (huge performance improvement over global manifest)
-      String cikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
-      String manifestFilePath = storageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
+      String cikManifestDirPath = localStorageProvider.resolvePath(this.secOperatingDirectory, "cik=" + normalizedCik);
+      String manifestFilePath = localStorageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
       Set<String> processedFilingsManifest = new HashSet<>();
-      if (storageProvider.exists(manifestFilePath)) {
+      if (localStorageProvider.exists(manifestFilePath)) {
         try (BufferedReader reader = new BufferedReader(
-            new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+            new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
           Set<String> rawEntries = new HashSet<>();
           String line;
           while ((line = reader.readLine()) != null) {
@@ -2136,15 +2275,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Quick check: if ALL filings are already processed, skip the entire CIK
-      if (!processedFilingsManifest.isEmpty() && filingsToDownload.size() > 0) {
+      boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      if (filingsToDownload.size() > 0) {
         boolean allFilingsProcessed = true;
         for (FilingToDownload filing : filingsToDownload) {
           String filingKey = filing.cik + "|" + filing.accession + "|" + filing.form + "|" + filing.filingDate;
           if (downloadedInThisCycle.contains(filingKey)) {
             continue; // Skip duplicates
           }
-          FilingStatus status = checkFilingStatusInMemory(filing.cik, filing.accession, filing.form, filing.filingDate, processedFilingsManifest);
-          if (status != FilingStatus.FULLY_PROCESSED && status != FilingStatus.EXCLUDED_424B && status != FilingStatus.HAS_ALL_PARQUET) {
+          // Skip 424B forms (excluded from processing)
+          if (filing.form.startsWith("424B")) {
+            continue;
+          }
+          // Use unified cache with self-healing
+          ProcessingDecision decision = filingCache.checkFiling(
+              filing.cik, filing.accession, filing.form, filing.filingDate, vectorizationEnabled);
+          if (decision.shouldProcess()) {
             allFilingsProcessed = false;
             break;
           }
@@ -2186,18 +2332,28 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           continue;
         }
 
-        // Check manifest to see if this filing is already fully processed
-        FilingStatus status = checkFilingStatusInMemory(filing.cik, filing.accession, filing.form, filing.filingDate, processedFilingsManifest);
-
-        if (status == FilingStatus.FULLY_PROCESSED || status == FilingStatus.EXCLUDED_424B || status == FilingStatus.HAS_ALL_PARQUET) {
+        // Skip 424B forms (excluded from processing)
+        if (filing.form.startsWith("424B")) {
           skippedCached++;
+          continue;
+        }
+
+        // Use unified cache with self-healing (cache handles S3 file checks automatically)
+        ProcessingDecision decision = filingCache.checkFiling(
+            filing.cik, filing.accession, filing.form, filing.filingDate, vectorizationEnabled);
+
+        if (!decision.shouldProcess()) {
+          skippedCached++;
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Skipping filing ({}): cik={} accession={}", decision.getReason(), filing.cik, filing.accession);
+          }
           continue;
         }
 
         // Filing needs processing - add to list
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("DEBUG: Filing needs processing - CIK: {}, Accession: {}, Form: {}, Status: {}",
-              filing.cik, filing.accession, filing.form, status);
+          LOGGER.debug("Filing needs processing ({}): CIK={}, Accession={}, Form={}",
+              decision.getReason(), filing.cik, filing.accession, filing.form);
         }
         filingsNeedingProcessing.add(filing);
       }
@@ -2270,169 +2426,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  // Helper class to hold aggregated manifest entry status
-  private static class FilingManifestEntry {
-    boolean hasVectorized = false;
-    boolean isNoXbrl = false;
-  }
-
-  // Enum for filing status
-  private enum FilingStatus {
-    FULLY_PROCESSED,      // In manifest with all required files
-    HAS_ALL_PARQUET,      // Has all Parquet files but not in manifest
-    NEEDS_PROCESSING,     // Missing Parquet files or source files
-    EXCLUDED_424B         // 424B forms are excluded from processing
-  }
-
-  // Check filing status - manifest, Parquet files, source files
-  private FilingStatus checkFilingStatus(String cik, String accession, String form,
-                                          String filingDate, String manifestPath) {
-    // Create cache key
-    String cacheKey = cik + "|" + accession + "|" + form + "|" + filingDate;
-
-    // Check cache first
-    FilingStatus cachedStatus = filingStatusCache.get(cacheKey);
-    if (cachedStatus != null) {
-      if (LOGGER.isTraceEnabled()) {
-        LOGGER.trace("Filing status CACHE HIT: {} -> {}", cacheKey, cachedStatus);
-      }
-      return cachedStatus;
-    }
-
-    // Cache miss - compute status
-    FilingStatus status;
-    try {
-      // Skip checking entirely for 424B forms - they are excluded from processing
-      if (form.startsWith("424B")) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("424B filing excluded from processing: {} {}", form, filingDate);
-        }
-        status = FilingStatus.EXCLUDED_424B;
-        filingStatusCache.put(cacheKey, status);
-        return status;
-      }
-
-      // Check manifest first
-      if (storageProvider.exists(manifestPath)) {
-        Set<String> rawEntries = new HashSet<>();
-        try (BufferedReader reader = new BufferedReader(
-            new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
-          String line;
-          while ((line = reader.readLine()) != null) {
-            rawEntries.add(line);
-          }
-        }
-        // Migrate old manifest entries to current format if needed
-        Set<String> processedFilings = migrateManifestIfNeeded(manifestPath, rawEntries);
-
-        String searchPrefix = cik + "|" + accession + "|";
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("checkFilingStatus: searching manifest for prefix='{}' in {} entries from {}",
-              searchPrefix, processedFilings.size(), manifestPath);
-        }
-
-        boolean isInManifest = false;
-        boolean hasVectorized = false;
-        boolean isNoXbrl = false;
-        int matchAttempts = 0;
-        for (String entry : processedFilings) {
-          if (entry.startsWith(searchPrefix)) {
-            isInManifest = true;
-            hasVectorized = entry.contains("PROCESSED_WITH_VECTORS");
-            isNoXbrl = entry.contains("NO_XBRL");
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("checkFilingStatus: FOUND entry='{}' for prefix='{}'", entry, searchPrefix);
-            }
-            break;
-          }
-          // Debug: show first few entries that don't match
-          if (LOGGER.isDebugEnabled() && matchAttempts < 3 && entry.contains(accession)) {
-            LOGGER.debug("checkFilingStatus: NEAR MISS - entry contains accession but doesn't match prefix. entry='{}' searchPrefix='{}'",
-                entry, searchPrefix);
-            matchAttempts++;
-          }
-        }
-
-        // Check if text similarity is enabled
-        Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-        boolean needsVectorized = textSimilarityConfig != null &&
-            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("checkFilingStatus: cik={} accession={} isInManifest={} needsVectorized={} hasVectorized={} isNoXbrl={}",
-              cik, accession, isInManifest, needsVectorized, hasVectorized, isNoXbrl);
-        }
-
-        if (isInManifest && isNoXbrl) {
-          // Filing has no XBRL data - fully processed (nothing to convert)
-          status = FilingStatus.FULLY_PROCESSED;
-          filingStatusCache.put(cacheKey, status);
-          return status;
-        } else if (isInManifest && (!needsVectorized || hasVectorized)) {
-          // Filing is in manifest and either:
-          // 1. Vectorization not needed, OR
-          // 2. Has vectorization flag (was processed with vectorization enabled)
-          status = FilingStatus.FULLY_PROCESSED;
-          filingStatusCache.put(cacheKey, status);
-          return status;
-        } else if (isInManifest && needsVectorized && !hasVectorized) {
-          // Filing in manifest but missing vectorization flag - needs reprocessing
-          // Note: With the fix above, new filings will be marked PROCESSED_WITH_VECTORS
-          // even if no vectorized files created, so this should be rare.
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Filing in manifest but needs vectorization reprocessing: {} {}", form, filingDate);
-          }
-          // Fall through to return NEEDS_PROCESSING
-        }
-
-      }
-
-      // DISABLED: Cannot reliably check Parquet files before parsing XBRL because fiscal year
-      // (used for partitioning) is only known after parsing XBRL data. The heuristic-based
-      // getPartitionYear() method produces incorrect year folders, causing false cache misses.
-      // Solution: Rely on manifest file only. After processing, files are added to manifest.
-      // if (hasAllParquetFiles(cik, accession, form, filingDate)) {
-      //   return FilingStatus.HAS_ALL_PARQUET;
-      // }
-
-      status = FilingStatus.NEEDS_PROCESSING;
-      filingStatusCache.put(cacheKey, status);
-      return status;
-    } catch (Exception e) {
-      LOGGER.debug("Error checking filing status: " + e.getMessage());
-      status = FilingStatus.NEEDS_PROCESSING;
-      filingStatusCache.put(cacheKey, status);
-      return status;
-    }
-  }
-
-  /**
-   * Check filing status using an in-memory manifest (performance-optimized version).
-   * This avoids repeated file I/O and stale reads by working with a pre-loaded manifest.
-   *
-   * IMPORTANT: Manifest may contain duplicate entries for the same filing (historical issue).
-   * We must scan ALL entries and use the LATEST status (PROCESSED_WITH_VECTORS takes precedence).
-   */
-  /**
-   * Check if the given form type is allowed for XBRL conversion.
-   * Excludes 424B prospectuses and S-* registration statements.
-   */
-  private boolean isFormTypeAllowed(String formType) {
-    // Normalize form type (remove dashes and slashes)
-    String normalizedForm = formType.replace("-", "").replace("/", "");
-
-    // Whitelist of allowed forms
-    List<String> allowedForms =
-        Arrays.asList("3", "4", "5",           // Insider forms
-        "10K",                   // Annual reports
-        "10Q",                   // Quarterly reports
-        "8K",                    // Current reports
-        "8KA",                   // Amended current reports
-        "DEF14A");                 // Proxy statements
-
-    return allowedForms.stream()
-        .anyMatch(type -> type.equalsIgnoreCase(normalizedForm));
-  }
+  // Deprecated: Old filing status types - now using unified SecFilingCache
+  // See SecFilingCache, ProcessingDecision, FormType, FileInventory for replacement
 
   /**
    * Migrates old manifest entries to current format if needed.
@@ -2503,7 +2498,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         for (String line : sortedEntries) {
           sb.append(line).append("\n");
         }
-        storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
+        localStorageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
         LOGGER.info("Successfully migrated manifest to current format");
       } catch (IOException e) {
         LOGGER.error("Failed to save migrated manifest: {}", e.getMessage());
@@ -2514,172 +2509,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return migrated;
   }
 
-  /**
-   * Index manifest entries into a HashMap for O(1) lookups.
-   * Aggregates duplicate entries by keeping the most permissive flags.
-   *
-   * @param manifest The set of manifest entries to index
-   * @return Map from "cik|accession" to aggregated FilingManifestEntry
-   */
-  private Map<String, FilingManifestEntry> indexManifestEntries(Set<String> manifest) {
-    Map<String, FilingManifestEntry> index = new HashMap<>();
-
-    for (String entry : manifest) {
-      // Entry format: "cik|accession|...|STATUS|timestamp"
-      // Example: "0000732712|0001062993-25-011201|PROCESSED_WITH_VECTORS|1234567890"
-      String[] parts = entry.split("\\|");
-      if (parts.length >= 2) {
-        String key = parts[0] + "|" + parts[1]; // "cik|accession"
-
-        FilingManifestEntry existing = index.get(key);
-        if (existing == null) {
-          existing = new FilingManifestEntry();
-          index.put(key, existing);
-        }
-
-        // Aggregate flags from all entries (handles duplicates)
-        if (entry.contains("PROCESSED_WITH_VECTORS")) {
-          existing.hasVectorized = true;
-        }
-        if (entry.contains("NO_XBRL")) {
-          existing.isNoXbrl = true;
-        }
-      }
-    }
-
-    return index;
-  }
-
-  private FilingStatus checkFilingStatusInMemory(String cik, String accession, String form,
-                                                  String filingDate, Set<String> processedFilingsManifest) {
-    try {
-      // Build indexed map for O(1) lookups
-      Map<String, FilingManifestEntry> manifestIndex = indexManifestEntries(processedFilingsManifest);
-
-      String lookupKey = cik + "|" + accession;
-      FilingManifestEntry entry = manifestIndex.get(lookupKey);
-
-      boolean isInManifest = (entry != null);
-      boolean hasVectorized = isInManifest && entry.hasVectorized;
-      boolean isNoXbrl = isInManifest && entry.isNoXbrl;
-
-      // Check if text similarity is enabled
-      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-      boolean needsVectorized = textSimilarityConfig != null &&
-          Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("[MANIFEST-CHECK] In-memory manifest lookup (O(1)): CIK={}, Accession={}, isInManifest={}, hasVectorized={}, needsVectorized={}, isNoXbrl={}",
-            cik, accession, isInManifest, hasVectorized, needsVectorized, isNoXbrl);
-      }
-
-      if (isInManifest && (isNoXbrl || !needsVectorized || hasVectorized)) {
-        return FilingStatus.FULLY_PROCESSED;
-      }
-
-      return FilingStatus.NEEDS_PROCESSING;
-    } catch (Exception e) {
-      LOGGER.debug("Error checking filing status: " + e.getMessage());
-      return FilingStatus.NEEDS_PROCESSING;
-    }
-  }
-
-  // Check if all required Parquet files exist for a filing
-  private boolean hasAllParquetFiles(String cik, String accession, String form, String filingDate) {
-    try {
-      String year = getPartitionYear(form, filingDate);
-      String govdataParquetDir = getGovDataParquetDir();
-
-      // Build path using StorageProvider
-      String yearDirPath =
-          storageProvider.resolvePath(govdataParquetDir, "source=sec/cik=" + cik + "/filing_type=" + form.replace("-", "") + "/year=" + year);
-
-      // Use same uniqueId logic as converter: accession if available, otherwise filingDate
-      // This matches XbrlToParquetConverter line 2662
-      String uniqueId = (accession != null && !accession.isEmpty()) ? accession.replace("-", "") : filingDate;
-      boolean isInsiderForm = form.matches("[345]");
-
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("[FILE-EXISTENCE-CHECK] Checking Parquet files (I/O): cik={}, accession={}, form={}, filingDate={}, uniqueId={}, isInsiderForm={}",
-            cik, accession, form, filingDate, uniqueId, isInsiderForm);
-      }
-
-      // Check primary file
-      String filenameSuffix = isInsiderForm ? "insider" : "facts";
-      String primaryParquetPath =
-          storageProvider.resolvePath(yearDirPath, String.format("%s_%s_%s.parquet", cik, uniqueId, filenameSuffix));
-
-      try {
-        StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
-        if (primaryMetadata.getSize() == 0) {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("hasAllParquetFiles: primary file has zero size: {}", primaryParquetPath);
-          }
-          return false;
-        }
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("hasAllParquetFiles: primary file exists: {}", primaryParquetPath);
-        }
-      } catch (IOException e) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("hasAllParquetFiles: primary file not found: {}", primaryParquetPath);
-        }
-        return false;
-      }
-
-      // Check relationships file for non-insider forms
-      if (!isInsiderForm) {
-        String relationshipsParquetPath =
-            storageProvider.resolvePath(yearDirPath, String.format("%s_%s_relationships.parquet", cik, uniqueId));
-        try {
-          storageProvider.getMetadata(relationshipsParquetPath);
-          // File exists - relationships file can be empty
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("hasAllParquetFiles: relationships file exists: {}", relationshipsParquetPath);
-          }
-        } catch (IOException e) {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("hasAllParquetFiles: relationships file not found: {}", relationshipsParquetPath);
-          }
-          return false;
-        }
-      }
-
-      // Check vectorized file if enabled
-      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-      if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
-        if (supportsVectorization(form)) {
-          String vectorizedPath =
-              storageProvider.resolvePath(yearDirPath, String.format("%s_%s_chunks.parquet", cik, uniqueId));
-          try {
-            StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
-            if (vectorizedMetadata.getSize() == 0) {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("hasAllParquetFiles: vectorized file has zero size: {}", vectorizedPath);
-              }
-              return false;
-            }
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("hasAllParquetFiles: vectorized file exists: {}", vectorizedPath);
-            }
-          } catch (IOException e) {
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("hasAllParquetFiles: vectorized file not found: {}", vectorizedPath);
-            }
-            return false;
-          }
-        }
-      }
-
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("hasAllParquetFiles: ALL files found for cik={} uniqueId={}", cik, uniqueId);
-      }
-      return true;
-    } catch (Exception e) {
-      LOGGER.debug("Error checking Parquet files: " + e.getMessage());
-      return false;
-    }
-  }
+  // Deprecated methods removed - now using unified SecFilingCache:
+  // - indexManifestEntries() - replaced by SecFilingCache.checkFiling()
+  // - checkFilingStatusInMemory() - replaced by SecFilingCache.checkFiling()
+  // - hasAllParquetFiles() - replaced by SecFilingCache.checkS3Files()
 
   private void downloadFilingDocumentWithRateLimit(SecHttpStorageProvider provider, FilingToDownload filing) {
     int maxAttempts = 3;
@@ -2732,69 +2565,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadFilingDocument(SecHttpStorageProvider provider, String cik,
       String accession, String primaryDoc, String form, String filingDate, String reportDate, String cikCachePath, boolean hasInlineXBRL) {
     try {
-      // Check per-CIK manifest first to see if this filing was already fully processed
-      String cikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
-      String manifestFilePath = storageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
-      String manifestKey = cik + "|" + accession + "|" + form + "|" + filingDate;
-
-      // Check if already in manifest or has all required Parquet files
-      FilingStatus status = checkFilingStatus(cik, accession, form, filingDate, manifestFilePath);
-
-      // Track if we need to reprocess for vectorization
-      boolean needsVectorizationReprocessing = false;
-
-      if (status == FilingStatus.FULLY_PROCESSED) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Filing fully processed, skipping: {} {}", form, filingDate);
-        }
-        return;
-      } else if (status == FilingStatus.EXCLUDED_424B) {
+      // Skip 424B forms (excluded from processing)
+      if (form.startsWith("424B")) {
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("424B filing excluded from processing, skipping: {} {}", form, filingDate);
         }
         return;
-      } else if (status == FilingStatus.NEEDS_PROCESSING) {
-        // Check if this is specifically for vectorization
-        Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-        boolean needsVectorized = textSimilarityConfig != null &&
-            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-        if (needsVectorized) {
-          needsVectorizationReprocessing = true;
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Filing needs vectorization reprocessing: {} {}", form, filingDate);
-          }
-        }
-      } else if (status == FilingStatus.HAS_ALL_PARQUET) {
-        // Has all Parquet files but not in manifest - add to manifest
-        try {
-          storageProvider.createDirectories(cikManifestDirPath);
-          synchronized (("manifest_" + cik).intern()) {
-            String entryPrefix = cik + "|" + accession + "|";
-            String manifestEntry = entryPrefix + "PROCESSED|" + System.currentTimeMillis();
+      }
 
-            // Append to manifest using StorageProvider
-            StringBuilder sb = new StringBuilder();
-            if (storageProvider.exists(manifestFilePath)) {
-              try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                  sb.append(line).append("\n");
-                }
-              }
-            }
-            sb.append(manifestEntry).append("\n");
-            storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
+      // Use unified cache with self-healing
+      boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      ProcessingDecision decision = filingCache.checkFiling(cik, accession, form, filingDate, vectorizationEnabled);
 
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Added filing to manifest (has all Parquet files): {} {}", form, filingDate);
-            }
-          }
-        } catch (IOException e) {
-          LOGGER.warn("Failed to add filing to manifest: {}", e.getMessage());
+      if (!decision.shouldProcess()) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Filing skipped ({}): {} {}", decision.getReason(), form, filingDate);
         }
         return;
       }
+
+      // Track if we only need to add vectorized chunks (existing files are complete except chunks)
+      boolean needsVectorizationReprocessing = decision.isChunksOnly();
+      if (needsVectorizationReprocessing && LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Filing needs vectorization upgrade only: {} {}", form, filingDate);
+      }
+
+      // Variables for backward-compatible manifest handling (alongside unified cache)
+      String cikManifestDirPath = localStorageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+      String manifestFilePath = localStorageProvider.resolvePath(cikManifestDirPath, "processed_filings.manifest");
 
       // Need to check source files and possibly download/process
 
@@ -2944,16 +2742,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
         // Add to manifest so future runs don't need to check S3
         try {
-          storageProvider.createDirectories(cikManifestDirPath);
+          localStorageProvider.createDirectories(cikManifestDirPath);
           synchronized (("manifest_" + cik).intern()) {
             String entryPrefix = cik + "|" + accession + "|";
 
             // Check if this entry already exists in the manifest (prevent duplicates)
             boolean alreadyExists = false;
             List<String> existingLines = new ArrayList<>();
-            if (storageProvider.exists(manifestFilePath)) {
+            if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   existingLines.add(line);
@@ -2972,22 +2770,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               // For cached files, mark as PROCESSED_WITH_VECTORS if vectorization is enabled,
               // even though we don't check if vectorized files exist (too expensive).
               // This prevents re-checking on every run.
-              boolean vectorizationEnabled = false;
-              if (currentOperand != null) {
-                Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-                vectorizationEnabled = textSimilarityConfig != null &&
-                    Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-              }
               String fileTypes = vectorizationEnabled ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
               String manifestEntry = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
-              // Append to manifest using StorageProvider
+              // Append to manifest using LocalStorageProvider
               StringBuilder sb = new StringBuilder();
               for (String existingLine : existingLines) {
                 sb.append(existingLine).append("\n");
               }
               sb.append(manifestEntry).append("\n");
-              storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
+              localStorageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
 
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Added cached filing to manifest: {} {}", form, filingDate);
@@ -3186,6 +2978,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             if (govdataParquetDir != null) {
               String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
               addToManifest(xbrlPath, secParquetDirPath, new ArrayList<>());
+
+              // Update unified cache - check existing files since this is an upgrade
+              FileInventory inventory = filingCache.checkS3Files(cik, accession);
+              filingCache.markComplete(cik, accession, form, filingDate, vectorizationEnabled, inventory);
+
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Upgraded filing to PROCESSED_WITH_VECTORS: {} {}", form, filingDate);
               }
@@ -3197,7 +2994,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               LOGGER.debug("Filing {} {} has no processable XBRL data - adding to manifest as NO_XBRL", form, filingDate);
             }
             try {
-              storageProvider.createDirectories(cikManifestDirPath);
+              localStorageProvider.createDirectories(cikManifestDirPath);
               synchronized (("manifest_" + cik).intern()) {
                 String entryPrefix = cik + "|" + accession + "|";
                 String manifestEntry = entryPrefix + "NO_XBRL|" + System.currentTimeMillis();
@@ -3205,9 +3002,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 // Check if entry already exists
                 boolean alreadyExists = false;
                 List<String> existingLines = new ArrayList<>();
-                if (storageProvider.exists(manifestFilePath)) {
+                if (localStorageProvider.exists(manifestFilePath)) {
                   try (BufferedReader reader = new BufferedReader(
-                      new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+                      new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                       existingLines.add(line);
@@ -3224,7 +3021,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                     sb.append(existingLine).append("\n");
                   }
                   sb.append(manifestEntry).append("\n");
-                  storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
+                  localStorageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
                   if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Added NO_XBRL entry to manifest: {}", manifestEntry);
                   }
@@ -3233,6 +3030,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             } catch (IOException e) {
               LOGGER.warn("Failed to add NO_XBRL entry to manifest: {}", e.getMessage());
             }
+
+            // Update unified cache with no_xbrl status
+            filingCache.markNoXbrl(cik, accession, form, filingDate);
           }
           return; // No conversion possible or already upgraded
         }
@@ -3247,10 +3047,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
 
           if (secParquetDirPath != null) {
-            // Check if text similarity is enabled
-            Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-            boolean enableVectorization = textSimilarityConfig != null &&
-                Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+            // Check if vectorization is enabled via YAML config
+            boolean enableVectorization = isVectorizedChunksEnabled();
 
             XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
@@ -3275,6 +3073,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               LOGGER.debug("INLINE CONVERSION: Calling addToManifest with {} output files", outputFiles.size());
             }
             addToManifest(fileToConvert, secParquetDirPath, outputFiles);
+
+            // Update unified cache with completion status
+            FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
+            filingCache.markComplete(cik, accession, form, filingDate, vectorizationEnabled, inventory);
+
             if (LOGGER.isDebugEnabled()) {
               if (!outputFiles.isEmpty()) {
                 LOGGER.debug("Converted filing inline: {} {} ({} parquet files)", form, filingDate, outputFiles.size());
@@ -3289,14 +3092,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Write FAILED entry to manifest so we don't keep retrying this filing
         try {
-          storageProvider.createDirectories(cikManifestDirPath);
+          localStorageProvider.createDirectories(cikManifestDirPath);
           synchronized (("manifest_" + cik).intern()) {
             String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
-            // Append to manifest using StorageProvider
+            // Append to manifest using LocalStorageProvider
             StringBuilder sb = new StringBuilder();
-            if (storageProvider.exists(manifestFilePath)) {
+            if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(storageProvider.openInputStream(manifestFilePath)))) {
+                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   sb.append(line).append("\n");
@@ -3304,9 +3107,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               }
             }
             sb.append(manifestEntry).append("\n");
-            storageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
+            localStorageProvider.writeFile(manifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
             LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
           }
+
+          // Update unified cache with failed status
+          filingCache.markFailed(cik, accession, form, filingDate, e.getMessage());
         } catch (IOException ioe) {
           LOGGER.warn("Failed to add FAILED entry to manifest: {}", ioe.getMessage());
         }
@@ -3317,17 +3123,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Write FAILED entry to manifest so we don't keep retrying this filing
       try {
-        String outerCikManifestDirPath = storageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
-        String outerManifestFilePath = storageProvider.resolvePath(outerCikManifestDirPath, "processed_filings.manifest");
-        storageProvider.createDirectories(outerCikManifestDirPath);
+        String outerCikManifestDirPath = localStorageProvider.resolvePath(this.secOperatingDirectory, "cik=" + cik);
+        String outerManifestFilePath = localStorageProvider.resolvePath(outerCikManifestDirPath, "processed_filings.manifest");
+        localStorageProvider.createDirectories(outerCikManifestDirPath);
 
         synchronized (("manifest_" + cik).intern()) {
           String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
-          // Append to manifest using StorageProvider
+          // Append to manifest using LocalStorageProvider
           StringBuilder sb = new StringBuilder();
-          if (storageProvider.exists(outerManifestFilePath)) {
+          if (localStorageProvider.exists(outerManifestFilePath)) {
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(storageProvider.openInputStream(outerManifestFilePath)))) {
+                new java.io.InputStreamReader(localStorageProvider.openInputStream(outerManifestFilePath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 sb.append(line).append("\n");
@@ -3335,9 +3141,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
           }
           sb.append(manifestEntry).append("\n");
-          storageProvider.writeFile(outerManifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
+          localStorageProvider.writeFile(outerManifestFilePath, sb.toString().getBytes(StandardCharsets.UTF_8));
           LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
         }
+
+        // Update unified cache with failed status
+        filingCache.markFailed(cik, accession, form, filingDate, e.getMessage());
       } catch (IOException ioe) {
         LOGGER.warn("Failed to add FAILED entry to manifest: {}", ioe.getMessage());
       }
