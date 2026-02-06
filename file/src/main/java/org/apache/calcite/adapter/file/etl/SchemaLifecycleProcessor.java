@@ -161,8 +161,8 @@ public class SchemaLifecycleProcessor {
 
         try {
           // Check if table is enabled (both YAML flag and callback hook)
-          HooksConfig hooks = tableContext.getHooksConfig();
-          boolean yamlEnabled = hooks == null || hooks.isEnabled();
+          // Use table-level enabled flag (supports env var interpolation like ${VAR:default})
+          boolean yamlEnabled = tableConfig.isEnabled();
           boolean hookEnabled = tableListener.isTableEnabled(tableContext);
 
           if (!yamlEnabled || !hookEnabled) {
@@ -1069,11 +1069,18 @@ public class SchemaLifecycleProcessor {
     }
 
     @Override public boolean isTableEnabled(TableContext context) {
+      // Check for exact table name match first
       java.util.function.Predicate<TableContext> hook =
           filterHooks.get(context.getTableName());
       if (hook != null) {
         return hook.test(context);
-      } else if (delegate != null) {
+      }
+      // Check for wildcard "*" match as fallback
+      hook = filterHooks.get("*");
+      if (hook != null) {
+        return hook.test(context);
+      }
+      if (delegate != null) {
         return delegate.isTableEnabled(context);
       }
       return true;
