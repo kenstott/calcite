@@ -20,8 +20,10 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
+import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
+import org.apache.iceberg.io.CloseableIterable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,6 +158,7 @@ public class IcebergMaterializer {
     private final String description;
     private final Map<String, String> computedColumns;
     private final int rowBatchSize;
+    private final String rowFilter;  // Optional WHERE clause filter (e.g., "cik IN ('0001', '0002')")
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -177,6 +180,7 @@ public class IcebergMaterializer {
       this.computedColumns = builder.computedColumns != null
           ? builder.computedColumns : Collections.<String, String>emptyMap();
       this.rowBatchSize = builder.rowBatchSize;
+      this.rowFilter = builder.rowFilter;
     }
 
     public String getSourcePattern() {
@@ -256,6 +260,14 @@ public class IcebergMaterializer {
       return rowBatchSize;
     }
 
+    /**
+     * Returns the optional row filter (WHERE clause) to apply during materialization.
+     * This is used to filter source data, e.g., by CIK list.
+     */
+    public String getRowFilter() {
+      return rowFilter;
+    }
+
     public boolean supportsIncremental() {
       return !incrementalKeys.isEmpty();
     }
@@ -282,6 +294,7 @@ public class IcebergMaterializer {
       private String description;
       private Map<String, String> computedColumns;
       private int rowBatchSize;
+      private String rowFilter;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -361,6 +374,15 @@ public class IcebergMaterializer {
        */
       public Builder rowBatchSize(int rowBatchSize) {
         this.rowBatchSize = rowBatchSize;
+        return this;
+      }
+
+      /**
+       * Sets an optional row filter (WHERE clause) to apply during materialization.
+       * Use to filter source data, e.g., "cik IN ('0001', '0002')".
+       */
+      public Builder rowFilter(String rowFilter) {
+        this.rowFilter = rowFilter;
         return this;
       }
 
@@ -516,12 +538,23 @@ public class IcebergMaterializer {
       Map<String, String> incrementalKeyValues = entry.getKey();
       List<Map<String, String>> batchesForKey = entry.getValue();
 
-      // Check if already processed
+      // Check if already processed (via tracker or self-healing)
       if (config.supportsIncremental() && !incrementalKeyValues.isEmpty()) {
         if (incrementalTracker.isProcessed(config.getTargetTableId(),
             config.getSourceTableName(), incrementalKeyValues)) {
           LOGGER.info("Skipping {} batches for incremental key {} (already processed)",
               batchesForKey.size(), incrementalKeyValues);
+          skippedCount += batchesForKey.size();
+          continue;
+        }
+
+        // Self-healing: check if partition already has data in Iceberg table
+        if (partitionHasData(table, incrementalKeyValues)) {
+          // Mark as processed and skip
+          incrementalTracker.markProcessed(config.getTargetTableId(),
+              config.getSourceTableName(), incrementalKeyValues, config.getTargetTableId());
+          LOGGER.info("Self-healing: partition {} already has data, marking processed and skipping {} batches",
+              incrementalKeyValues, batchesForKey.size());
           skippedCount += batchesForKey.size();
           continue;
         }
@@ -554,20 +587,22 @@ public class IcebergMaterializer {
 
     LOGGER.info("Materialization complete: {}", result);
 
-    // Run maintenance and record watermark if successful
-    if (result.isFullySuccessful()) {
+    // Run maintenance and record completion if we actually wrote data
+    if (result.isFullySuccessful() && successCount > 0) {
       writer.runMaintenance(7, 1);
 
-      // Track source file watermark for future incremental runs
-      if (enableSourceWatermark && currentSourceWatermark > 0) {
-        incrementalTracker.markTableCompleteWithSourceWatermark(
-            config.getTargetTableId(),
-            "auto", // config hash - use constant for watermark-only tracking
-            IncrementalTracker.computeDimensionSignature(batches),
-            successCount,
-            currentSourceWatermark);
+      // Always mark table complete (with watermark if available, without otherwise)
+      incrementalTracker.markTableCompleteWithSourceWatermark(
+          config.getTargetTableId(),
+          "auto", // config hash - use constant for tracking
+          IncrementalTracker.computeDimensionSignature(batches),
+          successCount,
+          currentSourceWatermark); // 0 for S3, actual watermark for local
+      if (currentSourceWatermark > 0) {
         LOGGER.info("Recorded source file watermark {} for '{}'",
             currentSourceWatermark, config.getTargetTableId());
+      } else {
+        LOGGER.info("Marked table '{}' complete ({} rows)", config.getTargetTableId(), successCount);
       }
     }
 
@@ -596,8 +631,17 @@ public class IcebergMaterializer {
         LOGGER.warn("Batch {} already committed by another writer, skipping", batch);
         return true;
       } catch (Exception e) {
+        String message = e.getMessage();
+
+        // Check for "No files found" - this means source data doesn't exist for this table/batch
+        // This is expected when running a 10-K job but the table needs Form 4 or 8-K data
+        if (message != null && message.contains("No files found")) {
+          LOGGER.debug("Batch {} has no source files, skipping (table may require different filing type)", batch);
+          return true;  // Treat as success - no data to process is OK
+        }
+
         LOGGER.warn("Batch {} failed (attempt {}/{}): {}",
-            batch, attempts, maxRetries, e.getMessage());
+            batch, attempts, maxRetries, message);
 
         if (attempts < maxRetries) {
           try {
@@ -725,6 +769,7 @@ public class IcebergMaterializer {
 
     long processedRows = 0;
     int batchNum = 0;
+    int commitInterval = 10; // Commit every 10 batches to prevent OOM
     long totalStartTime = System.currentTimeMillis();
 
     // Iterate with LIMIT/OFFSET until no more rows (avoids expensive COUNT)
@@ -759,6 +804,15 @@ public class IcebergMaterializer {
 
       // Clear rows for GC
       rows.clear();
+      rows = null; // Help GC
+
+      // Commit incrementally every N batches to prevent OOM from accumulating DataFiles
+      if (dataFiles.size() >= commitInterval) {
+        writer.commitDataFiles(dataFiles, typedPartitionFilter);
+        LOGGER.info("Incremental commit: {} files committed at batch {}", dataFiles.size(), batchNum);
+        dataFiles.clear();
+        dataFiles = new ArrayList<org.apache.iceberg.DataFile>(); // Fresh list for GC
+      }
 
       // If we got fewer rows than requested, we're done
       if (rowCount < rowBatchSize) {
@@ -766,13 +820,15 @@ public class IcebergMaterializer {
       }
     }
 
-    // Commit all data files in a single transaction
+    // Commit any remaining data files
     if (!dataFiles.isEmpty()) {
       writer.commitDataFiles(dataFiles, typedPartitionFilter);
-      long totalElapsed = System.currentTimeMillis() - totalStartTime;
-      LOGGER.info("Row batching completed: {} batches, {} rows, {} files committed in {}ms",
-          batchNum, processedRows, dataFiles.size(), totalElapsed);
+      LOGGER.info("Final commit: {} files committed", dataFiles.size());
     }
+
+    long totalElapsed = System.currentTimeMillis() - totalStartTime;
+    LOGGER.info("Row batching completed: {} batches, {} rows in {}ms",
+        batchNum, processedRows, totalElapsed);
   }
 
   /**
@@ -830,6 +886,11 @@ public class IcebergMaterializer {
       sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
     }
 
+    // Add WHERE clause if row filter is specified (e.g., to filter by CIK)
+    if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+      sql.append(" WHERE ").append(config.getRowFilter());
+    }
+
     // Add LIMIT/OFFSET
     sql.append(" LIMIT ").append(limit);
     if (offset > 0) {
@@ -864,6 +925,11 @@ public class IcebergMaterializer {
       sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
     } else {
       sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
+    }
+
+    // Add WHERE clause if row filter is specified (e.g., to filter by CIK)
+    if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+      sql.append(" WHERE ").append(config.getRowFilter());
     }
 
     return sql.toString();
@@ -940,6 +1006,10 @@ public class IcebergMaterializer {
       sql.append("read_parquet('").append(sourcePattern)
           .append("', hive_partitioning=true, union_by_name=true)");
     }
+    // Add WHERE clause if row filter is specified
+    if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+      sql.append(" WHERE ").append(config.getRowFilter());
+    }
     return sql.toString();
   }
 
@@ -977,6 +1047,11 @@ public class IcebergMaterializer {
       sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
     } else {
       sql.append("read_parquet('").append(sourcePattern).append("', hive_partitioning=true, union_by_name=true)");
+    }
+
+    // Add WHERE clause if row filter is specified (e.g., to filter by CIK)
+    if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+      sql.append(" WHERE ").append(config.getRowFilter());
     }
 
     // Add LIMIT/OFFSET for row batching
@@ -1137,6 +1212,69 @@ public class IcebergMaterializer {
         columns,
         config.getPartitionColumnNames());
     return new TableSetupResult(recreatedTable, true);
+  }
+
+  /**
+   * Checks if an Iceberg partition already has data (for self-healing).
+   *
+   * <p>This is used to detect partitions that were materialized in previous runs
+   * but not tracked in the incremental tracker (e.g., due to tracking being added
+   * after initial materialization).
+   *
+   * @param table The Iceberg table to check
+   * @param partitionValues The partition values to check for (e.g., {year=2026})
+   * @return true if the partition has data, false otherwise
+   */
+  private boolean partitionHasData(Table table, Map<String, String> partitionValues) {
+    if (table == null || partitionValues == null || partitionValues.isEmpty()) {
+      return false;
+    }
+
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        // Check if this file's partition matches our partition values
+        org.apache.iceberg.StructLike partition = task.file().partition();
+        org.apache.iceberg.PartitionSpec spec = table.spec();
+
+        boolean matches = true;
+        for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
+          String colName = entry.getKey();
+          String expectedValue = entry.getValue();
+
+          // Find the partition field index
+          int fieldIndex = -1;
+          for (int i = 0; i < spec.fields().size(); i++) {
+            if (spec.fields().get(i).name().equals(colName)) {
+              fieldIndex = i;
+              break;
+            }
+          }
+
+          if (fieldIndex < 0) {
+            // Partition column not found in spec
+            matches = false;
+            break;
+          }
+
+          Object actualValue = partition.get(fieldIndex, Object.class);
+          if (actualValue == null || !actualValue.toString().equals(expectedValue)) {
+            matches = false;
+            break;
+          }
+        }
+
+        if (matches) {
+          LOGGER.debug("Self-healing: found existing data for partition {} in table {}",
+              partitionValues, table.name());
+          return true;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Self-healing check failed for partition {}: {}",
+          partitionValues, e.getMessage());
+    }
+
+    return false;
   }
 
   /**

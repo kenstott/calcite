@@ -1370,6 +1370,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
     LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
 
+    // Build CIK filter to avoid materializing all companies when only a subset is requested
+    String rowFilter = buildCikFilter(operand);
+    if (rowFilter != null) {
+      LOGGER.debug("Using CIK filter for '{}': {} CIKs", tableName,
+          rowFilter.split(",").length);
+    }
+
     return IcebergMaterializer.MaterializationConfig.builder()
         .sourcePattern(sourcePattern)
         .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
@@ -1382,8 +1389,45 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .yearRange(startYear, endYear)
         .computedColumns(computedColumns)
         .rowBatchSize(rowBatchSize)
+        .rowFilter(rowFilter)
         .description(tableName)
         .build();
+  }
+
+  /**
+   * Builds a SQL WHERE clause filter for CIKs from the operand configuration.
+   * Returns null if no CIK filter is specified (e.g., for "_ALL_EDGAR_FILERS").
+   *
+   * @param operand The schema operand containing CIK configuration
+   * @return A SQL filter like "cik IN ('0001', '0002')" or null if no filter
+   */
+  private String buildCikFilter(Map<String, Object> operand) {
+    List<String> ciks = getCiksFromConfig(operand);
+    if (ciks == null || ciks.isEmpty()) {
+      return null;
+    }
+
+    // Check if this is _ALL_EDGAR_FILERS - don't filter in that case
+    Object cikConfig = operand.get("ciks");
+    if (cikConfig instanceof String) {
+      String cikStr = (String) cikConfig;
+      if (cikStr.contains("_ALL_EDGAR_FILERS") || cikStr.contains("_ALL")) {
+        LOGGER.debug("Skipping CIK filter for all-filers configuration");
+        return null;
+      }
+    }
+
+    // Build IN clause for CIKs
+    StringBuilder filter = new StringBuilder("cik IN (");
+    for (int i = 0; i < ciks.size(); i++) {
+      if (i > 0) {
+        filter.append(", ");
+      }
+      filter.append("'").append(ciks.get(i)).append("'");
+    }
+    filter.append(")");
+
+    return filter.toString();
   }
 
   /**
