@@ -1237,7 +1237,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Build MaterializationConfig from table config
         IcebergMaterializer.MaterializationConfig config =
-            buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern, tableConfig, operand);
+            buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
+                tableConfig, operand, warehousePath);
 
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
@@ -1280,7 +1281,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   @SuppressWarnings("unchecked")
   private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
       String tableName, String icebergTableName, String baseDir, String pattern,
-      Map<String, Object> tableConfig, Map<String, Object> operand) {
+      Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath) {
 
     // Build source pattern
     String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
@@ -1390,6 +1391,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .computedColumns(computedColumns)
         .rowBatchSize(rowBatchSize)
         .rowFilter(rowFilter)
+        .icebergTableLocation(warehousePath + "/" + icebergTableName)
+        .accessionColumn("accession_number")
         .description(tableName)
         .build();
   }
