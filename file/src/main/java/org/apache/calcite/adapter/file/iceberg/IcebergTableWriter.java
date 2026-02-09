@@ -155,44 +155,30 @@ public class IcebergTableWriter {
   /**
    * Commits data files to Iceberg with optional partition filter.
    *
+   * <p>NOTE: Always uses APPEND mode now. With accession-level deduplication,
+   * duplicates are filtered in the SQL query, so we should append new data
+   * to existing partitions rather than overwriting them.
+   *
    * @param dataFiles The data files to commit
-   * @param partitionFilter Optional filter for partition overwrite (null for append)
+   * @param partitionFilter Partition info for logging (no longer used for overwrite)
    */
   public void commitDataFiles(List<DataFile> dataFiles, Map<String, Object> partitionFilter) {
     if (dataFiles.isEmpty()) {
       return;
     }
 
-    // Commit to Iceberg
+    // Always use append mode - accession-level deduplication handles duplicates in SQL
     if (partitionFilter != null && !partitionFilter.isEmpty()) {
-      // Overwrite partition
-      LOGGER.info("Overwriting partition with filter: {}", partitionFilter);
-      org.apache.iceberg.OverwriteFiles overwrite = table.newOverwrite();
-
-      // Build filter expression from partition values
-      org.apache.iceberg.expressions.Expression filter = Expressions.alwaysTrue();
-      for (Map.Entry<String, Object> entry : partitionFilter.entrySet()) {
-        filter =
-            Expressions.and(filter, Expressions.equal(entry.getKey(), entry.getValue()));
-      }
-      overwrite.overwriteByRowFilter(filter);
-
-      for (DataFile dataFile : dataFiles) {
-        overwrite.addFile(dataFile);
-      }
-      overwrite.commit();
-
-      // Ensure version-hint.text exists after overwrite commit
-      ensureVersionHint();
+      LOGGER.info("Appending {} data files to partition: {}", dataFiles.size(), partitionFilter);
     } else {
-      // Simple append
       LOGGER.info("Appending {} data files to table", dataFiles.size());
-      org.apache.iceberg.AppendFiles append = table.newAppend();
-      for (DataFile dataFile : dataFiles) {
-        append.appendFile(dataFile);
-      }
-      append.commit();
     }
+
+    org.apache.iceberg.AppendFiles append = table.newAppend();
+    for (DataFile dataFile : dataFiles) {
+      append.appendFile(dataFile);
+    }
+    append.commit();
 
     // Ensure version-hint.text exists after commit (repairs orphaned tables)
     ensureVersionHint();
