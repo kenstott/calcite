@@ -1763,6 +1763,17 @@ public class IcebergMaterializer {
         LOGGER.debug("Quackformers extension not available: {}", e.getMessage());
       }
 
+      // Load Iceberg extension for iceberg_scan() used in self-healing
+      try {
+        stmt.execute("INSTALL iceberg");
+        stmt.execute("LOAD iceberg");
+        // Enable version guessing for tables without version-hint file
+        stmt.execute("SET unsafe_enable_version_guessing = true");
+        LOGGER.debug("Loaded DuckDB Iceberg extension for self-healing queries");
+      } catch (SQLException e) {
+        LOGGER.debug("Iceberg extension not available: {}", e.getMessage());
+      }
+
       // Configure S3 if available
       Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
       if (s3Config != null && !s3Config.isEmpty()) {
