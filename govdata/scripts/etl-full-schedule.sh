@@ -20,6 +20,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 
+# Setup logging - all output goes to both terminal and log file
+LOG_DIR="${GOVDATA_HOME}/runs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/etl-$(date +%Y%m%d-%H%M%S).log"
+LATEST_LOG="${LOG_DIR}/etl-latest.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+ln -sf "$LOG_FILE" "$LATEST_LOG"
+echo "Logging to: $LOG_FILE"
+echo "Latest log symlink: $LATEST_LOG"
+
 # Load environment
 ENV_FILE="${ENV_FILE:-.env.prod}"
 if [[ -f "$GOVDATA_HOME/$ENV_FILE" ]]; then
@@ -445,3 +455,32 @@ echo "=============================================="
 echo "Completed: $COMPLETED"
 echo "Failed: $FAILED"
 echo "=============================================="
+
+# Rebuild and upload VSS index if any SEC jobs completed
+if [[ $COMPLETED -gt 0 ]]; then
+    # Extract unique years from SEC jobs (format: num|sec|cik_name|type|year|...)
+    SEC_YEARS=$(echo "$JOBS" | grep "|sec|" | awk -F'|' '{print $5}' | sort -rn | uniq)
+
+    if [[ -n "$SEC_YEARS" ]]; then
+        echo ""
+        echo "=============================================="
+        echo "Rebuilding VSS Index"
+        echo "=============================================="
+
+        VSS_SCRIPT="$SCRIPT_DIR/vss.sh"
+        if [[ -x "$VSS_SCRIPT" ]]; then
+            for YEAR in $SEC_YEARS; do
+                echo "Refreshing VSS for year $YEAR..."
+                "$VSS_SCRIPT" refresh "$YEAR" || echo "Warning: VSS refresh for $YEAR failed"
+            done
+
+            # Upload to S3/R2 for client distribution
+            echo "Uploading VSS to cloud storage..."
+            "$VSS_SCRIPT" upload || echo "Warning: VSS upload failed"
+
+            echo "VSS rebuild complete"
+        else
+            echo "Warning: VSS script not found at $VSS_SCRIPT"
+        fi
+    fi
+fi
