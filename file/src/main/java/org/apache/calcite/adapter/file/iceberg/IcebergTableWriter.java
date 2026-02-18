@@ -718,13 +718,18 @@ public class IcebergTableWriter {
 
     // Remove orphan files using core Iceberg API
     // Orphans are data files not referenced by any snapshot
-    try {
-      int orphansRemoved = removeOrphanFiles(orphanFilesMillis);
-      if (orphansRemoved > 0) {
-        LOGGER.info("Removed {} orphan files older than {} days", orphansRemoved, orphanFilesDays);
+    // Skip if threshold is > 30 days (effectively disabled - scan is expensive)
+    if (orphanFilesDays <= 30) {
+      try {
+        int orphansRemoved = removeOrphanFiles(orphanFilesMillis);
+        if (orphansRemoved > 0) {
+          LOGGER.info("Removed {} orphan files older than {} days", orphansRemoved, orphanFilesDays);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to remove orphan files: {}", e.getMessage());
       }
-    } catch (Exception e) {
-      LOGGER.warn("Failed to remove orphan files: {}", e.getMessage());
+    } else {
+      LOGGER.debug("Skipping orphan file detection (threshold {} days > 30)", orphanFilesDays);
     }
   }
 

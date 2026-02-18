@@ -153,26 +153,29 @@ class BlsResponseTransformerTest {
   }
 
   @Test void testUnknownStatusStillExtractsData() {
-    // Unknown status should still try to extract data
+    // Unknown status should still try to extract data (with actual data points)
     String response = "{"
         + "\"status\": \"UNKNOWN_STATUS\","
         + "\"Results\": {"
-        + "  \"series\": [{\"seriesID\": \"TEST\"}]"
+        + "  \"series\": [{\"seriesID\": \"TEST\", \"data\": [{\"year\": \"2024\", \"value\": \"5.0\"}]}]"
         + "}}";
 
     String result = transformer.transform(response, context);
 
+    // Data is extracted and flattened, so seriesID appears in the output
     assertTrue(result.contains("TEST"));
+    assertTrue(result.contains("2024"));
   }
 
   @Test void testMultipleSeriesRecords() {
+    // Multiple series with actual data points are flattened into a single array
     String response = "{"
         + "\"status\": \"REQUEST_SUCCEEDED\","
         + "\"Results\": {"
         + "  \"series\": ["
-        + "    {\"seriesID\": \"SERIES1\", \"data\": []},"
-        + "    {\"seriesID\": \"SERIES2\", \"data\": []},"
-        + "    {\"seriesID\": \"SERIES3\", \"data\": []}"
+        + "    {\"seriesID\": \"SERIES1\", \"data\": [{\"year\": \"2023\", \"value\": \"1.0\"}]},"
+        + "    {\"seriesID\": \"SERIES2\", \"data\": [{\"year\": \"2023\", \"value\": \"2.0\"}]},"
+        + "    {\"seriesID\": \"SERIES3\", \"data\": [{\"year\": \"2023\", \"value\": \"3.0\"}]}"
         + "  ]"
         + "}}";
 

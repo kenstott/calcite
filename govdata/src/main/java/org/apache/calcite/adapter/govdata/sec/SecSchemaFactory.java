@@ -184,13 +184,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // SEC tables are populated by DocumentETLProcessor, not standard ETL
-    // Use isEnabled hook to skip standard ETL processing for all tables
-    // The hook returns false during ETL (to skip source fetching), but tables
-    // will still be created from existing Parquet files
+    // Use isEnabled hook to skip standard ETL processing for most tables.
+    // Exception: vectorized_chunks needs hooks enabled for GPU bulk generation.
     builder.isEnabled("*", context -> {
-      // Skip ETL processing - tables are populated by DocumentETLProcessor
+      String tableName = context.getTableName();
+      // Allow vectorized_chunks through - it needs table hooks for GPU embedding generation
+      if ("vectorized_chunks".equals(tableName)) {
+        LOGGER.debug("Allowing table hooks for '{}' - GPU bulk generation enabled", tableName);
+        return true;
+      }
+      // Skip ETL processing for other tables - populated by DocumentETLProcessor
       LOGGER.debug("Skipping standard ETL for table '{}' - populated by DocumentETLProcessor",
-          context.getTableName());
+          tableName);
       return false;
     });
   }
@@ -380,257 +385,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  /**
-   * Builds the operand configuration for SEC schema without creating a FileSchema instance.
-   * This method is called by GovDataSchemaFactory to get SEC-specific configuration
-   * that will be merged into a unified FileSchema.
-   *
-   * @param operand The base operand from the model file
-   * @return Modified operand with SEC-specific configuration
-   */
-  public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
-    LOGGER.info("=== SecSchemaFactory.buildOperand() START ===");
-    LOGGER.info("Operand keys: {}", operand != null ? operand.keySet() : "NULL");
+  // NOTE: buildOperand() was removed - it was dead code never called.
+  // The ETL flow now uses configureHooks() via ModelLifecycleProcessor -> FileSchemaBuilder.
+  // The following dead code block has been removed (lines 383-633 in original):
+  // - buildOperand() method
+  // - skipHardcodedTableDefinitions() method
+  // - shouldDownloadData() method
+  // See git history for original implementation if needed.
 
-    try {
-      // Access shared services from parent
-      LOGGER.info("Getting storage provider from parent...");
-      this.storageProvider = parent.getStorageProvider();
-      LOGGER.info("Storage provider obtained: {}", storageProvider);
+  // DEAD CODE REMOVAL MARKER - START
+  // This comment marks where ~250 lines of dead code were removed.
+  // The removed methods were:
+  //   buildOperand() - Never called; GovDataSchemaFactory uses configureHooks() instead
+  //   skipHardcodedTableDefinitions() - Only called by buildOperand()
+  //   shouldDownloadData() - Only called by buildOperand()
+  // DEAD CODE REMOVAL MARKER - END
 
-      // Create a mutable copy of operand to allow modifications
-      LOGGER.info("Creating mutable operand copy...");
-      Map<String, Object> mutableOperand = new HashMap<>(operand);
-      LOGGER.info("Mutable operand created");
-
-    // Load SecCacheManifest for ETag-based caching of submissions.json files
-    // Note: Cache manifest loading is deferred until after getGovDataCacheDir() is called
-    // to avoid duplicate variable declarations
-
-    // Check auto-download setting (default true like ECON)
-    Boolean autoDownload = (Boolean) operand.get("autoDownload");
-    if (autoDownload == null) {
-      autoDownload = true;  // Default to true like ECON
-      LOGGER.debug("autoDownload not specified, defaulting to true");
-    }
-    mutableOperand.put("autoDownload", autoDownload);
-
-    // Check stockPriceTtlHours setting (default 24 hours)
-    Integer stockPriceTtlHours = (Integer) operand.get("stockPriceTtlHours");
-    if (stockPriceTtlHours == null) {
-      stockPriceTtlHours = 24;  // Default to 24 hours
-      LOGGER.debug("stockPriceTtlHours not specified, defaulting to 24 hours");
-    }
-    mutableOperand.put("stockPriceTtlHours", stockPriceTtlHours);
-
-      // Load and apply defaults before processing
-      LOGGER.info("Loading defaults...");
-      Map<String, Object> defaults = loadDefaults();
-      if (defaults != null) {
-        LOGGER.info("Applying defaults from sec-schema-factory.defaults.json");
-        applyDefaults(mutableOperand, defaults);
-        LOGGER.info("Defaults applied");
-      }
-
-      LOGGER.info("Storing currentOperand...");
-      this.currentOperand = mutableOperand; // Store for table auto-discovery
-      LOGGER.info("currentOperand stored");
-
-      // Get cache directories from operand or environment variables
-      LOGGER.info("Getting cache directories...");
-      String govdataCacheDir = GovDataUtils.getCacheDir(mutableOperand);
-      String govdataParquetDir = GovDataUtils.getParquetDir(mutableOperand);
-      LOGGER.info("Cache directories obtained: cache={}, parquet={}", govdataCacheDir, govdataParquetDir);
-
-    // Check required directories are configured
-    if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
-      throw new IllegalStateException("cacheDirectory must be set in model operand or GOVDATA_CACHE_DIR environment variable must be set");
-    }
-    if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-      throw new IllegalStateException("parquetDirectory must be set in model operand or GOVDATA_PARQUET_DIR environment variable must be set");
-    }
-
-    // SEC cache directory for raw content (XBRL/HTML files)
-    String secCacheDir = storageProvider.resolvePath(govdataCacheDir, "sec");
-    this.secCacheDirectory = secCacheDir;
-
-    // Operating directory for metadata (.aperio/sec/)
-    // This is passed from GovDataSchemaFactory which establishes it centrally
-    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
-    this.secOperatingDirectory = (String) operand.get("operatingDirectory");
-    if (this.secOperatingDirectory == null) {
-      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
-    }
-    LOGGER.debug("Received operating directory from parent: {}", this.secOperatingDirectory);
-
-    // Initialize local storage provider for operating directory operations
-    // This is needed because the main storageProvider may be S3-based, but the operating
-    // directory (.aperio) is ALWAYS local filesystem
-    this.localStorageProvider = new LocalFileStorageProvider();
-    LOGGER.debug("Initialized local storage provider for operating directory operations");
-
-    // Load SecCacheManifest from operating directory
-    this.cacheManifest = SecCacheManifest.load(this.secOperatingDirectory);
-    LOGGER.debug("Loaded SEC cache manifest from {}", this.secOperatingDirectory);
-
-    // Initialize unified filing cache (close existing one first to release DuckDB lock)
-    if (this.filingCache != null) {
-      try {
-        this.filingCache.close();
-        LOGGER.debug("Closed existing SEC filing cache before reinitializing");
-      } catch (Exception e) {
-        LOGGER.warn("Failed to close existing SEC filing cache: {}", e.getMessage());
-      }
-    }
-    this.filingCache = new SecFilingCache(this.secOperatingDirectory, this.storageProvider, govdataParquetDir);
-    LOGGER.info("Initialized SEC filing cache at {}", this.secOperatingDirectory);
-
-    // SEC data directories - NEVER concatenate paths, always use storageProvider.resolvePath
-    String secRawDir = storageProvider.resolvePath(govdataCacheDir, "sec");
-    String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
-    LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}', operatingDir='{}'",
-                govdataParquetDir, secParquetDir, this.secOperatingDirectory);
-
-    // Determine cache directory
-    String configuredDir = (String) mutableOperand.get("directory");
-    if (configuredDir == null) {
-      configuredDir = (String) mutableOperand.get("cacheDirectory");
-    }
-
-    // Use GOVDATA_PARQUET_DIR if available, otherwise fall back to configured or default
-    String cacheHome;
-    if (govdataCacheDir != null && govdataParquetDir != null) {
-      // Raw XBRL data goes to GOVDATA_CACHE_DIR/sec
-      // Parquet data goes to GOVDATA_PARQUET_DIR/source=sec
-      cacheHome = secRawDir; // For raw XBRL data
-      LOGGER.info("Using unified govdata directories - cache: {}, parquet: {}/source=sec", govdataCacheDir, govdataParquetDir);
-    } else {
-      cacheHome = configuredDir != null ? configuredDir : secRawDir;
-    }
-
-      // Handle SEC data download if configured
-      LOGGER.info("Checking if data download is needed (autoDownload={})...", mutableOperand.get("autoDownload"));
-      if (shouldDownloadData(mutableOperand)) {
-        LOGGER.info("Data download needed - starting download...");
-      // Get base directory from operand
-      if (configuredDir != null) {
-        // Rebuild manifest from existing files first
-        rebuildManifestFromExistingFiles(configuredDir);
-      }
-        LOGGER.info("Calling downloadSecData...");
-        downloadSecData(mutableOperand);
-        LOGGER.info("downloadSecData completed");
-
-        // CRITICAL: Wait for all downloads and conversions to complete
-        // The downloadSecData method starts async tasks but returns immediately
-        // We need to wait for them to complete before creating the FileSchema
-        LOGGER.info("Waiting for all conversions to complete...");
-        waitForAllConversions();
-        LOGGER.info("All conversions completed");
-      } else {
-        LOGGER.info("Data download not needed (autoDownload={}, useMockData={})",
-                    mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
-      }
-
-      // Load table definitions from sec-schema.yaml (no fallback to hardcoded)
-      LOGGER.info("Loading partitioned tables from sec-schema.yaml...");
-      List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
-
-      if (partitionedTables.isEmpty()) {
-        throw new IllegalStateException(
-            "Failed to load table definitions from sec-schema.yaml - file missing or invalid");
-      }
-
-      LOGGER.info("Using {} table definitions from sec-schema.yaml", partitionedTables.size());
-      mutableOperand.put("partitionedTables", partitionedTables);
-      skipHardcodedTableDefinitions(mutableOperand, partitionedTables, secParquetDir);
-      return mutableOperand;
-    } catch (Exception e) {
-      LOGGER.error("ERROR in SecSchemaFactory.buildOperand(): {}", e.getMessage(), e);
-      throw new RuntimeException("Failed to build SEC schema operand", e);
-    }
-  }
-
-
-  /**
-   * Completes operand setup when using YAML table definitions.
-   *
-   * <p>This method handles the remainder of buildOperand() when tables are loaded
-   * from sec-schema.yaml instead of being hardcoded.
-   */
-  @SuppressWarnings("unchecked")
-  private void skipHardcodedTableDefinitions(Map<String, Object> operand,
-      List<Map<String, Object>> partitionedTables, String secParquetDir) {
-    LOGGER.info("Completing operand setup with {} YAML table definitions", partitionedTables.size());
-
-    // Set the directory for FileSchemaFactory to search
-    operand.put("directory", secParquetDir);
-
-    // Set materializeDirectory if not already set (required by SchemaLifecycleProcessor)
-    if (!operand.containsKey("materializeDirectory")) {
-      operand.put("materializeDirectory", secParquetDir);
-    }
-
-    // Note: Vectorization/text similarity is now controlled by the vectorized_chunks
-    // table 'enabled' setting in sec-schema.yaml, not by operand.textSimilarity
-
-    // Create conversion metadata with viewScanPatterns
-    Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>
-        conversionRecords = new HashMap<String,
-            org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>();
-
-    for (Map<String, Object> table : partitionedTables) {
-      String tableName = (String) table.get("name");
-      String pattern = (String) table.get("pattern");
-
-      if (tableName != null && pattern != null) {
-        // SEC parquet files are stored directly under secParquetDir with year= partitions
-        // NOT in table-specific subdirectories (e.g., /vectorized_chunks/year=*)
-        String viewScanPattern =
-            storageProvider.resolvePath(secParquetDir, pattern);
-
-        org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
-            new org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord();
-        record.viewScanPattern = viewScanPattern;
-        record.originalFile = tableName;
-        record.conversionType = "SEC_XBRL_TO_PARQUET";
-        record.tableName = tableName;
-        record.tableConfig = table;
-
-        conversionRecords.put(tableName, record);
-        LOGGER.info("Registered viewScanPattern for table '{}': {} (pattern='{}')", tableName, viewScanPattern, pattern);
-      }
-    }
-
-    if (!conversionRecords.isEmpty()) {
-      operand.put("conversionRecords", conversionRecords);
-      LOGGER.info("Registered viewScanPatterns for {} SEC tables", conversionRecords.size());
-    }
-
-    // Disable cache priming for SEC adapter
-    operand.put("primeCache", false);
-
-    // Add schema-level comment
-    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
-    if (schemaComment != null) {
-      operand.put("comment", schemaComment);
-    }
-
-    // Pass storage provider instance through operand
-    if (this.storageProvider != null) {
-      operand.put("_storageProvider", this.storageProvider);
-    }
-
-    LOGGER.info("SEC schema operand configuration complete (using YAML definitions)");
-  }
-
-  private boolean shouldDownloadData(Map<String, Object> operand) {
-    Boolean autoDownload = (Boolean) operand.get("autoDownload");
-    Boolean useMockData = (Boolean) operand.get("useMockData");
-    boolean result = (autoDownload != null && autoDownload) || (useMockData != null && useMockData);
-    LOGGER.debug("shouldDownloadData: autoDownload={}, useMockData={}, result={}", autoDownload, useMockData, result);
-    return result;
-  }
 
   /**
    * Wait for all downloads and conversions to complete.
@@ -839,94 +609,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return builder.build();
   }
 
-
-  private void rebuildManifestFromExistingFiles(String baseDirectory) {
-    // Rebuild manifest from existing files on startup
-    String manifestPath = storageProvider.resolvePath(baseDirectory, "processed_filings.manifest");
-    try {
-      if (storageProvider.exists(manifestPath)) {
-        try (BufferedReader reader = new BufferedReader(
-            new java.io.InputStreamReader(storageProvider.openInputStream(manifestPath)))) {
-          long count = 0;
-          while (reader.readLine() != null) {
-            count++;
-          }
-          LOGGER.debug("Manifest already exists with {} entries", count);
-          return;
-        }
-      }
-    } catch (Exception e) {
-      LOGGER.warn("Could not read manifest: " + e.getMessage());
-    }
-
-    LOGGER.debug("Building manifest from existing files...");
-    Set<String> processedFilings = new HashSet<>();
-
-    try {
-      String secCacheDir = storageProvider.resolvePath(baseDirectory, "sec-cache");
-      if (storageProvider.exists(secCacheDir) && storageProvider.isDirectory(secCacheDir)) {
-        String rawDir = storageProvider.resolvePath(secCacheDir, "raw");
-        if (storageProvider.exists(rawDir)) {
-          // Scan all CIK directories
-          List<StorageProvider.FileEntry> cikDirs = storageProvider.listFiles(rawDir, false);
-          for (StorageProvider.FileEntry cikEntry : cikDirs) {
-            if (!cikEntry.isDirectory()) {
-              continue;
-            }
-            String cik = cikEntry.getName();
-            // Scan all accession directories
-            List<StorageProvider.FileEntry> accessionDirs =
-                storageProvider.listFiles(cikEntry.getPath(), false);
-            for (StorageProvider.FileEntry accessionEntry : accessionDirs) {
-              if (!accessionEntry.isDirectory()) {
-                continue;
-              }
-              String accession = accessionEntry.getName();
-              // Format accession with dashes
-              if (accession.length() == 18) {
-                accession = accession.substring(0, 10) + "-" +
-                           accession.substring(10, 12) + "-" +
-                           accession.substring(12);
-              }
-
-              // Check for HTML files (indicates a filing was downloaded)
-              List<StorageProvider.FileEntry> htmlFiles =
-                  storageProvider.listFiles(accessionEntry.getPath(), false);
-              boolean hasHtmlFiles = false;
-              for (StorageProvider.FileEntry f : htmlFiles) {
-                String name = f.getName();
-                if (!name.startsWith("._") && (name.endsWith(".htm") || name.endsWith(".html"))) {
-                  hasHtmlFiles = true;
-                  break;
-                }
-              }
-              if (hasHtmlFiles) {
-                // For now, add with generic form/date - actual values would need parsing
-                String manifestKey = cik + "|" + accession + "|UNKNOWN|UNKNOWN";
-                processedFilings.add(manifestKey);
-              }
-            }
-          }
-        }
-      }
-    } catch (Exception e) {
-      LOGGER.warn("Could not scan existing files: " + e.getMessage());
-    }
-
-    // Write manifest
-    if (!processedFilings.isEmpty()) {
-      try {
-        StringBuilder sb = new StringBuilder();
-        for (String filing : processedFilings) {
-          sb.append(filing).append("\n");
-        }
-        storageProvider.writeFile(manifestPath, sb.toString().getBytes(StandardCharsets.UTF_8));
-        LOGGER.debug("Created manifest with {} existing filings", processedFilings.size());
-      } catch (Exception e) {
-        LOGGER.warn("Could not create manifest: " + e.getMessage());
-      }
-    }
-  }
 
   /**
    * Public static method to trigger SEC data download from external components like RSS monitor.
@@ -1293,6 +975,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Extract batch partition columns and computed columns
     List<String> batchPartitionCols = extractBatchPartitionColumns(tableConfig);
     Map<String, String> computedColumns = extractComputedColumns(tableConfig);
+
+    // Check if embeddings should be deferred to GPU pipeline
+    boolean deferEmbeddings = getBooleanValue(operand, "deferEmbeddings", false);
+    if (deferEmbeddings && !computedColumns.isEmpty()) {
+      // Filter out embed() expressions - these will be computed by GPU pipeline
+      Map<String, String> filteredColumns = new java.util.LinkedHashMap<>();
+      for (Map.Entry<String, String> entry : computedColumns.entrySet()) {
+        if (!entry.getValue().contains("embed(") && !entry.getValue().contains("embed_jina")) {
+          filteredColumns.put(entry.getKey(), entry.getValue());
+        } else {
+          LOGGER.info("Deferring embedding column '{}' to GPU pipeline", entry.getKey());
+        }
+      }
+      computedColumns = filteredColumns;
+    }
 
     // Get year range from operand (test config), falling back to YAML dimensions
     int startYear = getIntValue(operand, "startYear", -1);
@@ -1732,6 +1429,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("Invalid integer value for {}: {}", key, value);
         return defaultValue;
       }
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Extracts a boolean value from operand, handling Boolean and String types.
+   */
+  private boolean getBooleanValue(Map<String, Object> operand, String key, boolean defaultValue) {
+    Object value = operand.get(key);
+    if (value == null) {
+      return defaultValue;
+    }
+    if (value instanceof Boolean) {
+      return (Boolean) value;
+    }
+    if (value instanceof String) {
+      return "true".equalsIgnoreCase((String) value);
     }
     return defaultValue;
   }

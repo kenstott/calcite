@@ -84,6 +84,7 @@ public class HooksConfig {
   private final String variableNormalizerClass;
   private final Map<String, Object> variableNormalizerConfig;
   private final HookErrorHandling errorHandling;
+  private final List<PostProcessConfig> postProcess;
 
   private HooksConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -104,6 +105,9 @@ public class HooksConfig {
     this.errorHandling = builder.errorHandling != null
         ? builder.errorHandling
         : HookErrorHandling.defaults();
+    this.postProcess = builder.postProcess != null
+        ? Collections.unmodifiableList(new ArrayList<PostProcessConfig>(builder.postProcess))
+        : Collections.<PostProcessConfig>emptyList();
   }
 
   /**
@@ -218,6 +222,18 @@ public class HooksConfig {
   }
 
   /**
+   * Returns the list of post-processing configurations.
+   *
+   * <p>Post-processing scripts are executed after table materialization completes.
+   * This is useful for GPU-based bulk operations like embedding generation.
+   *
+   * @return List of PostProcessConfig, never null (may be empty)
+   */
+  public List<PostProcessConfig> getPostProcess() {
+    return postProcess;
+  }
+
+  /**
    * Returns whether any hooks are configured.
    *
    * @return true if at least one hook is configured
@@ -228,7 +244,8 @@ public class HooksConfig {
         || !validators.isEmpty()
         || dimensionResolverClass != null
         || tableLifecycleListenerClass != null
-        || variableNormalizerClass != null;
+        || variableNormalizerClass != null
+        || !postProcess.isEmpty();
   }
 
   /**
@@ -326,6 +343,21 @@ public class HooksConfig {
     Object errorHandlingObj = map.get("errorHandling");
     if (errorHandlingObj instanceof Map) {
       builder.errorHandling(HookErrorHandling.fromMap((Map<String, Object>) errorHandlingObj));
+    }
+
+    // Parse postProcess configurations
+    Object postProcessObj = map.get("postProcess");
+    if (postProcessObj instanceof List) {
+      List<PostProcessConfig> ppConfigs = new ArrayList<PostProcessConfig>();
+      for (Object ppItem : (List<?>) postProcessObj) {
+        if (ppItem instanceof Map) {
+          PostProcessConfig ppConfig = PostProcessConfig.fromMap((Map<String, Object>) ppItem);
+          if (ppConfig != null) {
+            ppConfigs.add(ppConfig);
+          }
+        }
+      }
+      builder.postProcess(ppConfigs);
     }
 
     return builder.build();
@@ -595,6 +627,7 @@ public class HooksConfig {
     private String variableNormalizerClass;
     private Map<String, Object> variableNormalizerConfig;
     private HookErrorHandling errorHandling;
+    private List<PostProcessConfig> postProcess;
 
     /**
      * Sets whether this table is enabled for processing.
@@ -713,6 +746,20 @@ public class HooksConfig {
      */
     public Builder errorHandling(HookErrorHandling errorHandling) {
       this.errorHandling = errorHandling;
+      return this;
+    }
+
+    /**
+     * Sets the list of post-processing configurations.
+     *
+     * <p>Post-processing scripts are executed after table materialization completes.
+     * This is useful for GPU-based bulk operations like embedding generation.
+     *
+     * @param postProcess List of PostProcessConfig
+     * @return This builder
+     */
+    public Builder postProcess(List<PostProcessConfig> postProcess) {
+      this.postProcess = postProcess;
       return this;
     }
 

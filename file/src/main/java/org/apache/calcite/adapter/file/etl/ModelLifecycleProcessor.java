@@ -673,6 +673,12 @@ public class ModelLifecycleProcessor {
             org.apache.calcite.util.EnvironmentVariableSubstitutor.substitute((String) materializeDir));
       }
 
+      // Copy postProcess for schema-level post-processing scripts (GPU embeddings, VSS refresh, etc.)
+      Object postProcess = schemaMap.get("postProcess");
+      if (postProcess != null) {
+        configMap.put("postProcess", postProcess);
+      }
+
       return SchemaConfig.fromMap(configMap);
     } catch (Exception e) {
       LOGGER.error("Error loading schema config from {}", resourcePath, e);

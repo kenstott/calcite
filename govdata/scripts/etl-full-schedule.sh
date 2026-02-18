@@ -316,7 +316,8 @@ while IFS='|' read -r job_num schema source type year cik_group filing_types; do
       "fetchStockPrices": false,
       "startYear": $year,
       "endYear": $year,
-      "autoDownload": true
+      "autoDownload": true,
+      "deferEmbeddings": true
     }
   }]
 }
@@ -456,31 +457,10 @@ echo "Completed: $COMPLETED"
 echo "Failed: $FAILED"
 echo "=============================================="
 
-# Rebuild and upload VSS index if any SEC jobs completed
-if [[ $COMPLETED -gt 0 ]]; then
-    # Extract unique years from SEC jobs (format: num|sec|cik_name|type|year|...)
-    SEC_YEARS=$(echo "$JOBS" | grep "|sec|" | awk -F'|' '{print $5}' | sort -rn | uniq)
-
-    if [[ -n "$SEC_YEARS" ]]; then
-        echo ""
-        echo "=============================================="
-        echo "Rebuilding VSS Index"
-        echo "=============================================="
-
-        VSS_SCRIPT="$SCRIPT_DIR/vss.sh"
-        if [[ -x "$VSS_SCRIPT" ]]; then
-            for YEAR in $SEC_YEARS; do
-                echo "Refreshing VSS for year $YEAR..."
-                "$VSS_SCRIPT" refresh "$YEAR" || echo "Warning: VSS refresh for $YEAR failed"
-            done
-
-            # Upload to S3/R2 for client distribution
-            echo "Uploading VSS to cloud storage..."
-            "$VSS_SCRIPT" upload || echo "Warning: VSS upload failed"
-
-            echo "VSS rebuild complete"
-        else
-            echo "Warning: VSS script not found at $VSS_SCRIPT"
-        fi
-    fi
-fi
+# Post-processing (GPU embeddings + VSS index) runs automatically per-job
+# via schema-level postProcess configuration in sec-schema.yaml.
+# This enables parallel job execution - each job handles its own post-processing.
+#
+# Schema postProcess runs after each job's tables are materialized:
+#   1. gpu_embeddings: scripts/vss-gpu-runner.sh - generates embeddings on GPU
+#   2. vss_refresh: scripts/vss.sh refresh - rebuilds HNSW index cache

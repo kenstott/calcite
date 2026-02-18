@@ -342,8 +342,43 @@ public interface StorageProvider {
           }
           break;
         default:
-          throw new IllegalArgumentException("Unsupported column type: " + column.getType()
-              + " for column: " + column.getName());
+          // Handle array types like array<double>, array<float>, array<string>
+          if (colType.startsWith("array<") && colType.endsWith(">")) {
+            String elementType = colType.substring(6, colType.length() - 1);
+            org.apache.avro.Schema elementSchema;
+            switch (elementType.toLowerCase()) {
+              case "double":
+                elementSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.DOUBLE);
+                break;
+              case "float":
+                elementSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.FLOAT);
+                break;
+              case "int":
+              case "integer":
+                elementSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT);
+                break;
+              case "long":
+                elementSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.LONG);
+                break;
+              case "string":
+                elementSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING);
+                break;
+              default:
+                throw new IllegalArgumentException("Unsupported array element type: " + elementType
+                    + " for column: " + column.getName());
+            }
+            org.apache.avro.Schema arraySchema = org.apache.avro.Schema.createArray(elementSchema);
+            if (column.isNullable()) {
+              fields = fields.name(column.getName()).doc(column.getComment())
+                  .type().unionOf().nullType().and().type(arraySchema).endUnion().noDefault();
+            } else {
+              fields = fields.name(column.getName()).doc(column.getComment())
+                  .type(arraySchema).noDefault();
+            }
+          } else {
+            throw new IllegalArgumentException("Unsupported column type: " + column.getType()
+                + " for column: " + column.getName());
+          }
       }
     }
 

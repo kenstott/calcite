@@ -214,7 +214,7 @@ public class DocumentETLProcessor {
         } catch (IOException e) {
           documentsFailed++;
           String errorMsg = "Failed to process document " + docVariables + ": " + e.getMessage();
-          LOGGER.warn(errorMsg);
+          LOGGER.warn(errorMsg, e);
           errors.add(errorMsg);
 
           // Continue processing remaining documents

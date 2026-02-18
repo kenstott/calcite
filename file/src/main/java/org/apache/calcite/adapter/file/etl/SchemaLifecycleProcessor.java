@@ -183,30 +183,45 @@ public class SchemaLifecycleProcessor {
           Map<String, DimensionConfig> resolvedDimensions =
               tableListener.resolveDimensions(tableContext, tableConfig.getDimensions());
 
-          // Source phase hooks - called before ETL pipeline starts
-          tableListener.beforeSource(tableContext);
+          // Check if table has source config - tables without source only need hook processing
+          boolean hasSource = tableConfig.getSource() != null
+              || tableConfig.getRawSourceConfig() != null;
 
-          // Execute the ETL pipeline for this table (source + materialize are interleaved)
           long sourceStart = System.currentTimeMillis();
           EtlResult tableResult;
-          try {
-            // Materialize phase hooks - called when pipeline starts writing
-            tableListener.beforeMaterialize(tableContext);
-            tableResult = processTable(tableContext, tableListener, resolvedDimensions);
-          } catch (Exception sourceEx) {
-            // Source or materialize error
-            boolean continueAfterSourceError = tableListener.onSourceError(tableContext, sourceEx);
-            boolean continueAfterMaterializeError = tableListener.onMaterializeError(tableContext, sourceEx);
-            if (!continueAfterSourceError || !continueAfterMaterializeError) {
-              throw sourceEx;
-            }
-            // Create failed result
+
+          if (!hasSource) {
+            // No source config - skip ETL pipeline, run hooks only (e.g., for post-materialization)
+            LOGGER.info("Table '{}' has no source - running hooks only", tableName);
             tableResult = EtlResult.builder()
                 .pipelineName(tableName)
-                .failed(true)
-                .failureMessage(sourceEx.getMessage())
-                .elapsedMs(System.currentTimeMillis() - sourceStart)
+                .failed(false)
+                .elapsedMs(0)
                 .build();
+          } else {
+            // Source phase hooks - called before ETL pipeline starts
+            tableListener.beforeSource(tableContext);
+
+            // Execute the ETL pipeline for this table (source + materialize are interleaved)
+            try {
+              // Materialize phase hooks - called when pipeline starts writing
+              tableListener.beforeMaterialize(tableContext);
+              tableResult = processTable(tableContext, tableListener, resolvedDimensions);
+            } catch (Exception sourceEx) {
+              // Source or materialize error
+              boolean continueAfterSourceError = tableListener.onSourceError(tableContext, sourceEx);
+              boolean continueAfterMaterializeError = tableListener.onMaterializeError(tableContext, sourceEx);
+              if (!continueAfterSourceError || !continueAfterMaterializeError) {
+                throw sourceEx;
+              }
+              // Create failed result
+              tableResult = EtlResult.builder()
+                  .pipelineName(tableName)
+                  .failed(true)
+                  .failureMessage(sourceEx.getMessage())
+                  .elapsedMs(System.currentTimeMillis() - sourceStart)
+                  .build();
+            }
           }
           long sourceDuration = System.currentTimeMillis() - sourceStart;
 
@@ -214,16 +229,26 @@ public class SchemaLifecycleProcessor {
           SourceResult sourceResult = tableResult.isFailed()
               ? SourceResult.error(tableResult.getFailureMessage(), sourceDuration, null)
               : SourceResult.success(tableResult.getTotalRows(), 0, sourceDuration, null);
-          tableListener.afterSource(tableContext, sourceResult);
+          if (hasSource) {
+            tableListener.afterSource(tableContext, sourceResult);
+          }
 
           // Materialize phase complete - create result with stats from EtlResult
           MaterializeResult materializeResult = tableResult.isFailed()
               ? MaterializeResult.error(tableResult.getFailureMessage(), sourceDuration)
               : MaterializeResult.success(tableResult.getTotalRows(), -1, sourceDuration);
-          tableListener.afterMaterialize(tableContext, materializeResult);
+          if (hasSource) {
+            tableListener.afterMaterialize(tableContext, materializeResult);
+          }
 
-          // Table post-processing
+          // Table post-processing - always run (handles bulkGenerator, etc.)
           tableListener.afterTable(tableContext, tableResult);
+
+          // Execute table-level postProcess hooks if configured
+          HooksConfig hooks = tableConfig.getHooks();
+          if (hooks != null && !hooks.getPostProcess().isEmpty()) {
+            executeTablePostProcess(tableContext, hooks.getPostProcess(), tableResult);
+          }
 
           resultBuilder.addTableResult(tableName, tableResult);
           LOGGER.info("Table '{}' complete: {}", tableName, tableResult);
@@ -260,12 +285,15 @@ public class SchemaLifecycleProcessor {
         }
       }
 
-      // Phase 3: Schema post-processing
+      // Phase 4: Execute schema-level post-processing scripts
+      executeSchemaPostProcessing(schemaContext);
+
+      // Phase 5: Schema post-processing hooks
       long elapsed = System.currentTimeMillis() - startTime;
       resultBuilder.elapsedMs(elapsed);
       SchemaResult result = resultBuilder.build();
 
-      LOGGER.info("Phase 3: Schema post-processing");
+      LOGGER.info("Phase 5: Schema post-processing hooks");
       schemaListener.afterSchema(schemaContext, result);
 
       LOGGER.info("Schema '{}' processing complete: {}", schemaName, result);
@@ -377,6 +405,195 @@ public class SchemaLifecycleProcessor {
 
     // Fall back to listener's fetchData hook
     return (cfg, variables) -> listener.fetchData(context, variables);
+  }
+
+  /**
+   * Executes schema-level post-processing scripts.
+   *
+   * <p>Post-processing scripts are executed after all tables have been materialized.
+   * They run in order, respecting any dependencies defined between them.
+   * Common use cases include GPU-based embedding generation and VSS index rebuilding.
+   *
+   * @param schemaContext Schema context
+   */
+  private void executeSchemaPostProcessing(SchemaContext schemaContext) {
+    List<PostProcessConfig> postProcessConfigs = config.getPostProcess();
+    if (postProcessConfigs == null || postProcessConfigs.isEmpty()) {
+      LOGGER.debug("No schema-level post-processing scripts configured");
+      return;
+    }
+
+    LOGGER.info("Phase 4: Executing {} schema-level post-processing scripts",
+        postProcessConfigs.size());
+
+    // Determine base directory for script execution
+    // Use the govdata root directory (parent of materialize directory)
+    java.nio.file.Path baseDir;
+    if (materializeDirectory != null) {
+      // If materializeDirectory is like /root/calcite/govdata/.aperio/sec or s3://bucket/source=sec
+      // We want the govdata root for script execution
+      String matDir = materializeDirectory;
+      if (matDir.startsWith("s3://")) {
+        // For S3, use current working directory as script base
+        baseDir = java.nio.file.Paths.get(System.getProperty("user.dir"));
+      } else {
+        // For local paths, go up from .aperio/sec to govdata
+        java.nio.file.Path matPath = java.nio.file.Paths.get(matDir);
+        // Check if path contains .aperio and navigate up
+        if (matPath.toString().contains(".aperio")) {
+          java.nio.file.Path parent = matPath;
+          while (parent != null && !parent.endsWith("govdata")) {
+            parent = parent.getParent();
+          }
+          baseDir = parent != null ? parent : matPath.getParent();
+        } else {
+          baseDir = matPath.getParent();
+        }
+      }
+    } else {
+      baseDir = java.nio.file.Paths.get(System.getProperty("user.dir"));
+    }
+
+    LOGGER.info("Post-processing base directory: {}", baseDir);
+
+    // Create executor
+    PostProcessExecutor executor = new PostProcessExecutor(baseDir);
+
+    // Build variables map for substitution
+    Map<String, String> variables = new java.util.HashMap<>();
+    variables.put("schema", config.getName());
+
+    // Track completed post-processes for dependency resolution
+    java.util.Set<String> completed = new java.util.HashSet<>();
+
+    for (PostProcessConfig ppConfig : postProcessConfigs) {
+      String name = ppConfig.getName();
+
+      // Check dependencies
+      List<String> dependsOn = ppConfig.getDependsOn();
+      if (dependsOn != null && !dependsOn.isEmpty()) {
+        boolean dependenciesMet = true;
+        for (String dep : dependsOn) {
+          if (!completed.contains(dep)) {
+            LOGGER.warn("Post-process '{}' depends on '{}' which has not completed",
+                name, dep);
+            dependenciesMet = false;
+          }
+        }
+        if (!dependenciesMet) {
+          LOGGER.warn("Skipping post-process '{}' due to unmet dependencies", name);
+          continue;
+        }
+      }
+
+      try {
+        boolean success = executor.execute(ppConfig, variables);
+        if (success) {
+          completed.add(name);
+        }
+      } catch (PostProcessExecutor.PostProcessException e) {
+        // If onFailure=ERROR, the exception is thrown
+        LOGGER.error("Post-process '{}' failed with error: {}", name, e.getMessage());
+        throw new RuntimeException("Schema post-processing failed: " + name, e);
+      }
+    }
+
+    LOGGER.info("Phase 4 complete: {} of {} post-processing scripts executed",
+        completed.size(), postProcessConfigs.size());
+  }
+
+  /**
+   * Executes table-level post-processing scripts.
+   *
+   * <p>Post-processing scripts are executed after the table has been materialized
+   * or after hooks-only processing completes. Common use cases include GPU-based
+   * embedding generation for vectorized_chunks tables.
+   *
+   * @param tableContext Table context
+   * @param postProcessConfigs List of post-process configurations from hooks
+   * @param tableResult Result from table processing
+   */
+  private void executeTablePostProcess(TableContext tableContext,
+      List<PostProcessConfig> postProcessConfigs, EtlResult tableResult) {
+    String tableName = tableContext.getTableName();
+
+    if (postProcessConfigs == null || postProcessConfigs.isEmpty()) {
+      LOGGER.debug("No table-level post-processing scripts for '{}'", tableName);
+      return;
+    }
+
+    LOGGER.info("Executing {} post-processing scripts for table '{}'",
+        postProcessConfigs.size(), tableName);
+
+    // Determine base directory for script execution
+    java.nio.file.Path baseDir;
+    if (materializeDirectory != null) {
+      String matDir = materializeDirectory;
+      if (matDir.startsWith("s3://")) {
+        baseDir = java.nio.file.Paths.get(System.getProperty("user.dir"));
+      } else {
+        java.nio.file.Path matPath = java.nio.file.Paths.get(matDir);
+        if (matPath.toString().contains(".aperio")) {
+          java.nio.file.Path parent = matPath;
+          while (parent != null && !parent.endsWith("govdata")) {
+            parent = parent.getParent();
+          }
+          baseDir = parent != null ? parent : matPath.getParent();
+        } else {
+          baseDir = matPath.getParent();
+        }
+      }
+    } else {
+      baseDir = java.nio.file.Paths.get(System.getProperty("user.dir"));
+    }
+
+    PostProcessExecutor executor = new PostProcessExecutor(baseDir);
+
+    // Build variables map for substitution
+    Map<String, String> variables = new java.util.HashMap<>();
+    variables.put("schema", config.getName());
+    variables.put("table", tableName);
+    variables.put("rows", String.valueOf(tableResult.getTotalRows()));
+
+    // Track completed post-processes for dependency resolution
+    java.util.Set<String> completed = new java.util.HashSet<>();
+
+    for (PostProcessConfig ppConfig : postProcessConfigs) {
+      String name = ppConfig.getName();
+
+      // Check dependencies
+      List<String> dependsOn = ppConfig.getDependsOn();
+      if (dependsOn != null && !dependsOn.isEmpty()) {
+        boolean dependenciesMet = true;
+        for (String dep : dependsOn) {
+          if (!completed.contains(dep)) {
+            LOGGER.warn("Table '{}' post-process '{}' depends on '{}' which has not completed",
+                tableName, name, dep);
+            dependenciesMet = false;
+          }
+        }
+        if (!dependenciesMet) {
+          LOGGER.warn("Skipping table '{}' post-process '{}' due to unmet dependencies",
+              tableName, name);
+          continue;
+        }
+      }
+
+      try {
+        boolean success = executor.execute(ppConfig, variables);
+        if (success) {
+          completed.add(name);
+          LOGGER.info("Table '{}' post-process '{}' completed successfully", tableName, name);
+        }
+      } catch (PostProcessExecutor.PostProcessException e) {
+        LOGGER.error("Table '{}' post-process '{}' failed: {}", tableName, name, e.getMessage());
+        // Re-throw if onFailure=ERROR (the execute method throws in that case)
+        throw new RuntimeException("Table post-processing failed: " + tableName + "/" + name, e);
+      }
+    }
+
+    LOGGER.info("Table '{}' post-processing complete: {} of {} scripts executed",
+        tableName, completed.size(), postProcessConfigs.size());
   }
 
   /**

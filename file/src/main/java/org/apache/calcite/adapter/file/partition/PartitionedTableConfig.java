@@ -775,6 +775,12 @@ public class PartitionedTableConfig {
           String comment = (String) m.get("comment");
           String expression = (String) m.get("expression");
           String csvColumn = (String) m.get("csvColumn");
+          // Columns with bulkGenerator are deferred (computed later via GPU/batch processing)
+          // Mark them as computed so they're skipped during initial Avro write
+          Object bulkGenerator = m.get("bulkGenerator");
+          if (bulkGenerator != null && expression == null) {
+            expression = "__BULK_GENERATED__"; // Placeholder to mark as computed
+          }
           if (name != null) {
             result.add(new TableColumn(name, type, nullable, comment, expression, csvColumn));
           }

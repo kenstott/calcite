@@ -66,6 +66,7 @@ public class SchemaConfig {
   private final Map<String, BulkDownloadConfig> bulkDownloads;
   private final List<EtlPipelineConfig> tables;
   private final SchemaHooksConfig hooks;
+  private final List<PostProcessConfig> postProcess;
   private final Map<String, Object> metadata;
 
   private SchemaConfig(Builder builder) {
@@ -79,6 +80,9 @@ public class SchemaConfig {
         ? Collections.unmodifiableList(new ArrayList<EtlPipelineConfig>(builder.tables))
         : Collections.<EtlPipelineConfig>emptyList();
     this.hooks = builder.hooks != null ? builder.hooks : SchemaHooksConfig.empty();
+    this.postProcess = builder.postProcess != null
+        ? Collections.unmodifiableList(new ArrayList<PostProcessConfig>(builder.postProcess))
+        : Collections.<PostProcessConfig>emptyList();
     this.metadata = builder.metadata != null
         ? Collections.unmodifiableMap(builder.metadata)
         : Collections.<String, Object>emptyMap();
@@ -151,6 +155,18 @@ public class SchemaConfig {
    */
   public SchemaHooksConfig getHooks() {
     return hooks;
+  }
+
+  /**
+   * Returns the schema-level post-processing scripts.
+   *
+   * <p>These scripts are executed after all tables are materialized.
+   * They run in order, respecting any dependencies defined between them.
+   *
+   * @return List of post-process configurations, empty if none configured
+   */
+  public List<PostProcessConfig> getPostProcess() {
+    return postProcess;
   }
 
   /**
@@ -248,8 +264,18 @@ public class SchemaConfig {
             continue;
           }
           // Skip tables without source configuration (metadata-only tables)
+          // Exception: tables with hooks enabled can skip source (hooks-only processing)
           if (tableMap.get("source") == null) {
-            continue;
+            Object hooksObj = tableMap.get("hooks");
+            boolean hooksEnabled = false;
+            if (hooksObj instanceof Map) {
+              Object enabledObj = ((Map<?, ?>) hooksObj).get("enabled");
+              hooksEnabled = Boolean.TRUE.equals(enabledObj)
+                  || "true".equalsIgnoreCase(String.valueOf(enabledObj));
+            }
+            if (!hooksEnabled) {
+              continue;
+            }
           }
           EtlPipelineConfig tableConfig = EtlPipelineConfig.fromMap(tableMap);
           if (tableConfig != null) {
@@ -263,6 +289,21 @@ public class SchemaConfig {
     Object hooksObj = map.get("hooks");
     if (hooksObj instanceof Map) {
       builder.hooks(SchemaHooksConfig.fromMap((Map<String, Object>) hooksObj));
+    }
+
+    // Parse postProcess configurations
+    Object postProcessObj = map.get("postProcess");
+    if (postProcessObj instanceof List) {
+      List<PostProcessConfig> postProcessConfigs = new ArrayList<PostProcessConfig>();
+      for (Object ppObj : (List<?>) postProcessObj) {
+        if (ppObj instanceof Map) {
+          PostProcessConfig ppConfig = PostProcessConfig.fromMap((Map<String, Object>) ppObj);
+          if (ppConfig != null) {
+            postProcessConfigs.add(ppConfig);
+          }
+        }
+      }
+      builder.postProcess(postProcessConfigs);
     }
 
     // Store remaining keys as metadata
@@ -281,6 +322,7 @@ public class SchemaConfig {
     private Map<String, BulkDownloadConfig> bulkDownloads;
     private List<EtlPipelineConfig> tables;
     private SchemaHooksConfig hooks;
+    private List<PostProcessConfig> postProcess;
     private Map<String, Object> metadata;
 
     public Builder name(String name) {
@@ -326,6 +368,19 @@ public class SchemaConfig {
 
     public Builder hooks(SchemaHooksConfig hooks) {
       this.hooks = hooks;
+      return this;
+    }
+
+    public Builder postProcess(List<PostProcessConfig> postProcess) {
+      this.postProcess = postProcess;
+      return this;
+    }
+
+    public Builder addPostProcess(PostProcessConfig config) {
+      if (this.postProcess == null) {
+        this.postProcess = new ArrayList<PostProcessConfig>();
+      }
+      this.postProcess.add(config);
       return this;
     }
 

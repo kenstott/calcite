@@ -84,6 +84,12 @@ public class IcebergMaterializer {
   private final int maxRetries;
   private final long retryDelayMs;
 
+  /** Tracks total rows written during current materialize() call. Reset per call. */
+  private long totalRowsWritten;
+
+  /** Cache of source accessions per year - populated once via S3 LIST, used for all tables. */
+  private final Map<String, Set<String>> sourceAccessionsCache = new HashMap<String, Set<String>>();
+
   /**
    * Creates a materializer with default retry settings.
    *
@@ -522,6 +528,7 @@ public class IcebergMaterializer {
    */
   public MaterializationResult materialize(MaterializationConfig config) throws IOException {
     long startTime = System.currentTimeMillis();
+    totalRowsWritten = 0;  // Reset per call
     LOGGER.info("Starting materialization for '{}' -> '{}'",
         config.getDescription(), config.getTargetTableId());
 
@@ -603,8 +610,8 @@ public class IcebergMaterializer {
     LOGGER.info("Materialization complete: {}", result);
 
     // Run maintenance and record completion if we actually wrote data
-    if (result.isFullySuccessful() && successCount > 0) {
-      writer.runMaintenance(7, 1);
+    if (result.isFullySuccessful() && totalRowsWritten > 0) {
+      writer.runMaintenance(7, 365);  // 365 days for orphans = effectively disabled for append-only
 
       // Always mark table complete (with watermark if available, without otherwise)
       incrementalTracker.markTableCompleteWithSourceWatermark(
@@ -617,8 +624,10 @@ public class IcebergMaterializer {
         LOGGER.info("Recorded source file watermark {} for '{}'",
             currentSourceWatermark, config.getTargetTableId());
       } else {
-        LOGGER.info("Marked table '{}' complete ({} rows)", config.getTargetTableId(), successCount);
+        LOGGER.info("Marked table '{}' complete ({} rows)", config.getTargetTableId(), totalRowsWritten);
       }
+    } else if (result.isFullySuccessful()) {
+      LOGGER.info("Skipping maintenance for '{}' (0 rows written)", config.getTargetTableId());
     }
 
     return result;
@@ -640,7 +649,23 @@ public class IcebergMaterializer {
     while (attempts < maxRetries) {
       attempts++;
       try {
-        processBatch(config, table, batch, excludeAccessions);
+        Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions);
+        // Mark newly materialized accessions in tracker so we never re-process them
+        if (!newAccessions.isEmpty()) {
+          String accessionCol = config.getAccessionColumn();
+          String yearValue = batch.get("year");
+          for (String accession : newAccessions) {
+            Map<String, String> accessionKey = new LinkedHashMap<String, String>();
+            if (yearValue != null) {
+              accessionKey.put("year", yearValue);
+            }
+            accessionKey.put(accessionCol, accession);
+            incrementalTracker.markProcessed(config.getTargetTableId(),
+                config.getSourceTableName(), accessionKey, config.getTargetTableId());
+          }
+          LOGGER.info("Tracked {} newly materialized accessions for {}/year={}",
+              newAccessions.size(), config.getTargetTableId(), yearValue);
+        }
         return true;
       } catch (CommitFailedException e) {
         // Another writer committed - assume idempotent, skip
@@ -685,9 +710,11 @@ public class IcebergMaterializer {
    *
    * @param excludeAccessions Accession numbers to skip (already processed)
    */
-  private void processBatch(MaterializationConfig config, Table table,
+  private Set<String> processBatch(MaterializationConfig config, Table table,
       Map<String, String> batch, Set<String> excludeAccessions) throws SQLException, IOException {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
+
+    Set<String> newAccessions = new HashSet<String>();
 
     try (Connection conn = getDuckDBConnection(config.getThreads())) {
       // Build source pattern with batch filters applied
@@ -718,16 +745,46 @@ public class IcebergMaterializer {
         }
       }
 
+      // Fast skip: compare tracked accessions against source accessions from S3 LIST cache
+      String year = batch.get("year");
+      if (year != null && !excludeAccessions.isEmpty()) {
+        Set<String> sourceAccessions = getSourceAccessions(config.getSourcePattern(), year);
+        if (sourceAccessions != null && !sourceAccessions.isEmpty()) {
+          // Check if all source accessions are already tracked
+          boolean allTracked = true;
+          for (String sourceAcc : sourceAccessions) {
+            if (!excludeAccessions.contains(sourceAcc)) {
+              allTracked = false;
+              break;
+            }
+          }
+          if (allTracked) {
+            LOGGER.info("Fast skip: all {} source accessions for year {} already tracked - skipping query",
+                sourceAccessions.size(), year);
+            return newAccessions;  // Return empty - nothing new to process
+          }
+          LOGGER.debug("Source has {} accessions, {} tracked - need to query for new data",
+              sourceAccessions.size(), excludeAccessions.size());
+        }
+      }
+
+      // Create temp table for exclusions if we have many accessions (anti-join is faster than NOT IN)
+      if (excludeAccessions != null && excludeAccessions.size() > 100) {
+        createExclusionTempTable(conn, config.getAccessionColumn(), excludeAccessions);
+      }
+
       // Use row batching for large tables to prevent OOM
       int rowBatchSize = config.getRowBatchSize();
       if (rowBatchSize > 0) {
         processWithRowBatchingToIceberg(config, conn, table, sourcePattern, batch,
-            partitionValues, typedPartitionFilter, rowBatchSize, excludeAccessions);
+            partitionValues, typedPartitionFilter, rowBatchSize, excludeAccessions, newAccessions);
       } else {
         processAllRowsToIceberg(config, conn, table, sourcePattern, batch,
-            partitionValues, typedPartitionFilter, excludeAccessions);
+            partitionValues, typedPartitionFilter, excludeAccessions, newAccessions);
       }
     }
+
+    return newAccessions;
   }
 
   /**
@@ -735,8 +792,8 @@ public class IcebergMaterializer {
    */
   private void processAllRowsToIceberg(MaterializationConfig config, Connection conn, Table table,
       String sourcePattern, Map<String, String> batch, Map<String, String> partitionValues,
-      Map<String, Object> typedPartitionFilter, Set<String> excludeAccessions)
-      throws SQLException, IOException {
+      Map<String, Object> typedPartitionFilter, Set<String> excludeAccessions,
+      Set<String> newAccessions) throws SQLException, IOException {
 
     String sql = buildSelectSql(config, sourcePattern, batch, excludeAccessions);
     LOGGER.debug("Executing DuckDB SELECT: {}", sql);
@@ -754,6 +811,15 @@ public class IcebergMaterializer {
       return;
     }
 
+    // Collect accession numbers from rows
+    String accessionCol = config.getAccessionColumn();
+    for (Map<String, Object> row : rows) {
+      Object val = row.get(accessionCol);
+      if (val != null) {
+        newAccessions.add(val.toString());
+      }
+    }
+
     // Write using Iceberg's native Parquet writer
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     long writeStart = System.currentTimeMillis();
@@ -762,6 +828,7 @@ public class IcebergMaterializer {
 
     if (dataFile != null) {
       writer.commitDataFiles(Collections.singletonList(dataFile), typedPartitionFilter);
+      totalRowsWritten += rows.size();
       LOGGER.info("Wrote and committed {} rows to Iceberg in {}ms", rows.size(), writeElapsed);
     }
   }
@@ -773,7 +840,8 @@ public class IcebergMaterializer {
   private void processWithRowBatchingToIceberg(MaterializationConfig config, Connection conn,
       Table table, String sourcePattern, Map<String, String> batch,
       Map<String, String> partitionValues, Map<String, Object> typedPartitionFilter,
-      int rowBatchSize, Set<String> excludeAccessions) throws SQLException, IOException {
+      int rowBatchSize, Set<String> excludeAccessions, Set<String> newAccessions)
+      throws SQLException, IOException {
 
     LOGGER.info("Row batching enabled: processing in batches of {} for {}", rowBatchSize, batch);
 
@@ -783,6 +851,7 @@ public class IcebergMaterializer {
       memStmt.execute("SET temp_directory='/tmp/duckdb_temp'");
     }
 
+    String accessionCol = config.getAccessionColumn();
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
 
@@ -808,6 +877,14 @@ public class IcebergMaterializer {
       if (rows.isEmpty()) {
         LOGGER.debug("No more rows at offset {}", processedRows);
         break;
+      }
+
+      // Collect accession numbers from rows
+      for (Map<String, Object> row : rows) {
+        Object val = row.get(accessionCol);
+        if (val != null) {
+          newAccessions.add(val.toString());
+        }
       }
 
       // Write batch to Iceberg
@@ -847,6 +924,7 @@ public class IcebergMaterializer {
     }
 
     long totalElapsed = System.currentTimeMillis() - totalStartTime;
+    totalRowsWritten += processedRows;
     LOGGER.info("Row batching completed: {} batches, {} rows in {}ms",
         batchNum, processedRows, totalElapsed);
   }
@@ -916,16 +994,23 @@ public class IcebergMaterializer {
     // Add exclusion filter for already-processed accessions
     if (excludeAccessions != null && !excludeAccessions.isEmpty()) {
       sql.append(hasWhere ? " AND " : " WHERE ");
-      sql.append(config.getAccessionColumn()).append(" NOT IN (");
-      boolean first = true;
-      for (String accession : excludeAccessions) {
-        if (!first) {
-          sql.append(", ");
+      if (excludeAccessions.size() > 100) {
+        // Use anti-join against temp table (much faster for large exclusion lists)
+        sql.append("NOT EXISTS (SELECT 1 FROM _exclusions e WHERE e.accession = ")
+            .append(config.getAccessionColumn()).append(")");
+      } else {
+        // Small exclusion list - inline NOT IN is fine
+        sql.append(config.getAccessionColumn()).append(" NOT IN (");
+        boolean first = true;
+        for (String accession : excludeAccessions) {
+          if (!first) {
+            sql.append(", ");
+          }
+          sql.append("'").append(accession).append("'");
+          first = false;
         }
-        sql.append("'").append(accession).append("'");
-        first = false;
+        sql.append(")");
       }
-      sql.append(")");
     }
 
     // Add LIMIT/OFFSET
@@ -974,16 +1059,23 @@ public class IcebergMaterializer {
     // Add exclusion filter for already-processed accessions
     if (excludeAccessions != null && !excludeAccessions.isEmpty()) {
       sql.append(hasWhere ? " AND " : " WHERE ");
-      sql.append(config.getAccessionColumn()).append(" NOT IN (");
-      boolean first = true;
-      for (String accession : excludeAccessions) {
-        if (!first) {
-          sql.append(", ");
+      if (excludeAccessions.size() > 100) {
+        // Use anti-join against temp table (much faster for large exclusion lists)
+        sql.append("NOT EXISTS (SELECT 1 FROM _exclusions e WHERE e.accession = ")
+            .append(config.getAccessionColumn()).append(")");
+      } else {
+        // Small exclusion list - inline NOT IN is fine
+        sql.append(config.getAccessionColumn()).append(" NOT IN (");
+        boolean first = true;
+        for (String accession : excludeAccessions) {
+          if (!first) {
+            sql.append(", ");
+          }
+          sql.append("'").append(accession).append("'");
+          first = false;
         }
-        sql.append("'").append(accession).append("'");
-        first = false;
+        sql.append(")");
       }
-      sql.append(")");
     }
 
     return sql.toString();
@@ -1046,6 +1138,179 @@ public class IcebergMaterializer {
     long totalElapsed = System.currentTimeMillis() - totalStartTime;
     LOGGER.info("Row batching completed: {} batches, {} rows in {}ms",
         batchNum, totalRows, totalElapsed);
+  }
+
+  /**
+   * Fast count of source records for a batch (used for skip optimization).
+   * Returns count WITHOUT exclusion filter - just base source count.
+   */
+  private long getSourceCountForBatch(Connection conn, MaterializationConfig config,
+      String sourcePattern, Map<String, String> batch) {
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT COUNT(*) FROM ");
+      if (config.getSourceFormat() == SourceFormat.JSON) {
+        sql.append("read_json('").append(sourcePattern).append("', union_by_name=true)");
+      } else {
+        sql.append("read_parquet('").append(sourcePattern)
+            .append("', hive_partitioning=true, union_by_name=true)");
+      }
+      // Add batch filters (year, etc.) but NOT exclusion filter
+      List<String> conditions = new ArrayList<String>();
+      if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+        conditions.add(config.getRowFilter());
+      }
+      for (Map.Entry<String, String> entry : batch.entrySet()) {
+        String col = entry.getKey();
+        String val = entry.getValue();
+        // Numeric columns don't need quotes
+        if (val.matches("-?\\d+")) {
+          conditions.add(String.format("\"%s\" = %s", col, val));
+        } else {
+          conditions.add(String.format("\"%s\" = '%s'", col, val));
+        }
+      }
+      if (!conditions.isEmpty()) {
+        sql.append(" WHERE ");
+        for (int i = 0; i < conditions.size(); i++) {
+          if (i > 0) sql.append(" AND ");
+          sql.append(conditions.get(i));
+        }
+      }
+
+      long startTime = System.currentTimeMillis();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql.toString())) {
+        if (rs.next()) {
+          long count = rs.getLong(1);
+          long elapsed = System.currentTimeMillis() - startTime;
+          LOGGER.debug("Fast count for {}: {} records in {}ms", batch, count, elapsed);
+          return count;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Fast count failed for {}: {}", batch, e.getMessage());
+    }
+    return -1;  // Unknown, don't skip
+  }
+
+  /**
+   * Creates a temp table with exclusion accessions for efficient anti-join filtering.
+   * This is much faster than a NOT IN clause with thousands of values.
+   */
+  private void createExclusionTempTable(Connection conn, String accessionCol,
+      Set<String> excludeAccessions) throws SQLException {
+    long startTime = System.currentTimeMillis();
+    try (Statement stmt = conn.createStatement()) {
+      // Drop if exists from previous batch
+      stmt.execute("DROP TABLE IF EXISTS _exclusions");
+      // Create temp table
+      stmt.execute("CREATE TEMP TABLE _exclusions (accession VARCHAR PRIMARY KEY)");
+    }
+
+    // Batch insert using prepared statement for efficiency
+    String insertSql = "INSERT INTO _exclusions VALUES (?)";
+    try (java.sql.PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+      int batchCount = 0;
+      for (String accession : excludeAccessions) {
+        pstmt.setString(1, accession);
+        pstmt.addBatch();
+        batchCount++;
+        if (batchCount % 1000 == 0) {
+          pstmt.executeBatch();
+        }
+      }
+      if (batchCount % 1000 != 0) {
+        pstmt.executeBatch();
+      }
+    }
+
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.debug("Created exclusion temp table with {} accessions in {}ms",
+        excludeAccessions.size(), elapsed);
+  }
+
+  /**
+   * Gets source accessions for a year by listing source files via StorageProvider.
+   * Results are cached per year+suffix to avoid repeated S3 LIST operations.
+   *
+   * @param sourcePattern Source pattern with year placeholder (e.g., year=*\/*_facts.parquet)
+   * @param year The year to list accessions for
+   * @return Set of accession numbers found in source files, or null if listing fails
+   */
+  private Set<String> getSourceAccessions(String sourcePattern, String year) {
+    // Extract file suffix from source pattern (e.g., "_facts.parquet" from "year=*/*_facts.parquet")
+    String fileSuffix = "_metadata.parquet"; // default
+    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    if (lastSlashIdx > 0) {
+      String filePattern = sourcePattern.substring(lastSlashIdx + 1);
+      // Pattern is like "*_facts.parquet" - extract "_facts.parquet"
+      int starIdx = filePattern.indexOf('*');
+      if (starIdx >= 0 && starIdx < filePattern.length() - 1) {
+        fileSuffix = filePattern.substring(starIdx + 1);
+      }
+    }
+
+    // Cache key includes year and file suffix
+    String cacheKey = year + ":" + fileSuffix;
+    if (sourceAccessionsCache.containsKey(cacheKey)) {
+      return sourceAccessionsCache.get(cacheKey);
+    }
+
+    if (storageProvider == null) {
+      LOGGER.debug("No storage provider available, skipping source accession cache");
+      return null;
+    }
+
+    long startTime = System.currentTimeMillis();
+    Set<String> accessions = new HashSet<String>();
+
+    try {
+      // Build path for year directory
+      // Convert source pattern like "s3://bucket/source=sec/year=*/..." to "s3://bucket/source=sec/year=2022/"
+      String basePath = sourcePattern;
+      int yearWildcardIdx = basePath.indexOf("year=*");
+      if (yearWildcardIdx > 0) {
+        basePath = basePath.substring(0, yearWildcardIdx) + "year=" + year + "/";
+      } else {
+        // No year wildcard - can't use this optimization
+        LOGGER.debug("Source pattern doesn't have year=* wildcard, skipping source accession cache");
+        return null;
+      }
+
+      // List files in the year directory
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, false);
+      for (StorageProvider.FileEntry file : files) {
+        String fileName = file.getName();
+        // Only process files matching the table's suffix (e.g., _facts.parquet, _metadata.parquet)
+        if (!fileName.endsWith(fileSuffix)) {
+          continue;
+        }
+        // Extract accession from filename
+        // Example: 0000001750_0001104659-22-081498_facts.parquet
+        int underscoreIdx = fileName.indexOf('_');
+        if (underscoreIdx > 0) {
+          int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
+          if (secondUnderscoreIdx > 0) {
+            String accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
+            accessions.add(accession);
+          }
+        }
+      }
+
+      long elapsed = System.currentTimeMillis() - startTime;
+      LOGGER.info("Listed {} source accessions for year {} ({}) in {}ms",
+          accessions.size(), year, fileSuffix, elapsed);
+
+      // Cache the result
+      sourceAccessionsCache.put(cacheKey, accessions);
+      return accessions;
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to list source accessions for year {} ({}): {}",
+          year, fileSuffix, e.getMessage());
+      return null;
+    }
   }
 
   /**
@@ -1356,40 +1621,33 @@ public class IcebergMaterializer {
     String accessionCol = config.getAccessionColumn();
     String yearValue = batch.get("year");
 
-    // Step 1: Get accessions from tracker (cheap, local)
+    // Step 1: Get accessions from tracker (cheap, local DuckDB)
     Set<String> trackedAccessions = getTrackedAccessions(config.getTargetTableId(), yearValue);
     excludeAccessions.addAll(trackedAccessions);
     if (!trackedAccessions.isEmpty()) {
-      LOGGER.debug("Found {} tracked accessions for {}/year={}", trackedAccessions.size(),
-          config.getTargetTableId(), yearValue);
+      LOGGER.info("Found {} tracked accessions for {}/year={}, skipping S3 scan",
+          trackedAccessions.size(), config.getTargetTableId(), yearValue);
     }
 
-    // Step 2: Self-healing - check Iceberg for accessions not in tracker
-    // Only do this if we have an Iceberg table to check
-    if (table != null) {
+    // Step 2: Self-healing - only scan Iceberg/S3 when tracker has no data for this partition
+    if (trackedAccessions.isEmpty() && table != null) {
       Set<String> icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
 
-      // Find accessions in Iceberg but not in tracker (need to add to tracker for self-healing)
+      // Add to tracker so we never scan S3 again for these accessions
       for (String accession : icebergAccessions) {
-        if (!trackedAccessions.contains(accession)) {
-          // Self-healing: mark this accession as processed in tracker
-          Map<String, String> accessionKey = new LinkedHashMap<String, String>();
-          if (yearValue != null) {
-            accessionKey.put("year", yearValue);
-          }
-          accessionKey.put(accessionCol, accession);
-          incrementalTracker.markProcessed(config.getTargetTableId(),
-              config.getSourceTableName(), accessionKey, config.getTargetTableId());
-          LOGGER.debug("Self-healing: marked accession {} as processed", accession);
+        Map<String, String> accessionKey = new LinkedHashMap<String, String>();
+        if (yearValue != null) {
+          accessionKey.put("year", yearValue);
         }
+        accessionKey.put(accessionCol, accession);
+        incrementalTracker.markProcessed(config.getTargetTableId(),
+            config.getSourceTableName(), accessionKey, config.getTargetTableId());
       }
       excludeAccessions.addAll(icebergAccessions);
 
       if (!icebergAccessions.isEmpty()) {
-        LOGGER.info("Self-healing: found {} accessions in Iceberg for {}/year={} ({} new to tracker)",
-            icebergAccessions.size(), config.getTargetTableId(), yearValue,
-            icebergAccessions.size() - (icebergAccessions.size() -
-                (excludeAccessions.size() - trackedAccessions.size())));
+        LOGGER.info("Self-healing: found {} accessions in Iceberg for {}/year={}, added to tracker",
+            icebergAccessions.size(), config.getTargetTableId(), yearValue);
       }
     }
 
@@ -1401,12 +1659,22 @@ public class IcebergMaterializer {
    */
   private Set<String> getTrackedAccessions(String tableId, String yearValue) {
     Set<String> accessions = new HashSet<String>();
-    // Query tracker for all accessions for this table/year
-    // The tracker stores entries like {year=2021, accession_number=0001234567-21-000123}
     try {
-      // Use the tracker's batch query capability if available
-      // For now, we rely on the Iceberg check for self-healing
-      // The tracker will be populated as we process new accessions
+      Set<Map<String, String>> allProcessed = incrementalTracker.getProcessedKeyValues(tableId);
+      for (Map<String, String> keyValues : allProcessed) {
+        if (yearValue != null) {
+          String entryYear = keyValues.get("year");
+          if (!yearValue.equals(entryYear)) {
+            continue;
+          }
+        }
+        for (Map.Entry<String, String> entry : keyValues.entrySet()) {
+          if (!"year".equals(entry.getKey())) {
+            accessions.add(entry.getValue());
+            break;
+          }
+        }
+      }
     } catch (Exception e) {
       LOGGER.debug("Error getting tracked accessions: {}", e.getMessage());
     }

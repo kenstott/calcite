@@ -3849,31 +3849,44 @@ public class XbrlToParquetConverter implements FileConverter {
     List<SecTextVectorizer.TextBlob> footnoteBlobs = extractFootnoteBlobs(doc);
 
     // Convert pre-extracted MDA data to TextBlobs (uses SAME text as mda_sections)
+    LOGGER.info("VECTORIZATION: Converting {} MDA sections to blobs", mdaData != null ? mdaData.size() : 0);
     List<SecTextVectorizer.TextBlob> mdaBlobs = convertMDADataToBlobs(mdaData);
+    LOGGER.info("VECTORIZATION: Created {} MDA blobs", mdaBlobs.size());
 
     // Build relationship map (who references whom)
+    LOGGER.info("VECTORIZATION: Building reference map from {} footnotes and {} MDA blobs",
+        footnoteBlobs.size(), mdaBlobs.size());
     Map<String, List<String>> references = buildReferenceMap(footnoteBlobs, mdaBlobs);
+    LOGGER.info("VECTORIZATION: Built reference map with {} entries", references.size());
 
     // Extract financial facts for enrichment
+    LOGGER.info("VECTORIZATION: Extracting financial facts for vectorization");
     Map<String, SecTextVectorizer.FinancialFact> facts = extractFinancialFactsForVectorization(doc);
+    LOGGER.info("VECTORIZATION: Extracted {} financial facts", facts.size());
 
     // Create vectorizer instance
     SecTextVectorizer vectorizer = new SecTextVectorizer();
 
     // Generate individual enriched chunks with filing context for text normalization
     // filingDate and periodEnd allow TextNormalizer to resolve relative dates
+    LOGGER.info("VECTORIZATION: Creating individual chunks with filingDate={}, periodEnd={}", filingDate, periodEnd);
     List<SecTextVectorizer.ContextualChunk> individualChunks =
         vectorizer.createIndividualChunks(footnoteBlobs, mdaBlobs,
             new ArrayList<>(), references, facts, filingDate, periodEnd);
+    LOGGER.info("VECTORIZATION: Created {} individual chunks", individualChunks.size());
 
     // Also generate concept group chunks (existing functionality)
+    LOGGER.info("VECTORIZATION: Creating concept group chunks from document");
     List<SecTextVectorizer.ContextualChunk> conceptChunks =
         vectorizer.createContextualChunks(doc, sourcePath);
+    LOGGER.info("VECTORIZATION: Created {} concept group chunks", conceptChunks.size());
 
     // Combine all chunks
     List<SecTextVectorizer.ContextualChunk> allChunks = new ArrayList<>();
     allChunks.addAll(individualChunks);
     allChunks.addAll(conceptChunks);
+    LOGGER.info("Total chunks for vectorization: {} (individual: {}, concept: {})",
+        allChunks.size(), individualChunks.size(), conceptChunks.size());
 
     // Extract accession number from output path (e.g., CIK_ACCESSION_chunks.parquet)
     String accessionNumber = null;

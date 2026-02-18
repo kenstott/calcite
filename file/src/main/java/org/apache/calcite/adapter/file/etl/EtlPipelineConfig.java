@@ -83,6 +83,7 @@ public class EtlPipelineConfig {
   public static final String SOURCE_TYPE_DOCUMENT = "document";
 
   private final String name;
+  private final boolean enabled;
   private final String sourceType;
   private final HttpSourceConfig source;
   private final Map<String, Object> rawSourceConfig;
@@ -94,6 +95,7 @@ public class EtlPipelineConfig {
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
+    this.enabled = builder.enabled;
     this.sourceType = builder.sourceType != null ? builder.sourceType : SOURCE_TYPE_HTTP;
     this.source = builder.source;
     this.rawSourceConfig = builder.rawSourceConfig;
@@ -117,6 +119,17 @@ public class EtlPipelineConfig {
    */
   public String getName() {
     return name;
+  }
+
+  /**
+   * Returns whether this table is enabled for ETL processing.
+   *
+   * <p>When false, the table is skipped during ETL pipeline execution.
+   *
+   * @return true if enabled (default), false to skip
+   */
+  public boolean isEnabled() {
+    return enabled;
   }
 
   /**
@@ -199,6 +212,12 @@ public class EtlPipelineConfig {
     Builder builder = builder();
     builder.name((String) map.get("name"));
 
+    // Parse table-level enabled flag with environment variable interpolation
+    Object enabledObj = map.get("enabled");
+    if (enabledObj != null) {
+      builder.enabled(parseEnabledValue(enabledObj));
+    }
+
     Map<String, Object> sourceMap = toMap(map.get("source"));
     if (sourceMap != null) {
       // Detect source type - default to "http" if not specified
@@ -280,6 +299,52 @@ public class EtlPipelineConfig {
       }
     }
     return comments;
+  }
+
+  /**
+   * Parses an enabled value with environment variable interpolation.
+   *
+   * <p>Supports:
+   * <ul>
+   *   <li>Boolean values (true/false)</li>
+   *   <li>String "true"/"false"</li>
+   *   <li>Environment variable syntax: "${VAR_NAME:default}"</li>
+   * </ul>
+   *
+   * @param value The value from YAML (Boolean or String)
+   * @return Resolved boolean value
+   */
+  private static boolean parseEnabledValue(Object value) {
+    if (value instanceof Boolean) {
+      return (Boolean) value;
+    }
+    if (value instanceof String) {
+      String strValue = (String) value;
+
+      // Handle environment variable syntax: ${VAR_NAME:default}
+      if (strValue.startsWith("${") && strValue.endsWith("}")) {
+        String varSpec = strValue.substring(2, strValue.length() - 1);
+        int colonIdx = varSpec.indexOf(':');
+        String envVar;
+        String defaultValue;
+        if (colonIdx >= 0) {
+          envVar = varSpec.substring(0, colonIdx);
+          defaultValue = varSpec.substring(colonIdx + 1);
+        } else {
+          envVar = varSpec;
+          defaultValue = "true";
+        }
+
+        String envValue = System.getenv(envVar);
+        if (envValue != null && !envValue.isEmpty()) {
+          return Boolean.parseBoolean(envValue);
+        }
+        return Boolean.parseBoolean(defaultValue);
+      }
+
+      return Boolean.parseBoolean(strValue);
+    }
+    return true; // Default to enabled
   }
 
   /**
@@ -497,6 +562,7 @@ public class EtlPipelineConfig {
    */
   public static class Builder {
     private String name;
+    private boolean enabled = true;  // Enabled by default
     private String sourceType;
     private HttpSourceConfig source;
     private Map<String, Object> rawSourceConfig;
@@ -508,6 +574,11 @@ public class EtlPipelineConfig {
 
     public Builder name(String name) {
       this.name = name;
+      return this;
+    }
+
+    public Builder enabled(boolean enabled) {
+      this.enabled = enabled;
       return this;
     }
 
@@ -555,11 +626,13 @@ public class EtlPipelineConfig {
       if (name == null || name.isEmpty()) {
         throw new IllegalArgumentException("Pipeline name is required");
       }
-      // For HTTP sources, require HttpSourceConfig; for other types, require rawSourceConfig
-      if (source == null && rawSourceConfig == null) {
+      // Source is required unless hooks are enabled (hooks-only tables skip ETL pipeline)
+      boolean hooksEnabled = hooks != null && hooks.isEnabled();
+      if (source == null && rawSourceConfig == null && !hooksEnabled) {
         throw new IllegalArgumentException("Source configuration is required");
       }
-      if (materialize == null) {
+      // Materialize is required unless this is a hooks-only table
+      if (materialize == null && !hooksEnabled) {
         throw new IllegalArgumentException("Materialize configuration is required");
       }
       return new EtlPipelineConfig(this);

@@ -55,28 +55,29 @@ class StooqDownloaderTest {
 
   @Test void testUrlConstructionBasic() {
     String url = downloader.buildStooqUrl("AAPL", null, null);
-    assertEquals("https://stooq.com/q/d/l/?s=aapl.us&i=d", url);
+    // Stooq requires uppercase ticker symbols with .US suffix
+    assertEquals("https://stooq.com/q/d/l/?s=AAPL.US&i=d", url);
   }
 
   @Test void testUrlConstructionWithYears() {
     String url = downloader.buildStooqUrl("AAPL", 2020, 2024);
-    assertEquals("https://stooq.com/q/d/l/?s=aapl.us&i=d&d1=20200101&d2=20241231", url);
+    assertEquals("https://stooq.com/q/d/l/?s=AAPL.US&i=d&d1=20200101&d2=20241231", url);
   }
 
   @Test void testUrlConstructionUpperCaseTicker() {
     String url = downloader.buildStooqUrl("MSFT", 2023, 2023);
-    // Ticker should be lowercased
-    assertEquals("https://stooq.com/q/d/l/?s=msft.us&i=d&d1=20230101&d2=20231231", url);
+    // Ticker is uppercased for Stooq API
+    assertEquals("https://stooq.com/q/d/l/?s=MSFT.US&i=d&d1=20230101&d2=20231231", url);
   }
 
   @Test void testUrlConstructionStartYearOnly() {
     String url = downloader.buildStooqUrl("GOOGL", 2022, null);
-    assertEquals("https://stooq.com/q/d/l/?s=googl.us&i=d&d1=20220101", url);
+    assertEquals("https://stooq.com/q/d/l/?s=GOOGL.US&i=d&d1=20220101", url);
   }
 
   @Test void testUrlConstructionEndYearOnly() {
     String url = downloader.buildStooqUrl("AMZN", null, 2023);
-    assertEquals("https://stooq.com/q/d/l/?s=amzn.us&i=d&d2=20231231", url);
+    assertEquals("https://stooq.com/q/d/l/?s=AMZN.US&i=d&d2=20231231", url);
   }
 
   @Test void testCsvParsingSingleRow() throws Exception {
