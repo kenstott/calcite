@@ -139,6 +139,7 @@ public class PostProcessExecutor {
       Process process = pb.start();
 
       // For async execution, start a background thread to log output and return immediately
+      // Thread is NOT daemon so JVM waits for async process to complete (for proper monitoring)
       if (config.isAsync()) {
         final String processName = config.getName();
         Thread outputThread = new Thread(() -> {
@@ -151,8 +152,20 @@ public class PostProcessExecutor {
           } catch (IOException e) {
             LOGGER.warn("[{}] Error reading output: {}", processName, e.getMessage());
           }
+          // Log process exit
+          try {
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+              LOGGER.info("[{}] Process completed successfully", processName);
+            } else {
+              LOGGER.warn("[{}] Process exited with code {}", processName, exitCode);
+            }
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.warn("[{}] Interrupted waiting for process", processName);
+          }
         }, "postprocess-" + processName + "-output");
-        outputThread.setDaemon(true);
+        outputThread.setDaemon(false);
         outputThread.start();
 
         LOGGER.info("Post-process '{}' started asynchronously (PID: {})",
