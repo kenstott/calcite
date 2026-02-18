@@ -196,7 +196,7 @@ wait_for_instance() {
 
 wait_for_ssh() {
     local ip="$1"
-    local max_wait="${2:-300}"  # 5 minutes default
+    local max_wait="${2:-1200}"  # 20 minutes default (GPU VMs take 10-15 min)
     local interval=10
     local elapsed=0
 
