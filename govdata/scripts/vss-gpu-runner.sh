@@ -217,23 +217,29 @@ wait_for_ssh() {
 
 wait_for_nvidia() {
     local ip="$1"
-    local max_wait="${2:-120}"  # 2 minutes - startup scripts don't work on Vultr GPU VMs
-    local interval=15
+    local max_wait="${2:-900}"  # 15 minutes - GPU driver install can take a while
+    local interval=20
     local elapsed=0
 
     log "Checking for NVIDIA driver (startup script)..."
 
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if nvidia-smi works (with timeout to prevent hang)
-        if timeout 30 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "nvidia-smi > /dev/null 2>&1" 2>/dev/null; then
+        # Use explicit || true to prevent set -e from killing us
+        local nvidia_ok=0
+        if timeout 60 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "nvidia-smi > /dev/null 2>&1" 2>/dev/null; then
+            nvidia_ok=1
+        fi
+
+        if [[ $nvidia_ok -eq 1 ]]; then
             log "NVIDIA driver is ready!"
-            run_remote_short "$ip" "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"
+            run_remote_short "$ip" "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader" || true
             return 0
         fi
 
         # Check startup script progress (with timeout)
         local status
-        status=$(timeout 30 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "
+        status=$(timeout 60 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "
             if [ -f /var/lib/vultr/states/.nvidia-ready ]; then
                 echo 'ready'
             elif [ -f /var/log/nvidia-setup.log ]; then
@@ -241,9 +247,9 @@ wait_for_nvidia() {
             else
                 echo 'pending'
             fi
-        " 2>/dev/null || echo "timeout")
+        " 2>/dev/null) || status="ssh-failed"
 
-        log "  NVIDIA status: $status"
+        log "  NVIDIA status: $status (elapsed: ${elapsed}s/${max_wait}s)"
 
         sleep $interval
         elapsed=$((elapsed + interval))
