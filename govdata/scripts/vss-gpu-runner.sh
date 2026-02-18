@@ -54,15 +54,27 @@ log() { echo -e "${GREEN}[$(date '+%H:%M:%S')]${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}[$(date '+%H:%M:%S')] WARNING:${NC} $1" >&2; }
 error() { echo -e "${RED}[$(date '+%H:%M:%S')] ERROR:${NC} $1" >&2; exit 1; }
 
-# Cleanup function
+# Cleanup function - ensures instance is destroyed on any exit
 cleanup() {
+    local exit_code=$?
     if [[ -n "$INSTANCE_ID" ]]; then
-        warn "Cleaning up - destroying instance $INSTANCE_ID"
-        destroy_instance "$INSTANCE_ID" || true
+        warn "Cleaning up - destroying instance $INSTANCE_ID (exit code: $exit_code)"
+        # Retry destroy a few times in case of transient failures
+        for i in 1 2 3; do
+            if destroy_instance "$INSTANCE_ID" 2>/dev/null; then
+                log "Instance destroyed successfully"
+                break
+            fi
+            warn "Destroy attempt $i failed, retrying..."
+            sleep 2
+        done
     fi
 }
 
+# Trap all exit scenarios
 trap cleanup EXIT
+trap 'exit 130' INT   # Ctrl+C
+trap 'exit 143' TERM  # kill
 
 #------------------------------------------------------------------------------
 # Vultr API Functions
@@ -212,16 +224,16 @@ wait_for_nvidia() {
     log "Checking for NVIDIA driver (startup script)..."
 
     while [[ $elapsed -lt $max_wait ]]; do
-        # Check if nvidia-smi works
-        if ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "nvidia-smi > /dev/null 2>&1" 2>/dev/null; then
+        # Check if nvidia-smi works (with timeout to prevent hang)
+        if timeout 30 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "nvidia-smi > /dev/null 2>&1" 2>/dev/null; then
             log "NVIDIA driver is ready!"
-            run_remote "$ip" "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"
+            run_remote_short "$ip" "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"
             return 0
         fi
 
-        # Check startup script progress
+        # Check startup script progress (with timeout)
         local status
-        status=$(ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "
+        status=$(timeout 30 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "
             if [ -f /var/lib/vultr/states/.nvidia-ready ]; then
                 echo 'ready'
             elif [ -f /var/log/nvidia-setup.log ]; then
@@ -229,7 +241,7 @@ wait_for_nvidia() {
             else
                 echo 'pending'
             fi
-        " 2>/dev/null || echo "checking")
+        " 2>/dev/null || echo "timeout")
 
         log "  NVIDIA status: $status"
 
@@ -255,14 +267,22 @@ destroy_instance() {
 run_remote() {
     local ip="$1"
     shift
-    ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "$@"
+    # Use timeout to prevent hanging (30 min max for long operations like pip install)
+    timeout 1800 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "$@"
+}
+
+run_remote_short() {
+    local ip="$1"
+    shift
+    # Short timeout for quick commands (2 min)
+    timeout 120 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "$@"
 }
 
 copy_to_remote() {
     local ip="$1"
     local src="$2"
     local dst="$3"
-    scp $SSH_OPTS -i "$SSH_KEY_PATH" "$src" "root@$ip:$dst"
+    timeout 300 scp $SSH_OPTS -i "$SSH_KEY_PATH" "$src" "root@$ip:$dst"
 }
 
 setup_gpu_instance() {
@@ -493,6 +513,35 @@ main() {
 
     log "Found $pending pending chunks - proceeding with GPU provisioning"
     echo ""
+
+    # Check for existing GPU instance (prevent concurrent runs)
+    # Also cleanup stale instances (running > 2 hours)
+    existing_json=$(vultr_api GET "/instances" | jq -r '.instances[]? | select(.label | startswith("vss-embedding"))')
+    if [[ -n "$existing_json" ]]; then
+        existing_instance=$(echo "$existing_json" | jq -r '.id')
+        created_time=$(echo "$existing_json" | jq -r '.date_created')
+
+        if [[ -n "$existing_instance" && "$existing_instance" != "null" ]]; then
+            # Check if instance is stale (> 2 hours old)
+            created_epoch=$(date -d "$created_time" +%s 2>/dev/null || echo 0)
+            now_epoch=$(date +%s)
+            age_hours=$(( (now_epoch - created_epoch) / 3600 ))
+
+            if [[ $age_hours -ge 2 ]]; then
+                warn "Found stale GPU instance $existing_instance (${age_hours}h old) - destroying"
+                destroy_instance "$existing_instance" || true
+                sleep 5  # Wait for cleanup
+            else
+                log "GPU instance already running: $existing_instance (${age_hours}h old)"
+                log "Another GPU job is in progress - skipping to avoid duplicate billing"
+                echo ""
+                echo "=============================================="
+                echo "VSS GPU Runner Skipped (instance already running)"
+                echo "=============================================="
+                exit 0
+            fi
+        fi
+    fi
 
     # Create instance
     INSTANCE_ID=$(create_instance) || {
