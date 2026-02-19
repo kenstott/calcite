@@ -1059,6 +1059,11 @@ public class IcebergTableWriter {
 
     // Commit the rewrite: delete old files, add new files
     RewriteFiles rewrite = table.newRewrite();
+    // Set validation snapshot to current to avoid lineage errors
+    // when old snapshots have been expired
+    if (table.currentSnapshot() != null) {
+      rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+    }
     for (DataFile oldFile : filesToDelete) {
       rewrite.deleteFile(oldFile);
     }

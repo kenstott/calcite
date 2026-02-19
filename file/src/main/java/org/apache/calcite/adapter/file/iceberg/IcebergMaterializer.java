@@ -613,6 +613,19 @@ public class IcebergMaterializer {
     if (result.isFullySuccessful() && totalRowsWritten > 0) {
       writer.runMaintenance(7, 365);  // 365 days for orphans = effectively disabled for append-only
 
+      // Compact small files to reduce metadata overhead for iceberg_scan queries
+      try {
+        long targetSize = 128 * 1024 * 1024; // 128MB
+        int minFiles = 10;
+        long smallFileSize = 10 * 1024 * 1024; // 10MB
+        int compacted = writer.compactSmallFiles(targetSize, minFiles, smallFileSize);
+        if (compacted > 0) {
+          LOGGER.info("Compacted {} partitions for '{}'", compacted, config.getTargetTableId());
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Compaction failed for '{}': {}", config.getTargetTableId(), e.getMessage());
+      }
+
       // Always mark table complete (with watermark if available, without otherwise)
       incrementalTracker.markTableCompleteWithSourceWatermark(
           config.getTargetTableId(),

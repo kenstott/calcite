@@ -273,8 +273,8 @@ destroy_instance() {
 run_remote() {
     local ip="$1"
     shift
-    # Use timeout to prevent hanging (30 min max for long operations like pip install)
-    timeout 1800 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "$@"
+    # Use timeout to prevent hanging (2 hour max for embedding pipeline)
+    timeout 7200 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "$@"
 }
 
 run_remote_short() {
@@ -405,18 +405,11 @@ ENVFILE
 
 run_embedding_pipeline() {
     local ip="$1"
-    local years="$2"
-    local dry_run="$3"
+    local dry_run="$2"
 
     log "Running embedding pipeline..."
 
-    local args="--upload"
-    if [[ "$years" == "all" ]]; then
-        args="--all $args"
-    else
-        args="--years $years $args"
-    fi
-
+    local args="--all"
     if [[ "$dry_run" == "1" ]]; then
         args="$args --dry-run"
     fi
@@ -426,7 +419,8 @@ set -e
 source /root/venv/bin/activate
 source /root/.env
 cd /root
-python3 vss-bulk-gpu.py $args
+export PYTHONUNBUFFERED=1
+python3 -u vss-bulk-gpu.py $args
 REMOTE_SCRIPT
 }
 
@@ -571,7 +565,7 @@ main() {
     setup_gpu_instance "$INSTANCE_IP"
 
     # Run embedding pipeline
-    run_embedding_pipeline "$INSTANCE_IP" "$YEARS" "$DRY_RUN"
+    run_embedding_pipeline "$INSTANCE_IP" "$DRY_RUN"
 
     # Destroy instance (cleanup trap will handle this)
     log "Pipeline complete, destroying instance..."
