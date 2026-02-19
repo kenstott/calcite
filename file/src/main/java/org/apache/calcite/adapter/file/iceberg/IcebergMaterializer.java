@@ -665,10 +665,11 @@ public class IcebergMaterializer {
       attempts++;
       try {
         Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions);
+        String accessionCol = config.getAccessionColumn();
+        String yearValue = batch.get("year");
+
         // Mark newly materialized accessions in tracker so we never re-process them
         if (!newAccessions.isEmpty()) {
-          String accessionCol = config.getAccessionColumn();
-          String yearValue = batch.get("year");
           for (String accession : newAccessions) {
             Map<String, String> accessionKey = new LinkedHashMap<String, String>();
             if (yearValue != null) {
@@ -681,6 +682,14 @@ public class IcebergMaterializer {
           LOGGER.info("Tracked {} newly materialized accessions for {}/year={}",
               newAccessions.size(), config.getTargetTableId(), yearValue);
         }
+
+        // Self-heal: if DuckDB returned 0 new rows, ensure tracker has entries for
+        // all source accessions. This handles the case where data exists in Iceberg
+        // but the tracker was reset or never populated (e.g., first run with new tracker).
+        if (newAccessions.isEmpty() && yearValue != null) {
+          selfHealTracker(config, yearValue, excludeAccessions);
+        }
+
         return true;
       } catch (CommitFailedException e) {
         // Another writer committed - assume idempotent, skip
@@ -712,6 +721,46 @@ public class IcebergMaterializer {
 
     LOGGER.error("Batch {} failed after {} attempts, skipping", batch, maxRetries);
     return false;
+  }
+
+  /**
+   * Self-heals the tracker by adding source accessions that are missing from the tracker.
+   * This handles the case where data already exists in Iceberg (from a previous run)
+   * but the tracker was not populated — e.g., first run with a new tracker, or after
+   * a tracker reset. Without this, every run would do a full DuckDB query (returning 0 rows)
+   * instead of fast-skipping.
+   */
+  private void selfHealTracker(MaterializationConfig config, String yearValue,
+      Set<String> excludeAccessions) {
+    Set<String> sourceAccessions =
+        getFilteredSourceAccessions(config.getSourcePattern(), yearValue, config.getRowFilter());
+    if (sourceAccessions == null || sourceAccessions.isEmpty()) {
+      return;
+    }
+
+    // Find source accessions not yet in the tracker
+    Set<String> untracked = new HashSet<String>();
+    for (String acc : sourceAccessions) {
+      if (!excludeAccessions.contains(acc)) {
+        untracked.add(acc);
+      }
+    }
+
+    if (untracked.isEmpty()) {
+      return;
+    }
+
+    // Add untracked accessions to the tracker
+    String accessionCol = config.getAccessionColumn();
+    for (String accession : untracked) {
+      Map<String, String> accessionKey = new LinkedHashMap<String, String>();
+      accessionKey.put("year", yearValue);
+      accessionKey.put(accessionCol, accession);
+      incrementalTracker.markProcessed(config.getTargetTableId(),
+          config.getSourceTableName(), accessionKey, config.getTargetTableId());
+    }
+    LOGGER.info("Self-healed tracker: added {} untracked accessions for {}/year={}",
+        untracked.size(), config.getTargetTableId(), yearValue);
   }
 
   /**

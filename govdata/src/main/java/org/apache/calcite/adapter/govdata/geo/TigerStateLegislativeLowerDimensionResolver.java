@@ -60,7 +60,7 @@ public class TigerStateLegislativeLowerDimensionResolver implements DimensionRes
       new HashSet<>(
           Arrays.asList(
           "11", // DC - federal district, no state legislature
-          "31"  // Nebraska - unicameral legislature (only Senate/upper chamber)
+          "31"  // Nebraska - unicameral legislature, only Senate/upper chamber
           ));
 
   // All 50 states + DC (FIPS 01-56, excluding invalid codes)

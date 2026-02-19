@@ -877,6 +877,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     int tablesProcessed = 0;
     int totalBatchesSuccessful = 0;
 
+    // Get the job's filing types from the operand for table filtering
+    List<String> jobFilingTypes = getFilingTypes(operand);
+
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
       String tableName = (String) tableConfig.get("name");
@@ -884,6 +887,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Check table-level enabled flag (supports env var interpolation)
       if (!isTableEnabled(tableConfig)) {
         LOGGER.debug("Skipping table '{}' - table not enabled", tableName);
+        continue;
+      }
+
+      // Skip tables whose filing_type dimensions don't overlap with the job's filing types
+      if (!isTableRelevantForFilingTypes(tableConfig, jobFilingTypes)) {
+        LOGGER.info("Skipping table '{}' - not relevant for filing types {}",
+            tableName, jobFilingTypes);
         continue;
       }
 
@@ -1684,6 +1694,45 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       return Boolean.parseBoolean(enabledStr);
     }
     return true; // Default to enabled for unexpected types
+  }
+
+  /**
+   * Checks if a table is relevant for the current job's filing types.
+   * A table is relevant if its dimensions.filing_type list overlaps with the job's filing types,
+   * or if the table has no filing_type dimension (e.g., stock_prices).
+   */
+  @SuppressWarnings("unchecked")
+  private boolean isTableRelevantForFilingTypes(Map<String, Object> tableConfig,
+      List<String> jobFilingTypes) {
+    if (jobFilingTypes == null || jobFilingTypes.isEmpty()) {
+      return true; // No filter specified, process all tables
+    }
+
+    Map<String, Object> dimensions = (Map<String, Object>) tableConfig.get("dimensions");
+    if (dimensions == null) {
+      return true; // No dimensions, assume relevant
+    }
+
+    Object filingTypeObj = dimensions.get("filing_type");
+    if (filingTypeObj == null) {
+      return true; // No filing_type dimension, always relevant (e.g., stock_prices)
+    }
+
+    if (filingTypeObj instanceof List) {
+      List<String> tableFilingTypes = (List<String>) filingTypeObj;
+      // Check if any of the job's filing types overlap with the table's
+      for (String jobType : jobFilingTypes) {
+        // Normalize: "10-K" matches "10-K" and "10-K/A"
+        for (String tableType : tableFilingTypes) {
+          if (tableType.equals(jobType) || tableType.startsWith(jobType + "/")) {
+            return true;
+          }
+        }
+      }
+      return false; // No overlap
+    }
+
+    return true; // Unexpected type, assume relevant
   }
 
   /**

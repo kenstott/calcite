@@ -270,8 +270,7 @@ public class PostProcessConfig {
     }
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     return "PostProcessConfig{"
         + "name='" + name + '\''
         + ", script='" + script + '\''

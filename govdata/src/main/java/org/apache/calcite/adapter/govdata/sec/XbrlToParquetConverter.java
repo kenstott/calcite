@@ -147,20 +147,31 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Check if it's an HTML file (potential inline XBRL)
       if (fileName.endsWith(".htm") || fileName.endsWith(".html")) {
-        // Try to parse as inline XBRL using StorageProvider
-        LOGGER.debug("Attempting to parse inline XBRL from: " + fileName);
+        // Try to parse as inline XBRL (post-2019 filings embed ix: tags in HTML)
         doc = parseInlineXbrl(sourceFilePath);
         if (doc != null) {
           isInlineXbrl = true;
-          LOGGER.debug("Successfully parsed inline XBRL from HTML: " + fileName);
+          LOGGER.debug("Successfully parsed inline XBRL from HTML: {}", fileName);
         } else {
-          LOGGER.warn("Failed to parse inline XBRL from HTML: " + fileName);
+          // Pre-2019 filings: HTML has no inline XBRL — look for companion .xml
+          LOGGER.debug("No inline XBRL in {}; searching for companion XBRL instance",
+              fileName);
+          String xbrlPath = findCompanionXbrlFile(sourceFilePath);
+          if (xbrlPath != null) {
+            LOGGER.info("Found companion XBRL instance: {}",
+                xbrlPath.substring(xbrlPath.lastIndexOf('/') + 1));
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            try (InputStream is = storageProvider.openInputStream(xbrlPath)) {
+              doc = builder.parse(is);
+            }
+          }
         }
       }
 
-      // If not inline XBRL or parsing failed, try traditional XBRL
+      // If not HTML, try traditional XBRL/XML parsing
       if (doc == null && !fileName.endsWith(".htm") && !fileName.endsWith(".html")) {
-        // Parse traditional XBRL/XML file using StorageProvider
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
@@ -169,28 +180,10 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // For inline XBRL files that failed initial parse, try specialized inline XBRL parsing
-      if (doc == null && (fileName.endsWith(".htm") || fileName.endsWith(".html"))) {
-        LOGGER.debug("Standard XML parsing failed for HTML file, attempting inline XBRL extraction: " + fileName);
-        try {
-          // Parse as HTML and extract inline XBRL elements
-          doc = parseInlineXbrl(sourceFilePath);
-          if (doc != null) {
-            LOGGER.debug("Successfully extracted inline XBRL data from: " + fileName);
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Inline XBRL extraction failed: " + e.getMessage());
-          // Get the full stack trace for debugging
-          LOGGER.debug("Stack trace for inline XBRL extraction exception", e);
-        }
-
-        // If still no document, don't create minimal parquet files
-        // Let the parsing failure be properly reported and track for offline review
-        if (doc == null) {
-          LOGGER.warn("Failed to extract XBRL data from inline XBRL file - parsing error for: {}", fileName);
-          // Return empty output files list to indicate failure
-          return outputFiles;
-        }
+      // If all parsing attempts failed, return empty
+      if (doc == null) {
+        LOGGER.warn("No XBRL data found for: {}", fileName);
+        return outputFiles;
       }
 
       // Debug: Check document structure after successful parsing
@@ -1208,6 +1201,152 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Finds inline XBRL elements (ix:nonNumeric, ix:nonFraction, etc.) in a Jsoup document.
+   * Works with both XML-parsed and HTML-parsed documents.
+   */
+  private org.jsoup.select.Elements findInlineXbrlElements(
+      org.jsoup.nodes.Document jsoupDoc) {
+    org.jsoup.select.Elements ixElements = new org.jsoup.select.Elements();
+
+    // Try CSS namespace selectors (work in XML mode)
+    try {
+      ixElements.addAll(jsoupDoc.select("ix|nonNumeric, ix|nonFraction"));
+    } catch (Exception e) {
+      // Pipe notation may not work in HTML parser mode
+    }
+
+    // Try lowercase variants
+    if (ixElements.isEmpty()) {
+      try {
+        ixElements.addAll(jsoupDoc.select("ix|nonnumeric, ix|nonfraction"));
+      } catch (Exception e) {
+        // Expected in HTML parser mode
+      }
+    }
+
+    // Scan all elements for ix: prefixed tags with contextRef (most robust)
+    for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
+      String tagName = elem.tagName().toLowerCase(Locale.ROOT);
+      if (tagName.startsWith("ix:")
+          && (elem.hasAttr("contextRef") || elem.hasAttr("contextref"))) {
+        ixElements.add(elem);
+      }
+    }
+
+    return ixElements;
+  }
+
+  /**
+   * Finds and downloads a companion XBRL instance document (.xml) from SEC EDGAR.
+   * Pre-2019 SEC filings store XBRL data in separate .xml files alongside the HTML.
+   * Uses FilingSummary.xml (same approach as SecSchemaFactory) to identify the instance doc.
+   */
+  private String findCompanionXbrlFile(String htmlPath) {
+    try {
+      String cik = extractCikFromPath(htmlPath);
+      String parentDir = htmlPath.substring(0, htmlPath.lastIndexOf('/'));
+      String accessionDir =
+          parentDir.substring(parentDir.lastIndexOf('/') + 1);
+
+      if (cik == null || accessionDir.isEmpty()) {
+        LOGGER.debug("Cannot extract CIK/accession from path: {}", htmlPath);
+        return null;
+      }
+
+      String cikNumeric = cik.replaceFirst("^0+", "");
+
+      // Fetch FilingSummary.xml to find the XBRL instance document name
+      String summaryUrl = String.format(
+          "https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml",
+          cikNumeric, accessionDir);
+      String summaryXml = downloadFile(summaryUrl);
+      if (summaryXml == null) {
+        LOGGER.debug("FilingSummary.xml not available for {}/{}",
+            cikNumeric, accessionDir);
+        return null;
+      }
+
+      String xbrlFileName = parseXbrlFilenameFromSummary(summaryXml);
+      if (xbrlFileName == null) {
+        LOGGER.debug("No XBRL instance document in FilingSummary.xml");
+        return null;
+      }
+
+      // Download the XBRL instance file from EDGAR
+      String xbrlUrl = String.format(
+          "https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
+          cikNumeric, accessionDir, xbrlFileName);
+      LOGGER.info("Downloading companion XBRL: {}", xbrlFileName);
+
+      String xbrlContent = downloadFile(xbrlUrl);
+      if (xbrlContent == null) {
+        LOGGER.warn("Failed to download XBRL file: {}", xbrlFileName);
+        return null;
+      }
+
+      // Store alongside the HTML file via storageProvider
+      String xbrlPath = storageProvider.resolvePath(
+          parentDir, xbrlFileName);
+      storageProvider.writeFile(xbrlPath,
+          xbrlContent.getBytes(StandardCharsets.UTF_8));
+
+      return xbrlPath;
+
+    } catch (Exception e) {
+      LOGGER.debug("Failed to find companion XBRL for {}: {}",
+          htmlPath, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Parse XBRL instance document filename from FilingSummary.xml content.
+   * Mirrors the logic in SecSchemaFactory.parseXbrlFilenameFromSummary.
+   */
+  private String parseXbrlFilenameFromSummary(String summaryXml) {
+    try {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      Document doc = builder.parse(
+          new ByteArrayInputStream(
+              summaryXml.getBytes(StandardCharsets.UTF_8)));
+
+      // Look for <InstanceReport> element
+      NodeList instanceReports =
+          doc.getElementsByTagName("InstanceReport");
+      if (instanceReports.getLength() > 0) {
+        return instanceReports.item(0).getTextContent().trim();
+      }
+
+      // Fallback: look for <Report> with type="instance"
+      NodeList reports = doc.getElementsByTagName("Report");
+      for (int i = 0; i < reports.getLength(); i++) {
+        Node report = reports.item(i);
+        if (report.getNodeType() == Node.ELEMENT_NODE) {
+          Element reportElement = (Element) report;
+          String reportType = reportElement.getAttribute("type");
+          if ("instance".equalsIgnoreCase(reportType)) {
+            NodeList htmlFileNames =
+                reportElement.getElementsByTagName("HtmlFileName");
+            if (htmlFileNames.getLength() > 0) {
+              String htmlFileName =
+                  htmlFileNames.item(0).getTextContent().trim();
+              return htmlFileName.replace(".htm", ".xml")
+                  .replace(".html", ".xml");
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (Exception e) {
+      LOGGER.debug("Failed to parse FilingSummary.xml: {}",
+          e.getMessage());
+      return null;
+    }
+  }
+
+  /**
    * Parse inline XBRL from HTML file.
    * Inline XBRL uses ix: namespace tags embedded in HTML.
    */
@@ -1225,57 +1364,23 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       LOGGER.debug("HTML file size: " + html.length() + " bytes");
 
-      // Parse with Jsoup - use XML parser to preserve namespace prefixes
-      LOGGER.debug("Calling Jsoup.parse with XML parser for namespace support...");
-      org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html, "", org.jsoup.parser.Parser.xmlParser());
-      LOGGER.debug("Jsoup.parse completed");
-      // XML syntax already set by xmlParser
+      // Try XML parser first (preserves namespace prefixes), then HTML parser as fallback
+      // HTML files from SEC filings may contain entities (e.g. &nbsp;) and unclosed tags
+      // that are valid HTML but invalid XML, causing the XML parser to produce an incomplete tree
+      org.jsoup.nodes.Document jsoupDoc =
+          Jsoup.parse(html, "", org.jsoup.parser.Parser.xmlParser());
 
-      // Look for inline XBRL elements - JSoup handles namespace prefixes as part of the tag name
-      org.jsoup.select.Elements ixElements = new org.jsoup.select.Elements();
+      org.jsoup.select.Elements ixElements = findInlineXbrlElements(jsoupDoc);
 
-      // Collect all ix: prefixed elements (these are inline XBRL elements)
-      // Use pipe notation for namespace selectors in XML mode
-      try {
-        LOGGER.debug("Trying selector with pipe notation: ix|nonNumeric, ix|nonFraction");
-        ixElements.addAll(jsoupDoc.select("ix|nonNumeric, ix|nonFraction"));
-      } catch (Exception e) {
-        LOGGER.warn("Selector with pipe notation failed: " + e.getMessage());
-      }
-
-      // Also try lowercase variants
       if (ixElements.isEmpty()) {
-        try {
-          LOGGER.debug("Trying lowercase selectors");
-          ixElements.addAll(jsoupDoc.select("ix|nonnumeric, ix|nonfraction"));
-        } catch (Exception e) {
-          LOGGER.warn("Lowercase selector failed: " + e.getMessage());
-        }
-      }
-
-      // Debug: Log what we're finding
-      LOGGER.debug(" Initial selector found " + ixElements.size() + " elements");
-
-      // Debug: Check what tag names JSoup is seeing
-      int debugCount = 0;
-      for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
-        if (elem.tagName().startsWith("ix:") && debugCount < 5) {
-          LOGGER.debug(" Found tag with name: " + elem.tagName());
-          debugCount++;
-        }
-      }
-
-      // Also look for elements with contextRef attribute (case insensitive)
-      for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
-        if (elem.hasAttr("contextRef") || elem.hasAttr("contextref")) {
-          if (elem.tagName().startsWith("ix:")) {
-            ixElements.add(elem);
-          }
-        }
+        // XML parser failed to find elements - retry with lenient HTML parser
+        LOGGER.debug("XML parser found no ix: elements in {}, retrying with HTML parser",
+            fileName);
+        jsoupDoc = Jsoup.parse(html);
+        ixElements = findInlineXbrlElements(jsoupDoc);
       }
 
       if (ixElements.isEmpty()) {
-        // No inline XBRL found
         LOGGER.debug("No inline XBRL elements found in: " + fileName);
         return null;
       }

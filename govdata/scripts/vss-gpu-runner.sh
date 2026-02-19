@@ -1,28 +1,19 @@
 #!/bin/bash
 #
-# VSS GPU Runner - Automated GPU VM lifecycle for embedding generation
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Creates a Vultr GPU VM, runs embedding pipeline, destroys VM.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Required environment variables:
-#   VULTR_API_KEY          - Vultr API key
-#   VULTR_SSH_KEY_ID       - Vultr SSH key UUID (get via: ./vss-gpu-runner.sh list-ssh-keys)
-#   VULTR_NVIDIA_SCRIPT_ID - Vultr startup script for NVIDIA driver installation
-#   AWS_ACCESS_KEY_ID      - S3/R2 access
-#   AWS_SECRET_ACCESS_KEY  - S3/R2 secret
-#   AWS_ENDPOINT_OVERRIDE  - R2 endpoint
-#
-# Optional:
-#   VSS_GPU_PLAN           - Vultr GPU plan (default: vcg-a100-1c-6g-4vram)
-#   VSS_GPU_REGION         - Vultr region (default: ewr)
-#   VSS_GPU_OS             - OS ID (default: 2136 = Ubuntu 22.04)
-#   VSS_YEARS              - Years to process (default: all)
-#   VSS_DRY_RUN            - Set to 1 for dry run
-#
-# Usage:
-#   source .env.prod
-#   export VULTR_API_KEY="your-key"
-#   ./vss-gpu-runner.sh
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -e
 
@@ -59,15 +50,24 @@ cleanup() {
     local exit_code=$?
     if [[ -n "$INSTANCE_ID" ]]; then
         warn "Cleaning up - destroying instance $INSTANCE_ID (exit code: $exit_code)"
-        # Retry destroy a few times in case of transient failures
+        # Direct API call to destroy - don't rely on destroy_instance which may fail
         for i in 1 2 3; do
-            if destroy_instance "$INSTANCE_ID" 2>/dev/null; then
-                log "Instance destroyed successfully"
-                break
+            curl -s -X DELETE "${VULTR_API}/instances/${INSTANCE_ID}" \
+                -H "Authorization: Bearer ${VULTR_API_KEY}" \
+                -H "Content-Type: application/json" 2>/dev/null || true
+            sleep 3
+            # Verify it's gone
+            local status
+            status=$(curl -s "${VULTR_API}/instances/${INSTANCE_ID}" \
+                -H "Authorization: Bearer ${VULTR_API_KEY}" 2>/dev/null \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('instance',{}).get('status',''))" 2>/dev/null) || status=""
+            if [[ -z "$status" || "$status" == "null" ]]; then
+                log "Instance destroyed successfully on cleanup"
+                return 0
             fi
-            warn "Destroy attempt $i failed, retrying..."
-            sleep 2
+            warn "Destroy attempt $i - instance still present (status: $status), retrying..."
         done
+        warn "Failed to destroy instance $INSTANCE_ID after 3 attempts!"
     fi
 }
 
@@ -263,7 +263,25 @@ destroy_instance() {
     local instance_id="$1"
     log "Destroying instance $instance_id..."
     vultr_api DELETE "/instances/$instance_id"
-    log "Instance destroyed"
+
+    # Verify the instance was actually destroyed (wait up to 60s)
+    local elapsed=0
+    while [[ $elapsed -lt 60 ]]; do
+        sleep 5
+        elapsed=$((elapsed + 5))
+        local status
+        status=$(get_instance_status "$instance_id" 2>/dev/null) || status=""
+        if [[ -z "$status" || "$status" == "null" ]]; then
+            log "Instance $instance_id destroyed successfully (verified)"
+            return 0
+        fi
+        log "  Waiting for instance destruction... status=$status (${elapsed}s)"
+    done
+
+    warn "Instance $instance_id may not be fully destroyed (status: $status)"
+    # Try once more
+    vultr_api DELETE "/instances/$instance_id" 2>/dev/null || true
+    return 0
 }
 
 #------------------------------------------------------------------------------
@@ -514,31 +532,39 @@ main() {
     log "Found $pending pending chunks - proceeding with GPU provisioning"
     echo ""
 
-    # Check for existing GPU instance (prevent concurrent runs)
-    # Also cleanup stale instances (running > 2 hours)
+    # Check for existing GPU instance - destroy orphaned instances
     existing_json=$(vultr_api GET "/instances" | jq -r '.instances[]? | select(.label | startswith("vss-embedding"))')
     if [[ -n "$existing_json" ]]; then
         existing_instance=$(echo "$existing_json" | jq -r '.id')
         created_time=$(echo "$existing_json" | jq -r '.date_created')
 
         if [[ -n "$existing_instance" && "$existing_instance" != "null" ]]; then
-            # Check if instance is stale (> 2 hours old)
             created_epoch=$(date -d "$created_time" +%s 2>/dev/null || echo 0)
             now_epoch=$(date +%s)
-            age_hours=$(( (now_epoch - created_epoch) / 3600 ))
+            age_minutes=$(( (now_epoch - created_epoch) / 60 ))
 
-            if [[ $age_hours -ge 2 ]]; then
-                warn "Found stale GPU instance $existing_instance (${age_hours}h old) - destroying"
-                destroy_instance "$existing_instance" || true
-                sleep 5  # Wait for cleanup
-            else
-                log "GPU instance already running: $existing_instance (${age_hours}h old)"
-                log "Another GPU job is in progress - skipping to avoid duplicate billing"
+            # Check if the instance is actively running a job via SSH
+            local ip
+            ip=$(get_instance_ip "$existing_instance" 2>/dev/null) || ip=""
+            local is_active=0
+            if [[ -n "$ip" && "$ip" != "0.0.0.0" ]]; then
+                if ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "pgrep -f vss-bulk-gpu" 2>/dev/null; then
+                    is_active=1
+                fi
+            fi
+
+            if [[ $is_active -eq 1 ]]; then
+                log "GPU instance $existing_instance (${age_minutes}m old) is actively running embeddings"
+                log "Skipping to let it finish"
                 echo ""
                 echo "=============================================="
-                echo "VSS GPU Runner Skipped (instance already running)"
+                echo "VSS GPU Runner Skipped (job actively running)"
                 echo "=============================================="
                 exit 0
+            else
+                warn "Found orphaned GPU instance $existing_instance (${age_minutes}m old, no active job) - destroying"
+                destroy_instance "$existing_instance" || true
+                sleep 5
             fi
         fi
     fi

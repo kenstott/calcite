@@ -1,15 +1,20 @@
 #!/bin/bash
-# VSS - Vector Similarity Search for SEC filings
-# Uses DuckDB with quackformers embeddings (snowflake-arctic-embed-xs, 384 dims)
 #
-# Client usage:
-#   1. Download: aws s3 cp s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb ./chunks_vss.duckdb
-#   2. Search:   ./vss.sh search "your query" [limit]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Server usage (refresh from Iceberg):
-#   ./vss.sh refresh 2024
-#   ./vss.sh upload
-
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -41,7 +46,7 @@ ORDER BY score DESC
 LIMIT ${LIMIT};
 EOSQL
         ;;
-    
+
     refresh)
         YEAR="$2"
         if [ -z "$YEAR" ]; then
@@ -114,21 +119,21 @@ SELECT 'VSS index rebuilt' as status;
 EOSQL
         rm -f "$TEMP_PARQUET"
         ;;
-    
+
     upload)
         echo "Uploading VSS database to R2..."
         export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
         aws s3 cp "$VSS_DB" s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb \
             --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
-        
+
         ROWS=$(duckdb "$VSS_DB" -c "SELECT COUNT(*) FROM chunks;" -noheader)
         echo "{\"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"rows\": $ROWS, \"embed_dim\": 384, \"model\": \"snowflake-arctic-embed-xs\"}" \
             | aws s3 cp - s3://govdata-parquet-v1/cache/vss/metadata.json \
             --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
-        
+
         echo "Uploaded to s3://govdata-parquet-v1/cache/vss/"
         ;;
-    
+
     stats)
         duckdb "$VSS_DB" -c "SELECT yr as year, COUNT(DISTINCT accession_number) as accessions, COUNT(*) as chunks FROM chunks GROUP BY yr ORDER BY yr;"
         ;;

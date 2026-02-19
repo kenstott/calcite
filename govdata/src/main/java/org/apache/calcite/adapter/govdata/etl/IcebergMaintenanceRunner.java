@@ -136,7 +136,8 @@ public class IcebergMaintenanceRunner {
     System.out.println("  Table loaded: " + table.name());
     System.out.println("  Location: " + table.location());
     System.out.println("  Snapshots: " + countSnapshots(table));
-    System.out.println("  Current snapshot: " + (table.currentSnapshot() != null
+    System.out.println(
+        "  Current snapshot: " + (table.currentSnapshot() != null
         ? table.currentSnapshot().snapshotId() : "none"));
 
     // Count data files
@@ -213,8 +214,8 @@ public class IcebergMaintenanceRunner {
 
     // Run compaction
     System.out.println("\nRunning compaction...");
-    int compacted = writer.compactSmallFiles(
-        config.targetFileSize, config.minFilesToCompact, config.smallFileSize);
+    int compacted =
+        writer.compactSmallFiles(config.targetFileSize, config.minFilesToCompact, config.smallFileSize);
 
     System.out.println("\nCompacted " + compacted + " partitions");
 
@@ -225,7 +226,8 @@ public class IcebergMaintenanceRunner {
       finalFiles++;
     }
 
-    System.out.println("\n" + "=".repeat(60));
+    System.out.println("\n"
+  + "=".repeat(60));
     System.out.println("Maintenance Complete");
     System.out.println("=".repeat(60));
     System.out.println("  Files before: " + totalFiles);

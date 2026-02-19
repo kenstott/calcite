@@ -143,8 +143,8 @@ public class PostProcessExecutor {
       if (config.isAsync()) {
         final String processName = config.getName();
         Thread outputThread = new Thread(() -> {
-          try (BufferedReader reader = new BufferedReader(
-              new InputStreamReader(process.getInputStream()))) {
+          try (BufferedReader reader =
+              new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
               LOGGER.info("[{}] {}", processName, line);
@@ -174,8 +174,8 @@ public class PostProcessExecutor {
       }
 
       // Synchronous execution - wait for completion
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(process.getInputStream()))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
         String line;
         while ((line = reader.readLine()) != null) {
           LOGGER.info("[{}] {}", config.getName(), line);
@@ -186,15 +186,15 @@ public class PostProcessExecutor {
 
       if (!completed) {
         process.destroyForcibly();
-        String msg = String.format("Post-process '%s' timed out after %d minutes",
-            config.getName(), timeoutMinutes);
+        String msg =
+            String.format("Post-process '%s' timed out after %d minutes", config.getName(), timeoutMinutes);
         return handleFailure(config, msg, null);
       }
 
       int exitCode = process.exitValue();
       if (exitCode != 0) {
-        String msg = String.format("Post-process '%s' failed with exit code %d",
-            config.getName(), exitCode);
+        String msg =
+            String.format("Post-process '%s' failed with exit code %d", config.getName(), exitCode);
         return handleFailure(config, msg, null);
       }
 
@@ -202,8 +202,8 @@ public class PostProcessExecutor {
       return true;
 
     } catch (IOException | InterruptedException e) {
-      String msg = String.format("Post-process '%s' execution error: %s",
-          config.getName(), e.getMessage());
+      String msg =
+          String.format("Post-process '%s' execution error: %s", config.getName(), e.getMessage());
       return handleFailure(config, msg, e);
     }
   }
