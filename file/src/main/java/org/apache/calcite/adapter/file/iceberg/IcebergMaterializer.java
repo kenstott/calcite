@@ -87,8 +87,10 @@ public class IcebergMaterializer {
   /** Tracks total rows written during current materialize() call. Reset per call. */
   private long totalRowsWritten;
 
-  /** Cache of source accessions per year - populated once via S3 LIST, used for all tables. */
-  private final Map<String, Set<String>> sourceAccessionsCache = new HashMap<String, Set<String>>();
+  /** Cache of source accessions per year - populated once via S3 LIST, used for all tables.
+   *  Key: "year:suffix", Value: Map of CIK to Set of accession numbers. */
+  private final Map<String, Map<String, Set<String>>> sourceAccessionsCache =
+      new HashMap<String, Map<String, Set<String>>>();
 
   /**
    * Creates a materializer with default retry settings.
@@ -761,7 +763,8 @@ public class IcebergMaterializer {
       // Fast skip: compare tracked accessions against source accessions from S3 LIST cache
       String year = batch.get("year");
       if (year != null && !excludeAccessions.isEmpty()) {
-        Set<String> sourceAccessions = getSourceAccessions(config.getSourcePattern(), year);
+        Set<String> sourceAccessions =
+            getFilteredSourceAccessions(config.getSourcePattern(), year, config.getRowFilter());
         if (sourceAccessions != null && !sourceAccessions.isEmpty()) {
           // Check if all source accessions are already tracked
           boolean allTracked = true;
@@ -878,8 +881,8 @@ public class IcebergMaterializer {
       batchNum++;
 
       // Build SELECT with LIMIT/OFFSET
-      String sql = buildSelectSqlWithPaging(config, sourcePattern, batch, rowBatchSize,
-          (int) processedRows, excludeAccessions);
+      String sql =
+          buildSelectSqlWithPaging(config, sourcePattern, batch, rowBatchSize, (int) processedRows, excludeAccessions);
       LOGGER.info("Row batch {}: fetching rows {} to {}", batchNum, processedRows, processedRows + rowBatchSize);
 
       long batchStart = System.currentTimeMillis();
@@ -1244,14 +1247,112 @@ public class IcebergMaterializer {
   }
 
   /**
+   * Gets source accessions for a year, filtered by the CIKs in the rowFilter if present.
+   * This ensures fast-skip comparisons only consider accessions relevant to the current job's CIKs.
+   *
+   * @param sourcePattern Source pattern with year placeholder
+   * @param year The year to list accessions for
+   * @param rowFilter Optional row filter that may contain CIK IN clause
+   * @return Set of accession numbers (filtered by CIK if applicable), or null if listing fails
+   */
+  private Set<String> getFilteredSourceAccessions(String sourcePattern, String year,
+      String rowFilter) {
+    Map<String, Set<String>> cikToAccessions = getSourceAccessions(sourcePattern, year);
+    if (cikToAccessions == null) {
+      return null;
+    }
+
+    // Extract CIKs from rowFilter to narrow down accessions
+    Set<String> filterCiks = extractCiksFromRowFilter(rowFilter);
+    if (filterCiks.isEmpty()) {
+      // No CIK filter - return all accessions (flatten the map)
+      Set<String> allAccessions = new HashSet<String>();
+      for (Set<String> accessions : cikToAccessions.values()) {
+        allAccessions.addAll(accessions);
+      }
+      return allAccessions;
+    }
+
+    // Filter accessions to only those from the specified CIKs
+    Set<String> filteredAccessions = new HashSet<String>();
+    for (String cik : filterCiks) {
+      Set<String> accessions = cikToAccessions.get(cik);
+      if (accessions != null) {
+        filteredAccessions.addAll(accessions);
+      }
+    }
+    LOGGER.debug("Filtered source accessions by {} CIKs: {} of {} total",
+        filterCiks.size(), filteredAccessions.size(), countAllAccessions(cikToAccessions));
+    return filteredAccessions;
+  }
+
+  private int countAllAccessions(Map<String, Set<String>> cikToAccessions) {
+    int count = 0;
+    for (Set<String> accessions : cikToAccessions.values()) {
+      count += accessions.size();
+    }
+    return count;
+  }
+
+  /**
+   * Extracts CIK values from a rowFilter containing a CIK IN clause.
+   * Parses patterns like: {@code cik IN ('0000320193', '0000004962', ...)}
+   *
+   * @param rowFilter The row filter string, may be null
+   * @return Set of CIK strings, empty if no CIK filter found
+   */
+  static Set<String> extractCiksFromRowFilter(String rowFilter) {
+    if (rowFilter == null || rowFilter.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    // Find "cik IN (" pattern (case-insensitive)
+    String upper = rowFilter.toUpperCase();
+    int cikInIdx = upper.indexOf("CIK IN");
+    if (cikInIdx < 0) {
+      // Also try "cik in" with varying whitespace
+      cikInIdx = upper.indexOf("CIK  IN");
+      if (cikInIdx < 0) {
+        return Collections.emptySet();
+      }
+    }
+
+    // Find the opening paren
+    int openParen = rowFilter.indexOf('(', cikInIdx);
+    if (openParen < 0) {
+      return Collections.emptySet();
+    }
+
+    // Find the closing paren
+    int closeParen = rowFilter.indexOf(')', openParen);
+    if (closeParen < 0) {
+      return Collections.emptySet();
+    }
+
+    // Parse the values between parens: '0000320193', '0000004962', ...
+    String valueList = rowFilter.substring(openParen + 1, closeParen);
+    Set<String> ciks = new HashSet<String>();
+    for (String token : valueList.split(",")) {
+      String trimmed = token.trim();
+      // Remove surrounding quotes
+      if (trimmed.length() >= 2 && trimmed.charAt(0) == '\''
+          && trimmed.charAt(trimmed.length() - 1) == '\'') {
+        ciks.add(trimmed.substring(1, trimmed.length() - 1));
+      }
+    }
+    return ciks;
+  }
+
+  /**
    * Gets source accessions for a year by listing source files via StorageProvider.
    * Results are cached per year+suffix to avoid repeated S3 LIST operations.
+   * Returns a map of CIK to accession sets for CIK-aware filtering.
    *
    * @param sourcePattern Source pattern with year placeholder (e.g., year=*\/*_facts.parquet)
    * @param year The year to list accessions for
-   * @return Set of accession numbers found in source files, or null if listing fails
+   * @return Map of CIK to accession number sets, or null if listing fails
    */
-  private Set<String> getSourceAccessions(String sourcePattern, String year) {
+  private Map<String, Set<String>> getSourceAccessions(String sourcePattern, String year) {
     // Extract file suffix from source pattern (e.g., "_facts.parquet" from "year=*/*_facts.parquet")
     String fileSuffix = "_metadata.parquet"; // default
     int lastSlashIdx = sourcePattern.lastIndexOf('/');
@@ -1276,7 +1377,7 @@ public class IcebergMaterializer {
     }
 
     long startTime = System.currentTimeMillis();
-    Set<String> accessions = new HashSet<String>();
+    Map<String, Set<String>> cikToAccessions = new HashMap<String, Set<String>>();
 
     try {
       // Build path for year directory
@@ -1299,25 +1400,32 @@ public class IcebergMaterializer {
         if (!fileName.endsWith(fileSuffix)) {
           continue;
         }
-        // Extract accession from filename
+        // Extract CIK and accession from filename
         // Example: 0000001750_0001104659-22-081498_facts.parquet
+        //          ^CIK        ^accession              ^suffix
         int underscoreIdx = fileName.indexOf('_');
         if (underscoreIdx > 0) {
+          String cik = fileName.substring(0, underscoreIdx);
           int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
           if (secondUnderscoreIdx > 0) {
             String accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
+            Set<String> accessions = cikToAccessions.get(cik);
+            if (accessions == null) {
+              accessions = new HashSet<String>();
+              cikToAccessions.put(cik, accessions);
+            }
             accessions.add(accession);
           }
         }
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
-      LOGGER.info("Listed {} source accessions for year {} ({}) in {}ms",
-          accessions.size(), year, fileSuffix, elapsed);
+      LOGGER.info("Listed {} source accessions across {} CIKs for year {} ({}) in {}ms",
+          countAllAccessions(cikToAccessions), cikToAccessions.size(), year, fileSuffix, elapsed);
 
       // Cache the result
-      sourceAccessionsCache.put(cacheKey, accessions);
-      return accessions;
+      sourceAccessionsCache.put(cacheKey, cikToAccessions);
+      return cikToAccessions;
 
     } catch (Exception e) {
       LOGGER.warn("Failed to list source accessions for year {} ({}): {}",
