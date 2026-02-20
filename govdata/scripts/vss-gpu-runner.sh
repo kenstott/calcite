@@ -453,36 +453,35 @@ REMOTE_SCRIPT
 check_pending_chunks() {
     log "Pre-flight check: Checking for chunks that need embeddings..."
 
-    # Get S3 endpoint without https://
     local s3_endpoint="${AWS_ENDPOINT_OVERRIDE#https://}"
     local iceberg_chunks="s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks"
 
-    # Use DuckDB to check if ANY chunks need embeddings (fast LIMIT 1 check)
+    # Use python+duckdb to check pending chunks. The system duckdb CLI (1.4.x)
+    # has a filter pushdown bug on list columns in iceberg_scan that silently
+    # returns 0 rows. Python duckdb 1.3.x works correctly.
     local has_pending
-    has_pending=$(duckdb -noheader -csv << EOF 2>/dev/null || echo "0"
-INSTALL iceberg; LOAD iceberg;
-INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-east-1';
-SET s3_access_key_id = '${AWS_ACCESS_KEY_ID}';
-SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}';
-SET s3_endpoint = '${s3_endpoint}';
-SET s3_use_ssl = true;
-SET s3_url_style = 'path';
-SET unsafe_enable_version_guessing = true;
+    has_pending=$(python3 -c "
+import duckdb, os, sys
+try:
+    conn = duckdb.connect()
+    conn.execute('INSTALL iceberg; LOAD iceberg')
+    conn.execute('INSTALL httpfs; LOAD httpfs')
+    conn.execute(\"SET s3_region = 'us-east-1'\")
+    conn.execute(\"SET s3_access_key_id = '${AWS_ACCESS_KEY_ID}'\")
+    conn.execute(\"SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}'\")
+    conn.execute(\"SET s3_endpoint = '${s3_endpoint}'\")
+    conn.execute('SET s3_use_ssl = true')
+    conn.execute(\"SET s3_url_style = 'path'\")
+    conn.execute('SET unsafe_enable_version_guessing = true')
+    # Materialize to temp table to avoid filter pushdown bug on list columns
+    conn.execute(\"CREATE TEMP TABLE _t AS SELECT embedding FROM iceberg_scan('${iceberg_chunks}') LIMIT 10000\")
+    r = conn.execute('SELECT COUNT(*) FROM _t WHERE embedding IS NULL OR (array_length(embedding) = 1 AND embedding[1] = 0.0)').fetchone()[0]
+    print(1 if r > 0 else 0)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    print(0)
+" 2>/dev/null || echo "0")
 
--- Check if ANY chunks need embeddings (NULL or placeholder)
-SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END as has_pending
-FROM (
-    SELECT 1
-    FROM iceberg_scan('${iceberg_chunks}')
-    WHERE embedding IS NULL
-       OR (array_length(embedding) = 1 AND embedding[1] = 0.0)
-    LIMIT 1
-);
-EOF
-)
-
-    # Strip whitespace and validate
     has_pending=$(echo "$has_pending" | tr -d '[:space:]' | head -1)
 
     if [[ "$has_pending" == "1" ]]; then
