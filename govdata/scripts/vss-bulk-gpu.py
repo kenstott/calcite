@@ -3,9 +3,9 @@
 VSS Bulk Embedding Pipeline (GPU)
 
 Pipeline:
-1. Read chunks with NULL embeddings from vectorized_chunks (Iceberg)
+1. Read chunks with NULL embeddings from vectorized_chunks (Iceberg via PyIceberg)
 2. Generate embeddings using sentence-transformers (GPU)
-3. Write updated chunks back to Iceberg
+3. Write updated chunks back to Iceberg (proper Iceberg append via PyIceberg)
 4. Build VSS index (local DuckDB with HNSW)
 5. Upload VSS cache to S3
 
@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 # Constants
 EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-xs"
@@ -43,6 +45,10 @@ S3_BUCKET = "s3://govdata-parquet-v1"
 ICEBERG_CHUNKS = f"{S3_BUCKET}/source=sec/SEC/vectorized_chunks"
 VSS_CACHE_PATH = f"{S3_BUCKET}/cache/vss/chunks_vss.duckdb"
 VSS_METADATA_PATH = f"{S3_BUCKET}/cache/vss/metadata.json"
+
+# Iceberg table identifier
+ICEBERG_TABLE = "vectorized_chunks"
+ICEBERG_WAREHOUSE = f"{S3_BUCKET}/source=sec/SEC"
 
 
 def check_gpu() -> str:
@@ -76,14 +82,16 @@ def get_s3_config() -> dict:
         "s3_access_key_id": os.environ["AWS_ACCESS_KEY_ID"],
         "s3_secret_access_key": os.environ["AWS_SECRET_ACCESS_KEY"],
         "s3_endpoint": os.environ["AWS_ENDPOINT_OVERRIDE"].replace("https://", ""),
+        "s3_endpoint_url": os.environ["AWS_ENDPOINT_OVERRIDE"],
     }
 
 
 def create_duckdb_connection(db_path: str = ":memory:") -> duckdb.DuckDBPyConnection:
-    """Create DuckDB connection with S3/httpfs support."""
+    """Create DuckDB connection with Iceberg + S3/httpfs support."""
     print("  Creating DuckDB connection...")
     conn = duckdb.connect(db_path)
-    print("  Installing httpfs extension...")
+    print("  Installing extensions...")
+    conn.execute("INSTALL iceberg; LOAD iceberg")
     conn.execute("INSTALL httpfs; LOAD httpfs")
 
     config = get_s3_config()
@@ -100,18 +108,35 @@ def create_duckdb_connection(db_path: str = ":memory:") -> duckdb.DuckDBPyConnec
     return conn
 
 
+def load_iceberg_table():
+    """Load the Iceberg table using PyIceberg."""
+    from pyiceberg.catalog import load_catalog
+
+    config = get_s3_config()
+
+    catalog = load_catalog(
+        "hadoop",
+        **{
+            "type": "hadoop",
+            "warehouse": ICEBERG_WAREHOUSE.replace("s3://", "s3a://"),
+            "s3.access-key-id": config["s3_access_key_id"],
+            "s3.secret-access-key": config["s3_secret_access_key"],
+            "s3.endpoint": config["s3_endpoint_url"],
+            "s3.region": config["s3_region"],
+        },
+    )
+
+    return catalog.load_table(ICEBERG_TABLE)
+
+
 def fetch_null_embedding_chunks(conn: duckdb.DuckDBPyConnection) -> list[dict]:
     """
     Read ALL chunks from vectorized_chunks that need embeddings.
-    Uses direct parquet read (bypasses Iceberg metadata scan which is very slow
-    when there are thousands of manifest files on R2).
+    Uses DuckDB iceberg_scan for proper Iceberg reads.
     Returns chunks with NULL or placeholder [0.0] embeddings.
     """
-    print("Querying vectorized_chunks for ALL NULL embeddings (direct parquet)...")
+    print("Querying vectorized_chunks for NULL embeddings (iceberg_scan)...")
     start = time.time()
-
-    # Read parquet files directly with hive partitioning to bypass slow iceberg_scan
-    parquet_glob = f"{ICEBERG_CHUNKS}/data/year=*/*.parquet"
 
     result = conn.execute(f"""
         SELECT cik, accession_number, year, chunk_id,
@@ -119,7 +144,7 @@ def fetch_null_embedding_chunks(conn: duckdb.DuckDBPyConnection) -> list[dict]:
                chunk_text, enriched_text, content_type,
                financial_concepts, exhibit_number,
                speaker_name, speaker_role, paragraph_number
-        FROM read_parquet('{parquet_glob}', hive_partitioning=true)
+        FROM iceberg_scan('{ICEBERG_CHUNKS}')
         WHERE chunk_text IS NOT NULL
           AND LENGTH(chunk_text) > 10
           AND (embedding IS NULL
@@ -171,86 +196,65 @@ def generate_embeddings(chunks: list[dict], device: str) -> list[list[float]]:
     return [emb.tolist() for emb in embeddings]
 
 
-def write_to_iceberg(conn: duckdb.DuckDBPyConnection, chunks: list[dict],
-                     embeddings: list[list[float]], year: int) -> int:
-    """Write chunks with embeddings to vectorized_chunks Iceberg table."""
+def write_to_iceberg(chunks: list[dict], embeddings: list[list[float]], year: int) -> int:
+    """Write chunks with embeddings to vectorized_chunks Iceberg table via PyIceberg."""
     if not chunks:
         return 0
 
-    print(f"  Writing {len(chunks)} chunks to Iceberg...")
+    print(f"  Writing {len(chunks)} chunks to Iceberg (year={year})...")
 
-    # Create temporary parquet file
-    with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
-        temp_path = f.name
+    table = load_iceberg_table()
 
-    try:
-        # Build data for parquet
-        import pyarrow as pa
-        import pyarrow.parquet as pq
+    data = {
+        "cik": [c["cik"] for c in chunks],
+        "accession_number": [c["accession_number"] for c in chunks],
+        "year": [c["year"] for c in chunks],
+        "chunk_id": [c["chunk_id"] for c in chunks],
+        "source_type": [c["source_type"] for c in chunks],
+        "section": [c["section"] for c in chunks],
+        "sequence": [c["sequence"] for c in chunks],
+        "filing_date": [c["filing_date"] for c in chunks],
+        "chunk_text": [c["chunk_text"] for c in chunks],
+        "enriched_text": [c["enriched_text"] for c in chunks],
+        "embedding": embeddings,
+        "content_type": [c["content_type"] for c in chunks],
+        "financial_concepts": [c["financial_concepts"] for c in chunks],
+        "exhibit_number": [c["exhibit_number"] for c in chunks],
+        "speaker_name": [c["speaker_name"] for c in chunks],
+        "speaker_role": [c["speaker_role"] for c in chunks],
+        "paragraph_number": [c["paragraph_number"] for c in chunks],
+    }
 
-        data = {
-            "cik": [c["cik"] for c in chunks],
-            "accession_number": [c["accession_number"] for c in chunks],
-            "year": [c["year"] for c in chunks],
-            "chunk_id": [c["chunk_id"] for c in chunks],
-            "source_type": [c["source_type"] for c in chunks],
-            "section": [c["section"] for c in chunks],
-            "sequence": [c["sequence"] for c in chunks],
-            "filing_date": [c["filing_date"] for c in chunks],
-            "chunk_text": [c["chunk_text"] for c in chunks],
-            "enriched_text": [c["enriched_text"] for c in chunks],
-            "embedding": embeddings,
-            "content_type": [c["content_type"] for c in chunks],
-            "financial_concepts": [c["financial_concepts"] for c in chunks],
-            "exhibit_number": [c["exhibit_number"] for c in chunks],
-            "speaker_name": [c["speaker_name"] for c in chunks],
-            "speaker_role": [c["speaker_role"] for c in chunks],
-            "paragraph_number": [c["paragraph_number"] for c in chunks],
-        }
+    # Create Arrow table matching Iceberg schema
+    arrow_schema = pa.schema([
+        ("cik", pa.string()),
+        ("accession_number", pa.string()),
+        ("year", pa.int32()),
+        ("chunk_id", pa.string()),
+        ("source_type", pa.string()),
+        ("section", pa.string()),
+        ("sequence", pa.int32()),
+        ("filing_date", pa.string()),
+        ("chunk_text", pa.string()),
+        ("enriched_text", pa.string()),
+        ("embedding", pa.list_(pa.float32(), EMBEDDING_DIM)),
+        ("content_type", pa.string()),
+        ("financial_concepts", pa.string()),
+        ("exhibit_number", pa.string()),
+        ("speaker_name", pa.string()),
+        ("speaker_role", pa.string()),
+        ("paragraph_number", pa.int32()),
+    ])
 
-        # Create Arrow table with correct types
-        schema = pa.schema([
-            ("cik", pa.string()),
-            ("accession_number", pa.string()),
-            ("year", pa.int32()),
-            ("chunk_id", pa.string()),
-            ("source_type", pa.string()),
-            ("section", pa.string()),
-            ("sequence", pa.int32()),
-            ("filing_date", pa.string()),
-            ("chunk_text", pa.string()),
-            ("enriched_text", pa.string()),
-            ("embedding", pa.list_(pa.float32(), EMBEDDING_DIM)),
-            ("content_type", pa.string()),
-            ("financial_concepts", pa.string()),
-            ("exhibit_number", pa.string()),
-            ("speaker_name", pa.string()),
-            ("speaker_role", pa.string()),
-            ("paragraph_number", pa.int32()),
-        ])
+    arrow_table = pa.table(data, schema=arrow_schema)
+    table.append(arrow_table)
 
-        table = pa.table(data, schema=schema)
-        pq.write_table(table, temp_path)
-
-        # Upload to Iceberg via DuckDB
-        # Note: DuckDB Iceberg extension doesn't support direct INSERT yet,
-        # so we append parquet files to the Iceberg table location
-        s3_dest = f"{ICEBERG_CHUNKS}/year={year}/chunks_{int(time.time())}.parquet"
-
-        conn.execute(f"""
-            COPY (SELECT * FROM read_parquet('{temp_path}'))
-            TO '{s3_dest}' (FORMAT PARQUET)
-        """)
-
-        print(f"  Wrote to {s3_dest}")
-        return len(chunks)
-
-    finally:
-        Path(temp_path).unlink(missing_ok=True)
+    print(f"  Committed {len(chunks)} rows to Iceberg (year={year})")
+    return len(chunks)
 
 
-def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tuple[int, float]:
-    """Build VSS DuckDB database with HNSW index from vectorized_chunks."""
+def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tuple:
+    """Build VSS DuckDB database with HNSW index from vectorized_chunks via iceberg_scan."""
     print(f"\nBuilding VSS database: {output_path}")
 
     # Remove existing
@@ -276,14 +280,10 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
         )
     """)
 
-    # Load from parquet directly (bypasses slow Iceberg metadata scan)
-    # GPU-written files (with embeddings) are at year=*/chunks_*.parquet
-    # Iceberg-managed files (may have NULL embeddings) are at data/year=*/*.parquet
+    # Load from Iceberg via iceberg_scan
     total_chunks = 0
-    gpu_glob = f"{ICEBERG_CHUNKS}/year=*/chunks_*.parquet"
-    iceberg_glob = f"{ICEBERG_CHUNKS}/data/year=*/*.parquet"
 
-    print(f"  Loading all chunks with embeddings from parquet...")
+    print(f"  Loading all chunks with embeddings from Iceberg...")
 
     with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
         temp_path = f.name
@@ -291,25 +291,11 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
     try:
         conn.execute(f"""
             COPY (
-                SELECT cik, accession_number, yr, chunk_id,
+                SELECT cik, accession_number, year as yr, chunk_id,
                        source_type, section, chunk_text, content_type, embedding
-                FROM (
-                    SELECT *, ROW_NUMBER() OVER (PARTITION BY chunk_id ORDER BY chunk_id) as rn
-                    FROM (
-                        SELECT cik, accession_number, year as yr, chunk_id,
-                               source_type, section, chunk_text, content_type, embedding
-                        FROM read_parquet('{gpu_glob}', hive_partitioning=true)
-                        WHERE embedding IS NOT NULL
-                          AND array_length(embedding) > 1
-                        UNION ALL
-                        SELECT cik, accession_number, year as yr, chunk_id,
-                               source_type, section, chunk_text, content_type, embedding
-                        FROM read_parquet('{iceberg_glob}', hive_partitioning=true)
-                        WHERE embedding IS NOT NULL
-                          AND array_length(embedding) > 1
-                    )
-                )
-                WHERE rn = 1
+                FROM iceberg_scan('{ICEBERG_CHUNKS}')
+                WHERE embedding IS NOT NULL
+                  AND array_length(embedding) > 1
             ) TO '{temp_path}' (FORMAT PARQUET)
         """)
 
@@ -424,7 +410,7 @@ def main():
     device = check_gpu()
     print()
 
-    # Connect to Iceberg
+    # Connect to Iceberg via DuckDB (for reads)
     print("Connecting to Iceberg...")
     conn = create_duckdb_connection()
     print()
@@ -466,7 +452,7 @@ def main():
         all_new_chunks = 0
         for yr in sorted(chunks_by_year.keys()):
             yr_chunks, yr_embeds = chunks_by_year[yr]
-            written = write_to_iceberg(conn, yr_chunks, yr_embeds, yr)
+            written = write_to_iceberg(yr_chunks, yr_embeds, yr)
             all_new_chunks += written
     else:
         all_new_chunks = len(chunks)
