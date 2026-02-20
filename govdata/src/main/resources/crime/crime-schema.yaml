@@ -1,0 +1,893 @@
+# ============================================================================
+# U.S. Crime and Public Safety Data Schema (CRIME)
+# ============================================================================
+# Data Sources:
+#   - FBI Crime Data Explorer (CDE) - Agency data, offense rates, police
+#     employment, hate crimes, use of force
+#   - Bureau of Justice Statistics (BJS) - NIBRS estimates, NCVS victimization
+#
+# Features:
+#   - Cross-references with geo.states via state_abbr
+#   - Hive-style partitioning for efficient querying
+#   - Rate-limited API integration (2 req/sec)
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:crime}"
+dataLagYears: 1
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=crime"
+
+comment: >
+  U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and Bureau of
+  Justice Statistics (BJS). Includes law enforcement agency data, offense rates by state,
+  police employment, hate crime statistics, use of force metrics, NIBRS national estimates,
+  and NCVS victimization surveys. Joins with geo.states via state_abbr for geographic analysis.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_abbr_column: &state_abbr_column
+    name: state_abbr
+    type: string
+    nullable: false
+    comment: 2-letter state abbreviation (e.g., 'CA') or 'national'
+
+  year_column: &year_column
+    name: year
+    type: integer
+    nullable: false
+    comment: Calendar year
+
+  section_column: &section_column
+    name: section
+    type: string
+    nullable: true
+    comment: Data section grouping
+
+  category_column: &category_column
+    name: category
+    type: string
+    nullable: true
+    comment: Category within section
+
+  label_column: &label_column
+    name: label
+    type: string
+    nullable: true
+    comment: Metric or value label
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_state: &partition_state
+    name: state_abbr
+    type: VARCHAR
+
+  partition_endpoint: &partition_endpoint
+    name: endpoint_id
+    type: VARCHAR
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  agency_partitions: &agency_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_state
+
+  endpoint_partitions: &endpoint_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_endpoint
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # All 50 states + DC
+  all_state_abbrs: &all_state_abbrs
+    - 'AL'
+    - 'AK'
+    - 'AZ'
+    - 'AR'
+    - 'CA'
+    - 'CO'
+    - 'CT'
+    - 'DE'
+    - 'DC'
+    - 'FL'
+    - 'GA'
+    - 'HI'
+    - 'ID'
+    - 'IL'
+    - 'IN'
+    - 'IA'
+    - 'KS'
+    - 'KY'
+    - 'LA'
+    - 'ME'
+    - 'MD'
+    - 'MA'
+    - 'MI'
+    - 'MN'
+    - 'MS'
+    - 'MO'
+    - 'MT'
+    - 'NE'
+    - 'NV'
+    - 'NH'
+    - 'NJ'
+    - 'NM'
+    - 'NY'
+    - 'NC'
+    - 'ND'
+    - 'OH'
+    - 'OK'
+    - 'OR'
+    - 'PA'
+    - 'RI'
+    - 'SC'
+    - 'SD'
+    - 'TN'
+    - 'TX'
+    - 'UT'
+    - 'VT'
+    - 'VA'
+    - 'WA'
+    - 'WV'
+    - 'WI'
+    - 'WY'
+
+  # UCR core offense codes for summarized crime data
+  ucr_core_offenses: &ucr_core_offenses
+    - 'violent-crime'
+    - 'property-crime'
+    - 'homicide'
+    - 'aggravated-assault'
+    - 'rape-legacy'
+    - 'robbery'
+    - 'burglary'
+    - 'larceny'
+    - 'motor-vehicle-theft'
+    - 'arson'
+
+  # Year range for FBI CDE data
+  # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
+  crime_year_range: &crime_year_range
+    type: yearRange
+    start: "${CRIME_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    end: current
+    dataLag: 1
+
+  # Month range is encoded differently for CDE API (MM-YYYY format)
+  # We use year dimension only; the API returns all months for the year range
+
+  # BJS NIBRS SODA endpoint IDs
+  bjs_nibrs_endpoints: &bjs_nibrs_endpoints
+    - 'r32q-bdaw'
+    - 'iv7i-eah6'
+    - 'x3sz-eb6y'
+    - 'kj7p-vx4s'
+    - 'ms42-n765'
+    - 'uy37-xgmh'
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # CDE AGENCIES - Law enforcement agency registry
+  # ---------------------------------------------------------------------------
+  - name: cde_agencies
+    pattern: "type=agency/state_abbr=*/*.parquet"
+    partitions: *agency_partitions
+    comment: >
+      FBI CDE law enforcement agency registry. ~19,600 agencies across 51 jurisdictions
+      with ORI identifiers, agency type, county, NIBRS reporting status, and coordinates.
+      One row per agency. Cross-references geo.states via state_abbr.
+
+    dimensions:
+      type:
+        - agency
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - name: ori
+        type: string
+        nullable: false
+        comment: ORI identifier (e.g., 'CA0150000')
+      - name: agency_name
+        type: string
+        nullable: true
+        comment: Agency name
+      - name: agency_type_name
+        type: string
+        nullable: true
+        comment: Agency type (City, County, State, Other)
+      - <<: *state_abbr_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (title case, e.g., 'Kern')
+      - name: is_nibrs
+        type: boolean
+        nullable: true
+        comment: Whether agency reports via NIBRS
+      - name: nibrs_start_date
+        type: string
+        nullable: true
+        comment: NIBRS start date (ISO format)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Agency latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Agency longitude
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/agency/byStateAbbr/{state_abbr}?API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeAgencyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=agency/state_abbr=*/"
+      partition:
+        columns: [type, state_abbr]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_agencies
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # CDE OFFENSES - Summarized crime rates by state, offense, and month
+  # ---------------------------------------------------------------------------
+  - name: cde_offenses
+    pattern: "type=offense/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE summarized crime rates by state and offense type. Includes offense rate,
+      clearance rate, national comparison rates, population, and coverage percentage.
+      One row per state + offense + month. Cross-references geo.states via state_abbr.
+
+    dimensions:
+      type:
+        - offense
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+      offense: *ucr_core_offenses
+
+    columns:
+      - <<: *state_abbr_column
+      - name: offense_code
+        type: string
+        nullable: false
+        comment: FBI offense code (e.g., violent-crime, homicide, burglary)
+      - name: month
+        type: string
+        nullable: true
+        comment: MM-YYYY format
+      - name: offense_rate
+        type: double
+        nullable: true
+        comment: Offenses per 100k population (state)
+      - name: clearance_rate
+        type: double
+        nullable: true
+        comment: Clearances per 100k population (state)
+      - name: national_offense_rate
+        type: double
+        nullable: true
+        comment: National offense rate for comparison
+      - name: national_clearance_rate
+        type: double
+        nullable: true
+        comment: National clearance rate for comparison
+      - name: population
+        type: long
+        nullable: true
+        comment: State population for the period
+      - name: population_coverage_pct
+        type: double
+        nullable: true
+        comment: Percentage of population covered by reporting agencies
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/summarized/state/{state_abbr}/{offense}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeCrimeRatesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=offense/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_offenses
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE POLICE EMPLOYMENT - Sworn officers and civilian employees
+  # ---------------------------------------------------------------------------
+  - name: cde_police_employment
+    pattern: "type=pe/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE police employment data by state and year. Includes officers per 1,000
+      population, male/female officer and civilian counts, and population coverage.
+
+    dimensions:
+      type:
+        - pe
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - name: officers_per_1000
+        type: double
+        nullable: true
+        comment: Officers per 1,000 people
+      - name: male_officers
+        type: long
+        nullable: true
+        comment: Male sworn officer count
+      - name: female_officers
+        type: long
+        nullable: true
+        comment: Female sworn officer count
+      - name: male_civilians
+        type: long
+        nullable: true
+        comment: Male civilian employee count
+      - name: female_civilians
+        type: long
+        nullable: true
+        comment: Female civilian employee count
+      - name: participated_population
+        type: long
+        nullable: true
+        comment: Population covered by reporting agencies
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/police-employment/states/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdePoliceEmploymentTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pe/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_police_employment
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE HATE CRIMES - Hate crime statistics by state
+  # ---------------------------------------------------------------------------
+  - name: cde_hate_crimes
+    pattern: "type=hate_crime/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE hate crime statistics by state and year. Flattened from nested sections
+      (bias_section, incident_section) with categories (victim_type, offense_type,
+      offender_race, bias, etc.) and labels with counts.
+
+    dimensions:
+      type:
+        - hate_crime
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+      - <<: *category_column
+      - <<: *label_column
+      - name: count
+        type: long
+        nullable: true
+        comment: Count for this combination
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/hate-crime/state/{state_abbr}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hate_crime/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_hate_crimes
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE USE OF FORCE - Police use of force metrics
+  # ---------------------------------------------------------------------------
+  - name: cde_use_of_force
+    pattern: "type=uof/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE use of force data by state and year. Includes participation rates,
+      incident reports, and demographic breakdowns.
+
+    dimensions:
+      type:
+        - uof
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+      - <<: *category_column
+      - <<: *label_column
+      - name: value
+        type: double
+        nullable: true
+        comment: Metric value (count or percentage)
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/use-of-force/state/{state_abbr}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=uof/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_use_of_force
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE CRIME AGENCY - Agency-level offense data
+  # ---------------------------------------------------------------------------
+  - name: cde_crime_agency
+    pattern: "type=agency_offense/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE agency-level offense data. One row per agency (ORI) + offense + month.
+      Uses OriDimensionResolver to iterate ORIs per state from cde_agencies table.
+      ~19,581 agencies x 10 core offenses. Cross-references cde_agencies via ori.
+
+    dimensions:
+      type:
+        - agency_offense
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+      offense: *ucr_core_offenses
+      ori:
+        type: custom
+        properties:
+          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME/cde_agencies"
+
+    columns:
+      - name: ori
+        type: string
+        nullable: false
+        comment: ORI identifier (e.g., 'CA0150000')
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state abbreviation
+      - name: offense_code
+        type: string
+        nullable: false
+        comment: FBI offense code
+      - name: month
+        type: string
+        nullable: true
+        comment: MM-YYYY format
+      - name: actual
+        type: long
+        nullable: true
+        comment: Actual offense count
+      - name: cleared
+        type: long
+        nullable: true
+        comment: Cleared offense count
+      - name: actual_since_last_year
+        type: long
+        nullable: true
+        comment: Year-to-date actual count
+      - name: cleared_since_last_year
+        type: long
+        nullable: true
+        comment: Year-to-date cleared count
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/summarized/agency/{ori}/{offense}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeAgencyOffenseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.crime.OriDimensionResolver"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=agency_offense/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_crime_agency
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # BJS NIBRS ESTIMATES - National Crime Victimization Estimates
+  # ---------------------------------------------------------------------------
+  - name: bjs_nibrs_estimates
+    pattern: "type=nibrs/endpoint_id=*/*.parquet"
+    partitions: *endpoint_partitions
+    comment: >
+      Bureau of Justice Statistics NIBRS national crime estimates from 6 SODA endpoints.
+      Includes weighted estimates, confidence intervals, standard errors, agency counts,
+      and population coverage for violent and property crime indicators.
+
+    dimensions:
+      type:
+        - nibrs
+      endpoint_id: *bjs_nibrs_endpoints
+
+    columns:
+      - name: endpoint_id
+        type: string
+        nullable: false
+        comment: SODA dataset ID (e.g., r32q-bdaw)
+      - name: indicator_name
+        type: string
+        nullable: true
+        comment: Crime indicator name
+      - name: estimate
+        type: double
+        nullable: true
+        comment: Weighted national estimate
+      - name: estimate_unweighted
+        type: long
+        nullable: true
+        comment: Raw unweighted count
+      - name: estimate_type
+        type: string
+        nullable: true
+        comment: Estimate type (count, percentage, or rate)
+      - name: estimate_domain_1
+        type: string
+        nullable: true
+        comment: Primary domain (Incident count, Weapon involved, etc.)
+      - name: estimate_domain_2
+        type: string
+        nullable: true
+        comment: Secondary domain
+      - name: estimate_geographic_location
+        type: string
+        nullable: true
+        comment: Geographic location (typically National)
+      - name: estimate_standard_error
+        type: double
+        nullable: true
+        comment: Standard error
+      - name: estimate_upper_bound
+        type: double
+        nullable: true
+        comment: Upper 95% confidence bound
+      - name: estimate_lower_bound
+        type: double
+        nullable: true
+        comment: Lower 95% confidence bound
+      - name: relative_standard_error
+        type: double
+        nullable: true
+        comment: Relative standard error
+      - name: agency_counts
+        type: integer
+        nullable: true
+        comment: Number of contributing agencies
+      - name: pop_cov
+        type: double
+        nullable: true
+        comment: Population coverage fraction
+      - name: time_series_start_year
+        type: integer
+        nullable: true
+        comment: Year for the estimate
+      - name: full_table
+        type: string
+        nullable: true
+        comment: BJS table reference
+
+    source:
+      type: http
+      url: "https://data.ojp.usdoj.gov/resource/{endpoint_id}.json?$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nibrs/endpoint_id=*/"
+      partition:
+        columns: [type, endpoint_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: bjs_nibrs_estimates
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # BJS NCVS PERSONAL - National Crime Victimization Survey
+  # ---------------------------------------------------------------------------
+  - name: bjs_ncvs_personal
+    pattern: "type=ncvs/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Bureau of Justice Statistics National Crime Victimization Survey (NCVS) personal
+      victimization microdata from 1993 onwards. Contains ~40+ fields including crime type,
+      notification status, weapon use, injury, offender demographics, location, and survey weights.
+
+    dimensions:
+      type:
+        - ncvs
+      year:
+        type: yearRange
+        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 2
+
+    columns:
+      - name: year
+        type: string
+        nullable: true
+        comment: Survey year
+      - name: yearq
+        type: string
+        nullable: true
+        comment: Year and quarter
+      - name: newcrime
+        type: string
+        nullable: true
+        comment: Crime type code
+      - name: newoff
+        type: string
+        nullable: true
+        comment: Offense type code
+      - name: seriousviolent
+        type: string
+        nullable: true
+        comment: Serious violent crime indicator
+      - name: notify
+        type: string
+        nullable: true
+        comment: Police notification status
+      - name: weapon
+        type: string
+        nullable: true
+        comment: Weapon presence indicator
+      - name: weapcat
+        type: string
+        nullable: true
+        comment: Weapon category
+      - name: injury
+        type: string
+        nullable: true
+        comment: Injury indicator
+      - name: offenderage
+        type: string
+        nullable: true
+        comment: Offender age category
+      - name: offendersex
+        type: string
+        nullable: true
+        comment: Offender sex
+      - name: locationr
+        type: string
+        nullable: true
+        comment: Location of crime
+      - name: direl
+        type: string
+        nullable: true
+        comment: Victim-offender relationship
+      - name: region
+        type: string
+        nullable: true
+        comment: Census region
+      - name: msa
+        type: string
+        nullable: true
+        comment: Metropolitan statistical area indicator
+      - name: series_weight
+        type: double
+        nullable: true
+        comment: Survey series weight
+      - name: newwgt
+        type: double
+        nullable: true
+        comment: Person weight
+
+    source:
+      type: http
+      url: "https://data.ojp.usdoj.gov/resource/gcuy-rt5g.json?$where=year='{year}'&$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ncvs/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: bjs_ncvs_personal
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+  cde_agencies:
+    primaryKey: [ori]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_offenses:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_police_employment:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_hate_crimes:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_use_of_force:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]

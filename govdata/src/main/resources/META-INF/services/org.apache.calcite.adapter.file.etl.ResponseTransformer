@@ -12,3 +12,11 @@ org.apache.calcite.adapter.govdata.sec.AlphaVantageResponseTransformer
 
 # Census/Geo data APIs
 org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer
+
+# Crime/Public Safety data APIs
+org.apache.calcite.adapter.govdata.crime.CdeAgencyTransformer
+org.apache.calcite.adapter.govdata.crime.CdeCrimeRatesTransformer
+org.apache.calcite.adapter.govdata.crime.CdePoliceEmploymentTransformer
+org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer
+org.apache.calcite.adapter.govdata.crime.CdeAgencyOffenseTransformer
+org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer

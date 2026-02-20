@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
+import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
@@ -49,6 +50,7 @@ import java.util.Map;
  *   <li>econ - Economic data (BLS employment, FRED indicators, Treasury yields)</li>
  *   <li>econ_reference - Reference/dimension tables for economic data</li>
  *   <li>census - U.S. Census Bureau demographic and socioeconomic data</li>
+ *   <li>crime - FBI Crime Data Explorer and Bureau of Justice Statistics</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -215,10 +217,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "census":
         return new CensusSchemaFactory();
 
+      case "crime":
+      case "fbi_crime":
+      case "public_safety":
+        return new CrimeSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime");
     }
   }
 
