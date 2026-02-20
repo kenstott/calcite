@@ -431,6 +431,21 @@ python3 -u vss-bulk-gpu.py $args
 REMOTE_SCRIPT
 }
 
+run_vss_rebuild() {
+    local ip="$1"
+
+    log "Rebuilding VSS DuckDB cache with HNSW index..."
+
+    run_remote "$ip" << 'REMOTE_SCRIPT'
+set -e
+source /root/venv/bin/activate
+source /root/.env
+cd /root
+export PYTHONUNBUFFERED=1
+python3 -u vss-bulk-gpu.py --rebuild-vss-only --upload
+REMOTE_SCRIPT
+}
+
 #------------------------------------------------------------------------------
 # Pre-flight Check - Count pending chunks before GPU provisioning
 #------------------------------------------------------------------------------
@@ -647,6 +662,11 @@ main() {
 
     # Run embedding pipeline
     run_embedding_pipeline "$INSTANCE_IP" "$DRY_RUN"
+
+    # Rebuild VSS DuckDB cache (HNSW index) from all embedded chunks
+    if [[ "$DRY_RUN" != "1" ]]; then
+        run_vss_rebuild "$INSTANCE_IP"
+    fi
 
     # Destroy instance (cleanup trap will handle this)
     log "Pipeline complete, destroying instance..."

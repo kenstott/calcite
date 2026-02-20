@@ -4212,9 +4212,22 @@ public class XbrlToParquetConverter implements FileConverter {
           concept = name.contains(":") ? name.substring(name.indexOf(":") + 1) : name;
         }
       }
+      // Check for traditional XBRL link:footnote elements (pre-2019 companion XBRL)
+      // These are inside <link:footnoteLink> and contain XHTML content
+      else if ("footnote".equals(localName) && namespaceURI != null
+               && namespaceURI.contains("xbrl")) {
+        text = element.getTextContent().trim();
+        String footnoteId = element.getAttribute("id");
+        concept = "FootnoteAnnotation"
+            + (footnoteId != null && !footnoteId.isEmpty() ? "_" + footnoteId : "");
+      }
 
       // Process extracted text if found
-      if (text != null && text.length() > 200 && !text.startsWith("<")) {
+      // link:footnote elements use a lower threshold (50 chars) since they are
+      // explicit footnote annotations that may be shorter than TextBlock narratives
+      int minLength = "FootnoteAnnotation".equals(concept)
+          || (concept != null && concept.startsWith("FootnoteAnnotation_")) ? 50 : 200;
+      if (text != null && text.length() > minLength && !text.startsWith("<")) {
         String contextRef = element.getAttribute("contextRef");
 
         // Determine footnote section from concept name
