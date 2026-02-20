@@ -1608,6 +1608,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           tableDefinition.put("materialize", materializeObj);
         }
 
+        // Process dimensions if present (needed for form-type filtering)
+        Object dimensionsObj = tableConfig.get("dimensions");
+        if (dimensionsObj instanceof Map) {
+          tableDefinition.put("dimensions", dimensionsObj);
+        }
+
         partitionedTables.add(tableDefinition);
         LOGGER.debug("Loaded table definition from YAML: {}", tableName);
       }
