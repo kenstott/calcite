@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# Reset vectorized_chunks pipeline to regenerate with new chunking strategy.
+#
+# This script clears all layers of the vectorization pipeline:
+#   1. Staging parquet (*_chunks.parquet) - deleted from S3
+#   2. Iceberg table (vectorized_chunks) - dropped via PyIceberg
+#   3. Partition status tracking - cleared so ETL re-materializes
+#   4. VSS cache (loaded_accessions + HNSW index) - rebuilt from scratch
+#
+# After running this, the next ETL run will:
+#   - Re-extract chunks using individual (footnote/mda/earnings) strategy only
+#   - No more concept_group chunks (superseded by individual chunks)
+#   - Financial facts sourced from writeFactsToParquet data (no redundant DOM parse)
+#   - Null embeddings written (GPU pipeline fills real ones)
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
+
+# Load environment
+for env_file in .env.prod .env.test; do
+    if [[ -f "$GOVDATA_HOME/$env_file" ]]; then
+        echo "Loading $env_file"
+        set -a
+        source "$GOVDATA_HOME/$env_file"
+        set +a
+        break
+    fi
+done
+
+if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
+    echo "Error: AWS credentials not set. Source .env.prod or .env.test first."
+    exit 1
+fi
+
+S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-4}"
+S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE}"
+ICEBERG_PATH="$S3_BUCKET/source=sec/SEC/vectorized_chunks"
+OPERATING_DIR="${GOVDATA_HOME}/build/.aperio/sec"
+PARTITION_DB="$OPERATING_DIR/.partition_status.duckdb"
+VSS_DB="${VSS_DB:-$GOVDATA_HOME/build/.aperio/vss/chunks_vss.duckdb}"
+
+echo "=============================================="
+echo "Reset vectorized_chunks Pipeline"
+echo "=============================================="
+echo "S3 bucket:      $S3_BUCKET"
+echo "Iceberg path:   $ICEBERG_PATH"
+echo "Partition DB:   $PARTITION_DB"
+echo "VSS DB:         $VSS_DB"
+echo ""
+
+# -----------------------------------------------
+# Step 1: Delete staging *_chunks.parquet from S3
+# -----------------------------------------------
+echo "Step 1: Deleting staging *_chunks.parquet files from S3..."
+
+DELETED=$(aws s3 rm "$S3_BUCKET/source=sec/" \
+    --recursive \
+    --exclude "*" \
+    --include "*_chunks.parquet" \
+    --endpoint-url "$S3_ENDPOINT" 2>&1 | grep -c "^delete:" || true)
+
+echo "  Deleted $DELETED staging chunk files"
+echo ""
+
+# -----------------------------------------------
+# Step 2: Drop Iceberg table via PyIceberg
+# -----------------------------------------------
+echo "Step 2: Dropping vectorized_chunks Iceberg table..."
+
+python3 - << 'PYEOF'
+import os, sys
+
+try:
+    from pyiceberg.catalog import load_catalog
+
+    s3_endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
+    # Strip https:// for s3 endpoint config
+    s3_endpoint_bare = s3_endpoint.replace("https://", "").replace("http://", "")
+
+    catalog = load_catalog("default", **{
+        "type": "rest",
+        "uri": "http://localhost:8181",  # If REST catalog is available
+    })
+    catalog.drop_table("sec.vectorized_chunks")
+    print("  Dropped Iceberg table sec.vectorized_chunks via REST catalog")
+except Exception as e1:
+    # Fallback: try in-memory catalog with S3 warehouse
+    try:
+        s3_bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
+        warehouse = f"{s3_bucket}/source=sec/SEC".replace("s3://", "s3a://")
+
+        catalog = load_catalog("default", **{
+            "type": "in-memory",
+            "warehouse": warehouse,
+            "s3.access-key-id": os.environ["AWS_ACCESS_KEY_ID"],
+            "s3.secret-access-key": os.environ["AWS_SECRET_ACCESS_KEY"],
+            "s3.endpoint": os.environ.get("AWS_ENDPOINT_OVERRIDE", ""),
+            "s3.path-style-access": "true",
+        })
+        catalog.drop_table("default.vectorized_chunks")
+        print("  Dropped Iceberg table via in-memory catalog")
+    except Exception as e2:
+        print(f"  PyIceberg drop failed: {e2}")
+        print("  Falling back to deleting Iceberg metadata files from S3...")
+        # Manual cleanup: delete the metadata directory
+        import subprocess
+        bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
+        endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
+        iceberg_meta = f"{bucket}/source=sec/SEC/vectorized_chunks/metadata/"
+        result = subprocess.run(
+            ["aws", "s3", "rm", iceberg_meta, "--recursive", "--endpoint-url", endpoint],
+            capture_output=True, text=True
+        )
+        print(f"  Deleted Iceberg metadata: {result.stdout.count('delete:')} files")
+PYEOF
+
+echo ""
+
+# -----------------------------------------------
+# Step 3: Clear partition_status for vectorized_chunks
+# -----------------------------------------------
+echo "Step 3: Clearing partition status tracking..."
+
+if [[ -f "$PARTITION_DB" ]]; then
+    BEFORE=$(duckdb "$PARTITION_DB" -csv -noheader \
+        "SELECT COUNT(*) FROM partition_status WHERE alternate_name LIKE '%vectorized_chunks%'" 2>/dev/null || echo "0")
+    duckdb "$PARTITION_DB" \
+        "DELETE FROM partition_status WHERE alternate_name LIKE '%vectorized_chunks%'" 2>/dev/null || true
+    echo "  Cleared $BEFORE partition_status entries from $PARTITION_DB"
+else
+    echo "  No partition status DB found at $PARTITION_DB (will be created on next ETL run)"
+fi
+
+# Also clear table_completion if it exists
+if [[ -f "$PARTITION_DB" ]]; then
+    duckdb "$PARTITION_DB" \
+        "DELETE FROM table_completion WHERE pipeline_name LIKE '%vectorized_chunks%'" 2>/dev/null || true
+    echo "  Cleared table_completion entries"
+fi
+
+echo ""
+
+# -----------------------------------------------
+# Step 4: Reset VSS cache
+# -----------------------------------------------
+echo "Step 4: Resetting VSS cache..."
+
+if [[ -f "$VSS_DB" ]]; then
+    SIZE=$(ls -lh "$VSS_DB" | awk '{print $5}')
+    rm -f "$VSS_DB" "${VSS_DB}.wal"
+    echo "  Deleted VSS database ($SIZE): $VSS_DB"
+else
+    echo "  No local VSS database found at $VSS_DB"
+fi
+
+# Also clean S3 VSS cache if it exists
+aws s3 rm "$S3_BUCKET/cache/vss/chunks_vss.duckdb" \
+    --endpoint-url "$S3_ENDPOINT" 2>/dev/null && \
+    echo "  Deleted S3 VSS cache: $S3_BUCKET/cache/vss/chunks_vss.duckdb" || \
+    echo "  No S3 VSS cache found"
+
+aws s3 rm "$S3_BUCKET/cache/vss/metadata.json" \
+    --endpoint-url "$S3_ENDPOINT" 2>/dev/null && \
+    echo "  Deleted S3 VSS metadata" || true
+
+echo ""
+
+# -----------------------------------------------
+# Summary
+# -----------------------------------------------
+echo "=============================================="
+echo "Reset Complete"
+echo "=============================================="
+echo ""
+echo "Next steps:"
+echo "  1. Run ETL to regenerate chunks:"
+echo "     ./scripts/etl-full-schedule.sh"
+echo ""
+echo "  2. GPU pipeline will auto-generate embeddings"
+echo "     (triggered by schema postProcess hook)"
+echo ""
+echo "  3. Rebuild VSS cache after embeddings complete:"
+echo "     ./scripts/vss-rebuild-full.sh"
+echo ""

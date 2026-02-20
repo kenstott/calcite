@@ -268,10 +268,11 @@ public class XbrlToParquetConverter implements FileConverter {
       String mdaPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId));
       String relationshipsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId));
 
-      // Convert financial facts to Parquet
+      // Convert financial facts to Parquet (returns extracted data for reuse by vectorization)
+      List<Map<String, Object>> factsData;
       LOGGER.debug(" Starting facts.parquet generation for: " + fileName + " -> " + factsPath);
       try {
-        writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, accession, sourceFilePath);
+        factsData = writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, accession, sourceFilePath);
         // Paths are already full paths from storageProvider.resolvePath()
         outputFiles.add(factsPath);
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
@@ -309,7 +310,7 @@ public class XbrlToParquetConverter implements FileConverter {
       if (enableVectorization) {
         String chunksPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
-        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath, mdaData);
+        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath, mdaData, factsData);
         outputFiles.add(chunksPath);
       }
 
@@ -649,7 +650,7 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
-  private void writeFactsToParquet(Document doc, String outputPath,
+  private List<Map<String, Object>> writeFactsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String accession, String sourcePath) throws IOException {
 
     LOGGER.debug("writeFactsToParquet called for " + outputPath +
@@ -847,6 +848,7 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.error("Failed to write facts parquet file for {} (CIK: {}): {}", filingDate, cik, e.getMessage());
       throw new IOException("Failed to write facts to parquet: " + e.getMessage(), e);
     }
+    return dataList;
   }
 
   private void writeMetadataToParquet(Document doc, String outputPath,
@@ -4011,7 +4013,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void writeVectorizedChunksToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath,
-      List<Map<String, Object>> mdaData) throws IOException {
+      List<Map<String, Object>> mdaData, List<Map<String, Object>> factsData) throws IOException {
 
     // Load schema from metadata (now vectorized_chunks)
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -4039,10 +4041,19 @@ public class XbrlToParquetConverter implements FileConverter {
     Map<String, List<String>> references = buildReferenceMap(footnoteBlobs, mdaBlobs);
     LOGGER.info("VECTORIZATION: Built reference map with {} entries", references.size());
 
-    // Extract financial facts for enrichment
-    LOGGER.info("VECTORIZATION: Extracting financial facts for vectorization");
-    Map<String, SecTextVectorizer.FinancialFact> facts = extractFinancialFactsForVectorization(doc);
-    LOGGER.info("VECTORIZATION: Extracted {} financial facts", facts.size());
+    // Build financial facts map from already-extracted facts data (avoids redundant DOM traversal)
+    Map<String, SecTextVectorizer.FinancialFact> facts = new HashMap<>();
+    for (Map<String, Object> row : factsData) {
+      String concept = (String) row.get("concept");
+      Object numericValue = row.get("numeric_value");
+      if (concept != null && numericValue instanceof Number) {
+        String period = row.get("period_end") != null
+            ? (String) row.get("period_end") : "unknown";
+        facts.put(concept, new SecTextVectorizer.FinancialFact(
+            concept, ((Number) numericValue).doubleValue(), period));
+      }
+    }
+    LOGGER.info("VECTORIZATION: Built {} financial facts from extracted data", facts.size());
 
     // Create vectorizer instance
     SecTextVectorizer vectorizer = new SecTextVectorizer();
@@ -4055,18 +4066,8 @@ public class XbrlToParquetConverter implements FileConverter {
             new ArrayList<>(), references, facts, filingDate, periodEnd);
     LOGGER.info("VECTORIZATION: Created {} individual chunks", individualChunks.size());
 
-    // Also generate concept group chunks (existing functionality)
-    LOGGER.info("VECTORIZATION: Creating concept group chunks from document");
-    List<SecTextVectorizer.ContextualChunk> conceptChunks =
-        vectorizer.createContextualChunks(doc, sourcePath);
-    LOGGER.info("VECTORIZATION: Created {} concept group chunks", conceptChunks.size());
-
-    // Combine all chunks
-    List<SecTextVectorizer.ContextualChunk> allChunks = new ArrayList<>();
-    allChunks.addAll(individualChunks);
-    allChunks.addAll(conceptChunks);
-    LOGGER.info("Total chunks for vectorization: {} (individual: {}, concept: {})",
-        allChunks.size(), individualChunks.size(), conceptChunks.size());
+    List<SecTextVectorizer.ContextualChunk> allChunks = individualChunks;
+    LOGGER.info("Total chunks for vectorization: {}", allChunks.size());
 
     // Extract accession number from output path (e.g., CIK_ACCESSION_chunks.parquet)
     String accessionNumber = null;
@@ -4397,14 +4398,6 @@ public class XbrlToParquetConverter implements FileConverter {
     return references;
   }
 
-  /**
-   * Extract financial facts for vectorization enrichment.
-   */
-  private Map<String, SecTextVectorizer.FinancialFact> extractFinancialFactsForVectorization(Document doc) {
-    // This method would need to be made accessible from SecTextVectorizer
-    // For now, return empty map - the vectorizer will handle this internally
-    return new HashMap<>();
-  }
 
   /**
    * Generate a simple embedding for short text (used for insider forms).
