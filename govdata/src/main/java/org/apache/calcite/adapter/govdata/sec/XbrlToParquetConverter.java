@@ -1249,36 +1249,40 @@ public class XbrlToParquetConverter implements FileConverter {
           parentDir.substring(parentDir.lastIndexOf('/') + 1);
 
       if (cik == null || accessionDir.isEmpty()) {
-        LOGGER.debug("Cannot extract CIK/accession from path: {}", htmlPath);
+        LOGGER.debug("Cannot extract CIK/accession from path: {}",
+            htmlPath);
         return null;
       }
 
       String cikNumeric = cik.replaceFirst("^0+", "");
-
-      // Fetch FilingSummary.xml to find the XBRL instance document name
-      String summaryUrl = String.format(
-          "https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml",
+      String baseUrl = String.format(
+          "https://www.sec.gov/Archives/edgar/data/%s/%s",
           cikNumeric, accessionDir);
-      String summaryXml = downloadFile(summaryUrl);
-      if (summaryXml == null) {
-        LOGGER.debug("FilingSummary.xml not available for {}/{}",
+
+      // Strategy 1: FilingSummary.xml (reliable when present)
+      String xbrlFileName = null;
+      String summaryXml = downloadFile(baseUrl + "/FilingSummary.xml");
+      if (summaryXml != null) {
+        xbrlFileName = parseXbrlFilenameFromSummary(summaryXml);
+      }
+
+      // Strategy 2: Parse filing index page for XBRL instance doc
+      if (xbrlFileName == null) {
+        String indexHtml = downloadFile(baseUrl + "/");
+        if (indexHtml != null) {
+          xbrlFileName = findXbrlInstanceInIndex(indexHtml);
+        }
+      }
+
+      if (xbrlFileName == null) {
+        LOGGER.debug("No companion XBRL found for {}/{}",
             cikNumeric, accessionDir);
         return null;
       }
 
-      String xbrlFileName = parseXbrlFilenameFromSummary(summaryXml);
-      if (xbrlFileName == null) {
-        LOGGER.debug("No XBRL instance document in FilingSummary.xml");
-        return null;
-      }
-
       // Download the XBRL instance file from EDGAR
-      String xbrlUrl = String.format(
-          "https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
-          cikNumeric, accessionDir, xbrlFileName);
       LOGGER.info("Downloading companion XBRL: {}", xbrlFileName);
-
-      String xbrlContent = downloadFile(xbrlUrl);
+      String xbrlContent = downloadFile(baseUrl + "/" + xbrlFileName);
       if (xbrlContent == null) {
         LOGGER.warn("Failed to download XBRL file: {}", xbrlFileName);
         return null;
@@ -1297,6 +1301,77 @@ public class XbrlToParquetConverter implements FileConverter {
           htmlPath, e.getMessage());
       return null;
     }
+  }
+
+  /**
+   * Parses an EDGAR filing index page to find the XBRL instance document.
+   * Looks for .xml files with type "EX-101.INS" or similar XBRL patterns,
+   * filtering out taxonomy linkbase files.
+   */
+  private String findXbrlInstanceInIndex(String indexHtml) {
+    org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+    org.jsoup.select.Elements rows = doc.select("table tr");
+
+    String bestCandidate = null;
+
+    for (org.jsoup.nodes.Element row : rows) {
+      org.jsoup.select.Elements cells = row.select("td");
+      if (cells.size() < 3) {
+        continue;
+      }
+
+      // Find link and type text from cells
+      String docType = "";
+      String fileName = null;
+
+      for (org.jsoup.nodes.Element cell : cells) {
+        org.jsoup.nodes.Element link = cell.selectFirst("a");
+        if (link != null && fileName == null) {
+          String href = link.attr("href");
+          if (href.endsWith(".xml") || href.endsWith(".htm")
+              || href.endsWith(".txt")) {
+            fileName = href.substring(
+                href.lastIndexOf('/') + 1);
+          }
+        }
+        String text = cell.text().trim().toLowerCase(Locale.ROOT);
+        if (text.contains("ex-101") || text.contains("xbrl")) {
+          docType = text;
+        }
+      }
+
+      if (fileName == null || !fileName.endsWith(".xml")) {
+        continue;
+      }
+
+      String nameLower = fileName.toLowerCase(Locale.ROOT);
+
+      // Skip taxonomy/linkbase files
+      if (nameLower.contains("_lab") || nameLower.contains("_cal")
+          || nameLower.contains("_def") || nameLower.contains("_pre")
+          || nameLower.endsWith(".xsd")) {
+        continue;
+      }
+      // Skip R-viewer and MetaLinks files
+      if (nameLower.matches("r\\d+\\.xml")
+          || nameLower.equals("metalinks.json")
+          || nameLower.equals("filingsummary.xml")) {
+        continue;
+      }
+
+      // Best match: explicit XBRL instance type
+      if (docType.contains("ex-101.ins")
+          || docType.contains("xbrl instance")) {
+        return fileName;
+      }
+
+      // Track first non-linkbase .xml as fallback
+      if (bestCandidate == null) {
+        bestCandidate = fileName;
+      }
+    }
+
+    return bestCandidate;
   }
 
   /**
