@@ -68,14 +68,24 @@ public class CrimeSchemaFactory implements GovDataSubSchemaFactory {
               "cde_police_employment",
               "cde_hate_crimes",
               "cde_use_of_force",
-              "cde_crime_agency"));
+              "cde_crime_agency",
+              "cde_arrests",
+              "cde_shr",
+              "cde_leoka",
+              "cde_cargo_theft",
+              "cde_human_trafficking",
+              "cde_participation",
+              "cde_estimates"));
 
   // Bureau of Justice Statistics tables
   private static final Set<String> BJS_TABLES =
       new HashSet<>(
           Arrays.asList(
               "bjs_nibrs_estimates",
-              "bjs_ncvs_personal"));
+              "bjs_ncvs_personal",
+              "bjs_ncvs_personal_pop",
+              "bjs_ncvs_household",
+              "bjs_ncvs_household_pop"));
 
   @Override public String getSchemaResourceName() {
     return "/crime/crime-schema.yaml";

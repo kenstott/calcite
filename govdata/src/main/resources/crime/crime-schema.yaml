@@ -2,9 +2,11 @@
 # U.S. Crime and Public Safety Data Schema (CRIME)
 # ============================================================================
 # Data Sources:
-#   - FBI Crime Data Explorer (CDE) - Agency data, offense rates, police
-#     employment, hate crimes, use of force
+#   - FBI Crime Data Explorer (CDE) - Agency data, offense rates, arrests, SHR,
+#     police employment, hate crimes, use of force, LEOKA, cargo theft,
+#     human trafficking, participation, crime estimates
 #   - Bureau of Justice Statistics (BJS) - NIBRS estimates, NCVS victimization
+#     (personal + household), NCVS population data
 #
 # Features:
 #   - Cross-references with geo.states via state_abbr
@@ -17,10 +19,13 @@ dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=crime"
 
 comment: >
-  U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and Bureau of
-  Justice Statistics (BJS). Includes law enforcement agency data, offense rates by state,
-  police employment, hate crime statistics, use of force metrics, NIBRS national estimates,
-  and NCVS victimization surveys. Joins with geo.states via state_abbr for geographic analysis.
+  Comprehensive U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and
+  Bureau of Justice Statistics (BJS). CDE tables cover law enforcement agencies, summarized
+  offense rates, agency-level offenses, arrests, supplementary homicide reports (SHR), police
+  employment, hate crimes, use of force, LEOKA (officers killed/assaulted), cargo theft,
+  human trafficking, agency participation rates, and estimated crime counts. BJS tables cover
+  NIBRS national crime estimates, NCVS personal and household victimization, and NCVS
+  population data. All state-level tables join with geo.states via state_abbr.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -152,7 +157,8 @@ dimension_values:
     - 'WI'
     - 'WY'
 
-  # UCR core offense codes for summarized crime data
+  # UCR offense codes for summarized crime data
+  # Aggregate categories
   ucr_core_offenses: &ucr_core_offenses
     - 'violent-crime'
     - 'property-crime'
@@ -164,6 +170,48 @@ dimension_values:
     - 'larceny'
     - 'motor-vehicle-theft'
     - 'arson'
+
+  # Full NIBRS offense types for detailed queries
+  ucr_all_offenses: &ucr_all_offenses
+    - 'violent-crime'
+    - 'property-crime'
+    - 'homicide'
+    - 'aggravated-assault'
+    - 'rape-legacy'
+    - 'rape-revised'
+    - 'robbery'
+    - 'burglary'
+    - 'larceny'
+    - 'motor-vehicle-theft'
+    - 'arson'
+    - 'human-trafficing'
+    - 'human-trafficking-commercial'
+    - 'human-trafficking-servitude'
+
+  # Arrest offense categories
+  arrest_offenses: &arrest_offenses
+    - 'all'
+    - 'violent-crime'
+    - 'property-crime'
+    - 'drug-abuse'
+    - 'dui'
+    - 'liquor-laws'
+    - 'drunkenness'
+    - 'other-assault'
+    - 'disorderly-conduct'
+    - 'vandalism'
+    - 'fraud'
+    - 'forgery'
+    - 'embezzlement'
+    - 'stolen-property'
+    - 'weapons'
+    - 'prostitution'
+    - 'sex-offenses'
+    - 'gambling'
+    - 'offenses-against-family'
+    - 'vagrancy'
+    - 'curfew'
+    - 'runaways'
 
   # Year range for FBI CDE data
   # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
@@ -178,12 +226,23 @@ dimension_values:
 
   # BJS NIBRS SODA endpoint IDs
   bjs_nibrs_endpoints: &bjs_nibrs_endpoints
-    - 'r32q-bdaw'
-    - 'iv7i-eah6'
-    - 'x3sz-eb6y'
-    - 'kj7p-vx4s'
-    - 'ms42-n765'
-    - 'uy37-xgmh'
+    - 'r32q-bdaw'   # Violent incidents
+    - 'iv7i-eah6'   # Property incidents
+    - 'x3sz-eb6y'   # Violent offenses
+    - 'kj7p-vx4s'   # Property offenses
+    - 'ms42-n765'   # Victimization counts
+    - 'uy37-xgmh'   # Victimization rates
+
+  # BJS NCVS SODA endpoint IDs
+  bjs_ncvs_endpoints: &bjs_ncvs_endpoints
+    - endpoint_id: 'gcuy-rt5g'
+      name: ncvs_personal
+    - endpoint_id: 'r4j4-fdwx'
+      name: ncvs_personal_pop
+    - endpoint_id: 'gkck-euys'
+      name: ncvs_household
+    - endpoint_id: 'ya4e-n9zp'
+      name: ncvs_household_pop
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -624,6 +683,444 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # CDE ARRESTS - Arrest data by state, offense, age, sex, race
+  # ---------------------------------------------------------------------------
+  - name: cde_arrests
+    pattern: "type=arrest/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE arrest data by state and offense category. Includes monthly arrest
+      counts broken down by age group, sex, and race. Covers drug abuse, DUI,
+      violent crime, property crime, and 20+ other categories.
+
+    dimensions:
+      type:
+        - arrest
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+      offense: *arrest_offenses
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - name: offense_code
+        type: string
+        nullable: false
+        comment: Arrest offense category (e.g., drug-abuse, dui, violent-crime)
+      - <<: *section_column
+        comment: Data section (age, sex, race, ethnicity)
+      - <<: *category_column
+        comment: Category within section (e.g., Under 10, Male, White)
+      - <<: *label_column
+        comment: Metric label
+      - name: count
+        type: long
+        nullable: true
+        comment: Arrest count
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/data/arrest/states/{state_abbr}/{offense}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=arrest/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_arrests
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE SHR - Supplementary Homicide Reports
+  # ---------------------------------------------------------------------------
+  - name: cde_shr
+    pattern: "type=shr/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE Supplementary Homicide Reports. Victim and offender demographics
+      for homicide incidents including age, sex, race, relationship, weapon,
+      and circumstance details.
+
+    dimensions:
+      type:
+        - shr
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+        comment: Data section (victim demographics, offender demographics, circumstances)
+      - <<: *category_column
+        comment: Category (age, sex, race, relationship, weapon, circumstance)
+      - <<: *label_column
+        comment: Value label
+      - name: count
+        type: long
+        nullable: true
+        comment: Count for this combination
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/shr/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=shr/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_shr
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE LEOKA - Law Enforcement Officers Killed and Assaulted
+  # ---------------------------------------------------------------------------
+  - name: cde_leoka
+    pattern: "type=leoka/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE Law Enforcement Officers Killed and Assaulted (LEOKA) data.
+      Totals for officers killed (feloniously and accidentally) and assaulted
+      in the line of duty, by state and year.
+
+    dimensions:
+      type:
+        - leoka
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+        comment: Data section (killed, assaulted, activity, weapon, assignment)
+      - <<: *category_column
+        comment: Category within section
+      - <<: *label_column
+        comment: Metric label
+      - name: count
+        type: long
+        nullable: true
+        comment: Count for this combination
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/leoka/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=leoka/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_leoka
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE CARGO THEFT - Cargo theft incidents
+  # ---------------------------------------------------------------------------
+  - name: cde_cargo_theft
+    pattern: "type=cargo_theft/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE cargo theft data by state and year. Includes theft totals by
+      property type, property value, location type, and offense details.
+
+    dimensions:
+      type:
+        - cargo_theft
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+        comment: Data section (property_type, location_type, offense)
+      - <<: *category_column
+        comment: Category within section
+      - <<: *label_column
+        comment: Value label
+      - name: count
+        type: long
+        nullable: true
+        comment: Count for this combination
+      - name: value
+        type: double
+        nullable: true
+        comment: Property value (when applicable)
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/cargo-theft/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cargo_theft/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_cargo_theft
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE HUMAN TRAFFICKING - Human trafficking offenses
+  # ---------------------------------------------------------------------------
+  - name: cde_human_trafficking
+    pattern: "type=human_trafficking/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE human trafficking data by state and year. Covers commercial
+      sex acts and involuntary servitude offenses and arrests.
+
+    dimensions:
+      type:
+        - human_trafficking
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+        comment: Data section (offense_type, arrest)
+      - <<: *category_column
+        comment: Category (commercial_sex_acts, involuntary_servitude)
+      - <<: *label_column
+        comment: Metric label
+      - name: count
+        type: long
+        nullable: true
+        comment: Count for this combination
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/human-trafficking/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=human_trafficking/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_human_trafficking
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE PARTICIPATION - Agency reporting participation rates
+  # ---------------------------------------------------------------------------
+  - name: cde_participation
+    pattern: "type=participation/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE agency participation data showing SRS and NIBRS reporting rates
+      by state and year. Tracks agency reporting coverage and population
+      represented by reporting agencies.
+
+    dimensions:
+      type:
+        - participation
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - <<: *section_column
+        comment: Reporting system (srs, nibrs)
+      - <<: *category_column
+        comment: Metric category (agencies, population, coverage)
+      - <<: *label_column
+        comment: Metric label
+      - name: value
+        type: double
+        nullable: true
+        comment: Metric value (count, percentage, or rate)
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/participation/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=participation/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_participation
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE ESTIMATES - Estimated crime counts (state and national)
+  # ---------------------------------------------------------------------------
+  - name: cde_estimates
+    pattern: "type=estimate/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE estimated crime counts for states and nationally. Provides
+      estimated totals that account for agencies that did not report,
+      enabling more accurate trend analysis than raw reported counts alone.
+
+    dimensions:
+      type:
+        - estimate
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+      offense: *ucr_core_offenses
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - name: offense_code
+        type: string
+        nullable: false
+        comment: FBI offense code
+      - name: estimated_count
+        type: long
+        nullable: true
+        comment: Estimated total offense count
+      - name: reported_count
+        type: long
+        nullable: true
+        comment: Actual reported count
+      - name: population
+        type: long
+        nullable: true
+        comment: State population
+      - name: rate_per_100k
+        type: double
+        nullable: true
+        comment: Estimated rate per 100,000 population
+
+    source:
+      type: http
+      url: "https://api.usa.gov/crime/fbi/sapi/api/estimates/state/{state_abbr}/{offense}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeCrimeRatesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=estimate/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_estimates
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # BJS NIBRS ESTIMATES - National Crime Victimization Estimates
   # ---------------------------------------------------------------------------
   - name: bjs_nibrs_estimates
@@ -851,6 +1348,284 @@ partitionedTables:
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
+  # ---------------------------------------------------------------------------
+  # BJS NCVS PERSONAL POPULATION - NCVS survey respondent demographics
+  # ---------------------------------------------------------------------------
+  - name: bjs_ncvs_personal_pop
+    pattern: "type=ncvs_pop/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Bureau of Justice Statistics NCVS personal population data. Demographic
+      information for all survey respondents regardless of victimization status.
+      Includes age, sex, race, Hispanic origin, marital status, education, income.
+      Used as denominator for computing victimization rates from bjs_ncvs_personal.
+
+    dimensions:
+      type:
+        - ncvs_pop
+      year:
+        type: yearRange
+        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 2
+
+    columns:
+      - name: year
+        type: string
+        nullable: true
+        comment: Survey year
+      - name: yearq
+        type: string
+        nullable: true
+        comment: Year and quarter
+      - name: age
+        type: string
+        nullable: true
+        comment: Respondent age
+      - name: sex
+        type: string
+        nullable: true
+        comment: Respondent sex
+      - name: race
+        type: string
+        nullable: true
+        comment: Respondent race
+      - name: hispanic
+        type: string
+        nullable: true
+        comment: Hispanic origin indicator
+      - name: marital
+        type: string
+        nullable: true
+        comment: Marital status
+      - name: education
+        type: string
+        nullable: true
+        comment: Education level
+      - name: income
+        type: string
+        nullable: true
+        comment: Household income category
+      - name: region
+        type: string
+        nullable: true
+        comment: Census region
+      - name: msa
+        type: string
+        nullable: true
+        comment: Metropolitan statistical area indicator
+      - name: wgtpercy
+        type: double
+        nullable: true
+        comment: Person weight
+
+    source:
+      type: http
+      url: "https://data.ojp.usdoj.gov/resource/r4j4-fdwx.json?$where=year='{year}'&$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ncvs_pop/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: bjs_ncvs_personal_pop
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # BJS NCVS HOUSEHOLD - Household property crime victimization
+  # ---------------------------------------------------------------------------
+  - name: bjs_ncvs_household
+    pattern: "type=ncvs_hh/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Bureau of Justice Statistics NCVS household victimization data. Property
+      crime victimizations including burglary, theft, motor vehicle theft, and
+      vandalism. One row per household victimization incident.
+
+    dimensions:
+      type:
+        - ncvs_hh
+      year:
+        type: yearRange
+        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 2
+
+    columns:
+      - name: year
+        type: string
+        nullable: true
+        comment: Survey year
+      - name: yearq
+        type: string
+        nullable: true
+        comment: Year and quarter
+      - name: newcrime
+        type: string
+        nullable: true
+        comment: Crime type code
+      - name: newoff
+        type: string
+        nullable: true
+        comment: Offense type code
+      - name: notify
+        type: string
+        nullable: true
+        comment: Police notification status
+      - name: region
+        type: string
+        nullable: true
+        comment: Census region
+      - name: msa
+        type: string
+        nullable: true
+        comment: Metropolitan statistical area indicator
+      - name: tenure
+        type: string
+        nullable: true
+        comment: Home ownership status
+      - name: income
+        type: string
+        nullable: true
+        comment: Household income category
+      - name: series_weight
+        type: double
+        nullable: true
+        comment: Survey series weight
+      - name: wgtviccy
+        type: double
+        nullable: true
+        comment: Household victimization weight
+
+    source:
+      type: http
+      url: "https://data.ojp.usdoj.gov/resource/gkck-euys.json?$where=year='{year}'&$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ncvs_hh/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: bjs_ncvs_household
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # BJS NCVS HOUSEHOLD POPULATION - Household demographics
+  # ---------------------------------------------------------------------------
+  - name: bjs_ncvs_household_pop
+    pattern: "type=ncvs_hh_pop/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Bureau of Justice Statistics NCVS household population data. Demographic
+      data for all participating households regardless of victimization. Used as
+      denominator for computing property crime victimization rates.
+
+    dimensions:
+      type:
+        - ncvs_hh_pop
+      year:
+        type: yearRange
+        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 2
+
+    columns:
+      - name: year
+        type: string
+        nullable: true
+        comment: Survey year
+      - name: yearq
+        type: string
+        nullable: true
+        comment: Year and quarter
+      - name: region
+        type: string
+        nullable: true
+        comment: Census region
+      - name: msa
+        type: string
+        nullable: true
+        comment: Metropolitan statistical area indicator
+      - name: tenure
+        type: string
+        nullable: true
+        comment: Home ownership status
+      - name: income
+        type: string
+        nullable: true
+        comment: Household income category
+      - name: hhsize
+        type: string
+        nullable: true
+        comment: Household size
+      - name: wgthhcy
+        type: double
+        nullable: true
+        comment: Household weight
+
+    source:
+      type: http
+      url: "https://data.ojp.usdoj.gov/resource/ya4e-n9zp.json?$where=year='{year}'&$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ncvs_hh_pop/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: bjs_ncvs_household_pop
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -886,6 +1661,61 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_use_of_force:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_crime_agency:
+    foreignKeys:
+      - columns: [ori]
+        targetTable: cde_agencies
+        targetColumns: [ori]
+
+  cde_arrests:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_shr:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_leoka:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_cargo_theft:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_human_trafficking:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_participation:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_estimates:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
