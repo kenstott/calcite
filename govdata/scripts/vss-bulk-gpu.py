@@ -200,24 +200,41 @@ def update_version_hint_after_append(table):
 
 def fetch_null_embedding_chunks(conn: duckdb.DuckDBPyConnection) -> list[dict]:
     """
-    Read ALL chunks from vectorized_chunks that need embeddings.
-    Uses DuckDB iceberg_scan for proper Iceberg reads.
-    Returns chunks with NULL or placeholder [0.0] embeddings.
+    Read chunks from vectorized_chunks that need embeddings.
+    Uses DuckDB iceberg_scan with temp table workaround for filter pushdown bug.
+    Deduplicates by (cik, chunk_id) to handle Iceberg append-only semantics:
+    the Java materializer writes rows with NULL embeddings, and the GPU pipeline
+    appends rows WITH embeddings — both coexist in the table.
+    Only returns chunks that have NO embedded copy anywhere in the table.
     """
     print("Querying vectorized_chunks for NULL embeddings (iceberg_scan)...")
     start = time.time()
 
-    result = conn.execute(f"""
-        SELECT cik, accession_number, year, chunk_id,
-               source_type, section, "sequence", filing_date,
-               chunk_text, enriched_text, content_type,
-               financial_concepts, exhibit_number,
-               speaker_name, speaker_role, paragraph_number
-        FROM iceberg_scan('{ICEBERG_CHUNKS}')
-        WHERE chunk_text IS NOT NULL
-          AND LENGTH(chunk_text) > 10
-          AND (embedding IS NULL
-               OR (array_length(embedding) = 1 AND embedding[1] = 0.0))
+    # Materialize to temp table first (DuckDB iceberg filter pushdown bug workaround)
+    conn.execute(f"""
+        CREATE OR REPLACE TEMP TABLE _all_chunks AS
+        SELECT * FROM iceberg_scan('{ICEBERG_CHUNKS}')
+    """)
+
+    # Find chunks that need embeddings: have a NULL-embedding row but NO
+    # embedded row (i.e., chunk_id+cik combos where no copy has a real embedding)
+    result = conn.execute("""
+        SELECT c.cik, c.accession_number, c.year, c.chunk_id,
+               c.source_type, c.section, c."sequence", c.filing_date,
+               c.chunk_text, c.enriched_text, c.content_type,
+               c.financial_concepts, c.exhibit_number,
+               c.speaker_name, c.speaker_role, c.paragraph_number
+        FROM _all_chunks c
+        WHERE c.chunk_text IS NOT NULL
+          AND LENGTH(c.chunk_text) > 10
+          AND (c.embedding IS NULL
+               OR (array_length(c.embedding) = 1 AND c.embedding[1] = 0.0))
+          AND NOT EXISTS (
+              SELECT 1 FROM _all_chunks e
+              WHERE e.cik = c.cik AND e.chunk_id = c.chunk_id
+                AND e.embedding IS NOT NULL
+                AND array_length(e.embedding) > 1
+          )
     """).fetchall()
 
     elapsed = time.time() - start
@@ -367,12 +384,24 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
             CREATE OR REPLACE TEMP TABLE _iceberg_chunks AS
             SELECT * FROM iceberg_scan('{ICEBERG_CHUNKS}')
         """)
+        # Deduplicate by (cik, chunk_id): Iceberg is append-only, so both the
+        # original NULL-embedding row and the GPU-embedded row coexist.
+        # Use ROW_NUMBER to pick the row with a real embedding (non-NULL, length > 1).
         conn.execute(f"""
             COPY (
                 SELECT cik, accession_number, year as yr, chunk_id,
                        source_type, section, chunk_text, content_type, embedding
-                FROM _iceberg_chunks
-                WHERE embedding IS NOT NULL
+                FROM (
+                    SELECT *, ROW_NUMBER() OVER (
+                        PARTITION BY cik, chunk_id
+                        ORDER BY CASE WHEN embedding IS NOT NULL
+                                       AND array_length(embedding) > 1
+                                      THEN 0 ELSE 1 END
+                    ) as _rn
+                    FROM _iceberg_chunks
+                )
+                WHERE _rn = 1
+                  AND embedding IS NOT NULL
                   AND array_length(embedding) > 1
             ) TO '{temp_path}' (FORMAT PARQUET)
         """)
