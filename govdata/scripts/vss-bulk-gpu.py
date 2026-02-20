@@ -108,25 +108,94 @@ def create_duckdb_connection(db_path: str = ":memory:") -> duckdb.DuckDBPyConnec
     return conn
 
 
+def get_pyiceberg_s3_properties() -> dict:
+    """Get S3 properties for PyIceberg file I/O."""
+    config = get_s3_config()
+    return {
+        "s3.access-key-id": config["s3_access_key_id"],
+        "s3.secret-access-key": config["s3_secret_access_key"],
+        "s3.endpoint": config["s3_endpoint_url"],
+        "s3.region": config["s3_region"],
+    }
+
+
 def load_iceberg_table():
-    """Load the Iceberg table using PyIceberg."""
+    """Load the Iceberg table using PyIceberg in-memory catalog + register_table."""
     from pyiceberg.catalog import load_catalog
 
-    config = get_s3_config()
+    props = get_pyiceberg_s3_properties()
 
     catalog = load_catalog(
-        "hadoop",
+        "default",
         **{
-            "type": "hadoop",
+            "type": "in-memory",
             "warehouse": ICEBERG_WAREHOUSE.replace("s3://", "s3a://"),
-            "s3.access-key-id": config["s3_access_key_id"],
-            "s3.secret-access-key": config["s3_secret_access_key"],
-            "s3.endpoint": config["s3_endpoint_url"],
-            "s3.region": config["s3_region"],
+            **props,
         },
     )
 
-    return catalog.load_table(ICEBERG_TABLE)
+    # Create namespace if needed, then register existing table from metadata
+    try:
+        catalog.create_namespace("default")
+    except Exception:
+        pass
+
+    metadata_location = f"{ICEBERG_CHUNKS}/metadata"
+
+    # Read version-hint.text to find current metadata version
+    import s3fs
+    fs = s3fs.S3FileSystem(
+        key=props["s3.access-key-id"],
+        secret=props["s3.secret-access-key"],
+        client_kwargs={"endpoint_url": props["s3.endpoint"]},
+    )
+    hint_path = f"{metadata_location}/version-hint.text".replace("s3://", "")
+    version = int(fs.cat_file(hint_path).decode().strip())
+    metadata_file = f"{metadata_location}/v{version}.metadata.json".replace("s3://", "s3://")
+
+    table = catalog.register_table(
+        ("default", ICEBERG_TABLE),
+        metadata_file,
+    )
+    return table
+
+
+def update_version_hint_after_append(table):
+    """After PyIceberg append, copy UUID-named metadata to vN.metadata.json and update version-hint.text.
+
+    PyIceberg writes metadata with UUID naming (00000-uuid.metadata.json) but
+    DuckDB iceberg_scan expects sequential naming (vN.metadata.json) via version-hint.text.
+    """
+    import s3fs
+
+    props = get_pyiceberg_s3_properties()
+    fs = s3fs.S3FileSystem(
+        key=props["s3.access-key-id"],
+        secret=props["s3.secret-access-key"],
+        client_kwargs={"endpoint_url": props["s3.endpoint"]},
+    )
+
+    metadata_dir = f"{ICEBERG_CHUNKS}/metadata".replace("s3://", "")
+    hint_path = f"{metadata_dir}/version-hint.text"
+
+    # Read current version
+    current_version = int(fs.cat_file(hint_path).decode().strip())
+
+    # Get the new metadata file path from the table object (set by PyIceberg after append)
+    new_metadata_path = table.metadata_location.replace("s3a://", "").replace("s3://", "")
+
+    new_version = current_version + 1
+    new_name = f"{metadata_dir}/v{new_version}.metadata.json"
+
+    print(f"  Promoting metadata: {new_metadata_path.split('/')[-1]} -> v{new_version}.metadata.json")
+
+    # Copy the UUID metadata as vN.metadata.json
+    content = fs.cat_file(new_metadata_path)
+    fs.pipe_file(new_name, content)
+
+    # Update version-hint.text
+    fs.pipe_file(hint_path, str(new_version).encode())
+    print(f"  Updated version-hint.text to v{new_version}")
 
 
 def fetch_null_embedding_chunks(conn: duckdb.DuckDBPyConnection) -> list[dict]:
@@ -237,7 +306,7 @@ def write_to_iceberg(chunks: list[dict], embeddings: list[list[float]], year: in
         ("filing_date", pa.string()),
         ("chunk_text", pa.string()),
         ("enriched_text", pa.string()),
-        ("embedding", pa.list_(pa.float32(), EMBEDDING_DIM)),
+        ("embedding", pa.list_(pa.float32())),
         ("content_type", pa.string()),
         ("financial_concepts", pa.string()),
         ("exhibit_number", pa.string()),
@@ -248,6 +317,9 @@ def write_to_iceberg(chunks: list[dict], embeddings: list[list[float]], year: in
 
     arrow_table = pa.table(data, schema=arrow_schema)
     table.append(arrow_table)
+
+    # Update version-hint.text so DuckDB iceberg_scan can find the new data
+    update_version_hint_after_append(table)
 
     print(f"  Committed {len(chunks)} rows to Iceberg (year={year})")
     return len(chunks)
@@ -289,11 +361,17 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
         temp_path = f.name
 
     try:
+        # Materialize into temp table first to avoid DuckDB iceberg filter pushdown
+        # bug with list columns (array_length filter fails with direct iceberg_scan)
+        conn.execute(f"""
+            CREATE OR REPLACE TEMP TABLE _iceberg_chunks AS
+            SELECT * FROM iceberg_scan('{ICEBERG_CHUNKS}')
+        """)
         conn.execute(f"""
             COPY (
                 SELECT cik, accession_number, year as yr, chunk_id,
                        source_type, section, chunk_text, content_type, embedding
-                FROM iceberg_scan('{ICEBERG_CHUNKS}')
+                FROM _iceberg_chunks
                 WHERE embedding IS NOT NULL
                   AND array_length(embedding) > 1
             ) TO '{temp_path}' (FORMAT PARQUET)

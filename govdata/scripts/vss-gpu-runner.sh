@@ -390,7 +390,7 @@ source /root/venv/bin/activate
 echo "Installing Python packages..."
 pip install -q --upgrade pip
 pip install -q torch --index-url https://download.pytorch.org/whl/cu124
-pip install -q sentence-transformers duckdb pyarrow "pyiceberg[s3fs]"
+pip install -q sentence-transformers "duckdb>=1.3,<1.4" pyarrow "pyiceberg[sql-sqlite,s3fs]"
 
 echo "Verifying GPU in PyTorch..."
 python3 -c "import torch; print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NOT FOUND\"}')"
