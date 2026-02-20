@@ -277,8 +277,11 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
     """)
 
     # Load from parquet directly (bypasses slow Iceberg metadata scan)
+    # GPU-written files (with embeddings) are at year=*/chunks_*.parquet
+    # Iceberg-managed files (may have NULL embeddings) are at data/year=*/*.parquet
     total_chunks = 0
-    parquet_glob = f"{ICEBERG_CHUNKS}/data/year=*/*.parquet"
+    gpu_glob = f"{ICEBERG_CHUNKS}/year=*/chunks_*.parquet"
+    iceberg_glob = f"{ICEBERG_CHUNKS}/data/year=*/*.parquet"
 
     print(f"  Loading all chunks with embeddings from parquet...")
 
@@ -288,11 +291,25 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
     try:
         conn.execute(f"""
             COPY (
-                SELECT cik, accession_number, year as yr, chunk_id,
+                SELECT cik, accession_number, yr, chunk_id,
                        source_type, section, chunk_text, content_type, embedding
-                FROM read_parquet('{parquet_glob}', hive_partitioning=true)
-                WHERE embedding IS NOT NULL
-                  AND array_length(embedding) > 1
+                FROM (
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY chunk_id ORDER BY chunk_id) as rn
+                    FROM (
+                        SELECT cik, accession_number, year as yr, chunk_id,
+                               source_type, section, chunk_text, content_type, embedding
+                        FROM read_parquet('{gpu_glob}', hive_partitioning=true)
+                        WHERE embedding IS NOT NULL
+                          AND array_length(embedding) > 1
+                        UNION ALL
+                        SELECT cik, accession_number, year as yr, chunk_id,
+                               source_type, section, chunk_text, content_type, embedding
+                        FROM read_parquet('{iceberg_glob}', hive_partitioning=true)
+                        WHERE embedding IS NOT NULL
+                          AND array_length(embedding) > 1
+                    )
+                )
+                WHERE rn = 1
             ) TO '{temp_path}' (FORMAT PARQUET)
         """)
 
