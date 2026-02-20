@@ -17,6 +17,9 @@
 #
 set -e
 
+# Ignore SIGPIPE - prevents script death when parent Java process drops stdout pipe
+trap '' PIPE
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 
@@ -121,6 +124,8 @@ create_instance() {
     log "  Label: $GPU_LABEL"
 
     local response
+    # Note: script_id omitted - Vultr cloud-init vendor scripts don't execute
+    # reliably on GPU instances (permission issue). We install NVIDIA manually.
     response=$(vultr_api POST "/instances" "{
         \"plan\": \"$GPU_PLAN\",
         \"region\": \"$GPU_REGION\",
@@ -128,7 +133,6 @@ create_instance() {
         \"label\": \"$GPU_LABEL\",
         \"hostname\": \"vss-gpu\",
         \"sshkey_id\": [\"$VULTR_SSH_KEY_ID\"],
-        \"script_id\": \"$VULTR_NVIDIA_SCRIPT_ID\",
         \"backups\": \"disabled\",
         \"ddos_protection\": false,
         \"activation_email\": false
@@ -217,15 +221,13 @@ wait_for_ssh() {
 
 wait_for_nvidia() {
     local ip="$1"
-    local max_wait="${2:-900}"  # 15 minutes - GPU driver install can take a while
-    local interval=20
+    local max_wait="${2:-120}"  # 2 minutes - quick check if startup script worked
+    local interval=15
     local elapsed=0
 
-    log "Checking for NVIDIA driver (startup script)..."
+    log "Checking for NVIDIA driver..."
 
     while [[ $elapsed -lt $max_wait ]]; do
-        # Check if nvidia-smi works (with timeout to prevent hang)
-        # Use explicit || true to prevent set -e from killing us
         local nvidia_ok=0
         if timeout 60 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "nvidia-smi > /dev/null 2>&1" 2>/dev/null; then
             nvidia_ok=1
@@ -237,25 +239,12 @@ wait_for_nvidia() {
             return 0
         fi
 
-        # Check startup script progress (with timeout)
-        local status
-        status=$(timeout 60 ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "
-            if [ -f /var/lib/vultr/states/.nvidia-ready ]; then
-                echo 'ready'
-            elif [ -f /var/log/nvidia-setup.log ]; then
-                tail -1 /var/log/nvidia-setup.log 2>/dev/null || echo 'installing'
-            else
-                echo 'pending'
-            fi
-        " 2>/dev/null) || status="ssh-failed"
-
-        log "  NVIDIA status: $status (elapsed: ${elapsed}s/${max_wait}s)"
-
+        log "  NVIDIA status: not ready (elapsed: ${elapsed}s/${max_wait}s)"
         sleep $interval
         elapsed=$((elapsed + interval))
     done
 
-    warn "NVIDIA driver installation timed out, will try manual install"
+    warn "NVIDIA driver not found, will do manual install"
     return 1
 }
 
@@ -518,6 +507,42 @@ main() {
     log "  Dry run: $DRY_RUN"
     echo ""
 
+    # Redirect output to log file to survive parent JVM exit
+    # (each ETL job runs a separate JVM; when it exits, the pipe closes
+    # and set -e kills us on the next write)
+    GPU_LOG="${GOVDATA_HOME}/runs/gpu-runner-$(date +%Y%m%d-%H%M%S).log"
+    log "GPU runner output redirecting to: $GPU_LOG"
+    exec >> "$GPU_LOG" 2>&1
+    log "GPU runner started (PID: $$)"
+
+    # Lock file to prevent concurrent GPU provisioning from multiple ETL jobs
+    LOCK_FILE="${GOVDATA_HOME}/runs/.gpu-runner.lock"
+    if [[ -f "$LOCK_FILE" ]]; then
+        lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
+        lock_age=0
+        if [[ -f "$LOCK_FILE" ]]; then
+            lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0) ))
+        fi
+        # If lock holder is still alive AND lock is < 30 min old, skip
+        if kill -0 "$lock_pid" 2>/dev/null && [[ $lock_age -lt 1800 ]]; then
+            log "Another GPU runner is active (PID $lock_pid, ${lock_age}s old) - skipping"
+            echo ""
+            echo "=============================================="
+            echo "VSS GPU Runner Skipped (lock held by PID $lock_pid)"
+            echo "=============================================="
+            exit 0
+        else
+            warn "Stale lock file (PID $lock_pid dead or lock ${lock_age}s old) - removing"
+            rm -f "$LOCK_FILE"
+        fi
+    fi
+    echo $$ > "$LOCK_FILE"
+    # Ensure lock is cleaned up on exit
+    cleanup_lock() { rm -f "$LOCK_FILE"; }
+    # Chain with existing cleanup trap
+    original_cleanup=$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT//")
+    trap "cleanup_lock; $original_cleanup" EXIT
+
     # Pre-flight check: count pending chunks before creating GPU
     pending=$(check_pending_chunks)
     if [[ "$pending" -le 0 ]]; then
@@ -532,7 +557,7 @@ main() {
     log "Found $pending pending chunks - proceeding with GPU provisioning"
     echo ""
 
-    # Check for existing GPU instance - destroy orphaned instances
+    # Check for existing GPU instance - reuse active ones, destroy truly orphaned
     existing_json=$(vultr_api GET "/instances" | jq -r '.instances[]? | select(.label | startswith("vss-embedding"))')
     if [[ -n "$existing_json" ]]; then
         existing_instance=$(echo "$existing_json" | jq -r '.id')
@@ -543,29 +568,59 @@ main() {
             now_epoch=$(date +%s)
             age_minutes=$(( (now_epoch - created_epoch) / 60 ))
 
-            # Check if the instance is actively running a job via SSH
+            # Check if the instance is actively running a job or still setting up
             local ip
             ip=$(get_instance_ip "$existing_instance" 2>/dev/null) || ip=""
             local is_active=0
             if [[ -n "$ip" && "$ip" != "0.0.0.0" ]]; then
-                if ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "pgrep -f vss-bulk-gpu" 2>/dev/null; then
+                # Check for embedding pipeline OR setup processes (apt, pip, nvidia, dpkg)
+                if ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" \
+                    "pgrep -f 'vss-bulk-gpu|apt-get|dpkg|pip|nvidia|install.sh'" 2>/dev/null; then
                     is_active=1
                 fi
             fi
 
+            # Instance is still setting up or running — skip
             if [[ $is_active -eq 1 ]]; then
-                log "GPU instance $existing_instance (${age_minutes}m old) is actively running embeddings"
+                log "GPU instance $existing_instance (${age_minutes}m old) is active (running job or setup)"
                 log "Skipping to let it finish"
                 echo ""
                 echo "=============================================="
-                echo "VSS GPU Runner Skipped (job actively running)"
+                echo "VSS GPU Runner Skipped (instance active)"
                 echo "=============================================="
                 exit 0
-            else
-                warn "Found orphaned GPU instance $existing_instance (${age_minutes}m old, no active job) - destroying"
-                destroy_instance "$existing_instance" || true
-                sleep 5
             fi
+
+            # Instance is young (< 25 min) but SSH isn't ready — still provisioning
+            if [[ $age_minutes -lt 25 ]] && [[ -z "$ip" || "$ip" == "0.0.0.0" ]]; then
+                log "GPU instance $existing_instance (${age_minutes}m old) is still provisioning (no IP)"
+                log "Skipping to let it finish"
+                echo ""
+                echo "=============================================="
+                echo "VSS GPU Runner Skipped (instance provisioning)"
+                echo "=============================================="
+                exit 0
+            fi
+
+            # Instance is young (< 25 min) but SSH failed — could be booting
+            if [[ $age_minutes -lt 25 ]] && [[ $is_active -eq 0 ]] && [[ -n "$ip" && "$ip" != "0.0.0.0" ]]; then
+                # SSH might not be ready yet — check if we can connect at all
+                if ! ssh $SSH_OPTS -i "$SSH_KEY_PATH" "root@$ip" "echo ok" 2>/dev/null; then
+                    log "GPU instance $existing_instance (${age_minutes}m old) SSH not ready yet"
+                    log "Skipping to let it boot"
+                    echo ""
+                    echo "=============================================="
+                    echo "VSS GPU Runner Skipped (instance booting)"
+                    echo "=============================================="
+                    exit 0
+                fi
+            fi
+
+            # If we get here: instance is old (>= 25 min) with no active processes, or
+            # young with SSH working but no processes — truly orphaned
+            warn "Found orphaned GPU instance $existing_instance (${age_minutes}m old, no active processes) - destroying"
+            destroy_instance "$existing_instance" || true
+            sleep 5
         fi
     fi
 
