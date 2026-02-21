@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
+import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
@@ -51,6 +52,7 @@ import java.util.Map;
  *   <li>econ_reference - Reference/dimension tables for economic data</li>
  *   <li>census - U.S. Census Bureau demographic and socioeconomic data</li>
  *   <li>crime - FBI Crime Data Explorer and Bureau of Justice Statistics</li>
+ *   <li>weather - NWS weather stations/alerts, NOAA CDO climate data, EPA air quality</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -222,10 +224,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "public_safety":
         return new CrimeSchemaFactory();
 
+      case "weather":
+      case "climate":
+        return new WeatherSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather");
     }
   }
 

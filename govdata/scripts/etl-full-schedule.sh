@@ -134,6 +134,34 @@ generate_jobs() {
     ((job_num++))
     echo "$job_num|geo|tiger||2000||"
 
+    # === CRIME (2015-2025) ===
+    local crime_sources=("cde" "bjs")
+    for source in "${crime_sources[@]}"; do
+        for year in $(seq 2025 -1 2015); do
+            ((job_num++))
+            echo "$job_num|crime|$source||$year||"
+        done
+    done
+
+    # === WEATHER - NWS (no year dimension, snapshot) ===
+    ((job_num++))
+    echo "$job_num|weather|nws||0||"
+
+    # === WEATHER - CDO (2015-2025) ===
+    local weather_cdo_sources=("cdo")
+    for source in "${weather_cdo_sources[@]}"; do
+        for year in $(seq 2025 -1 2015); do
+            ((job_num++))
+            echo "$job_num|weather|$source||$year||"
+        done
+    done
+
+    # === WEATHER - EPA (2015-2025) ===
+    for year in $(seq 2025 -1 2015); do
+        ((job_num++))
+        echo "$job_num|weather|epa||$year||"
+    done
+
     # === SEC 8-K, Form 4, Other (2010-2026) - LOWER PRIORITY ===
     local low_priority_types=("8-K" "4" "3,5,DEF_14A,S-1,S-3,S-4,S-8")
     local low_priority_names=("8k" "form4" "other")
@@ -225,6 +253,30 @@ reset_job_state() {
                 echo "  Cleared cache entries for TIGER year $year"
             else
                 echo "  No GEO cache DB found at $db_file"
+            fi
+            ;;
+        crime)
+            # Crime cache is in DuckDB
+            local db_file="$cache_dir/cache_crime.duckdb"
+            if [[ -f "$db_file" ]]; then
+                echo "  Crime cache DB: $db_file"
+                local pattern="${source}:${year}:%"
+                duckdb "$db_file" -c "DELETE FROM cache_entries WHERE cache_key LIKE '$pattern';" 2>/dev/null || true
+                echo "  Cleared cache entries for $source year $year"
+            else
+                echo "  No Crime cache DB found at $db_file"
+            fi
+            ;;
+        weather)
+            # Weather cache is in DuckDB
+            local db_file="$cache_dir/cache_weather.duckdb"
+            if [[ -f "$db_file" ]]; then
+                echo "  Weather cache DB: $db_file"
+                local pattern="${source}:${year}:%"
+                duckdb "$db_file" -c "DELETE FROM cache_entries WHERE cache_key LIKE '$pattern';" 2>/dev/null || true
+                echo "  Cleared cache entries for $source year $year"
+            else
+                echo "  No Weather cache DB found at $db_file"
             fi
             ;;
     esac
@@ -415,6 +467,58 @@ EOF
       $s3_config
       "enabledSources": ["tiger", "hud"],
       "tigerYear": $year,
+      "autoDownload": true
+    }
+  }]
+}
+EOF
+            ;;
+        crime)
+            # Crime data (FBI CDE + BJS)
+            cat > "$MODEL_FILE" << EOF
+{
+  "version": "1.0",
+  "defaultSchema": "crime",
+  "schemas": [{
+    "name": "crime",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "crime",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
+      "enabledSources": ["$source"],
+      "startYear": $year,
+      "endYear": $year,
+      "autoDownload": true
+    }
+  }]
+}
+EOF
+            ;;
+        weather)
+            # Weather / Climate / Air Quality
+            # NWS jobs use year=0 (snapshot, no year dimension)
+            local weather_year_config=""
+            if [[ "$year" -gt 0 ]]; then
+                weather_year_config="\"startYear\": $year, \"endYear\": $year,"
+            fi
+            cat > "$MODEL_FILE" << EOF
+{
+  "version": "1.0",
+  "defaultSchema": "weather",
+  "schemas": [{
+    "name": "weather",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "weather",
+      "cacheDirectory": "$GOVDATA_CACHE_DIR",
+      "directory": "$GOVDATA_PARQUET_DIR",
+      $s3_config
+      "enabledSources": ["$source"],
+      $weather_year_config
       "autoDownload": true
     }
   }]

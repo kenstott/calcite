@@ -59,7 +59,7 @@ import java.util.Set;
 public class CrimeSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CrimeSchemaFactory.class);
 
-  // FBI CDE tables
+  // FBI CDE tables - working endpoints on cde.ucr.cjis.gov/LATEST/
   private static final Set<String> CDE_TABLES =
       new HashSet<>(
           Arrays.asList(
@@ -69,13 +69,21 @@ public class CrimeSchemaFactory implements GovDataSubSchemaFactory {
               "cde_hate_crimes",
               "cde_use_of_force",
               "cde_crime_agency",
+              "cde_leoka",
               "cde_arrests",
               "cde_shr",
-              "cde_leoka",
-              "cde_cargo_theft",
-              "cde_human_trafficking",
-              "cde_participation",
-              "cde_estimates"));
+              "cde_trends",
+              "cde_supplemental"));
+
+  // FBI CDE tables - broken endpoints (missing routes as of 2026-02)
+  // These will be re-enabled once FBI fixes the /cde/ API gateway migration
+  private static final Set<String> CDE_BROKEN_TABLES =
+      new HashSet<>(
+          Arrays.asList(
+              "cde_cargo_theft",       // 403 route not migrated
+              "cde_human_trafficking", // 403 route not migrated
+              "cde_participation",     // 404 route not migrated
+              "cde_estimates"));       // 403 route not migrated
 
   // Bureau of Justice Statistics tables
   private static final Set<String> BJS_TABLES =
@@ -112,13 +120,25 @@ public class CrimeSchemaFactory implements GovDataSubSchemaFactory {
           isTableEnabled(tableName, "cde", enabledSources));
     }
 
+    // Broken CDE tables are disabled by default unless explicitly force-enabled
+    for (String tableName : CDE_BROKEN_TABLES) {
+      builder.isEnabled(tableName, ctx -> {
+        if (enabledSources != null && enabledSources.contains("cde_broken")) {
+          return isTableEnabled(tableName, "cde", enabledSources);
+        }
+        LOGGER.debug("Table '{}' disabled: CDE endpoint broken (server bug or missing route)",
+            tableName);
+        return false;
+      });
+    }
+
     for (String tableName : BJS_TABLES) {
       builder.isEnabled(tableName, ctx ->
           isTableEnabled(tableName, "bjs", enabledSources));
     }
 
-    LOGGER.debug("Added isEnabled hooks for {} CDE, {} BJS tables",
-        CDE_TABLES.size(), BJS_TABLES.size());
+    LOGGER.debug("Added isEnabled hooks for {} CDE working, {} CDE broken, {} BJS tables",
+        CDE_TABLES.size(), CDE_BROKEN_TABLES.size(), BJS_TABLES.size());
   }
 
   private boolean isTableEnabled(String tableName, String dataSource,

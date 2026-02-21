@@ -188,30 +188,10 @@ dimension_values:
     - 'human-trafficking-commercial'
     - 'human-trafficking-servitude'
 
-  # Arrest offense categories
+  # Arrest offense categories - numeric codes from /LATEST/lookup/offenses?type=arrest
+  # Use 'all' for all offenses combined
   arrest_offenses: &arrest_offenses
     - 'all'
-    - 'violent-crime'
-    - 'property-crime'
-    - 'drug-abuse'
-    - 'dui'
-    - 'liquor-laws'
-    - 'drunkenness'
-    - 'other-assault'
-    - 'disorderly-conduct'
-    - 'vandalism'
-    - 'fraud'
-    - 'forgery'
-    - 'embezzlement'
-    - 'stolen-property'
-    - 'weapons'
-    - 'prostitution'
-    - 'sex-offenses'
-    - 'gambling'
-    - 'offenses-against-family'
-    - 'vagrancy'
-    - 'curfew'
-    - 'runaways'
 
   # Year range for FBI CDE data
   # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
@@ -303,7 +283,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/agency/byStateAbbr/{state_abbr}?API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://api.usa.gov/crime/fbi/cde/agency/byStateAbbr/{state_abbr}?API_KEY=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -383,7 +363,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/summarized/state/{state_abbr}/{offense}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/summarized/state/{state_abbr}/{offense}?from=01-{year}&to=12-{year}"
       method: GET
       response:
         format: json
@@ -456,7 +436,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/police-employment/states/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/pe?stateAbbr={state_abbr}&from={year}&to={year}"
       method: GET
       response:
         format: json
@@ -513,7 +493,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/hate-crime/state/{state_abbr}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/hate-crime/state/{state_abbr}?from=01-{year}&to=12-{year}"
       method: GET
       response:
         format: json
@@ -569,7 +549,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/use-of-force/state/{state_abbr}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/uof?location={state_abbr}&year={year}"
       method: GET
       response:
         format: json
@@ -654,7 +634,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/summarized/agency/{ori}/{offense}?from=01-{year}&to=12-{year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/summarized/agency/{ori}/{offense}?from=01-{year}&to=12-{year}"
       method: GET
       response:
         format: json
@@ -720,7 +700,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/data/arrest/states/{state_abbr}/{offense}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/arrest/state/{state_abbr}/{offense}?from=01-{year}&to=12-{year}&type=totals"
       method: GET
       response:
         format: json
@@ -780,7 +760,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/shr/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/shr/state/{state_abbr}?from=01-{year}&to=12-{year}&type=totals"
       method: GET
       response:
         format: json
@@ -840,7 +820,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/leoka/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      url: "https://cde.ucr.cjis.gov/LATEST/leoka/ytd?stateAbbr={state_abbr}&year={year}"
       method: GET
       response:
         format: json
@@ -863,6 +843,131 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_leoka
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CDE TRENDS - National crime trend percentages (rolling 12-month)
+  # ---------------------------------------------------------------------------
+  - name: cde_trends
+    pattern: "type=trends/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      FBI CDE national crime trend percentages. Year-over-year change for major
+      offense categories from a rolling 12-month comparison window. Single
+      snapshot refreshed periodically (~monthly). No state dimension.
+
+    dimensions:
+      type:
+        - trends
+
+    columns:
+      - name: offense_name
+        type: string
+        nullable: false
+        comment: Offense category (e.g., Murder, Robbery, Violent Crime)
+      - name: trend_pct
+        type: double
+        nullable: true
+        comment: Year-over-year percentage change (negative = decrease)
+      - name: current_range
+        type: string
+        nullable: true
+        comment: Comparison time window (e.g., 'November 2024 - October 2025')
+      - name: last_refresh_date
+        type: string
+        nullable: true
+        comment: Date this data was last refreshed
+
+    source:
+      type: http
+      url: "https://cde.ucr.cjis.gov/LATEST/trends/national"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeTrendsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trends/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_trends
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # CDE SUPPLEMENTAL - Stolen and recovered property values
+  # ---------------------------------------------------------------------------
+  - name: cde_supplemental
+    pattern: "type=supplemental/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE supplemental property crime data. Stolen and recovered property
+      values by category (Firearms, Motor Vehicles, Currency, Jewelry, etc.)
+      aggregated at the state level. Cross-references geo.states via state_abbr.
+
+    dimensions:
+      type:
+        - supplemental
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - <<: *state_abbr_column
+      - <<: *year_column
+      - name: property_type
+        type: string
+        nullable: false
+        comment: Property category (Firearms, Locally Stolen Motor Vehicles, Currency, etc.)
+      - name: stolen_value
+        type: long
+        nullable: true
+        comment: Total dollar value of stolen property
+      - name: recovered_value
+        type: long
+        nullable: true
+        comment: Total dollar value of recovered property
+
+    source:
+      type: http
+      url: "https://cde.ucr.cjis.gov/LATEST/supplemental/state/{state_abbr}/property-crime?from=01-{year}&to=12-{year}&type=totals"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeSupplementalTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=supplemental/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        tableName: cde_supplemental
         catalogType: hadoop
         batchPartitionColumns: [year]
         incrementalKeys: [year]
@@ -903,7 +1008,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/cargo-theft/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      # BROKEN: CDE cargo-theft route returns 403 (not yet migrated to /cde/ as of 2026-02)
+      url: "https://api.usa.gov/crime/fbi/cde/cargo-theft/state/{state_abbr}?from={year}&to={year}&API_KEY=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -962,7 +1068,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/human-trafficking/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      # BROKEN: CDE human-trafficking route returns 403 (not yet migrated to /cde/ as of 2026-02)
+      url: "https://api.usa.gov/crime/fbi/cde/human-trafficking/state/{state_abbr}?from={year}&to={year}&API_KEY=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1022,7 +1129,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/participation/state/{state_abbr}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      # BROKEN: CDE participation route returns 403 (not yet migrated to /cde/ as of 2026-02)
+      url: "https://api.usa.gov/crime/fbi/cde/participation/state/{state_abbr}?from={year}&to={year}&API_KEY=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1093,7 +1201,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.usa.gov/crime/fbi/sapi/api/estimates/state/{state_abbr}/{offense}?from={year}&to={year}&API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv"
+      # BROKEN: CDE estimates route returns 403 (not yet migrated to /cde/ as of 2026-02)
+      url: "https://api.usa.gov/crime/fbi/cde/estimate/state/{state_abbr}/{offense}?from={year}&to={year}&API_KEY=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1204,7 +1313,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ojp.usdoj.gov/resource/{endpoint_id}.json?$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/{endpoint_id}.json?$limit=50000"
       method: GET
       response:
         format: json
@@ -1321,7 +1430,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ojp.usdoj.gov/resource/gcuy-rt5g.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/gcuy-rt5g.json?$where=year='{year}'&$limit=50000"
       method: GET
       response:
         format: json
@@ -1421,7 +1530,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ojp.usdoj.gov/resource/r4j4-fdwx.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/r4j4-fdwx.json?$where=year='{year}'&$limit=50000"
       method: GET
       response:
         format: json
@@ -1516,7 +1625,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ojp.usdoj.gov/resource/gkck-euys.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/gkck-euys.json?$where=year='{year}'&$limit=50000"
       method: GET
       response:
         format: json
@@ -1599,7 +1708,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ojp.usdoj.gov/resource/ya4e-n9zp.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/ya4e-n9zp.json?$where=year='{year}'&$limit=50000"
       method: GET
       response:
         format: json
@@ -1688,6 +1797,13 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_leoka:
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+
+  cde_supplemental:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo

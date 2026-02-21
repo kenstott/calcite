@@ -19,4 +19,13 @@ org.apache.calcite.adapter.govdata.crime.CdeCrimeRatesTransformer
 org.apache.calcite.adapter.govdata.crime.CdePoliceEmploymentTransformer
 org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer
 org.apache.calcite.adapter.govdata.crime.CdeAgencyOffenseTransformer
+org.apache.calcite.adapter.govdata.crime.CdeTrendsTransformer
+org.apache.calcite.adapter.govdata.crime.CdeSupplementalTransformer
 org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer
+
+# Weather/Climate/Air Quality data APIs
+org.apache.calcite.adapter.govdata.weather.NwsStationTransformer
+org.apache.calcite.adapter.govdata.weather.NwsAlertTransformer
+org.apache.calcite.adapter.govdata.weather.CdoDataTransformer
+org.apache.calcite.adapter.govdata.weather.CdoStationTransformer
+org.apache.calcite.adapter.govdata.weather.EpaAqsTransformer
