@@ -111,8 +111,8 @@ public class OriDimensionResolver implements DimensionResolver {
 
   private List<String> loadOrisForState(String stateAbbr, DimensionConfig config,
       StorageProvider storageProvider) {
-    String agenciesPath = StorageProvider.normalizePath(
-        config.getProperty("agenciesTablePath"));
+    String agenciesPath =
+        StorageProvider.normalizePath(config.getProperty("agenciesTablePath"));
 
     if (agenciesPath == null || agenciesPath.isEmpty()) {
       LOGGER.warn("OriDimensionResolver: No agenciesTablePath configured, returning empty");

@@ -579,7 +579,26 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Try to extract from XBRL contexts - check both xbrli:context and context elements
+    // Try filename-based date extraction before context scan.
+    // SEC EDGAR mandates inline XBRL filenames as {ticker}-{YYYYMMDD}.htm
+    // where the date is the period end date. This is more reliable than
+    // scanning XBRL contexts which can contain forward-looking dates
+    // (lease maturities, debt maturities, pension horizons, etc.)
+    String filenameFromPath = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
+    String filenameDateStr = extractFilingDateFromFilename(filenameFromPath);
+    // extractFilingDateFromFilename returns "2024-01-01" as a hardcoded default — only use
+    // it if it actually matched a date in the filename (not the default)
+    boolean hasFilenameDate = filenameDateStr != null
+        && !filenameDateStr.equals("2024-01-01");
+    if (hasFilenameDate) {
+      LOGGER.debug("Extracted filing date from filename: " + filenameDateStr);
+      return filenameDateStr;
+    }
+
+    // Try to extract from XBRL contexts - check both xbrli:context and context elements.
+    // Cap at current year to avoid picking up forward-looking dates from XBRL contexts
+    // (e.g., lease/debt maturities extending years into the future).
+    int maxYear = java.time.Year.now().getValue();
     NodeList contexts = doc.getElementsByTagName("xbrli:context");
     if (contexts.getLength() == 0) {
       contexts = doc.getElementsByTagNameNS("*", "context");
@@ -588,7 +607,7 @@ public class XbrlToParquetConverter implements FileConverter {
       contexts = doc.getElementsByTagName("context");
     }
 
-    // Look for the first valid period end date in contexts
+    // Look for the latest valid period end date in contexts, capped at current year
     String latestDate = null;
     for (int i = 0; i < contexts.getLength(); i++) {
       Node context = contexts.item(i);
@@ -600,8 +619,8 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       if (endDates.getLength() > 0) {
         String date = endDates.item(0).getTextContent().trim();
-        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
-          // Keep track of the latest date found
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")
+            && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
           if (latestDate == null || date.compareTo(latestDate) > 0) {
             latestDate = date;
           }
@@ -615,7 +634,8 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       if (instants.getLength() > 0) {
         String date = instants.item(0).getTextContent().trim();
-        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")
+            && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
           if (latestDate == null || date.compareTo(latestDate) > 0) {
             latestDate = date;
           }
@@ -4189,6 +4209,13 @@ public class XbrlToParquetConverter implements FileConverter {
     NodeList allElements = doc.getElementsByTagName("*");
     int footnoteCounter = 0;
 
+    // Track seen text content to deduplicate across traditional XBRL and inline XBRL.
+    // In iXBRL filings (post-2020), the same TextBlock content appears both as a
+    // traditional XBRL element AND as an ix:nonNumeric wrapper, causing every
+    // footnote to be extracted twice. We deduplicate by concept+text hash.
+    java.util.Set<Long> seenTextHashes = new java.util.HashSet<>();
+    int duplicatesSkipped = 0;
+
     for (int i = 0; i < allElements.getLength(); i++) {
       Element element = (Element) allElements.item(i);
       String localName = element.getLocalName();
@@ -4229,6 +4256,18 @@ public class XbrlToParquetConverter implements FileConverter {
       int minLength = "FootnoteAnnotation".equals(concept)
           || (concept != null && concept.startsWith("FootnoteAnnotation_")) ? 50 : 200;
       if (text != null && text.length() > minLength && !text.startsWith("<")) {
+        // Deduplicate: hash concept name + text length + first/last 200 chars.
+        // Using concept + text signature avoids O(n) string comparison while
+        // correctly deduplicating the same content from traditional vs inline XBRL.
+        String conceptKey = concept != null ? concept : "";
+        String textSig = text.length() <= 400 ? text
+            : text.substring(0, 200) + text.substring(text.length() - 200);
+        long hash = conceptKey.hashCode() * 31L + textSig.hashCode();
+        if (!seenTextHashes.add(hash)) {
+          duplicatesSkipped++;
+          continue;
+        }
+
         String contextRef = element.getAttribute("contextRef");
 
         // Determine footnote section from concept name
@@ -4251,6 +4290,9 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    if (duplicatesSkipped > 0) {
+      LOGGER.info("Deduplicated {} duplicate footnotes (iXBRL dual extraction)", duplicatesSkipped);
+    }
     LOGGER.info("Extracted " + blobs.size() + " footnote blobs from XBRL");
     return blobs;
   }
@@ -4303,25 +4345,94 @@ public class XbrlToParquetConverter implements FileConverter {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
 
     int counter = 0;
+    // Pending header text to propagate as the subsection of subsequent content paragraphs.
+    // Section headers (e.g., "Item 7. Management's Discussion and Analysis...")
+    // should not be standalone chunks — they become the subsection in the
+    // [HIERARCHY: Management Discussion and Analysis > <header text>] tag.
+    String pendingHeader = null;
+    int headersAbsorbed = 0;
+
     for (Map<String, Object> data : mdaData) {
       String text = (String) data.get("paragraph_text");
-      if (text != null && text.length() > 50) {
-        String id = "mda_para_" + (++counter);
-        String section = (String) data.getOrDefault("section", "Item 7");
-        String subsection = (String) data.getOrDefault("subsection", "PARAGRAPH");
-
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put("source", "mda_sections");
-
-        SecTextVectorizer.TextBlob blob =
-            new SecTextVectorizer.TextBlob(id, "mda_paragraph", text,
-                "Management Discussion and Analysis", subsection, attributes);
-        blobs.add(blob);
+      if (text == null || text.length() <= 50) {
+        continue;
       }
+      String subsection = (String) data.getOrDefault("subsection", "PARAGRAPH");
+
+      // Detect standalone section headers: either classified as HEADING by the chunker,
+      // or matching SEC Item header patterns (Item 7, Item 7A, etc.)
+      if ("HEADING".equals(subsection) || isSectionHeader(text)) {
+        // Accumulate headers (there can be multiple, e.g., "Item 7" followed by
+        // "Management's Discussion and Analysis of Financial Condition and Results of Operations")
+        if (pendingHeader != null) {
+          pendingHeader = pendingHeader + " — " + text.trim();
+        } else {
+          pendingHeader = text.trim();
+        }
+        continue;
+      }
+
+      // Normal content paragraph — use pending header as subsection if available.
+      // This flows into the existing [HIERARCHY: parentSection > subsection] tag
+      // in vectorizeMDAParagraph(), giving the embedding model section context.
+      String effectiveSubsection;
+      if (pendingHeader != null) {
+        effectiveSubsection = pendingHeader;
+        headersAbsorbed++;
+        // Don't clear pendingHeader — it applies to ALL paragraphs in this section
+        // until the next header replaces it
+      } else {
+        effectiveSubsection = subsection;
+      }
+
+      String id = "mda_para_" + (++counter);
+
+      Map<String, String> attributes = new HashMap<>();
+      attributes.put("source", "mda_sections");
+
+      SecTextVectorizer.TextBlob blob =
+          new SecTextVectorizer.TextBlob(id, "mda_paragraph", text,
+              "Management Discussion and Analysis", effectiveSubsection, attributes);
+      blobs.add(blob);
     }
 
-    LOGGER.debug("Converted {} MDA records to TextBlobs", blobs.size());
+    // Trailing header with no following content is dropped (no content to contextualize)
+
+    if (headersAbsorbed > 0) {
+      LOGGER.info("Absorbed {} section headers into [HIERARCHY:] subsections", headersAbsorbed);
+    }
+    LOGGER.debug("Converted {} MDA records to {} TextBlobs", mdaData.size(), blobs.size());
     return blobs;
+  }
+
+  /**
+   * Detects standalone section headers in SEC filings.
+   * Matches patterns like "Item 7.", "ITEM 7A.", "Management's Discussion and Analysis...",
+   * "Results of Operations", etc.
+   */
+  private static final java.util.regex.Pattern SEC_ITEM_PATTERN =
+      java.util.regex.Pattern.compile(
+          "(?i)^\\s*(item\\s+\\d+[a-z]?\\.?\\s*[-—]?\\s*)?"
+          + "(management.{0,5}discussion|results\\s+of\\s+operations"
+          + "|financial\\s+condition|liquidity\\s+and\\s+capital"
+          + "|quantitative\\s+and\\s+qualitative|critical\\s+accounting"
+          + "|risk\\s+factors|controls\\s+and\\s+procedures).*$");
+
+  private boolean isSectionHeader(String text) {
+    if (text == null) {
+      return false;
+    }
+    String trimmed = text.trim();
+    // Short text that matches Item N pattern or known section titles
+    if (trimmed.length() > 300) {
+      return false;  // Real content, not a header
+    }
+    // Check for "Item N" prefix
+    if (trimmed.matches("(?i)^\\s*item\\s+\\d+[a-z]?\\.?\\s*$")) {
+      return true;
+    }
+    // Check for known SEC section header patterns
+    return SEC_ITEM_PATTERN.matcher(trimmed).matches();
   }
 
   /**
