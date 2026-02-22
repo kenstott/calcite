@@ -443,7 +443,34 @@ def build_vss_database(conn: duckdb.DuckDBPyConnection, output_path: str) -> tup
     return total_chunks, size_mb
 
 
-def upload_vss_to_s3(local_path: str, total_chunks: int) -> bool:
+def read_vss_metadata() -> dict:
+    """Download and parse metadata.json from S3. Returns dict with at least {"version": 0}."""
+    import subprocess
+
+    endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        temp_path = f.name
+
+    try:
+        cmd = ["aws", "s3", "cp", VSS_METADATA_PATH, temp_path, "--endpoint-url", endpoint]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"  No existing metadata.json on S3 (starting fresh)")
+            return {"version": 0}
+
+        with open(temp_path) as f:
+            metadata = json.load(f)
+
+        metadata.setdefault("version", 0)
+        return metadata
+
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
+
+
+def upload_vss_to_s3(local_path: str, total_chunks: int, version: int = 1) -> bool:
     """Upload VSS database and metadata to S3."""
     import subprocess
 
@@ -468,6 +495,7 @@ def upload_vss_to_s3(local_path: str, total_chunks: int) -> bool:
         "years": "all",
         "embed_model": EMBEDDING_MODEL,
         "embed_dim": EMBEDDING_DIM,
+        "version": version,
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -488,6 +516,28 @@ def upload_vss_to_s3(local_path: str, total_chunks: int) -> bool:
         Path(temp_path).unlink(missing_ok=True)
 
     return True
+
+
+def check_version_and_upload(local_path: str, total_chunks: int, start_version: int) -> bool:
+    """Check for version conflicts or regression before uploading VSS cache.
+
+    Returns True if upload succeeded, False if skipped.
+    """
+    current_meta = read_vss_metadata()
+    current_version = current_meta.get("version", 0)
+    current_chunks = current_meta.get("chunks", 0)
+
+    if current_version != start_version:
+        print(f"  Version changed (expected {start_version}, found {current_version}) "
+              f"— another builder uploaded. Skipping.")
+        return False
+
+    if current_chunks > total_chunks:
+        print(f"  Current cache has more chunks ({current_chunks}) than rebuild "
+              f"({total_chunks}). Skipping.")
+        return False
+
+    return upload_vss_to_s3(local_path, total_chunks, start_version + 1)
 
 
 def main():
@@ -522,12 +572,18 @@ def main():
     conn = create_duckdb_connection()
     print()
 
+    # Read current VSS metadata version for optimistic concurrency control
+    start_meta = read_vss_metadata()
+    start_version = start_meta.get("version", 0)
+    print(f"VSS metadata version at start: {start_version}")
+    print()
+
     # Rebuild VSS only mode (builds local VSS from existing embeddings)
     if args.rebuild_vss_only:
         total_chunks, size_mb = build_vss_database(conn, args.output)
 
         if args.upload and total_chunks > 0:
-            upload_vss_to_s3(args.output, total_chunks)
+            check_version_and_upload(args.output, total_chunks, start_version)
 
         print("\nDone!")
         return

@@ -115,3 +115,5 @@ govdata/.env.prod
 # Generated/runtime files
 govdata/runs/
 govdata/.env.prod
+/govdata/scripts/parallel/runs/pids
+
