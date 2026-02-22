@@ -3818,11 +3818,13 @@ public class XbrlToParquetConverter implements FileConverter {
         // Extract paragraphs from earnings content
         List<String> paragraphs = extractEarningsParagraphs(fileContent);
 
+        int earningsYear = Integer.parseInt(filingDate.substring(0, 4));
         for (int i = 0; i < paragraphs.size(); i++) {
           Map<String, Object> data = new HashMap<>();
           data.put("accession_number", accession);
           data.put("cik", cik);
           data.put("filing_date", filingDate);
+          data.put("year", earningsYear);
           data.put("filing_type", filingType);
           data.put("exhibit_number", detectExhibitNumber(fileContent));
           data.put("section_type", detectSectionType(paragraphs.get(i)));
@@ -3964,6 +3966,7 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("accession_number", accession);
       data.put("cik", cik);
       data.put("filing_date", filingDate);
+      data.put("year", Integer.parseInt(filingDate.substring(0, 4)));
       data.put("filing_type", filingType);
       data.put("exhibit_number", detectExhibitNumber(exhibitContent));
       data.put("section_type", detectSectionType(text));
