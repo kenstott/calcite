@@ -2893,7 +2893,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Convert using String paths (works for both local and S3)
-            LOGGER.info("CONVERT DECISION: form={} is8KForm={} fileToConvert={}", form, is8KForm, fileToConvert);
             List<String> outputFiles;
             if (is8KForm) {
               outputFiles = converter.convertInternal(

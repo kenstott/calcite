@@ -179,6 +179,12 @@ public class XbrlToParquetConverter implements FileConverter {
     String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1).toLowerCase();
 
     try {
+      // Fast path: 8-K filings are plain HTML — skip all XBRL parsing attempts
+      if (overrideFilingType != null && is8KFiling(overrideFilingType)) {
+        LOGGER.debug("8-K filing detected, skipping XBRL parsing: {}", fileName);
+        return process8KHtml(sourceFilePath, targetDirectoryPath);
+      }
+
       Document doc = null;
       boolean isInlineXbrl = false;
 
@@ -217,12 +223,8 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // If all parsing attempts failed, check if this is an 8-K we can process as plain HTML
+      // If all parsing attempts failed, return empty
       if (doc == null) {
-        LOGGER.info("GATE2 CHECK: doc=null overrideFilingType={} fileName={}", overrideFilingType, fileName);
-        if (overrideFilingType != null && is8KFiling(overrideFilingType)) {
-          return process8KHtml(sourceFilePath, targetDirectoryPath);
-        }
         LOGGER.warn("No XBRL data found for: {}", fileName);
         return outputFiles;
       }
