@@ -283,7 +283,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
-        List<String> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
+        List<String> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession, false);
         outputFiles.addAll(extraFiles);
       }
 
@@ -3246,6 +3246,12 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
           + transactions.size() + " records");
 
+      // Write filing_metadata for insider forms
+      String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourcePath);
+      outputFiles.add(metadataPath);
+
       // Create vectorized chunks for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
@@ -3691,7 +3697,7 @@ public class XbrlToParquetConverter implements FileConverter {
     LOGGER.info("Processing 8-K as plain HTML: cik={}, date={}, accession={}", cik, filingDate, accession);
 
     List<String> extraFiles = extract8KExhibits(
-        sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
+        sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession, true);
     outputFiles.addAll(extraFiles);
 
     return outputFiles;
@@ -3703,6 +3709,150 @@ public class XbrlToParquetConverter implements FileConverter {
   private boolean is8KFiling(String filingType) {
     return filingType != null && (filingType.equals("8-K") || filingType.equals("8K")
         || filingType.startsWith("8-K/"));
+  }
+
+  /**
+   * Extract ALL item sections from 8-K HTML into vectorized_chunks format.
+   * Parses headers like "Item 1.01", "Item 5.02", "Item 8.01" and captures
+   * text between each header and the next (or SIGNATURES).
+   */
+  private List<Map<String, Object>> extract8KItems(String fileContent,
+      String cik, String filingDate, String accession, int year) {
+    List<Map<String, Object>> chunks = new ArrayList<>();
+    Pattern itemPattern = Pattern.compile("Item\\s+(\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE);
+
+    org.jsoup.nodes.Document doc = Jsoup.parse(fileContent);
+    doc.select("script, style").remove();
+    String bodyText = doc.body() != null ? doc.body().text() : doc.text();
+
+    // Find all item header positions
+    Matcher matcher = itemPattern.matcher(bodyText);
+    List<int[]> itemPositions = new ArrayList<>(); // [start, end, -] pairs
+    List<String> itemNumbers = new ArrayList<>();
+    while (matcher.find()) {
+      itemPositions.add(new int[]{matcher.start(), matcher.end()});
+      itemNumbers.add(matcher.group(1));
+    }
+
+    // Find SIGNATURES position as end boundary
+    int sigPos = bodyText.toUpperCase().indexOf("SIGNATURES");
+    if (sigPos < 0) {
+      sigPos = bodyText.length();
+    }
+
+    int sequence = 0;
+    Set<String> boilerplate = new HashSet<>();
+    boilerplate.add("FORWARD-LOOKING STATEMENTS");
+    boilerplate.add("Safe Harbor");
+    boilerplate.add("forward-looking statements");
+
+    for (int i = 0; i < itemPositions.size(); i++) {
+      String itemNumber = itemNumbers.get(i);
+      int textStart = itemPositions.get(i)[1];
+      int textEnd = (i + 1 < itemPositions.size()) ? itemPositions.get(i + 1)[0] : sigPos;
+      if (textStart >= textEnd) {
+        continue;
+      }
+
+      String sectionText = bodyText.substring(textStart, textEnd).trim();
+      // Split into paragraphs by sentence boundaries or double spaces
+      String[] parts = sectionText.split("(?<=\\.)\\s{2,}|\\n\\s*\\n");
+
+      int paraSeq = 0;
+      for (String part : parts) {
+        String para = part.trim();
+        if (para.length() < 50) {
+          continue;
+        }
+        // Skip boilerplate
+        boolean isBoilerplate = false;
+        for (String bp : boilerplate) {
+          if (para.contains(bp)) {
+            isBoilerplate = true;
+            break;
+          }
+        }
+        if (isBoilerplate) {
+          continue;
+        }
+
+        Map<String, Object> chunk = new HashMap<>();
+        chunk.put("cik", cik);
+        chunk.put("accession_number", accession);
+        chunk.put("year", year);
+        chunk.put("chunk_id", "item_" + itemNumber + "_" + paraSeq);
+        chunk.put("source_type", "8k_item");
+        chunk.put("section", "Item " + itemNumber);
+        chunk.put("sequence", sequence++);
+        chunk.put("filing_date", filingDate);
+        chunk.put("chunk_text", para);
+        chunk.put("enriched_text", para);
+        chunk.put("content_type", "paragraph");
+        chunk.put("financial_concepts", null);
+
+        chunks.add(chunk);
+        paraSeq++;
+      }
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Write filing_metadata record for an 8-K accession.
+   * Follows the pattern of writeMetadataToParquet() but without XBRL DEI fields.
+   */
+  private void write8KMetadata(String fileContent, String outputPath,
+      String cik, String filingType, String filingDate, String accession,
+      String sourcePath) throws IOException {
+
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("filing_metadata");
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_type", filingType);
+    data.put("filing_date", filingDate);
+
+    int year = 0;
+    if (filingDate != null && filingDate.length() >= 4) {
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Failed to parse year from filing date: {}", filingDate);
+      }
+    }
+    data.put("year", year);
+
+    // Extract company name from HTML <title> tag if available
+    org.jsoup.nodes.Document doc = Jsoup.parse(fileContent);
+    org.jsoup.nodes.Element titleEl = doc.selectFirst("title");
+    data.put("company_name", titleEl != null ? titleEl.text().trim() : null);
+
+    String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
+    data.put("primary_document", filename);
+    data.put("document_type", filingType);
+
+    // DEI fields not available from plain HTML (no XBRL)
+    data.put("state_of_incorporation", null);
+    data.put("fiscal_year_end", null);
+    data.put("business_address", null);
+    data.put("mailing_address", null);
+    data.put("phone", null);
+    data.put("period_end_date", null);
+    data.put("period_of_report", null);
+    data.put("sic_code", null);
+    data.put("irs_number", null);
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
+    data.put("fiscal_year", null);
+
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    dataList.add(data);
+
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
+    LOGGER.info("Wrote 8-K filing metadata to {}", outputPath);
   }
 
   /**
@@ -3793,7 +3943,8 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private List<String> extract8KExhibits(String sourcePath, String targetDirectoryPath,
-      String cik, String filingType, String filingDate, String accession) {
+      String cik, String filingType, String filingDate, String accession,
+      boolean writeMetadata) {
     List<String> outputFiles = new ArrayList<>();
 
     try {
@@ -3803,7 +3954,32 @@ public class XbrlToParquetConverter implements FileConverter {
         fileContent = new String(readAllBytes(is), java.nio.charset.StandardCharsets.UTF_8);
       }
 
-      // Look for Exhibit 99.1 and 99.2 references
+      // Validate and parse year
+      int year;
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+        if (year < 1934 || year > java.time.Year.now().getValue()) {
+          LOGGER.warn("Invalid year " + year + " for filing date " + filingDate);
+          year = java.time.Year.now().getValue();
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to parse year from filing date: " + filingDate);
+        year = java.time.Year.now().getValue();
+      }
+
+      String partitionYear = filingDate.substring(0, 4);
+      String relativePartitionPath = String.format("year=%s", partitionYear);
+      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+
+      // 1. Write filing_metadata for 8-K accession (skip when XBRL path handles it with richer DEI data)
+      if (writeMetadata) {
+        String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+        write8KMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourcePath);
+        outputFiles.add(metadataPath);
+      }
+
+      // 2. Existing earnings extraction (unchanged)
       List<Map<String, Object>> earningsRecords = new ArrayList<>();
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> earningsColumns = loadEarningsTranscriptColumns();
 
@@ -3817,16 +3993,14 @@ public class XbrlToParquetConverter implements FileConverter {
           || fileContent.toLowerCase().contains("earnings release")
           || fileContent.toLowerCase().contains("conference call")) {
 
-        // Extract paragraphs from earnings content
         List<String> paragraphs = extractEarningsParagraphs(fileContent);
 
-        int earningsYear = Integer.parseInt(filingDate.substring(0, 4));
         for (int i = 0; i < paragraphs.size(); i++) {
           Map<String, Object> data = new HashMap<>();
           data.put("accession_number", accession);
           data.put("cik", cik);
           data.put("filing_date", filingDate);
-          data.put("year", earningsYear);
+          data.put("year", year);
           data.put("filing_type", filingType);
           data.put("exhibit_number", detectExhibitNumber(fileContent));
           data.put("section_type", detectSectionType(paragraphs.get(i)));
@@ -3839,42 +4013,78 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // Write earnings transcripts to Parquet if we found any
+      // 3. Write earnings_transcripts (unchanged - only when earnings content found)
       if (!earningsRecords.isEmpty()) {
-        // Create partition directory
-        // Validate and parse year
-        int year;
-        try {
-          year = Integer.parseInt(filingDate.substring(0, 4));
-          if (year < 1934 || year > java.time.Year.now().getValue()) {
-            LOGGER.warn("Invalid year " + year + " for filing date " + filingDate);
-            year = java.time.Year.now().getValue();
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to parse year from filing date: " + filingDate);
-          year = java.time.Year.now().getValue();
-        }
+        String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, uniqueId));
 
-        String partitionYear = filingDate.substring(0, 4); // 8-K filings use filing year
-
-        // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
-        // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
-        String relativePartitionPath = String.format("year=%s", partitionYear);
-        String outputPath =
-            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
-
-        storageProvider.writeAvroParquet(outputPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
-        outputFiles.add(outputPath);
+        storageProvider.writeAvroParquet(earningsPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
+        outputFiles.add(earningsPath);
 
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
+      }
 
-        // Also write earnings to vectorized_chunks for semantic search
-        if (enableVectorization) {
+      // 4. Extract ALL item sections + merge with earnings chunks
+      if (enableVectorization) {
+        // Build earnings chunks list (without writing separately)
+        List<Map<String, Object>> allChunks = new ArrayList<>();
+
+        // Convert earnings records to chunk format
+        int sequence = 0;
+        for (Map<String, Object> earnings : earningsRecords) {
+          String paragraphText = (String) earnings.get("paragraph_text");
+          if (paragraphText == null || paragraphText.length() < 20) {
+            continue;
+          }
+          Map<String, Object> chunk = new HashMap<>();
+          chunk.put("cik", cik);
+          chunk.put("accession_number", accession);
+          chunk.put("year", year);
+          chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+          chunk.put("source_type", "earnings");
+          chunk.put("section", earnings.get("section_type"));
+          chunk.put("sequence", sequence++);
+          chunk.put("filing_date", filingDate);
+          chunk.put("chunk_text", paragraphText);
+          chunk.put("enriched_text", paragraphText);
+          chunk.put("content_type", "paragraph");
+          chunk.put("financial_concepts", null);
+          chunk.put("exhibit_number", earnings.get("exhibit_number"));
+          chunk.put("speaker_name", earnings.get("speaker_name"));
+          chunk.put("speaker_role", earnings.get("speaker_role"));
+          chunk.put("paragraph_number", earnings.get("paragraph_number"));
+          allChunks.add(chunk);
+        }
+
+        // Extract all 8-K item sections
+        List<Map<String, Object>> itemChunks = extract8KItems(fileContent, cik, filingDate, accession, year);
+
+        // Dedup: if earnings covered Item 2.02, skip item chunks for that section
+        // (earnings version has richer metadata like speaker/exhibit)
+        Set<String> earningsSections = new HashSet<>();
+        if (!earningsRecords.isEmpty()) {
+          earningsSections.add("Item 2.02"); // Results of Operations - typically the earnings item
+        }
+
+        for (Map<String, Object> itemChunk : itemChunks) {
+          String section = (String) itemChunk.get("section");
+          if (earningsSections.contains(section)) {
+            continue; // Earnings version takes priority
+          }
+          // Re-sequence to follow earnings chunks
+          itemChunk.put("sequence", sequence++);
+          allChunks.add(itemChunk);
+        }
+
+        // 5. Write combined chunks parquet
+        if (!allChunks.isEmpty()) {
+          java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> chunkColumns =
+              AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
           String chunksPath = storageProvider.resolvePath(targetDirectoryPath,
-              relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik,
-                  (accession != null && !accession.isEmpty()) ? accession : filingDate));
-          writeEarningsVectorizedChunks(earningsRecords, chunksPath, cik, filingDate, accession, year);
+              relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
+          storageProvider.writeAvroParquet(chunksPath, chunkColumns, allChunks, "VectorizedChunk", "vectorized_chunks");
           outputFiles.add(chunksPath);
+          LOGGER.info("Wrote " + allChunks.size() + " combined chunks (earnings + items) to " + chunksPath);
         }
       }
 
