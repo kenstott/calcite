@@ -205,8 +205,9 @@ public class DocumentETLProcessor {
           if (documentTracker != null && !converted.isEmpty()) {
             String cik = docVariables.get("cik");
             String accession = docVariables.get("accession");
+            String form = docVariables.get("form");
             if (cik != null && accession != null) {
-              documentTracker.markProcessed(cik, accession, converted);
+              documentTracker.markProcessed(cik, accession, form, converted);
             }
           }
 
@@ -324,7 +325,8 @@ public class DocumentETLProcessor {
 
     // Use document tracker if available (no S3 checks needed)
     if (documentTracker != null) {
-      return documentTracker.isProcessed(cik, accession);
+      String form = docVariables.get("form");
+      return documentTracker.isProcessed(cik, accession, form);
     }
 
     // Fallback: check S3 for output files (slower)

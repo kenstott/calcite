@@ -760,16 +760,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       final boolean vectorizationEnabled = isVectorizedChunksEnabled();
       ProcessedDocumentTracker documentTracker = cache != null
           ? new ProcessedDocumentTracker() {
-            @Override public boolean isProcessed(String cik, String accession) {
-              // Use unified cache with self-healing
-              // Note: form type and filing date will be filled in during markProcessed
-              ProcessingDecision decision = cache.checkFiling(cik, accession, "UNKNOWN", "", vectorizationEnabled);
+            @Override public boolean isProcessed(String cik, String accession, String formType) {
+              String form = formType != null ? formType : "UNKNOWN";
+              ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
               return !decision.shouldProcess();
             }
-            @Override public void markProcessed(String cik, String accession,
+            @Override public void markProcessed(String cik, String accession, String formType,
                 java.util.List<String> outputFiles) {
+              String form = formType != null ? formType : "UNKNOWN";
               FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
-              cache.markComplete(cik, accession, "UNKNOWN", "", vectorizationEnabled, inventory);
+              cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
             }
           }
           : null;

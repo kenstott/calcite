@@ -25,20 +25,22 @@ import java.util.List;
 public interface ProcessedDocumentTracker {
 
   /**
-   * Check if a document has already been processed.
+   * Check if a document has already been processed with all required outputs.
    *
    * @param cik The CIK identifier
    * @param accession The accession number
+   * @param formType The filing form type (e.g. "10-K", "8-K", "4")
    * @return true if already processed, false otherwise
    */
-  boolean isProcessed(String cik, String accession);
+  boolean isProcessed(String cik, String accession, String formType);
 
   /**
    * Mark a document as processed after successful conversion.
    *
    * @param cik The CIK identifier
    * @param accession The accession number
+   * @param formType The filing form type (e.g. "10-K", "8-K", "4")
    * @param outputFiles List of output file paths created by conversion
    */
-  void markProcessed(String cik, String accession, List<String> outputFiles);
+  void markProcessed(String cik, String accession, String formType, List<String> outputFiles);
 }
