@@ -206,7 +206,7 @@ public class DocumentETLProcessor {
             String cik = docVariables.get("cik");
             String accession = docVariables.get("accession");
             if (cik != null && accession != null) {
-              documentTracker.markProcessed(cik, accession, converted.size());
+              documentTracker.markProcessed(cik, accession, converted);
             }
           }
 

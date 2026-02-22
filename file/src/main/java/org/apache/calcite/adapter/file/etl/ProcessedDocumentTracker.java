@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.List;
+
 /**
  * Interface for tracking which documents have been processed.
  * Implementations should persist this information to avoid S3 checks on restart.
@@ -36,7 +38,7 @@ public interface ProcessedDocumentTracker {
    *
    * @param cik The CIK identifier
    * @param accession The accession number
-   * @param outputFileCount Number of output files created
+   * @param outputFiles List of output file paths created by conversion
    */
-  void markProcessed(String cik, String accession, int outputFileCount);
+  void markProcessed(String cik, String accession, List<String> outputFiles);
 }
