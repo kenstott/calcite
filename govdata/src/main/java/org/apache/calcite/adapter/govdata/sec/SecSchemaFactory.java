@@ -2009,8 +2009,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         boolean isInsiderForm = form.equals("3") || form.equals("4") || form.equals("5")
             || form.equals("3/A") || form.equals("4/A") || form.equals("5/A");
 
-        // Skip non-XBRL filings entirely - UNLESS they're insider forms
+        // Check if this is an 8-K filing - these are often plain HTML without XBRL
+        boolean is8KForm = form.equals("8-K") || form.equals("8K")
+            || form.startsWith("8-K/") || form.equals("8KA");
+
+        // Skip non-XBRL filings entirely - UNLESS they're insider forms or 8-K forms
         // Insider forms (3/4/5) are XML ownership documents, not XBRL, but we still want to process them
+        // 8-K forms are current event reports, often plain HTML with earnings/exhibit data
         // This is a major optimization: prevents downloading, parsing, and manifest checking
         // for filings that would produce no Parquet output anyway
         boolean hasXBRL = false;
@@ -2027,7 +2032,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             hasXBRL = true;  // Inline XBRL counts as XBRL
           }
         }
-        if (!hasXBRL && !isInsiderForm) {
+        if (!hasXBRL && !isInsiderForm && !is8KForm) {
           skippedNonXBRL++;
           continue;
         }
@@ -2432,6 +2437,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // For Forms 3/4/5, we need to download the .txt file and extract the raw XML
       boolean isInsiderForm = form.equals("3") || form.equals("4") || form.equals("5");
+      boolean is8KForm = form.equals("8-K") || form.equals("8K")
+          || form.startsWith("8-K/") || form.equals("8KA");
 
       // Check if HTML file exists (for human-readable preview)
       String htmlPath = storageProvider.resolvePath(accessionPath, primaryDoc);
@@ -2789,6 +2796,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           fileToConvert = xbrlPath;
         } else if (htmlExists && (confirmedInlineXbrl || hasInlineXBRL)) {
           fileToConvert = htmlPath;
+        } else if (htmlExists && is8KForm) {
+          fileToConvert = htmlPath;
         } else if (xbrlKnownNotFound && !confirmedInlineXbrl && !hasInlineXBRL) {
           // Special case: If this is vectorization reprocessing and filing is already PROCESSED,
           // we should upgrade to PROCESSED_WITH_VECTORS rather than marking as NO_XBRL
@@ -2884,7 +2893,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Convert using String paths (works for both local and S3)
-            List<String> outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
+            List<String> outputFiles;
+            if (is8KForm) {
+              outputFiles = converter.convertInternal(
+                  fileToConvert, secParquetDirPath, null, cik, form, filingDate, accession);
+            } else {
+              outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
+            }
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("INLINE CONVERSION: Conversion completed, outputFiles.size={}",

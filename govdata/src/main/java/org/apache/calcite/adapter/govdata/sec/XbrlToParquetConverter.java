@@ -67,6 +67,14 @@ public class XbrlToParquetConverter implements FileConverter {
   private final StorageProvider storageProvider;
   private final boolean enableVectorization;
 
+  // Override metadata for non-XBRL filings (e.g. 8-K plain HTML)
+  // These are set per-call via the overloaded convertInternal and cleared in finally.
+  // Thread-safe because the converter is instantiated per-call in SecSchemaFactory.
+  private String overrideCik;
+  private String overrideFilingType;
+  private String overrideFilingDate;
+  private String overrideAccession;
+
   public XbrlToParquetConverter(StorageProvider storageProvider) {
     this(storageProvider, false);
   }
@@ -104,6 +112,27 @@ public class XbrlToParquetConverter implements FileConverter {
       ConversionMetadata metadata) throws IOException {
     // Direct String-based method for S3 paths - no File wrapping
     return convertInternal(sourcePath, targetDirectory, metadata);
+  }
+
+  /**
+   * Overloaded convertInternal that accepts explicit metadata for non-XBRL filings (e.g. 8-K).
+   * Sets override fields, delegates to the standard method, then clears them.
+   */
+  public List<String> convertInternal(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata, String cik, String filingType, String filingDate,
+      String accession) throws IOException {
+    this.overrideCik = cik;
+    this.overrideFilingType = filingType;
+    this.overrideFilingDate = filingDate;
+    this.overrideAccession = accession;
+    try {
+      return convertInternal(sourceFilePath, targetDirectoryPath, metadata);
+    } finally {
+      this.overrideCik = null;
+      this.overrideFilingType = null;
+      this.overrideFilingDate = null;
+      this.overrideAccession = null;
+    }
   }
 
   /**
@@ -180,8 +209,11 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // If all parsing attempts failed, return empty
+      // If all parsing attempts failed, check if this is an 8-K we can process as plain HTML
       if (doc == null) {
+        if (overrideFilingType != null && is8KFiling(overrideFilingType)) {
+          return process8KHtml(sourceFilePath, targetDirectoryPath);
+        }
         LOGGER.warn("No XBRL data found for: {}", fileName);
         return outputFiles;
       }
@@ -3623,6 +3655,38 @@ public class XbrlToParquetConverter implements FileConverter {
 
 
   /**
+   * Process an 8-K filing as plain HTML (no XBRL required).
+   * Uses override metadata from SecSchemaFactory with path-based fallbacks.
+   */
+  private List<String> process8KHtml(String sourceFilePath, String targetDirectoryPath)
+      throws IOException {
+    List<String> outputFiles = new ArrayList<>();
+
+    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
+    String filingType = overrideFilingType != null ? overrideFilingType : "8-K";
+    String filingDate = overrideFilingDate;
+    String accession = overrideAccession != null ? overrideAccession
+        : extractAccessionFromPath(sourceFilePath);
+
+    if (cik == null || cik.equals("0000000000")) {
+      LOGGER.warn("Skipping 8-K HTML processing - invalid CIK from: {}", sourceFilePath);
+      return outputFiles;
+    }
+    if (filingDate == null) {
+      LOGGER.warn("Skipping 8-K HTML processing - no filing date for: {}", sourceFilePath);
+      return outputFiles;
+    }
+
+    LOGGER.info("Processing 8-K as plain HTML: cik={}, date={}, accession={}", cik, filingDate, accession);
+
+    List<String> extraFiles = extract8KExhibits(
+        sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
+    outputFiles.addAll(extraFiles);
+
+    return outputFiles;
+  }
+
+  /**
    * Check if this is an 8-K filing.
    */
   private boolean is8KFiling(String filingType) {
@@ -3792,11 +3856,13 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
 
         // Also write earnings to vectorized_chunks for semantic search
-        String chunksPath = storageProvider.resolvePath(targetDirectoryPath,
-            relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik,
-                (accession != null && !accession.isEmpty()) ? accession : filingDate));
-        writeEarningsVectorizedChunks(earningsRecords, chunksPath, cik, filingDate, accession, year);
-        outputFiles.add(chunksPath);
+        if (enableVectorization) {
+          String chunksPath = storageProvider.resolvePath(targetDirectoryPath,
+              relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik,
+                  (accession != null && !accession.isEmpty()) ? accession : filingDate));
+          writeEarningsVectorizedChunks(earningsRecords, chunksPath, cik, filingDate, accession, year);
+          outputFiles.add(chunksPath);
+        }
       }
 
     } catch (Exception e) {
