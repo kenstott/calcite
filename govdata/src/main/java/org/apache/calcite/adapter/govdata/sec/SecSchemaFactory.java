@@ -767,11 +767,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               return !decision.shouldProcess();
             }
             @Override public void markProcessed(String cik, String accession, int outputFileCount) {
-              // Build inventory from output count (simplified - will be updated with actual files)
-              FileInventory inventory = FileInventory.builder()
-                  .hasFacts(outputFileCount > 0)
-                  .hasMetadata(outputFileCount > 0)
-                  .build();
+              // Check actual S3 files to build accurate inventory
+              // (outputFileCount alone can't distinguish which file types were produced)
+              FileInventory inventory = cache.checkS3Files(cik, accession);
               cache.markComplete(cik, accession, "UNKNOWN", "", vectorizationEnabled, inventory);
             }
           }
