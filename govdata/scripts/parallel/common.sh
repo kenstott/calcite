@@ -6,11 +6,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 
 # Load base credentials from govdata/.env.prod, then parallel overrides
 load_env() {
-  local env_prod="$PROJECT_ROOT/govdata/.env.prod"
+  local env_prod="$GOVDATA_ROOT/.env.prod"
   if [ -f "$env_prod" ]; then
     set -a
     # shellcheck disable=SC1090
@@ -34,7 +35,7 @@ load_env() {
 # Resolve the govdata shadow JAR (fat JAR with all dependencies)
 resolve_classpath() {
   local jar
-  jar=$(find "$PROJECT_ROOT/govdata/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
+  jar=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
   if [ -z "$jar" ]; then
     echo "ERROR: Shadow JAR not found. Run: ./gradlew :govdata:shadowJar" >&2
     exit 1
