@@ -3741,8 +3741,8 @@ public abstract class AbstractGovDataDownloader {
    * @return IncrementalTracker instance
    */
   protected org.apache.calcite.adapter.file.partition.IncrementalTracker getIncrementalTracker() {
-    return org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore
-        .getInstance(operatingDirectory);
+    return org.apache.calcite.adapter.file.partition.PipelineTrackerFactory
+        .create(operatingDirectory);
   }
 
   /**

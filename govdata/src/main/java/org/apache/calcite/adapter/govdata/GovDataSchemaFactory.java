@@ -12,8 +12,9 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.ModelLifecycleProcessor;
 import org.apache.calcite.adapter.file.SubSchemaFactory;
-import org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
+import org.apache.calcite.adapter.file.partition.PipelineTracker;
+import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
@@ -394,13 +395,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
   /**
    * Create incremental tracker for resumable ETL.
+   * Uses PipelineTrackerFactory to select backend based on operand or environment.
    */
   private IncrementalTracker createIncrementalTracker(String operatingDirectory, String schemaName) {
     try {
-      return DuckDBPartitionStatusStore.getInstance(operatingDirectory);
+      return PipelineTrackerFactory.create(operatingDirectory);
     } catch (Exception e) {
-      LOGGER.warn("Failed to create DuckDB tracker, using NOOP: {}", e.getMessage());
-      return IncrementalTracker.NOOP;
+      LOGGER.warn("Failed to create tracker, using NOOP: {}", e.getMessage());
+      return PipelineTracker.NOOP_PIPELINE;
     }
   }
 

@@ -19,3 +19,6 @@ ALTER TABLE partition_status ADD COLUMN IF NOT EXISTS row_count INTEGER DEFAULT 
 -- Add error tracking columns (migration)
 ALTER TABLE partition_status ADD COLUMN IF NOT EXISTS error_status BOOLEAN DEFAULT FALSE;
 ALTER TABLE partition_status ADD COLUMN IF NOT EXISTS error_message VARCHAR DEFAULT NULL;
+
+-- Add phase column for PipelineTracker unified state model (migration)
+ALTER TABLE partition_status ADD COLUMN IF NOT EXISTS phase VARCHAR DEFAULT NULL;

@@ -34,6 +34,7 @@ import java.sql.Statement;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Each base directory gets its own DuckDB file at .partition_status.duckdb.
  * This decouples the file adapter from govdata's DuckDBCacheStore.
  */
-public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoCloseable {
+public class DuckDBPartitionStatusStore implements PipelineTracker, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBPartitionStatusStore.class);
 
   /** SQL resource path prefix. */
@@ -993,6 +994,121 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
         LOGGER.debug("Column migration: {}", e.getMessage());
       }
     }
+  }
+
+  // ===== PipelineTracker Native Implementations =====
+
+  @Override public boolean isComplete(String sourceKey, String tableName, String phase) {
+    String sql = "SELECT processed_at FROM partition_status "
+        + "WHERE alternate_name = ? AND incremental_key_values = ? "
+        + "AND COALESCE(phase, '') = ? AND COALESCE(error_status, FALSE) = FALSE";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":" + phase);
+      stmt.setString(2, mapToJson(Collections.singletonMap("source_key", sourceKey)));
+      stmt.setString(3, phase);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getLong("processed_at") > 0;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error checking pipeline completion for {}/{}/{}: {}",
+          sourceKey, tableName, phase, e.getMessage());
+    }
+    return false;
+  }
+
+  @Override public void markComplete(String sourceKey, String tableName, String phase,
+      long rowCount) {
+    long now = System.currentTimeMillis();
+    String alternateName = tableName + ":" + phase;
+    String keyValuesJson = mapToJson(Collections.singletonMap("source_key", sourceKey));
+
+    String sql = "INSERT INTO partition_status "
+        + "(alternate_name, incremental_key_values, source_table, target_pattern, "
+        + "processed_at, row_count, error_status, error_message, phase) "
+        + "VALUES (?, ?, ?, ?, ?, ?, FALSE, NULL, ?) "
+        + "ON CONFLICT (alternate_name, incremental_key_values) DO UPDATE SET "
+        + "processed_at = EXCLUDED.processed_at, "
+        + "row_count = EXCLUDED.row_count, "
+        + "error_status = FALSE, error_message = NULL, "
+        + "phase = EXCLUDED.phase";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      stmt.setString(2, keyValuesJson);
+      stmt.setString(3, tableName);
+      stmt.setString(4, alternateName);
+      stmt.setLong(5, now);
+      if (rowCount >= 0) {
+        stmt.setLong(6, rowCount);
+      } else {
+        stmt.setNull(6, java.sql.Types.BIGINT);
+      }
+      stmt.setString(7, phase);
+      stmt.executeUpdate();
+      LOGGER.debug("Pipeline: marked {}/{}/{} complete (rows={})",
+          sourceKey, tableName, phase, rowCount >= 0 ? rowCount : "unknown");
+    } catch (SQLException e) {
+      LOGGER.error("Error marking pipeline completion for {}/{}/{}: {}",
+          sourceKey, tableName, phase, e.getMessage());
+    }
+  }
+
+  @Override public void markError(String sourceKey, String tableName, String phase,
+      String error) {
+    long now = System.currentTimeMillis();
+    String alternateName = tableName + ":" + phase;
+    String keyValuesJson = mapToJson(Collections.singletonMap("source_key", sourceKey));
+
+    String sql = "INSERT INTO partition_status "
+        + "(alternate_name, incremental_key_values, source_table, target_pattern, "
+        + "processed_at, row_count, error_status, error_message, phase) "
+        + "VALUES (?, ?, ?, ?, ?, 0, TRUE, ?, ?) "
+        + "ON CONFLICT (alternate_name, incremental_key_values) DO UPDATE SET "
+        + "processed_at = EXCLUDED.processed_at, "
+        + "row_count = 0, error_status = TRUE, "
+        + "error_message = EXCLUDED.error_message, "
+        + "phase = EXCLUDED.phase";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      stmt.setString(2, keyValuesJson);
+      stmt.setString(3, tableName);
+      stmt.setString(4, alternateName);
+      stmt.setLong(5, now);
+      stmt.setString(6, error != null
+          ? error.substring(0, Math.min(1000, error.length())) : null);
+      stmt.setString(7, phase);
+      stmt.executeUpdate();
+      LOGGER.debug("Pipeline: marked {}/{}/{} error", sourceKey, tableName, phase);
+    } catch (SQLException e) {
+      LOGGER.error("Error marking pipeline error for {}/{}/{}: {}",
+          sourceKey, tableName, phase, e.getMessage());
+    }
+  }
+
+  @Override public Set<String> getCompletedTables(String sourceKey, String phase) {
+    Set<String> tables = new LinkedHashSet<>();
+    String sql = "SELECT source_table FROM partition_status "
+        + "WHERE incremental_key_values = ? "
+        + "AND COALESCE(phase, '') = ? "
+        + "AND COALESCE(error_status, FALSE) = FALSE "
+        + "AND processed_at > 0";
+    String keyValuesJson = mapToJson(Collections.singletonMap("source_key", sourceKey));
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, keyValuesJson);
+      stmt.setString(2, phase);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          tables.add(rs.getString("source_table"));
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error getting completed tables for {}/{}: {}",
+          sourceKey, phase, e.getMessage());
+    }
+    return tables;
   }
 
   @Override public void close() {

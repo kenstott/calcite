@@ -86,9 +86,16 @@ public class AlternatePartitionMaterializer {
    *
    * @return IncrementalTracker instance
    */
+  /**
+   * Set an external tracker (e.g., from factory). If not set, creates one on demand.
+   */
+  public void setIncrementalTracker(IncrementalTracker tracker) {
+    this.incrementalTracker = tracker;
+  }
+
   private IncrementalTracker getOrCreateTracker() {
     if (incrementalTracker == null) {
-      incrementalTracker = DuckDBPartitionStatusStore.getInstance(operatingDirectory);
+      incrementalTracker = PipelineTrackerFactory.create(operatingDirectory);
       LOGGER.debug("Created incremental tracker in operating directory: {}", operatingDirectory);
     }
     return incrementalTracker;

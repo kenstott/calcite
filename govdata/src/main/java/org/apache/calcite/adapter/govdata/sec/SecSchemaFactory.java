@@ -18,8 +18,8 @@ import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
-import org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
+import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -749,7 +749,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Use govdataParquetDir from operand (already computed above) instead of getGovDataParquetDir()
       // because this.currentOperand may be null when called from configureHooks
       if (this.filingCache == null && this.secOperatingDirectory != null) {
-        this.filingCache = new SecFilingCache(this.secOperatingDirectory, this.storageProvider, govdataParquetDir);
+        org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
+            PipelineTrackerFactory.create(this.secOperatingDirectory);
+        this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
         LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
       }
 
@@ -868,7 +870,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
     // Get incremental tracker for skipping already-materialized partitions
-    IncrementalTracker incrementalTracker = DuckDBPartitionStatusStore.getInstance(this.secOperatingDirectory);
+    IncrementalTracker incrementalTracker = PipelineTrackerFactory.create(this.secOperatingDirectory);
 
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
