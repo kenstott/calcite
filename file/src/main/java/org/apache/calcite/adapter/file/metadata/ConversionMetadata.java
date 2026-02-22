@@ -156,6 +156,21 @@ public class ConversionMetadata {
   private final File metadataFile;
   private final Map<String, ConversionRecord> conversions = new ConcurrentHashMap<>();
 
+  /** Generic hints passed from ETL processors to file converters (e.g. cik, form, filingDate). */
+  private final Map<String, String> hints = new HashMap<>();
+
+  /** Set a converter hint. */
+  public void setHint(String key, String value) {
+    if (value != null) {
+      hints.put(key, value);
+    }
+  }
+
+  /** Get a converter hint, or null if not set. */
+  public String getHint(String key) {
+    return hints.get(key);
+  }
+
   /**
    * Comprehensive record of a table in the schema, tracking everything from original source to final table.
    * Despite the name "ConversionRecord", this now tracks ALL tables, not just converted ones.

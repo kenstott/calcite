@@ -189,6 +189,10 @@ public class DocumentETLProcessor {
 
           // Convert document using String-based method for S3 compatibility
           ConversionMetadata conversionMetadata = new ConversionMetadata(outputDirectory);
+          // Pass document metadata as hints so converters can use them
+          for (Map.Entry<String, String> entry : docVariables.entrySet()) {
+            conversionMetadata.setHint(entry.getKey(), entry.getValue());
+          }
           List<String> converted =
               documentConverter.convert(documentPath,
               outputDirectory,

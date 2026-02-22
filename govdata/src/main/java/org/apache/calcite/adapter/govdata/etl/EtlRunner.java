@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.etl;
 
+import org.apache.hadoop.util.ShutdownHookManager;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,6 +90,14 @@ public class EtlRunner {
       System.err.println("Fatal error: " + e.getMessage());
       e.printStackTrace(System.err);
       exitCode = EXIT_FAILED;
+    }
+
+    // Clear Hadoop shutdown hooks before exiting to avoid
+    // NoClassDefFoundError on ShutdownHookManager during JVM teardown
+    try {
+      ShutdownHookManager.get().clearShutdownHooks();
+    } catch (Exception e) {
+      // Ignore — best-effort cleanup
     }
 
     System.exit(exitCode);

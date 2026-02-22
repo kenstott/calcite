@@ -110,7 +110,15 @@ public class XbrlToParquetConverter implements FileConverter {
 
   @Override public List<String> convert(String sourcePath, String targetDirectory,
       ConversionMetadata metadata) throws IOException {
-    // Direct String-based method for S3 paths - no File wrapping
+    // Extract hints from metadata if available (populated by DocumentETLProcessor)
+    if (metadata != null && metadata.getHint("form") != null) {
+      String form = metadata.getHint("form");
+      if (is8KFiling(form)) {
+        return convertInternal(sourcePath, targetDirectory, metadata,
+            metadata.getHint("cik"), form,
+            metadata.getHint("filingDate"), metadata.getHint("accession"));
+      }
+    }
     return convertInternal(sourcePath, targetDirectory, metadata);
   }
 
@@ -211,6 +219,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // If all parsing attempts failed, check if this is an 8-K we can process as plain HTML
       if (doc == null) {
+        LOGGER.info("GATE2 CHECK: doc=null overrideFilingType={} fileName={}", overrideFilingType, fileName);
         if (overrideFilingType != null && is8KFiling(overrideFilingType)) {
           return process8KHtml(sourceFilePath, targetDirectoryPath);
         }

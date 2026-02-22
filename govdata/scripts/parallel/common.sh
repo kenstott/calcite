@@ -62,9 +62,16 @@ generate_sec_model() {
       "startYear": ${start_year},
       "endYear": ${end_year},
       "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
       }
     }
   }]
@@ -93,9 +100,16 @@ generate_prices_model() {
       "startYear": ${start_year},
       "endYear": ${end_year},
       "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
       }
     }
   }]
@@ -121,8 +135,15 @@ generate_nonsec_model() {
         "startYear": 2010,
         "endYear": 2026,
         "autoDownload": true,
+        "directory": "${GOVDATA_PARQUET_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" }
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "s3Config": {
+          "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+          "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+          "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+        }
       }
     },
     {
@@ -135,8 +156,15 @@ generate_nonsec_model() {
         "startYear": 2010,
         "endYear": 2026,
         "autoDownload": true,
+        "directory": "${GOVDATA_PARQUET_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" }
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "s3Config": {
+          "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+          "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+          "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+        }
       }
     },
     {
@@ -148,8 +176,15 @@ generate_nonsec_model() {
         "enabledSources": ["tiger", "hud"],
         "tigerYear": 2024,
         "autoDownload": true,
+        "directory": "${GOVDATA_PARQUET_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" }
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "s3Config": {
+          "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+          "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+          "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+        }
       }
     },
     {
@@ -161,8 +196,15 @@ generate_nonsec_model() {
         "startYear": 2010,
         "endYear": 2026,
         "autoDownload": true,
+        "directory": "${GOVDATA_PARQUET_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" }
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "s3Config": {
+          "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+          "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+          "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+        }
       }
     },
     {
@@ -174,8 +216,15 @@ generate_nonsec_model() {
         "startYear": 2010,
         "endYear": 2026,
         "autoDownload": true,
+        "directory": "${GOVDATA_PARQUET_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" }
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "s3Config": {
+          "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+          "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+          "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+        }
       }
     }
   ]
@@ -202,6 +251,9 @@ run_etl() {
   echo "[$worker_id] Starting ETL with model: $model_file"
   echo "[$worker_id] Log: $log_file"
 
+  # Ensure Ctrl-C kills the java process, not just tee
+  trap 'kill 0' INT TERM
+
   java \
     -Xms"${ETL_HEAP_MIN:-1g}" \
     -Xmx"${ETL_HEAP_MAX:-4g}" \
@@ -213,6 +265,7 @@ run_etl() {
     2>&1 | tee "$log_file"
 
   local exit_code=${PIPESTATUS[0]}
+  trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
   return $exit_code
 }
