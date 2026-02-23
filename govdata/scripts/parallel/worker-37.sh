@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Worker 16: SEC Primary 2011 (10-K/10-Q + Stock Prices)
+# Worker 37: SEC Secondary 2012 (8-K, Proxy, Insider)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-WORKER_ID="worker-16"
+WORKER_ID="worker-37"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
-generate_sec_primary_model 2011 2011 "$MODEL_DIR/sec-primary-2011.json"
-run_etl "$MODEL_DIR/sec-primary-2011.json" "$WORKER_ID"
+generate_sec_secondary_model 2012 2012 "$MODEL_DIR/sec-secondary-2012.json"
+run_etl "$MODEL_DIR/sec-secondary-2012.json" "$WORKER_ID"
 
 log_info "$WORKER_ID complete"

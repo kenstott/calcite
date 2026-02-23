@@ -4,7 +4,7 @@
 # Usage: ./run.sh 5 10 17    — runs workers 05, 10, 17 in parallel
 #        ./run.sh 1-5         — runs workers 01 through 05
 #        ./run.sh 3 7-9 15    — mix of individual and ranges
-#        ./run.sh all          — runs all 20 workers
+#        ./run.sh all          — runs all 39 workers
 # ============================================================================
 set -euo pipefail
 
@@ -17,7 +17,7 @@ if [ $# -eq 0 ]; then
   echo "  $0 5 10 17       — run workers 05, 10, 17 in parallel"
   echo "  $0 1-5            — run workers 01 through 05"
   echo "  $0 3 7-9 15       — mix of individual and ranges"
-  echo "  $0 all             — run all 20 workers"
+  echo "  $0 all             — run all 39 workers"
   exit 1
 fi
 
@@ -25,7 +25,7 @@ fi
 workers=()
 for arg in "$@"; do
   if [ "$arg" = "all" ]; then
-    for i in $(seq 1 20); do workers+=("$i"); done
+    for i in $(seq 1 39); do workers+=("$i"); done
   elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
     for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do workers+=("$i"); done
   elif [[ "$arg" =~ ^[0-9]+$ ]]; then

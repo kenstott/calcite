@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Worker 20: Pre-XBRL stock prices 2000-2003
+# Worker 20: Geographic Data (TIGER, HUD)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,7 +10,7 @@ WORKER_ID="worker-20"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
-generate_prices_model 2000 2003 "$MODEL_DIR/prices-2000-2003.json"
-run_etl "$MODEL_DIR/prices-2000-2003.json" "$WORKER_ID"
+generate_single_schema_model "geo" "$MODEL_DIR/geo.json"
+run_etl "$MODEL_DIR/geo.json" "$WORKER_ID"
 
 log_info "$WORKER_ID complete"

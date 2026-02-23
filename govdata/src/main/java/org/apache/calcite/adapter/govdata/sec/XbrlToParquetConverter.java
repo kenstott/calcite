@@ -2450,7 +2450,7 @@ public class XbrlToParquetConverter implements FileConverter {
       String order = arc.getAttribute("order");
       if (order != null && !order.isEmpty()) {
         try {
-          data.put("order", Integer.parseInt(order));
+          data.put("order", (int) Double.parseDouble(order));
         } catch (NumberFormatException e) {
           data.put("order", null);
         }
@@ -2614,7 +2614,7 @@ public class XbrlToParquetConverter implements FileConverter {
               data.put("from_concept", cleanConceptName(fromRef));
               data.put("to_concept", cleanConceptName(toRef));
               data.put("weight", weight != null && !weight.isEmpty() ? Double.parseDouble(weight) : null);
-              data.put("order", order != null && !order.isEmpty() ? Integer.parseInt(order) : i);
+              data.put("order", order != null && !order.isEmpty() ? (int) Double.parseDouble(order) : i);
               data.put("preferred_label", ixRel.getAttribute("preferredLabel"));
               dataList.add(data);
               processedRelationships.add(relationshipKey);
@@ -2973,7 +2973,7 @@ public class XbrlToParquetConverter implements FileConverter {
           String order = element.getAttribute("order");
           if (order != null && !order.isEmpty()) {
             try {
-              data.put("order", Integer.parseInt(order));
+              data.put("order", (int) Double.parseDouble(order));
             } catch (NumberFormatException e) {
               data.put("order", null);
             }

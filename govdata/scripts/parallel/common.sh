@@ -232,6 +232,145 @@ generate_nonsec_model() {
 ENDJSON
 }
 
+# Generate a SEC primary model JSON (10-K/10-Q + stock prices) for a year range
+# Usage: generate_sec_primary_model <start_year> <end_year> <output_file>
+generate_sec_primary_model() {
+  local start_year=$1 end_year=$2 output_file=$3
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": "_ALL_EDGAR_FILERS",
+      "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A"],
+      "fetchStockPrices": true,
+      "stockPriceSource": "stooq",
+      "startYear": ${start_year},
+      "endYear": ${end_year},
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
+# Generate a SEC secondary model JSON (8-K, proxy, insider) for a year range
+# Usage: generate_sec_secondary_model <start_year> <end_year> <output_file>
+generate_sec_secondary_model() {
+  local start_year=$1 end_year=$2 output_file=$3
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": "_ALL_EDGAR_FILERS",
+      "filingTypes": ["8-K", "8-K/A", "DEF 14A", "3", "4", "5"],
+      "startYear": ${start_year},
+      "endYear": ${end_year},
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
+# Generate a single-schema model JSON for one non-SEC data source
+# Usage: generate_single_schema_model <schema_name> <output_file>
+generate_single_schema_model() {
+  local schema_name=$1 output_file=$2
+  local operand_body
+
+  case "$schema_name" in
+    econ)
+      operand_body="\"dataSource\": \"econ\",
+      \"startYear\": 2010,
+      \"endYear\": 2026"
+      ;;
+    census)
+      operand_body="\"dataSource\": \"census\",
+      \"enabledSources\": [\"acs\"],
+      \"startYear\": 2010,
+      \"endYear\": 2026"
+      ;;
+    geo)
+      operand_body="\"dataSource\": \"geo\",
+      \"enabledSources\": [\"tiger\", \"hud\"],
+      \"tigerYear\": 2024"
+      ;;
+    crime)
+      operand_body="\"dataSource\": \"crime\",
+      \"startYear\": 2010,
+      \"endYear\": 2026"
+      ;;
+    weather)
+      operand_body="\"dataSource\": \"weather\",
+      \"startYear\": 2010,
+      \"endYear\": 2026"
+      ;;
+    *)
+      echo "ERROR: unknown schema '$schema_name'" >&2
+      return 1
+      ;;
+  esac
+
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "${schema_name}",
+  "schemas": [{
+    "name": "${schema_name}",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      ${operand_body},
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
 # Run the ETL with a given model file
 # Usage: run_etl <model_file> <worker_id> [extra_args...]
 run_etl() {
