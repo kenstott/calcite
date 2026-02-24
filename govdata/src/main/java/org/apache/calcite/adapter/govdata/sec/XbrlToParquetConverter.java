@@ -206,7 +206,8 @@ public class XbrlToParquetConverter implements FileConverter {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
             DocumentBuilder builder = factory.newDocumentBuilder();
-            try (InputStream is = storageProvider.openInputStream(xbrlPath)) {
+            try (InputStream is = sanitizeXmlStream(
+                storageProvider.openInputStream(xbrlPath))) {
               doc = builder.parse(is);
             }
           }
@@ -218,7 +219,8 @@ public class XbrlToParquetConverter implements FileConverter {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
-        try (InputStream is = storageProvider.openInputStream(sourceFilePath)) {
+        try (InputStream is = sanitizeXmlStream(
+            storageProvider.openInputStream(sourceFilePath))) {
           doc = builder.parse(is);
         }
       }
@@ -3081,6 +3083,40 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     return baseUrl + relativeUrl;
+  }
+
+  /**
+   * Sanitizes an XML input stream by escaping bare {@code &} characters that are
+   * not part of valid entity references. Some legacy SEC EDGAR filings (especially
+   * .TXT format) contain unescaped ampersands like "Smith & Jones" which cause
+   * SAXParseException during XML parsing.
+   *
+   * <p>Valid entity references ({@code &amp;}, {@code &lt;}, {@code &gt;},
+   * {@code &quot;}, {@code &apos;}, {@code &#NNN;}, {@code &#xHHH;}) are preserved.
+   */
+  private InputStream sanitizeXmlStream(InputStream is) throws IOException {
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = is.read(buf)) != -1) {
+      baos.write(buf, 0, n);
+    }
+    is.close();
+
+    String content = baos.toString(StandardCharsets.UTF_8.name());
+
+    // Replace bare '&' that are NOT followed by a valid entity reference:
+    //   &amp; &lt; &gt; &quot; &apos; &#digits; &#xhex;
+    // The negative lookahead matches '&' not followed by word-chars+semicolon or #
+    String sanitized = content.replaceAll("&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)", "&amp;");
+
+    if (!sanitized.equals(content)) {
+      int fixes = sanitized.length() - content.length();
+      // Each bare '&' becomes '&amp;' — 4 extra chars per fix
+      LOGGER.info("Sanitized {} bare '&' characters in XML input", fixes / 4);
+    }
+
+    return new ByteArrayInputStream(sanitized.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
