@@ -25,7 +25,7 @@ fi
 workers=()
 for arg in "$@"; do
   if [ "$arg" = "all" ]; then
-    for i in $(seq 1 39); do workers+=("$i"); done
+    for i in $(seq 1 40); do workers+=("$i"); done
   elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
     for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do workers+=("$i"); done
   elif [[ "$arg" =~ ^[0-9]+$ ]]; then

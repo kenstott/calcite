@@ -234,7 +234,7 @@ generate_nonsec_model() {
 ENDJSON
 }
 
-# Generate a SEC primary model JSON (10-K/10-Q + stock prices) for a year range
+# Generate a SEC primary model JSON (10-K/10-Q filings only) for a year range
 # Usage: generate_sec_primary_model <start_year> <end_year> <output_file>
 generate_sec_primary_model() {
   local start_year=$1 end_year=$2 output_file=$3
@@ -250,8 +250,7 @@ generate_sec_primary_model() {
       "dataSource": "sec",
       "ciks": "_ALL_EDGAR_FILERS",
       "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A"],
-      "fetchStockPrices": true,
-      "stockPriceSource": "stooq",
+      "fetchStockPrices": false,
       "startYear": ${start_year},
       "endYear": ${end_year},
       "autoDownload": true,
