@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -75,6 +76,7 @@ public class DocumentETLProcessor {
   private final FileConverter documentConverter;
   private final ProgressListener progressListener;
   private final ProcessedDocumentTracker documentTracker;
+  private final FilingIndexProvider filingIndexProvider;
 
   // In-memory cache fallback to avoid repeated S3 exists() checks when no tracker provided
   private final Set<String> existsCache = new HashSet<String>();
@@ -138,6 +140,31 @@ public class DocumentETLProcessor {
       FileConverter documentConverter,
       ProgressListener progressListener,
       ProcessedDocumentTracker documentTracker) {
+    this(config, storageProvider, outputDirectory, cacheDirectory, documentConverter,
+        progressListener, documentTracker, null);
+  }
+
+  /**
+   * Creates a new document ETL processor with all options.
+   *
+   * @param config HTTP source configuration with document settings
+   * @param storageProvider Storage provider for output files
+   * @param outputDirectory Directory for converted Parquet files (can be S3 or local path)
+   * @param cacheDirectory Cache directory for downloaded documents (can be S3 or local path)
+   * @param documentConverter Converter for document processing
+   * @param progressListener Listener for progress updates
+   * @param documentTracker Tracker for processed documents (avoids S3 checks)
+   * @param filingIndexProvider Optional index provider for fast CIK pre-filtering
+   */
+  public DocumentETLProcessor(
+      HttpSourceConfig config,
+      StorageProvider storageProvider,
+      String outputDirectory,
+      String cacheDirectory,
+      FileConverter documentConverter,
+      ProgressListener progressListener,
+      ProcessedDocumentTracker documentTracker,
+      FilingIndexProvider filingIndexProvider) {
     this.config = config;
     this.storageProvider = storageProvider;
     this.outputDirectory = outputDirectory;
@@ -145,6 +172,7 @@ public class DocumentETLProcessor {
     this.documentConverter = documentConverter;
     this.progressListener = progressListener;
     this.documentTracker = documentTracker;
+    this.filingIndexProvider = filingIndexProvider;
   }
 
   /**
@@ -155,10 +183,30 @@ public class DocumentETLProcessor {
    * @throws IOException If processing fails
    */
   public DocumentETLResult processEntity(Map<String, String> entityVariables) throws IOException {
+    long startTime = System.currentTimeMillis();
+
+    // Check index cache before hitting EDGAR API
+    if (filingIndexProvider != null) {
+      String cik = entityVariables.get("cik");
+      String yearStr = entityVariables.get("year");
+      if (cik != null && yearStr != null) {
+        int year = Integer.parseInt(yearStr);
+        List<String> filingTypes = config.getDocumentSource() != null
+            ? config.getDocumentSource().getDocumentTypes() : null;
+        FilingIndexProvider.CacheDecision decision =
+            filingIndexProvider.checkCik(cik, year, filingTypes, documentTracker);
+        if (decision == FilingIndexProvider.CacheDecision.SKIP) {
+          LOGGER.debug("Index cache: skipping CIK {} year {} (no untracked filings)", cik, year);
+          return new DocumentETLResult(0, 0, 0,
+              Collections.<String>emptyList(), Collections.<String>emptyList(),
+              System.currentTimeMillis() - startTime);
+        }
+      }
+    }
+
     // Pass cache directory path directly to DocumentSource (supports S3 or local paths)
     DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDirectory);
 
-    long startTime = System.currentTimeMillis();
     int documentsProcessed = 0;
     int documentsSkipped = 0;
     int documentsFailed = 0;

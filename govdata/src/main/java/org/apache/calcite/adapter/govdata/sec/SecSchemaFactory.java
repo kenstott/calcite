@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
+import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
@@ -776,6 +777,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           : null;
       LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
 
+      // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
+      FilingIndexProvider indexCache = null;
+      try {
+        indexCache = new EdgarFullIndexCache(
+            storageProvider, this.secCacheDirectory, startYear, endYear);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
+            e.getMessage());
+      }
+
       // Create processor - pass cache directory as String to support S3 paths
       DocumentETLProcessor processor = new DocumentETLProcessor(
           httpSourceConfig,
@@ -784,7 +795,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           this.secCacheDirectory,
           documentConverter,
           null,  // progressListener
-          documentTracker);
+          documentTracker,
+          indexCache);
 
       // Build entity list with CIKs and year range
       List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
