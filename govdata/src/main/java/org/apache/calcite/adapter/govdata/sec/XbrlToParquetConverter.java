@@ -203,12 +203,18 @@ public class XbrlToParquetConverter implements FileConverter {
           if (xbrlPath != null) {
             LOGGER.info("Found companion XBRL instance: {}",
                 xbrlPath.substring(xbrlPath.lastIndexOf('/') + 1));
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            try (InputStream is = sanitizeXmlStream(
-                storageProvider.openInputStream(xbrlPath))) {
-              doc = builder.parse(is);
+            try {
+              DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+              factory.setNamespaceAware(true);
+              DocumentBuilder builder = factory.newDocumentBuilder();
+              try (InputStream is = sanitizeXmlStream(
+                  storageProvider.openInputStream(xbrlPath))) {
+                doc = builder.parse(is);
+              }
+            } catch (org.xml.sax.SAXParseException e) {
+              LOGGER.info("Strict XML parse failed for {}: {} — falling back to JSoup",
+                  xbrlPath.substring(xbrlPath.lastIndexOf('/') + 1), e.getMessage());
+              doc = parseWithJsoupFallback(xbrlPath);
             }
           }
         }
@@ -216,12 +222,19 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // If not HTML, try traditional XBRL/XML parsing
       if (doc == null && !fileName.endsWith(".htm") && !fileName.endsWith(".html")) {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        try (InputStream is = sanitizeXmlStream(
-            storageProvider.openInputStream(sourceFilePath))) {
-          doc = builder.parse(is);
+        try {
+          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+          factory.setNamespaceAware(true);
+          DocumentBuilder builder = factory.newDocumentBuilder();
+          try (InputStream is = sanitizeXmlStream(
+              storageProvider.openInputStream(sourceFilePath))) {
+            doc = builder.parse(is);
+          }
+        } catch (org.xml.sax.SAXParseException e) {
+          // Malformed XML (unclosed tags, HTML entities, etc.) — fall back to JSoup
+          LOGGER.info("Strict XML parse failed for {}: {} — falling back to JSoup",
+              fileName, e.getMessage());
+          doc = parseWithJsoupFallback(sourceFilePath);
         }
       }
 
@@ -3083,6 +3096,48 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     return baseUrl + relativeUrl;
+  }
+
+  /**
+   * Parses a malformed XML/XBRL file using JSoup's lenient HTML parser, then
+   * converts to a W3C DOM Document. Used as a fallback when strict XML parsing
+   * fails due to unclosed tags, bare ampersands, HTML entities, etc.
+   *
+   * @param filePath Path to the file (local or S3)
+   * @return W3C DOM Document, or null if parsing fails
+   */
+  private Document parseWithJsoupFallback(String filePath) {
+    try {
+      String content;
+      try (InputStream is = storageProvider.openInputStream(filePath)) {
+        byte[] bytes = readAllBytes(is);
+        content = new String(bytes, StandardCharsets.UTF_8);
+      }
+
+      // Try JSoup XML parser first (preserves namespace prefixes)
+      org.jsoup.nodes.Document jsoupDoc =
+          Jsoup.parse(content, "", org.jsoup.parser.Parser.xmlParser());
+
+      // If XML parser produces a near-empty tree, retry with HTML parser
+      if (jsoupDoc.children().size() <= 1
+          && jsoupDoc.getElementsByTag("xbrl").isEmpty()) {
+        jsoupDoc = Jsoup.parse(content);
+      }
+
+      // Convert JSoup document to W3C DOM
+      org.jsoup.helper.W3CDom w3cDom = new org.jsoup.helper.W3CDom();
+      Document doc = w3cDom.fromJsoup(jsoupDoc);
+
+      LOGGER.info("JSoup fallback parsed {} successfully ({} child nodes)",
+          filePath.substring(filePath.lastIndexOf('/') + 1),
+          doc.getDocumentElement() != null
+              ? doc.getDocumentElement().getChildNodes().getLength() : 0);
+      return doc;
+    } catch (Exception e) {
+      LOGGER.warn("JSoup fallback also failed for {}: {}",
+          filePath.substring(filePath.lastIndexOf('/') + 1), e.getMessage());
+      return null;
+    }
   }
 
   /**
