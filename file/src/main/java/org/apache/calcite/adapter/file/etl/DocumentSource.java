@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -77,6 +78,10 @@ public class DocumentSource {
   private final StorageProvider storageProvider;
   private final String cacheDirectory;
   private final long minRequestIntervalMs;
+
+  // Retry configuration
+  private static final int MAX_RETRIES = 3;
+  private static final long INITIAL_RETRY_DELAY_MS = 1000;
 
   // Last request timestamp for rate limiting
   private long lastRequestTime = 0;
@@ -231,130 +236,162 @@ public class DocumentSource {
   }
 
   /**
-   * Fetches content from a URL as a string.
+   * Fetches content from a URL as a string with retry and exponential backoff.
    */
   private String fetchUrl(String urlStr) throws IOException {
-    enforceRateLimit();
+    for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      enforceRateLimit();
 
-    URL url = new URL(urlStr);
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+      HttpURLConnection conn = null;
+      try {
+        URL url = URI.create(urlStr).toURL();
+        conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(60000);
 
-    try {
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(30000);
-      conn.setReadTimeout(60000);
-
-      // Set headers
-      for (Map.Entry<String, String> header : defaultHeaders.entrySet()) {
-        conn.setRequestProperty(header.getKey(), header.getValue());
-      }
-
-      int responseCode = conn.getResponseCode();
-
-      if (responseCode == 429) {
-        // Rate limited - wait and retry
-        LOGGER.warn("Rate limited, waiting before retry...");
-        try {
-          Thread.sleep(5000);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
+        // Set headers
+        for (Map.Entry<String, String> header : defaultHeaders.entrySet()) {
+          conn.setRequestProperty(header.getKey(), header.getValue());
         }
-        return fetchUrl(urlStr);
-      }
 
-      if (responseCode != 200) {
-        throw new IOException("HTTP " + responseCode + " from " + urlStr);
-      }
+        int responseCode = conn.getResponseCode();
 
-      // Handle gzip encoding
-      InputStream inputStream = conn.getInputStream();
-      String encoding = conn.getContentEncoding();
-      if ("gzip".equalsIgnoreCase(encoding)) {
-        inputStream = new GZIPInputStream(inputStream);
-      }
+        if (isRetryableHttpStatus(responseCode)) {
+          if (attempt < MAX_RETRIES - 1) {
+            long delay = retryDelay(attempt);
+            LOGGER.warn("HTTP {} from {} - retrying in {}ms (attempt {}/{})",
+                responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
+            sleepQuietly(delay);
+            continue;
+          }
+          throw new IOException("HTTP " + responseCode + " from " + urlStr
+              + " after " + MAX_RETRIES + " attempts");
+        }
 
-      // Read response
-      StringBuilder sb = new StringBuilder();
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-        String line;
-        while ((line = reader.readLine()) != null) {
-          sb.append(line).append("\n");
+        if (responseCode != 200) {
+          throw new IOException("HTTP " + responseCode + " from " + urlStr);
+        }
+
+        // Handle gzip encoding
+        InputStream inputStream = conn.getInputStream();
+        String encoding = conn.getContentEncoding();
+        if ("gzip".equalsIgnoreCase(encoding)) {
+          inputStream = new GZIPInputStream(inputStream);
+        }
+
+        // Read response
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader =
+            new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+          String line;
+          while ((line = reader.readLine()) != null) {
+            sb.append(line).append("\n");
+          }
+        }
+
+        return sb.toString();
+
+      } catch (IOException e) {
+        if (attempt < MAX_RETRIES - 1 && isRetryableException(e)) {
+          long delay = retryDelay(attempt);
+          LOGGER.warn("Request to {} failed: {} - retrying in {}ms (attempt {}/{})",
+              urlStr, e.getMessage(), delay, attempt + 1, MAX_RETRIES);
+          sleepQuietly(delay);
+        } else {
+          throw e;
+        }
+      } finally {
+        if (conn != null) {
+          conn.disconnect();
         }
       }
-
-      return sb.toString();
-
-    } finally {
-      conn.disconnect();
     }
+    throw new IOException("Failed to fetch " + urlStr + " after " + MAX_RETRIES + " attempts");
   }
 
   /**
-   * Downloads content from a URL to a storage provider path.
+   * Downloads content from a URL to a storage provider path with retry
+   * and exponential backoff for transient errors.
    */
   private void downloadToPath(String urlStr, String targetPath) throws IOException {
-    enforceRateLimit();
+    for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      enforceRateLimit();
 
-    URL url = new URL(urlStr);
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+      HttpURLConnection conn = null;
+      try {
+        URL url = URI.create(urlStr).toURL();
+        conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(120000);
 
-    try {
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(30000);
-      conn.setReadTimeout(120000);
-
-      // Set headers
-      for (Map.Entry<String, String> header : defaultHeaders.entrySet()) {
-        conn.setRequestProperty(header.getKey(), header.getValue());
-      }
-
-      int responseCode = conn.getResponseCode();
-
-      if (responseCode == 429) {
-        // Rate limited - wait and retry
-        LOGGER.warn("Rate limited, waiting before retry...");
-        try {
-          Thread.sleep(5000);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
+        // Set headers
+        for (Map.Entry<String, String> header : defaultHeaders.entrySet()) {
+          conn.setRequestProperty(header.getKey(), header.getValue());
         }
-        downloadToPath(urlStr, targetPath);
+
+        int responseCode = conn.getResponseCode();
+
+        if (responseCode == 404) {
+          throw new IOException("File not found: " + urlStr);
+        }
+
+        if (isRetryableHttpStatus(responseCode)) {
+          if (attempt < MAX_RETRIES - 1) {
+            long delay = retryDelay(attempt);
+            LOGGER.warn("HTTP {} downloading {} - retrying in {}ms (attempt {}/{})",
+                responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
+            sleepQuietly(delay);
+            continue;
+          }
+          throw new IOException("HTTP " + responseCode + " from " + urlStr
+              + " after " + MAX_RETRIES + " attempts");
+        }
+
+        if (responseCode != 200) {
+          throw new IOException("HTTP " + responseCode + " from " + urlStr);
+        }
+
+        // Handle gzip encoding
+        InputStream inputStream = conn.getInputStream();
+        String encoding = conn.getContentEncoding();
+        if ("gzip".equalsIgnoreCase(encoding)) {
+          inputStream = new GZIPInputStream(inputStream);
+        }
+
+        // Read content to byte array
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+          baos.write(buffer, 0, bytesRead);
+        }
+        byte[] content = baos.toByteArray();
+
+        // Write via storage provider
+        storageProvider.writeFile(targetPath, content);
+
+        LOGGER.debug("Downloaded {} bytes to {}", content.length, targetPath);
         return;
+
+      } catch (IOException e) {
+        if (attempt < MAX_RETRIES - 1 && isRetryableException(e)) {
+          long delay = retryDelay(attempt);
+          LOGGER.warn("Download of {} failed: {} - retrying in {}ms (attempt {}/{})",
+              urlStr, e.getMessage(), delay, attempt + 1, MAX_RETRIES);
+          sleepQuietly(delay);
+        } else {
+          throw e;
+        }
+      } finally {
+        if (conn != null) {
+          conn.disconnect();
+        }
       }
-
-      if (responseCode == 404) {
-        throw new IOException("File not found: " + urlStr);
-      }
-
-      if (responseCode != 200) {
-        throw new IOException("HTTP " + responseCode + " from " + urlStr);
-      }
-
-      // Handle gzip encoding
-      InputStream inputStream = conn.getInputStream();
-      String encoding = conn.getContentEncoding();
-      if ("gzip".equalsIgnoreCase(encoding)) {
-        inputStream = new GZIPInputStream(inputStream);
-      }
-
-      // Read content to byte array
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      while ((bytesRead = inputStream.read(buffer)) != -1) {
-        baos.write(buffer, 0, bytesRead);
-      }
-      byte[] content = baos.toByteArray();
-
-      // Write via storage provider
-      storageProvider.writeFile(targetPath, content);
-
-      LOGGER.debug("Downloaded {} bytes to {}", content.length, targetPath);
-
-    } finally {
-      conn.disconnect();
     }
+    throw new IOException(
+        "Failed to download " + urlStr + " after " + MAX_RETRIES + " attempts");
   }
 
   /**
@@ -428,5 +465,56 @@ public class DocumentSource {
    */
   public long getMinRequestIntervalMs() {
     return minRequestIntervalMs;
+  }
+
+  /**
+   * Returns whether an HTTP status code is retryable (transient server error).
+   */
+  private static boolean isRetryableHttpStatus(int statusCode) {
+    return statusCode == 429    // Too Many Requests
+        || statusCode == 500    // Internal Server Error
+        || statusCode == 502    // Bad Gateway
+        || statusCode == 503    // Service Unavailable
+        || statusCode == 504;   // Gateway Timeout
+  }
+
+  /**
+   * Returns whether an IOException is retryable (transient network error).
+   */
+  private static boolean isRetryableException(IOException e) {
+    String msg = e.getMessage();
+    if (msg == null) {
+      return true; // Unknown IOException - worth retrying
+    }
+    String lower = msg.toLowerCase();
+    return lower.contains("connection reset")
+        || lower.contains("tls")
+        || lower.contains("ssl")
+        || lower.contains("handshake")
+        || lower.contains("timed out")
+        || lower.contains("timeout")
+        || lower.contains("broken pipe")
+        || lower.contains("connection refused")
+        || lower.contains("no route to host")
+        || lower.contains("network is unreachable")
+        || lower.contains("unexpected end of stream");
+  }
+
+  /**
+   * Calculates retry delay with exponential backoff.
+   */
+  private static long retryDelay(int attempt) {
+    return INITIAL_RETRY_DELAY_MS * (1L << attempt);
+  }
+
+  /**
+   * Sleeps for the specified duration, restoring interrupt flag if interrupted.
+   */
+  private static void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 }

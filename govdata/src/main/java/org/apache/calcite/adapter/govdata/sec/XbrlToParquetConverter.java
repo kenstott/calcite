@@ -3084,63 +3084,120 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Download file from URL.
+   * Download file from URL with retry and exponential backoff for transient errors.
    */
   private String downloadFile(String urlString) {
-    try {
-      URI uri = URI.create(urlString);
-      URL url = uri.toURL();
-      HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(10000);
-      conn.setReadTimeout(10000);
-      // SEC.gov requires proper User-Agent identifying automated tools with contact info
-      // Format: "Company Name admin@email.com" - see: https://www.sec.gov/os/accessing-edgar-data
-      String userAgent = "Apache Calcite SEC Adapter apache-calcite@apache.org";
-      conn.setRequestProperty("User-Agent", userAgent);
-      conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-      conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
-      // Removed "Accept-Encoding: gzip, deflate" - was causing SEC to return gzip-compressed error responses
-      // that couldn't be read as plain text. SEC.gov appears to return 403 for XSD downloads regardless.
-      conn.setRequestProperty("DNT", "1");
-      conn.setRequestProperty("Connection", "keep-alive");
-      conn.setRequestProperty("Upgrade-Insecure-Requests", "1");
+    int maxRetries = 3;
+    long initialDelayMs = 1000;
 
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Attempting XSD download with User-Agent: {}", userAgent);
-      }
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      HttpURLConnection conn = null;
+      try {
+        URI uri = URI.create(urlString);
+        URL url = uri.toURL();
+        conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(30000);
+        // SEC.gov requires proper User-Agent identifying automated tools with contact info
+        // Format: "Company Name admin@email.com" - see: https://www.sec.gov/os/accessing-edgar-data
+        String userAgent = "Apache Calcite SEC Adapter apache-calcite@apache.org";
+        conn.setRequestProperty("User-Agent", userAgent);
+        conn.setRequestProperty("Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+        conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
+        conn.setRequestProperty("DNT", "1");
+        conn.setRequestProperty("Connection", "keep-alive");
+        conn.setRequestProperty("Upgrade-Insecure-Requests", "1");
 
-      int responseCode = conn.getResponseCode();
-      if (responseCode != HttpURLConnection.HTTP_OK) {
-        String responseMessage = conn.getResponseMessage();
-        LOGGER.warn("HTTP " + responseCode + " (" + responseMessage + ") for URL: " + urlString);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Attempting XSD download with User-Agent: {}", userAgent);
+        }
 
-        // Try to read error response body for more details
-        try {
-          InputStream errorStream = conn.getErrorStream();
-          if (errorStream != null) {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(errorStream));
-            String errorResponse = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
-            LOGGER.warn("Error response body: " + errorResponse.substring(0, Math.min(500, errorResponse.length())));
+        int responseCode = conn.getResponseCode();
+
+        // Retryable HTTP status codes
+        if (responseCode == 429 || responseCode == 500 || responseCode == 502
+            || responseCode == 503 || responseCode == 504) {
+          if (attempt < maxRetries - 1) {
+            long delay = initialDelayMs * (1L << attempt);
+            LOGGER.warn("HTTP {} from {} - retrying in {}ms (attempt {}/{})",
+                responseCode, urlString, delay, attempt + 1, maxRetries);
+            sleepQuietly(delay);
+            continue;
           }
-        } catch (Exception e) {
-          LOGGER.debug("Could not read error response: " + e.getMessage());
+          LOGGER.warn("HTTP {} from {} after {} attempts - giving up",
+              responseCode, urlString, maxRetries);
+          return null;
         }
-        return null;
-      }
 
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-        StringBuilder content = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-          content.append(line).append("\n");
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+          String responseMessage = conn.getResponseMessage();
+          LOGGER.warn("HTTP {} ({}) for URL: {}", responseCode, responseMessage, urlString);
+          return null;
         }
-        return content.toString();
+
+        try (BufferedReader reader =
+            new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+          StringBuilder content = new StringBuilder();
+          String line;
+          while ((line = reader.readLine()) != null) {
+            content.append(line).append("\n");
+          }
+          return content.toString();
+        }
+      } catch (Exception e) {
+        String msg = e.getMessage();
+        boolean retryable = isRetryableException(msg);
+        if (attempt < maxRetries - 1 && retryable) {
+          long delay = initialDelayMs * (1L << attempt);
+          LOGGER.warn("Download of {} failed: {} - retrying in {}ms (attempt {}/{})",
+              urlString, msg, delay, attempt + 1, maxRetries);
+          sleepQuietly(delay);
+        } else {
+          LOGGER.warn("Failed to download {}: {}", urlString, msg);
+          return null;
+        }
+      } finally {
+        if (conn != null) {
+          conn.disconnect();
+        }
       }
-    } catch (Exception e) {
-      LOGGER.warn("Failed to download " + urlString + ": " + e.getMessage());
-      return null;
+    }
+    LOGGER.warn("Failed to download {} after {} attempts", urlString, maxRetries);
+    return null;
+  }
+
+  /**
+   * Returns whether an exception message indicates a transient/retryable error.
+   */
+  private static boolean isRetryableException(String msg) {
+    if (msg == null) {
+      return true;
+    }
+    String lower = msg.toLowerCase();
+    return lower.contains("connection reset")
+        || lower.contains("tls")
+        || lower.contains("ssl")
+        || lower.contains("handshake")
+        || lower.contains("timed out")
+        || lower.contains("timeout")
+        || lower.contains("broken pipe")
+        || lower.contains("connection refused")
+        || lower.contains("no route to host")
+        || lower.contains("network is unreachable")
+        || lower.contains("unexpected end of stream");
+  }
+
+  /**
+   * Sleeps for the specified duration, restoring interrupt flag if interrupted.
+   */
+  private static void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 
