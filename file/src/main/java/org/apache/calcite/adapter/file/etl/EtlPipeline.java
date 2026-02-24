@@ -864,7 +864,7 @@ public class EtlPipeline {
     if (EtlPipelineConfig.SOURCE_TYPE_FILE.equals(sourceType)) {
       LOGGER.info("Creating FileSource for type: {}", sourceType);
       FileSourceConfig fileConfig = FileSourceConfig.fromMap(config.getRawSourceConfig());
-      return new FileSource(fileConfig);
+      return new FileSource(fileConfig, sourceStorageProvider);
     }
 
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(sourceType)) {

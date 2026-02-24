@@ -66,7 +66,8 @@ generate_sec_model() {
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
       },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
@@ -104,7 +105,8 @@ generate_prices_model() {
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
       },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
@@ -138,7 +140,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -159,7 +161,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -179,7 +181,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -199,7 +201,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -219,7 +221,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -257,7 +259,8 @@ generate_sec_primary_model() {
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
       },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
@@ -293,7 +296,8 @@ generate_sec_secondary_model() {
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}"
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
       },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
@@ -359,7 +363,7 @@ generate_single_schema_model() {
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
-      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}" },
+      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",

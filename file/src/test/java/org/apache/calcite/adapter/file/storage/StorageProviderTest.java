@@ -103,9 +103,9 @@ import static org.junit.jupiter.api.Assertions.*;
     StorageProvider https = StorageProviderFactory.createFromUrl("https://example.com/file.txt");
     assertEquals("http", https.getStorageType());
 
-    // Test S3
-    StorageProvider s3 = StorageProviderFactory.createFromUrl("s3://bucket/path/file.txt");
-    assertEquals("s3", s3.getStorageType());
+    // Test S3 - requires explicit credentials, cannot create from URL alone
+    assertThrows(IllegalArgumentException.class,
+        () -> StorageProviderFactory.createFromUrl("s3://bucket/path/file.txt"));
 
     // Test FTP
     StorageProvider ftp = StorageProviderFactory.createFromUrl("ftp://server/path/file.txt");

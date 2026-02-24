@@ -26,7 +26,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,13 +36,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration test for S3 storage provider.
- * These tests require AWS credentials to be configured.
+ * These tests require AWS credentials to be configured via environment
+ * variables, system properties, or a local-test.properties file.
  *
- * The tests require the following environment variables:
- * - AWS_ACCESS_KEY_ID
- * - AWS_SECRET_ACCESS_KEY
- * - AWS_REGION (optional, defaults to us-east-1)
- * - S3_TEST_BUCKET (the bucket name to use for testing)
+ * <p>Required configuration (via env, system property, or properties file):
+ * <ul>
+ *   <li>AWS_ACCESS_KEY_ID</li>
+ *   <li>AWS_SECRET_ACCESS_KEY</li>
+ *   <li>AWS_REGION (optional, defaults to us-east-1)</li>
+ *   <li>S3_TEST_BUCKET (the bucket name to use for testing)</li>
+ * </ul>
  */
 @Tag("integration")
 public class S3StorageProviderTest {
@@ -120,10 +125,44 @@ public class S3StorageProviderTest {
     return bucket;
   }
 
+  /**
+   * Creates an S3StorageProvider with credentials from test config.
+   * Used for integration tests that actually call S3.
+   */
+  private S3StorageProvider createTestProvider() {
+    Map<String, Object> config = new HashMap<>();
+    config.put("accessKeyId", getConfig("AWS_ACCESS_KEY_ID"));
+    config.put("secretAccessKey", getConfig("AWS_SECRET_ACCESS_KEY"));
+    String region = getConfig("AWS_REGION");
+    if (region == null || region.isEmpty()) {
+      region = getConfig("AWS_DEFAULT_REGION");
+    }
+    if (region != null && !region.isEmpty()) {
+      config.put("region", region);
+    }
+    String endpoint = getConfig("AWS_ENDPOINT_OVERRIDE");
+    if (endpoint != null && !endpoint.isEmpty()) {
+      config.put("endpoint", endpoint);
+    }
+    return new S3StorageProvider(config);
+  }
+
+  /**
+   * Creates an S3StorageProvider with dummy credentials for tests
+   * that only exercise non-S3-calling methods like resolvePath.
+   */
+  private S3StorageProvider createDummyProvider() {
+    Map<String, Object> config = new HashMap<>();
+    config.put("accessKeyId", "test-key");
+    config.put("secretAccessKey", "test-secret");
+    config.put("region", "us-east-1");
+    return new S3StorageProvider(config);
+  }
+
   @Test void testS3Operations() throws IOException {
     assumeTrue(isS3Available(), "S3 credentials not configured, skipping test");
 
-    S3StorageProvider provider = new S3StorageProvider();
+    S3StorageProvider provider = createTestProvider();
     String bucket = getTestBucket();
 
     // Test listing bucket root
@@ -166,7 +205,7 @@ public class S3StorageProviderTest {
   }
 
   @Test void testS3PathResolution() {
-    S3StorageProvider provider = new S3StorageProvider();
+    S3StorageProvider provider = createDummyProvider();
 
     // Test absolute S3 URL
     assertEquals("s3://bucket/absolute/path.txt",
@@ -188,7 +227,7 @@ public class S3StorageProviderTest {
   @Test void testS3UriParsing() throws IOException {
     assumeTrue(isS3Available(), "S3 credentials not configured, skipping test");
 
-    S3StorageProvider provider = new S3StorageProvider();
+    S3StorageProvider provider = createTestProvider();
 
     // Test directory listing with various path formats
     String bucket = getTestBucket();
@@ -218,7 +257,7 @@ public class S3StorageProviderTest {
   @Test void testS3WriteOperations() throws IOException {
     assumeTrue(isS3Available(), "S3 credentials not configured, skipping test");
 
-    S3StorageProvider provider = new S3StorageProvider();
+    S3StorageProvider provider = createTestProvider();
     String bucket = getTestBucket();
     String testPrefix = "calcite-test/" + System.currentTimeMillis() + "/";
 

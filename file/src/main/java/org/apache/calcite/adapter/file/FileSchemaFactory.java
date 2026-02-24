@@ -523,6 +523,19 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       }
     }
 
+    // Fail-fast validation: S3 storage requires explicit credentials in model.json
+    if ("s3".equals(storageType) && storageProviderInstance == null) {
+      boolean hasCredentials = storageConfig != null
+          && storageConfig.get("accessKeyId") != null
+          && storageConfig.get("secretAccessKey") != null;
+      if (!hasCredentials) {
+        throw new IllegalArgumentException(
+            "S3 storage for schema '" + name + "' requires 'accessKeyId' and "
+            + "'secretAccessKey' in model.json storageConfig. "
+            + "Environment variable fallbacks are not supported.");
+      }
+    }
+
     // Get refresh interval for schema (default for all tables)
     final String refreshInterval = (String) operand.get("refreshInterval");
     LOGGER.info("FileSchemaFactory: refreshInterval from operand: '{}'", refreshInterval);

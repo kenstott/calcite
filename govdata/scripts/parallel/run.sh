@@ -44,6 +44,7 @@ mkdir -p "$PID_DIR"
 
 pids=()
 labels=()
+start_times=()
 
 for num in "${workers[@]}"; do
   id=$(printf "worker-%02d" "$num")
@@ -65,6 +66,7 @@ for num in "${workers[@]}"; do
 
   pids+=("$pid")
   labels+=("$id")
+  start_times+=("$(date +%s)")
 done
 
 echo ""
@@ -86,14 +88,11 @@ while true; do
     if kill -0 "$pid" 2>/dev/null; then
       ((running++)) || true
       last_line=$(tail -1 "$log_file" 2>/dev/null | cut -c1-120)
-      elapsed=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
-      if [ -n "$elapsed" ]; then
-        mins=$((elapsed / 60))
-        secs=$((elapsed % 60))
-        status_lines+=("  ${id}: running ${mins}m${secs}s  | ${last_line}")
-      else
-        status_lines+=("  ${id}: running  | ${last_line}")
-      fi
+      now=$(date +%s)
+      elapsed=$((now - start_times[i]))
+      mins=$((elapsed / 60))
+      secs=$((elapsed % 60))
+      status_lines+=("  ${id}: running ${mins}m${secs}s  | ${last_line}")
     else
       # Process finished — check exit code
       if wait "$pid" 2>/dev/null; then

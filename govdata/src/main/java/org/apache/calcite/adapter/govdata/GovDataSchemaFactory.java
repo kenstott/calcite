@@ -125,7 +125,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         LOGGER.info("Processing dependency '{}' for schema '{}'", depDataSource, name);
 
         String depOperatingDir = establishOperatingDirectory(depDataSource);
-        IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource);
+        IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource, operand);
         SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
         Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource.toUpperCase());
 
@@ -140,7 +140,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Now add the main schema
     String operatingDirectory = establishOperatingDirectory(dataSource);
-    IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name);
+    IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name, operand);
 
     // Check for freshStart option - clears all completion tracking to force re-download
     Boolean freshStart = (Boolean) operand.get("freshStart");
@@ -397,9 +397,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * Create incremental tracker for resumable ETL.
    * Uses PipelineTrackerFactory to select backend based on operand or environment.
    */
-  private IncrementalTracker createIncrementalTracker(String operatingDirectory, String schemaName) {
+  private IncrementalTracker createIncrementalTracker(String operatingDirectory,
+      String schemaName, Map<String, Object> operand) {
     try {
-      return PipelineTrackerFactory.create(operatingDirectory);
+      return PipelineTrackerFactory.createFromOperand(operand, operatingDirectory);
     } catch (Exception e) {
       LOGGER.warn("Failed to create tracker, using NOOP: {}", e.getMessage());
       return PipelineTracker.NOOP_PIPELINE;

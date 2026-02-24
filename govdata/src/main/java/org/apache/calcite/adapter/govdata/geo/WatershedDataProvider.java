@@ -22,6 +22,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -143,7 +144,7 @@ public class WatershedDataProvider implements DataProvider {
   }
 
   private void downloadFile(String urlString, File destination) throws IOException {
-    URL url = new URL(urlString);
+    URL url = URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter");
     conn.setConnectTimeout(30000);

@@ -68,9 +68,15 @@ public class FileSource implements DataSource {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileSource.class);
 
   private final FileSourceConfig config;
+  private final StorageProvider injectedStorageProvider;
 
   public FileSource(FileSourceConfig config) {
+    this(config, null);
+  }
+
+  public FileSource(FileSourceConfig config, StorageProvider storageProvider) {
     this.config = config;
+    this.injectedStorageProvider = storageProvider;
   }
 
   @Override public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
@@ -109,8 +115,17 @@ public class FileSource implements DataSource {
 
   /**
    * Selects appropriate storage provider based on path scheme.
+   * Prefers injected StorageProvider when the path scheme matches.
    */
   private StorageProvider selectStorageProvider(String path) throws IOException {
+    // Prefer injected provider when path scheme matches
+    if (injectedStorageProvider != null) {
+      String scheme = injectedStorageProvider.getStorageType();
+      if (path.startsWith(scheme + "://") || "local".equals(scheme)) {
+        return injectedStorageProvider;
+      }
+    }
+
     try {
       StorageProvider provider = StorageProviderFactory.createFromUrl(path);
       if (provider != null) {
@@ -220,14 +235,22 @@ public class FileSource implements DataSource {
   }
 
   /**
-   * Configures S3 credentials for DuckDB from environment.
+   * Configures S3 credentials for DuckDB from injected StorageProvider config.
    */
   private void configureS3Credentials(Statement stmt) {
     try {
-      String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
-      String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
-      String endpoint = System.getenv("AWS_ENDPOINT_URL");
-      String region = System.getenv("AWS_REGION");
+      java.util.Map<String, String> s3Config = injectedStorageProvider != null
+          ? injectedStorageProvider.getS3Config() : null;
+
+      if (s3Config == null || s3Config.isEmpty()) {
+        LOGGER.debug("No S3 config available from StorageProvider - S3 access will not work");
+        return;
+      }
+
+      String accessKey = s3Config.get("accessKeyId");
+      String secretKey = s3Config.get("secretAccessKey");
+      String endpoint = s3Config.get("endpoint");
+      String region = s3Config.get("region");
 
       if (accessKey != null && secretKey != null) {
         stmt.execute("SET s3_access_key_id='" + accessKey + "'");

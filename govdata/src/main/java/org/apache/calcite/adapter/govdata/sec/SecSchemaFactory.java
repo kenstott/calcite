@@ -748,9 +748,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Initialize filing cache if not yet done
       // Use govdataParquetDir from operand (already computed above) instead of getGovDataParquetDir()
       // because this.currentOperand may be null when called from configureHooks
-      if (this.filingCache == null && this.secOperatingDirectory != null) {
+      if (this.filingCache == null && this.secOperatingDirectory != null
+          && this.currentOperand != null) {
         org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
-            PipelineTrackerFactory.create(this.secOperatingDirectory);
+            PipelineTrackerFactory.createFromOperand(this.currentOperand, this.secOperatingDirectory);
         this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
         LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
       }
@@ -867,7 +868,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
     // Get incremental tracker for skipping already-materialized partitions
-    IncrementalTracker incrementalTracker = PipelineTrackerFactory.create(this.secOperatingDirectory);
+    IncrementalTracker incrementalTracker =
+        PipelineTrackerFactory.createFromOperand(this.currentOperand, this.secOperatingDirectory);
 
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(

@@ -21,9 +21,7 @@ import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
-import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
@@ -77,10 +75,6 @@ public class S3StorageProvider implements StorageProvider {
   // S3 configuration for DuckDB access (credentials, endpoint, region)
   private final java.util.Map<String, String> s3Config;
 
-  public S3StorageProvider() {
-    this((AmazonS3) null, null);
-  }
-
   public S3StorageProvider(AmazonS3 s3Client) {
     this(s3Client, null);
   }
@@ -112,66 +106,44 @@ public class S3StorageProvider implements StorageProvider {
       AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
           .withClientConfiguration(clientConfig);
 
-      if (config != null) {
-        // Use provided credentials if available, otherwise fall back to default chain
-        String accessKeyId = (String) config.get("accessKeyId");
-        String secretAccessKey = (String) config.get("secretAccessKey");
+      if (config == null) {
+        throw new IllegalArgumentException(
+            "S3StorageProvider requires explicit configuration via model.json operand. "
+            + "Provide 'accessKeyId' and 'secretAccessKey' in the storageConfig section.");
+      }
 
-        if (accessKeyId != null && secretAccessKey != null) {
-          builder.withCredentials(
-              new com.amazonaws.auth.AWSStaticCredentialsProvider(
-              new com.amazonaws.auth.BasicAWSCredentials(accessKeyId, secretAccessKey)));
-        } else {
-          builder.withCredentials(new DefaultAWSCredentialsProviderChain());
-        }
+      // Require explicit credentials from config - no environment variable fallbacks
+      String accessKeyId = (String) config.get("accessKeyId");
+      String secretAccessKey = (String) config.get("secretAccessKey");
 
-        // Check for custom endpoint (e.g., MinIO, Wasabi, or other S3-compatible services)
-        // Priority: config > AWS_ENDPOINT_OVERRIDE environment variable
-        String endpoint = (String) config.get("endpoint");
-        if (endpoint == null) {
-          endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
-        }
+      if (accessKeyId == null || secretAccessKey == null) {
+        throw new IllegalArgumentException(
+            "S3StorageProvider requires 'accessKeyId' and 'secretAccessKey' in model.json "
+            + "storageConfig. Environment variable fallbacks are not supported. "
+            + "Provided config keys: " + config.keySet());
+      }
 
-        String region = (String) config.get("region");
-        if (region == null) {
-          region = System.getenv("AWS_REGION");
-        }
-        if (region == null) {
-          try {
-            region = new DefaultAwsRegionProviderChain().getRegion();
-          } catch (Exception e) {
-            region = "us-east-1"; // Default for custom endpoints
-          }
-        }
+      builder.withCredentials(
+          new com.amazonaws.auth.AWSStaticCredentialsProvider(
+          new com.amazonaws.auth.BasicAWSCredentials(accessKeyId, secretAccessKey)));
 
-        // If custom endpoint is provided, use endpoint configuration
-        if (endpoint != null) {
-          builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
-          // Enable path-style access for S3-compatible services like MinIO
-          builder.withPathStyleAccessEnabled(true);
-        } else {
-          // Standard AWS S3 - use region only
-          builder.withRegion(region);
-        }
+      // Endpoint from config only (no env var fallback)
+      String endpoint = (String) config.get("endpoint");
+
+      // Region from config only, default to us-east-1 if absent
+      String region = (String) config.get("region");
+      if (region == null) {
+        region = "us-east-1";
+      }
+
+      // If custom endpoint is provided, use endpoint configuration
+      if (endpoint != null) {
+        builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
+        // Enable path-style access for S3-compatible services like MinIO
+        builder.withPathStyleAccessEnabled(true);
       } else {
-        builder.withCredentials(new DefaultAWSCredentialsProviderChain());
-
-        // Check for AWS_ENDPOINT_OVERRIDE even without config
-        String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
-
-        String region;
-        try {
-          region = new DefaultAwsRegionProviderChain().getRegion();
-        } catch (Exception e) {
-          region = "us-east-1";
-        }
-
-        if (endpoint != null) {
-          builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
-          builder.withPathStyleAccessEnabled(true);
-        } else {
-          builder.withRegion(region);
-        }
+        // Standard AWS S3 - use region only
+        builder.withRegion(region);
       }
 
       this.s3Client = builder.build();

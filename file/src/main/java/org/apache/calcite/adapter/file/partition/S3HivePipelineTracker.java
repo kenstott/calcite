@@ -56,6 +56,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   private final String bucketPath;
   private final String endpoint;
+  private final Map<String, String> config;
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
@@ -64,12 +65,25 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Create an S3-backed pipeline tracker.
    *
    * @param bucketPath S3 path for tracker data (e.g. "s3://bucket/tracker")
-   * @param endpoint   Optional S3 endpoint override (for MinIO, LocalStack, etc.)
+   * @param endpoint   Optional S3 endpoint override (for MinIO, R2, etc.)
    */
   public S3HivePipelineTracker(String bucketPath, String endpoint) {
+    this(bucketPath, endpoint, Collections.<String, String>emptyMap());
+  }
+
+  /**
+   * Create an S3-backed pipeline tracker with full configuration.
+   *
+   * @param bucketPath S3 path for tracker data (e.g. "s3://bucket/tracker")
+   * @param endpoint   Optional S3 endpoint override (for MinIO, R2, etc.)
+   * @param config     Configuration map with accessKeyId, secretAccessKey, region
+   */
+  public S3HivePipelineTracker(String bucketPath, String endpoint,
+      Map<String, String> config) {
     this.bucketPath = bucketPath.endsWith("/") ? bucketPath.substring(0, bucketPath.length() - 1)
         : bucketPath;
     this.endpoint = endpoint;
+    this.config = config != null ? config : Collections.<String, String>emptyMap();
   }
 
   private Connection getConnection() throws SQLException {
@@ -91,24 +105,26 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.execute("INSTALL httpfs");
       stmt.execute("LOAD httpfs");
 
-      // Configure S3 credentials from environment
-      String region = System.getenv("AWS_REGION");
-      if (region == null) {
-        region = System.getenv("AWS_DEFAULT_REGION");
-      }
-      if (region != null) {
+      // Configure S3 - credentials must come from config (model.json operand)
+      String region = config.get("region");
+      if (region != null && !region.isEmpty()) {
         stmt.execute("SET s3_region = '" + region + "'");
       }
 
-      String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
-      String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
-      if (accessKey != null && secretKey != null) {
+      String accessKey = config.get("accessKeyId");
+      String secretKey = config.get("secretAccessKey");
+      if (accessKey != null && !accessKey.isEmpty()
+          && secretKey != null && !secretKey.isEmpty()) {
         stmt.execute("SET s3_access_key_id = '" + accessKey + "'");
         stmt.execute("SET s3_secret_access_key = '" + secretKey + "'");
+      } else {
+        LOGGER.warn("S3 tracker missing accessKeyId/secretAccessKey in config. "
+            + "Provide credentials via model.json operand. Available keys: {}",
+            config.keySet());
       }
 
-      String sessionToken = System.getenv("AWS_SESSION_TOKEN");
-      if (sessionToken != null) {
+      String sessionToken = config.get("sessionToken");
+      if (sessionToken != null && !sessionToken.isEmpty()) {
         stmt.execute("SET s3_session_token = '" + sessionToken + "'");
       }
 
@@ -120,7 +136,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         }
       }
 
-      LOGGER.info("Initialized S3 httpfs extension for tracker at {}", bucketPath);
+      LOGGER.info("Initialized S3 httpfs extension for tracker at {} (endpoint={})",
+          bucketPath, endpoint);
     }
   }
 

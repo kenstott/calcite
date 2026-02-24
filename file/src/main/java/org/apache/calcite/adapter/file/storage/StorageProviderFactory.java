@@ -60,7 +60,9 @@ public class StorageProviderFactory {
         return getCachedProvider("http", HttpStorageProvider::new);
 
       case "s3":
-        return getCachedProvider("s3", S3StorageProvider::new);
+        throw new IllegalArgumentException(
+            "S3 storage requires explicit credentials via model.json storageConfig. "
+            + "Cannot create S3 provider from URL alone.");
 
       case "hdfs":
         return getCachedProvider("hdfs", () -> {
@@ -123,7 +125,9 @@ public class StorageProviderFactory {
           // Configuration map provided with credentials/region
           return new S3StorageProvider(config);
         }
-        return getCachedProvider("s3", S3StorageProvider::new);
+        throw new IllegalArgumentException(
+            "S3 storage requires explicit credentials via model.json storageConfig. "
+            + "Provide 'accessKeyId' and 'secretAccessKey' in the config map.");
 
       case "hdfs":
         if (config != null && config.containsKey("hadoopConfig")) {

@@ -505,6 +505,9 @@ public abstract class AbstractGovDataDownloader {
   /** Default filename for output files when pattern uses wildcard (from model operands) */
   protected final String defaultParquetFilename;
 
+  /** Schema operand map for creating trackers and other config-driven components */
+  protected Map<String, Object> operand;
+
   protected AbstractGovDataDownloader(
       String cacheDirectory,
       String operatingDirectory,
@@ -3741,8 +3744,17 @@ public abstract class AbstractGovDataDownloader {
    * @return IncrementalTracker instance
    */
   protected org.apache.calcite.adapter.file.partition.IncrementalTracker getIncrementalTracker() {
+    if (operand != null) {
+      return org.apache.calcite.adapter.file.partition.PipelineTrackerFactory
+          .createFromOperand(operand, operatingDirectory);
+    }
     return org.apache.calcite.adapter.file.partition.PipelineTrackerFactory
         .create(operatingDirectory);
+  }
+
+  /** Set the schema operand for config-driven tracker creation. */
+  public void setOperand(Map<String, Object> operand) {
+    this.operand = operand;
   }
 
   /**

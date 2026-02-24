@@ -265,11 +265,7 @@ public class DuckDBJdbcSchemaFactory {
           }
         }
 
-        // Fall back to environment variables if not in operands
-        if (s3Region == null) s3Region = System.getenv("AWS_REGION");
-        if (s3AccessKey == null) s3AccessKey = System.getenv("AWS_ACCESS_KEY_ID");
-        if (s3SecretKey == null) s3SecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
-        if (s3Endpoint == null) s3Endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+        // No environment variable fallbacks - credentials must come from model.json operands
 
         // Process endpoint configuration (needs to be done before making final variables)
         if (s3Endpoint != null) {
@@ -315,7 +311,7 @@ public class DuckDBJdbcSchemaFactory {
           LOGGER.info("DuckDB S3 secret created successfully for endpoint: {} (SSL: {})",
                      endpointHostPort != null ? endpointHostPort : "default", useSSL);
         } else {
-          LOGGER.info("No S3 credentials found in operands or environment - S3 access will use default AWS credentials");
+          LOGGER.info("No S3 credentials found in operands - S3 access will not be available");
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to configure S3 support: {} - S3 URIs will not work", e.getMessage());

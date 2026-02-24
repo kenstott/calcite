@@ -109,10 +109,20 @@ public final class PipelineTrackerFactory {
   public static PipelineTracker createFromOperand(Map<String, Object> operand,
       String baseDirectory) {
     String backend = (String) operand.get("trackerBackend");
-    Map<String, String> config = Collections.emptyMap();
+    Map<String, String> config = new java.util.HashMap<>();
     Object trackerConfig = operand.get("trackerConfig");
     if (trackerConfig instanceof Map) {
-      config = (Map<String, String>) trackerConfig;
+      config.putAll((Map<String, String>) trackerConfig);
+    }
+    // Merge s3Config credentials into tracker config if not already set
+    Object s3Config = operand.get("s3Config");
+    if (s3Config instanceof Map) {
+      Map<String, String> s3 = (Map<String, String>) s3Config;
+      for (String key : new String[]{"accessKeyId", "secretAccessKey", "endpoint", "region"}) {
+        if (!config.containsKey(key) && s3.containsKey(key)) {
+          config.put(key, s3.get(key));
+        }
+      }
     }
     return create(backend, baseDirectory, config);
   }
@@ -143,10 +153,7 @@ public final class PipelineTrackerFactory {
             "S3 tracker requires 'bucket' in trackerConfig or CALCITE_TRACKER_S3_BUCKET env var");
       }
       String endpoint = config.get("endpoint");
-      if (endpoint == null) {
-        endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
-      }
-      return new S3HivePipelineTracker(bucket, endpoint);
+      return new S3HivePipelineTracker(bucket, endpoint, config);
     } catch (Exception e) {
       LOGGER.error("Failed to create S3 tracker, falling back to DuckDB: {}", e.getMessage());
       return DuckDBPartitionStatusStore.getInstance(baseDirectory);
