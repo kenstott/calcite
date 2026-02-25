@@ -553,99 +553,156 @@ public class S3StorageProvider implements StorageProvider {
       metadata.setContentType(contentType);
     }
 
-    try (InputStream input = new ByteArrayInputStream(content)) {
-      PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, input, metadata);
-      s3Client.putObject(request);
-    } catch (AmazonServiceException e) {
-      throw new IOException("Failed to write file to S3: " + path, e);
+    int maxRetries = 3;
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try (InputStream input = new ByteArrayInputStream(content)) {
+        PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, input, metadata);
+        s3Client.putObject(request);
+        return;
+      } catch (AmazonServiceException e) {
+        if (isRetryableS3Error(e) && attempt < maxRetries - 1) {
+          long delay = 1000L * (1L << attempt);
+          LOGGER.warn("S3 write failed for {} (HTTP {}): {} — retrying in {}ms (attempt {}/{})",
+              path, e.getStatusCode(), e.getErrorCode(), delay, attempt + 1, maxRetries);
+          sleepQuietly(delay);
+        } else {
+          throw new IOException("Failed to write file to S3: " + path, e);
+        }
+      }
     }
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {
-    // Stream upload using S3 multipart upload to avoid buffering large payloads in memory
+    // For streams we must buffer to byte[] first so we can retry
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    byte[] transferBuf = new byte[8192];
+    int n;
+    while ((n = content.read(transferBuf)) != -1) {
+      baos.write(transferBuf, 0, n);
+    }
+    byte[] data = baos.toByteArray();
+
+    writeMultipartWithRetry(path, data);
+  }
+
+  /**
+   * Writes data to S3 using multipart upload with retry on transient errors.
+   * Each retry restarts the entire multipart upload from scratch.
+   */
+  private void writeMultipartWithRetry(String path, byte[] data) throws IOException {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
 
     // Choose part size (must be >= 5 MB for multipart). Use 16 MB by default.
     final int partSize = 16 * 1024 * 1024;
-    final byte[] buf = new byte[partSize];
 
-    // Prepare metadata; we don't know content length in advance
+    // Prepare metadata
     ObjectMetadata objectMetadata = new ObjectMetadata();
     String contentType = guessContentType(path);
     if (contentType != null) {
       objectMetadata.setContentType(contentType);
     }
 
-    List<PartETag> partETags = new ArrayList<>();
-    String uploadId = null;
+    int maxRetries = 3;
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      List<PartETag> partETags = new ArrayList<>();
+      String uploadId = null;
 
-    try {
-      // Initiate multipart upload
-      InitiateMultipartUploadRequest initRequest =
-          new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
-              .withObjectMetadata(objectMetadata);
-      InitiateMultipartUploadResult initResponse = s3Client.initiateMultipartUpload(initRequest);
-      uploadId = initResponse.getUploadId();
-
-      int partNumber = 1;
-      long total = 0L;
-      while (true) {
-        int bytesRead = fillBuffer(content, buf);
-        if (bytesRead <= 0) {
-          break; // EOF
+      try {
+        if (data.length == 0) {
+          // Zero-byte object: simple put
+          objectMetadata.setContentLength(0);
+          try (InputStream empty = new ByteArrayInputStream(new byte[0])) {
+            PutObjectRequest req =
+                new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata);
+            s3Client.putObject(req);
+          }
+          return;
         }
-        total += bytesRead;
 
-        UploadPartRequest uploadRequest = new UploadPartRequest()
-            .withBucketName(s3Uri.bucket)
-            .withKey(s3Uri.key)
-            .withUploadId(uploadId)
-            .withPartNumber(partNumber++)
-            .withInputStream(new java.io.ByteArrayInputStream(buf, 0, bytesRead))
-            .withPartSize(bytesRead);
+        // Initiate multipart upload
+        InitiateMultipartUploadRequest initRequest =
+            new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
+                .withObjectMetadata(objectMetadata);
+        InitiateMultipartUploadResult initResponse =
+            s3Client.initiateMultipartUpload(initRequest);
+        uploadId = initResponse.getUploadId();
 
-        partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
-      }
+        int partNumber = 1;
+        int offset = 0;
+        while (offset < data.length) {
+          int len = Math.min(partSize, data.length - offset);
 
-      if (partETags.isEmpty()) {
-        // Zero-byte object: put a small empty object instead of multipart
-        try (InputStream empty = new java.io.ByteArrayInputStream(new byte[0])) {
-          PutObjectRequest req = new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata);
-          s3Client.putObject(req);
+          UploadPartRequest uploadRequest = new UploadPartRequest()
+              .withBucketName(s3Uri.bucket)
+              .withKey(s3Uri.key)
+              .withUploadId(uploadId)
+              .withPartNumber(partNumber++)
+              .withInputStream(new ByteArrayInputStream(data, offset, len))
+              .withPartSize(len);
+
+          partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+          offset += len;
         }
+
+        // Complete multipart upload
+        CompleteMultipartUploadRequest compRequest =
+            new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags);
+        s3Client.completeMultipartUpload(compRequest);
         return;
-      }
 
-      // Complete multipart upload
-      CompleteMultipartUploadRequest compRequest =
-          new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags);
-      s3Client.completeMultipartUpload(compRequest);
-    } catch (AmazonServiceException e) {
-      // Abort multipart upload on failure
-      if (uploadId != null) {
-        try {
-          s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
-        } catch (Exception abortEx) {
-          // log and continue
-          LoggerFactory.getLogger(S3StorageProvider.class).warn("Failed to abort multipart upload for s3://{}/{}: {}",
-              s3Uri.bucket, s3Uri.key, abortEx.toString());
+      } catch (AmazonServiceException e) {
+        // Abort multipart upload on failure
+        if (uploadId != null) {
+          try {
+            s3Client.abortMultipartUpload(
+                new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
+          } catch (Exception abortEx) {
+            LOGGER.warn("Failed to abort multipart upload for s3://{}/{}: {}",
+                s3Uri.bucket, s3Uri.key, abortEx.toString());
+          }
+        }
+
+        if (isRetryableS3Error(e) && attempt < maxRetries - 1) {
+          long delay = 1000L * (1L << attempt);
+          LOGGER.warn("S3 multipart write failed for {} (HTTP {}): {} — retrying in {}ms "
+                  + "(attempt {}/{})",
+              path, e.getStatusCode(), e.getErrorCode(), delay, attempt + 1, maxRetries);
+          sleepQuietly(delay);
+        } else {
+          throw new IOException("Failed to write file to S3: " + path, e);
         }
       }
-      throw new IOException("Failed to write file to S3: " + path, e);
     }
   }
 
-  // Reads from 'in' into 'buffer' until either buffer is full or EOF; returns bytes read or -1 for EOF
-  private static int fillBuffer(InputStream in, byte[] buffer) throws IOException {
-    int off = 0;
-    int len = buffer.length;
-    while (off < len) {
-      int r = in.read(buffer, off, len - off);
-      if (r < 0) break;
-      off += r;
+  /**
+   * Returns whether an S3 error is transient and worth retrying.
+   * Covers server errors (500, 502, 503, 504), throttling (429),
+   * and known transient error codes from S3/R2.
+   */
+  private static boolean isRetryableS3Error(AmazonServiceException e) {
+    int status = e.getStatusCode();
+    if (status == 429 || status == 500 || status == 502 || status == 503 || status == 504) {
+      return true;
     }
-    return off == 0 ? -1 : off;
+    String code = e.getErrorCode();
+    if (code == null) {
+      return false;
+    }
+    return "InternalError".equals(code)
+        || "NoSuchUpload".equals(code)
+        || "RequestTimeout".equals(code)
+        || "SlowDown".equals(code)
+        || "ServiceUnavailable".equals(code);
+  }
+
+  private static void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   @Override public void createDirectories(String path) throws IOException {
