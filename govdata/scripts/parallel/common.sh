@@ -398,7 +398,7 @@ run_etl() {
 
   java \
     -Xms"${ETL_HEAP_MIN:-1g}" \
-    -Xmx"${ETL_HEAP_MAX:-4g}" \
+    -Xmx"${ETL_HEAP_MAX:-2g}" \
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
