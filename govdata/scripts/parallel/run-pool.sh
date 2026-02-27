@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Run workers with a concurrency pool (max N at a time)
-# Usage: ./run-pool.sh -j 4 1-20       — run workers 01-20, max 4 at a time
-#        ./run-pool.sh -j 3 1 5 10-15   — mix of individual and ranges
-#        ./run-pool.sh -j 6 all         — all workers, max 6 concurrent
-#        ./run-pool.sh 1-10             — default: max 4 concurrent
+# Usage: ./run-pool.sh -j 4 1-20              — run workers 01-20, max 4 at a time
+#        ./run-pool.sh -j 3 -t 90 1 5 10-15   — max 3 concurrent, 90min timeout
+#        ./run-pool.sh -j 6 all                — all workers, max 6 concurrent
+#        ./run-pool.sh 1-10                    — default: max 4 concurrent, 60min timeout
 # ============================================================================
 set -euo pipefail
 
@@ -13,23 +13,33 @@ source "$SCRIPT_DIR/common.sh"
 load_env
 
 MAX_WORKERS=4
+TIMEOUT_MINS=60
 
-# Parse -j flag
-if [ "${1:-}" = "-j" ]; then
-  if [ -z "${2:-}" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: -j requires a numeric argument" >&2
-    exit 1
-  fi
-  MAX_WORKERS=$2
-  shift 2
-fi
+# Parse flags
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    -j)
+      if [ -z "${2:-}" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: -j requires a numeric argument" >&2; exit 1
+      fi
+      MAX_WORKERS=$2; shift 2 ;;
+    -t)
+      if [ -z "${2:-}" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: -t requires a numeric argument (minutes)" >&2; exit 1
+      fi
+      TIMEOUT_MINS=$2; shift 2 ;;
+    *) break ;;
+  esac
+done
+
+TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] <worker-numbers...>"
-  echo "  $0 -j 4 1-20        — run workers 01-20, max 4 at a time"
-  echo "  $0 -j 3 1 5 10-15   — mix of individual and ranges"
-  echo "  $0 -j 6 all         — all workers, max 6 concurrent"
-  echo "  $0 1-10             — default: max $MAX_WORKERS concurrent"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] <worker-numbers...>"
+  echo "  $0 -j 4 1-20              — run workers 01-20, max 4 at a time"
+  echo "  $0 -j 3 -t 90 1 5 10-15   — max 3 concurrent, 90min timeout"
+  echo "  $0 -j 6 all               — all workers, max 6 concurrent"
+  echo "  $0 1-10                   — default: max $MAX_WORKERS concurrent, ${TIMEOUT_MINS}min timeout"
   exit 1
 fi
 
@@ -55,19 +65,21 @@ PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
 total=${#queue[@]}
-echo "=== Pool Runner: $total workers, max $MAX_WORKERS concurrent ==="
+echo "=== Pool Runner: $total workers, max $MAX_WORKERS concurrent, ${TIMEOUT_MINS}min timeout ==="
 echo ""
 
 # Active worker tracking: parallel arrays
 active_pids=()
 active_labels=()
 active_starts=()
+active_nums=()
 
 # Counters
 queue_idx=0
 done_count=0
 failed_count=0
 failed_list=()
+restart_count=0
 
 # Launch a single worker by number, append to active arrays
 launch_worker() {
@@ -91,6 +103,7 @@ launch_worker() {
   active_pids+=("$pid")
   active_labels+=("$id")
   active_starts+=("$(date +%s)")
+  active_nums+=("$num")
   return 0
 }
 
@@ -105,17 +118,43 @@ fill_pool() {
 # Remove a finished worker from active arrays by index
 remove_active() {
   local idx=$1
-  local new_pids=() new_labels=() new_starts=()
+  local new_pids=() new_labels=() new_starts=() new_nums=()
   for i in "${!active_pids[@]}"; do
     if [ "$i" -ne "$idx" ]; then
       new_pids+=("${active_pids[$i]}")
       new_labels+=("${active_labels[$i]}")
       new_starts+=("${active_starts[$i]}")
+      new_nums+=("${active_nums[$i]}")
     fi
   done
   active_pids=("${new_pids[@]+"${new_pids[@]}"}")
   active_labels=("${new_labels[@]+"${new_labels[@]}"}")
   active_starts=("${new_starts[@]+"${new_starts[@]}"}")
+  active_nums=("${new_nums[@]+"${new_nums[@]}"}")
+}
+
+# Kill a stuck worker and re-queue it
+kill_and_requeue() {
+  local idx=$1
+  local pid="${active_pids[$idx]}"
+  local id="${active_labels[$idx]}"
+  local num="${active_nums[$idx]}"
+  local elapsed_mins=$(( ($(date +%s) - active_starts[$idx]) / 60 ))
+
+  log_info "$id stuck (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
+
+  # Kill the process tree
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  sleep 2
+  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+
+  remove_active "$idx"
+  ((restart_count++)) || true
+
+  # Re-queue: append worker number back to the queue
+  queue+=("$num")
+  ((total++)) || true
 }
 
 # Initial fill
@@ -153,13 +192,26 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     ((i++))
   done
 
+  # Check for stuck workers exceeding timeout
+  i=0
+  while [ "$i" -lt "${#active_pids[@]}" ]; do
+    now=$(date +%s)
+    elapsed=$(( now - active_starts[$i] ))
+    if [ "$elapsed" -ge "$TIMEOUT_SECS" ]; then
+      kill_and_requeue "$i"
+      # Don't increment i — array shifted
+      continue
+    fi
+    ((i++))
+  done
+
   # Fill any open slots
   fill_pool
 
   # Print status
   remaining=$((total - done_count - failed_count - ${#active_pids[@]}))
-  printf "\r[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  " \
-    "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining"
+  printf "\r[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  Restarts: %d  " \
+    "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining" "$restart_count"
 
   # Show active worker names
   if [ "${#active_labels[@]}" -gt 0 ]; then
@@ -175,7 +227,7 @@ done
 echo ""
 echo ""
 echo "=== Pool Complete ==="
-echo "Total: $total  Done: $done_count  Failed: $failed_count"
+echo "Total: $total  Done: $done_count  Failed: $failed_count  Restarts: $restart_count"
 if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
   exit 1
