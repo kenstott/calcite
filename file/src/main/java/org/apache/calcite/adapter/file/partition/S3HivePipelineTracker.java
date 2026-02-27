@@ -57,10 +57,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final String bucketPath;
   private final String endpoint;
   private final Map<String, String> config;
-  private final String sourceKeyPrefix;
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
+  /** Cached result of probing for any tracker data; null = not yet checked. */
+  private Boolean hasAnyTrackerData;
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -85,11 +86,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         : bucketPath;
     this.endpoint = endpoint;
     this.config = config != null ? config : Collections.<String, String>emptyMap();
-    String prefix = this.config.get("sourceKeyPrefix");
-    this.sourceKeyPrefix = (prefix != null && !prefix.isEmpty()) ? prefix : null;
-    if (this.sourceKeyPrefix != null) {
-      LOGGER.info("S3 tracker will narrow scans to source_key={}*", this.sourceKeyPrefix);
-    }
   }
 
   private Connection getConnection() throws SQLException {
@@ -316,8 +312,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
     // S3 tracker: scan all partitions for this alternate name
     Set<Map<String, String>> result = new HashSet<>();
-    String sourceKeyGlob = sourceKeyPrefix != null ? sourceKeyPrefix + "*" : "*";
-    String glob = bucketPath + "/year=*/source_key=" + sourceKeyGlob + "/*.parquet";
+    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
 
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "
@@ -359,15 +354,86 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
 
-    // Get all processed keys, then filter
-    Set<Map<String, String>> processed = getProcessedKeyValues(alternateName);
+    // Fast path: if we already know the tracker bucket is empty, everything is unprocessed
+    if (hasAnyTrackerData != null && !hasAnyTrackerData) {
+      LOGGER.debug("Tracker bucket known empty, all {} combinations unprocessed for {}",
+          allCombinations.size(), alternateName);
+      return allIndices(allCombinations.size());
+    }
+
+    // Build targeted globs from the known combinations instead of scanning source_key=*
+    Set<String> sourceKeyPaths = new LinkedHashSet<>();
+    for (Map<String, String> combo : allCombinations) {
+      String flat = flattenKeyValues(combo);
+      sourceKeyPaths.add(bucketPath + "/year=*/source_key="
+          + sanitizeHiveValue(flat) + "/*.parquet");
+    }
+
+    // DuckDB read_parquet accepts a list of globs
+    StringBuilder pathList = new StringBuilder();
+    pathList.append("[");
+    boolean first = true;
+    for (String p : sourceKeyPaths) {
+      if (!first) {
+        pathList.append(", ");
+      }
+      pathList.append("'").append(p).append("'");
+      first = false;
+    }
+    pathList.append("]");
+
+    String sql = "SELECT source_key FROM ("
+        + "  SELECT source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+        + "  FROM read_parquet(" + pathList + ", "
+        + "hive_partitioning=true, union_by_name=true) "
+        + "  WHERE table_name = ? AND phase = 'incremental'"
+        + ") WHERE rn = 1 AND state = 'complete'";
+
+    Set<String> processedKeys = new HashSet<>();
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          processedKeys.add(rs.getString("source_key"));
+        }
+      }
+      // We found tracker data (or at least it's queryable)
+      if (hasAnyTrackerData == null) {
+        hasAnyTrackerData = !processedKeys.isEmpty();
+      }
+    } catch (SQLException e) {
+      // Glob matched no files — this schema has no tracker data yet
+      String msg = e.getMessage();
+      if (msg != null && (msg.contains("No files found")
+          || msg.contains("Could not find")
+          || msg.contains("HTTP 404"))) {
+        if (hasAnyTrackerData == null) {
+          hasAnyTrackerData = false;
+          LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
+              alternateName, allCombinations.size());
+        }
+        return allIndices(allCombinations.size());
+      }
+      LOGGER.debug("Error filtering unprocessed for {}: {}", alternateName, msg);
+    }
+
     Set<Integer> unprocessed = new HashSet<>();
     for (int i = 0; i < allCombinations.size(); i++) {
-      if (!processed.contains(allCombinations.get(i))) {
+      String flat = flattenKeyValues(allCombinations.get(i));
+      if (!processedKeys.contains(flat)) {
         unprocessed.add(i);
       }
     }
     return unprocessed;
+  }
+
+  private Set<Integer> allIndices(int size) {
+    Set<Integer> all = new HashSet<>();
+    for (int i = 0; i < size; i++) {
+      all.add(i);
+    }
+    return all;
   }
 
   // ===== Table Completion =====
@@ -539,6 +605,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         }
         connection = null;
         initialized = false;
+        hasAnyTrackerData = null;
       }
     }
   }
