@@ -23,7 +23,11 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -218,9 +222,9 @@ public class DocumentETLProcessor {
       String metadata = documentSource.fetchMetadata(entityVariables);
       LOGGER.debug("Fetched metadata for entity: {}", entityVariables);
 
-      // Parse documents from metadata
+      // Parse documents from metadata (includes pagination file fetching)
       Iterator<Map<String, String>> documents =
-          parseDocuments(metadata, entityVariables);
+          parseDocuments(metadata, entityVariables, documentSource);
 
       while (documents.hasNext()) {
         Map<String, String> docVariables = documents.next();
@@ -340,9 +344,7 @@ public class DocumentETLProcessor {
 
   /**
    * Parses document metadata to extract document list.
-   *
-   * <p>This method handles SEC EDGAR submissions.json format.
-   * Override or extend for other metadata formats.
+   * Backward-compatible overload without pagination support.
    *
    * @param metadataJson Raw metadata JSON
    * @param baseVariables Base variables (e.g., cik)
@@ -350,9 +352,283 @@ public class DocumentETLProcessor {
    */
   protected Iterator<Map<String, String>> parseDocuments(
       String metadataJson, Map<String, String> baseVariables) {
-    // Parse SEC EDGAR submissions.json format
-    // Returns iterator of document variables with accession, form type, etc.
-    return new SecSubmissionsIterator(metadataJson, baseVariables, config);
+    return parseDocuments(metadataJson, baseVariables, null);
+  }
+
+  /**
+   * Parses document metadata to extract document list, including pagination files.
+   *
+   * <p>EDGAR's submissions.json returns filings in a "recent" section (limited to ~1000
+   * entries) plus a "filings.files" array pointing to paginated history files. This method
+   * parses the "recent" section and then fetches any pagination files whose date range
+   * overlaps with the configured year range.
+   *
+   * @param metadataJson Raw metadata JSON
+   * @param baseVariables Base variables (e.g., cik)
+   * @param documentSource Document source for fetching pagination files (may be null)
+   * @return Iterator over document variable maps
+   */
+  protected Iterator<Map<String, String>> parseDocuments(
+      String metadataJson, Map<String, String> baseVariables,
+      DocumentSource documentSource) {
+    // Parse "recent" filings from main submissions.json
+    List<Map<String, String>> allDocuments =
+        new SecSubmissionsIterator(metadataJson, baseVariables, config).documents;
+
+    // Extract and fetch pagination files if documentSource is available
+    if (documentSource != null) {
+      List<PaginationFileRef> paginationFiles = extractPaginationFiles(metadataJson);
+
+      if (!paginationFiles.isEmpty()) {
+        HttpSourceConfig.DocumentSourceConfig docConfig =
+            config != null ? config.getDocumentSource() : null;
+        Integer startYear = docConfig != null ? docConfig.getStartYear() : null;
+        Integer endYear = docConfig != null ? docConfig.getEndYear() : null;
+        String cik = baseVariables.get("cik");
+
+        // Base URL for pagination files (same directory as submissions.json)
+        String baseUrl = "https://data.sec.gov/submissions/";
+
+        for (PaginationFileRef ref : paginationFiles) {
+          // Skip pagination files outside the configured year range
+          if (!ref.overlapsYearRange(startYear, endYear)) {
+            LOGGER.debug("Skipping pagination file {} for CIK {} "
+                    + "(range {}-{} outside {}-{})",
+                ref.name, cik, ref.filingFrom, ref.filingTo, startYear, endYear);
+            continue;
+          }
+
+          try {
+            String paginationJson = fetchPaginationFile(
+                documentSource, baseUrl + ref.name, ref.name, cik);
+
+            // Parse pagination file through same iterator (same array structure)
+            List<Map<String, String>> paginatedDocs =
+                new SecSubmissionsIterator(paginationJson, baseVariables, config).documents;
+
+            LOGGER.info("Fetched pagination file {} for CIK {}: {} filings "
+                    + "(range {}-{})",
+                ref.name, cik, paginatedDocs.size(), ref.filingFrom, ref.filingTo);
+
+            allDocuments.addAll(paginatedDocs);
+
+          } catch (IOException e) {
+            LOGGER.warn("Failed to fetch pagination file {} for CIK {}: {}",
+                ref.name, cik, e.getMessage());
+          }
+        }
+      }
+    }
+
+    return allDocuments.iterator();
+  }
+
+  /**
+   * Fetches a pagination file, using cached version from storage if available.
+   */
+  private String fetchPaginationFile(DocumentSource documentSource,
+      String url, String filename, String cik) throws IOException {
+    // Check cache first
+    String cachePath = storageProvider.resolvePath(cacheDirectory,
+        "submissions_pagination/" + filename);
+
+    if (storageProvider.exists(cachePath)) {
+      LOGGER.debug("Using cached pagination file: {}", cachePath);
+      return readStorageFile(cachePath);
+    }
+
+    // Fetch from EDGAR
+    LOGGER.info("Fetching pagination file: {} for CIK {}", filename, cik);
+    String content = documentSource.fetchUrlContent(url);
+
+    // Cache to storage for future use (pagination files are immutable)
+    storageProvider.writeFile(cachePath, content.getBytes(StandardCharsets.UTF_8));
+
+    return content;
+  }
+
+  /**
+   * Reads a text file from the storage provider as a string.
+   */
+  private String readStorageFile(String path) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    try (InputStream is = storageProvider.openInputStream(path);
+         BufferedReader reader = new BufferedReader(
+             new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sb.append(line).append("\n");
+      }
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Extracts pagination file references from EDGAR submissions.json.
+   *
+   * <p>The files array is located at "filings.files" and contains objects like:
+   * <pre>{@code
+   * {"name":"CIK0000070502-submissions-001.json",
+   *  "filingCount":866,
+   *  "filingFrom":"1994-01-18",
+   *  "filingTo":"2017-10-06"}
+   * }</pre>
+   */
+  List<PaginationFileRef> extractPaginationFiles(String json) {
+    List<PaginationFileRef> refs = new ArrayList<PaginationFileRef>();
+
+    // Find "files" array within "filings" object
+    int filingsIdx = json.indexOf("\"filings\"");
+    if (filingsIdx < 0) {
+      return refs;
+    }
+
+    // Find "files" key after "filings"
+    int filesIdx = json.indexOf("\"files\"", filingsIdx);
+    if (filesIdx < 0) {
+      return refs;
+    }
+
+    // Find the opening bracket of the files array
+    int arrayStart = json.indexOf("[", filesIdx);
+    if (arrayStart < 0) {
+      return refs;
+    }
+
+    int arrayEnd = findMatchingBracket(json, arrayStart);
+    if (arrayEnd < 0) {
+      return refs;
+    }
+
+    String filesArray = json.substring(arrayStart + 1, arrayEnd);
+
+    // Parse each object in the array
+    int pos = 0;
+    while (pos < filesArray.length()) {
+      int objStart = filesArray.indexOf("{", pos);
+      if (objStart < 0) {
+        break;
+      }
+      int objEnd = findMatchingBracket(filesArray, objStart);
+      if (objEnd < 0) {
+        break;
+      }
+
+      String obj = filesArray.substring(objStart, objEnd + 1);
+
+      String name = extractJsonStringField(obj, "name");
+      String filingFrom = extractJsonStringField(obj, "filingFrom");
+      String filingTo = extractJsonStringField(obj, "filingTo");
+      int filingCount = extractJsonIntField(obj, "filingCount");
+
+      if (name != null && !name.isEmpty()) {
+        refs.add(new PaginationFileRef(name, filingFrom, filingTo, filingCount));
+      }
+
+      pos = objEnd + 1;
+    }
+
+    return refs;
+  }
+
+  /**
+   * Extracts a string field value from a JSON object string.
+   */
+  static String extractJsonStringField(String json, String fieldName) {
+    String key = "\"" + fieldName + "\"";
+    int idx = json.indexOf(key);
+    if (idx < 0) {
+      return null;
+    }
+    // Skip past key and colon
+    int colonIdx = json.indexOf(":", idx + key.length());
+    if (colonIdx < 0) {
+      return null;
+    }
+    int quoteStart = json.indexOf("\"", colonIdx + 1);
+    if (quoteStart < 0) {
+      return null;
+    }
+    int quoteEnd = json.indexOf("\"", quoteStart + 1);
+    if (quoteEnd < 0) {
+      return null;
+    }
+    return json.substring(quoteStart + 1, quoteEnd);
+  }
+
+  /**
+   * Extracts an integer field value from a JSON object string.
+   */
+  static int extractJsonIntField(String json, String fieldName) {
+    String key = "\"" + fieldName + "\"";
+    int idx = json.indexOf(key);
+    if (idx < 0) {
+      return 0;
+    }
+    int colonIdx = json.indexOf(":", idx + key.length());
+    if (colonIdx < 0) {
+      return 0;
+    }
+    // Skip whitespace after colon
+    int numStart = colonIdx + 1;
+    while (numStart < json.length() && json.charAt(numStart) == ' ') {
+      numStart++;
+    }
+    // Read digits
+    int numEnd = numStart;
+    while (numEnd < json.length()
+        && (Character.isDigit(json.charAt(numEnd)) || json.charAt(numEnd) == '-')) {
+      numEnd++;
+    }
+    if (numEnd == numStart) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(json.substring(numStart, numEnd));
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  /**
+   * Finds the matching closing bracket/brace for an opening bracket/brace.
+   * Returns -1 if not found.
+   */
+  static int findMatchingBracket(String json, int openPos) {
+    char open = json.charAt(openPos);
+    char close;
+    if (open == '[') {
+      close = ']';
+    } else if (open == '{') {
+      close = '}';
+    } else {
+      return -1;
+    }
+
+    int depth = 1;
+    boolean inString = false;
+    for (int i = openPos + 1; i < json.length(); i++) {
+      char c = json.charAt(i);
+      if (c == '\\' && inString) {
+        i++; // skip escaped character
+        continue;
+      }
+      if (c == '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (c == open) {
+          depth++;
+        } else if (c == close) {
+          depth--;
+          if (depth == 0) {
+            return i;
+          }
+        }
+      }
+    }
+    return -1;
   }
 
   /**
@@ -506,6 +782,69 @@ public class DocumentETLProcessor {
           "DocumentETLResult{processed=%d, skipped=%d, failed=%d, outputs=%d, duration=%dms}",
           documentsProcessed, documentsSkipped, documentsFailed,
           outputFiles.size(), durationMs);
+    }
+  }
+
+  /**
+   * Reference to a pagination file from EDGAR's submissions.json "filings.files" array.
+   */
+  static class PaginationFileRef {
+    final String name;
+    final String filingFrom;
+    final String filingTo;
+    final int filingCount;
+
+    PaginationFileRef(String name, String filingFrom, String filingTo, int filingCount) {
+      this.name = name;
+      this.filingFrom = filingFrom;
+      this.filingTo = filingTo;
+      this.filingCount = filingCount;
+    }
+
+    /**
+     * Checks if this pagination file's date range overlaps with the given year range.
+     * Returns true if either bound is null (no filtering), or if the ranges overlap.
+     */
+    boolean overlapsYearRange(Integer startYear, Integer endYear) {
+      // No year filtering configured - always include
+      if (startYear == null && endYear == null) {
+        return true;
+      }
+      // Parse years from filing dates (format: YYYY-MM-DD)
+      int fileFromYear = parseYear(filingFrom);
+      int fileToYear = parseYear(filingTo);
+
+      // If we can't parse dates, include the file to be safe
+      if (fileFromYear < 0 || fileToYear < 0) {
+        return true;
+      }
+
+      // Check overlap: file range [fileFromYear, fileToYear] vs config [startYear, endYear]
+      if (endYear != null && fileFromYear > endYear) {
+        return false;
+      }
+      if (startYear != null && fileToYear < startYear) {
+        return false;
+      }
+      return true;
+    }
+
+    private static int parseYear(String date) {
+      if (date == null || date.length() < 4) {
+        return -1;
+      }
+      try {
+        return Integer.parseInt(date.substring(0, 4));
+      } catch (NumberFormatException e) {
+        return -1;
+      }
+    }
+
+    @Override public String toString() {
+      return "PaginationFileRef{name='" + name
+          + "', filingFrom='" + filingFrom
+          + "', filingTo='" + filingTo
+          + "', filingCount=" + filingCount + "}";
     }
   }
 

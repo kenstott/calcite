@@ -454,6 +454,18 @@ public class DocumentSource {
   }
 
   /**
+   * Fetches content from a URL as a string.
+   * Reuses existing rate limiting, retry, and gzip support.
+   *
+   * @param url The URL to fetch
+   * @return Response content as string
+   * @throws IOException If fetch fails after retries
+   */
+  public String fetchUrlContent(String url) throws IOException {
+    return fetchUrl(url);
+  }
+
+  /**
    * Returns the cache directory path.
    */
   public String getCacheDirectory() {
