@@ -140,7 +140,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "econ" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -161,7 +161,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "census" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -181,7 +181,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "geo" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -201,7 +201,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "crime" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -221,7 +221,7 @@ generate_nonsec_model() {
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}",
         "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "weather" },
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -362,7 +362,7 @@ generate_single_schema_model() {
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
-      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}", "sourceKeyPrefix": "${schema_name}" },
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",

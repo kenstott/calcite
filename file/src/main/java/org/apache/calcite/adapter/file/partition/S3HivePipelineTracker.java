@@ -57,6 +57,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final String bucketPath;
   private final String endpoint;
   private final Map<String, String> config;
+  private final String sourceKeyPrefix;
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
@@ -84,6 +85,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         : bucketPath;
     this.endpoint = endpoint;
     this.config = config != null ? config : Collections.<String, String>emptyMap();
+    String prefix = this.config.get("sourceKeyPrefix");
+    this.sourceKeyPrefix = (prefix != null && !prefix.isEmpty()) ? prefix : null;
+    if (this.sourceKeyPrefix != null) {
+      LOGGER.info("S3 tracker will narrow scans to source_key={}*", this.sourceKeyPrefix);
+    }
   }
 
   private Connection getConnection() throws SQLException {
@@ -310,7 +316,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
     // S3 tracker: scan all partitions for this alternate name
     Set<Map<String, String>> result = new HashSet<>();
-    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
+    String sourceKeyGlob = sourceKeyPrefix != null ? sourceKeyPrefix + "*" : "*";
+    String glob = bucketPath + "/year=*/source_key=" + sourceKeyGlob + "/*.parquet";
 
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "
