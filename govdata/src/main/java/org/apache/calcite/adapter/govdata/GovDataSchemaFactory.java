@@ -248,8 +248,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       s3Config = (Map<String, Object>) operand.get("s3");
     }
     if (s3Config != null) {
-      // Resolve env vars in nested s3 config
+      // Resolve env vars in nested s3 config and update operand so downstream
+      // consumers (PipelineTrackerFactory, SecSchemaFactory) get resolved values
       s3Config = resolveS3Config(s3Config);
+      operand.put("s3Config", s3Config);
       LOGGER.debug("Resolved S3 config with {} keys", s3Config.size());
     } else {
       // Also check for individual S3 fields in operand
@@ -399,12 +401,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    */
   private IncrementalTracker createIncrementalTracker(String operatingDirectory,
       String schemaName, Map<String, Object> operand) {
-    try {
-      return PipelineTrackerFactory.createFromOperand(operand, operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.warn("Failed to create tracker, using NOOP: {}", e.getMessage());
-      return PipelineTracker.NOOP_PIPELINE;
-    }
+    return PipelineTrackerFactory.createFromOperand(operand, operatingDirectory);
   }
 
   /**

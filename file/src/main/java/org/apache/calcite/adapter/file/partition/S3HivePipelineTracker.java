@@ -175,7 +175,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.executeUpdate();
       LOGGER.debug("Wrote tracker state to {}", path);
     } catch (SQLException e) {
-      LOGGER.error("Failed to write tracker state to {}: {}", path, e.getMessage());
+      throw new RuntimeException("Failed to write tracker state to " + path + ": " + e.getMessage(), e);
     }
   }
 

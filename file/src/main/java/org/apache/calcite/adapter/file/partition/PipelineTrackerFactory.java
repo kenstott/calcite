@@ -143,21 +143,16 @@ public final class PipelineTrackerFactory {
 
   private static PipelineTracker createS3Tracker(String baseDirectory,
       Map<String, String> config) {
-    try {
-      String bucket = config.get("bucket");
-      if (bucket == null) {
-        bucket = System.getenv("CALCITE_TRACKER_S3_BUCKET");
-      }
-      if (bucket == null) {
-        throw new IllegalArgumentException(
-            "S3 tracker requires 'bucket' in trackerConfig or CALCITE_TRACKER_S3_BUCKET env var");
-      }
-      String endpoint = config.get("endpoint");
-      return new S3HivePipelineTracker(bucket, endpoint, config);
-    } catch (Exception e) {
-      LOGGER.error("Failed to create S3 tracker, falling back to DuckDB: {}", e.getMessage());
-      return DuckDBPartitionStatusStore.getInstance(baseDirectory);
+    String bucket = config.get("bucket");
+    if (bucket == null) {
+      bucket = System.getenv("CALCITE_TRACKER_S3_BUCKET");
     }
+    if (bucket == null) {
+      throw new IllegalArgumentException(
+          "S3 tracker requires 'bucket' in trackerConfig or CALCITE_TRACKER_S3_BUCKET env var");
+    }
+    String endpoint = config.get("endpoint");
+    return new S3HivePipelineTracker(bucket, endpoint, config);
   }
 
   private static PipelineTracker createPGTracker(Map<String, String> config) {
