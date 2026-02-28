@@ -215,8 +215,34 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   if [ "${#active_labels[@]}" -gt 0 ]; then
     active_str="| ${active_labels[*]}"
   fi
-  printf "[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  Restarts: %d  %s\n" \
+  printf "\n[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  Restarts: %d  %s\n" \
     "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining" "$restart_count" "$active_str"
+
+  # Per-worker detail: elapsed time + last activity from log
+  now=$(date +%s)
+  for idx in "${!active_pids[@]}"; do
+    id="${active_labels[$idx]}"
+    elapsed=$(( now - active_starts[$idx] ))
+    hrs=$((elapsed / 3600))
+    mins=$(( (elapsed % 3600) / 60 ))
+    secs=$((elapsed % 60))
+    if [ "$hrs" -gt 0 ]; then
+      elapsed_str="${hrs}h${mins}m"
+    elif [ "$mins" -gt 0 ]; then
+      elapsed_str="${mins}m${secs}s"
+    else
+      elapsed_str="${secs}s"
+    fi
+
+    # Extract last meaningful activity from the worker's log
+    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
+    activity=""
+    if [ -f "$log_file" ]; then
+      # Look for the last Processed/Converted/Downloaded/Processing line
+      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //' | cut -c1-120)
+    fi
+    printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
+  done
 
   sleep 10
 done
