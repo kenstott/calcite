@@ -97,7 +97,9 @@ launch_worker() {
   local log_file="$log_dir/launch.log"
   mkdir -p "$log_dir"
 
-  nohup bash "$script" >> "$log_file" 2>&1 &
+  # setsid gives each worker its own process group so 'kill 0' in the worker
+  # trap only kills that worker's processes, not the pool runner or other workers
+  setsid nohup bash "$script" >> "$log_file" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_DIR/${id}.pid"
 
@@ -144,10 +146,10 @@ kill_and_requeue() {
 
   log_info "$id stuck (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
 
-  # Kill the process tree
-  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  # Kill the worker's process group (setsid gives each worker its own group)
+  kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   sleep 2
-  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  kill -KILL -"$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
 
   remove_active "$idx"
