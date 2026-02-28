@@ -747,12 +747,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       FileConverter documentConverter = getOrCreateXbrlConverter(operand);
 
       // Initialize filing cache if not yet done
-      // Use govdataParquetDir from operand (already computed above) instead of getGovDataParquetDir()
-      // because this.currentOperand may be null when called from configureHooks
-      if (this.filingCache == null && this.secOperatingDirectory != null
-          && this.currentOperand != null) {
+      if (this.filingCache == null && this.secOperatingDirectory != null) {
         org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
-            PipelineTrackerFactory.createFromOperand(this.currentOperand, this.secOperatingDirectory);
+            PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
         this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
         LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
       }
