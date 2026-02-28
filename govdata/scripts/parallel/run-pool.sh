@@ -239,7 +239,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     activity=""
     if [ -f "$log_file" ]; then
       # Look for the last Processed/Converted/Downloaded/Processing line
-      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //' | cut -c1-120 || true)
+      # Match progress patterns across all worker types (SEC, econ, census, geo, crime)
+      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
     fi
     printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done
