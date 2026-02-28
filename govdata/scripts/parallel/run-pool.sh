@@ -182,7 +182,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
         ((failed_count++)) || true
         failed_list+=("$id")
         log_file="$SCRIPT_DIR/runs/${id}/launch.log"
-        last_err=$(grep -i -E "error|exception|fatal" "$log_file" 2>/dev/null | tail -1 | cut -c1-120)
+        last_err=$(grep -i -E "error|exception|fatal" "$log_file" 2>/dev/null | tail -1 | cut -c1-120 || true)
         log_info "$id FAILED (${mins}m): ${last_err:-check log}"
       fi
 
@@ -239,7 +239,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     activity=""
     if [ -f "$log_file" ]; then
       # Look for the last Processed/Converted/Downloaded/Processing line
-      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //' | cut -c1-120)
+      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //' | cut -c1-120 || true)
     fi
     printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done
