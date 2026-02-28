@@ -208,18 +208,14 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   # Fill any open slots
   fill_pool
 
-  # Print status
+  # Print status — use \n so output is visible in logs, nohup, and pipes
   remaining=$((total - done_count - failed_count - ${#active_pids[@]}))
-  printf "\r[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  Restarts: %d  " \
-    "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining" "$restart_count"
-
-  # Show active worker names
+  active_str=""
   if [ "${#active_labels[@]}" -gt 0 ]; then
-    printf "| "
-    for lbl in "${active_labels[@]}"; do
-      printf "%s " "$lbl"
-    done
+    active_str="| ${active_labels[*]}"
   fi
+  printf "[%s] Running: %d  Done: %d  Failed: %d  Queued: %d  Restarts: %d  %s\n" \
+    "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining" "$restart_count" "$active_str"
 
   sleep 10
 done
