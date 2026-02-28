@@ -2,9 +2,9 @@
 # ============================================================================
 # Run workers with a concurrency pool (max N at a time)
 # Usage: ./run-pool.sh -j 4 1-20              — run workers 01-20, max 4 at a time
-#        ./run-pool.sh -j 3 -t 90 1 5 10-15   — max 3 concurrent, 90min timeout
+#        ./run-pool.sh -j 3 -t 90 1 5 10-15   — max 3 concurrent, 90min inactivity timeout
 #        ./run-pool.sh -j 6 all                — all workers, max 6 concurrent
-#        ./run-pool.sh 1-10                    — default: max 4 concurrent, 60min timeout
+#        ./run-pool.sh 1-10                    — default: max 4 concurrent, 60min inactivity timeout
 # ============================================================================
 set -euo pipefail
 
@@ -65,7 +65,7 @@ PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
 total=${#queue[@]}
-echo "=== Pool Runner: $total workers, max $MAX_WORKERS concurrent, ${TIMEOUT_MINS}min timeout ==="
+echo "=== Pool Runner: $total workers, max $MAX_WORKERS concurrent, ${TIMEOUT_MINS}min inactivity timeout ==="
 echo ""
 
 # Active worker tracking: parallel arrays
@@ -144,7 +144,7 @@ kill_and_requeue() {
   local num="${active_nums[$idx]}"
   local elapsed_mins=$(( ($(date +%s) - active_starts[$idx]) / 60 ))
 
-  log_info "$id stuck (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
+  log_info "$id inactive (${elapsed_mins}m since last log output > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
 
   # Kill the worker's process group (setsid gives each worker its own group)
   kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
@@ -195,12 +195,19 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     ((i++)) || true
   done
 
-  # Check for stuck workers exceeding timeout
+  # Check for stuck workers — kill if log has no new output for TIMEOUT_MINS
   i=0
   while [ "$i" -lt "${#active_pids[@]}" ]; do
+    id="${active_labels[$i]}"
+    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     now=$(date +%s)
-    elapsed=$(( now - active_starts[$i] ))
-    if [ "$elapsed" -ge "$TIMEOUT_SECS" ]; then
+    if [ -f "$log_file" ]; then
+      last_modified=$(stat -c '%Y' "$log_file" 2>/dev/null || echo "$now")
+      idle_secs=$(( now - last_modified ))
+    else
+      idle_secs=$(( now - active_starts[$i] ))
+    fi
+    if [ "$idle_secs" -ge "$TIMEOUT_SECS" ]; then
       kill_and_requeue "$i"
       # Don't increment i — array shifted
       continue
