@@ -221,15 +221,14 @@ public class BeaDimensionResolver implements DimensionResolver {
          Statement stmt = conn.createStatement()) {
 
       // Read parquet files with hive partitioning. The 'tablename' column comes from
-      // the partition path (e.g., tablename=SAINC1/), and LineCode/geography_level
-      // are data columns in the parquet files.
-      // Use COALESCE to handle both 'Key' (raw BEA column) and 'LineCode' (derived column)
-      // since the expression mapping may not have been applied during ETL.
-      String sql = "SELECT DISTINCT tablename, COALESCE(LineCode, Key) AS LineCode, geography_level "
+      // the partition path (e.g., tablename=SAINC1/), and 'key' is the raw BEA
+      // line code column. geography_level is not stored in parquet — it is inferred
+      // from table name prefix (CA*=county, SA*/SQ*=state, MA*=msa) in loadFromResultSet.
+      String sql = "SELECT DISTINCT tablename, key AS LineCode, NULL AS geography_level "
           + "FROM read_parquet('" + linecodeTablePath + "/data/**/*.parquet', "
           + "hive_partitioning=true, union_by_name=true) "
-          + "WHERE tablename IS NOT NULL AND COALESCE(LineCode, Key) IS NOT NULL "
-          + "ORDER BY 1, 3, 2";
+          + "WHERE tablename IS NOT NULL AND key IS NOT NULL "
+          + "ORDER BY 1, 2";
 
       LOGGER.debug("BeaDimensionResolver: Executing SQL: {}", sql);
       ResultSet rs;
