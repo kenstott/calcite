@@ -93,10 +93,11 @@ launch_worker() {
     return 1
   fi
 
-  local log_file="$SCRIPT_DIR/runs/${id}/launch.log"
-  mkdir -p "$(dirname "$log_file")"
+  local log_dir="$SCRIPT_DIR/runs/${id}"
+  local log_file="$log_dir/launch.log"
+  mkdir -p "$log_dir"
 
-  nohup bash "$script" > "$log_file" 2>&1 &
+  nohup bash "$script" >> "$log_file" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_DIR/${id}.pid"
 
