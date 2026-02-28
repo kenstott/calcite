@@ -112,7 +112,7 @@ launch_worker() {
 fill_pool() {
   while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$queue_idx" -lt "$total" ]; do
     launch_worker "${queue[$queue_idx]}" || true
-    ((queue_idx++))
+    ((queue_idx++)) || true
   done
 }
 
@@ -190,7 +190,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       # Don't increment i — array shifted
       continue
     fi
-    ((i++))
+    ((i++)) || true
   done
 
   # Check for stuck workers exceeding timeout
@@ -203,7 +203,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       # Don't increment i — array shifted
       continue
     fi
-    ((i++))
+    ((i++)) || true
   done
 
   # Fill any open slots
