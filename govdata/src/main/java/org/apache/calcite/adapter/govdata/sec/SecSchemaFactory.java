@@ -2904,13 +2904,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Convert using String paths (works for both local and S3)
+            // Always pass explicit metadata (cik, form, filingDate, accession) so the converter
+            // can distinguish the actual SEC submission date from the period end date in the document
             List<String> outputFiles;
-            if (is8KForm) {
-              outputFiles = converter.convertInternal(
-                  fileToConvert, secParquetDirPath, null, cik, form, filingDate, accession);
-            } else {
-              outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
-            }
+            outputFiles = converter.convertInternal(
+                fileToConvert, secParquetDirPath, null, cik, form, filingDate, accession);
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("INLINE CONVERSION: Conversion completed, outputFiles.size={}",

@@ -111,13 +111,12 @@ public class XbrlToParquetConverter implements FileConverter {
   @Override public List<String> convert(String sourcePath, String targetDirectory,
       ConversionMetadata metadata) throws IOException {
     // Extract hints from metadata if available (populated by DocumentETLProcessor)
+    // Pass explicit metadata for all filing types when hints are present,
+    // so the converter can distinguish actual filing date from period end date
     if (metadata != null && metadata.getHint("form") != null) {
-      String form = metadata.getHint("form");
-      if (is8KFiling(form)) {
-        return convertInternal(sourcePath, targetDirectory, metadata,
-            metadata.getHint("cik"), form,
-            metadata.getHint("filingDate"), metadata.getHint("accession"));
-      }
+      return convertInternal(sourcePath, targetDirectory, metadata,
+          metadata.getHint("cik"), metadata.getHint("form"),
+          metadata.getHint("filingDate"), metadata.getHint("accession"));
     }
     return convertInternal(sourcePath, targetDirectory, metadata);
   }
@@ -255,9 +254,14 @@ public class XbrlToParquetConverter implements FileConverter {
       // Extract filing metadata
       String cik = extractCik(doc, sourceFilePath);
       String filingType = extractFilingType(doc, sourceFilePath);
-      String filingDate = extractFilingDate(doc, sourceFilePath);
+      String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
 
-      LOGGER.debug(" Extracted metadata for " + fileName + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
+      // Compute actual filing date: prefer SEC submission date from EDGAR (overrideFilingDate),
+      // fall back to period end date extracted from document for standalone conversion
+      String actualFilingDate = (overrideFilingDate != null) ? overrideFilingDate : periodEndDate;
+
+      LOGGER.debug(" Extracted metadata for " + fileName + " - CIK: " + cik + ", Filing Type: " + filingType
+          + ", Period End: " + periodEndDate + ", Filing Date: " + actualFilingDate);
 
       // Skip conversion if we couldn't extract required metadata
       if (cik == null || cik.equals("0000000000")) {
@@ -265,46 +269,46 @@ public class XbrlToParquetConverter implements FileConverter {
         return outputFiles; // Return empty list
       }
 
-      // Validate filing date - must be present
-      if (filingDate == null) {
-        LOGGER.warn("DEBUG: Skipping conversion - could not extract filing date from: " + fileName);
+      // Validate period end date - must be present (needed for fiscal year logic)
+      if (periodEndDate == null) {
+        LOGGER.warn("DEBUG: Skipping conversion - could not extract period end date from: " + fileName);
         return outputFiles; // Skip conversion
       }
 
-      // Validate filing date format and year
-      if (filingDate.length() >= 4) {
+      // Validate period end date format and year
+      if (periodEndDate.length() >= 4) {
         try {
-          int year = Integer.parseInt(filingDate.substring(0, 4));
+          int year = Integer.parseInt(periodEndDate.substring(0, 4));
           if (year < 1934 || year > java.time.Year.now().getValue()) {
-            LOGGER.warn("Invalid year " + year + " in filing date " + filingDate + " for " + fileName);
+            LOGGER.warn("Invalid year " + year + " in period end date " + periodEndDate + " for " + fileName);
             return outputFiles; // Skip conversion
           }
         } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid filing date format: " + filingDate + " for " + fileName);
+          LOGGER.warn("Invalid period end date format: " + periodEndDate + " for " + fileName);
           return outputFiles; // Skip conversion
         }
       } else {
-        LOGGER.warn("Filing date too short: " + filingDate + " for " + fileName);
+        LOGGER.warn("Period end date too short: " + periodEndDate + " for " + fileName);
         return outputFiles; // Skip conversion
       }
 
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
       if (isInsiderForm(doc, filingType)) {
         LOGGER.debug("Processing as insider form: " + fileName);
-        return convertInsiderForm(doc, sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession);
+        return convertInsiderForm(doc, sourceFilePath, targetDirectoryPath, cik, filingType, actualFilingDate, accession);
       }
 
       LOGGER.debug("Not an insider form, proceeding to facts extraction: " + fileName);
 
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
-        List<String> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, filingDate, accession, false);
+        List<String> extraFiles = extract8KExhibits(sourceFilePath, targetDirectoryPath, cik, filingType, actualFilingDate, accession, false);
         outputFiles.addAll(extraFiles);
       }
 
       // Create partitioned output path - BUILD RELATIVE PATHS
       // Year-only partitioning for optimal 128MB file sizes
-      String partitionYear = getPartitionYear(filingType, filingDate, doc);
+      String partitionYear = getPartitionYear(filingType, actualFilingDate, periodEndDate, doc);
 
       // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
@@ -317,7 +321,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Use accession for file naming if available, otherwise fall back to filing date
-      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : actualFilingDate;
 
       // Build FULL paths for all outputs (StorageProvider needs absolute paths)
       String factsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_facts.parquet", cik, uniqueId));
@@ -330,7 +334,7 @@ public class XbrlToParquetConverter implements FileConverter {
       List<Map<String, Object>> factsData;
       LOGGER.debug(" Starting facts.parquet generation for: " + fileName + " -> " + factsPath);
       try {
-        factsData = writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, accession, sourceFilePath);
+        factsData = writeFactsToParquet(doc, factsPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
         // Paths are already full paths from storageProvider.resolvePath()
         outputFiles.add(factsPath);
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
@@ -340,22 +344,22 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Write filing metadata
-      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+      writeMetadataToParquet(doc, metadataPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
       outputFiles.add(metadataPath);
 
       // Convert contexts to Parquet
-      writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate, accession);
+      writeContextsToParquet(doc, contextsPath, cik, filingType, actualFilingDate, accession);
       outputFiles.add(contextsPath);
 
       // Extract MD&A ONCE and use for both mda_sections and vectorized_chunks
-      List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, filingDate, accession, sourceFilePath);
+      List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, actualFilingDate, accession, sourceFilePath);
       writeMDAToParquetFromData(mdaData, mdaPath);
       outputFiles.add(mdaPath);
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
       try {
-        writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, filingDate, sourceFilePath);
+        writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, actualFilingDate, sourceFilePath);
         outputFiles.add(relationshipsPath);
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
@@ -368,7 +372,7 @@ public class XbrlToParquetConverter implements FileConverter {
       if (enableVectorization) {
         String chunksPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
-        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, filingDate, sourceFilePath, mdaData, factsData);
+        writeVectorizedChunksToParquet(doc, chunksPath, cik, filingType, actualFilingDate, sourceFilePath, mdaData, factsData);
         outputFiles.add(chunksPath);
       }
 
@@ -604,7 +608,7 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
-  private String extractFilingDate(Document doc, String sourcePath) {
+  private String extractPeriodEndDate(Document doc, String sourcePath) {
     // For ownership documents (Form 3/4/5), extract periodOfReport
     NodeList periodOfReports = doc.getElementsByTagName("periodOfReport");
     if (periodOfReports.getLength() > 0) {
@@ -649,7 +653,7 @@ public class XbrlToParquetConverter implements FileConverter {
     boolean hasFilenameDate = filenameDateStr != null
         && !filenameDateStr.equals("2024-01-01");
     if (hasFilenameDate) {
-      LOGGER.debug("Extracted filing date from filename: " + filenameDateStr);
+      LOGGER.debug("Extracted period end date from filename: " + filenameDateStr);
       return filenameDateStr;
     }
 
@@ -724,7 +728,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Return null if no date found - let the caller handle this
-    LOGGER.warn("Could not extract filing date from: " + filename);
+    LOGGER.warn("Could not extract period end date from: " + filename);
     return null;
   }
 
@@ -3359,7 +3363,8 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Year-only partitioning for optimal 128MB file sizes
-      String partitionYear = getPartitionYear(filingType, filingDate, doc);
+      // For insider forms (3/4/5), filing date is used for partition year (not 10-K/10-Q)
+      String partitionYear = getPartitionYear(filingType, filingDate, filingDate, doc);
 
       // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
@@ -5176,48 +5181,112 @@ public class XbrlToParquetConverter implements FileConverter {
 
   /**
    * Determine the appropriate year for partitioning based on filing type.
-   * For 10-Q and 10-K filings, use fiscal year (from period end date).
-   * For all other filings, use filing year.
+   * For 10-K/10-Q and their amendments, use fiscal year (from period end date).
+   * For all other filings, use actual filing year (SEC submission date).
+   *
+   * @param filingType SEC form type (e.g., "10-K", "10-Q/A")
+   * @param actualFilingDate SEC submission date (YYYY-MM-DD)
+   * @param periodEndDate Period end date extracted from document (YYYY-MM-DD), may be null
+   * @param doc Parsed XBRL document for fallback extraction
    */
-  private String getPartitionYear(String filingType, String filingDate, Document doc) {
+  private String getPartitionYear(String filingType, String actualFilingDate,
+      String periodEndDate, Document doc) {
     String normalizedType = filingType.replace("-", "").replace("/", "");
 
-    // For 10-Q and 10-K filings, use fiscal year from period end date
-    if ("10Q".equals(normalizedType) || "10K".equals(normalizedType)) {
-      String periodEndDate = extractPeriodEndDateFromDocument(doc);
+    // For 10-K/10-Q and their amendments (10-KA, 10-QA), use fiscal year from period end date
+    if ("10Q".equals(normalizedType) || "10K".equals(normalizedType)
+        || "10QA".equals(normalizedType) || "10KA".equals(normalizedType)
+        || "10KSB".equals(normalizedType) || "10KSBA".equals(normalizedType)
+        || "10QSB".equals(normalizedType) || "10QSBA".equals(normalizedType)) {
+      // Prefer periodEndDate passed from caller (extracted by extractPeriodEndDate)
       if (periodEndDate != null && periodEndDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
-        return periodEndDate.substring(0, 4); // Extract year from period end date
+        return periodEndDate.substring(0, 4);
+      }
+      // Fall back to document extraction
+      String docPeriodEnd = extractPeriodEndDateFromDocument(doc);
+      if (docPeriodEnd != null && docPeriodEnd.matches("\\d{4}-\\d{2}-\\d{2}")) {
+        return docPeriodEnd.substring(0, 4);
       }
     }
 
-    // For all other filing types, use filing year
-    return filingDate.substring(0, 4);
+    // For all other filing types, use actual filing year (SEC submission date)
+    return actualFilingDate.substring(0, 4);
   }
 
   /**
-   * Extract period end date from XBRL document.
-   * Looks for endDate elements in the document.
+   * Extract period end date from XBRL document using a heuristic chain.
+   * Used by getPartitionYear() and writeVectorizedChunksToParquet() for fiscal year
+   * determination and text normalization context.
+   *
+   * <p>Heuristic order:
+   * 1. DocumentPeriodEndDate DEI element (most authoritative)
+   * 2. Collect all endDate values, dedup, sort descending, pick latest where year <= current year
    */
   private String extractPeriodEndDateFromDocument(Document doc) {
     try {
-      NodeList endDateNodes = doc.getElementsByTagName("endDate");
-      if (endDateNodes.getLength() > 0) {
-        return endDateNodes.item(0).getTextContent().trim();
+      // 1. Try DocumentPeriodEndDate DEI element (most authoritative)
+      NodeList deiNodes = doc.getElementsByTagNameNS("*", "DocumentPeriodEndDate");
+      if (deiNodes.getLength() > 0) {
+        String date = deiNodes.item(0).getTextContent().trim();
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          return date;
+        }
       }
 
-      // Try alternative tag names
-      endDateNodes = doc.getElementsByTagName("xbrli:endDate");
-      if (endDateNodes.getLength() > 0) {
-        return endDateNodes.item(0).getTextContent().trim();
+      // Also try with dei: prefix (inline XBRL)
+      deiNodes = doc.getElementsByTagName("dei:DocumentPeriodEndDate");
+      if (deiNodes.getLength() > 0) {
+        String date = deiNodes.item(0).getTextContent().trim();
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          return date;
+        }
       }
 
-      // Try period elements with endDate
+      // 2. Collect all endDate values, dedup, pick latest where year <= current year
+      int maxYear = java.time.Year.now().getValue();
+      Set<String> allDates = new HashSet<>();
+
+      // Try multiple tag name variants
+      String[] tagNames = {"endDate", "xbrli:endDate"};
+      for (String tagName : tagNames) {
+        NodeList endDateNodes = doc.getElementsByTagName(tagName);
+        for (int i = 0; i < endDateNodes.getLength(); i++) {
+          String date = endDateNodes.item(i).getTextContent().trim();
+          if (date.matches("\\d{4}-\\d{2}-\\d{2}")
+              && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
+            allDates.add(date);
+          }
+        }
+      }
+
+      // Also try namespace-aware lookup
+      NodeList nsEndDates = doc.getElementsByTagNameNS("*", "endDate");
+      for (int i = 0; i < nsEndDates.getLength(); i++) {
+        String date = nsEndDates.item(i).getTextContent().trim();
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")
+            && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
+          allDates.add(date);
+        }
+      }
+
+      // Sort descending and pick latest
+      if (!allDates.isEmpty()) {
+        List<String> sorted = new ArrayList<>(allDates);
+        java.util.Collections.sort(sorted, java.util.Collections.reverseOrder());
+        return sorted.get(0);
+      }
+
+      // Try period elements with endDate as fallback
       NodeList periodNodes = doc.getElementsByTagName("period");
       for (int i = 0; i < periodNodes.getLength(); i++) {
         Element periodElement = (Element) periodNodes.item(i);
         NodeList endDates = periodElement.getElementsByTagName("endDate");
         if (endDates.getLength() > 0) {
-          return endDates.item(0).getTextContent().trim();
+          String date = endDates.item(0).getTextContent().trim();
+          if (date.matches("\\d{4}-\\d{2}-\\d{2}")
+              && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
+            return date;
+          }
         }
       }
 
