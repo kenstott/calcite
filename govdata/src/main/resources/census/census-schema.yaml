@@ -3520,6 +3520,7 @@ tables:
 constraints:
   # ACS 5-Year Tables
   acs_population:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3533,6 +3534,7 @@ constraints:
         comment: Links census county data to geographic boundaries (when geography=county)
 
   acs_income:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3544,6 +3546,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_housing:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3555,6 +3558,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_education:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3566,6 +3570,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_employment:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3577,6 +3582,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_poverty:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3588,6 +3594,7 @@ constraints:
         targetColumns: [county_fips]
 
   decennial_population:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3599,6 +3606,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_race_ethnicity:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3610,6 +3618,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_age_distribution:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3621,6 +3630,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_commute:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3632,6 +3642,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_occupation:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3643,6 +3654,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_language:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3654,6 +3666,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_disability:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3665,6 +3678,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_veterans:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3676,6 +3690,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_migration:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3687,6 +3702,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_industry_employment:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3698,6 +3714,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_industry_wages:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3709,6 +3726,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_internet:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3720,6 +3738,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_citizenship:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3731,6 +3750,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_marital_status:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3742,6 +3762,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_households:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3753,6 +3774,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_housing_tenure:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3764,6 +3786,7 @@ constraints:
         targetColumns: [county_fips]
 
   acs_income_distribution:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3775,6 +3798,7 @@ constraints:
         targetColumns: [county_fips]
 
   decennial_housing:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3786,6 +3810,7 @@ constraints:
         targetColumns: [county_fips]
 
   population_estimates:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3797,6 +3822,7 @@ constraints:
         targetColumns: [county_fips]
 
   cbp_establishments:
+    primaryKey: [year, geography, state, county, naics_code]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3809,6 +3835,7 @@ constraints:
 
   # ACS 1-Year Tables
   acs1_population:
+    primaryKey: [year, state]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3816,6 +3843,7 @@ constraints:
         targetColumns: [state_fips]
 
   acs1_income:
+    primaryKey: [year, state]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3824,6 +3852,7 @@ constraints:
 
   # Economic Census
   economic_census:
+    primaryKey: [year, geography, state, county, naics_code]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3836,6 +3865,7 @@ constraints:
 
   # SAIPE/SAHIE
   saipe:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3847,6 +3877,7 @@ constraints:
         targetColumns: [county_fips]
 
   sahie:
+    primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3859,6 +3890,7 @@ constraints:
 
   # Business Data
   bds:
+    primaryKey: [year, state]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3866,6 +3898,7 @@ constraints:
         targetColumns: [state_fips]
 
   abs:
+    primaryKey: [year, state]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3873,6 +3906,7 @@ constraints:
         targetColumns: [state_fips]
 
   nonemp:
+    primaryKey: [year, geography, state, county, naics_code]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -3883,6 +3917,44 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
 
+
+  # Health Insurance
+  acs_health_insurance:
+    primaryKey: [year, geography, state, county]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  # Building Permits
+  building_permits:
+    primaryKey: [year, column1]
+
+  # QWI Employment
+  qwi_employment:
+    primaryKey: [time, state]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  # LODES Workplace
+  lodes_workplace:
+    primaryKey: [year, state, w_geocode]
+
+  # Trade Exports
+  trade_exports:
+    primaryKey: [time, country_code]
+
+  # Trade Imports
+  trade_imports:
+    primaryKey: [time, country_code]
 # ============================================================================
 # END OF SCHEMA
 # ============================================================================

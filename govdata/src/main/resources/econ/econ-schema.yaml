@@ -4402,6 +4402,21 @@ constraints:
           - LineCode
         comment: Links BEA GDP data to line code descriptions and metadata
 
+  state_personal_income:
+    primaryKey:
+      - geo_fips
+      - table_name
+      - line_code
+      - year
+    foreignKeys:
+      - columns:
+          - geo_fips
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_fips
+        comment: Links state personal income to geographic and demographic data (when geo_fips is state-level)
+
   quarterly_income:
     primaryKey:
       - geo_fips
@@ -4418,6 +4433,13 @@ constraints:
           - tablename
           - LineCode
         comment: Links BEA quarterly income data to line code descriptions
+      - columns:
+          - geo_fips
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_fips
+        comment: Links quarterly income to geographic and demographic data (when geo_fips is state-level)
 
   quarterly_gdp:
     primaryKey:
@@ -4435,6 +4457,13 @@ constraints:
           - tablename
           - LineCode
         comment: Links BEA quarterly GDP data to line code descriptions
+      - columns:
+          - geo_fips
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_fips
+        comment: Links quarterly GDP to geographic and demographic data (when geo_fips is state-level)
 
   state_consumption:
     primaryKey:
@@ -4452,6 +4481,13 @@ constraints:
           - tablename
           - LineCode
         comment: Links BEA consumption data to line code descriptions
+      - columns:
+          - geo_fips
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_fips
+        comment: Links state consumption to geographic and demographic data (when geo_fips is state-level)
 
   trade_statistics:
     primaryKey:

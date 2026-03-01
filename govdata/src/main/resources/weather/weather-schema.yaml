@@ -741,6 +741,7 @@ constraints:
         targetColumns: [state_abbr]
 
   nws_alerts:
+    primaryKey: [alert_id, state_abbr]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -756,6 +757,7 @@ constraints:
         targetColumns: [state_fips]
 
   cdo_monthly_summaries:
+    primaryKey: [station_id, datatype, year, month]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
@@ -766,6 +768,7 @@ constraints:
         targetColumns: [station_id]
 
   cdo_annual_summaries:
+    primaryKey: [station_id, datatype, year]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
@@ -776,6 +779,7 @@ constraints:
         targetColumns: [station_id]
 
   epa_annual_aqi:
+    primaryKey: [county_fips, parameter_code, year]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo

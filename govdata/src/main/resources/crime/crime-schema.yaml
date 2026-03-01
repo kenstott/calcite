@@ -1749,6 +1749,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_offenses:
+    primaryKey: [state_abbr, offense_code, month]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1756,6 +1757,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_police_employment:
+    primaryKey: [state_abbr, year]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1763,6 +1765,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_hate_crimes:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1770,6 +1773,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_use_of_force:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1777,12 +1781,14 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_crime_agency:
+    primaryKey: [ori, offense_code, month]
     foreignKeys:
       - columns: [ori]
         targetTable: cde_agencies
         targetColumns: [ori]
 
   cde_arrests:
+    primaryKey: [state_abbr, year, offense_code, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1790,6 +1796,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_shr:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1797,6 +1804,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_leoka:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1804,6 +1812,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_supplemental:
+    primaryKey: [state_abbr, year, property_type]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1811,6 +1820,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_cargo_theft:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1818,6 +1828,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_human_trafficking:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1825,6 +1836,7 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_participation:
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1832,8 +1844,21 @@ constraints:
         targetColumns: [state_abbr]
 
   cde_estimates:
+    primaryKey: [state_abbr, year, offense_code]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
         targetColumns: [state_abbr]
+
+  cde_trends:
+    primaryKey: [offense_name]
+
+  bjs_nibrs_estimates:
+    primaryKey:
+      - endpoint_id
+      - indicator_name
+      - estimate_domain_1
+      - estimate_domain_2
+      - time_series_start_year
+
