@@ -385,12 +385,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
 
-    // Fast path: if we already know the tracker bucket is empty, everything is unprocessed
-    if (hasAnyTrackerData != null && !hasAnyTrackerData) {
-      LOGGER.debug("Tracker bucket known empty, all {} combinations unprocessed for {}",
-          allCombinations.size(), alternateName);
-      return allIndices(allCombinations.size());
-    }
+    // Note: we intentionally do NOT cache "no data" across tables.
+    // A "No files found" for one table does not mean other tables lack tracker data.
 
     // Build targeted globs from the known combinations instead of scanning source_key=*
     Set<String> sourceKeyPaths = new LinkedHashSet<>();
@@ -429,9 +425,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           processedKeys.add(rs.getString("source_key"));
         }
       }
-      // We found tracker data (or at least it's queryable)
-      if (hasAnyTrackerData == null) {
-        hasAnyTrackerData = !processedKeys.isEmpty();
+      // Cache positive result only — presence of data is safe to cache
+      if (!processedKeys.isEmpty()) {
+        hasAnyTrackerData = true;
       }
     } catch (SQLException e) {
       // Glob matched no files — this schema has no tracker data yet
@@ -439,11 +435,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        if (hasAnyTrackerData == null) {
-          hasAnyTrackerData = false;
-          LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
-              alternateName, allCombinations.size());
-        }
+        LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
+            alternateName, allCombinations.size());
         return allIndices(allCombinations.size());
       }
       LOGGER.debug("Error filtering unprocessed for {}: {}", alternateName, msg);
