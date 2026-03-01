@@ -1164,12 +1164,25 @@ public class EtlPipeline {
       }
 
       if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
-        // For Iceberg, check if metadata directory has files (indicates table was created)
-        // Use isDirectory which does a list check - works for S3 where directories don't exist as objects
-        String metadataPath = baseDirectory + "/" + pipelineName + "/metadata";
+        // For Iceberg, check metadata directory exists (indicates table was created).
+        // When warehousePath is configured, Iceberg stores data there, not baseDirectory.
+        String icebergBase = baseDirectory;
+        if (materializeConfig.getIceberg() != null
+            && materializeConfig.getIceberg().getWarehousePath() != null
+            && !materializeConfig.getIceberg().getWarehousePath().isEmpty()) {
+          icebergBase = materializeConfig.getIceberg().getWarehousePath();
+        }
+        String metadataPath = icebergBase + "/" + pipelineName + "/metadata";
         if (storageProvider.isDirectory(metadataPath)) {
           LOGGER.debug("Verified Iceberg metadata exists at {}", metadataPath);
           return true;
+        }
+        if (!icebergBase.equals(baseDirectory)) {
+          String fallbackPath = baseDirectory + "/" + pipelineName + "/metadata";
+          if (storageProvider.isDirectory(fallbackPath)) {
+            LOGGER.debug("Verified Iceberg metadata exists at fallback {}", fallbackPath);
+            return true;
+          }
         }
       } else {
         // For Parquet format, check if data directory has files
