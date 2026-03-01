@@ -196,16 +196,23 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   done
 
   # Check for stuck workers — kill if log has no new output for TIMEOUT_MINS
+  # Grace period: don't check until the worker has been running for at least TIMEOUT_SECS,
+  # since the log file may have a stale mtime from a previous run.
   i=0
   while [ "$i" -lt "${#active_pids[@]}" ]; do
     id="${active_labels[$i]}"
-    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     now=$(date +%s)
+    uptime_secs=$(( now - active_starts[$i] ))
+    if [ "$uptime_secs" -lt "$TIMEOUT_SECS" ]; then
+      ((i++)) || true
+      continue
+    fi
+    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     if [ -f "$log_file" ]; then
       last_modified=$(stat -c '%Y' "$log_file" 2>/dev/null || echo "$now")
       idle_secs=$(( now - last_modified ))
     else
-      idle_secs=$(( now - active_starts[$i] ))
+      idle_secs=$uptime_secs
     fi
     if [ "$idle_secs" -ge "$TIMEOUT_SECS" ]; then
       kill_and_requeue "$i"
