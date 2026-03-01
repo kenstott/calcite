@@ -342,10 +342,41 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public void invalidateAll(String alternateName) {
-    // Append-only: we can't delete, but we can mark as cleared
-    // For now, log a warning. Full invalidation requires reading all keys.
-    LOGGER.warn("invalidateAll on S3 tracker is a no-op. "
-        + "Use markCleared for specific keys instead.");
+    // Append-only: read all completed source_keys and write "cleared" markers
+    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
+    String sql = "SELECT source_key FROM ("
+        + "  SELECT source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+        + "  FROM read_parquet('" + glob + "', "
+        + "hive_partitioning=true, union_by_name=true) "
+        + "  WHERE table_name = ? AND phase = 'incremental'"
+        + ") WHERE rn = 1 AND state = 'complete'";
+
+    Set<String> completedKeys = new LinkedHashSet<String>();
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          completedKeys.add(rs.getString("source_key"));
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Failed to read completed keys for invalidateAll({}): {}",
+          alternateName, e.getMessage());
+      return;
+    }
+
+    if (completedKeys.isEmpty()) {
+      LOGGER.info("invalidateAll({}): no completed partition keys found", alternateName);
+      return;
+    }
+
+    LOGGER.info("invalidateAll({}): clearing {} completed partition keys",
+        alternateName, completedKeys.size());
+    for (String sourceKey : completedKeys) {
+      writeState(sourceKey, alternateName, "incremental", "cleared", 0,
+          null, null, null);
+    }
   }
 
   @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
