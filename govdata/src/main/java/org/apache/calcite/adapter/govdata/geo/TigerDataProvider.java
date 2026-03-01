@@ -183,52 +183,55 @@ public class TigerDataProvider implements DataProvider {
     }
 
     String tigerPath = "TIGER" + year;
+    // TIGER2010 has an extra /2010/ subdirectory between entity folder and files
+    // e.g., TIGER2010/STATE/2010/tl_2010_us_state10.zip (vs TIGER2024/STATE/tl_2024_us_state.zip)
+    String subdir2010 = (yearInt == 2010) ? "/2010" : "";
 
     switch (tableName) {
     case "states":
       String stateSuffix = (yearInt == 2010) ? "state10" : "state";
-      return String.format("%s/%s/STATE/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateSuffix);
+      return String.format("%s/%s/STATE%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateSuffix);
 
     case "counties":
       String countySuffix = (yearInt == 2010) ? "county10" : "county";
-      return String.format("%s/%s/COUNTY/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, countySuffix);
+      return String.format("%s/%s/COUNTY%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, countySuffix);
 
     case "places":
       if (stateFips == null) {
         return null;
       }
       String placeSuffix = (yearInt == 2010) ? "place10" : "place";
-      return String.format("%s/%s/PLACE/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, placeSuffix);
+      return String.format("%s/%s/PLACE%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, placeSuffix);
 
     case "zctas":
       String zctaType = (yearInt == 2010) ? "zcta510" : "zcta520";
       String zctaDir = (yearInt == 2010) ? "ZCTA5" : "ZCTA520";
-      return String.format("%s/%s/%s/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, zctaDir, year, zctaType);
+      return String.format("%s/%s/%s%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, zctaDir, subdir2010, year, zctaType);
 
     case "census_tracts":
       if (stateFips == null) {
         return null;
       }
       String tractSuffix = (yearInt == 2010) ? "tract10" : "tract";
-      return String.format("%s/%s/TRACT/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, tractSuffix);
+      return String.format("%s/%s/TRACT%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, tractSuffix);
 
     case "block_groups":
       if (stateFips == null) {
         return null;
       }
       String bgSuffix = (yearInt == 2010) ? "bg10" : "bg";
-      return String.format("%s/%s/BG/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, bgSuffix);
+      return String.format("%s/%s/BG%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, bgSuffix);
 
     case "cbsa":
       String cbsaSuffix = (yearInt == 2010) ? "cbsa10" : "cbsa";
-      return String.format("%s/%s/CBSA/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, cbsaSuffix);
+      return String.format("%s/%s/CBSA%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, cbsaSuffix);
 
     case "congressional_districts":
       if (stateFips == null) {
@@ -237,52 +240,52 @@ public class TigerDataProvider implements DataProvider {
       // Congressional district files are per-state
       // 118th Congress (2023-2024), 119th Congress (2025-2026)
       int congressNum = ((yearInt - 1789) / 2) + 1;
-      return String.format("%s/%s/CD/tl_%s_%s_cd%d.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, congressNum);
+      return String.format("%s/%s/CD%s/tl_%s_%s_cd%d.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, congressNum);
 
     case "school_districts":
       if (stateFips == null) {
         return null;
       }
       String sdSuffix = (yearInt == 2010) ? "unsd10" : "unsd";
-      return String.format("%s/%s/UNSD/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, sdSuffix);
+      return String.format("%s/%s/UNSD%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, sdSuffix);
 
     case "state_legislative_lower":
       if (stateFips == null) {
         return null;
       }
       String sldlSuffix = (yearInt == 2010) ? "sldl10" : "sldl";
-      return String.format("%s/%s/SLDL/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, sldlSuffix);
+      return String.format("%s/%s/SLDL%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, sldlSuffix);
 
     case "state_legislative_upper":
       if (stateFips == null) {
         return null;
       }
       String slduSuffix = (yearInt == 2010) ? "sldu10" : "sldu";
-      return String.format("%s/%s/SLDU/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, slduSuffix);
+      return String.format("%s/%s/SLDU%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, slduSuffix);
 
     case "county_subdivisions":
       if (stateFips == null) {
         return null;
       }
       String cousubSuffix = (yearInt == 2010) ? "cousub10" : "cousub";
-      return String.format("%s/%s/COUSUB/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, stateFips, cousubSuffix);
+      return String.format("%s/%s/COUSUB%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, cousubSuffix);
 
     case "tribal_areas":
       String aiannhSuffix = (yearInt == 2010) ? "aiannh10" : "aiannh";
-      return String.format("%s/%s/AIANNH/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, year, aiannhSuffix);
+      return String.format("%s/%s/AIANNH%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, aiannhSuffix);
 
     case "urban_areas":
       // UAC directory and suffix both have vintage indicator (UAC10 for 2010, UAC20 for 2020+)
       String uacSuffix = (yearInt == 2010) ? "uac10" : "uac20";
       String uacDir = (yearInt == 2010) ? "UAC10" : "UAC20";
-      return String.format("%s/%s/%s/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, uacDir, year, uacSuffix);
+      return String.format("%s/%s/%s%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, uacDir, subdir2010, year, uacSuffix);
 
     case "pumas":
       if (stateFips == null) {
@@ -291,8 +294,8 @@ public class TigerDataProvider implements DataProvider {
       // PUMA directory and suffix both have vintage indicator (PUMA10 for 2010, PUMA20 for 2020+)
       String pumaSuffix = (yearInt == 2010) ? "puma10" : "puma20";
       String pumaDir = (yearInt == 2010) ? "PUMA10" : "PUMA20";
-      return String.format("%s/%s/%s/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, pumaDir, year, stateFips, pumaSuffix);
+      return String.format("%s/%s/%s%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, pumaDir, subdir2010, year, stateFips, pumaSuffix);
 
     case "voting_districts":
       if (stateFips == null) {
