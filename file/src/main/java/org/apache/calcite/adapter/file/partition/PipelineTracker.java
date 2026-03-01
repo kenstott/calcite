@@ -141,6 +141,19 @@ public interface PipelineTracker extends IncrementalTracker {
   }
 
   /**
+   * Bulk-preload all tracker state for a phase into an in-memory cache.
+   *
+   * <p>After this call, subsequent {@code isComplete} and {@code getCompletedTables}
+   * calls for the given phase will be served from memory instead of making
+   * individual S3 round-trips.
+   *
+   * @param phase  Caller-defined step label (e.g. "staging")
+   */
+  default void preloadAll(String phase) {
+    // No-op by default; S3-backed implementations override for performance.
+  }
+
+  /**
    * A no-op PipelineTracker that always returns false (forces full rebuild).
    */
   PipelineTracker NOOP_PIPELINE = new NoopPipelineTracker();

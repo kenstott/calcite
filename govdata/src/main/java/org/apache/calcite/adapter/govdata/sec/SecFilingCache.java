@@ -77,6 +77,7 @@ public class SecFilingCache implements AutoCloseable {
     this.storageProvider = storageProvider;
     this.parquetBaseDir = parquetBaseDir;
     LOGGER.info("Initialized SEC filing cache with {} tracker", tracker.getClass().getSimpleName());
+    tracker.preloadAll(PHASE_STAGING);
   }
 
   /**
