@@ -343,12 +343,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   @Override public void invalidateAll(String alternateName) {
     // Append-only: read all completed source_keys and write "cleared" markers
+    // Use hive_partitioning=false to avoid DuckDB Hive partition mismatch errors
+    // when source_key values have different formats across schemas (e.g. SEC vs ETL).
+    // The source_key column is stored inside each parquet file, so we read it from there.
     String glob = bucketPath + "/year=*/source_key=*/*.parquet";
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "
         + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
         + "  FROM read_parquet('" + glob + "', "
-        + "hive_partitioning=true, union_by_name=true) "
+        + "hive_partitioning=false, union_by_name=true) "
         + "  WHERE table_name = ? AND phase = 'incremental'"
         + ") WHERE rn = 1 AND state = 'complete'";
 
