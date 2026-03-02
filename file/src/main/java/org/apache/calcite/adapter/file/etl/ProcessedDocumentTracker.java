@@ -43,4 +43,24 @@ public interface ProcessedDocumentTracker {
    * @param outputFiles List of output file paths created by conversion
    */
   void markProcessed(String cik, String accession, String formType, List<String> outputFiles);
+
+  /**
+   * Bulk-check whether all given accessions are fully processed.
+   *
+   * <p>Default loops through {@link #isProcessed}. Implementations backed by
+   * a bulk-capable tracker should override for a single round-trip.
+   *
+   * @param cik         The CIK identifier
+   * @param accessions  Accession numbers to check
+   * @param formTypes   Corresponding form types (parallel to accessions)
+   * @return true if every accession is already processed
+   */
+  default boolean areAllProcessed(String cik, List<String> accessions, List<String> formTypes) {
+    for (int i = 0; i < accessions.size(); i++) {
+      if (!isProcessed(cik, accessions.get(i), formTypes.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
 }

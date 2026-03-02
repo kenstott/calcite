@@ -18,7 +18,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -77,7 +79,6 @@ public class SecFilingCache implements AutoCloseable {
     this.storageProvider = storageProvider;
     this.parquetBaseDir = parquetBaseDir;
     LOGGER.info("Initialized SEC filing cache with {} tracker", tracker.getClass().getSimpleName());
-    tracker.preloadAll(PHASE_STAGING);
   }
 
   /**
@@ -155,6 +156,45 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     return ProcessingDecision.process("Completing partial processing");
+  }
+
+  /**
+   * Bulk-check whether all given accessions are fully processed.
+   *
+   * <p>Uses a single {@link PipelineTracker#bulkGetCompletedTables} call to
+   * fetch tracker state for all accessions at once, then checks completeness
+   * for each one based on its form type.
+   *
+   * @param accessions     Accession numbers to check
+   * @param formTypes      Corresponding form types (parallel to accessions)
+   * @param vectorizationEnabled Whether vectorization (chunks) is required
+   * @return true if every accession is fully complete in the tracker
+   */
+  public boolean areAllFilingsComplete(List<String> accessions, List<String> formTypes,
+      boolean vectorizationEnabled) {
+    Map<String, Set<String>> bulkState =
+        tracker.bulkGetCompletedTables(accessions, PHASE_STAGING);
+
+    for (int i = 0; i < accessions.size(); i++) {
+      String accession = accessions.get(i);
+      Set<String> completedTables = bulkState.get(accession);
+
+      if (completedTables == null || completedTables.isEmpty()) {
+        return false; // No tracker data at all
+      }
+
+      // Check for no_xbrl marker (stored as a "table" in the tracker)
+      if (completedTables.contains(TABLE_NO_XBRL)) {
+        continue; // This accession is handled
+      }
+
+      FormType form = FormType.fromString(formTypes.get(i));
+      FileInventory inv = inventoryFromCompletedTables(completedTables);
+      if (!inv.isComplete(form, vectorizationEnabled)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

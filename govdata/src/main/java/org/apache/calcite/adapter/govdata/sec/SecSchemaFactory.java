@@ -770,6 +770,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
               cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
             }
+            @Override public boolean areAllProcessed(String cik,
+                java.util.List<String> accessions, java.util.List<String> formTypes) {
+              return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
+            }
           }
           : null;
       LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");

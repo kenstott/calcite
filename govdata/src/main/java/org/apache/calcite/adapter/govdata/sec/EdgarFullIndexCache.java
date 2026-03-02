@@ -146,18 +146,20 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
       return CacheDecision.SKIP;
     }
 
-    // Check tracker for all matching entries
+    // Check tracker for all matching entries in a single bulk query
     if (tracker == null) {
       return CacheDecision.PROCESS;
     }
 
+    List<String> accessions = new ArrayList<String>(yearEntries.size());
+    List<String> formTypesList = new ArrayList<String>(yearEntries.size());
     for (IndexEntry entry : yearEntries) {
-      if (!tracker.isProcessed(normalizedCik, entry.accession, entry.formType)) {
-        return CacheDecision.PROCESS;
-      }
+      accessions.add(entry.accession);
+      formTypesList.add(entry.formType);
     }
 
-    return CacheDecision.SKIP;
+    return tracker.areAllProcessed(normalizedCik, accessions, formTypesList)
+        ? CacheDecision.SKIP : CacheDecision.PROCESS;
   }
 
   /**

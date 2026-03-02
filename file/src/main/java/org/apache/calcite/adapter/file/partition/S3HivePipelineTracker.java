@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * S3 hive-partitioned append-only PipelineTracker.
@@ -64,11 +64,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private boolean initialized;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
-
-  /** Bulk-preloaded state: sourceKey -> (tableName -> latestState). */
-  private volatile Map<String, Map<String, String>> bulkCache;
-  /** Phase that was preloaded (only one phase is preloaded at a time). */
-  private volatile String bulkCachePhase;
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -151,52 +146,73 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Bulk-preload all tracker state for a phase into an in-memory cache.
-   * Uses {@code hive_partitioning=false} to avoid mismatch errors when
-   * source_key values have different formats across schemas.
+   * Bulk-retrieve completed tables for multiple source keys in a single DuckDB query.
+   *
+   * <p>Builds a single {@code read_parquet([glob1, glob2, ...])} call with one
+   * targeted glob per source key, so DuckDB resolves all of them in one S3 round-trip
+   * instead of N sequential queries.
    */
-  @Override public void preloadAll(String phase) {
-    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
-    String sql = "SELECT source_key, table_name, state FROM ("
+  @Override public Map<String, Set<String>> bulkGetCompletedTables(
+      java.util.Collection<String> sourceKeys, String phase) {
+    if (sourceKeys.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    // Build per-sourceKey globs with targeted year from accession number
+    // e.g. s3://bucket/year=2026/source_key={safe}/*.parquet
+    // Falls back to year=* only when year can't be extracted
+    StringBuilder globList = new StringBuilder();
+    globList.append('[');
+    boolean first = true;
+    for (String sk : sourceKeys) {
+      if (!first) {
+        globList.append(',');
+      }
+      String year = extractYear(sk, System.currentTimeMillis());
+      globList.append('\'');
+      globList.append(bucketPath).append("/year=").append(year)
+          .append("/source_key=")
+          .append(sanitizeHiveValue(sk)).append("/*.parquet");
+      globList.append('\'');
+      first = false;
+    }
+    globList.append(']');
+
+    String sql = "SELECT source_key, table_name FROM ("
         + "  SELECT source_key, table_name, state, "
         + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn"
-        + "  FROM read_parquet('" + glob + "', "
+        + "  FROM read_parquet(" + globList + ", "
         + "hive_partitioning=false, union_by_name=true)"
         + "  WHERE phase = ?"
-        + ") WHERE rn = 1";
+        + ") WHERE rn = 1 AND state = 'complete'";
 
-    Map<String, Map<String, String>> cache = new ConcurrentHashMap<String, Map<String, String>>();
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, phase);
       try (ResultSet rs = stmt.executeQuery()) {
         while (rs.next()) {
           String sourceKey = rs.getString("source_key");
           String tableName = rs.getString("table_name");
-          String state = rs.getString("state");
-          Map<String, String> tableStates = cache.get(sourceKey);
-          if (tableStates == null) {
-            tableStates = new ConcurrentHashMap<String, String>();
-            cache.put(sourceKey, tableStates);
+          Set<String> tables = result.get(sourceKey);
+          if (tables == null) {
+            tables = new LinkedHashSet<String>();
+            result.put(sourceKey, tables);
           }
-          tableStates.put(tableName, state);
+          tables.add(tableName);
         }
       }
-      this.bulkCache = cache;
-      this.bulkCachePhase = phase;
-      LOGGER.info("Preloaded tracker state for {} source keys (phase={})",
-          cache.size(), phase);
     } catch (SQLException e) {
       String msg = e.getMessage();
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        this.bulkCache = new ConcurrentHashMap<String, Map<String, String>>();
-        this.bulkCachePhase = phase;
-        LOGGER.info("Preloaded tracker state for 0 source keys (phase={}, no data yet)", phase);
-      } else {
-        LOGGER.warn("Failed to preload tracker state for phase {}: {}", phase, msg);
+        // No tracker data for any of these source keys
+        return Collections.emptyMap();
       }
+      LOGGER.warn("Bulk tracker query failed for {} source keys: {}",
+          sourceKeys.size(), msg);
     }
+    return result;
   }
 
   /**
@@ -230,16 +246,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(9, asOf);
       stmt.executeUpdate();
       LOGGER.debug("Wrote tracker state to {}", path);
-
-      // Write-through: update bulk cache so subsequent reads see the new state
-      if (bulkCache != null && phase.equals(bulkCachePhase)) {
-        Map<String, String> tableStates = bulkCache.get(sourceKey);
-        if (tableStates == null) {
-          tableStates = new ConcurrentHashMap<String, String>();
-          bulkCache.put(sourceKey, tableStates);
-        }
-        tableStates.put(tableName, state);
-      }
     } catch (SQLException e) {
       throw new RuntimeException("Failed to write tracker state to " + path + ": " + e.getMessage(), e);
     }
@@ -249,18 +255,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Read the latest state for a (source_key, table_name, phase) combination.
    */
   private String readLatestState(String sourceKey, String tableName, String phase) {
-    // Check bulk cache first
-    if (bulkCache != null && phase.equals(bulkCachePhase)) {
-      Map<String, String> tableStates = bulkCache.get(sourceKey);
-      if (tableStates != null) {
-        String cached = tableStates.get(tableName);
-        if (cached != null) {
-          return cached;
-        }
-      }
-      // Not in cache — fall through to S3 query (handles filings written after preload)
-    }
-
     String glob = bucketPath + "/year=*/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
     String sql = "SELECT state FROM read_parquet('" + glob + "', "
@@ -307,22 +301,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public Set<String> getCompletedTables(String sourceKey, String phase) {
-    // Check bulk cache first
-    if (bulkCache != null && phase.equals(bulkCachePhase)) {
-      Map<String, String> tableStates = bulkCache.get(sourceKey);
-      if (tableStates != null) {
-        Set<String> tables = new LinkedHashSet<String>();
-        for (Map.Entry<String, String> entry : tableStates.entrySet()) {
-          if ("complete".equals(entry.getValue())) {
-            tables.add(entry.getKey());
-          }
-        }
-        return tables;
-      }
-      // Not in cache — fall through to S3 query
-    }
-
-    Set<String> tables = new LinkedHashSet<>();
+    Set<String> tables = new LinkedHashSet<String>();
     String glob = bucketPath + "/year=*/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
 
@@ -726,8 +705,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         connection = null;
         initialized = false;
         hasAnyTrackerData = null;
-        bulkCache = null;
-        bulkCachePhase = null;
       }
     }
   }

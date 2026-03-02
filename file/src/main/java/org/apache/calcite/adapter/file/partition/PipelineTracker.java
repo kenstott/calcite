@@ -16,7 +16,9 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -151,6 +153,29 @@ public interface PipelineTracker extends IncrementalTracker {
    */
   default void preloadAll(String phase) {
     // No-op by default; S3-backed implementations override for performance.
+  }
+
+  /**
+   * Bulk-retrieve completed tables for multiple source keys in a single query.
+   *
+   * <p>More efficient than calling {@link #getCompletedTables} in a loop when
+   * checking many source keys at once (e.g., all accessions for a CIK).
+   *
+   * @param sourceKeys Collection of source keys to check
+   * @param phase      Caller-defined step label (e.g. "staging")
+   * @return Map from sourceKey to its set of completed table names.
+   *         Source keys with no tracker data are absent from the map.
+   */
+  default Map<String, Set<String>> bulkGetCompletedTables(
+      Collection<String> sourceKeys, String phase) {
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    for (String sourceKey : sourceKeys) {
+      Set<String> tables = getCompletedTables(sourceKey, phase);
+      if (!tables.isEmpty()) {
+        result.put(sourceKey, tables);
+      }
+    }
+    return result;
   }
 
   /**
