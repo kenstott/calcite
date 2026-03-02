@@ -397,22 +397,34 @@ public class EtlPipeline {
 
       // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed
       // This handles the case where cache DB was deleted but Iceberg table has data
+      // Skip if we already know the Iceberg table doesn't exist (verifyDataExists returned false
+      // earlier, or readRowCountFromIceberg showed table does not exist)
+      Set<Integer> prefilteredIndices = null;
       if (materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
-          && materializeConfig.isEnabled()) {
-        rebuildCacheFromIceberg(pipelineName, config, combinations);
+          && materializeConfig.isEnabled()
+          && verifyDataExists(pipelineName, config)) {
+        prefilteredIndices = rebuildCacheFromIceberg(pipelineName, config, combinations);
       }
 
       // Phase 2: Bulk filter to find unprocessed combinations
-      // Use TTL-aware filtering to requery empty results after configured interval
-      LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
+      // Reuse Phase 1.5 result if available to avoid duplicate S3 queries
       long filterStartMs = System.currentTimeMillis();
       long emptyResultTtlMillis = materializeConfig != null && materializeConfig.getOptions() != null
           ? materializeConfig.getOptions().getEmptyResultTtlMillis()
           : MaterializeOptionsConfig.defaults().getEmptyResultTtlMillis();
-      Set<Integer> unprocessedIndices =
-          incrementalTracker.filterUnprocessedWithEmptyTtl(
-              pipelineName, pipelineName, combinations, emptyResultTtlMillis);
+      Set<Integer> unprocessedIndices;
+      if (prefilteredIndices != null && prefilteredIndices.size() < totalBatches) {
+        // Phase 1.5 already filtered and found some processed entries — reuse
+        unprocessedIndices = prefilteredIndices;
+        LOGGER.info("Phase 2: Reusing Phase 1.5 filter result: {} unprocessed of {} total",
+            unprocessedIndices.size(), totalBatches);
+      } else {
+        LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
+        unprocessedIndices =
+            incrementalTracker.filterUnprocessedWithEmptyTtl(
+                pipelineName, pipelineName, combinations, emptyResultTtlMillis);
+      }
       long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
       int neededCount = unprocessedIndices.size();
@@ -947,8 +959,10 @@ public class EtlPipeline {
    * @param pipelineName Pipeline name for cache key
    * @param config Pipeline configuration
    * @param combinations Expected dimension combinations
+   * @return The filterUnprocessed result from the quick check (for reuse by Phase 2),
+   *         or null if the method returned early without filtering
    */
-  private void rebuildCacheFromIceberg(String pipelineName, EtlPipelineConfig config,
+  private Set<Integer> rebuildCacheFromIceberg(String pipelineName, EtlPipelineConfig config,
       List<Map<String, String>> combinations) {
 
     // Quick check: if cache already has data, skip rebuild
@@ -957,13 +971,13 @@ public class EtlPipeline {
     if (unprocessed.size() < combinations.size()) {
       LOGGER.debug("Cache has {} processed entries, skipping Iceberg rebuild",
           combinations.size() - unprocessed.size());
-      return;
+      return unprocessed;
     }
 
     // Cache is empty - check if Iceberg table has data we can use
     MaterializeConfig materializeConfig = config.getMaterialize();
     if (materializeConfig == null || !materializeConfig.isEnabled()) {
-      return;
+      return unprocessed;
     }
 
     // Get target table ID
@@ -983,7 +997,7 @@ public class EtlPipeline {
 
     if (partitionColumns.isEmpty()) {
       LOGGER.debug("No partition columns configured, skipping Iceberg rebuild");
-      return;
+      return unprocessed;
     }
 
     // Build catalog config for querying Iceberg metadata
@@ -996,7 +1010,7 @@ public class EtlPipeline {
     if (existingPartitions.isEmpty()) {
       LOGGER.debug("No existing partitions in Iceberg table '{}', no cache rebuild needed",
           targetTableId);
-      return;
+      return unprocessed;
     }
 
     // Verify existing partitions are not stale - they should be a subset of expected combinations
@@ -1046,7 +1060,7 @@ public class EtlPipeline {
     if (rebuildable.isEmpty()) {
       LOGGER.debug("No rebuildable partitions found for table '{}', skipping cache rebuild",
           targetTableId);
-      return;
+      return unprocessed;
     }
 
     // Rebuild cache from existing partitions that match current dimensions
@@ -1063,6 +1077,9 @@ public class EtlPipeline {
 
     LOGGER.info("Self-healing complete: Rebuilt cache with {} partition entries from Iceberg metadata",
         rebuilt);
+
+    // Re-filter after rebuild so Phase 2 can reuse the result
+    return incrementalTracker.filterUnprocessed(pipelineName, pipelineName, combinations);
   }
 
   /**
