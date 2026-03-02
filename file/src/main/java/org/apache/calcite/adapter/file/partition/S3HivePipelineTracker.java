@@ -255,7 +255,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Read the latest state for a (source_key, table_name, phase) combination.
    */
   private String readLatestState(String sourceKey, String tableName, String phase) {
-    String glob = bucketPath + "/year=*/source_key=" + sanitizeHiveValue(sourceKey)
+    String year = extractYear(sourceKey, System.currentTimeMillis());
+    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
     String sql = "SELECT state FROM read_parquet('" + glob + "', "
         + "hive_partitioning=true, union_by_name=true) "
@@ -302,7 +303,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   @Override public Set<String> getCompletedTables(String sourceKey, String phase) {
     Set<String> tables = new LinkedHashSet<String>();
-    String glob = bucketPath + "/year=*/source_key=" + sanitizeHiveValue(sourceKey)
+    String year = extractYear(sourceKey, System.currentTimeMillis());
+    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
 
     String sql = "SELECT table_name, state FROM ("
@@ -339,7 +341,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public boolean isProcessedWithTtl(String alternateName, String sourceTable,
       Map<String, String> keyValues, long ttlMillis) {
     String sourceKey = flattenKeyValues(keyValues);
-    String glob = bucketPath + "/year=*/source_key=" + sanitizeHiveValue(sourceKey)
+    String year = extractYear(sourceKey, System.currentTimeMillis());
+    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
     String sql = "SELECT as_of FROM read_parquet('" + glob + "', "
         + "hive_partitioning=true, union_by_name=true) "
@@ -464,10 +467,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // A "No files found" for one table does not mean other tables lack tracker data.
 
     // Build targeted globs from the known combinations instead of scanning source_key=*
+    // Use extractYear to target specific year partitions instead of year=*
     Set<String> sourceKeyPaths = new LinkedHashSet<>();
     for (Map<String, String> combo : allCombinations) {
       String flat = flattenKeyValues(combo);
-      sourceKeyPaths.add(bucketPath + "/year=*/source_key="
+      String year = extractYear(flat, System.currentTimeMillis());
+      sourceKeyPaths.add(bucketPath + "/year=" + year + "/source_key="
           + sanitizeHiveValue(flat) + "/*.parquet");
     }
 
