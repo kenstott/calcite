@@ -2212,9 +2212,22 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       throw builderException;
     }
 
-    LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}",
-                tableCache.size(), name, tableCache.keySet());
-    if (tableCache.isEmpty()) {
+    // Count Iceberg tables managed via conversionMetadata (not in tableCache)
+    int icebergTableCount = 0;
+    if (conversionMetadata != null) {
+      for (ConversionMetadata.ConversionRecord r : conversionMetadata.getAllConversions().values()) {
+        if ("ICEBERG_PARQUET".equals(r.getConversionType())) {
+          icebergTableCount++;
+        }
+      }
+    }
+
+    LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}{}",
+                tableCache.size(), name, tableCache.keySet(),
+                icebergTableCount > 0
+                    ? " (plus " + icebergTableCount + " Iceberg tables via conversionMetadata)"
+                    : "");
+    if (tableCache.isEmpty() && icebergTableCount == 0) {
       LOGGER.warn("[FileSchema.getTableMap] WARNING: No tables were registered for schema '{}'!", name);
     }
 
@@ -2225,7 +2238,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     generateModelFile(tableCache);
 
     // Log the final table names
-    LOGGER.info("Final table cache contains {} tables: {}", tableCache.size(), tableCache.keySet());
+    LOGGER.info("Final table cache contains {} tables: {}{}",
+        tableCache.size(), tableCache.keySet(),
+        icebergTableCount > 0
+            ? " (plus " + icebergTableCount + " Iceberg tables via conversionMetadata)"
+            : "");
 
     return tableCache;
     } catch (Exception e) {

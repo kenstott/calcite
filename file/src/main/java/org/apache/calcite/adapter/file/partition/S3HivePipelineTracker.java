@@ -678,13 +678,40 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   private String extractYear(String sourceKey, long asOf) {
-    // Try to extract year from source key (accession format: 0000123456-YY-012345)
-    if (sourceKey != null && sourceKey.length() >= 15 && sourceKey.charAt(10) == '-') {
-      try {
-        int yy = Integer.parseInt(sourceKey.substring(11, 13));
-        return String.valueOf(yy >= 90 ? 1900 + yy : 2000 + yy);
-      } catch (NumberFormatException e) {
-        // Fall through
+    if (sourceKey != null) {
+      // 1. Flattened dimension key: "geography=state__type=acs__year=2023"
+      int yearIdx = sourceKey.indexOf("year=");
+      if (yearIdx >= 0) {
+        int start = yearIdx + 5; // length of "year="
+        int end = start;
+        while (end < sourceKey.length() && Character.isDigit(sourceKey.charAt(end))) {
+          end++;
+        }
+        if (end - start == 4) {
+          return sourceKey.substring(start, end);
+        }
+      }
+
+      // 2. SEC accession format: 0000123456-YY-012345
+      if (sourceKey.length() >= 15 && sourceKey.charAt(10) == '-') {
+        try {
+          int yy = Integer.parseInt(sourceKey.substring(11, 13));
+          return String.valueOf(yy >= 90 ? 1900 + yy : 2000 + yy);
+        } catch (NumberFormatException e) {
+          // Fall through
+        }
+      }
+
+      // 3. Bare 4-digit year (single-dimension key like "2023")
+      if (sourceKey.length() == 4) {
+        try {
+          int y = Integer.parseInt(sourceKey);
+          if (y >= 1900 && y <= 2100) {
+            return sourceKey;
+          }
+        } catch (NumberFormatException e) {
+          // Fall through
+        }
       }
     }
     // Fall back to current year from timestamp

@@ -107,19 +107,25 @@ dimension_values:
   # --- Year Range for ACS 5-year (starts 2009) ---
   # ACS 5-year estimates only available from 2009 onwards (Census API limitation)
   # Pre-2009 data does not exist - API returns errors for earlier years
-  # lagYears: 3 because ACS 5-year data is released ~2 years after the survey year
+  # lagYears: 2 because ACS 5-year data for year Y is released in December of Y+2
+  # releaseMonth: 12 because release happens in December; before Dec, subtract one more year
+  # Example in March 2026: effectiveEnd = min(2026-2, 2026) = 2024, then month 3 < 12 → 2023
   acs_year_range: &acs_year_range
     type: yearRange
     start: 2009
-    lagYears: 3
+    lagYears: 2
+    releaseMonth: 12
 
   # --- Year Range for ACS 1-year (starts 2006) ---
   # ACS 1-year estimates available from 2006 onwards (only for areas with 65,000+ population)
-  # lagYears: 2 because ACS 1-year data is released ~1 year after the survey year
+  # lagYears: 1 because ACS 1-year data for year Y is released in September of Y+1
+  # releaseMonth: 9 because release happens in September
+  # Example in March 2026: effectiveEnd = min(2026-1, 2026) = 2025, then month 3 < 9 → 2024
   acs1_year_range: &acs1_year_range
     type: yearRange
     start: 2006
-    lagYears: 2
+    lagYears: 1
+    releaseMonth: 9
 
   # --- Year Values for Decennial Census ---
   decennial_years: &decennial_years
