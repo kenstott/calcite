@@ -596,6 +596,7 @@ partitionedTables:
       ori:
         type: custom
         properties:
+          contextKey: state_abbr
           agenciesTablePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME/cde_agencies"
 
     columns:
