@@ -16,7 +16,9 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Provides filing index lookup to determine whether a CIK needs an EDGAR API call.
@@ -48,4 +50,15 @@ public interface FilingIndexProvider {
    */
   CacheDecision checkCik(String cik, int year, List<String> filingTypes,
       ProcessedDocumentTracker tracker);
+
+  /**
+   * Get CIKs that have filings matching the given year and types.
+   *
+   * <p>Default implementation returns an empty set (no filtering).
+   *
+   * @param year        The filing year
+   * @param filingTypes Filing types to filter (e.g. "10-K", "4"), or null for all
+   * @return set of normalized CIKs with matching filings
+   */
+  Set<String> getActiveCiks(int year, List<String> filingTypes);
 }

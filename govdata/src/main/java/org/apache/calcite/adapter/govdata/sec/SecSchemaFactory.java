@@ -724,118 +724,130 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       // Get CIKs from configuration
       List<String> ciks = getCiksFromConfig(operand);
-      if (ciks.isEmpty()) {
-        LOGGER.warn("No CIKs configured for document-based ETL");
-        return new DocumentETLProcessor.DocumentETLResult(
-            0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
-      }
 
-      // Get filing types and year range
+      // Compute before CIK guard — needed for materialization regardless of CIK list
       List<String> filingTypes = getFilingTypes(operand);
       int startYear = getIntValue(operand, "startYear", 2020);
       int endYear = getIntValue(operand, "endYear", Year.now().getValue());
       LOGGER.info("Year range: {} to {}", startYear, endYear);
 
-      // Get parquet directory for output
       String govdataParquetDir = GovDataUtils.getParquetDir(operand);
       String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
 
-      // Create HttpSourceConfig from YAML-style configuration
-      HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
+      DocumentETLProcessor.DocumentETLResult result;
 
-      // Get or create document converter with vectorization enabled if configured
-      FileConverter documentConverter = getOrCreateXbrlConverter(operand);
+      if (!ciks.isEmpty()) {
+        // Create HttpSourceConfig from YAML-style configuration
+        HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
 
-      // Initialize filing cache if not yet done
-      if (this.filingCache == null && this.secOperatingDirectory != null) {
-        org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
-            PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
-        this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
-        LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
-      }
+        // Get or create document converter with vectorization enabled if configured
+        FileConverter documentConverter = getOrCreateXbrlConverter(operand);
 
-      // Create document tracker using SecFilingCache with complete self-healing
-      final SecFilingCache cache = this.filingCache;
-      final boolean vectorizationEnabled = isVectorizedChunksEnabled();
-      ProcessedDocumentTracker documentTracker = cache != null
-          ? new ProcessedDocumentTracker() {
-            @Override public boolean isProcessed(String cik, String accession, String formType) {
-              String form = formType != null ? formType : "UNKNOWN";
-              ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
-              return !decision.shouldProcess();
-            }
-            @Override public void markProcessed(String cik, String accession, String formType,
-                java.util.List<String> outputFiles) {
-              String form = formType != null ? formType : "UNKNOWN";
-              FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
-              cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
-            }
-            @Override public boolean areAllProcessed(String cik,
-                java.util.List<String> accessions, java.util.List<String> formTypes) {
-              return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
-            }
-          }
-          : null;
-      LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
-
-      // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
-      FilingIndexProvider indexCache = null;
-      try {
-        indexCache = new EdgarFullIndexCache(
-            storageProvider, this.secCacheDirectory, startYear, endYear);
-      } catch (Exception e) {
-        LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
-            e.getMessage());
-      }
-
-      // Create processor - pass cache directory as String to support S3 paths
-      DocumentETLProcessor processor = new DocumentETLProcessor(
-          httpSourceConfig,
-          storageProvider,
-          secParquetDir,
-          this.secCacheDirectory,
-          documentConverter,
-          null,  // progressListener
-          documentTracker,
-          indexCache);
-
-      // Build entity list with CIKs and year range
-      List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
-      for (String cik : ciks) {
-        String normalizedCik = normalizeCik(cik);
-        for (int year = startYear; year <= endYear; year++) {
-          Map<String, String> entity = new HashMap<String, String>();
-          entity.put("cik", normalizedCik);
-          entity.put("year", String.valueOf(year));
-          entities.add(entity);
+        // Initialize filing cache if not yet done
+        if (this.filingCache == null && this.secOperatingDirectory != null) {
+          org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
+              PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+          this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
+          LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
         }
+
+        // Create document tracker using SecFilingCache with complete self-healing
+        final SecFilingCache cache = this.filingCache;
+        final boolean vectorizationEnabled = isVectorizedChunksEnabled();
+        ProcessedDocumentTracker documentTracker = cache != null
+            ? new ProcessedDocumentTracker() {
+              @Override public boolean isProcessed(String cik, String accession, String formType) {
+                String form = formType != null ? formType : "UNKNOWN";
+                ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
+                return !decision.shouldProcess();
+              }
+              @Override public void markProcessed(String cik, String accession, String formType,
+                  java.util.List<String> outputFiles) {
+                String form = formType != null ? formType : "UNKNOWN";
+                FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
+                cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
+              }
+              @Override public boolean areAllProcessed(String cik,
+                  java.util.List<String> accessions, java.util.List<String> formTypes) {
+                return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
+              }
+            }
+            : null;
+        LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
+
+        // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
+        FilingIndexProvider indexCache = null;
+        try {
+          indexCache = new EdgarFullIndexCache(
+              storageProvider, this.secCacheDirectory, startYear, endYear);
+        } catch (Exception e) {
+          LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
+              e.getMessage());
+        }
+
+        // If using full-index, narrow CIK list to only those with filings
+        if (indexCache != null) {
+          Set<String> activeCiks = new java.util.LinkedHashSet<String>();
+          for (int year = startYear; year <= endYear; year++) {
+            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes));
+          }
+          int originalSize = ciks.size();
+          ciks = new ArrayList<String>(activeCiks);
+          LOGGER.info("Narrowed CIK list from {} to {} using full-index", originalSize, ciks.size());
+        }
+
+        // Create processor - pass cache directory as String to support S3 paths
+        DocumentETLProcessor processor = new DocumentETLProcessor(
+            httpSourceConfig,
+            storageProvider,
+            secParquetDir,
+            this.secCacheDirectory,
+            documentConverter,
+            null,  // progressListener
+            documentTracker,
+            indexCache);
+
+        // Build entity list with CIKs and year range
+        List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
+        for (String cik : ciks) {
+          String normalizedCik = normalizeCik(cik);
+          for (int year = startYear; year <= endYear; year++) {
+            Map<String, String> entity = new HashMap<String, String>();
+            entity.put("cik", normalizedCik);
+            entity.put("year", String.valueOf(year));
+            entities.add(entity);
+          }
+        }
+
+        LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
+            ciks.size(), (endYear - startYear + 1), entities.size());
+
+        // Process all entities
+        result = processor.processEntities(entities);
+
+        LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
+            result.getDocumentsProcessed(),
+            result.getDocumentsSkipped(),
+            result.getDocumentsFailed(),
+            result.getDurationMs());
+
+        // Download stock prices via Stooq (separate from EDGAR filings)
+        Object fetchStockPricesObj = operand.get("fetchStockPrices");
+        boolean fetchStockPrices = fetchStockPricesObj == null ? true
+            : Boolean.parseBoolean(fetchStockPricesObj.toString());
+        if (fetchStockPrices) {
+          LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
+              ciks.size(), startYear, endYear);
+          // Pass the already-computed govdataParquetDir to avoid null from getGovDataParquetDir()
+          downloadStockPrices(govdataParquetDir, ciks, startYear, endYear);
+        }
+      } else {
+        LOGGER.info("No CIKs configured - skipping download, running materialization only");
+        result = new DocumentETLProcessor.DocumentETLResult(
+            0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
       }
 
-      LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
-          ciks.size(), (endYear - startYear + 1), entities.size());
-
-      // Process all entities
-      DocumentETLProcessor.DocumentETLResult result = processor.processEntities(entities);
-
-      LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
-          result.getDocumentsProcessed(),
-          result.getDocumentsSkipped(),
-          result.getDocumentsFailed(),
-          result.getDurationMs());
-
-      // Download stock prices via Stooq (separate from EDGAR filings)
-      Object fetchStockPricesObj = operand.get("fetchStockPrices");
-      boolean fetchStockPrices = fetchStockPricesObj == null ? true
-          : Boolean.parseBoolean(fetchStockPricesObj.toString());
-      if (fetchStockPrices) {
-        LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
-            ciks.size(), startYear, endYear);
-        // Pass the already-computed govdataParquetDir to avoid null from getGovDataParquetDir()
-        downloadStockPrices(govdataParquetDir, ciks, startYear, endYear);
-      }
-
-      // Materialize staging parquet files to Iceberg tables if configured
-      // Always run materialization - even if no new documents were processed (self-healing case),
+      // Always run materialization — even with empty CIKs or no new documents,
       // existing parquet files still need to be materialized to Iceberg tables
       materializeStagingFilesToIceberg(operand, secParquetDir);
 

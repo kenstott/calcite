@@ -28,9 +28,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Caches EDGAR quarterly full-index files to avoid per-CIK API calls on reruns.
@@ -131,12 +133,8 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
     if (filingTypes != null && !filingTypes.isEmpty()) {
       List<IndexEntry> filtered = new ArrayList<IndexEntry>();
       for (IndexEntry entry : yearEntries) {
-        for (String type : filingTypes) {
-          if (entry.formType.equalsIgnoreCase(type)
-              || entry.formType.startsWith(type + "/")) {
-            filtered.add(entry);
-            break;
-          }
+        if (matchesFilingType(entry.formType, filingTypes)) {
+          filtered.add(entry);
         }
       }
       yearEntries = filtered;
@@ -160,6 +158,33 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
 
     return tracker.areAllProcessed(normalizedCik, accessions, formTypesList)
         ? CacheDecision.SKIP : CacheDecision.PROCESS;
+  }
+
+  @Override public Set<String> getActiveCiks(int year, List<String> filingTypes) {
+    Set<String> result = new HashSet<String>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year == year && matchesFilingType(ie.formType, filingTypes)) {
+          result.add(entry.getKey());
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  /** Check whether a form type matches the requested filing types. */
+  private static boolean matchesFilingType(String formType, List<String> filingTypes) {
+    if (filingTypes == null || filingTypes.isEmpty()) {
+      return true;
+    }
+    for (String type : filingTypes) {
+      if (formType.equalsIgnoreCase(type)
+          || formType.startsWith(type + "/")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
