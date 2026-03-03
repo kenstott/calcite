@@ -31,6 +31,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Expands dimension definitions into concrete value combinations for batch processing.
@@ -165,6 +167,151 @@ public class DimensionIterator {
 
     // Standard expansion for non-custom dimensions
     return expandStandard(dimensions);
+  }
+
+  /**
+   * Expands dimensions into partitions grouped by the CUSTOM dimension's context key.
+   *
+   * <p>For pipelines with CUSTOM dimensions (e.g., {@code ori} resolved per {@code state_abbr}),
+   * the full Cartesian product can be millions of combinations. This method avoids materializing
+   * all of them at once by:
+   * <ol>
+   *   <li>Expanding all non-CUSTOM dimensions into "prefix" combinations</li>
+   *   <li>Identifying the context key that the CUSTOM dimension depends on</li>
+   *   <li>Grouping prefix combinations by distinct context key values</li>
+   *   <li>For each group, resolving the CUSTOM dimension and expanding</li>
+   * </ol>
+   *
+   * <p>If no CUSTOM dimensions exist, returns a single partition wrapping the standard
+   * {@link #expand} result.
+   *
+   * @param dimensions Map of dimension name to configuration
+   * @return List of partitions, one per distinct context key value
+   */
+  public List<DimensionPartition> expandByPartition(Map<String, DimensionConfig> dimensions) {
+    if (dimensions == null || dimensions.isEmpty()) {
+      List<Map<String, String>> single =
+          Collections.singletonList(Collections.<String, String>emptyMap());
+      return Collections.singletonList(
+          new DimensionPartition(Collections.<String, String>emptyMap(), single));
+    }
+
+    // Find CUSTOM dimensions and their position
+    String customDimName = null;
+    DimensionConfig customDimConfig = null;
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      if (entry.getValue().getType() == DimensionType.CUSTOM) {
+        customDimName = entry.getKey();
+        customDimConfig = entry.getValue();
+        break;
+      }
+    }
+
+    // No CUSTOM dimensions - wrap standard expand in a single partition
+    if (customDimName == null || dimensionResolver == null) {
+      List<Map<String, String>> all = expand(dimensions);
+      return Collections.singletonList(
+          new DimensionPartition(Collections.<String, String>emptyMap(), all));
+    }
+
+    // Step 1: Expand all non-CUSTOM dimensions (the "prefix" combinations)
+    Map<String, DimensionConfig> prefixDimensions = new LinkedHashMap<String, DimensionConfig>();
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      if (entry.getValue().getType() != DimensionType.CUSTOM) {
+        prefixDimensions.put(entry.getKey(), entry.getValue());
+      }
+    }
+    List<Map<String, String>> prefixCombinations = expandStandard(prefixDimensions);
+    LOGGER.info("Prefix expansion (non-CUSTOM): {} combinations", prefixCombinations.size());
+
+    // Step 2: Identify the context key - find which prefix dimension the CUSTOM depends on.
+    // The context key is resolved by checking which prefix dimension key produces
+    // distinct groups of CUSTOM values. We determine this by looking at the DimensionConfig
+    // properties for a "contextKey" hint, or by using the last prefix dimension before
+    // the CUSTOM dimension in iteration order.
+    String contextKey = null;
+    if (customDimConfig.getProperties() != null) {
+      contextKey = customDimConfig.getProperties().get("contextKey");
+    }
+    if (contextKey == null) {
+      // Default: use the dimension immediately before the CUSTOM one
+      String prevKey = null;
+      for (String key : dimensions.keySet()) {
+        if (key.equals(customDimName)) {
+          break;
+        }
+        prevKey = key;
+      }
+      contextKey = prevKey;
+    }
+    if (contextKey == null) {
+      // No context key found - fall back to standard expand
+      LOGGER.warn("CUSTOM dimension '{}' has no identifiable context key, "
+          + "falling back to standard expansion", customDimName);
+      List<Map<String, String>> all = expand(dimensions);
+      return Collections.singletonList(
+          new DimensionPartition(Collections.<String, String>emptyMap(), all));
+    }
+    LOGGER.info("Partitioning by context key '{}' for CUSTOM dimension '{}'",
+        contextKey, customDimName);
+
+    // Step 3: Collect distinct context key values in order
+    Set<String> contextValues = new TreeSet<String>();
+    for (Map<String, String> combo : prefixCombinations) {
+      String val = combo.get(contextKey);
+      if (val != null) {
+        contextValues.add(val);
+      }
+    }
+    LOGGER.info("Found {} distinct '{}' values for partitioning", contextValues.size(), contextKey);
+
+    // Step 4: For each context value, group prefix combos and resolve CUSTOM dimension
+    List<DimensionPartition> partitions = new ArrayList<DimensionPartition>();
+    for (String contextValue : contextValues) {
+      // Filter prefix combinations for this context value
+      List<Map<String, String>> groupCombos = new ArrayList<Map<String, String>>();
+      for (Map<String, String> combo : prefixCombinations) {
+        if (contextValue.equals(combo.get(contextKey))) {
+          groupCombos.add(combo);
+        }
+      }
+
+      // Resolve CUSTOM dimension with context from one representative combo
+      Map<String, String> representativeContext = groupCombos.get(0);
+      List<String> customValues = resolveCustomWithContext(customDimConfig, representativeContext);
+
+      if (customValues.isEmpty()) {
+        LOGGER.debug("CUSTOM dimension '{}' resolved to empty for context {}={}, skipping",
+            customDimName, contextKey, contextValue);
+        continue;
+      }
+
+      // Expand each prefix combo with each custom value
+      List<Map<String, String>> partitionCombos =
+          new ArrayList<Map<String, String>>(groupCombos.size() * customValues.size());
+      for (Map<String, String> prefix : groupCombos) {
+        for (String customVal : customValues) {
+          Map<String, String> full = new LinkedHashMap<String, String>(prefix);
+          full.put(customDimName, customVal);
+          partitionCombos.add(full);
+        }
+      }
+
+      Map<String, String> partContext = Collections.singletonMap(contextKey, contextValue);
+      partitions.add(new DimensionPartition(partContext, partitionCombos));
+      LOGGER.debug("Partition {}={}: {} prefix x {} custom = {} combinations",
+          contextKey, contextValue, groupCombos.size(), customValues.size(),
+          partitionCombos.size());
+    }
+
+    int totalCombos = 0;
+    for (DimensionPartition p : partitions) {
+      totalCombos += p.getCombinations().size();
+    }
+    LOGGER.info("Partitioned expansion: {} partitions, {} total combinations",
+        partitions.size(), totalCombos);
+
+    return partitions;
   }
 
   /**

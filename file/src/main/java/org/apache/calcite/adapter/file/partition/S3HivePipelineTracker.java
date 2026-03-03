@@ -25,6 +25,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -457,6 +458,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  /** Maximum number of glob paths per DuckDB query to avoid OOM with large dimension spaces. */
+  private static final int FILTER_CHUNK_SIZE = 50_000;
+
   @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
       List<Map<String, String>> allCombinations) {
     if (allCombinations == null || allCombinations.isEmpty()) {
@@ -468,64 +472,90 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     // Build targeted globs from the known combinations instead of scanning source_key=*
     // Use extractYear to target specific year partitions instead of year=*
-    Set<String> sourceKeyPaths = new LinkedHashSet<>();
-    for (Map<String, String> combo : allCombinations) {
-      String flat = flattenKeyValues(combo);
+    // Pre-compute flattened keys for all combinations (reused for matching later)
+    String[] flatKeys = new String[allCombinations.size()];
+    List<String> sourceKeyPaths = new ArrayList<String>();
+    for (int i = 0; i < allCombinations.size(); i++) {
+      String flat = flattenKeyValues(allCombinations.get(i));
+      flatKeys[i] = flat;
       String year = extractYear(flat, System.currentTimeMillis());
       sourceKeyPaths.add(bucketPath + "/year=" + year + "/source_key="
           + sanitizeHiveValue(flat) + "/*.parquet");
     }
 
-    // DuckDB read_parquet accepts a list of globs
-    StringBuilder pathList = new StringBuilder();
-    pathList.append("[");
-    boolean first = true;
-    for (String p : sourceKeyPaths) {
-      if (!first) {
-        pathList.append(", ");
+    // Deduplicate paths (multiple combinations may map to the same glob)
+    List<String> uniquePaths = new ArrayList<String>(new LinkedHashSet<String>(sourceKeyPaths));
+
+    // Query in chunks to avoid OOM with large dimension spaces (e.g., 3M+ combinations)
+    Set<String> processedKeys = new HashSet<String>();
+    boolean anyNoFiles = false;
+
+    for (int offset = 0; offset < uniquePaths.size(); offset += FILTER_CHUNK_SIZE) {
+      int end = Math.min(offset + FILTER_CHUNK_SIZE, uniquePaths.size());
+      List<String> chunk = uniquePaths.subList(offset, end);
+
+      if (uniquePaths.size() > FILTER_CHUNK_SIZE) {
+        LOGGER.info("Filtering chunk {}-{} of {} unique paths for {}",
+            offset, end, uniquePaths.size(), alternateName);
       }
-      pathList.append("'").append(p).append("'");
-      first = false;
-    }
-    pathList.append("]");
 
-    String sql = "SELECT source_key FROM ("
-        + "  SELECT source_key, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
-        + "  FROM read_parquet(" + pathList + ", "
-        + "hive_partitioning=true, union_by_name=true) "
-        + "  WHERE table_name = ? AND phase = 'incremental'"
-        + ") WHERE rn = 1 AND state = 'complete'";
-
-    Set<String> processedKeys = new HashSet<>();
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, alternateName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          processedKeys.add(rs.getString("source_key"));
+      // Build path list for this chunk
+      StringBuilder pathList = new StringBuilder();
+      pathList.append("[");
+      boolean first = true;
+      for (String p : chunk) {
+        if (!first) {
+          pathList.append(", ");
         }
+        pathList.append("'").append(p).append("'");
+        first = false;
       }
-      // Cache positive result only — presence of data is safe to cache
-      if (!processedKeys.isEmpty()) {
-        hasAnyTrackerData = true;
+      pathList.append("]");
+
+      String sql = "SELECT source_key FROM ("
+          + "  SELECT source_key, state, ROW_NUMBER() OVER "
+          + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+          + "  FROM read_parquet(" + pathList + ", "
+          + "hive_partitioning=true, union_by_name=true) "
+          + "  WHERE table_name = ? AND phase = 'incremental'"
+          + ") WHERE rn = 1 AND state = 'complete'";
+
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, alternateName);
+        try (ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+            processedKeys.add(rs.getString("source_key"));
+          }
+        }
+      } catch (SQLException e) {
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("No files found")
+            || msg.contains("Could not find")
+            || msg.contains("HTTP 404"))) {
+          anyNoFiles = true;
+          // Continue to next chunk — other chunks may have data
+          continue;
+        }
+        LOGGER.debug("Error filtering unprocessed for {} (chunk {}-{}): {}",
+            alternateName, offset, end, msg);
       }
-    } catch (SQLException e) {
-      // Glob matched no files — this schema has no tracker data yet
-      String msg = e.getMessage();
-      if (msg != null && (msg.contains("No files found")
-          || msg.contains("Could not find")
-          || msg.contains("HTTP 404"))) {
-        LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
-            alternateName, allCombinations.size());
-        return allIndices(allCombinations.size());
-      }
-      LOGGER.debug("Error filtering unprocessed for {}: {}", alternateName, msg);
     }
 
-    Set<Integer> unprocessed = new HashSet<>();
+    // Cache positive result only — presence of data is safe to cache
+    if (!processedKeys.isEmpty()) {
+      hasAnyTrackerData = true;
+    }
+
+    // If ALL chunks returned "no files" and nothing was found, return all as unprocessed
+    if (processedKeys.isEmpty() && anyNoFiles) {
+      LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
+          alternateName, allCombinations.size());
+      return allIndices(allCombinations.size());
+    }
+
+    Set<Integer> unprocessed = new HashSet<Integer>();
     for (int i = 0; i < allCombinations.size(); i++) {
-      String flat = flattenKeyValues(allCombinations.get(i));
-      if (!processedKeys.contains(flat)) {
+      if (!processedKeys.contains(flatKeys[i])) {
         unprocessed.add(i);
       }
     }

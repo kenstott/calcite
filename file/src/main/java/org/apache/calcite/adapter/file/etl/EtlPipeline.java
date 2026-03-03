@@ -321,12 +321,40 @@ public class EtlPipeline {
       DimensionIterator dimensionIterator = dimensionResolver != null
           ? new DimensionIterator(dimensionResolver, storageProvider)
           : new DimensionIterator();
-      List<Map<String, String>> combinations = dimensionIterator.expand(config.getDimensions());
-      int totalBatches = combinations.size();
-      LOGGER.info("Expanded to {} dimension combinations", totalBatches);
 
-      // Compute dimension signature for table-level completion tracking
-      String dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
+      // Check if partitioned expansion is needed (CUSTOM dimensions with resolver)
+      boolean hasCustomDimensions = false;
+      for (DimensionConfig dc : config.getDimensions().values()) {
+        if (dc.getType() == DimensionType.CUSTOM) {
+          hasCustomDimensions = true;
+          break;
+        }
+      }
+      boolean usePartitionedExpansion = hasCustomDimensions && dimensionResolver != null;
+
+      // For partitioned mode, use expandByPartition to avoid materializing all combos at once.
+      // For standard mode, use expand as before.
+      List<DimensionPartition> partitions = null;
+      List<Map<String, String>> combinations = null;
+      int totalBatches;
+      String dimensionSignature;
+
+      if (usePartitionedExpansion) {
+        partitions = dimensionIterator.expandByPartition(config.getDimensions());
+        totalBatches = 0;
+        for (DimensionPartition p : partitions) {
+          totalBatches += p.getCombinations().size();
+        }
+        // Compute signature from config hash + total count to avoid materializing all combos
+        dimensionSignature = "partitioned:" + configHash + ":" + totalBatches;
+        LOGGER.info("Partitioned expansion: {} partitions, {} total combinations",
+            partitions.size(), totalBatches);
+      } else {
+        combinations = dimensionIterator.expand(config.getDimensions());
+        totalBatches = combinations.size();
+        dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
+        LOGGER.info("Expanded to {} dimension combinations", totalBatches);
+      }
 
       // Fast-path: Check if entire pipeline was already completed with same dimensions
       if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
@@ -395,48 +423,64 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
       }
 
-      // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed
-      // This handles the case where cache DB was deleted but Iceberg table has data
-      // Skip if we already know the Iceberg table doesn't exist (verifyDataExists returned false
-      // earlier, or readRowCountFromIceberg showed table does not exist)
-      Set<Integer> prefilteredIndices = null;
-      if (materializeConfig != null
-          && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
-          && materializeConfig.isEnabled()
-          && verifyDataExists(pipelineName, config)) {
-        prefilteredIndices = rebuildCacheFromIceberg(pipelineName, config, combinations);
-      }
-
-      // Phase 2: Bulk filter to find unprocessed combinations
-      // Reuse Phase 1.5 result if available to avoid duplicate S3 queries
-      long filterStartMs = System.currentTimeMillis();
       long emptyResultTtlMillis = materializeConfig != null && materializeConfig.getOptions() != null
           ? materializeConfig.getOptions().getEmptyResultTtlMillis()
           : MaterializeOptionsConfig.defaults().getEmptyResultTtlMillis();
-      Set<Integer> unprocessedIndices;
-      if (prefilteredIndices != null && prefilteredIndices.size() < totalBatches) {
-        // Phase 1.5 already filtered and found some processed entries — reuse
-        unprocessedIndices = prefilteredIndices;
-        LOGGER.info("Phase 2: Reusing Phase 1.5 filter result: {} unprocessed of {} total",
-            unprocessedIndices.size(), totalBatches);
-      } else {
-        LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
-        unprocessedIndices =
-            incrementalTracker.filterUnprocessedWithEmptyTtl(
-                pipelineName, pipelineName, combinations, emptyResultTtlMillis);
-      }
-      long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
+      int neededCount;
+      // Standard mode stores filtered indices here; partitioned mode filters per-partition in Phase 5
+      Set<Integer> standardUnprocessedIndices = null;
 
-      int neededCount = unprocessedIndices.size();
-      skippedBatches = totalBatches - neededCount;
-      LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
-          neededCount, totalBatches, filterElapsedMs,
-          totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+      if (usePartitionedExpansion) {
+        // Partitioned mode: skip Phase 1.5 (cache rebuild operates on full combo list)
+        // Phase 2 filtering happens per-partition in Phase 5
+
+        // Pre-filter across all partitions to compute neededCount for progress reporting
+        neededCount = 0;
+        for (DimensionPartition partition : partitions) {
+          Set<Integer> unprocessed =
+              incrementalTracker.filterUnprocessedWithEmptyTtl(
+                  pipelineName, pipelineName, partition.getCombinations(), emptyResultTtlMillis);
+          neededCount += unprocessed.size();
+        }
+        skippedBatches = totalBatches - neededCount;
+        LOGGER.info("Partitioned filtering: {} unprocessed of {} total ({}% cached)",
+            neededCount, totalBatches,
+            totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+      } else {
+        // Standard mode: Phase 1.5 + Phase 2 as before
+
+        // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed
+        Set<Integer> prefilteredIndices = null;
+        if (materializeConfig != null
+            && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
+            && materializeConfig.isEnabled()
+            && verifyDataExists(pipelineName, config)) {
+          prefilteredIndices = rebuildCacheFromIceberg(pipelineName, config, combinations);
+        }
+
+        // Phase 2: Bulk filter to find unprocessed combinations
+        long filterStartMs = System.currentTimeMillis();
+        if (prefilteredIndices != null && prefilteredIndices.size() < totalBatches) {
+          standardUnprocessedIndices = prefilteredIndices;
+          LOGGER.info("Phase 2: Reusing Phase 1.5 filter result: {} unprocessed of {} total",
+              standardUnprocessedIndices.size(), totalBatches);
+        } else {
+          LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
+          standardUnprocessedIndices =
+              incrementalTracker.filterUnprocessedWithEmptyTtl(
+                  pipelineName, pipelineName, combinations, emptyResultTtlMillis);
+        }
+        long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
+
+        neededCount = standardUnprocessedIndices.size();
+        skippedBatches = totalBatches - neededCount;
+        LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
+            neededCount, totalBatches, filterElapsedMs,
+            totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+      }
 
       // If all combinations are already processed, mark complete and return
-      // But only if there were actual combinations - empty dimensions is a config error
       if (neededCount == 0 && totalBatches > 0) {
-        // Try to get row count from Iceberg metadata for COUNT(*) optimization
         long cachedRowCount = 0;
         if (materializeConfig != null
             && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
@@ -456,7 +500,6 @@ public class EtlPipeline {
             .elapsedMs(elapsed)
             .build();
       } else if (totalBatches == 0) {
-        // No dimension combinations - likely a configuration error
         long elapsed = System.currentTimeMillis() - startTime;
         LOGGER.warn("Pipeline '{}' has no dimension combinations - check dimensions config", pipelineName);
         return EtlResult.builder()
@@ -475,7 +518,6 @@ public class EtlPipeline {
       DataSource dataSource = createDataSource(config);
 
       // Phase 4: Create and initialize materialization writer
-      // Reuse materializeConfig from Phase 1.5 - already fetched above
       MaterializeConfig.Format format = materializeConfig != null
           ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
       LOGGER.info("Phase 4: Creating MaterializationWriter (format={})", format);
@@ -526,150 +568,168 @@ public class EtlPipeline {
       writer.initialize(materializeConfig);
       LOGGER.info("Initialized {} writer for table {}", format, tableName);
 
-      // Phase 5: Process only unprocessed dimension combinations
+      // Phase 5: Process unprocessed dimension combinations
       LOGGER.info("Phase 5: Processing {} unprocessed batches (of {} total)", neededCount, totalBatches);
       if (progressListener != null) {
         progressListener.onPhaseStart("data_processing", neededCount);
       }
 
       int processedCount = 0;
-      for (int idx = 0; idx < combinations.size(); idx++) {
-        // Skip already-processed combinations (from bulk filter)
-        if (!unprocessedIndices.contains(idx)) {
-          continue;
-        }
 
-        Map<String, String> variables = combinations.get(idx);
-        processedCount++;
+      if (usePartitionedExpansion) {
+        // Partitioned processing: iterate partition by partition to bound memory
+        for (int pi = 0; pi < partitions.size(); pi++) {
+          DimensionPartition partition = partitions.get(pi);
+          List<Map<String, String>> partCombos = partition.getCombinations();
 
-        if (progressListener != null) {
-          progressListener.onBatchStart(processedCount, neededCount, variables);
-        }
+          // Filter unprocessed within this partition
+          Set<Integer> unprocessedIndices =
+              incrementalTracker.filterUnprocessedWithEmptyTtl(
+                  pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
 
-        try {
-          LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
+          if (unprocessedIndices.isEmpty()) {
+            LOGGER.debug("Partition {}/{} ({}) fully processed, skipping",
+                pi + 1, partitions.size(), partition.getPartitionContext());
+            continue;
+          }
+          LOGGER.info("Partition {}/{} ({}): {} unprocessed of {} combinations",
+              pi + 1, partitions.size(), partition.getPartitionContext(),
+              unprocessedIndices.size(), partCombos.size());
 
-          // For document sources, the dataWriter handles all processing
-          // (download + convert + write) so skip the standard fetch/write flow
-          if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
-            LOGGER.info("Document source - using custom DataWriter for processing");
-            if (dataWriter != null) {
-              long batchRows = dataWriter.write(config, null, variables);
+          for (int idx : unprocessedIndices) {
+            Map<String, String> variables = partCombos.get(idx);
+            processedCount++;
+
+            if (progressListener != null) {
+              progressListener.onBatchStart(processedCount, neededCount, variables);
+            }
+
+            try {
+              LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
+              long batchRows = processSingleBatch(config, variables, dataSource, writer,
+                  processedCount, neededCount, pipelineName);
               totalRows += batchRows;
               successfulBatches++;
-              incrementalTracker.markProcessedWithRowCount(
-                  pipelineName, pipelineName, variables, null, batchRows);
+
               if (progressListener != null) {
                 progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
               }
-              continue;
-            } else {
-              LOGGER.warn("Document source requires custom DataWriter - skipping batch");
-              skippedBatches++;
-              continue;
-            }
-          }
 
-          // Fetch data - use custom provider if available, otherwise built-in HttpSource
-          Iterator<Map<String, Object>> data = null;
-          if (dataProvider != null) {
-            data = dataProvider.fetch(config, variables);
-            if (data != null) {
-              LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
-            }
-          }
-          if (data == null) {
-            // Fall back to built-in DataSource
-            data = dataSource.fetch(variables);
-          }
-
-          // Check if response partitioning is enabled
-          HttpSourceConfig sourceConfig = config.getSource();
-          boolean hasResponsePartitioning = sourceConfig != null
-              && sourceConfig.hasResponsePartitioning();
-
-          long batchRows;
-          if (hasResponsePartitioning) {
-            // Response partitioning: group rows by partition fields and write each group
-            batchRows =
-                writeWithResponsePartitioning(data, variables, sourceConfig.getResponsePartitioning(),
-                writer, dataWriter, incrementalTracker, pipelineName);
-          } else {
-            // Standard path: write all rows with the URL dimension variables
-            if (dataWriter != null) {
-              batchRows = dataWriter.write(config, data, variables);
-              if (batchRows >= 0) {
-                LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
-              } else {
-                // Custom writer returned -1, use built-in writer
-                batchRows = writer.writeBatch(data, variables);
+              if (processedCount % 10 == 0) {
+                System.gc();
               }
-            } else {
-              // Use built-in MaterializationWriter
-              batchRows = writer.writeBatch(data, variables);
+
+            } catch (IOException e) {
+              String errorMsg =
+                  String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
+              LOGGER.error(errorMsg, e);
+              errors.add(errorMsg);
+              incrementalTracker.invalidateTableCompletion(pipelineName);
+
+              EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
+                  determineErrorAction(e, config.getErrorHandling());
+
+              switch (action) {
+                case FAIL:
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      variables, null, e.getMessage());
+                  throw new IOException("Pipeline failed at batch " + processedCount, e);
+                case SKIP:
+                  skippedBatches++;
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      variables, null, e.getMessage());
+                  LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}",
+                      processedCount, e.getMessage());
+                  break;
+                case WARN:
+                  failedBatches++;
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      variables, null, e.getMessage());
+                  LOGGER.warn("Batch {} failed (will retry after TTL): {}",
+                      processedCount, e.getMessage());
+                  break;
+                default:
+                  failedBatches++;
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      variables, null, e.getMessage());
+              }
+
+              if (progressListener != null) {
+                progressListener.onBatchComplete(processedCount, neededCount, 0, e);
+              }
             }
-            // Mark batch as successfully processed for incremental tracking
-            // Track row count so empty results can be requeried after TTL
-            incrementalTracker.markProcessedWithRowCount(
-                pipelineName, pipelineName, variables, null, batchRows);
           }
-          totalRows += batchRows;
+          // Partition's combinations list is now eligible for GC
+          LOGGER.debug("Partition {}/{} complete, combinations eligible for GC",
+              pi + 1, partitions.size());
+        }
+      } else {
+        // Standard (non-partitioned) processing
+        for (int idx = 0; idx < combinations.size(); idx++) {
+          if (!standardUnprocessedIndices.contains(idx)) {
+            continue;
+          }
 
-          LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
-
-          successfulBatches++;
+          Map<String, String> variables = combinations.get(idx);
+          processedCount++;
 
           if (progressListener != null) {
-            progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
+            progressListener.onBatchStart(processedCount, neededCount, variables);
           }
 
-          // Periodic GC every 10 batches to prevent memory buildup
-          // Critical for large batch pipelines like VTDs (78 batches with geometry data)
-          if (processedCount % 10 == 0) {
-            System.gc();
-          }
+          try {
+            LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
+            long batchRows = processSingleBatch(config, variables, dataSource, writer,
+                processedCount, neededCount, pipelineName);
+            totalRows += batchRows;
+            successfulBatches++;
 
-        } catch (IOException e) {
-          String errorMsg =
-              String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
-          LOGGER.error(errorMsg, e);
-          errors.add(errorMsg);
+            if (progressListener != null) {
+              progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
+            }
 
-          // Invalidate table completion since we have an error
-          incrementalTracker.invalidateTableCompletion(pipelineName);
+            if (processedCount % 10 == 0) {
+              System.gc();
+            }
 
-          // Handle error according to policy
-          EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
-              determineErrorAction(e, config.getErrorHandling());
+          } catch (IOException e) {
+            String errorMsg =
+                String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
+            LOGGER.error(errorMsg, e);
+            errors.add(errorMsg);
+            incrementalTracker.invalidateTableCompletion(pipelineName);
 
-          switch (action) {
-            case FAIL:
-              // Mark as error before failing - allows TTL-based retry on next run
-              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                  variables, null, e.getMessage());
-              throw new IOException("Pipeline failed at batch " + processedCount, e);
-            case SKIP:
-              skippedBatches++;
-              // Mark as error so it will be retried after error TTL expires
-              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                  variables, null, e.getMessage());
-              LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}", processedCount, e.getMessage());
-              break;
-            case WARN:
-              failedBatches++;
-              // Mark as error so it will be retried after error TTL expires
-              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                  variables, null, e.getMessage());
-              LOGGER.warn("Batch {} failed (will retry after TTL): {}", processedCount, e.getMessage());
-              break;
-            default:
-              failedBatches++;
-              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                  variables, null, e.getMessage());
-          }
+            EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
+                determineErrorAction(e, config.getErrorHandling());
 
-          if (progressListener != null) {
-            progressListener.onBatchComplete(processedCount, neededCount, 0, e);
+            switch (action) {
+              case FAIL:
+                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                    variables, null, e.getMessage());
+                throw new IOException("Pipeline failed at batch " + processedCount, e);
+              case SKIP:
+                skippedBatches++;
+                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                    variables, null, e.getMessage());
+                LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}",
+                    processedCount, e.getMessage());
+                break;
+              case WARN:
+                failedBatches++;
+                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                    variables, null, e.getMessage());
+                LOGGER.warn("Batch {} failed (will retry after TTL): {}",
+                    processedCount, e.getMessage());
+                break;
+              default:
+                failedBatches++;
+                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                    variables, null, e.getMessage());
+            }
+
+            if (progressListener != null) {
+              progressListener.onBatchComplete(processedCount, neededCount, 0, e);
+            }
           }
         }
       }
@@ -830,6 +890,72 @@ public class EtlPipeline {
         writtenRows);
 
     return writtenRows;
+  }
+
+  /**
+   * Processes a single batch: fetches data and writes via the materialization writer.
+   * Extracted to avoid duplicating the fetch/write/track logic across partitioned and
+   * non-partitioned code paths.
+   *
+   * @return Number of rows written
+   */
+  private long processSingleBatch(EtlPipelineConfig config, Map<String, String> variables,
+      DataSource dataSource, MaterializationWriter writer,
+      int processedCount, int neededCount, String pipelineName) throws IOException {
+
+    // Document sources use dataWriter directly
+    if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
+      LOGGER.info("Document source - using custom DataWriter for processing");
+      if (dataWriter != null) {
+        long batchRows = dataWriter.write(config, null, variables);
+        incrementalTracker.markProcessedWithRowCount(
+            pipelineName, pipelineName, variables, null, batchRows);
+        return batchRows;
+      } else {
+        LOGGER.warn("Document source requires custom DataWriter - skipping batch");
+        return 0;
+      }
+    }
+
+    // Fetch data
+    Iterator<Map<String, Object>> data = null;
+    if (dataProvider != null) {
+      data = dataProvider.fetch(config, variables);
+      if (data != null) {
+        LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
+      }
+    }
+    if (data == null) {
+      data = dataSource.fetch(variables);
+    }
+
+    // Check response partitioning
+    HttpSourceConfig sourceConfig = config.getSource();
+    boolean hasResponsePartitioning = sourceConfig != null
+        && sourceConfig.hasResponsePartitioning();
+
+    long batchRows;
+    if (hasResponsePartitioning) {
+      batchRows =
+          writeWithResponsePartitioning(data, variables, sourceConfig.getResponsePartitioning(),
+          writer, dataWriter, incrementalTracker, pipelineName);
+    } else {
+      if (dataWriter != null) {
+        batchRows = dataWriter.write(config, data, variables);
+        if (batchRows >= 0) {
+          LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+        } else {
+          batchRows = writer.writeBatch(data, variables);
+        }
+      } else {
+        batchRows = writer.writeBatch(data, variables);
+      }
+      incrementalTracker.markProcessedWithRowCount(
+          pipelineName, pipelineName, variables, null, batchRows);
+    }
+
+    LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
+    return batchRows;
   }
 
   /**
