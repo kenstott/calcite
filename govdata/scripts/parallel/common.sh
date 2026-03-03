@@ -398,13 +398,13 @@ run_etl() {
 
   java \
     -Xms"${ETL_HEAP_MIN:-2g}" \
-    -Xmx"${ETL_HEAP_MAX:-4g}" \
+    -Xmx"${ETL_HEAP_MAX:-3g}" \
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
     --verbose \
     "$@" \
-    2>&1 | tee "$log_file"
+    2>&1 | stdbuf -oL tee "$log_file"
 
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
