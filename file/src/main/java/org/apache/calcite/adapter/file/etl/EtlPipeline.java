@@ -322,33 +322,27 @@ public class EtlPipeline {
           ? new DimensionIterator(dimensionResolver, storageProvider)
           : new DimensionIterator();
 
-      // Check if partitioned expansion is needed (CUSTOM dimensions with resolver)
-      boolean hasCustomDimensions = false;
-      for (DimensionConfig dc : config.getDimensions().values()) {
-        if (dc.getType() == DimensionType.CUSTOM) {
-          hasCustomDimensions = true;
-          break;
-        }
-      }
-      boolean usePartitionedExpansion = hasCustomDimensions && dimensionResolver != null;
+      // Check if partitioned expansion is applicable (CUSTOM dimensions with resolver).
+      // planPartitions returns null if not applicable, signaling standard expand.
+      DimensionPartitionPlan partitionPlan =
+          dimensionIterator.planPartitions(config.getDimensions());
+      boolean usePartitionedExpansion = partitionPlan != null;
 
-      // For partitioned mode, use expandByPartition to avoid materializing all combos at once.
-      // For standard mode, use expand as before.
-      List<DimensionPartition> partitions = null;
       List<Map<String, String>> combinations = null;
       int totalBatches;
       String dimensionSignature;
 
       if (usePartitionedExpansion) {
-        partitions = dimensionIterator.expandByPartition(config.getDimensions());
-        totalBatches = 0;
-        for (DimensionPartition p : partitions) {
-          totalBatches += p.getCombinations().size();
-        }
-        // Compute signature from config hash + total count to avoid materializing all combos
-        dimensionSignature = "partitioned:" + configHash + ":" + totalBatches;
-        LOGGER.info("Partitioned expansion: {} partitions, {} total combinations",
-            partitions.size(), totalBatches);
+        // Partitioned mode: we know the prefix count and partition count,
+        // but don't expand CUSTOM dimension yet (that's done lazily per-partition).
+        // Use config hash as the signature to avoid materializing 3M+ combos.
+        dimensionSignature = "partitioned:" + configHash;
+        // totalBatches is unknown until we expand each partition — use prefix count as placeholder
+        // for the fast-path check. Actual count is computed during processing.
+        totalBatches = partitionPlan.getTotalPrefixCount();
+        LOGGER.info("Partitioned plan: {} partitions by '{}', {} prefix combinations",
+            partitionPlan.getPartitionCount(), partitionPlan.getContextKey(),
+            totalBatches);
       } else {
         combinations = dimensionIterator.expand(config.getDimensions());
         totalBatches = combinations.size();
@@ -431,21 +425,12 @@ public class EtlPipeline {
       Set<Integer> standardUnprocessedIndices = null;
 
       if (usePartitionedExpansion) {
-        // Partitioned mode: skip Phase 1.5 (cache rebuild operates on full combo list)
-        // Phase 2 filtering happens per-partition in Phase 5
-
-        // Pre-filter across all partitions to compute neededCount for progress reporting
-        neededCount = 0;
-        for (DimensionPartition partition : partitions) {
-          Set<Integer> unprocessed =
-              incrementalTracker.filterUnprocessedWithEmptyTtl(
-                  pipelineName, pipelineName, partition.getCombinations(), emptyResultTtlMillis);
-          neededCount += unprocessed.size();
-        }
-        skippedBatches = totalBatches - neededCount;
-        LOGGER.info("Partitioned filtering: {} unprocessed of {} total ({}% cached)",
-            neededCount, totalBatches,
-            totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+        // Partitioned mode: skip Phase 1.5 and Phase 2 pre-filter.
+        // Filtering happens lazily per-partition during Phase 5 to avoid
+        // materializing all partition combinations at once.
+        // neededCount is unknown until processing; use totalBatches as upper bound.
+        neededCount = totalBatches;
+        LOGGER.info("Partitioned mode: deferring filter to per-partition processing");
       } else {
         // Standard mode: Phase 1.5 + Phase 2 as before
 
@@ -577,10 +562,25 @@ public class EtlPipeline {
       int processedCount = 0;
 
       if (usePartitionedExpansion) {
-        // Partitioned processing: iterate partition by partition to bound memory
-        for (int pi = 0; pi < partitions.size(); pi++) {
-          DimensionPartition partition = partitions.get(pi);
+        // Partitioned processing: lazily expand one partition at a time to bound memory.
+        // Each partition's combinations are built, processed, then discarded before the next.
+        List<String> contextValues = partitionPlan.getContextValues();
+        int partCount = contextValues.size();
+        int actualTotalBatches = 0;
+
+        for (int pi = 0; pi < partCount; pi++) {
+          String contextValue = contextValues.get(pi);
+
+          // Lazily expand this single partition (resolves CUSTOM dimension via S3)
+          DimensionPartition partition =
+              dimensionIterator.expandPartition(partitionPlan, contextValue);
+          if (partition == null) {
+            LOGGER.debug("Partition {}/{} ({}={}) resolved to empty, skipping",
+                pi + 1, partCount, partitionPlan.getContextKey(), contextValue);
+            continue;
+          }
           List<Map<String, String>> partCombos = partition.getCombinations();
+          actualTotalBatches += partCombos.size();
 
           // Filter unprocessed within this partition
           Set<Integer> unprocessedIndices =
@@ -588,12 +588,15 @@ public class EtlPipeline {
                   pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
 
           if (unprocessedIndices.isEmpty()) {
-            LOGGER.debug("Partition {}/{} ({}) fully processed, skipping",
-                pi + 1, partitions.size(), partition.getPartitionContext());
+            skippedBatches += partCombos.size();
+            LOGGER.debug("Partition {}/{} ({}={}) fully processed ({} combos), skipping",
+                pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
+                partCombos.size());
             continue;
           }
-          LOGGER.info("Partition {}/{} ({}): {} unprocessed of {} combinations",
-              pi + 1, partitions.size(), partition.getPartitionContext(),
+          skippedBatches += partCombos.size() - unprocessedIndices.size();
+          LOGGER.info("Partition {}/{} ({}={}): {} unprocessed of {} combinations",
+              pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
               unprocessedIndices.size(), partCombos.size());
 
           for (int idx : unprocessedIndices) {
@@ -605,7 +608,8 @@ public class EtlPipeline {
             }
 
             try {
-              LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
+              LOGGER.info("Processing batch {} (partition {}/{}): {}",
+                  processedCount, pi + 1, partCount, variables);
               long batchRows = processSingleBatch(config, variables, dataSource, writer,
                   processedCount, neededCount, pipelineName);
               totalRows += batchRows;
@@ -621,7 +625,8 @@ public class EtlPipeline {
 
             } catch (IOException e) {
               String errorMsg =
-                  String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
+                  String.format("Batch %d (partition %d/%d) failed: %s",
+                      processedCount, pi + 1, partCount, e.getMessage());
               LOGGER.error(errorMsg, e);
               errors.add(errorMsg);
               incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -659,10 +664,12 @@ public class EtlPipeline {
               }
             }
           }
-          // Partition's combinations list is now eligible for GC
-          LOGGER.debug("Partition {}/{} complete, combinations eligible for GC",
-              pi + 1, partitions.size());
+          // Partition's combinations are now eligible for GC
+          LOGGER.debug("Partition {}/{} complete, {} combos eligible for GC",
+              pi + 1, partCount, partCombos.size());
         }
+        // Update totalBatches with actual count now that all partitions have been expanded
+        totalBatches = actualTotalBatches;
       } else {
         // Standard (non-partitioned) processing
         for (int idx = 0; idx < combinations.size(); idx++) {
