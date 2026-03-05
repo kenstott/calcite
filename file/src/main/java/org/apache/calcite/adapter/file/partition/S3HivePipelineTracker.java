@@ -173,9 +173,26 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (sourceKeys.isEmpty()) {
       return Collections.emptyMap();
     }
+
+    // Return cached results for source keys already in stageCache, only query uncached ones
+    Map<String, Set<String>> cachedResults = new HashMap<String, Set<String>>();
+    List<String> uncachedKeys = new ArrayList<String>();
+    for (String sk : sourceKeys) {
+      String cacheKey = sk + "\0" + phase;
+      Set<String> cached = stageCache.get(cacheKey);
+      if (cached != null) {
+        cachedResults.put(sk, cached);
+      } else {
+        uncachedKeys.add(sk);
+      }
+    }
+    if (uncachedKeys.isEmpty()) {
+      return cachedResults;
+    }
+
     long bulkStart = System.currentTimeMillis();
-    LOGGER.info("Bulk loading completed tables for {} source keys (phase={})",
-        sourceKeys.size(), phase);
+    LOGGER.info("Bulk loading completed tables for {} source keys (phase={}, {} already cached)",
+        uncachedKeys.size(), phase, cachedResults.size());
 
     // Build per-sourceKey globs with targeted year from accession number
     // e.g. s3://bucket/year=2026/source_key={safe}/*.parquet
@@ -183,7 +200,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     StringBuilder globList = new StringBuilder();
     globList.append('[');
     boolean first = true;
-    for (String sk : sourceKeys) {
+    for (String sk : uncachedKeys) {
       if (!first) {
         globList.append(',');
       }
@@ -226,17 +243,18 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
         // No tracker data — cache empty results for all queried keys
-        for (String sk : sourceKeys) {
+        for (String sk : uncachedKeys) {
           stageCache.put(sk + "\0" + phase, new LinkedHashSet<String>());
         }
-        return Collections.emptyMap();
+        cachedResults.putAll(result);
+        return cachedResults;
       }
       LOGGER.warn("Bulk tracker query failed for {} source keys: {}",
-          sourceKeys.size(), msg);
+          uncachedKeys.size(), msg);
     }
     // Populate stage cache for ALL queried source keys (including those with no results)
     int withData = 0;
-    for (String sk : sourceKeys) {
+    for (String sk : uncachedKeys) {
       Set<String> tables = result.get(sk);
       String cacheKey = sk + "\0" + phase;
       if (tables != null) {
@@ -248,8 +266,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
     long bulkElapsed = System.currentTimeMillis() - bulkStart;
     LOGGER.info("Bulk loaded completed tables: {} keys queried, {} with data, {}ms",
-        sourceKeys.size(), withData, bulkElapsed);
-    return result;
+        uncachedKeys.size(), withData, bulkElapsed);
+    // Merge cached and freshly-queried results
+    cachedResults.putAll(result);
+    return cachedResults;
   }
 
   /**
