@@ -785,18 +785,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               e.getMessage());
         }
 
-        // If using full-index, narrow CIK list to only those with filings
-        if (indexCache != null) {
-          Set<String> activeCiks = new java.util.LinkedHashSet<String>();
-          for (int year = startYear; year <= endYear; year++) {
-            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes));
-          }
-          int originalSize = ciks.size();
-          ciks = new ArrayList<String>(activeCiks);
-          LOGGER.info("Narrowed CIK list from {} to {} using full-index", originalSize, ciks.size());
-        }
-
-        // Bulk-preload tracker state for all accessions so per-filing checks are in-memory
+        // Bulk-preload tracker state so getActiveCiks can filter in-memory
         if (indexCache != null && cache != null) {
           long preloadStart = System.currentTimeMillis();
           LOGGER.info("Building accession list from full-index for years {}-{}...",
@@ -811,6 +800,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (!allAccessions.isEmpty()) {
             cache.preload(allAccessions);
           }
+        }
+
+        // Narrow CIK list to only those with unprocessed filings
+        if (indexCache != null) {
+          Set<String> activeCiks = new java.util.LinkedHashSet<String>();
+          for (int year = startYear; year <= endYear; year++) {
+            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes, documentTracker));
+          }
+          int originalSize = ciks.size();
+          ciks = new ArrayList<String>(activeCiks);
+          LOGGER.info("Narrowed CIK list from {} to {} using full-index (tracker-filtered)",
+              originalSize, ciks.size());
         }
 
         // Create processor - pass cache directory as String to support S3 paths

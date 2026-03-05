@@ -54,11 +54,11 @@ public interface FilingIndexProvider {
   /**
    * Get CIKs that have filings matching the given year and types.
    *
-   * <p>Default implementation returns an empty set (no filtering).
-   *
    * @param year        The filing year
    * @param filingTypes Filing types to filter (e.g. "10-K", "4"), or null for all
-   * @return set of normalized CIKs with matching filings
+   * @param tracker     Tracker to exclude CIKs whose filings are all processed, or null
+   * @return set of normalized CIKs with unprocessed matching filings
    */
-  Set<String> getActiveCiks(int year, List<String> filingTypes);
+  Set<String> getActiveCiks(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker);
 }

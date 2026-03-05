@@ -182,14 +182,33 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
     return accessions;
   }
 
-  @Override public Set<String> getActiveCiks(int year, List<String> filingTypes) {
+  @Override public Set<String> getActiveCiks(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker) {
     Set<String> result = new HashSet<String>();
     for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      List<IndexEntry> matching = new ArrayList<IndexEntry>();
       for (IndexEntry ie : entry.getValue()) {
         if (ie.year == year && matchesFilingType(ie.formType, filingTypes)) {
-          result.add(entry.getKey());
-          break;
+          matching.add(ie);
         }
+      }
+      if (matching.isEmpty()) {
+        continue;
+      }
+      // If no tracker, include all CIKs with matching filings
+      if (tracker == null) {
+        result.add(entry.getKey());
+        continue;
+      }
+      // Check if all matching filings are already processed
+      List<String> accessions = new ArrayList<String>(matching.size());
+      List<String> formTypes = new ArrayList<String>(matching.size());
+      for (IndexEntry ie : matching) {
+        accessions.add(ie.accession);
+        formTypes.add(ie.formType);
+      }
+      if (!tracker.areAllProcessed(entry.getKey(), accessions, formTypes)) {
+        result.add(entry.getKey());
       }
     }
     return result;
