@@ -88,34 +88,24 @@ public class SecFilingCache implements AutoCloseable {
    * will use cached data instead of individual S3 queries.
    *
    * @param accessions all accession numbers to preload
-   * @return number of accessions that had tracker data (non-empty completed tables)
    */
-  public int preload(Collection<String> accessions) {
+  public void preload(Collection<String> accessions) {
     if (accessions.isEmpty()) {
-      return 0;
+      return;
     }
     long start = System.currentTimeMillis();
     // Chunk into batches to avoid DuckDB glob list OOM
     List<String> accessionList = new ArrayList<String>(accessions);
     int chunkSize = 5000;
     int loaded = 0;
-    int withData = 0;
     for (int offset = 0; offset < accessionList.size(); offset += chunkSize) {
       int end = Math.min(offset + chunkSize, accessionList.size());
       List<String> chunk = accessionList.subList(offset, end);
-      Map<String, Set<String>> result = tracker.bulkGetCompletedTables(chunk, PHASE_STAGING);
-      for (Map.Entry<String, Set<String>> entry : result.entrySet()) {
-        if (entry.getValue() != null && !entry.getValue().isEmpty()) {
-          withData++;
-        }
-      }
+      tracker.bulkGetCompletedTables(chunk, PHASE_STAGING);
       loaded += chunk.size();
     }
     long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("Preloaded tracker state for {} accessions in {}ms ({} with data, {}% coverage)",
-        loaded, elapsed, withData,
-        loaded > 0 ? (withData * 100 / loaded) : 0);
-    return withData;
+    LOGGER.info("Preloaded tracker state for {} accessions in {}ms", loaded, elapsed);
   }
 
   /**

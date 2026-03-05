@@ -786,50 +786,32 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
 
         // Bulk-preload tracker state so getActiveCiks can filter in-memory
-        int trackerCoverage = 0;
-        int totalAccessions = 0;
         if (indexCache != null && cache != null) {
           long preloadStart = System.currentTimeMillis();
-          LOGGER.info("Building accession list from full-index for years {}-{}, filingTypes={}...",
-              startYear, endYear, filingTypes);
+          LOGGER.info("Building accession list from full-index for years {}-{}...",
+              startYear, endYear);
           List<String> allAccessions = new ArrayList<String>();
           for (int year = startYear; year <= endYear; year++) {
             allAccessions.addAll(
                 ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
           }
-          totalAccessions = allAccessions.size();
           LOGGER.info("Collected {} accessions from full-index in {}ms, preloading tracker state...",
-              totalAccessions, System.currentTimeMillis() - preloadStart);
+              allAccessions.size(), System.currentTimeMillis() - preloadStart);
           if (!allAccessions.isEmpty()) {
-            trackerCoverage = cache.preload(allAccessions);
+            cache.preload(allAccessions);
           }
         }
 
-        // Narrow CIK list to only those with filings (and unprocessed if tracker has data)
+        // Narrow CIK list to only those with unprocessed filings
         if (indexCache != null) {
-          // Decide whether to apply tracker-based filtering:
-          // If tracker coverage is < 10% of total accessions, the tracker is likely
-          // bootstrapping (first run with S3 tracker). Skip tracker filtering to
-          // avoid re-queuing all CIKs; per-entity self-healing will still work.
-          boolean useTrackerFilter = totalAccessions > 0
-              && trackerCoverage * 100 / totalAccessions >= 10;
-          ProcessedDocumentTracker narrowingTracker = useTrackerFilter ? documentTracker : null;
-          if (!useTrackerFilter && totalAccessions > 0) {
-            LOGGER.info("Tracker coverage too low ({}/{} = {}%), "
-                    + "narrowing by index only (no tracker filter)",
-                trackerCoverage, totalAccessions,
-                trackerCoverage * 100 / totalAccessions);
-          }
-
           Set<String> activeCiks = new java.util.LinkedHashSet<String>();
           for (int year = startYear; year <= endYear; year++) {
-            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes, narrowingTracker));
+            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes, documentTracker));
           }
           int originalSize = ciks.size();
           ciks = new ArrayList<String>(activeCiks);
-          LOGGER.info("Narrowed CIK list from {} to {} using full-index{}",
-              originalSize, ciks.size(),
-              useTrackerFilter ? " (tracker-filtered)" : " (index-only, tracker bootstrapping)");
+          LOGGER.info("Narrowed CIK list from {} to {} using full-index (tracker-filtered)",
+              originalSize, ciks.size());
         }
 
         // Create processor - pass cache directory as String to support S3 paths
