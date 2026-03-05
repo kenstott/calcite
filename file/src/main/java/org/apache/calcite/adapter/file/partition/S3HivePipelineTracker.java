@@ -218,7 +218,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // Group uncached keys by extracted year for year-level scanning
     Map<String, List<String>> keysByYear = new HashMap<String, List<String>>();
     for (String sk : uncachedKeys) {
-      String year = extractYear(sk, System.currentTimeMillis());
+      String year = "_table_complete".equals(sk)
+          ? COMPLETION_YEAR : extractYear(sk, System.currentTimeMillis());
       List<String> list = keysByYear.get(year);
       if (list == null) {
         list = new ArrayList<String>();
@@ -259,7 +260,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     for (String sk : uncachedKeys) {
       String cacheKey = sk + "\0" + phase;
       if (!stageCache.containsKey(cacheKey)) {
-        String year = extractYear(sk, System.currentTimeMillis());
+        String year = "_table_complete".equals(sk)
+            ? COMPLETION_YEAR : extractYear(sk, System.currentTimeMillis());
         String scanKey = year + "\0" + phase;
         // Only cache empty if year was fully scanned (not just attempted)
         if (fullyScannedYears.contains(scanKey)) {
@@ -428,7 +430,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       }
       String sourceKey = key.substring(0, sep);
       String phase = key.substring(sep + 1);
-      String skYear = extractYear(sourceKey, asOf);
+      String skYear = "_table_complete".equals(sourceKey)
+          ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
       if (!year.equals(skYear)) {
         continue;
       }
