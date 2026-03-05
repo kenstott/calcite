@@ -340,6 +340,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         scannedYears.add(year);
         if (scannedFiles != null) {
           fullyScannedYears.add(year);
+          if (!scannedFiles.isEmpty()) {
+            deleteSpecificFiles(scannedFiles, year);
+          }
         } else {
           LOGGER.info("Year {} scan incomplete — individual queries will occur on demand", year);
         }
