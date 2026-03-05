@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -57,6 +58,9 @@ import java.util.UUID;
 public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3HivePipelineTracker.class);
 
+  /** Fixed year partition for _table_complete markers. Avoids year=* wildcard scans. */
+  private static final String COMPLETION_YEAR = "0";
+
   private final String bucketPath;
   private final String endpoint;
   private final Map<String, String> config;
@@ -65,6 +69,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private boolean initialized;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
+  /** In-memory cache of table completions for the duration of this tracker instance. */
+  private final Map<String, CachedCompletion> completionCache =
+      new ConcurrentHashMap<String, CachedCompletion>();
+  /**
+   * In-memory cache of completed tables per (sourceKey, phase).
+   * Key format: "sourceKey\0phase" → Set of completed table names.
+   * Populated by {@link #bulkGetCompletedTables} and {@link #getCompletedTables},
+   * so subsequent {@link #isComplete} calls are O(1) memory lookups.
+   */
+  private final Map<String, Set<String>> stageCache =
+      new ConcurrentHashMap<String, Set<String>>();
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -207,11 +222,24 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        // No tracker data for any of these source keys
+        // No tracker data — cache empty results for all queried keys
+        for (String sk : sourceKeys) {
+          stageCache.put(sk + "\0" + phase, new LinkedHashSet<String>());
+        }
         return Collections.emptyMap();
       }
       LOGGER.warn("Bulk tracker query failed for {} source keys: {}",
           sourceKeys.size(), msg);
+    }
+    // Populate stage cache for ALL queried source keys (including those with no results)
+    for (String sk : sourceKeys) {
+      Set<String> tables = result.get(sk);
+      String cacheKey = sk + "\0" + phase;
+      if (tables != null) {
+        stageCache.put(cacheKey, tables);
+      } else {
+        stageCache.put(cacheKey, new LinkedHashSet<String>());
+      }
     }
     return result;
   }
@@ -223,7 +251,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       String state, long rowCount, String configHash, String signature,
       String errorMessage) {
     long asOf = System.currentTimeMillis();
-    String year = extractYear(sourceKey, asOf);
+    String year = "_table_complete".equals(sourceKey)
+        ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
     String safeSourceKey = sanitizeHiveValue(sourceKey);
     String fileName = UUID.randomUUID().toString() + ".parquet";
     String path = bucketPath + "/year=" + year + "/source_key=" + safeSourceKey
@@ -256,7 +285,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Read the latest state for a (source_key, table_name, phase) combination.
    */
   private String readLatestState(String sourceKey, String tableName, String phase) {
-    String year = extractYear(sourceKey, System.currentTimeMillis());
+    String year = "_table_complete".equals(sourceKey)
+        ? COMPLETION_YEAR : extractYear(sourceKey, System.currentTimeMillis());
     String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
     String sql = "SELECT state FROM read_parquet('" + glob + "', "
@@ -284,6 +314,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   // ===== PipelineTracker Implementation =====
 
   @Override public boolean isComplete(String sourceKey, String tableName, String phase) {
+    // Check stage cache first (populated by bulkGetCompletedTables / getCompletedTables)
+    String cacheKey = sourceKey + "\0" + phase;
+    Set<String> cached = stageCache.get(cacheKey);
+    if (cached != null) {
+      return cached.contains(tableName);
+    }
     String state = readLatestState(sourceKey, tableName, phase);
     return "complete".equals(state);
   }
@@ -291,6 +327,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public void markComplete(String sourceKey, String tableName, String phase,
       long rowCount) {
     writeState(sourceKey, tableName, phase, "complete", rowCount, null, null, null);
+    // Update stage cache
+    String cacheKey = sourceKey + "\0" + phase;
+    Set<String> tables = stageCache.get(cacheKey);
+    if (tables != null) {
+      tables.add(tableName);
+    } else {
+      Set<String> newSet = Collections.newSetFromMap(
+          new ConcurrentHashMap<String, Boolean>());
+      newSet.add(tableName);
+      stageCache.put(cacheKey, newSet);
+    }
   }
 
   @Override public void markError(String sourceKey, String tableName, String phase,
@@ -300,9 +347,22 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   @Override public void markCleared(String sourceKey, String tableName, String phase) {
     writeState(sourceKey, tableName, phase, "cleared", 0, null, null, null);
+    // Update stage cache — remove the cleared table
+    String cacheKey = sourceKey + "\0" + phase;
+    Set<String> tables = stageCache.get(cacheKey);
+    if (tables != null) {
+      tables.remove(tableName);
+    }
   }
 
   @Override public Set<String> getCompletedTables(String sourceKey, String phase) {
+    // Check stage cache first
+    String cacheKey = sourceKey + "\0" + phase;
+    Set<String> cached = stageCache.get(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
     Set<String> tables = new LinkedHashSet<String>();
     String year = extractYear(sourceKey, System.currentTimeMillis());
     String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
@@ -327,6 +387,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       LOGGER.debug("Error getting completed tables for {}/{}: {}",
           sourceKey, phase, e.getMessage());
     }
+    // Cache the result (even if empty — prevents repeated S3 queries for missing data)
+    stageCache.put(cacheKey, tables);
     return tables;
   }
 
@@ -573,38 +635,31 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   // ===== Table Completion =====
 
   @Override public boolean isTableComplete(String pipelineName, String dimensionSignature) {
-    String state = readLatestState("_table_complete", pipelineName, "table_completion");
-    if (!"complete".equals(state)) {
+    // Use in-memory cache first, then fall back to getCachedCompletion
+    CachedCompletion cached = completionCache.get(pipelineName);
+    if (cached == null) {
+      cached = getCachedCompletion(pipelineName);
+    }
+    if (cached == null) {
       return false;
     }
-    // Check signature match
-    String glob = bucketPath + "/year=*/source_key=_table_complete/*.parquet";
-    String sql = "SELECT signature FROM read_parquet('" + glob + "', "
-        + "hive_partitioning=true, union_by_name=true) "
-        + "WHERE table_name = ? AND phase = 'table_completion' AND state = 'complete' "
-        + "ORDER BY as_of DESC LIMIT 1";
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, pipelineName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        if (rs.next()) {
-          return dimensionSignature.equals(rs.getString("signature"));
-        }
-      }
-    } catch (SQLException e) {
-      LOGGER.debug("Error checking table completion for {}: {}", pipelineName, e.getMessage());
-    }
-    return false;
+    return dimensionSignature.equals(cached.signature);
   }
 
   @Override public void markTableComplete(String pipelineName, String dimensionSignature) {
     writeState("_table_complete", pipelineName, "table_completion", "complete",
         0, null, dimensionSignature, null);
+    completionCache.put(pipelineName,
+        new CachedCompletion(null, dimensionSignature, 0, System.currentTimeMillis(), 0));
   }
 
   @Override public void markTableCompleteWithConfig(String pipelineName, String configHash,
       String dimensionSignature, long rowCount) {
     writeState("_table_complete", pipelineName, "table_completion", "complete",
         rowCount, configHash, dimensionSignature, null);
+    completionCache.put(pipelineName,
+        new CachedCompletion(configHash, dimensionSignature, rowCount,
+            System.currentTimeMillis(), 0));
   }
 
   @Override public void markTableCompleteWithSourceWatermark(String pipelineName,
@@ -614,10 +669,20 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String configWithWatermark = configHash + ":wm=" + sourceFileWatermark;
     writeState("_table_complete", pipelineName, "table_completion", "complete",
         rowCount, configWithWatermark, dimensionSignature, null);
+    completionCache.put(pipelineName,
+        new CachedCompletion(configHash, dimensionSignature, rowCount,
+            System.currentTimeMillis(), sourceFileWatermark));
   }
 
   @Override public CachedCompletion getCachedCompletion(String pipelineName) {
-    String glob = bucketPath + "/year=*/source_key=_table_complete/*.parquet";
+    // Check in-memory cache first
+    CachedCompletion memoryCached = completionCache.get(pipelineName);
+    if (memoryCached != null) {
+      return memoryCached;
+    }
+
+    String glob = bucketPath + "/year=" + COMPLETION_YEAR
+        + "/source_key=_table_complete/*.parquet";
     String sql = "SELECT config_hash, signature, row_count, as_of "
         + "FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
         + "WHERE table_name = ? AND phase = 'table_completion' AND state = 'complete' "
@@ -642,7 +707,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
               // ignore
             }
           }
-          return new CachedCompletion(configHash, signature, rowCount, completedAt, watermark);
+          CachedCompletion result =
+              new CachedCompletion(configHash, signature, rowCount, completedAt, watermark);
+          completionCache.put(pipelineName, result);
+          return result;
         }
       }
     } catch (SQLException e) {
@@ -652,6 +720,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public void invalidateTableCompletion(String pipelineName) {
+    completionCache.remove(pipelineName);
     writeState("_table_complete", pipelineName, "table_completion", "cleared",
         0, null, null, null);
   }
@@ -659,6 +728,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public void clearAllCompletions() {
     LOGGER.warn("clearAllCompletions on S3 tracker writes 'cleared' markers. "
         + "Old parquet files remain but are superseded by the cleared state.");
+    completionCache.clear();
     // Write cleared markers for table completion
     writeState("_table_complete", "_all", "table_completion", "cleared",
         0, null, null, null);
@@ -767,6 +837,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         connection = null;
         initialized = false;
         hasAnyTrackerData = null;
+        completionCache.clear();
+        stageCache.clear();
       }
     }
   }

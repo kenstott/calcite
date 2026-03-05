@@ -82,6 +82,33 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
+   * Bulk-preload tracker state for all given accessions into the in-memory cache.
+   *
+   * <p>After this call, subsequent {@link #checkFiling} calls for these accessions
+   * will use cached data instead of individual S3 queries.
+   *
+   * @param accessions all accession numbers to preload
+   */
+  public void preload(Collection<String> accessions) {
+    if (accessions.isEmpty()) {
+      return;
+    }
+    long start = System.currentTimeMillis();
+    // Chunk into batches to avoid DuckDB glob list OOM
+    List<String> accessionList = new ArrayList<String>(accessions);
+    int chunkSize = 5000;
+    int loaded = 0;
+    for (int offset = 0; offset < accessionList.size(); offset += chunkSize) {
+      int end = Math.min(offset + chunkSize, accessionList.size());
+      List<String> chunk = accessionList.subList(offset, end);
+      tracker.bulkGetCompletedTables(chunk, PHASE_STAGING);
+      loaded += chunk.size();
+    }
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("Preloaded tracker state for {} accessions in {}ms", loaded, elapsed);
+  }
+
+  /**
    * Check if a filing needs processing.
    *
    * <p>Implements self-healing: if files exist in S3 but tracker has no state,

@@ -796,6 +796,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.info("Narrowed CIK list from {} to {} using full-index", originalSize, ciks.size());
         }
 
+        // Bulk-preload tracker state for all accessions so per-filing checks are in-memory
+        if (indexCache != null && cache != null) {
+          List<String> allAccessions = new ArrayList<String>();
+          for (int year = startYear; year <= endYear; year++) {
+            allAccessions.addAll(
+                ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
+          }
+          if (!allAccessions.isEmpty()) {
+            cache.preload(allAccessions);
+          }
+        }
+
         // Create processor - pass cache directory as String to support S3 paths
         DocumentETLProcessor processor = new DocumentETLProcessor(
             httpSourceConfig,

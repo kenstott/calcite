@@ -160,6 +160,28 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
         ? CacheDecision.SKIP : CacheDecision.PROCESS;
   }
 
+  /**
+   * Returns all accession numbers loaded from the index for the given year and filing types.
+   *
+   * <p>Used to bulk-preload tracker state for all accessions before processing,
+   * so that per-accession tracker checks become in-memory lookups.
+   *
+   * @param year        The filing year
+   * @param filingTypes Filing types to filter, or null for all
+   * @return list of accession numbers
+   */
+  public List<String> getAllAccessions(int year, List<String> filingTypes) {
+    List<String> accessions = new ArrayList<String>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year == year && matchesFilingType(ie.formType, filingTypes)) {
+          accessions.add(ie.accession);
+        }
+      }
+    }
+    return accessions;
+  }
+
   @Override public Set<String> getActiveCiks(int year, List<String> filingTypes) {
     Set<String> result = new HashSet<String>();
     for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
