@@ -80,6 +80,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    */
   private final Map<String, Set<String>> stageCache =
       new ConcurrentHashMap<String, Set<String>>();
+  /**
+   * Tracks which year+phase combinations have been fully scanned.
+   * Key format: "year\0phase". Once scanned, all source keys for that year
+   * are in the stageCache (either with data or as empty sets).
+   */
+  private final Set<String> scannedYears =
+      Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -162,11 +169,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Bulk-retrieve completed tables for multiple source keys in a single DuckDB query.
+   * Bulk-retrieve completed tables for multiple source keys.
    *
-   * <p>Builds a single {@code read_parquet([glob1, glob2, ...])} call with one
-   * targeted glob per source key, so DuckDB resolves all of them in one S3 round-trip
-   * instead of N sequential queries.
+   * <p>Groups source keys by their extracted year and performs a full year-level
+   * scan for each year. This avoids the DuckDB limitation where
+   * {@code read_parquet([glob1, glob2, ...])} fails with "No files found" if
+   * even one glob pattern matches no files — which silently discards valid data
+   * for all other patterns in the list.
+   *
+   * <p>Year-level scanning reads all tracker files for a year partition in one
+   * query, caches every source key found, then compacts the files into a single
+   * parquet file so future startups read one file instead of thousands.
    */
   @Override public Map<String, Set<String>> bulkGetCompletedTables(
       java.util.Collection<String> sourceKeys, String phase) {
@@ -181,7 +194,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       String cacheKey = sk + "\0" + phase;
       Set<String> cached = stageCache.get(cacheKey);
       if (cached != null) {
-        cachedResults.put(sk, cached);
+        if (!cached.isEmpty()) {
+          cachedResults.put(sk, cached);
+        }
       } else {
         uncachedKeys.add(sk);
       }
@@ -194,47 +209,97 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     LOGGER.info("Bulk loading completed tables for {} source keys (phase={}, {} already cached)",
         uncachedKeys.size(), phase, cachedResults.size());
 
-    // Build per-sourceKey globs with targeted year from accession number
-    // e.g. s3://bucket/year=2026/source_key={safe}/*.parquet
-    // Falls back to year=* only when year can't be extracted
-    StringBuilder globList = new StringBuilder();
-    globList.append('[');
-    boolean first = true;
+    // Group uncached keys by extracted year for year-level scanning
+    Map<String, List<String>> keysByYear = new HashMap<String, List<String>>();
     for (String sk : uncachedKeys) {
-      if (!first) {
-        globList.append(',');
-      }
       String year = extractYear(sk, System.currentTimeMillis());
-      globList.append('\'');
-      globList.append(bucketPath).append("/year=").append(year)
-          .append("/source_key=")
-          .append(sanitizeHiveValue(sk)).append("/*.parquet");
-      globList.append('\'');
-      first = false;
+      List<String> list = keysByYear.get(year);
+      if (list == null) {
+        list = new ArrayList<String>();
+        keysByYear.put(year, list);
+      }
+      list.add(sk);
     }
-    globList.append(']');
+
+    // Scan each year's tracker data (once per year, cached for subsequent calls)
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    for (Map.Entry<String, List<String>> yearEntry : keysByYear.entrySet()) {
+      String year = yearEntry.getKey();
+      List<String> yearKeys = yearEntry.getValue();
+      String scanKey = year + "\0" + phase;
+
+      if (!scannedYears.contains(scanKey)) {
+        scanAndCacheYear(year, phase);
+        scannedYears.add(scanKey);
+      }
+
+      // Collect results from cache for the requested keys
+      for (String sk : yearKeys) {
+        String cacheKey = sk + "\0" + phase;
+        Set<String> cached = stageCache.get(cacheKey);
+        if (cached != null && !cached.isEmpty()) {
+          result.put(sk, cached);
+        }
+      }
+    }
+
+    // Cache empty sets for uncached keys that weren't found in the scan
+    for (String sk : uncachedKeys) {
+      String cacheKey = sk + "\0" + phase;
+      if (!stageCache.containsKey(cacheKey)) {
+        stageCache.put(cacheKey, new LinkedHashSet<String>());
+      }
+    }
+
+    long bulkElapsed = System.currentTimeMillis() - bulkStart;
+    LOGGER.info("Bulk loaded completed tables: {} keys queried, {} with data, {}ms",
+        uncachedKeys.size(), result.size(), bulkElapsed);
+    cachedResults.putAll(result);
+    return cachedResults;
+  }
+
+  /**
+   * Scan ALL tracker data for a year partition, cache results, and compact.
+   *
+   * <p>Reads all parquet files under {@code year=YYYY/}, de-duplicates by
+   * (source_key, table_name) taking the latest state, and populates the
+   * stageCache. Then compacts the files into a single parquet file so
+   * future startups read one file instead of thousands.
+   *
+   * <p>The first scan may be slow (reading thousands of small files), but
+   * after compaction subsequent startups will be near-instant.
+   */
+  private void scanAndCacheYear(String year, String phase) {
+    long start = System.currentTimeMillis();
+    String yearGlob = bucketPath + "/year=" + year + "/**/*.parquet";
+    LOGGER.info("Scanning full tracker year={} (phase={}) — "
+        + "first scan may be slow, compaction will speed up future reads...", year, phase);
 
     String sql = "SELECT source_key, table_name FROM ("
         + "  SELECT source_key, table_name, state, "
         + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn"
-        + "  FROM read_parquet(" + globList + ", "
+        + "  FROM read_parquet('" + yearGlob + "', "
         + "hive_partitioning=false, union_by_name=true)"
         + "  WHERE phase = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
 
-    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    int sourceKeyCount = 0;
+    int tableCount = 0;
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, phase);
       try (ResultSet rs = stmt.executeQuery()) {
         while (rs.next()) {
           String sourceKey = rs.getString("source_key");
           String tableName = rs.getString("table_name");
-          Set<String> tables = result.get(sourceKey);
+          String cacheKey = sourceKey + "\0" + phase;
+          Set<String> tables = stageCache.get(cacheKey);
           if (tables == null) {
             tables = new LinkedHashSet<String>();
-            result.put(sourceKey, tables);
+            stageCache.put(cacheKey, tables);
+            sourceKeyCount++;
           }
           tables.add(tableName);
+          tableCount++;
         }
       }
     } catch (SQLException e) {
@@ -242,34 +307,63 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        // No tracker data — cache empty results for all queried keys
-        for (String sk : uncachedKeys) {
-          stageCache.put(sk + "\0" + phase, new LinkedHashSet<String>());
-        }
-        cachedResults.putAll(result);
-        return cachedResults;
+        LOGGER.info("No tracker data found for year={} ({}ms)",
+            year, System.currentTimeMillis() - start);
+        return;
       }
-      LOGGER.warn("Bulk tracker query failed for {} source keys: {}",
-          uncachedKeys.size(), msg);
+      LOGGER.warn("Failed to scan tracker year={}: {}", year, msg);
+      return;
     }
-    // Populate stage cache for ALL queried source keys (including those with no results)
-    int withData = 0;
-    for (String sk : uncachedKeys) {
-      Set<String> tables = result.get(sk);
-      String cacheKey = sk + "\0" + phase;
-      if (tables != null) {
-        stageCache.put(cacheKey, tables);
-        withData++;
-      } else {
-        stageCache.put(cacheKey, new LinkedHashSet<String>());
-      }
+
+    long scanElapsed = System.currentTimeMillis() - start;
+    LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms",
+        year, sourceKeyCount, tableCount, scanElapsed);
+
+    // Compact the year's tracker files into a single file for faster future reads
+    compactYear(year);
+  }
+
+  /**
+   * Compact all tracker files for a year into a single parquet file.
+   *
+   * <p>Reads all individual tracker files, de-duplicates (latest state per
+   * source_key + table_name + phase), and writes a single compacted file.
+   * This dramatically speeds up future reads from O(N files) to O(1 file).
+   *
+   * <p>The compacted file is written alongside the individual files. On the
+   * next scan, DuckDB reads the compacted file (plus any new individual files
+   * written since compaction) and de-duplicates again. Subsequent compactions
+   * merge everything into a fresh compacted file.
+   */
+  private void compactYear(String year) {
+    long start = System.currentTimeMillis();
+    String yearGlob = bucketPath + "/year=" + year + "/**/*.parquet";
+    String compactedPath = bucketPath + "/year=" + year
+        + "/_compacted/" + UUID.randomUUID().toString() + ".parquet";
+
+    // CAST nullable columns to VARCHAR to handle schema mismatches between files
+    // (NULL-only columns may be inferred as INT32 by DuckDB)
+    String sql = "COPY ("
+        + "  SELECT source_key, table_name, phase, state, row_count, "
+        + "    CAST(config_hash AS VARCHAR) AS config_hash, "
+        + "    CAST(signature AS VARCHAR) AS signature, "
+        + "    CAST(error_message AS VARCHAR) AS error_message, as_of"
+        + "  FROM ("
+        + "    SELECT *, ROW_NUMBER() OVER ("
+        + "      PARTITION BY source_key, table_name, phase ORDER BY as_of DESC"
+        + "    ) AS rn"
+        + "    FROM read_parquet('" + yearGlob + "', "
+        + "      hive_partitioning=false, union_by_name=true)"
+        + "  ) WHERE rn = 1"
+        + ") TO '" + compactedPath + "' (FORMAT PARQUET)";
+
+    try (Statement stmt = getConnection().createStatement()) {
+      stmt.executeUpdate(sql);
+      long elapsed = System.currentTimeMillis() - start;
+      LOGGER.info("Compacted tracker year={} to single file in {}ms", year, elapsed);
+    } catch (SQLException e) {
+      LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
     }
-    long bulkElapsed = System.currentTimeMillis() - bulkStart;
-    LOGGER.info("Bulk loaded completed tables: {} keys queried, {} with data, {}ms",
-        uncachedKeys.size(), withData, bulkElapsed);
-    // Merge cached and freshly-queried results
-    cachedResults.putAll(result);
-    return cachedResults;
   }
 
   /**
@@ -927,6 +1021,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         hasAnyTrackerData = null;
         completionCache.clear();
         stageCache.clear();
+        scannedYears.clear();
       }
     }
   }
