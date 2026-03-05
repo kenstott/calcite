@@ -139,6 +139,9 @@ public class SchemaLifecycleProcessor {
       // Phase 2: Bulk downloads (download once, use many)
       processBulkDownloads(schemaContext);
 
+      // Phase 2b: Preload table completion markers (single S3 query)
+      incrementalTracker.preloadAllCompletions();
+
       // Phase 3: Process each table
       List<EtlPipelineConfig> tables = config.getTables();
       int totalTables = tables.size();

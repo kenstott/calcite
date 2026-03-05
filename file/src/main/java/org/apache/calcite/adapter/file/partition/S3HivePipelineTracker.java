@@ -173,6 +173,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (sourceKeys.isEmpty()) {
       return Collections.emptyMap();
     }
+    long bulkStart = System.currentTimeMillis();
+    LOGGER.info("Bulk loading completed tables for {} source keys (phase={})",
+        sourceKeys.size(), phase);
 
     // Build per-sourceKey globs with targeted year from accession number
     // e.g. s3://bucket/year=2026/source_key={safe}/*.parquet
@@ -232,15 +235,20 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           sourceKeys.size(), msg);
     }
     // Populate stage cache for ALL queried source keys (including those with no results)
+    int withData = 0;
     for (String sk : sourceKeys) {
       Set<String> tables = result.get(sk);
       String cacheKey = sk + "\0" + phase;
       if (tables != null) {
         stageCache.put(cacheKey, tables);
+        withData++;
       } else {
         stageCache.put(cacheKey, new LinkedHashSet<String>());
       }
     }
+    long bulkElapsed = System.currentTimeMillis() - bulkStart;
+    LOGGER.info("Bulk loaded completed tables: {} keys queried, {} with data, {}ms",
+        sourceKeys.size(), withData, bulkElapsed);
     return result;
   }
 
@@ -681,6 +689,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return memoryCached;
     }
 
+    long queryStart = System.currentTimeMillis();
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
     String sql = "SELECT config_hash, signature, row_count, as_of "
@@ -690,6 +699,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, pipelineName);
       try (ResultSet rs = stmt.executeQuery()) {
+        long queryElapsed = System.currentTimeMillis() - queryStart;
         if (rs.next()) {
           String configHash = rs.getString("config_hash");
           String signature = rs.getString("signature");
@@ -710,13 +720,70 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           CachedCompletion result =
               new CachedCompletion(configHash, signature, rowCount, completedAt, watermark);
           completionCache.put(pipelineName, result);
+          LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — found ({} rows)",
+              pipelineName, queryElapsed, rowCount);
           return result;
+        } else {
+          LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — not found",
+              pipelineName, queryElapsed);
         }
       }
     } catch (SQLException e) {
-      LOGGER.debug("Error getting cached completion for {}: {}", pipelineName, e.getMessage());
+      long queryElapsed = System.currentTimeMillis() - queryStart;
+      LOGGER.info("getCachedCompletion({}) S3 query failed after {}ms: {}",
+          pipelineName, queryElapsed, e.getMessage());
     }
     return null;
+  }
+
+  @Override public void preloadAllCompletions() {
+    long start = System.currentTimeMillis();
+    String glob = bucketPath + "/year=" + COMPLETION_YEAR
+        + "/source_key=_table_complete/*.parquet";
+    String sql = "SELECT table_name, config_hash, signature, row_count, as_of "
+        + "FROM ("
+        + "  SELECT table_name, config_hash, signature, row_count, as_of, "
+        + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
+        + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true)"
+        + "  WHERE phase = 'table_completion' AND state = 'complete'"
+        + ") WHERE rn = 1";
+    int count = 0;
+    try (Statement stmt = getConnection().createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        String tableName = rs.getString("table_name");
+        String configHash = rs.getString("config_hash");
+        String signature = rs.getString("signature");
+        long rowCount = rs.getLong("row_count");
+        long completedAt = rs.getLong("as_of");
+
+        long watermark = 0;
+        if (configHash != null && configHash.contains(":wm=")) {
+          int wmIdx = configHash.indexOf(":wm=");
+          try {
+            watermark = Long.parseLong(configHash.substring(wmIdx + 4));
+            configHash = configHash.substring(0, wmIdx);
+          } catch (NumberFormatException e) {
+            // ignore
+          }
+        }
+        completionCache.put(tableName,
+            new CachedCompletion(configHash, signature, rowCount, completedAt, watermark));
+        count++;
+      }
+    } catch (SQLException e) {
+      String msg = e.getMessage();
+      if (msg != null && (msg.contains("No files found")
+          || msg.contains("Could not find")
+          || msg.contains("HTTP 404"))) {
+        LOGGER.info("No table completion markers found ({}ms)", System.currentTimeMillis() - start);
+        return;
+      }
+      LOGGER.warn("Failed to preload table completions: {}", msg);
+      return;
+    }
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("Preloaded {} table completion markers in {}ms", count, elapsed);
   }
 
   @Override public void invalidateTableCompletion(String pipelineName) {

@@ -252,6 +252,17 @@ public interface IncrementalTracker {
   }
 
   /**
+   * Preloads all table completion markers into the in-memory cache.
+   *
+   * <p>S3-backed implementations override this to issue a single query that loads
+   * all {@code _table_complete} markers, avoiding per-table S3 round-trips during
+   * the table processing loop.
+   */
+  default void preloadAllCompletions() {
+    // No-op by default
+  }
+
+  /**
    * Marks a pipeline as complete with source file watermark for incremental detection.
    *
    * <p>The source file watermark is the max lastModified timestamp of all source files

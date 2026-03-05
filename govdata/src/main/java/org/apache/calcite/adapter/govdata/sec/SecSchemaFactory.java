@@ -798,11 +798,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Bulk-preload tracker state for all accessions so per-filing checks are in-memory
         if (indexCache != null && cache != null) {
+          long preloadStart = System.currentTimeMillis();
+          LOGGER.info("Building accession list from full-index for years {}-{}...",
+              startYear, endYear);
           List<String> allAccessions = new ArrayList<String>();
           for (int year = startYear; year <= endYear; year++) {
             allAccessions.addAll(
                 ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
           }
+          LOGGER.info("Collected {} accessions from full-index in {}ms, preloading tracker state...",
+              allAccessions.size(), System.currentTimeMillis() - preloadStart);
           if (!allAccessions.isEmpty()) {
             cache.preload(allAccessions);
           }
