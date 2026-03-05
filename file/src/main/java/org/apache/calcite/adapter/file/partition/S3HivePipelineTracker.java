@@ -336,9 +336,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       List<String> yearKeys = yearEntry.getValue();
 
       if (!scannedYears.contains(year)) {
-        boolean fullData = scanAndCacheYear(year);
+        List<String> scannedFiles = scanAndCacheYear(year);
         scannedYears.add(year);
-        if (fullData) {
+        if (scannedFiles != null) {
           fullyScannedYears.add(year);
         } else {
           LOGGER.info("Year {} scan incomplete — individual queries will occur on demand", year);
@@ -399,11 +399,19 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
 
     // Compact table completion markers (year=0)
-    scanAndCacheYear(COMPLETION_YEAR);
+    // scanAndCacheYear returns the list of individual files it read.
+    // After compaction succeeds, we delete exactly those files (not a fresh listing).
+    List<String> scannedFiles = scanAndCacheYear(COMPLETION_YEAR);
+    if (scannedFiles != null && !scannedFiles.isEmpty()) {
+      deleteSpecificFiles(scannedFiles, COMPLETION_YEAR);
+    }
 
     // Compact each data year (all phases in one pass)
     for (int year = startYear; year <= endYear; year++) {
-      scanAndCacheYear(String.valueOf(year));
+      scannedFiles = scanAndCacheYear(String.valueOf(year));
+      if (scannedFiles != null && !scannedFiles.isEmpty()) {
+        deleteSpecificFiles(scannedFiles, String.valueOf(year));
+      }
     }
 
     long elapsed = System.currentTimeMillis() - start;
@@ -423,9 +431,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    *     compacted file from the in-memory cache so future runs use the fast path.</li>
    * </ol>
    *
-   * @return true if data was successfully loaded (from compacted or full scan)
+   * @return list of individual S3 files that were scanned (empty if fast-path hit),
+   *         or null if the scan failed
    */
-  private boolean scanAndCacheYear(String year) {
+  private List<String> scanAndCacheYear(String year) {
     long start = System.currentTimeMillis();
 
     // Fast path: try compacted file first (O(1) file read, all phases)
@@ -437,7 +446,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       LOGGER.info("Scanned tracker year={} from compacted file: "
           + "{} source keys, {} completed tables, {}ms",
           year, counts[0], counts[1], elapsed);
-      return true;
+      return Collections.emptyList(); // fast path — no individual files to clean up
     }
 
     // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.
@@ -449,7 +458,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (files.isEmpty()) {
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("No tracker data found for year={} ({}ms)", year, elapsed);
-      return true;
+      return Collections.emptyList();
     }
 
     // Download all files in parallel to a local temp dir, then read from disk.
@@ -471,12 +480,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           + "({} files downloaded+read)", year, totalSourceKeys, totalTables, elapsed,
           files.size());
       compactFromCache(year);
-      return true;
+      return files; // return the files that were successfully read and compacted
     } catch (Exception e) {
       LOGGER.warn("Parallel download failed for year={}, falling back to batched S3 reads: {}",
           year, e.getMessage());
       // Fallback: batched S3 reads (all phases)
-      return readBatchedFromS3(files, year, start);
+      if (readBatchedFromS3(files, year, start)) {
+        return files;
+      }
+      return null;
     } finally {
       if (tempDir != null) {
         deleteDir(tempDir);
@@ -758,10 +770,6 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms",
           year, rows.size(), elapsed);
-
-      // Clean up individual files — they're now redundant.
-      // This makes future compactions fast (only new files since last compaction).
-      deleteIndividualTrackerFiles(year);
     } catch (SQLException e) {
       LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
       try (Statement stmt = getConnection().createStatement()) {
@@ -802,36 +810,33 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Delete individual tracker files for a year (source_key=* files, NOT _compacted/).
-   * Called after a successful compaction to prevent re-downloading on next compaction.
+   * Delete specific S3 files that were previously listed and compacted.
+   * Only deletes the exact files passed in — never does a fresh listing.
+   * This ensures we never delete files written after the scan started.
    */
-  private void deleteIndividualTrackerFiles(String year) {
-    String prefix = "year=" + year + "/source_key=";
+  private void deleteSpecificFiles(List<String> s3Files, String year) {
     try {
-      List<String> files = listTrackerFiles(prefix); // already excludes _compacted/
-      if (files.isEmpty()) {
-        return;
-      }
       AmazonS3 client = getS3Client();
       String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
       int slash = path.indexOf('/');
       String bucket = slash > 0 ? path.substring(0, slash) : path;
 
       int deleted = 0;
-      for (String file : files) {
+      for (String file : s3Files) {
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
         client.deleteObject(bucket, key);
         deleted++;
         if (deleted % 10000 == 0) {
-          LOGGER.info("Deleted {}/{} individual tracker files for year={}...",
-              deleted, files.size(), year);
+          LOGGER.info("Deleted {}/{} compacted tracker files for year={}...",
+              deleted, s3Files.size(), year);
         }
       }
-      LOGGER.info("Deleted {} individual tracker files for year={}", deleted, year);
+      LOGGER.info("Deleted {} individual tracker files for year={} (compacted)",
+          deleted, year);
     } catch (Exception e) {
-      LOGGER.warn("Failed to delete individual tracker files for year={}: {}",
+      LOGGER.warn("Failed to delete tracker files for year={}: {}",
           year, e.getMessage());
     }
   }
