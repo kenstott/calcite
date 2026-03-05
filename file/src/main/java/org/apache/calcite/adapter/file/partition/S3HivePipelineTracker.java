@@ -16,6 +16,14 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
+import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,12 +69,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** Fixed year partition for _table_complete markers. Avoids year=* wildcard scans. */
   private static final String COMPLETION_YEAR = "0";
 
+  /** Max files per batch when reading tracker files via explicit list. */
+  private static final int READ_BATCH_SIZE = 200;
+
   private final String bucketPath;
   private final String endpoint;
   private final Map<String, String> config;
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
+  /** Lazy-initialized S3 client for ListObjectsV2 file listing. */
+  private AmazonS3 s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
   /** In-memory cache of table completions for the duration of this tracker instance. */
@@ -117,6 +130,87 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         : bucketPath;
     this.endpoint = endpoint;
     this.config = config != null ? config : Collections.<String, String>emptyMap();
+  }
+
+  /**
+   * Get or create the AWS S3 client for file listing (ListObjectsV2).
+   * Uses the same credentials as DuckDB httpfs.
+   */
+  private AmazonS3 getS3Client() {
+    if (s3Client != null) {
+      return s3Client;
+    }
+    ClientConfiguration clientConfig = new ClientConfiguration();
+    clientConfig.setSocketTimeout(60 * 1000);
+    clientConfig.setConnectionTimeout(30 * 1000);
+
+    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+        .withClientConfiguration(clientConfig);
+
+    String accessKey = config.get("accessKeyId");
+    String secretKey = config.get("secretAccessKey");
+    if (accessKey != null && secretKey != null) {
+      builder.withCredentials(
+          new com.amazonaws.auth.AWSStaticCredentialsProvider(
+              new com.amazonaws.auth.BasicAWSCredentials(accessKey, secretKey)));
+    }
+
+    String region = config.get("region");
+    if (region == null) {
+      region = "us-east-1";
+    }
+
+    if (endpoint != null && !endpoint.isEmpty()) {
+      String cleanEndpoint = endpoint;
+      builder.withEndpointConfiguration(
+          new EndpointConfiguration(cleanEndpoint, region));
+      builder.withPathStyleAccessEnabled(true);
+    } else {
+      builder.withRegion(region);
+    }
+
+    s3Client = builder.build();
+    return s3Client;
+  }
+
+  /**
+   * List tracker parquet files under a prefix using paginated ListObjectsV2.
+   * Excludes files in {@code _compacted/} directories.
+   *
+   * @param prefix S3 key prefix (e.g. "year=2026/source_key=")
+   * @return list of full S3 URIs for matching parquet files
+   */
+  private List<String> listTrackerFiles(String prefix) {
+    // Parse bucket and key from bucketPath (e.g. "s3://bucket/tracker")
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) + "/" + prefix : prefix;
+
+    List<String> files = new ArrayList<String>();
+    ListObjectsV2Request request = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withPrefix(keyPrefix);
+
+    int pages = 0;
+    ListObjectsV2Result result;
+    do {
+      result = getS3Client().listObjectsV2(request);
+      pages++;
+
+      for (S3ObjectSummary summary : result.getObjectSummaries()) {
+        String key = summary.getKey();
+        if (key.endsWith(".parquet") && !key.contains("_compacted/")) {
+          files.add("s3://" + bucket + "/" + key);
+        }
+      }
+
+      request.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+
+    LOGGER.info("Listed {} tracker files under {} ({} pages)",
+        files.size(), prefix, pages);
+    return files;
   }
 
   private Connection getConnection() throws SQLException {
@@ -336,38 +430,72 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return true;
     }
 
-    // Slow path: full scan of individual tracker files
-    // Uses source_key=*/*.parquet (non-recursive) to avoid re-reading _compacted/
-    String fullGlob = bucketPath + "/year=" + year + "/source_key=*/*.parquet";
+    // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.
+    // This avoids DuckDB's glob expansion which tries to list+open all files at once.
     LOGGER.info("Scanning full tracker year={} (phase={}) — "
-        + "first scan, may take several minutes on remote storage...", year, phase);
-    counts = readTrackerGlob(fullGlob, phase);
-    if (counts != null) {
+        + "listing files via S3 API...", year, phase);
+    String prefix = "year=" + year + "/source_key=";
+    List<String> files = listTrackerFiles(prefix);
+
+    if (files.isEmpty()) {
       long elapsed = System.currentTimeMillis() - start;
-      LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms",
-          year, counts[0], counts[1], elapsed);
-      compactFromCache(year);
+      LOGGER.info("No tracker data found for year={} ({}ms)", year, elapsed);
       return true;
     }
 
-    // Both compacted and full scan returned null — either the year is truly empty
-    // or the scan failed (timeout/error). Return true for "no files found" (safe to
-    // cache empty sets) but the logging from readTrackerGlob will distinguish errors.
+    // Read in batches to control memory
+    int totalSourceKeys = 0;
+    int totalTables = 0;
+    for (int i = 0; i < files.size(); i += READ_BATCH_SIZE) {
+      int end = Math.min(i + READ_BATCH_SIZE, files.size());
+      List<String> batch = files.subList(i, end);
+
+      // Build explicit file list for read_parquet([...])
+      StringBuilder fileList = new StringBuilder();
+      for (int j = 0; j < batch.size(); j++) {
+        if (j > 0) {
+          fileList.append(", ");
+        }
+        fileList.append("'").append(batch.get(j)).append("'");
+      }
+
+      int[] batchCounts = readTrackerGlob(
+          "[" + fileList.toString() + "]", phase);
+      if (batchCounts != null) {
+        totalSourceKeys += batchCounts[0];
+        totalTables += batchCounts[1];
+      }
+
+      LOGGER.info("Scanned tracker year={} batch {}/{}: {} files, {} source keys so far",
+          year, (i / READ_BATCH_SIZE) + 1,
+          (files.size() + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE,
+          batch.size(), totalSourceKeys);
+    }
+
     long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("No tracker data found for year={} ({}ms)", year, elapsed);
+    LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms ({} files)",
+        year, totalSourceKeys, totalTables, elapsed, files.size());
+    compactFromCache(year);
     return true;
   }
 
   /**
-   * Read tracker data from a glob pattern and populate the stageCache.
+   * Read tracker data from a glob pattern or explicit file list and populate the stageCache.
    *
+   * @param globOrList glob pattern (e.g. "s3://bucket/year=0/_compacted/*.parquet")
+   *                   or explicit list (e.g. "['s3://bucket/file1.parquet', ...]")
+   * @param phase      tracker phase to filter on
    * @return int[]{sourceKeyCount, tableCount} on success, null on "no files found"
    */
-  private int[] readTrackerGlob(String glob, String phase) {
+  private int[] readTrackerGlob(String globOrList, String phase) {
+    // If it starts with '[', it's an explicit file list — don't wrap in quotes
+    String parquetArg = globOrList.startsWith("[")
+        ? globOrList
+        : "'" + globOrList + "'";
     String sql = "SELECT source_key, table_name FROM ("
         + "  SELECT source_key, table_name, state, "
         + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn"
-        + "  FROM read_parquet('" + glob + "', "
+        + "  FROM read_parquet(" + parquetArg + ", "
         + "hive_partitioning=false, union_by_name=true)"
         + "  WHERE phase = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
@@ -398,7 +526,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           || msg.contains("HTTP 404"))) {
         return null;
       }
-      LOGGER.warn("Failed to read tracker from {}: {}", glob, msg);
+      LOGGER.warn("Failed to read tracker from {}: {}", globOrList, msg);
       return null;
     }
     return new int[]{sourceKeyCount, tableCount};
@@ -1147,6 +1275,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         stageCache.clear();
         scannedYears.clear();
         fullyScannedYears.clear();
+      }
+      if (s3Client != null) {
+        try {
+          s3Client.shutdown();
+        } catch (Exception e) {
+          // ignore
+        }
+        s3Client = null;
       }
     }
   }
