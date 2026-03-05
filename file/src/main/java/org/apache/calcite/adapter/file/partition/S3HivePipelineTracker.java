@@ -738,6 +738,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   @Override public void preloadAllCompletions() {
     long start = System.currentTimeMillis();
+    LOGGER.info("Preloading all table completion markers from S3 (year={})...", COMPLETION_YEAR);
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
     String sql = "SELECT table_name, config_hash, signature, row_count, as_of "
