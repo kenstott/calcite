@@ -44,6 +44,7 @@ public class EtlRunConfig {
   private final File modelFile;
   private final boolean compact;
   private final boolean compactOnly;
+  private final boolean noCompact;
   private final boolean dryRun;
   private final boolean verbose;
   private final File manifestFile;
@@ -54,6 +55,7 @@ public class EtlRunConfig {
     this.modelFile = builder.modelFile;
     this.compact = builder.compact;
     this.compactOnly = builder.compactOnly;
+    this.noCompact = builder.noCompact;
     this.dryRun = builder.dryRun;
     this.verbose = builder.verbose;
     this.manifestFile = builder.manifestFile;
@@ -86,6 +88,9 @@ public class EtlRunConfig {
           break;
         case "--compact-only":
           builder.compactOnly(true);
+          break;
+        case "--no-compact":
+          builder.noCompact(true);
           break;
         case "--dry-run":
           builder.dryRun(true);
@@ -127,6 +132,7 @@ public class EtlRunConfig {
     System.out.println("  --model <file>    Model JSON file (required)");
     System.out.println("  --compact         Minimal output for scripting");
     System.out.println("  --compact-only    Scan and compact tracker data only (no ETL)");
+    System.out.println("  --no-compact      Disable compaction on first read (for parallel workers)");
     System.out.println("  --dry-run         Validate model without executing ETL");
     System.out.println("  --verbose         Detailed progress output");
     System.out.println("  --manifest <file> Custom manifest file path");
@@ -221,6 +227,10 @@ public class EtlRunConfig {
     return compactOnly;
   }
 
+  public boolean isNoCompact() {
+    return noCompact;
+  }
+
   public boolean isDryRun() {
     return dryRun;
   }
@@ -291,6 +301,7 @@ public class EtlRunConfig {
     private File modelFile;
     private boolean compact = false;
     private boolean compactOnly = false;
+    private boolean noCompact = false;
     private boolean dryRun = false;
     private boolean verbose = false;
     private File manifestFile;
@@ -307,6 +318,11 @@ public class EtlRunConfig {
 
     public Builder compactOnly(boolean compactOnly) {
       this.compactOnly = compactOnly;
+      return this;
+    }
+
+    public Builder noCompact(boolean noCompact) {
+      this.noCompact = noCompact;
       return this;
     }
 

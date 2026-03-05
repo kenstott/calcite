@@ -110,6 +110,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final Set<String> fullyScannedYears =
       Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
+  /** When true, skip compaction and file deletion during reads (for parallel worker mode). */
+  private final boolean noCompact;
+
   /**
    * Create an S3-backed pipeline tracker.
    *
@@ -133,6 +136,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         : bucketPath;
     this.endpoint = endpoint;
     this.config = config != null ? config : Collections.<String, String>emptyMap();
+    this.noCompact = "true".equals(System.getProperty("calcite.tracker.noCompact"));
+    if (this.noCompact) {
+      LOGGER.info("No-compact mode: tracker will read but not compact or delete files");
+    }
   }
 
   /**
@@ -340,7 +347,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         scannedYears.add(year);
         if (scannedFiles != null) {
           fullyScannedYears.add(year);
-          if (!scannedFiles.isEmpty()) {
+          if (!noCompact && !scannedFiles.isEmpty()) {
             deleteSpecificFiles(scannedFiles, year);
           }
         } else {
@@ -482,8 +489,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms "
           + "({} files downloaded+read)", year, totalSourceKeys, totalTables, elapsed,
           files.size());
-      compactFromCache(year);
-      return files; // return the files that were successfully read and compacted
+      if (!noCompact) {
+        compactFromCache(year);
+      }
+      return files; // return the files that were successfully read (and compacted if enabled)
     } catch (Exception e) {
       LOGGER.warn("Parallel download failed for year={}, falling back to batched S3 reads: {}",
           year, e.getMessage());
@@ -628,7 +637,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms ({} files)",
         year, totalSourceKeys, totalTables, elapsed, files.size());
-    compactFromCache(year);
+    if (!noCompact) {
+      compactFromCache(year);
+    }
     return true;
   }
 

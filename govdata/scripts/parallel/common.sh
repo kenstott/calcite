@@ -425,10 +425,13 @@ run_etl() {
   get_heap_config "$worker_id"
 
   # Build extra flags
-  local compact_flag=""
+  local extra_flags=""
   if [ "${ETL_COMPACT_ONLY:-}" = "true" ]; then
-    compact_flag="--compact-only"
+    extra_flags="--compact-only"
     echo "[$worker_id] COMPACT-ONLY mode: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  elif [ "${ETL_NO_COMPACT:-}" = "true" ]; then
+    extra_flags="--no-compact"
+    echo "[$worker_id] NO-COMPACT mode: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   else
     echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   fi
@@ -444,7 +447,7 @@ run_etl() {
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
     --verbose \
-    $compact_flag \
+    $extra_flags \
     "$@" \
     2>&1 | stdbuf -oL tee "$log_file"
 

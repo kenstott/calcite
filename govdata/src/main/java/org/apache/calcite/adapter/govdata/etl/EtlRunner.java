@@ -144,6 +144,11 @@ public class EtlRunner {
       return compactTrackerOnly(schemas);
     }
 
+    if (config.isNoCompact()) {
+      log("No-compact mode — tracker will read but not compact or delete individual files");
+      System.setProperty("calcite.tracker.noCompact", "true");
+    }
+
     // Process schemas sequentially
     int processed = 0;
     int succeeded = 0;
