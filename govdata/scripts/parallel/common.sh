@@ -374,6 +374,36 @@ generate_single_schema_model() {
 ENDJSON
 }
 
+# Determine heap sizes for a worker based on its type.
+# Crime worker (worker-21) needs more memory for large dimension expansion;
+# SEC workers (worker-23+) are lighter and can run with less.
+# Usage: get_heap_config <worker_id>
+# Sets: _HEAP_MIN, _HEAP_MAX
+get_heap_config() {
+  local worker_id=$1
+
+  # Allow env overrides to take precedence
+  if [ -n "${ETL_HEAP_MIN:-}" ] && [ -n "${ETL_HEAP_MAX:-}" ]; then
+    _HEAP_MIN="$ETL_HEAP_MIN"
+    _HEAP_MAX="$ETL_HEAP_MAX"
+    return
+  fi
+
+  # Extract worker number (e.g., "worker-21" -> 21)
+  local num
+  num=$(echo "$worker_id" | grep -oP '\d+' | head -1)
+
+  if [ "$num" -ge 23 ] && [ "$num" -le 40 ]; then
+    # SEC Secondary workers (8-K, proxy, insider): lighter workload
+    _HEAP_MIN="1g"
+    _HEAP_MAX="2g"
+  else
+    # SEC Primary (1-17: 10-K/10-Q), non-SEC data (18-22), crime (21): need full heap
+    _HEAP_MIN="2g"
+    _HEAP_MAX="3g"
+  fi
+}
+
 # Run the ETL with a given model file
 # Usage: run_etl <model_file> <worker_id> [extra_args...]
 run_etl() {
@@ -390,15 +420,19 @@ run_etl() {
   timestamp=$(date +%Y%m%d_%H%M%S)
   local log_file="$log_dir/etl_${timestamp}.log"
 
-  echo "[$worker_id] Starting ETL with model: $model_file"
+  # Determine per-worker heap sizes
+  local _HEAP_MIN _HEAP_MAX
+  get_heap_config "$worker_id"
+
+  echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   echo "[$worker_id] Log: $log_file"
 
   # Ensure Ctrl-C kills the java process, not just tee
   trap 'kill 0' INT TERM
 
   java \
-    -Xms"${ETL_HEAP_MIN:-2g}" \
-    -Xmx"${ETL_HEAP_MAX:-3g}" \
+    -Xms"${_HEAP_MIN}" \
+    -Xmx"${_HEAP_MAX}" \
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
