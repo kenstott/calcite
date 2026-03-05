@@ -391,6 +391,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     LOGGER.info("Compacting tracker years {}-{} (plus completion markers)...",
         startYear, endYear);
 
+    // Delete existing compacted files so the slow path runs and captures
+    // any new tracker entries written since the last compaction.
+    deleteCompactedFiles(COMPLETION_YEAR);
+    for (int year = startYear; year <= endYear; year++) {
+      deleteCompactedFiles(String.valueOf(year));
+    }
+
     // Compact table completion markers (year=0)
     scanAndCacheYear(COMPLETION_YEAR);
 
@@ -751,6 +758,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms",
           year, rows.size(), elapsed);
+
+      // Clean up individual files — they're now redundant.
+      // This makes future compactions fast (only new files since last compaction).
+      deleteIndividualTrackerFiles(year);
     } catch (SQLException e) {
       LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
       try (Statement stmt = getConnection().createStatement()) {
@@ -759,6 +770,99 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         // ignore cleanup failure
       }
     }
+  }
+
+  /**
+   * Delete existing compacted files for a year partition.
+   * Called before re-compaction to ensure the slow path runs and captures
+   * any new tracker entries written since the last compaction.
+   */
+  private void deleteCompactedFiles(String year) {
+    String prefix = "year=" + year + "/_compacted/";
+    try {
+      List<String> files = listTrackerFilesIncludeCompacted(prefix);
+      if (files.isEmpty()) {
+        return;
+      }
+      AmazonS3 client = getS3Client();
+      String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+      int slash = path.indexOf('/');
+      String bucket = slash > 0 ? path.substring(0, slash) : path;
+
+      for (String file : files) {
+        String filePath = file.startsWith("s3://") ? file.substring(5) : file;
+        int fileSlash = filePath.indexOf('/');
+        String key = filePath.substring(fileSlash + 1);
+        client.deleteObject(bucket, key);
+      }
+      LOGGER.info("Deleted {} compacted files for year={}", files.size(), year);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to delete compacted files for year={}: {}", year, e.getMessage());
+    }
+  }
+
+  /**
+   * Delete individual tracker files for a year (source_key=* files, NOT _compacted/).
+   * Called after a successful compaction to prevent re-downloading on next compaction.
+   */
+  private void deleteIndividualTrackerFiles(String year) {
+    String prefix = "year=" + year + "/source_key=";
+    try {
+      List<String> files = listTrackerFiles(prefix); // already excludes _compacted/
+      if (files.isEmpty()) {
+        return;
+      }
+      AmazonS3 client = getS3Client();
+      String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+      int slash = path.indexOf('/');
+      String bucket = slash > 0 ? path.substring(0, slash) : path;
+
+      int deleted = 0;
+      for (String file : files) {
+        String filePath = file.startsWith("s3://") ? file.substring(5) : file;
+        int fileSlash = filePath.indexOf('/');
+        String key = filePath.substring(fileSlash + 1);
+        client.deleteObject(bucket, key);
+        deleted++;
+        if (deleted % 10000 == 0) {
+          LOGGER.info("Deleted {}/{} individual tracker files for year={}...",
+              deleted, files.size(), year);
+        }
+      }
+      LOGGER.info("Deleted {} individual tracker files for year={}", deleted, year);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to delete individual tracker files for year={}: {}",
+          year, e.getMessage());
+    }
+  }
+
+  /**
+   * List files under a prefix, including files in _compacted/ directories.
+   */
+  private List<String> listTrackerFilesIncludeCompacted(String prefix) {
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) + "/" + prefix : prefix;
+
+    List<String> files = new ArrayList<String>();
+    ListObjectsV2Request request = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withPrefix(keyPrefix);
+
+    ListObjectsV2Result result;
+    do {
+      result = getS3Client().listObjectsV2(request);
+      for (S3ObjectSummary summary : result.getObjectSummaries()) {
+        String key = summary.getKey();
+        if (key.endsWith(".parquet")) {
+          files.add("s3://" + bucket + "/" + key);
+        }
+      }
+      request.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+
+    return files;
   }
 
   /**
