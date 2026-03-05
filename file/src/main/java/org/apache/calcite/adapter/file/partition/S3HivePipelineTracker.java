@@ -96,13 +96,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final Map<String, Set<String>> stageCache =
       new ConcurrentHashMap<String, Set<String>>();
   /**
-   * Tracks which year+phase combinations have been attempted (prevents retries).
-   * Key format: "year\0phase".
+   * Tracks which years have been scanned (prevents retries).
+   * Key is just the year string (e.g. "2026", "0").
+   * Scans always load ALL phases — no phase-level tracking needed.
    */
   private final Set<String> scannedYears =
       Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   /**
-   * Tracks which year+phase combinations were fully scanned with complete data.
+   * Tracks which years were fully scanned with complete data.
    * Only when a year is fully scanned is it safe to cache empty sets for missing
    * source keys (meaning they genuinely have no tracker data).
    */
@@ -328,18 +329,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       list.add(sk);
     }
 
-    // Scan each year's tracker data (once per year, cached for subsequent calls)
+    // Scan each year's tracker data (once per year, ALL phases, cached for subsequent calls)
     Map<String, Set<String>> result = new HashMap<String, Set<String>>();
     for (Map.Entry<String, List<String>> yearEntry : keysByYear.entrySet()) {
       String year = yearEntry.getKey();
       List<String> yearKeys = yearEntry.getValue();
-      String scanKey = year + "\0" + phase;
 
-      if (!scannedYears.contains(scanKey)) {
-        boolean fullData = scanAndCacheYear(year, phase);
-        scannedYears.add(scanKey);
+      if (!scannedYears.contains(year)) {
+        boolean fullData = scanAndCacheYear(year);
+        scannedYears.add(year);
         if (fullData) {
-          fullyScannedYears.add(scanKey);
+          fullyScannedYears.add(year);
         } else {
           LOGGER.info("Year {} scan incomplete — individual queries will occur on demand", year);
         }
@@ -362,9 +362,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (!stageCache.containsKey(cacheKey)) {
         String year = "_table_complete".equals(sk)
             ? COMPLETION_YEAR : extractYear(sk, System.currentTimeMillis());
-        String scanKey = year + "\0" + phase;
         // Only cache empty if year was fully scanned (not just attempted)
-        if (fullyScannedYears.contains(scanKey)) {
+        if (fullyScannedYears.contains(year)) {
           stageCache.put(cacheKey, new LinkedHashSet<String>());
         }
       }
@@ -393,12 +392,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         startYear, endYear);
 
     // Compact table completion markers (year=0)
-    scanAndCacheYear(COMPLETION_YEAR, "table_completion");
+    scanAndCacheYear(COMPLETION_YEAR);
 
-    // Compact each data year for both staging and incremental phases
+    // Compact each data year (all phases in one pass)
     for (int year = startYear; year <= endYear; year++) {
-      scanAndCacheYear(String.valueOf(year), "staging");
-      scanAndCacheYear(String.valueOf(year), "incremental");
+      scanAndCacheYear(String.valueOf(year));
     }
 
     long elapsed = System.currentTimeMillis() - start;
@@ -420,14 +418,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    *
    * @return true if data was successfully loaded (from compacted or full scan)
    */
-  private boolean scanAndCacheYear(String year, String phase) {
+  private boolean scanAndCacheYear(String year) {
     long start = System.currentTimeMillis();
 
-    // Fast path: try compacted file first (O(1) file read)
+    // Fast path: try compacted file first (O(1) file read, all phases)
     String compactedGlob = bucketPath + "/year=" + year + "/_compacted/*.parquet";
-    LOGGER.info("Scanning tracker year={} (phase={}) — checking for compacted file...",
-        year, phase);
-    int[] counts = readTrackerGlob(compactedGlob, phase);
+    LOGGER.info("Scanning tracker year={} — checking for compacted file...", year);
+    int[] counts = readTrackerGlobAllPhases(compactedGlob);
     if (counts != null) {
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("Scanned tracker year={} from compacted file: "
@@ -438,8 +435,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.
     // This avoids DuckDB's glob expansion which tries to list+open all files at once.
-    LOGGER.info("Scanning full tracker year={} (phase={}) — "
-        + "listing files via S3 API...", year, phase);
+    LOGGER.info("Scanning full tracker year={} — listing files via S3 API...", year);
     String prefix = "year=" + year + "/source_key=";
     List<String> files = listTrackerFiles(prefix);
 
@@ -456,7 +452,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     try {
       tempDir = downloadTrackerFilesParallel(files, year);
       String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
-      int[] localCounts = readTrackerGlob(localGlob, phase);
+      // Read ALL phases (not just the requested one) so the compacted file
+      // contains complete data. Otherwise phase data read first "shadows"
+      // other phases when the compacted file replaces raw files.
+      int[] localCounts = readTrackerGlobAllPhases(localGlob);
       int totalSourceKeys = localCounts != null ? localCounts[0] : 0;
       int totalTables = localCounts != null ? localCounts[1] : 0;
 
@@ -469,8 +468,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     } catch (Exception e) {
       LOGGER.warn("Parallel download failed for year={}, falling back to batched S3 reads: {}",
           year, e.getMessage());
-      // Fallback: batched S3 reads
-      return readBatchedFromS3(files, year, phase, start);
+      // Fallback: batched S3 reads (all phases)
+      return readBatchedFromS3(files, year, start);
     } finally {
       if (tempDir != null) {
         deleteDir(tempDir);
@@ -576,8 +575,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return tempDir;
   }
 
-  /** Fallback: batched S3 reads when parallel download fails. */
-  private boolean readBatchedFromS3(List<String> files, String year, String phase, long start) {
+  /** Fallback: batched S3 reads (all phases) when parallel download fails. */
+  private boolean readBatchedFromS3(List<String> files, String year, long start) {
     int totalSourceKeys = 0;
     int totalTables = 0;
     for (int i = 0; i < files.size(); i += READ_BATCH_SIZE) {
@@ -592,7 +591,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         fileList.append("'").append(batch.get(j)).append("'");
       }
 
-      int[] batchCounts = readTrackerGlob("[" + fileList.toString() + "]", phase);
+      int[] batchCounts = readTrackerGlobAllPhases("[" + fileList.toString() + "]");
       if (batchCounts != null) {
         totalSourceKeys += batchCounts[0];
         totalTables += batchCounts[1];
@@ -627,44 +626,42 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Read tracker data from a glob pattern or explicit file list and populate the stageCache.
+   * Read tracker data from ALL phases and populate the stageCache.
+   * Unlike {@link #readTrackerGlob}, this does not filter by phase,
+   * so the cache (and subsequent compacted file) contains complete data.
    *
-   * @param globOrList glob pattern (e.g. "s3://bucket/year=0/_compacted/*.parquet")
-   *                   or explicit list (e.g. "['s3://bucket/file1.parquet', ...]")
-   * @param phase      tracker phase to filter on
+   * @param globOrList glob pattern or explicit file list
    * @return int[]{sourceKeyCount, tableCount} on success, null on "no files found"
    */
-  private int[] readTrackerGlob(String globOrList, String phase) {
-    // If it starts with '[', it's an explicit file list — don't wrap in quotes
+  private int[] readTrackerGlobAllPhases(String globOrList) {
     String parquetArg = globOrList.startsWith("[")
         ? globOrList
         : "'" + globOrList + "'";
-    String sql = "SELECT source_key, table_name FROM ("
-        + "  SELECT source_key, table_name, state, "
-        + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn"
+    String sql = "SELECT source_key, table_name, phase FROM ("
+        + "  SELECT source_key, table_name, phase, state, "
+        + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name, phase"
+        + "      ORDER BY as_of DESC) AS rn"
         + "  FROM read_parquet(" + parquetArg + ", "
         + "hive_partitioning=false, union_by_name=true)"
-        + "  WHERE phase = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
 
     int sourceKeyCount = 0;
     int tableCount = 0;
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, phase);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          String sourceKey = rs.getString("source_key");
-          String tableName = rs.getString("table_name");
-          String cacheKey = sourceKey + "\0" + phase;
-          Set<String> tables = stageCache.get(cacheKey);
-          if (tables == null) {
-            tables = new LinkedHashSet<String>();
-            stageCache.put(cacheKey, tables);
-            sourceKeyCount++;
-          }
-          tables.add(tableName);
-          tableCount++;
+    try (Statement stmt = getConnection().createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        String sourceKey = rs.getString("source_key");
+        String tableName = rs.getString("table_name");
+        String phase = rs.getString("phase");
+        String cacheKey = sourceKey + "\0" + phase;
+        Set<String> tables = stageCache.get(cacheKey);
+        if (tables == null) {
+          tables = new LinkedHashSet<String>();
+          stageCache.put(cacheKey, tables);
+          sourceKeyCount++;
         }
+        tables.add(tableName);
+        tableCount++;
       }
     } catch (SQLException e) {
       String msg = e.getMessage();
