@@ -43,6 +43,7 @@ public class EtlRunConfig {
 
   private final File modelFile;
   private final boolean compact;
+  private final boolean compactOnly;
   private final boolean dryRun;
   private final boolean verbose;
   private final File manifestFile;
@@ -52,6 +53,7 @@ public class EtlRunConfig {
   private EtlRunConfig(Builder builder) throws IOException {
     this.modelFile = builder.modelFile;
     this.compact = builder.compact;
+    this.compactOnly = builder.compactOnly;
     this.dryRun = builder.dryRun;
     this.verbose = builder.verbose;
     this.manifestFile = builder.manifestFile;
@@ -81,6 +83,9 @@ public class EtlRunConfig {
           break;
         case "--compact":
           builder.compact(true);
+          break;
+        case "--compact-only":
+          builder.compactOnly(true);
           break;
         case "--dry-run":
           builder.dryRun(true);
@@ -121,6 +126,7 @@ public class EtlRunConfig {
     System.out.println("Options:");
     System.out.println("  --model <file>    Model JSON file (required)");
     System.out.println("  --compact         Minimal output for scripting");
+    System.out.println("  --compact-only    Scan and compact tracker data only (no ETL)");
     System.out.println("  --dry-run         Validate model without executing ETL");
     System.out.println("  --verbose         Detailed progress output");
     System.out.println("  --manifest <file> Custom manifest file path");
@@ -211,6 +217,10 @@ public class EtlRunConfig {
     return compact;
   }
 
+  public boolean isCompactOnly() {
+    return compactOnly;
+  }
+
   public boolean isDryRun() {
     return dryRun;
   }
@@ -280,6 +290,7 @@ public class EtlRunConfig {
   public static class Builder {
     private File modelFile;
     private boolean compact = false;
+    private boolean compactOnly = false;
     private boolean dryRun = false;
     private boolean verbose = false;
     private File manifestFile;
@@ -291,6 +302,11 @@ public class EtlRunConfig {
 
     public Builder compact(boolean compact) {
       this.compact = compact;
+      return this;
+    }
+
+    public Builder compactOnly(boolean compactOnly) {
+      this.compactOnly = compactOnly;
       return this;
     }
 

@@ -424,7 +424,14 @@ run_etl() {
   local _HEAP_MIN _HEAP_MAX
   get_heap_config "$worker_id"
 
-  echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  # Build extra flags
+  local compact_flag=""
+  if [ "${ETL_COMPACT_ONLY:-}" = "true" ]; then
+    compact_flag="--compact-only"
+    echo "[$worker_id] COMPACT-ONLY mode: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  else
+    echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  fi
   echo "[$worker_id] Log: $log_file"
 
   # Ensure Ctrl-C kills the java process, not just tee
@@ -437,6 +444,7 @@ run_etl() {
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
     --verbose \
+    $compact_flag \
     "$@" \
     2>&1 | stdbuf -oL tee "$log_file"
 

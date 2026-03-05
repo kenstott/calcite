@@ -81,11 +81,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final Map<String, Set<String>> stageCache =
       new ConcurrentHashMap<String, Set<String>>();
   /**
-   * Tracks which year+phase combinations have been fully scanned.
-   * Key format: "year\0phase". Once scanned, all source keys for that year
-   * are in the stageCache (either with data or as empty sets).
+   * Tracks which year+phase combinations have been attempted (prevents retries).
+   * Key format: "year\0phase".
    */
   private final Set<String> scannedYears =
+      Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+  /**
+   * Tracks which year+phase combinations were fully scanned with complete data.
+   * Only when a year is fully scanned is it safe to cache empty sets for missing
+   * source keys (meaning they genuinely have no tracker data).
+   */
+  private final Set<String> fullyScannedYears =
       Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
   /**
@@ -229,8 +235,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       String scanKey = year + "\0" + phase;
 
       if (!scannedYears.contains(scanKey)) {
-        scanAndCacheYear(year, phase);
+        boolean fullData = scanAndCacheYear(year, phase);
         scannedYears.add(scanKey);
+        if (fullData) {
+          fullyScannedYears.add(scanKey);
+        } else {
+          LOGGER.info("Year {} scan incomplete — individual queries will occur on demand", year);
+        }
       }
 
       // Collect results from cache for the requested keys
@@ -243,11 +254,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       }
     }
 
-    // Cache empty sets for uncached keys that weren't found in the scan
+    // Cache empty sets for uncached keys that weren't found in the scan.
+    // Only safe when the year was fully scanned (compacted or full scan succeeded).
     for (String sk : uncachedKeys) {
       String cacheKey = sk + "\0" + phase;
       if (!stageCache.containsKey(cacheKey)) {
-        stageCache.put(cacheKey, new LinkedHashSet<String>());
+        String year = extractYear(sk, System.currentTimeMillis());
+        String scanKey = year + "\0" + phase;
+        // Only cache empty if year was fully scanned (not just attempted)
+        if (fullyScannedYears.contains(scanKey)) {
+          stageCache.put(cacheKey, new LinkedHashSet<String>());
+        }
       }
     }
 
@@ -259,26 +276,96 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Scan ALL tracker data for a year partition, cache results, and compact.
+   * Scan and compact tracker data for a range of years.
    *
-   * <p>Reads all parquet files under {@code year=YYYY/}, de-duplicates by
-   * (source_key, table_name) taking the latest state, and populates the
-   * stageCache. Then compacts the files into a single parquet file so
-   * future startups read one file instead of thousands.
+   * <p>For each year in the range, reads all tracker files (or the existing
+   * compacted file), caches the data, and writes a compacted file. This is
+   * intended for standalone compaction runs ({@code --compact-only}) to prepare
+   * tracker data for fast reads on subsequent ETL runs.
    *
-   * <p>The first scan may be slow (reading thousands of small files), but
-   * after compaction subsequent startups will be near-instant.
+   * <p>Also compacts year=0 (table completion markers).
    */
-  private void scanAndCacheYear(String year, String phase) {
+  public void compactYearRange(int startYear, int endYear) {
     long start = System.currentTimeMillis();
-    String yearGlob = bucketPath + "/year=" + year + "/**/*.parquet";
-    LOGGER.info("Scanning full tracker year={} (phase={}) — "
-        + "first scan may be slow, compaction will speed up future reads...", year, phase);
+    LOGGER.info("Compacting tracker years {}-{} (plus completion markers)...",
+        startYear, endYear);
 
+    // Compact table completion markers (year=0)
+    scanAndCacheYear(COMPLETION_YEAR, "table_completion");
+
+    // Compact each data year for both staging and incremental phases
+    for (int year = startYear; year <= endYear; year++) {
+      scanAndCacheYear(String.valueOf(year), "staging");
+      scanAndCacheYear(String.valueOf(year), "incremental");
+    }
+
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("Tracker compaction complete: years {}-{} in {}ms",
+        startYear, endYear, elapsed);
+  }
+
+  /**
+   * Scan tracker data for a year partition and cache results.
+   *
+   * <p>Two-phase approach:
+   * <ol>
+   * <li><b>Fast path</b>: Read {@code _compacted/*.parquet} (single file, instant).
+   *     Available after a previous run compacted the tracker data.</li>
+   * <li><b>Slow path</b>: Read {@code source_key=*&#47;*.parquet} (all individual files).
+   *     Only needed on the first run for each year. After scanning, writes a
+   *     compacted file from the in-memory cache so future runs use the fast path.</li>
+   * </ol>
+   *
+   * @return true if data was successfully loaded (from compacted or full scan)
+   */
+  private boolean scanAndCacheYear(String year, String phase) {
+    long start = System.currentTimeMillis();
+
+    // Fast path: try compacted file first (O(1) file read)
+    String compactedGlob = bucketPath + "/year=" + year + "/_compacted/*.parquet";
+    LOGGER.info("Scanning tracker year={} (phase={}) — checking for compacted file...",
+        year, phase);
+    int[] counts = readTrackerGlob(compactedGlob, phase);
+    if (counts != null) {
+      long elapsed = System.currentTimeMillis() - start;
+      LOGGER.info("Scanned tracker year={} from compacted file: "
+          + "{} source keys, {} completed tables, {}ms",
+          year, counts[0], counts[1], elapsed);
+      return true;
+    }
+
+    // Slow path: full scan of individual tracker files
+    // Uses source_key=*/*.parquet (non-recursive) to avoid re-reading _compacted/
+    String fullGlob = bucketPath + "/year=" + year + "/source_key=*/*.parquet";
+    LOGGER.info("Scanning full tracker year={} (phase={}) — "
+        + "first scan, may take several minutes on remote storage...", year, phase);
+    counts = readTrackerGlob(fullGlob, phase);
+    if (counts != null) {
+      long elapsed = System.currentTimeMillis() - start;
+      LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms",
+          year, counts[0], counts[1], elapsed);
+      compactFromCache(year);
+      return true;
+    }
+
+    // Both compacted and full scan returned null — either the year is truly empty
+    // or the scan failed (timeout/error). Return true for "no files found" (safe to
+    // cache empty sets) but the logging from readTrackerGlob will distinguish errors.
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("No tracker data found for year={} ({}ms)", year, elapsed);
+    return true;
+  }
+
+  /**
+   * Read tracker data from a glob pattern and populate the stageCache.
+   *
+   * @return int[]{sourceKeyCount, tableCount} on success, null on "no files found"
+   */
+  private int[] readTrackerGlob(String glob, String phase) {
     String sql = "SELECT source_key, table_name FROM ("
         + "  SELECT source_key, table_name, state, "
         + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn"
-        + "  FROM read_parquet('" + yearGlob + "', "
+        + "  FROM read_parquet('" + glob + "', "
         + "hive_partitioning=false, union_by_name=true)"
         + "  WHERE phase = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
@@ -307,62 +394,95 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        LOGGER.info("No tracker data found for year={} ({}ms)",
-            year, System.currentTimeMillis() - start);
-        return;
+        return null;
       }
-      LOGGER.warn("Failed to scan tracker year={}: {}", year, msg);
-      return;
+      LOGGER.warn("Failed to read tracker from {}: {}", glob, msg);
+      return null;
     }
-
-    long scanElapsed = System.currentTimeMillis() - start;
-    LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms",
-        year, sourceKeyCount, tableCount, scanElapsed);
-
-    // Compact the year's tracker files into a single file for faster future reads
-    compactYear(year);
+    return new int[]{sourceKeyCount, tableCount};
   }
 
   /**
-   * Compact all tracker files for a year into a single parquet file.
+   * Write a compacted tracker file from the in-memory stageCache.
    *
-   * <p>Reads all individual tracker files, de-duplicates (latest state per
-   * source_key + table_name + phase), and writes a single compacted file.
-   * This dramatically speeds up future reads from O(N files) to O(1 file).
+   * <p>Collects all cached (source_key, table_name) pairs for the given year,
+   * writes them to a single parquet file in {@code _compacted/}. This avoids
+   * re-reading thousands of small files from S3 — the data is already in memory.
    *
-   * <p>The compacted file is written alongside the individual files. On the
-   * next scan, DuckDB reads the compacted file (plus any new individual files
-   * written since compaction) and de-duplicates again. Subsequent compactions
-   * merge everything into a fresh compacted file.
+   * <p>Future {@link #scanAndCacheYear} calls read this single file instead of
+   * scanning all individual tracker files.
    */
-  private void compactYear(String year) {
+  private void compactFromCache(String year) {
     long start = System.currentTimeMillis();
-    String yearGlob = bucketPath + "/year=" + year + "/**/*.parquet";
+    long asOf = System.currentTimeMillis();
     String compactedPath = bucketPath + "/year=" + year
         + "/_compacted/" + UUID.randomUUID().toString() + ".parquet";
 
-    // CAST nullable columns to VARCHAR to handle schema mismatches between files
-    // (NULL-only columns may be inferred as INT32 by DuckDB)
-    String sql = "COPY ("
-        + "  SELECT source_key, table_name, phase, state, row_count, "
-        + "    CAST(config_hash AS VARCHAR) AS config_hash, "
-        + "    CAST(signature AS VARCHAR) AS signature, "
-        + "    CAST(error_message AS VARCHAR) AS error_message, as_of"
-        + "  FROM ("
-        + "    SELECT *, ROW_NUMBER() OVER ("
-        + "      PARTITION BY source_key, table_name, phase ORDER BY as_of DESC"
-        + "    ) AS rn"
-        + "    FROM read_parquet('" + yearGlob + "', "
-        + "      hive_partitioning=false, union_by_name=true)"
-        + "  ) WHERE rn = 1"
-        + ") TO '" + compactedPath + "' (FORMAT PARQUET)";
+    // Collect all cached entries for this year
+    List<String[]> rows = new ArrayList<String[]>();
+    for (Map.Entry<String, Set<String>> entry : stageCache.entrySet()) {
+      String key = entry.getKey();
+      int sep = key.indexOf('\0');
+      if (sep < 0) {
+        continue;
+      }
+      String sourceKey = key.substring(0, sep);
+      String phase = key.substring(sep + 1);
+      String skYear = extractYear(sourceKey, asOf);
+      if (!year.equals(skYear)) {
+        continue;
+      }
+      for (String tableName : entry.getValue()) {
+        rows.add(new String[]{sourceKey, tableName, phase});
+      }
+    }
 
-    try (Statement stmt = getConnection().createStatement()) {
-      stmt.executeUpdate(sql);
+    if (rows.isEmpty()) {
+      LOGGER.info("No cached tracker data to compact for year={}", year);
+      return;
+    }
+
+    // Write via DuckDB temp table (handles large row counts efficiently)
+    String tableName = "_compact_" + year.replace("-", "_");
+    try {
+      Connection conn = getConnection();
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS " + tableName);
+        stmt.execute("CREATE TABLE " + tableName + " ("
+            + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
+            + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
+            + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
+      }
+
+      try (PreparedStatement ps = conn.prepareStatement(
+          "INSERT INTO " + tableName
+              + " VALUES (?, ?, ?, 'complete', 0, NULL, NULL, NULL, ?)")) {
+        for (String[] row : rows) {
+          ps.setString(1, row[0]);
+          ps.setString(2, row[1]);
+          ps.setString(3, row[2]);
+          ps.setLong(4, asOf);
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+
+      try (Statement stmt = conn.createStatement()) {
+        stmt.executeUpdate("COPY " + tableName
+            + " TO '" + compactedPath + "' (FORMAT PARQUET)");
+        stmt.execute("DROP TABLE " + tableName);
+      }
+
       long elapsed = System.currentTimeMillis() - start;
-      LOGGER.info("Compacted tracker year={} to single file in {}ms", year, elapsed);
+      LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms",
+          year, rows.size(), elapsed);
     } catch (SQLException e) {
       LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
+      try (Statement stmt = getConnection().createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS " + tableName);
+      } catch (SQLException e2) {
+        // ignore cleanup failure
+      }
     }
   }
 
@@ -442,8 +562,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (cached != null) {
       return cached.contains(tableName);
     }
-    String state = readLatestState(sourceKey, tableName, phase);
-    return "complete".equals(state);
+    // Cache miss — use getCompletedTables to populate full set (avoids separate S3 query)
+    Set<String> tables = getCompletedTables(sourceKey, phase);
+    return tables.contains(tableName);
   }
 
   @Override public void markComplete(String sourceKey, String tableName, String phase,
@@ -1022,6 +1143,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         completionCache.clear();
         stageCache.clear();
         scannedYears.clear();
+        fullyScannedYears.clear();
       }
     }
   }

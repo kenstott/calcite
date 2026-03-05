@@ -21,6 +21,7 @@ load_env
 MAX_WORKERS=99       # Effectively unlimited — memory budget is the real constraint
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
+COMPACT_ONLY=false
 
 # Parse flags
 while [ $# -gt 0 ]; do
@@ -40,18 +41,26 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -r requires a numeric argument (MB reserved for OS)" >&2; exit 1
       fi
       OS_RESERVE_MB=$2; shift 2 ;;
+    -c|--compact-only)
+      COMPACT_ONLY=true; shift ;;
     *) break ;;
   esac
 done
 
 TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
+# Export compact-only flag so worker scripts pass it to EtlRunner
+if [ "$COMPACT_ONLY" = "true" ]; then
+  export ETL_COMPACT_ONLY=true
+fi
+
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] <worker-numbers...>"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-c] <worker-numbers...>"
   echo "  $0 18-26                  — auto-fit workers to available memory"
   echo "  $0 -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)"
   echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
   echo "  $0 -r 2000 18-26          — reserve 2GB for OS (default: ${OS_RESERVE_MB}MB)"
+  echo "  $0 -c 1-22                — compact tracker data only (no ETL processing)"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   exit 1
 fi
@@ -80,7 +89,11 @@ mkdir -p "$PID_DIR"
 total=${#queue[@]}
 total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 budget_mb=$((total_mem_mb - OS_RESERVE_MB))
-echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
+if [ "$COMPACT_ONLY" = "true" ]; then
+  echo "=== Pool Runner (COMPACT-ONLY): $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
+else
+  echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
+fi
 if [ "$MAX_WORKERS" -lt 99 ]; then
   echo "    Hard cap: max $MAX_WORKERS concurrent"
 fi
@@ -341,7 +354,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     activity=""
     if [ -f "$log_file" ]; then
       # Match progress patterns across all worker types (SEC, econ, census, geo, crime)
-      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
+      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
     fi
     printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done
