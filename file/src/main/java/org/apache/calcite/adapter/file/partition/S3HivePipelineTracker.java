@@ -69,8 +69,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** Fixed year partition for _table_complete markers. Avoids year=* wildcard scans. */
   private static final String COMPLETION_YEAR = "0";
 
-  /** Max files per batch when reading tracker files via explicit list. */
-  private static final int READ_BATCH_SIZE = 200;
+  /** Max files per batch when reading tracker files via explicit list.
+   *  Tracker files are tiny (~1-5KB), so large batches are fine for data volume.
+   *  DuckDB parallelizes reads across cores within each batch. */
+  private static final int READ_BATCH_SIZE = 10000;
 
   private final String bucketPath;
   private final String endpoint;
@@ -203,6 +205,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         if (key.endsWith(".parquet") && !key.contains("_compacted/")) {
           files.add("s3://" + bucket + "/" + key);
         }
+      }
+
+      if (pages % 50 == 0) {
+        LOGGER.info("Listed {} files so far ({} pages)...", files.size(), pages);
       }
 
       request.setContinuationToken(result.getNextContinuationToken());
@@ -443,14 +449,141 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return true;
     }
 
-    // Read in batches to control memory
+    // Download all files in parallel to a local temp dir, then read from disk.
+    // This is orders of magnitude faster than having DuckDB read each file
+    // individually over HTTPS (which serializes TLS handshakes).
+    java.io.File tempDir = null;
+    try {
+      tempDir = downloadTrackerFilesParallel(files, year);
+      String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+      int[] localCounts = readTrackerGlob(localGlob, phase);
+      int totalSourceKeys = localCounts != null ? localCounts[0] : 0;
+      int totalTables = localCounts != null ? localCounts[1] : 0;
+
+      long elapsed = System.currentTimeMillis() - start;
+      LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms "
+          + "({} files downloaded+read)", year, totalSourceKeys, totalTables, elapsed,
+          files.size());
+      compactFromCache(year);
+      return true;
+    } catch (Exception e) {
+      LOGGER.warn("Parallel download failed for year={}, falling back to batched S3 reads: {}",
+          year, e.getMessage());
+      // Fallback: batched S3 reads
+      return readBatchedFromS3(files, year, phase, start);
+    } finally {
+      if (tempDir != null) {
+        deleteDir(tempDir);
+      }
+    }
+  }
+
+  /**
+   * Download tracker files from S3 in parallel to a local temp directory.
+   *
+   * <p>Uses a thread pool to download many small files concurrently, avoiding
+   * the per-file TLS overhead that makes sequential reads slow on R2/S3.
+   *
+   * @param s3Files list of full S3 URIs
+   * @param year    year label for logging
+   * @return temp directory containing the downloaded parquet files
+   */
+  private java.io.File downloadTrackerFilesParallel(List<String> s3Files, String year)
+      throws Exception {
+    java.io.File tempDir = java.io.File.createTempFile("tracker-" + year + "-", "");
+    tempDir.delete();
+    tempDir.mkdirs();
+
+    AmazonS3 client = getS3Client();
+    int threads = Math.min(50, s3Files.size());
+    java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(threads);
+    java.util.concurrent.atomic.AtomicInteger completed =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+    java.util.concurrent.atomic.AtomicInteger errors =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+    int total = s3Files.size();
+    long downloadStart = System.currentTimeMillis();
+
+    LOGGER.info("Downloading {} tracker files to local temp dir ({} threads)...",
+        total, threads);
+
+    List<java.util.concurrent.Future<?>> futures =
+        new ArrayList<java.util.concurrent.Future<?>>();
+    for (int i = 0; i < s3Files.size(); i++) {
+      final String s3Uri = s3Files.get(i);
+      final int idx = i;
+      final java.io.File localFile = new java.io.File(tempDir, idx + ".parquet");
+      futures.add(pool.submit(new Runnable() {
+        @Override public void run() {
+          try {
+            // Parse s3://bucket/key
+            String path = s3Uri.substring(5); // remove "s3://"
+            int slash = path.indexOf('/');
+            String bucket = path.substring(0, slash);
+            String key = path.substring(slash + 1);
+
+            com.amazonaws.services.s3.model.S3Object obj =
+                client.getObject(bucket, key);
+            try {
+              java.io.InputStream in = obj.getObjectContent();
+              try {
+                java.io.FileOutputStream out = new java.io.FileOutputStream(localFile);
+                try {
+                  byte[] buf = new byte[8192];
+                  int n;
+                  while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                  }
+                } finally {
+                  out.close();
+                }
+              } finally {
+                in.close();
+              }
+            } finally {
+              obj.close();
+            }
+
+            int done = completed.incrementAndGet();
+            if (done % 10000 == 0 || done == total) {
+              LOGGER.info("Downloaded {}/{} tracker files ({} errors)...",
+                  done, total, errors.get());
+            }
+          } catch (Exception e) {
+            errors.incrementAndGet();
+            if (errors.get() <= 3) {
+              LOGGER.warn("Failed to download {}: {}", s3Uri, e.getMessage());
+            }
+          }
+        }
+      }));
+    }
+
+    // Wait for all downloads
+    for (java.util.concurrent.Future<?> f : futures) {
+      f.get();
+    }
+    pool.shutdown();
+
+    long downloadElapsed = System.currentTimeMillis() - downloadStart;
+    LOGGER.info("Downloaded {} tracker files in {}ms ({} errors, {} threads)",
+        completed.get(), downloadElapsed, errors.get(), threads);
+
+    if (errors.get() > total / 2) {
+      throw new RuntimeException("Too many download errors: " + errors.get() + "/" + total);
+    }
+    return tempDir;
+  }
+
+  /** Fallback: batched S3 reads when parallel download fails. */
+  private boolean readBatchedFromS3(List<String> files, String year, String phase, long start) {
     int totalSourceKeys = 0;
     int totalTables = 0;
     for (int i = 0; i < files.size(); i += READ_BATCH_SIZE) {
       int end = Math.min(i + READ_BATCH_SIZE, files.size());
       List<String> batch = files.subList(i, end);
 
-      // Build explicit file list for read_parquet([...])
       StringBuilder fileList = new StringBuilder();
       for (int j = 0; j < batch.size(); j++) {
         if (j > 0) {
@@ -459,8 +592,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         fileList.append("'").append(batch.get(j)).append("'");
       }
 
-      int[] batchCounts = readTrackerGlob(
-          "[" + fileList.toString() + "]", phase);
+      int[] batchCounts = readTrackerGlob("[" + fileList.toString() + "]", phase);
       if (batchCounts != null) {
         totalSourceKeys += batchCounts[0];
         totalTables += batchCounts[1];
@@ -477,6 +609,21 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         year, totalSourceKeys, totalTables, elapsed, files.size());
     compactFromCache(year);
     return true;
+  }
+
+  /** Recursively delete a directory. */
+  private static void deleteDir(java.io.File dir) {
+    java.io.File[] files = dir.listFiles();
+    if (files != null) {
+      for (java.io.File f : files) {
+        if (f.isDirectory()) {
+          deleteDir(f);
+        } else {
+          f.delete();
+        }
+      }
+    }
+    dir.delete();
   }
 
   /**
