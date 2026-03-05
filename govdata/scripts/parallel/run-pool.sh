@@ -62,22 +62,27 @@ if [ $# -eq 0 ]; then
   echo "  $0 -r 2000 18-26          — reserve 2GB for OS (default: ${OS_RESERVE_MB}MB)"
   echo "  $0 -c 1-22                — compact tracker data only (no ETL processing)"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
+  echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
   exit 1
 fi
 
-# Expand arguments into worker numbers
+# Expand arguments into worker numbers (supports: 5, 1-10, 1-10,15-20, all)
 queue=()
 for arg in "$@"; do
-  if [ "$arg" = "all" ]; then
-    for i in $(seq 1 40); do queue+=("$i"); done
-  elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-    for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
-  elif [[ "$arg" =~ ^[0-9]+$ ]]; then
-    queue+=("$arg")
-  else
-    echo "ERROR: invalid argument '$arg'" >&2
-    exit 1
-  fi
+  # Split on commas to support discontinuous ranges like "1-10,15-20"
+  IFS=',' read -ra parts <<< "$arg"
+  for part in "${parts[@]}"; do
+    if [ "$part" = "all" ]; then
+      for i in $(seq 1 40); do queue+=("$i"); done
+    elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      queue+=("$part")
+    else
+      echo "ERROR: invalid argument '$part' (from '$arg')" >&2
+      exit 1
+    fi
+  done
 done
 
 # Verify shadow JAR before launching
