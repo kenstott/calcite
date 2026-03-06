@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
+import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
@@ -55,6 +56,8 @@ import java.util.Map;
  *   <li>census - U.S. Census Bureau demographic and socioeconomic data</li>
  *   <li>crime - FBI Crime Data Explorer and Bureau of Justice Statistics</li>
  *   <li>weather - NWS weather stations/alerts, NOAA CDO climate data, EPA air quality</li>
+ *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
+ *   <li>fec - Federal Election Commission campaign finance data</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -234,10 +237,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "reference":
         return new RefSchemaFactory();
 
+      case "fec":
+      case "campaign_finance":
+        return new FecSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec");
     }
   }
 
@@ -443,6 +450,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // SEC schema name
     String secSchemaName = getStringOrDefault(operand, "secSchemaName", "sec");
     System.setProperty("SEC_SCHEMA_NAME", secSchemaName);
+
+    // FEC schema name
+    String fecSchemaName = getStringOrDefault(operand, "fecSchemaName", "fec");
+    System.setProperty("FEC_SCHEMA_NAME", fecSchemaName);
 
     // Set parquet directory for cross-schema references (e.g., BeaDimensionResolver)
     // This allows dimension resolvers to find reference tables from other schemas

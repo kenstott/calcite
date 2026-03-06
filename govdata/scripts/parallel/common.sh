@@ -342,6 +342,9 @@ generate_single_schema_model() {
       \"startYear\": 2010,
       \"endYear\": 2026"
       ;;
+    fec)
+      operand_body="\"dataSource\": \"fec\""
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1
@@ -422,6 +425,39 @@ generate_ref_model() {
 ENDJSON
 }
 
+# Generate a FEC (campaign finance) model JSON
+# Usage: generate_fec_model <output_file>
+generate_fec_model() {
+  local output_file=$1
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "fec",
+  "schemas": [{
+    "name": "fec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "fec",
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
 # Determine heap sizes for a worker based on its type.
 # Crime worker (worker-21) needs more memory for large dimension expansion;
 # SEC workers (worker-23+) are lighter and can run with less.
@@ -443,6 +479,10 @@ get_heap_config() {
 
   if [ "$num" -eq 41 ]; then
     # REF (41): GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows, needs more heap
+    _HEAP_MIN="3g"
+    _HEAP_MAX="4g"
+  elif [ "$num" -eq 60 ]; then
+    # FEC (60): Individual contributions file is ~4-5GB per cycle, needs more heap
     _HEAP_MIN="3g"
     _HEAP_MAX="4g"
   elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then

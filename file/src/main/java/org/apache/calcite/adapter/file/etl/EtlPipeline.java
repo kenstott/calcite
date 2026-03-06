@@ -29,6 +29,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Orchestrates ETL pipeline execution from HTTP sources to Iceberg or Parquet tables.
@@ -86,6 +92,9 @@ public class EtlPipeline {
   private final IncrementalTracker incrementalTracker;
   private final DataProvider dataProvider;
   private final DataWriter dataWriter;
+
+  /** Lock serializing all writer and tracker operations when parallel threads are active. */
+  private final Object writeLock = new Object();
 
   /**
    * Creates a new ETL pipeline.
@@ -599,8 +608,287 @@ public class EtlPipeline {
               pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
               unprocessedIndices.size(), partCombos.size());
 
-          for (int idx : unprocessedIndices) {
-            Map<String, String> variables = partCombos.get(idx);
+          int partThreadCount = getParallelThreadCount();
+          if (partThreadCount > 1 && unprocessedIndices.size() > 1) {
+            // Parallel within partition: fetch concurrently, writes serialized via writeLock
+            final AtomicLong partRows = new AtomicLong();
+            final AtomicInteger partSucceeded = new AtomicInteger();
+            final AtomicInteger partFailed = new AtomicInteger();
+            final AtomicInteger partSkipped = new AtomicInteger();
+            final List<String> partErrors = Collections.synchronizedList(new ArrayList<String>());
+            final AtomicInteger partProcessed = new AtomicInteger(processedCount);
+
+            final EtlPipelineConfig cfgFinal = config;
+            final DataSource dsFinal = dataSource;
+            final MaterializationWriter writerFinal = writer;
+            final String pipelineNameFinal = pipelineName;
+            final int neededCountFinal = neededCount;
+            final int piFinal = pi;
+            final int partCountFinal = partCount;
+
+            ExecutorService partExecutor = Executors.newFixedThreadPool(partThreadCount);
+            List<Future<Void>> partFutures = new ArrayList<Future<Void>>();
+
+            for (final int idx : unprocessedIndices) {
+              final Map<String, String> variables = partCombos.get(idx);
+
+              partFutures.add(partExecutor.submit(new Callable<Void>() {
+                @Override public Void call() {
+                  int currentBatch = partProcessed.incrementAndGet();
+                  try {
+                    LOGGER.info("Processing batch {} (partition {}/{}): {}",
+                        currentBatch, piFinal + 1, partCountFinal, variables);
+                    long batchRows = processSingleBatch(cfgFinal, variables, dsFinal, writerFinal,
+                        currentBatch, neededCountFinal, pipelineNameFinal);
+                    partRows.addAndGet(batchRows);
+                    partSucceeded.incrementAndGet();
+
+                    if (currentBatch % 10 == 0) {
+                      System.gc();
+                    }
+                  } catch (IOException e) {
+                    String errorMsg = String.format("Batch %d (partition %d/%d) failed: %s",
+                        currentBatch, piFinal + 1, partCountFinal, e.getMessage());
+                    LOGGER.error(errorMsg, e);
+                    partErrors.add(errorMsg);
+
+                    EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
+                        determineErrorAction(e, cfgFinal.getErrorHandling());
+
+                    synchronized (writeLock) {
+                      incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                      switch (action) {
+                        case SKIP:
+                          partSkipped.incrementAndGet();
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, variables, null, e.getMessage());
+                          break;
+                        case WARN:
+                        default:
+                          partFailed.incrementAndGet();
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, variables, null, e.getMessage());
+                          break;
+                        case FAIL:
+                          partFailed.incrementAndGet();
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, variables, null, e.getMessage());
+                          break;
+                      }
+                    }
+                  }
+                  return null;
+                }
+              }));
+            }
+
+            for (Future<Void> f : partFutures) {
+              try {
+                f.get();
+              } catch (Exception e) {
+                LOGGER.error("Unexpected error in parallel partition batch: {}", e.getMessage());
+              }
+            }
+            partExecutor.shutdown();
+
+            totalRows += partRows.get();
+            successfulBatches += partSucceeded.get();
+            failedBatches += partFailed.get();
+            skippedBatches += partSkipped.get();
+            errors.addAll(partErrors);
+            processedCount = partProcessed.get();
+
+          } else {
+            // Sequential within partition (original behavior)
+            for (int idx : unprocessedIndices) {
+              Map<String, String> variables = partCombos.get(idx);
+              processedCount++;
+
+              if (progressListener != null) {
+                progressListener.onBatchStart(processedCount, neededCount, variables);
+              }
+
+              try {
+                LOGGER.info("Processing batch {} (partition {}/{}): {}",
+                    processedCount, pi + 1, partCount, variables);
+                long batchRows = processSingleBatch(config, variables, dataSource, writer,
+                    processedCount, neededCount, pipelineName);
+                totalRows += batchRows;
+                successfulBatches++;
+
+                if (progressListener != null) {
+                  progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
+                }
+
+                if (processedCount % 10 == 0) {
+                  System.gc();
+                }
+
+              } catch (IOException e) {
+                String errorMsg =
+                    String.format("Batch %d (partition %d/%d) failed: %s",
+                        processedCount, pi + 1, partCount, e.getMessage());
+                LOGGER.error(errorMsg, e);
+                errors.add(errorMsg);
+                incrementalTracker.invalidateTableCompletion(pipelineName);
+
+                EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
+                    determineErrorAction(e, config.getErrorHandling());
+
+                switch (action) {
+                  case FAIL:
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        variables, null, e.getMessage());
+                    throw new IOException("Pipeline failed at batch " + processedCount, e);
+                  case SKIP:
+                    skippedBatches++;
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        variables, null, e.getMessage());
+                    LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}",
+                        processedCount, e.getMessage());
+                    break;
+                  case WARN:
+                    failedBatches++;
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        variables, null, e.getMessage());
+                    LOGGER.warn("Batch {} failed (will retry after TTL): {}",
+                        processedCount, e.getMessage());
+                    break;
+                  default:
+                    failedBatches++;
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        variables, null, e.getMessage());
+                }
+
+                if (progressListener != null) {
+                  progressListener.onBatchComplete(processedCount, neededCount, 0, e);
+                }
+              }
+            }
+          }
+          // Partition's combinations are now eligible for GC
+          LOGGER.debug("Partition {}/{} complete, {} combos eligible for GC",
+              pi + 1, partCount, partCombos.size());
+        }
+        // Update totalBatches with actual count now that all partitions have been expanded
+        totalBatches = actualTotalBatches;
+      } else {
+        // Standard (non-partitioned) processing
+        int threadCount = getParallelThreadCount();
+
+        if (threadCount > 1 && neededCount > 1) {
+          // Parallel mode: fetch data concurrently, writes are serialized via writeLock
+          LOGGER.info("Using {} parallel threads for {} batches", threadCount, neededCount);
+
+          // Build work list of (index, variables) for unprocessed batches
+          final List<int[]> workIndices = new ArrayList<int[]>();
+          final List<Map<String, String>> workVariables = new ArrayList<Map<String, String>>();
+          int batchNum = 0;
+          for (int idx = 0; idx < combinations.size(); idx++) {
+            if (!standardUnprocessedIndices.contains(idx)) {
+              continue;
+            }
+            workIndices.add(new int[]{idx, ++batchNum});
+            workVariables.add(combinations.get(idx));
+          }
+
+          final AtomicLong parallelTotalRows = new AtomicLong();
+          final AtomicInteger parallelSucceeded = new AtomicInteger();
+          final AtomicInteger parallelFailed = new AtomicInteger();
+          final AtomicInteger parallelSkipped = new AtomicInteger();
+          final List<String> parallelErrors = Collections.synchronizedList(new ArrayList<String>());
+          final AtomicInteger parallelProcessed = new AtomicInteger();
+
+          // Capture effectively-final copies for use in inner class
+          final EtlPipelineConfig cfgFinal = config;
+          final DataSource dsFinal = dataSource;
+          final MaterializationWriter writerFinal = writer;
+          final String pipelineNameFinal = pipelineName;
+          final int neededCountFinal = neededCount;
+
+          ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+          List<Future<Void>> futures = new ArrayList<Future<Void>>();
+
+          for (int wi = 0; wi < workVariables.size(); wi++) {
+            final Map<String, String> vars = workVariables.get(wi);
+            final int batchNumber = workIndices.get(wi)[1];
+
+            futures.add(executor.submit(new Callable<Void>() {
+              @Override public Void call() {
+                int currentBatch = parallelProcessed.incrementAndGet();
+                try {
+                  LOGGER.info("Processing batch {}/{}: {}", currentBatch, neededCountFinal, vars);
+                  long batchRows = processSingleBatch(cfgFinal, vars, dsFinal, writerFinal,
+                      currentBatch, neededCountFinal, pipelineNameFinal);
+                  parallelTotalRows.addAndGet(batchRows);
+                  parallelSucceeded.incrementAndGet();
+
+                  if (currentBatch % 10 == 0) {
+                    System.gc();
+                  }
+                } catch (IOException e) {
+                  String errorMsg = String.format("Batch %d/%d failed: %s",
+                      currentBatch, neededCountFinal, e.getMessage());
+                  LOGGER.error(errorMsg, e);
+                  parallelErrors.add(errorMsg);
+
+                  EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
+                      determineErrorAction(e, cfgFinal.getErrorHandling());
+
+                  // Serialize tracker writes for error marking
+                  synchronized (writeLock) {
+                    incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                    switch (action) {
+                      case SKIP:
+                        parallelSkipped.incrementAndGet();
+                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                            pipelineNameFinal, vars, null, e.getMessage());
+                        break;
+                      case WARN:
+                      default:
+                        parallelFailed.incrementAndGet();
+                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                            pipelineNameFinal, vars, null, e.getMessage());
+                        break;
+                      case FAIL:
+                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                            pipelineNameFinal, vars, null, e.getMessage());
+                        // FAIL action in parallel mode — logged but doesn't abort other threads
+                        parallelFailed.incrementAndGet();
+                        break;
+                    }
+                  }
+                }
+                return null;
+              }
+            }));
+          }
+
+          // Wait for all tasks
+          for (Future<Void> f : futures) {
+            try {
+              f.get();
+            } catch (Exception e) {
+              LOGGER.error("Unexpected error in parallel batch: {}", e.getMessage());
+            }
+          }
+          executor.shutdown();
+
+          totalRows += parallelTotalRows.get();
+          successfulBatches += parallelSucceeded.get();
+          failedBatches += parallelFailed.get();
+          skippedBatches += parallelSkipped.get();
+          errors.addAll(parallelErrors);
+          processedCount += parallelProcessed.get();
+
+        } else {
+          // Sequential mode (original behavior)
+          for (int idx = 0; idx < combinations.size(); idx++) {
+            if (!standardUnprocessedIndices.contains(idx)) {
+              continue;
+            }
+
+            Map<String, String> variables = combinations.get(idx);
             processedCount++;
 
             if (progressListener != null) {
@@ -608,8 +896,7 @@ public class EtlPipeline {
             }
 
             try {
-              LOGGER.info("Processing batch {} (partition {}/{}): {}",
-                  processedCount, pi + 1, partCount, variables);
+              LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
               long batchRows = processSingleBatch(config, variables, dataSource, writer,
                   processedCount, neededCount, pipelineName);
               totalRows += batchRows;
@@ -625,8 +912,7 @@ public class EtlPipeline {
 
             } catch (IOException e) {
               String errorMsg =
-                  String.format("Batch %d (partition %d/%d) failed: %s",
-                      processedCount, pi + 1, partCount, e.getMessage());
+                  String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
               LOGGER.error(errorMsg, e);
               errors.add(errorMsg);
               incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -662,80 +948,6 @@ public class EtlPipeline {
               if (progressListener != null) {
                 progressListener.onBatchComplete(processedCount, neededCount, 0, e);
               }
-            }
-          }
-          // Partition's combinations are now eligible for GC
-          LOGGER.debug("Partition {}/{} complete, {} combos eligible for GC",
-              pi + 1, partCount, partCombos.size());
-        }
-        // Update totalBatches with actual count now that all partitions have been expanded
-        totalBatches = actualTotalBatches;
-      } else {
-        // Standard (non-partitioned) processing
-        for (int idx = 0; idx < combinations.size(); idx++) {
-          if (!standardUnprocessedIndices.contains(idx)) {
-            continue;
-          }
-
-          Map<String, String> variables = combinations.get(idx);
-          processedCount++;
-
-          if (progressListener != null) {
-            progressListener.onBatchStart(processedCount, neededCount, variables);
-          }
-
-          try {
-            LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
-            long batchRows = processSingleBatch(config, variables, dataSource, writer,
-                processedCount, neededCount, pipelineName);
-            totalRows += batchRows;
-            successfulBatches++;
-
-            if (progressListener != null) {
-              progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
-            }
-
-            if (processedCount % 10 == 0) {
-              System.gc();
-            }
-
-          } catch (IOException e) {
-            String errorMsg =
-                String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
-            LOGGER.error(errorMsg, e);
-            errors.add(errorMsg);
-            incrementalTracker.invalidateTableCompletion(pipelineName);
-
-            EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
-                determineErrorAction(e, config.getErrorHandling());
-
-            switch (action) {
-              case FAIL:
-                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                    variables, null, e.getMessage());
-                throw new IOException("Pipeline failed at batch " + processedCount, e);
-              case SKIP:
-                skippedBatches++;
-                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                    variables, null, e.getMessage());
-                LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}",
-                    processedCount, e.getMessage());
-                break;
-              case WARN:
-                failedBatches++;
-                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                    variables, null, e.getMessage());
-                LOGGER.warn("Batch {} failed (will retry after TTL): {}",
-                    processedCount, e.getMessage());
-                break;
-              default:
-                failedBatches++;
-                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                    variables, null, e.getMessage());
-            }
-
-            if (progressListener != null) {
-              progressListener.onBatchComplete(processedCount, neededCount, 0, e);
             }
           }
         }
@@ -910,21 +1122,24 @@ public class EtlPipeline {
       DataSource dataSource, MaterializationWriter writer,
       int processedCount, int neededCount, String pipelineName) throws IOException {
 
-    // Document sources use dataWriter directly
+    // Document sources use dataWriter directly — serialize writes
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
       LOGGER.info("Document source - using custom DataWriter for processing");
       if (dataWriter != null) {
-        long batchRows = dataWriter.write(config, null, variables);
-        incrementalTracker.markProcessedWithRowCount(
-            pipelineName, pipelineName, variables, null, batchRows);
-        return batchRows;
+        synchronized (writeLock) {
+          long batchRows = dataWriter.write(config, null, variables);
+          incrementalTracker.markProcessedWithRowCount(
+              pipelineName, pipelineName, variables, null, batchRows);
+          return batchRows;
+        }
       } else {
         LOGGER.warn("Document source requires custom DataWriter - skipping batch");
         return 0;
       }
     }
 
-    // Fetch data
+    // Fetch data — this is the expensive network I/O that benefits from parallelism.
+    // Multiple threads can fetch concurrently; writes are serialized below.
     Iterator<Map<String, Object>> data = null;
     if (dataProvider != null) {
       data = dataProvider.fetch(config, variables);
@@ -936,33 +1151,45 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
-    // Check response partitioning
-    HttpSourceConfig sourceConfig = config.getSource();
-    boolean hasResponsePartitioning = sourceConfig != null
-        && sourceConfig.hasResponsePartitioning();
-
-    long batchRows;
-    if (hasResponsePartitioning) {
-      batchRows =
-          writeWithResponsePartitioning(data, variables, sourceConfig.getResponsePartitioning(),
-          writer, dataWriter, incrementalTracker, pipelineName);
-    } else {
-      if (dataWriter != null) {
-        batchRows = dataWriter.write(config, data, variables);
-        if (batchRows >= 0) {
-          LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
-        } else {
-          batchRows = writer.writeBatch(data, variables);
-        }
-      } else {
-        batchRows = writer.writeBatch(data, variables);
-      }
-      incrementalTracker.markProcessedWithRowCount(
-          pipelineName, pipelineName, variables, null, batchRows);
+    // Buffer the fetched data so the iterator is fully consumed outside the write lock.
+    // This ensures the HTTP connection is released before waiting on the lock.
+    List<Map<String, Object>> bufferedData = new ArrayList<Map<String, Object>>();
+    while (data.hasNext()) {
+      bufferedData.add(data.next());
     }
+    LOGGER.debug("Fetched {} rows for batch {}, queuing for write", bufferedData.size(), processedCount);
 
-    LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
-    return batchRows;
+    // Serialize all writer and tracker operations to prevent concurrent DuckDB access
+    synchronized (writeLock) {
+      HttpSourceConfig sourceConfig = config.getSource();
+      boolean hasResponsePartitioning = sourceConfig != null
+          && sourceConfig.hasResponsePartitioning();
+
+      long batchRows;
+      Iterator<Map<String, Object>> bufferedIter = bufferedData.iterator();
+      if (hasResponsePartitioning) {
+        batchRows =
+            writeWithResponsePartitioning(bufferedIter, variables,
+            sourceConfig.getResponsePartitioning(),
+            writer, dataWriter, incrementalTracker, pipelineName);
+      } else {
+        if (dataWriter != null) {
+          batchRows = dataWriter.write(config, bufferedIter, variables);
+          if (batchRows >= 0) {
+            LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+          } else {
+            batchRows = writer.writeBatch(bufferedIter, variables);
+          }
+        } else {
+          batchRows = writer.writeBatch(bufferedIter, variables);
+        }
+        incrementalTracker.markProcessedWithRowCount(
+            pipelineName, pipelineName, variables, null, batchRows);
+      }
+
+      LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
+      return batchRows;
+    }
   }
 
   /**
@@ -1756,6 +1983,18 @@ public class EtlPipeline {
       } else {
         LOG.debug("Batch {}/{} complete: {} rows", batchNum, totalBatches, rowCount);
       }
+    }
+  }
+
+  /**
+   * Returns the configured parallel thread count from the {@code calcite.etl.threads}
+   * system property. Returns 1 (sequential) if not set or invalid.
+   */
+  private static int getParallelThreadCount() {
+    try {
+      return Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
+    } catch (NumberFormatException e) {
+      return 1;
     }
   }
 }
