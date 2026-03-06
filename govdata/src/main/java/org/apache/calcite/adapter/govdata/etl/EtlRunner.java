@@ -149,6 +149,12 @@ public class EtlRunner {
       System.setProperty("calcite.tracker.noCompact", "true");
     }
 
+    if (config.getParallelThreads() > 1) {
+      log("Parallel entity threads: " + config.getParallelThreads());
+      System.setProperty("calcite.etl.threads",
+          String.valueOf(config.getParallelThreads()));
+    }
+
     // Process schemas sequentially
     int processed = 0;
     int succeeded = 0;

@@ -36,6 +36,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Orchestrates document-based ETL processing for SEC filings and similar sources.
@@ -337,6 +342,74 @@ public class DocumentETLProcessor {
         totalProcessed,
         totalSkipped,
         totalFailed,
+        allOutputFiles,
+        allErrors,
+        duration);
+  }
+
+  /**
+   * Processes documents for multiple entities in parallel using a thread pool.
+   *
+   * <p>Each entity is submitted as an independent task. EDGAR rate limiting is
+   * handled globally by {@link DocumentSource}, so concurrent threads collectively
+   * respect the 10 req/sec limit regardless of thread count.
+   *
+   * @param entities List of entity variable maps
+   * @param threadCount Number of parallel threads
+   * @return Aggregated processing result
+   * @throws IOException If processing fails fatally
+   */
+  public DocumentETLResult processEntitiesParallel(
+      List<Map<String, String>> entities, int threadCount) throws IOException {
+    long startTime = System.currentTimeMillis();
+    final AtomicInteger totalProcessed = new AtomicInteger();
+    final AtomicInteger totalSkipped = new AtomicInteger();
+    final AtomicInteger totalFailed = new AtomicInteger();
+    final List<String> allOutputFiles = Collections.synchronizedList(new ArrayList<String>());
+    final List<String> allErrors = Collections.synchronizedList(new ArrayList<String>());
+
+    ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+    List<Future<?>> futures = new ArrayList<Future<?>>();
+
+    for (final Map<String, String> entityVariables : entities) {
+      futures.add(executor.submit(new Callable<Void>() {
+        @Override public Void call() {
+          try {
+            DocumentETLResult result = processEntity(entityVariables);
+            totalProcessed.addAndGet(result.getDocumentsProcessed());
+            totalSkipped.addAndGet(result.getDocumentsSkipped());
+            totalFailed.addAndGet(result.getDocumentsFailed());
+            allOutputFiles.addAll(result.getOutputFiles());
+            allErrors.addAll(result.getErrors());
+            LOGGER.info("Processed entity {}: {} documents, {} skipped, {} failed",
+                entityVariables, result.getDocumentsProcessed(),
+                result.getDocumentsSkipped(), result.getDocumentsFailed());
+          } catch (Exception e) {
+            totalFailed.incrementAndGet();
+            allErrors.add("Failed: " + entityVariables + ": " + e.getMessage());
+            LOGGER.error("Failed to process entity {}: {}", entityVariables, e.getMessage());
+          }
+          return null;
+        }
+      }));
+    }
+
+    // Wait for all tasks to complete
+    for (Future<?> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        LOGGER.error("Unexpected error waiting for entity task: {}", e.getMessage());
+      }
+    }
+    executor.shutdown();
+
+    long duration = System.currentTimeMillis() - startTime;
+
+    return new DocumentETLResult(
+        totalProcessed.get(),
+        totalSkipped.get(),
+        totalFailed.get(),
         allOutputFiles,
         allErrors,
         duration);

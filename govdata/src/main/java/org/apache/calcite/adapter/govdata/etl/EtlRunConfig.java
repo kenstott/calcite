@@ -47,6 +47,7 @@ public class EtlRunConfig {
   private final boolean noCompact;
   private final boolean dryRun;
   private final boolean verbose;
+  private final int parallelThreads;
   private final File manifestFile;
   private final JsonNode modelJson;
   private final List<SchemaConfig> schemas;
@@ -58,6 +59,7 @@ public class EtlRunConfig {
     this.noCompact = builder.noCompact;
     this.dryRun = builder.dryRun;
     this.verbose = builder.verbose;
+    this.parallelThreads = builder.parallelThreads;
     this.manifestFile = builder.manifestFile;
     this.modelJson = parseModelFile(builder.modelFile);
     this.schemas = extractSchemas(this.modelJson);
@@ -98,6 +100,12 @@ public class EtlRunConfig {
         case "--verbose":
           builder.verbose(true);
           break;
+        case "--threads":
+          if (i + 1 >= args.length) {
+            throw new IllegalArgumentException("--threads requires a number");
+          }
+          builder.parallelThreads(Integer.parseInt(args[++i]));
+          break;
         case "--manifest":
           if (i + 1 >= args.length) {
             throw new IllegalArgumentException("--manifest requires a file path");
@@ -133,6 +141,7 @@ public class EtlRunConfig {
     System.out.println("  --compact         Minimal output for scripting");
     System.out.println("  --compact-only    Scan and compact tracker data only (no ETL)");
     System.out.println("  --no-compact      Disable compaction on first read (for parallel workers)");
+    System.out.println("  --threads <N>     Parallel entity threads within a worker (default: 1)");
     System.out.println("  --dry-run         Validate model without executing ETL");
     System.out.println("  --verbose         Detailed progress output");
     System.out.println("  --manifest <file> Custom manifest file path");
@@ -231,6 +240,10 @@ public class EtlRunConfig {
     return noCompact;
   }
 
+  public int getParallelThreads() {
+    return parallelThreads;
+  }
+
   public boolean isDryRun() {
     return dryRun;
   }
@@ -304,6 +317,7 @@ public class EtlRunConfig {
     private boolean noCompact = false;
     private boolean dryRun = false;
     private boolean verbose = false;
+    private int parallelThreads = 1;
     private File manifestFile;
 
     public Builder modelFile(File modelFile) {
@@ -333,6 +347,11 @@ public class EtlRunConfig {
 
     public Builder verbose(boolean verbose) {
       this.verbose = verbose;
+      return this;
+    }
+
+    public Builder parallelThreads(int parallelThreads) {
+      this.parallelThreads = parallelThreads;
       return this;
     }
 

@@ -840,8 +840,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
             ciks.size(), (endYear - startYear + 1), entities.size());
 
-        // Process all entities
-        result = processor.processEntities(entities);
+        // Process all entities (parallel if --threads > 1)
+        int threads = Integer.parseInt(
+            System.getProperty("calcite.etl.threads", "1"));
+        if (threads > 1) {
+          LOGGER.info("Using {} parallel entity threads", threads);
+          result = processor.processEntitiesParallel(entities, threads);
+        } else {
+          result = processor.processEntities(entities);
+        }
 
         LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
             result.getDocumentsProcessed(),

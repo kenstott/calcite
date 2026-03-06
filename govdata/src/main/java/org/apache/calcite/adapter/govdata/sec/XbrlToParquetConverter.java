@@ -67,13 +67,9 @@ public class XbrlToParquetConverter implements FileConverter {
   private final StorageProvider storageProvider;
   private final boolean enableVectorization;
 
-  // Override metadata for non-XBRL filings (e.g. 8-K plain HTML)
-  // These are set per-call via the overloaded convertInternal and cleared in finally.
-  // Thread-safe because the converter is instantiated per-call in SecSchemaFactory.
-  private String overrideCik;
-  private String overrideFilingType;
-  private String overrideFilingDate;
-  private String overrideAccession;
+  // Override metadata for non-XBRL filings (e.g. 8-K plain HTML) is passed
+  // via ConversionMetadata hints instead of mutable instance fields, making
+  // this converter stateless and safe for concurrent use by multiple threads.
 
   public XbrlToParquetConverter(StorageProvider storageProvider) {
     this(storageProvider, false);
@@ -123,23 +119,27 @@ public class XbrlToParquetConverter implements FileConverter {
 
   /**
    * Overloaded convertInternal that accepts explicit metadata for non-XBRL filings (e.g. 8-K).
-   * Sets override fields, delegates to the standard method, then clears them.
+   * Passes overrides via metadata hints (thread-safe, no mutable instance state).
    */
   public List<String> convertInternal(String sourceFilePath, String targetDirectoryPath,
       ConversionMetadata metadata, String cik, String filingType, String filingDate,
       String accession) throws IOException {
-    this.overrideCik = cik;
-    this.overrideFilingType = filingType;
-    this.overrideFilingDate = filingDate;
-    this.overrideAccession = accession;
-    try {
-      return convertInternal(sourceFilePath, targetDirectoryPath, metadata);
-    } finally {
-      this.overrideCik = null;
-      this.overrideFilingType = null;
-      this.overrideFilingDate = null;
-      this.overrideAccession = null;
+    if (metadata == null) {
+      metadata = new ConversionMetadata(targetDirectoryPath);
     }
+    if (cik != null) {
+      metadata.setHint("cik", cik);
+    }
+    if (filingType != null) {
+      metadata.setHint("form", filingType);
+    }
+    if (filingDate != null) {
+      metadata.setHint("filingDate", filingDate);
+    }
+    if (accession != null) {
+      metadata.setHint("accession", accession);
+    }
+    return convertInternal(sourceFilePath, targetDirectoryPath, metadata);
   }
 
   /**
@@ -179,21 +179,22 @@ public class XbrlToParquetConverter implements FileConverter {
 
     try {
       // Fast path: 8-K filings are plain HTML — skip all XBRL parsing attempts
-      if (overrideFilingType != null && is8KFiling(overrideFilingType)) {
+      String hintFilingType = metadata != null ? metadata.getHint("form") : null;
+      if (hintFilingType != null && is8KFiling(hintFilingType)) {
         LOGGER.debug("8-K filing detected, skipping XBRL parsing: {}", fileName);
-        return process8KHtml(sourceFilePath, targetDirectoryPath);
+        return process8KHtml(sourceFilePath, targetDirectoryPath, metadata);
       }
 
       // Fast path: 13F-HR filings have structured XML information tables
-      if (overrideFilingType != null && is13FFiling(overrideFilingType)) {
+      if (hintFilingType != null && is13FFiling(hintFilingType)) {
         LOGGER.debug("13F filing detected: {}", fileName);
-        return process13FForm(sourceFilePath, targetDirectoryPath);
+        return process13FForm(sourceFilePath, targetDirectoryPath, metadata);
       }
 
       // Fast path: SC 13D/G filings are HTML with beneficial ownership data
-      if (overrideFilingType != null && is13DGFiling(overrideFilingType)) {
+      if (hintFilingType != null && is13DGFiling(hintFilingType)) {
         LOGGER.debug("13D/G filing detected: {}", fileName);
-        return process13DGForm(sourceFilePath, targetDirectoryPath);
+        return process13DGForm(sourceFilePath, targetDirectoryPath, metadata);
       }
 
       Document doc = null;
@@ -268,9 +269,10 @@ public class XbrlToParquetConverter implements FileConverter {
       String filingType = extractFilingType(doc, sourceFilePath);
       String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
 
-      // Compute actual filing date: prefer SEC submission date from EDGAR (overrideFilingDate),
+      // Compute actual filing date: prefer SEC submission date from EDGAR (metadata hint),
       // fall back to period end date extracted from document for standalone conversion
-      String actualFilingDate = (overrideFilingDate != null) ? overrideFilingDate : periodEndDate;
+      String hintFilingDate = metadata != null ? metadata.getHint("filingDate") : null;
+      String actualFilingDate = (hintFilingDate != null) ? hintFilingDate : periodEndDate;
 
       LOGGER.debug(" Extracted metadata for " + fileName + " - CIK: " + cik + ", Filing Type: " + filingType
           + ", Period End: " + periodEndDate + ", Filing Date: " + actualFilingDate);
@@ -3848,16 +3850,21 @@ public class XbrlToParquetConverter implements FileConverter {
 
   /**
    * Process an 8-K filing as plain HTML (no XBRL required).
-   * Uses override metadata from SecSchemaFactory with path-based fallbacks.
+   * Reads override metadata from ConversionMetadata hints with path-based fallbacks.
    */
-  private List<String> process8KHtml(String sourceFilePath, String targetDirectoryPath)
-      throws IOException {
+  private List<String> process8KHtml(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
     List<String> outputFiles = new ArrayList<>();
 
-    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
-    String filingType = overrideFilingType != null ? overrideFilingType : "8-K";
-    String filingDate = overrideFilingDate;
-    String accession = overrideAccession != null ? overrideAccession
+    String hintCik = metadata != null ? metadata.getHint("cik") : null;
+    String hintForm = metadata != null ? metadata.getHint("form") : null;
+    String hintDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String hintAccession = metadata != null ? metadata.getHint("accession") : null;
+
+    String cik = hintCik != null ? hintCik : extractCikFromPath(sourceFilePath);
+    String filingType = hintForm != null ? hintForm : "8-K";
+    String filingDate = hintDate;
+    String accession = hintAccession != null ? hintAccession
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {
@@ -5343,14 +5350,19 @@ public class XbrlToParquetConverter implements FileConverter {
    * Process a 13F-HR filing. Parses the informationTable XML to extract
    * per-security holdings with share counts, market value, and voting authority.
    */
-  private List<String> process13FForm(String sourceFilePath, String targetDirectoryPath)
-      throws IOException {
+  private List<String> process13FForm(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
     List<String> outputFiles = new ArrayList<>();
 
-    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
-    String filingType = overrideFilingType != null ? overrideFilingType : "13F-HR";
-    String filingDate = overrideFilingDate;
-    String accession = overrideAccession != null ? overrideAccession
+    String hintCik = metadata != null ? metadata.getHint("cik") : null;
+    String hintForm = metadata != null ? metadata.getHint("form") : null;
+    String hintDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String hintAccession = metadata != null ? metadata.getHint("accession") : null;
+
+    String cik = hintCik != null ? hintCik : extractCikFromPath(sourceFilePath);
+    String filingType = hintForm != null ? hintForm : "13F-HR";
+    String filingDate = hintDate;
+    String accession = hintAccession != null ? hintAccession
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {
@@ -5599,7 +5611,7 @@ public class XbrlToParquetConverter implements FileConverter {
     if (managerName == null) {
       managerName = getElementText(doc, "name");
     }
-    String managerCik = overrideCik != null ? overrideCik : cik;
+    String managerCik = cik;
 
     // Extract report period
     String reportPeriod = getElementText(doc, "reportCalendarOrQuarter");
@@ -5674,14 +5686,19 @@ public class XbrlToParquetConverter implements FileConverter {
    * Process a Schedule 13D or 13G filing. Extracts beneficial ownership data
    * from the HTML cover page and Item 4 (purpose of transaction) for vectorization.
    */
-  private List<String> process13DGForm(String sourceFilePath, String targetDirectoryPath)
-      throws IOException {
+  private List<String> process13DGForm(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
     List<String> outputFiles = new ArrayList<>();
 
-    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
-    String filingType = overrideFilingType != null ? overrideFilingType : "SC 13D";
-    String filingDate = overrideFilingDate;
-    String accession = overrideAccession != null ? overrideAccession
+    String hintCik = metadata != null ? metadata.getHint("cik") : null;
+    String hintForm = metadata != null ? metadata.getHint("form") : null;
+    String hintDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String hintAccession = metadata != null ? metadata.getHint("accession") : null;
+
+    String cik = hintCik != null ? hintCik : extractCikFromPath(sourceFilePath);
+    String filingType = hintForm != null ? hintForm : "SC 13D";
+    String filingDate = hintDate;
+    String accession = hintAccession != null ? hintAccession
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {

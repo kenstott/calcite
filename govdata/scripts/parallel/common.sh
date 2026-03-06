@@ -487,6 +487,10 @@ run_etl() {
   else
     echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   fi
+  if [ -n "${ETL_PARALLEL_THREADS:-}" ] && [ "${ETL_PARALLEL_THREADS:-0}" -gt 1 ]; then
+    extra_flags="$extra_flags --threads $ETL_PARALLEL_THREADS"
+    echo "[$worker_id] Parallel entity threads: $ETL_PARALLEL_THREADS"
+  fi
   echo "[$worker_id] Log: $log_file"
 
   # Ensure Ctrl-C kills the java process, not just tee

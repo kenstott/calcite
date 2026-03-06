@@ -83,8 +83,11 @@ public class DocumentSource {
   private static final int MAX_RETRIES = 3;
   private static final long INITIAL_RETRY_DELAY_MS = 1000;
 
-  // Last request timestamp for rate limiting
-  private long lastRequestTime = 0;
+  // Global rate limiter — shared across all DocumentSource instances so that
+  // multiple threads (parallel entity processing) collectively respect EDGAR's
+  // 10 req/sec limit instead of each instance running its own timer.
+  private static long globalLastRequestTime = 0;
+  private static final Object GLOBAL_RATE_LOCK = new Object();
 
   /**
    * Creates a DocumentSource from configuration.
@@ -396,20 +399,24 @@ public class DocumentSource {
 
   /**
    * Enforces rate limiting by sleeping if necessary.
+   * Uses a global lock so all DocumentSource instances share one rate limiter,
+   * preventing multiple threads from exceeding EDGAR's 10 req/sec limit.
    */
-  private synchronized void enforceRateLimit() {
-    long now = System.currentTimeMillis();
-    long elapsed = now - lastRequestTime;
+  private void enforceRateLimit() {
+    synchronized (GLOBAL_RATE_LOCK) {
+      long now = System.currentTimeMillis();
+      long elapsed = now - globalLastRequestTime;
 
-    if (elapsed < minRequestIntervalMs) {
-      try {
-        Thread.sleep(minRequestIntervalMs - elapsed);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+      if (elapsed < minRequestIntervalMs) {
+        try {
+          Thread.sleep(minRequestIntervalMs - elapsed);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
       }
-    }
 
-    lastRequestTime = System.currentTimeMillis();
+      globalLastRequestTime = System.currentTimeMillis();
+    }
   }
 
   /**

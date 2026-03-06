@@ -904,20 +904,25 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "? AS error_message, CAST(? AS BIGINT) AS as_of"
         + ") TO '" + path + "' (FORMAT PARQUET)";
 
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, sourceKey);
-      stmt.setString(2, tableName);
-      stmt.setString(3, phase);
-      stmt.setString(4, state);
-      stmt.setLong(5, rowCount);
-      stmt.setString(6, configHash);
-      stmt.setString(7, signature);
-      stmt.setString(8, errorMessage);
-      stmt.setLong(9, asOf);
-      stmt.executeUpdate();
-      LOGGER.debug("Wrote tracker state to {}", path);
-    } catch (SQLException e) {
-      throw new RuntimeException("Failed to write tracker state to " + path + ": " + e.getMessage(), e);
+    // Synchronize on connectionLock — DuckDB JDBC connection is not thread-safe
+    // for concurrent prepareStatement/executeUpdate calls
+    synchronized (connectionLock) {
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, sourceKey);
+        stmt.setString(2, tableName);
+        stmt.setString(3, phase);
+        stmt.setString(4, state);
+        stmt.setLong(5, rowCount);
+        stmt.setString(6, configHash);
+        stmt.setString(7, signature);
+        stmt.setString(8, errorMessage);
+        stmt.setLong(9, asOf);
+        stmt.executeUpdate();
+        LOGGER.debug("Wrote tracker state to {}", path);
+      } catch (SQLException e) {
+        throw new RuntimeException(
+            "Failed to write tracker state to " + path + ": " + e.getMessage(), e);
+      }
     }
   }
 
@@ -934,19 +939,21 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "WHERE source_key = ? AND table_name = ? AND phase = ? "
         + "ORDER BY as_of DESC LIMIT 1";
 
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, sourceKey);
-      stmt.setString(2, tableName);
-      stmt.setString(3, phase);
-      try (ResultSet rs = stmt.executeQuery()) {
-        if (rs.next()) {
-          return rs.getString("state");
+    synchronized (connectionLock) {
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, sourceKey);
+        stmt.setString(2, tableName);
+        stmt.setString(3, phase);
+        try (ResultSet rs = stmt.executeQuery()) {
+          if (rs.next()) {
+            return rs.getString("state");
+          }
         }
+      } catch (SQLException e) {
+        // Glob may match no files, treat as not found
+        LOGGER.debug("No tracker state found for {}/{}/{}: {}",
+            sourceKey, tableName, phase, e.getMessage());
       }
-    } catch (SQLException e) {
-      // Glob may match no files, treat as not found
-      LOGGER.debug("No tracker state found for {}/{}/{}: {}",
-          sourceKey, tableName, phase, e.getMessage());
     }
     return null;
   }

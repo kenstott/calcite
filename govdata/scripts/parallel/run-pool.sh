@@ -10,6 +10,7 @@
 #        ./run-pool.sh -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)
 #        ./run-pool.sh -t 90 1 5 10-15        — 90min inactivity timeout
 #        ./run-pool.sh -r 1500 18-26          — reserve 1.5GB for OS/other processes
+#        ./run-pool.sh -p 4 18-26             — 4 parallel entity threads per worker
 #        ./run-pool.sh 1-10                   — default: auto-fit, 60min timeout
 # ============================================================================
 set -euo pipefail
@@ -23,6 +24,7 @@ TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
 COMPACT_ONLY=false
 NO_COMPACT=false
+PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 
 # Parse flags
 while [ $# -gt 0 ]; do
@@ -42,6 +44,11 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -r requires a numeric argument (MB reserved for OS)" >&2; exit 1
       fi
       OS_RESERVE_MB=$2; shift 2 ;;
+    -p|--parallel)
+      if [ -z "${2:-}" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: -p requires a numeric argument (parallel entity threads)" >&2; exit 1
+      fi
+      PARALLEL_THREADS=$2; shift 2 ;;
     -c|--compact-only)
       COMPACT_ONLY=true; shift ;;
     -n|--no-compact)
@@ -59,13 +66,17 @@ fi
 if [ "$NO_COMPACT" = "true" ]; then
   export ETL_NO_COMPACT=true
 fi
+if [ "$PARALLEL_THREADS" -gt 0 ]; then
+  export ETL_PARALLEL_THREADS=$PARALLEL_THREADS
+fi
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-c] <worker-numbers...>"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [-c] <worker-numbers...>"
   echo "  $0 18-26                  — auto-fit workers to available memory"
   echo "  $0 -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)"
   echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
   echo "  $0 -r 2000 18-26          — reserve 2GB for OS (default: ${OS_RESERVE_MB}MB)"
+  echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
   echo "  $0 -c 1-22                — compact tracker data only (no ETL processing)"
   echo "  $0 -n 1-17,23-40          — no compaction on read (for parallel workers)"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
