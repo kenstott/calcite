@@ -5511,8 +5511,14 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // Fallback: parse filing index to find info table document
-      String indexHtml = downloadFile(baseUrl + "/");
+      // Fallback: parse the formatted filing index page to find info table document.
+      // The formatted index ({accession}-index.html) has 5 columns including document Type,
+      // while the raw directory listing (/) only has 3 columns (name, size, date).
+      String indexHtml = downloadFile(baseUrl + "/" + accession + "-index.html");
+      if (indexHtml == null) {
+        // Try raw directory listing as last resort
+        indexHtml = downloadFile(baseUrl + "/");
+      }
       if (indexHtml != null) {
         String infoTableFile = find13FInfoTableInIndex(indexHtml);
         if (infoTableFile != null) {
@@ -5541,7 +5547,13 @@ public class XbrlToParquetConverter implements FileConverter {
 
   /**
    * Finds the 13F information table filename in an EDGAR filing index page.
-   * Looks for XML files with type "INFORMATION TABLE" or filenames containing "infotable".
+   *
+   * <p>The formatted index ({accession}-index.html) has 5 columns:
+   * Seq, Description, Document, Type, Size. The Type column contains
+   * "INFORMATION TABLE" for the info table XML.
+   *
+   * <p>The raw directory listing (/) has 3 columns: name, size, date.
+   * For the raw listing, we match by filename patterns.
    */
   private String find13FInfoTableInIndex(String indexHtml) {
     org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
@@ -5553,23 +5565,41 @@ public class XbrlToParquetConverter implements FileConverter {
         continue;
       }
 
-      String type = cells.get(3).text().trim().toLowerCase();
-      String href = "";
-      org.jsoup.select.Elements links = cells.get(2).select("a");
-      if (!links.isEmpty()) {
-        href = links.first().attr("href");
-        // Extract just the filename
-        int lastSlash = href.lastIndexOf('/');
-        if (lastSlash >= 0) {
-          href = href.substring(lastSlash + 1);
+      // Check document type if present (formatted index has 5 columns)
+      if (cells.size() > 3) {
+        String type = cells.get(3).text().trim().toLowerCase();
+        if (type.contains("information table")) {
+          // Get the XML link from the Document column (index 2)
+          // The formatted index has both .html (XSL-transformed) and .xml versions
+          // We want the raw .xml file
+          org.jsoup.select.Elements links = cells.get(2).select("a");
+          if (!links.isEmpty()) {
+            String href = links.first().attr("href");
+            int lastSlash = href.lastIndexOf('/');
+            if (lastSlash >= 0) {
+              href = href.substring(lastSlash + 1);
+            }
+            // Skip XSL-transformed HTML versions, keep raw XML
+            if (href.endsWith(".xml")) {
+              return href;
+            }
+          }
         }
       }
 
-      // Match by document type or filename
-      if (type.contains("information table")
-          || href.toLowerCase().contains("infotable")
-          || href.equalsIgnoreCase("InformationTableOutput.xml")) {
-        return href;
+      // Fallback: match by filename in any column (works for raw directory listings)
+      for (org.jsoup.nodes.Element cell : cells) {
+        org.jsoup.select.Elements links = cell.select("a");
+        for (org.jsoup.nodes.Element link : links) {
+          String href = link.attr("href");
+          int lastSlash = href.lastIndexOf('/');
+          String filename = lastSlash >= 0 ? href.substring(lastSlash + 1) : href;
+          String lower = filename.toLowerCase();
+          if (lower.endsWith(".xml")
+              && (lower.contains("infotable") || lower.contains("information"))) {
+            return filename;
+          }
+        }
       }
     }
 
