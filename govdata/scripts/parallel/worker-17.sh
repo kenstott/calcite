@@ -11,6 +11,6 @@ MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
 generate_sec_primary_model 2010 2010 "$MODEL_DIR/sec-primary-2010.json"
-run_etl "$MODEL_DIR/sec-primary-2010.json" "$WORKER_ID"
+ETL_NO_COMPACT=true run_etl "$MODEL_DIR/sec-primary-2010.json" "$WORKER_ID"
 
 log_info "$WORKER_ID complete"

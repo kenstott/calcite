@@ -322,6 +322,9 @@ public class EtlPipelineConfig {
       String strValue = (String) value;
 
       // Handle environment variable syntax: ${VAR_NAME:default}
+      // After variable interpolation, the value may already be resolved
+      // (e.g., "${OPENFIGI_API_KEY:}" becomes "49cdb6ff-..." or "")
+      // So we check: empty/false = disabled, anything else = enabled
       if (strValue.startsWith("${") && strValue.endsWith("}")) {
         String varSpec = strValue.substring(2, strValue.length() - 1);
         int colonIdx = varSpec.indexOf(':');
@@ -337,14 +340,24 @@ public class EtlPipelineConfig {
 
         String envValue = System.getenv(envVar);
         if (envValue != null && !envValue.isEmpty()) {
-          return Boolean.parseBoolean(envValue);
+          return isTruthyString(envValue);
         }
-        return Boolean.parseBoolean(defaultValue);
+        return isTruthyString(defaultValue);
       }
 
-      return Boolean.parseBoolean(strValue);
+      return isTruthyString(strValue);
     }
     return true; // Default to enabled
+  }
+
+  /**
+   * Determines if a string value is "truthy" for the enabled field.
+   * Empty string and "false" are falsy; any other non-empty string is truthy.
+   * This allows patterns like {@code enabled: "${API_KEY:}"} where a non-empty
+   * API key enables the table and an empty default disables it.
+   */
+  private static boolean isTruthyString(String value) {
+    return value != null && !value.isEmpty() && !"false".equalsIgnoreCase(value);
   }
 
   /**

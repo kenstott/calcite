@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
 import org.apache.calcite.model.JsonTable;
@@ -229,10 +230,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "climate":
         return new WeatherSchemaFactory();
 
+      case "ref":
+      case "reference":
+        return new RefSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref");
     }
   }
 

@@ -272,7 +272,7 @@ generate_sec_primary_model() {
 ENDJSON
 }
 
-# Generate a SEC secondary model JSON (8-K, proxy, insider) for a year range
+# Generate a SEC secondary model JSON (8-K, proxy, insider, 13F, 13D/G) for a year range
 # Usage: generate_sec_secondary_model <start_year> <end_year> <output_file>
 generate_sec_secondary_model() {
   local start_year=$1 end_year=$2 output_file=$3
@@ -287,7 +287,7 @@ generate_sec_secondary_model() {
     "operand": {
       "dataSource": "sec",
       "ciks": "_ALL_EDGAR_FILERS",
-      "filingTypes": ["8-K", "8-K/A", "DEF 14A", "3", "4", "5"],
+      "filingTypes": ["8-K", "8-K/A", "DEF 14A", "3", "4", "5", "13F-HR", "13F-HR/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"],
       "startYear": ${start_year},
       "endYear": ${end_year},
       "autoDownload": true,
@@ -374,6 +374,54 @@ generate_single_schema_model() {
 ENDJSON
 }
 
+# Discover the latest GLEIF golden copy CSV download URL.
+# GLEIF publishes daily snapshots with date-embedded URLs. This function
+# queries the golden copy API to resolve the current URL.
+# Sets: GLEIF_CSV_URL (exported)
+discover_gleif_url() {
+  if [ -n "${GLEIF_CSV_URL:-}" ]; then
+    return
+  fi
+  log_info "Discovering latest GLEIF golden copy CSV URL..."
+  GLEIF_CSV_URL=$(curl -sf "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/latest" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['lei2']['full_file']['csv']['url'])")
+  export GLEIF_CSV_URL
+  log_info "GLEIF CSV URL: $GLEIF_CSV_URL"
+}
+
+# Generate a REF (reference identifiers) model JSON
+# Usage: generate_ref_model <output_file>
+generate_ref_model() {
+  local output_file=$1
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "ref",
+  "schemas": [{
+    "name": "ref",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "ref",
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
 # Determine heap sizes for a worker based on its type.
 # Crime worker (worker-21) needs more memory for large dimension expansion;
 # SEC workers (worker-23+) are lighter and can run with less.
@@ -393,8 +441,12 @@ get_heap_config() {
   local num
   num=$(echo "$worker_id" | grep -oP '\d+' | head -1)
 
-  if [ "$num" -ge 23 ] && [ "$num" -le 40 ]; then
-    # SEC Secondary workers (8-K, proxy, insider): lighter workload
+  if [ "$num" -eq 41 ]; then
+    # REF (41): GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows, needs more heap
+    _HEAP_MIN="3g"
+    _HEAP_MAX="4g"
+  elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then
+    # SEC Secondary (23-39), prices (40), compact (42-58): lighter workload
     _HEAP_MIN="1g"
     _HEAP_MAX="2g"
   else

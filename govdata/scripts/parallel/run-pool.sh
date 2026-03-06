@@ -80,7 +80,7 @@ for arg in "$@"; do
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ]; then
-      for i in $(seq 1 40); do queue+=("$i"); done
+      for i in $(seq 1 58); do queue+=("$i"); done
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
     elif [[ "$part" =~ ^[0-9]+$ ]]; then
@@ -368,7 +368,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     activity=""
     if [ -f "$log_file" ]; then
       # Match progress patterns across all worker types (SEC, econ, census, geo, crime)
-      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
+      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list|Processing 13F-HR|Converted 13F-HR|institutional holdings|Processing SC 13[DG]|Converted SC 13|beneficial ownership|13D/G filing detected|13F filing detected|GLEIF:|FIGI:|Extracted [0-9]+ records from|Extracted [0-9]+ holdings|Extracted [0-9]+ ownership|Extracted [0-9]+ instrument|OpenFIGI|gleif_entities|gleif_cik_mapping|figi_instruments|vectorized chunks from 13D" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
     fi
     printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done

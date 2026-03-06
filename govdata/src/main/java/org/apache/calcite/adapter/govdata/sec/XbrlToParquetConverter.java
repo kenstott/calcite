@@ -184,6 +184,18 @@ public class XbrlToParquetConverter implements FileConverter {
         return process8KHtml(sourceFilePath, targetDirectoryPath);
       }
 
+      // Fast path: 13F-HR filings have structured XML information tables
+      if (overrideFilingType != null && is13FFiling(overrideFilingType)) {
+        LOGGER.debug("13F filing detected: {}", fileName);
+        return process13FForm(sourceFilePath, targetDirectoryPath);
+      }
+
+      // Fast path: SC 13D/G filings are HTML with beneficial ownership data
+      if (overrideFilingType != null && is13DGFiling(overrideFilingType)) {
+        LOGGER.debug("13D/G filing detected: {}", fileName);
+        return process13DGForm(sourceFilePath, targetDirectoryPath);
+      }
+
       Document doc = null;
       boolean isInlineXbrl = false;
 
@@ -3865,6 +3877,22 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Check if this is a 13F-HR filing (institutional holdings).
+   */
+  private boolean is13FFiling(String filingType) {
+    return filingType != null && (filingType.equals("13F-HR")
+        || filingType.startsWith("13F-HR/"));
+  }
+
+  /**
+   * Check if this is a Schedule 13D or 13G filing (beneficial ownership).
+   */
+  private boolean is13DGFiling(String filingType) {
+    return filingType != null && (filingType.startsWith("SC 13D")
+        || filingType.startsWith("SC 13G"));
+  }
+
+  /**
    * Extract ALL item sections from 8-K HTML into vectorized_chunks format.
    * Parses headers like "Item 1.01", "Item 5.02", "Item 8.01" and captures
    * text between each header and the next (or SIGNATURES).
@@ -5293,6 +5321,578 @@ public class XbrlToParquetConverter implements FileConverter {
       return null;
     } catch (Exception e) {
       LOGGER.warn("Error extracting period end date: " + e.getMessage());
+      return null;
+    }
+  }
+
+  // =========================================================================
+  // 13F-HR Processing — Institutional Holdings
+  // =========================================================================
+
+  /**
+   * Process a 13F-HR filing. Parses the informationTable XML to extract
+   * per-security holdings with share counts, market value, and voting authority.
+   */
+  private List<String> process13FForm(String sourceFilePath, String targetDirectoryPath)
+      throws IOException {
+    List<String> outputFiles = new ArrayList<>();
+
+    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
+    String filingType = overrideFilingType != null ? overrideFilingType : "13F-HR";
+    String filingDate = overrideFilingDate;
+    String accession = overrideAccession != null ? overrideAccession
+        : extractAccessionFromPath(sourceFilePath);
+
+    if (cik == null || cik.equals("0000000000")) {
+      LOGGER.warn("Skipping 13F processing - invalid CIK from: {}", sourceFilePath);
+      return outputFiles;
+    }
+    if (filingDate == null) {
+      LOGGER.warn("Skipping 13F processing - no filing date for: {}", sourceFilePath);
+      return outputFiles;
+    }
+
+    LOGGER.info("Processing 13F-HR: cik={}, date={}, accession={}", cik, filingDate, accession);
+
+    try {
+      int year;
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+        if (year < 1934 || year > java.time.Year.now().getValue()) {
+          year = java.time.Year.now().getValue();
+        }
+      } catch (Exception e) {
+        year = java.time.Year.now().getValue();
+      }
+
+      String partitionYear = filingDate.substring(0, 4);
+      String relativePartitionPath = String.format("year=%s", partitionYear);
+      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+
+      // Parse the XML document
+      Document doc = null;
+      String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1).toLowerCase();
+
+      if (fileName.endsWith(".xml")) {
+        try {
+          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+          factory.setNamespaceAware(true);
+          DocumentBuilder builder = factory.newDocumentBuilder();
+          try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
+            doc = builder.parse(is);
+          }
+        } catch (Exception e) {
+          LOGGER.info("XML parse failed for 13F {}: {} — trying JSoup", fileName, e.getMessage());
+          doc = parseWithJsoupFallback(sourceFilePath);
+        }
+      }
+
+      if (doc == null) {
+        LOGGER.warn("Could not parse 13F XML: {}", sourceFilePath);
+        return outputFiles;
+      }
+
+      // Extract holdings from informationTable
+      List<Map<String, Object>> holdings = extract13FHoldings(doc, cik, filingType, filingDate, accession, year);
+      LOGGER.debug("Extracted {} holdings from 13F {}", holdings.size(), fileName);
+
+      // Write 13f.parquet
+      String outputPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_13f.parquet", cik, uniqueId));
+
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          AbstractSecDataDownloader.loadTableColumns("institutional_holdings");
+      storageProvider.writeAvroParquet(outputPath, columns, holdings,
+          "InstitutionalHolding", "institutional_holdings");
+      outputFiles.add(outputPath);
+
+      LOGGER.info("Converted 13F-HR to institutional holdings: {} records", holdings.size());
+
+      // Write filing_metadata
+      String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+      outputFiles.add(metadataPath);
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to process 13F form: " + e.getMessage());
+    }
+
+    return outputFiles;
+  }
+
+  /**
+   * Extract holdings from a 13F-HR XML informationTable.
+   *
+   * <p>13F XML structure:
+   * <pre>{@code
+   * <informationTable>
+   *   <infoTable>
+   *     <nameOfIssuer>APPLE INC</nameOfIssuer>
+   *     <titleOfClass>COM</titleOfClass>
+   *     <cusip>037833100</cusip>
+   *     <value>150000</value>
+   *     <shrsOrPrnAmt>
+   *       <sshPrnamt>1000</sshPrnamt>
+   *       <sshPrnamtType>SH</sshPrnamtType>
+   *     </shrsOrPrnAmt>
+   *     <investmentDiscretion>SOLE</investmentDiscretion>
+   *     <votingAuthority>
+   *       <Sole>1000</Sole>
+   *       <Shared>0</Shared>
+   *       <None>0</None>
+   *     </votingAuthority>
+   *     <putCall>...</putCall>
+   *   </infoTable>
+   * </informationTable>
+   * }</pre>
+   */
+  private List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
+      String filingType, String filingDate, String accession, int year) {
+    List<Map<String, Object>> dataList = new ArrayList<>();
+
+    // Extract manager info from the primary doc (headerData or coverPage)
+    String managerName = getElementText(doc, "filingManager");
+    if (managerName == null) {
+      managerName = getElementText(doc, "name");
+    }
+    String managerCik = overrideCik != null ? overrideCik : cik;
+
+    // Extract report period
+    String reportPeriod = getElementText(doc, "reportCalendarOrQuarter");
+    if (reportPeriod == null) {
+      reportPeriod = getElementText(doc, "periodOfReport");
+    }
+
+    // Find infoTable entries (handles both namespaced and non-namespaced)
+    NodeList entries = doc.getElementsByTagName("infoTable");
+    if (entries.getLength() == 0) {
+      entries = doc.getElementsByTagNameNS("*", "infoTable");
+    }
+
+    for (int i = 0; i < entries.getLength(); i++) {
+      Element entry = (Element) entries.item(i);
+
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("accession_number", accession);
+      data.put("filing_date", filingDate);
+      data.put("year", year);
+      data.put("filing_type", filingType);
+      data.put("manager_name", managerName);
+      data.put("manager_cik", managerCik);
+      data.put("report_period", reportPeriod);
+
+      data.put("issuer_name", getElementText(entry, "nameOfIssuer"));
+      data.put("title_of_class", getElementText(entry, "titleOfClass"));
+      data.put("cusip", getElementText(entry, "cusip"));
+
+      String value = getElementText(entry, "value");
+      data.put("value_thousands", parseDoubleOrNull(value));
+
+      // Shares or principal amount
+      data.put("shares_or_principal",
+          parseDoubleOrNull(getElementText(entry, "sshPrnamt")));
+      data.put("shares_or_principal_type",
+          getElementText(entry, "sshPrnamtType"));
+
+      data.put("investment_discretion",
+          getElementText(entry, "investmentDiscretion"));
+
+      // Voting authority
+      NodeList votingAuth = entry.getElementsByTagName("votingAuthority");
+      if (votingAuth.getLength() == 0) {
+        votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
+      }
+      if (votingAuth.getLength() > 0) {
+        Element va = (Element) votingAuth.item(0);
+        data.put("voting_authority_sole", parseDoubleOrNull(getElementText(va, "Sole")));
+        data.put("voting_authority_shared", parseDoubleOrNull(getElementText(va, "Shared")));
+        data.put("voting_authority_none", parseDoubleOrNull(getElementText(va, "None")));
+      } else {
+        data.put("voting_authority_sole", null);
+        data.put("voting_authority_shared", null);
+        data.put("voting_authority_none", null);
+      }
+
+      data.put("put_call", getElementText(entry, "putCall"));
+
+      dataList.add(data);
+    }
+
+    return dataList;
+  }
+
+  // =========================================================================
+  // 13D/G Processing — Beneficial Ownership
+  // =========================================================================
+
+  /**
+   * Process a Schedule 13D or 13G filing. Extracts beneficial ownership data
+   * from the HTML cover page and Item 4 (purpose of transaction) for vectorization.
+   */
+  private List<String> process13DGForm(String sourceFilePath, String targetDirectoryPath)
+      throws IOException {
+    List<String> outputFiles = new ArrayList<>();
+
+    String cik = overrideCik != null ? overrideCik : extractCikFromPath(sourceFilePath);
+    String filingType = overrideFilingType != null ? overrideFilingType : "SC 13D";
+    String filingDate = overrideFilingDate;
+    String accession = overrideAccession != null ? overrideAccession
+        : extractAccessionFromPath(sourceFilePath);
+
+    if (cik == null || cik.equals("0000000000")) {
+      LOGGER.warn("Skipping 13D/G processing - invalid CIK from: {}", sourceFilePath);
+      return outputFiles;
+    }
+    if (filingDate == null) {
+      LOGGER.warn("Skipping 13D/G processing - no filing date for: {}", sourceFilePath);
+      return outputFiles;
+    }
+
+    LOGGER.info("Processing {}: cik={}, date={}, accession={}", filingType, cik, filingDate, accession);
+
+    try {
+      int year;
+      try {
+        year = Integer.parseInt(filingDate.substring(0, 4));
+        if (year < 1934 || year > java.time.Year.now().getValue()) {
+          year = java.time.Year.now().getValue();
+        }
+      } catch (Exception e) {
+        year = java.time.Year.now().getValue();
+      }
+
+      String partitionYear = filingDate.substring(0, 4);
+      String relativePartitionPath = String.format("year=%s", partitionYear);
+      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+
+      // Read file content
+      String fileContent;
+      try (InputStream is = storageProvider.openInputStream(sourceFilePath)) {
+        fileContent = new String(readAllBytes(is), java.nio.charset.StandardCharsets.UTF_8);
+      }
+
+      // Try XML parse first (some 13D/G are structured XML)
+      Document xmlDoc = null;
+      String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1).toLowerCase();
+      if (fileName.endsWith(".xml")) {
+        try {
+          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+          factory.setNamespaceAware(true);
+          DocumentBuilder builder = factory.newDocumentBuilder();
+          try (InputStream is = sanitizeXmlStream(
+              new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8)))) {
+            xmlDoc = builder.parse(is);
+          }
+        } catch (Exception e) {
+          LOGGER.debug("XML parse failed for 13D/G, using HTML path: {}", e.getMessage());
+        }
+      }
+
+      // Extract structured ownership data
+      List<Map<String, Object>> ownershipRecords = extract13DGOwnership(
+          fileContent, xmlDoc, cik, filingType, filingDate, accession, year);
+      LOGGER.debug("Extracted {} ownership records from {}", ownershipRecords.size(), fileName);
+
+      // Write 13dg.parquet
+      String outputPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_13dg.parquet", cik, uniqueId));
+
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          AbstractSecDataDownloader.loadTableColumns("beneficial_ownership");
+      storageProvider.writeAvroParquet(outputPath, columns, ownershipRecords,
+          "BeneficialOwnership", "beneficial_ownership");
+      outputFiles.add(outputPath);
+
+      LOGGER.info("Converted {} to beneficial ownership: {} records", filingType, ownershipRecords.size());
+
+      // Write filing_metadata
+      if (xmlDoc != null) {
+        String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+        writeMetadataToParquet(xmlDoc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+        outputFiles.add(metadataPath);
+      } else {
+        // Write 8K-style metadata from HTML
+        String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+        write8KMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+        outputFiles.add(metadataPath);
+      }
+
+      // Extract Item 4 (purpose of transaction) for vectorized_chunks
+      if (enableVectorization) {
+        List<Map<String, Object>> chunks = extract13DGItems(fileContent, cik, filingDate, accession, year);
+        if (!chunks.isEmpty()) {
+          java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> chunkColumns =
+              AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
+          String chunksPath = storageProvider.resolvePath(targetDirectoryPath,
+              relativePartitionPath + "/" + String.format("%s_%s_chunks.parquet", cik, uniqueId));
+          storageProvider.writeAvroParquet(chunksPath, chunkColumns, chunks,
+              "VectorizedChunk", "vectorized_chunks");
+          outputFiles.add(chunksPath);
+          LOGGER.info("Wrote {} vectorized chunks from 13D/G items", chunks.size());
+        }
+      }
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to process 13D/G form: " + e.getMessage());
+    }
+
+    return outputFiles;
+  }
+
+  /**
+   * Extract beneficial ownership data from Schedule 13D/G filing.
+   * Handles both HTML (text parsing) and XML structured formats.
+   */
+  private List<Map<String, Object>> extract13DGOwnership(String fileContent, Document xmlDoc,
+      String cik, String filingType, String filingDate, String accession, int year) {
+    List<Map<String, Object>> dataList = new ArrayList<>();
+
+    // Parse HTML for text extraction
+    org.jsoup.nodes.Document htmlDoc = Jsoup.parse(fileContent);
+    htmlDoc.select("script, style").remove();
+    String bodyText = htmlDoc.body() != null ? htmlDoc.body().text() : htmlDoc.text();
+
+    // Extract subject company from cover page
+    String subjectCompany = extractPatternValue(bodyText,
+        "(?i)Name of Issuer[:\\s]+([^\\n]+?)(?:\\s{2,}|$)");
+    String subjectCik = null;
+
+    // Extract title of class and CUSIP
+    String titleOfClass = extractPatternValue(bodyText,
+        "(?i)Title of Class[^:]*[:\\s]+([^\\n]+?)(?:\\s{2,}|$)");
+    String cusip = extractPatternValue(bodyText,
+        "(?i)CUSIP[^:]*[:\\s]+([A-Za-z0-9]{6,9})");
+
+    // Extract date of event
+    String dateOfEvent = extractPatternValue(bodyText,
+        "(?i)Date of Event[^:]*[:\\s]+(\\d{1,2}/\\d{1,2}/\\d{2,4}|\\w+ \\d{1,2},? \\d{4})");
+
+    // Extract type of reporting person
+    String typeOfReportingPerson = extractPatternValue(bodyText,
+        "(?i)Type of Reporting Person[^:]*[:\\s]+([A-Z]{2})");
+
+    // Extract source of funds
+    String sourceOfFunds = extractPatternValue(bodyText,
+        "(?i)Source of Funds[^:]*[:\\s]+([A-Z]{2})");
+
+    // Extract percent of class
+    Double percentOfClass = null;
+    String percentStr = extractPatternValue(bodyText,
+        "(?i)Percent of Class[^:]*[:\\s]+([\\d.]+)\\s*%?");
+    if (percentStr != null) {
+      percentOfClass = parseDoubleOrNull(percentStr);
+    }
+
+    // Extract aggregate amount beneficially owned
+    Double sharesBeneficiallyOwned = null;
+    String sharesStr = extractPatternValue(bodyText,
+        "(?i)Aggregate Amount Beneficially Owned[^:]*[:\\s]+([\\d,]+)");
+    if (sharesStr != null) {
+      sharesBeneficiallyOwned = parseDoubleOrNull(sharesStr.replace(",", ""));
+    }
+
+    // Extract voting/dispositive power
+    Double soleVoting = parseDoubleOrNull(extractPatternValue(bodyText,
+        "(?i)Sole Voting Power[^:]*[:\\s]+([\\d,]+)"));
+    Double sharedVoting = parseDoubleOrNull(extractPatternValue(bodyText,
+        "(?i)Shared Voting Power[^:]*[:\\s]+([\\d,]+)"));
+    Double soleDispositive = parseDoubleOrNull(extractPatternValue(bodyText,
+        "(?i)Sole Dispositive Power[^:]*[:\\s]+([\\d,]+)"));
+    Double sharedDispositive = parseDoubleOrNull(extractPatternValue(bodyText,
+        "(?i)Shared Dispositive Power[^:]*[:\\s]+([\\d,]+)"));
+
+    // Extract filer name(s) — look for reporting person on cover page
+    String filerName = extractPatternValue(bodyText,
+        "(?i)(?:Name of Reporting Person|REPORTING PERSON)[^:]*[:\\s]+([^\\n]+?)(?:\\s{2,}|$)");
+
+    // Extract purpose of transaction (Item 4)
+    String purpose = extract13DGPurposeText(bodyText);
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", filingType);
+    data.put("subject_company", subjectCompany);
+    data.put("subject_cik", subjectCik);
+    data.put("filer_name", filerName);
+    data.put("filer_cik", cik); // In EDGAR, the filer's CIK is the filing CIK
+    data.put("date_of_event", dateOfEvent);
+    data.put("title_of_class", titleOfClass);
+    data.put("cusip", cusip);
+    data.put("percent_of_class", percentOfClass);
+    data.put("shares_beneficially_owned", sharesBeneficiallyOwned);
+    data.put("sole_voting_power", soleVoting != null ? soleVoting : null);
+    data.put("shared_voting_power", sharedVoting != null ? sharedVoting : null);
+    data.put("sole_dispositive_power", soleDispositive != null ? soleDispositive : null);
+    data.put("shared_dispositive_power", sharedDispositive != null ? sharedDispositive : null);
+    data.put("type_of_reporting_person", typeOfReportingPerson);
+    data.put("source_of_funds", sourceOfFunds);
+    data.put("purpose_of_transaction", purpose);
+
+    dataList.add(data);
+    return dataList;
+  }
+
+  /**
+   * Extract Item 4 (Purpose of Transaction) text from a 13D/G filing body.
+   * Also extracts Item 3 (Source and Amount of Funds) and Item 6 (Contracts).
+   */
+  private String extract13DGPurposeText(String bodyText) {
+    // Try to find Item 4 boundaries
+    Pattern item4Start = Pattern.compile(
+        "(?i)Item\\s+4\\.?\\s*[-—.]?\\s*Purpose of Transaction", Pattern.CASE_INSENSITIVE);
+    Matcher m4 = item4Start.matcher(bodyText);
+    if (!m4.find()) {
+      return null;
+    }
+
+    int start = m4.end();
+
+    // End at Item 5 or SIGNATURES
+    Pattern item5Start = Pattern.compile(
+        "(?i)Item\\s+5\\.?\\s*[-—.]?\\s*Interest", Pattern.CASE_INSENSITIVE);
+    Matcher m5 = item5Start.matcher(bodyText);
+    int end;
+    if (m5.find(start)) {
+      end = m5.start();
+    } else {
+      int sigPos = bodyText.toUpperCase().indexOf("SIGNATURES", start);
+      end = sigPos > 0 ? sigPos : Math.min(start + 5000, bodyText.length());
+    }
+
+    String purpose = bodyText.substring(start, end).trim();
+    // Truncate very long purpose text
+    if (purpose.length() > 5000) {
+      purpose = purpose.substring(0, 5000) + "...";
+    }
+    return purpose.isEmpty() ? null : purpose;
+  }
+
+  /**
+   * Extract item sections from 13D/G HTML for vectorized_chunks.
+   * Similar to extract8KItems but with 13D/G-specific item numbers.
+   */
+  private List<Map<String, Object>> extract13DGItems(String fileContent,
+      String cik, String filingDate, String accession, int year) {
+    List<Map<String, Object>> chunks = new ArrayList<>();
+    Pattern itemPattern = Pattern.compile(
+        "Item\\s+(\\d+)\\.?\\s*[-—.]?\\s*([^\\n]{5,80})", Pattern.CASE_INSENSITIVE);
+
+    org.jsoup.nodes.Document doc = Jsoup.parse(fileContent);
+    doc.select("script, style").remove();
+    String bodyText = doc.body() != null ? doc.body().text() : doc.text();
+
+    // Find all item header positions
+    Matcher matcher = itemPattern.matcher(bodyText);
+    List<int[]> itemPositions = new ArrayList<>();
+    List<String> itemNumbers = new ArrayList<>();
+    while (matcher.find()) {
+      String itemNum = matcher.group(1);
+      // 13D/G items are 1-10
+      try {
+        int num = Integer.parseInt(itemNum);
+        if (num >= 1 && num <= 10) {
+          itemPositions.add(new int[]{matcher.start(), matcher.end()});
+          itemNumbers.add(itemNum);
+        }
+      } catch (NumberFormatException e) {
+        // skip
+      }
+    }
+
+    // Find SIGNATURES position as end boundary
+    int sigPos = bodyText.toUpperCase().indexOf("SIGNATURES");
+    if (sigPos < 0) {
+      sigPos = bodyText.length();
+    }
+
+    int sequence = 0;
+    Set<String> boilerplate = new HashSet<>();
+    boilerplate.add("FORWARD-LOOKING STATEMENTS");
+    boilerplate.add("Safe Harbor");
+
+    for (int i = 0; i < itemPositions.size(); i++) {
+      String itemNumber = itemNumbers.get(i);
+      int textStart = itemPositions.get(i)[1];
+      int textEnd = (i + 1 < itemPositions.size()) ? itemPositions.get(i + 1)[0] : sigPos;
+      if (textStart >= textEnd) {
+        continue;
+      }
+
+      String sectionText = bodyText.substring(textStart, textEnd).trim();
+      String[] parts = sectionText.split("(?<=\\.)\\s{2,}|\\n\\s*\\n");
+
+      int paraSeq = 0;
+      for (String part : parts) {
+        String para = part.trim();
+        if (para.length() < 50) {
+          continue;
+        }
+        boolean isBoilerplate = false;
+        for (String bp : boilerplate) {
+          if (para.contains(bp)) {
+            isBoilerplate = true;
+            break;
+          }
+        }
+        if (isBoilerplate) {
+          continue;
+        }
+
+        Map<String, Object> chunk = new HashMap<>();
+        chunk.put("cik", cik);
+        chunk.put("accession_number", accession);
+        chunk.put("year", year);
+        chunk.put("chunk_id", "13dg_item_" + itemNumber + "_" + paraSeq);
+        chunk.put("source_type", "13dg_item");
+        chunk.put("section", "Item " + itemNumber);
+        chunk.put("sequence", sequence++);
+        chunk.put("filing_date", filingDate);
+        chunk.put("chunk_text", para);
+        chunk.put("enriched_text", para);
+        chunk.put("content_type", "paragraph");
+        chunk.put("financial_concepts", null);
+
+        chunks.add(chunk);
+        paraSeq++;
+      }
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Extract a value from text using a regex pattern with a capture group.
+   */
+  private String extractPatternValue(String text, String patternStr) {
+    try {
+      Pattern pattern = Pattern.compile(patternStr);
+      Matcher matcher = pattern.matcher(text);
+      if (matcher.find()) {
+        return matcher.group(1).trim();
+      }
+    } catch (Exception e) {
+      LOGGER.trace("Pattern extraction failed: {}", e.getMessage());
+    }
+    return null;
+  }
+
+  /**
+   * Parse a string as Double, returning null on failure.
+   */
+  private Double parseDoubleOrNull(String value) {
+    if (value == null || value.isEmpty()) {
+      return null;
+    }
+    try {
+      return Double.parseDouble(value.replace(",", ""));
+    } catch (NumberFormatException e) {
       return null;
     }
   }

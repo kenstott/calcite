@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Worker 38: SEC Secondary (8-K, Proxy, Insider, 13F, 13D/G)
+# Worker 41: REF schema (GLEIF entities, CIK mapping, OpenFIGI)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-WORKER_ID="worker-38"
+WORKER_ID="worker-41"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
-generate_sec_secondary_model 2011 2011 "$MODEL_DIR/sec-secondary-2011.json"
-ETL_NO_COMPACT=true run_etl "$MODEL_DIR/sec-secondary-2011.json" "$WORKER_ID"
+# Resolve the daily GLEIF golden copy CSV URL
+discover_gleif_url
+
+generate_ref_model "$MODEL_DIR/ref.json"
+run_etl "$MODEL_DIR/ref.json" "$WORKER_ID"
 
 log_info "$WORKER_ID complete"

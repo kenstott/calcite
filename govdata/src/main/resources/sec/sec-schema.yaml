@@ -170,6 +170,16 @@ dimension_values:
     - "4"
     - "5"
 
+  institutional_filing_types: &institutional_filing_types
+    - "13F-HR"
+    - "13F-HR/A"
+
+  beneficial_ownership_types: &beneficial_ownership_types
+    - "SC 13D"
+    - "SC 13D/A"
+    - "SC 13G"
+    - "SC 13G/A"
+
   all_filing_types: &all_filing_types
     - "10-K"
     - "10-K/A"
@@ -844,6 +854,241 @@ partitionedTables:
         batchPartitionColumns: [year]
 
   # ==========================================================================
+  # INSTITUTIONAL HOLDINGS (13F)
+  # ==========================================================================
+  # Form 13F-HR quarterly holdings from institutional investment managers
+  # ==========================================================================
+
+  - name: institutional_holdings
+    pattern: "year=*/*_13f.parquet"
+    partitions: *sec_partitions
+    hooks:
+      enabled: false
+
+    comment: >
+      Institutional investment manager holdings from Form 13F-HR. Filed quarterly
+      by managers with $100M+ in qualifying assets. Contains per-security positions
+      with share counts, market value, and voting authority. Known as "whale watching"
+      data — tracks positions of Berkshire Hathaway, Bridgewater, Renaissance, etc.
+      Use for: tracking institutional ownership changes, identifying crowded trades,
+      monitoring activist accumulation, and building factor models.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
+      - *filing_type
+      - name: manager_name
+        type: string
+        nullable: true
+        comment: Name of the filing investment manager
+      - name: manager_cik
+        type: string
+        nullable: true
+        comment: CIK of the filing investment manager
+      - name: report_period
+        type: string
+        nullable: true
+        comment: Calendar quarter end date for the report (ISO 8601)
+      - name: issuer_name
+        type: string
+        nullable: true
+        comment: Name of the security issuer (company name)
+        source: nameOfIssuer
+      - name: title_of_class
+        type: string
+        nullable: true
+        comment: Title/class of the security (e.g., COM, CL A, PFD)
+        source: titleOfClass
+      - name: cusip
+        type: string
+        nullable: true
+        comment: CUSIP identifier (9-character)
+      - name: value_thousands
+        type: double
+        nullable: true
+        comment: Market value in thousands of USD
+      - name: shares_or_principal
+        type: double
+        nullable: true
+        comment: Number of shares or principal amount
+        source: sshPrnamt
+      - name: shares_or_principal_type
+        type: string
+        nullable: true
+        comment: SH for shares, PRN for principal amount
+        source: sshPrnamtType
+      - name: investment_discretion
+        type: string
+        nullable: true
+        comment: Investment discretion (SOLE, DFND, OTR)
+        source: investmentDiscretion
+      - name: voting_authority_sole
+        type: double
+        nullable: true
+        comment: Shares with sole voting authority
+      - name: voting_authority_shared
+        type: double
+        nullable: true
+        comment: Shares with shared voting authority
+      - name: voting_authority_none
+        type: double
+        nullable: true
+        comment: Shares with no voting authority
+      - name: put_call
+        type: string
+        nullable: true
+        comment: Put or Call indicator for options (null for common stock)
+
+    source:
+      <<: *document_source_defaults
+      extractionType: form_13f_xml
+      documentTypes:
+        - "*.xml"
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type: *institutional_filing_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: institutional_holdings
+        sortOrder: [cik, report_period, cusip]
+        batchPartitionColumns: [year]
+
+  # ==========================================================================
+  # BENEFICIAL OWNERSHIP (13D/G)
+  # ==========================================================================
+  # Schedule 13D/G beneficial ownership filings (>5% holders)
+  # ==========================================================================
+
+  - name: beneficial_ownership
+    pattern: "year=*/*_13dg.parquet"
+    partitions: *sec_partitions
+    hooks:
+      enabled: false
+
+    comment: >
+      Beneficial ownership filings from Schedule 13D (activist >5% holders) and
+      Schedule 13G (passive >5% holders). Discloses who owns large stakes, how many
+      shares, percent of class, source of funds, and critically — the purpose of the
+      transaction (Item 4). 13D filers may push for M&A, board changes, or restructuring.
+      Use for: tracking activist campaigns, monitoring ownership concentration, detecting
+      accumulation patterns, and governance risk analysis.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
+      - *filing_type
+      - name: subject_company
+        type: string
+        nullable: true
+        comment: Name of the company whose shares are held
+      - name: subject_cik
+        type: string
+        nullable: true
+        comment: CIK of the subject company
+      - name: filer_name
+        type: string
+        nullable: true
+        comment: Name of the beneficial owner filing the schedule
+      - name: filer_cik
+        type: string
+        nullable: true
+        comment: CIK of the beneficial owner
+      - name: date_of_event
+        type: string
+        nullable: true
+        comment: Date of event requiring filing (ISO 8601)
+      - name: title_of_class
+        type: string
+        nullable: true
+        comment: Title/class of securities (e.g., Common Stock)
+      - name: cusip
+        type: string
+        nullable: true
+        comment: CUSIP identifier of the security
+      - name: percent_of_class
+        type: double
+        nullable: true
+        comment: Percent of class beneficially owned
+      - name: shares_beneficially_owned
+        type: double
+        nullable: true
+        comment: Number of shares beneficially owned
+      - name: sole_voting_power
+        type: double
+        nullable: true
+        comment: Shares with sole voting power
+      - name: shared_voting_power
+        type: double
+        nullable: true
+        comment: Shares with shared voting power
+      - name: sole_dispositive_power
+        type: double
+        nullable: true
+        comment: Shares with sole dispositive power
+      - name: shared_dispositive_power
+        type: double
+        nullable: true
+        comment: Shares with shared dispositive power
+      - name: type_of_reporting_person
+        type: string
+        nullable: true
+        comment: Type code (IN=individual, CO=corporation, IA=investment adviser, etc.)
+      - name: source_of_funds
+        type: string
+        nullable: true
+        comment: Source of funds (WC=working capital, BK=bank, OO=other)
+      - name: purpose_of_transaction
+        type: string
+        nullable: true
+        comment: Item 4 text describing intent (investment, activist, M&A, etc.)
+
+    source:
+      <<: *document_source_defaults
+      extractionType: form_13dg_html
+      documentTypes:
+        - "*.htm"
+        - "*.html"
+        - "*.xml"
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type: *beneficial_ownership_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: beneficial_ownership
+        sortOrder: [subject_cik, filing_date, filer_cik]
+        batchPartitionColumns: [year]
+
+  # ==========================================================================
   # EARNINGS TRANSCRIPTS
   # ==========================================================================
   # 8-K earnings release sections
@@ -1232,6 +1477,29 @@ constraints:
 
   earnings_transcripts:
     primaryKey: [cik, accession_number, section_type, paragraph_number]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  institutional_holdings:
+    primaryKey: [cik, accession_number, cusip]
+    indexes:
+      - [report_period]
+      - [issuer_name]
+      - [cusip]
+      - [manager_cik]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  beneficial_ownership:
+    primaryKey: [cik, accession_number, filer_cik]
+    indexes:
+      - [subject_cik]
+      - [filer_name]
+      - [percent_of_class]
     foreignKeys:
       - columns: [cik, accession_number]
         targetTable: filing_metadata
