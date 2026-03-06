@@ -981,9 +981,19 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("year", year);
 
-    // Extract DEI (Document and Entity Information) elements
-    // Try different namespaces and formats
+    // Extract company name — try DEI elements first, then form-specific elements
     String companyName = extractDeiValue(doc, "EntityRegistrantName", "RegistrantName");
+    if (companyName == null) {
+      // Form 4: <issuer><issuerName>
+      companyName = getElementText(doc, "issuerName");
+    }
+    if (companyName == null) {
+      // 13F: <filingManager><name> or <companyName>
+      companyName = getElementText(doc, "filingManager");
+      if (companyName == null) {
+        companyName = getElementText(doc, "companyName");
+      }
+    }
     data.put("company_name", companyName);
 
     String stateOfIncorp =
@@ -5369,8 +5379,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String relativePartitionPath = String.format("year=%s", partitionYear);
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
 
-      // Parse the XML document
-      Document doc = null;
+      // Parse the primary document (cover page) for metadata
+      Document primaryDoc = null;
       String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1).toLowerCase();
 
       if (fileName.endsWith(".xml")) {
@@ -5379,22 +5389,45 @@ public class XbrlToParquetConverter implements FileConverter {
           factory.setNamespaceAware(true);
           DocumentBuilder builder = factory.newDocumentBuilder();
           try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
-            doc = builder.parse(is);
+            primaryDoc = builder.parse(is);
           }
         } catch (Exception e) {
           LOGGER.info("XML parse failed for 13F {}: {} — trying JSoup", fileName, e.getMessage());
-          doc = parseWithJsoupFallback(sourceFilePath);
+          primaryDoc = parseWithJsoupFallback(sourceFilePath);
         }
       }
 
-      if (doc == null) {
-        LOGGER.warn("Could not parse 13F XML: {}", sourceFilePath);
+      if (primaryDoc == null) {
+        LOGGER.warn("Could not parse 13F primary doc XML: {}", sourceFilePath);
         return outputFiles;
       }
 
-      // Extract holdings from informationTable
-      List<Map<String, Object>> holdings = extract13FHoldings(doc, cik, filingType, filingDate, accession, year);
-      LOGGER.debug("Extracted {} holdings from 13F {}", holdings.size(), fileName);
+      // The primary_doc.xml is just the cover page — the actual holdings are in
+      // a separate XML file (typically InformationTableOutput.xml or infotable.xml).
+      // We need to download it from EDGAR.
+      Document infoTableDoc = download13FInfoTable(cik, accession);
+
+      List<Map<String, Object>> holdings;
+      if (infoTableDoc != null) {
+        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year);
+        // Extract manager name from primary doc if not in info table
+        if (!holdings.isEmpty()) {
+          String managerName = getElementText(primaryDoc, "filingManager");
+          if (managerName == null) {
+            managerName = getElementText(primaryDoc, "name");
+          }
+          if (managerName != null) {
+            for (Map<String, Object> h : holdings) {
+              if (h.get("manager_name") == null) {
+                h.put("manager_name", managerName);
+              }
+            }
+          }
+        }
+      } else {
+        LOGGER.warn("Could not download 13F information table for cik={}, accession={}", cik, accession);
+        holdings = new ArrayList<>();
+      }
 
       // Write 13f.parquet
       String outputPath = storageProvider.resolvePath(targetDirectoryPath,
@@ -5408,10 +5441,10 @@ public class XbrlToParquetConverter implements FileConverter {
 
       LOGGER.info("Converted 13F-HR to institutional holdings: {} records", holdings.size());
 
-      // Write filing_metadata
+      // Write filing_metadata using primary doc (has company info, period, etc.)
       String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
           relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
-      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+      writeMetadataToParquet(primaryDoc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
       outputFiles.add(metadataPath);
 
     } catch (Exception e) {
@@ -5419,6 +5452,116 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     return outputFiles;
+  }
+
+  /**
+   * Downloads the 13F information table XML from EDGAR.
+   *
+   * <p>A 13F-HR filing consists of two documents:
+   * <ul>
+   *   <li>primary_doc.xml — cover page with manager info and report period</li>
+   *   <li>InformationTableOutput.xml — the actual per-security holdings</li>
+   * </ul>
+   *
+   * <p>This method fetches the filing index page and locates the information
+   * table document, then downloads and parses it.
+   */
+  private Document download13FInfoTable(String cik, String accession) {
+    if (cik == null || accession == null) {
+      return null;
+    }
+
+    try {
+      String cikNumeric = cik.replaceFirst("^0+", "");
+      String accessionNoDash = accession.replace("-", "");
+      String baseUrl = String.format(
+          "https://www.sec.gov/Archives/edgar/data/%s/%s", cikNumeric, accessionNoDash);
+
+      // Try common info table filenames directly (faster than parsing index)
+      String[] infoTableNames = {
+          "InformationTableOutput.xml",
+          "infotable.xml",
+          "InfoTable.xml",
+          "information_table.xml"
+      };
+
+      for (String name : infoTableNames) {
+        String content = downloadFile(baseUrl + "/" + name);
+        if (content != null && content.contains("infoTable")) {
+          LOGGER.info("Downloaded 13F info table: {}/{}", accession, name);
+          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+          factory.setNamespaceAware(true);
+          DocumentBuilder builder = factory.newDocumentBuilder();
+          try (InputStream is = sanitizeXmlStream(
+              new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
+            return builder.parse(is);
+          }
+        }
+      }
+
+      // Fallback: parse filing index to find info table document
+      String indexHtml = downloadFile(baseUrl + "/");
+      if (indexHtml != null) {
+        String infoTableFile = find13FInfoTableInIndex(indexHtml);
+        if (infoTableFile != null) {
+          String content = downloadFile(baseUrl + "/" + infoTableFile);
+          if (content != null) {
+            LOGGER.info("Downloaded 13F info table from index: {}/{}", accession, infoTableFile);
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            try (InputStream is = sanitizeXmlStream(
+                new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
+              return builder.parse(is);
+            }
+          }
+        }
+      }
+
+      LOGGER.warn("No 13F information table found for {}/{}", cikNumeric, accessionNoDash);
+      return null;
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to download 13F info table for {}: {}", accession, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Finds the 13F information table filename in an EDGAR filing index page.
+   * Looks for XML files with type "INFORMATION TABLE" or filenames containing "infotable".
+   */
+  private String find13FInfoTableInIndex(String indexHtml) {
+    org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+    org.jsoup.select.Elements rows = doc.select("table tr");
+
+    for (org.jsoup.nodes.Element row : rows) {
+      org.jsoup.select.Elements cells = row.select("td");
+      if (cells.size() < 3) {
+        continue;
+      }
+
+      String type = cells.get(3).text().trim().toLowerCase();
+      String href = "";
+      org.jsoup.select.Elements links = cells.get(2).select("a");
+      if (!links.isEmpty()) {
+        href = links.first().attr("href");
+        // Extract just the filename
+        int lastSlash = href.lastIndexOf('/');
+        if (lastSlash >= 0) {
+          href = href.substring(lastSlash + 1);
+        }
+      }
+
+      // Match by document type or filename
+      if (type.contains("information table")
+          || href.toLowerCase().contains("infotable")
+          || href.equalsIgnoreCase("InformationTableOutput.xml")) {
+        return href;
+      }
+    }
+
+    return null;
   }
 
   /**

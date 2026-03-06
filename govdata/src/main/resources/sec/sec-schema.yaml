@@ -311,7 +311,7 @@ partitionedTables:
         comment: Primary document filename in the filing
       - name: company_name
         type: string
-        nullable: false
+        nullable: true
         comment: Legal name of the registrant company
       - name: period_of_report
         type: string
