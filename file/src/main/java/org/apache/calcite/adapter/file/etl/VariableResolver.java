@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -70,6 +71,9 @@ public final class VariableResolver {
       return template;
     }
 
+    // Enrich with derived variables
+    Map<String, String> enriched = addDerivedVariables(variables);
+
     // First resolve ${VAR} style environment variables
     String resolved = resolveEnvVars(template);
 
@@ -79,12 +83,34 @@ public final class VariableResolver {
 
     while (matcher.find()) {
       String varExpr = matcher.group(1);
-      String replacement = resolveVariable(varExpr, variables);
+      String replacement = resolveVariable(varExpr, enriched);
       matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
     }
     matcher.appendTail(result);
 
     return result.toString();
+  }
+
+  /**
+   * Adds derived variables computed from existing variables.
+   *
+   * <p>Currently supports:
+   * <ul>
+   *   <li>{@code yearSuffix} - last 2 digits of {@code year} (e.g., "2024" → "24")</li>
+   * </ul>
+   */
+  private static Map<String, String> addDerivedVariables(Map<String, String> variables) {
+    if (variables == null || variables.isEmpty()) {
+      return variables;
+    }
+    // Only create a copy if we need to add derived variables
+    String year = variables.get("year");
+    if (year != null && year.length() >= 2 && !variables.containsKey("yearSuffix")) {
+      Map<String, String> enriched = new HashMap<>(variables);
+      enriched.put("yearSuffix", year.substring(year.length() - 2));
+      return enriched;
+    }
+    return variables;
   }
 
   /**

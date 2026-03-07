@@ -482,9 +482,9 @@ get_heap_config() {
     _HEAP_MIN="3g"
     _HEAP_MAX="4g"
   elif [ "$num" -eq 60 ]; then
-    # FEC (60): Individual contributions file is ~4-5GB per cycle, needs more heap
-    _HEAP_MIN="3g"
-    _HEAP_MAX="4g"
+    # FEC (60): Individual contributions has 3M+ rows/year, streaming to Iceberg
+    _HEAP_MIN="4g"
+    _HEAP_MAX="5g"
   elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then
     # SEC Secondary (23-39), prices (40), compact (42-58): lighter workload
     _HEAP_MIN="1g"

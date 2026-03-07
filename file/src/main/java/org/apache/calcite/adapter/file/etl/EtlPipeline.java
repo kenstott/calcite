@@ -209,6 +209,8 @@ public class EtlPipeline {
     MaterializationWriter writer = null;
 
     try {
+      boolean forceReprocessAll = false;
+
       // Fast-path: Check cached completion from DuckDB to skip dimension expansion entirely
       // This works for both Parquet and Iceberg formats
       MaterializeConfig materializeConfig = config.getMaterialize();
@@ -262,7 +264,7 @@ public class EtlPipeline {
           LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating",
               pipelineName);
           incrementalTracker.invalidateTableCompletion(pipelineName);
-          incrementalTracker.invalidateAll(pipelineName);
+          forceReprocessAll = true;
         }
       } else if (cached != null && cached.rowCount > 0) {
         // Config hash mismatch but data exists with rows - skip ETL validation
@@ -417,7 +419,10 @@ public class EtlPipeline {
           LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating stale marker",
               pipelineName);
           incrementalTracker.invalidateTableCompletion(pipelineName);
-          incrementalTracker.invalidateAll(pipelineName);
+          // Skip expensive invalidateAll() scan — instead force all partitions
+          // to be reprocessed. The old incremental markers will be superseded
+          // when new "complete" markers are written during reprocessing.
+          forceReprocessAll = true;
         }
       }
 
@@ -433,7 +438,15 @@ public class EtlPipeline {
       // Standard mode stores filtered indices here; partitioned mode filters per-partition in Phase 5
       Set<Integer> standardUnprocessedIndices = null;
 
-      if (usePartitionedExpansion) {
+      if (forceReprocessAll) {
+        // Stale completion marker detected — skip expensive tracker scans
+        // and reprocess all combinations from scratch
+        neededCount = totalBatches;
+        if (!usePartitionedExpansion) {
+          standardUnprocessedIndices = allIndicesSet(totalBatches);
+        }
+        LOGGER.info("Phase 2: Force reprocess all {} combinations (stale marker)", totalBatches);
+      } else if (usePartitionedExpansion) {
         // Partitioned mode: skip Phase 1.5 and Phase 2 pre-filter.
         // Filtering happens lazily per-partition during Phase 5 to avoid
         // materializing all partition combinations at once.
@@ -592,9 +605,14 @@ public class EtlPipeline {
           actualTotalBatches += partCombos.size();
 
           // Filter unprocessed within this partition
-          Set<Integer> unprocessedIndices =
-              incrementalTracker.filterUnprocessedWithEmptyTtl(
-                  pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
+          Set<Integer> unprocessedIndices;
+          if (forceReprocessAll) {
+            unprocessedIndices = allIndicesSet(partCombos.size());
+          } else {
+            unprocessedIndices =
+                incrementalTracker.filterUnprocessedWithEmptyTtl(
+                    pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
+          }
 
           if (unprocessedIndices.isEmpty()) {
             skippedBatches += partCombos.size();
@@ -1151,22 +1169,31 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
-    // Buffer the fetched data so the iterator is fully consumed outside the write lock.
-    // This ensures the HTTP connection is released before waiting on the lock.
-    List<Map<String, Object>> bufferedData = new ArrayList<Map<String, Object>>();
-    while (data.hasNext()) {
-      bufferedData.add(data.next());
-    }
-    LOGGER.debug("Fetched {} rows for batch {}, queuing for write", bufferedData.size(), processedCount);
-
+    // For large datasets, pass the iterator directly to avoid OOM from buffering
+    // millions of rows. Only buffer when needed for response partitioning (which
+    // may need to re-scan data) or write lock contention.
     // Serialize all writer and tracker operations to prevent concurrent DuckDB access
     synchronized (writeLock) {
       HttpSourceConfig sourceConfig = config.getSource();
       boolean hasResponsePartitioning = sourceConfig != null
           && sourceConfig.hasResponsePartitioning();
 
+      // Buffer data only when response partitioning needs it; otherwise stream directly
+      Iterator<Map<String, Object>> writeIter;
+      if (hasResponsePartitioning) {
+        List<Map<String, Object>> bufferedData = new ArrayList<Map<String, Object>>();
+        while (data.hasNext()) {
+          bufferedData.add(data.next());
+        }
+        LOGGER.debug("Buffered {} rows for response partitioning in batch {}",
+            bufferedData.size(), processedCount);
+        writeIter = bufferedData.iterator();
+      } else {
+        writeIter = data;
+      }
+
       long batchRows;
-      Iterator<Map<String, Object>> bufferedIter = bufferedData.iterator();
+      Iterator<Map<String, Object>> bufferedIter = writeIter;
       if (hasResponsePartitioning) {
         batchRows =
             writeWithResponsePartitioning(bufferedIter, variables,
@@ -1527,6 +1554,14 @@ public class EtlPipeline {
    * @param config Pipeline configuration
    * @return true if data files exist, false otherwise
    */
+  private static Set<Integer> allIndicesSet(int size) {
+    Set<Integer> all = new java.util.HashSet<Integer>();
+    for (int i = 0; i < size; i++) {
+      all.add(i);
+    }
+    return all;
+  }
+
   private boolean verifyDataExists(String pipelineName, EtlPipelineConfig config) {
     MaterializeConfig materializeConfig = config.getMaterialize();
     if (materializeConfig == null || !materializeConfig.isEnabled()) {

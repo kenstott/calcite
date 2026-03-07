@@ -37,6 +37,24 @@ comment: >
   from 1980 to present. Bulk downloads are pipe-delimited files with no headers.
 
 # ============================================================================
+# DIMENSION TEMPLATES
+# ============================================================================
+# FEC uses even-numbered election cycle years (not yearRange which generates
+# consecutive years). Define as explicit YAML list for proper expansion.
+
+dimension_templates:
+
+  fec_election_cycles: &fec_election_cycles
+    - "2010"
+    - "2012"
+    - "2014"
+    - "2016"
+    - "2018"
+    - "2020"
+    - "2022"
+    - "2024"
+
+# ============================================================================
 # BULK DOWNLOADS
 # ============================================================================
 
@@ -47,49 +65,49 @@ bulkDownloads:
     cachePattern: "type=fec_bulk/year={year}/cn{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cn{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
   # Committees master file — all political committees
   fec_committees:
     cachePattern: "type=fec_bulk/year={year}/cm{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cm{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
   # Candidate-Committee linkages
   fec_linkages:
     cachePattern: "type=fec_bulk/year={year}/ccl{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/ccl{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
-  # Individual contributions (largest file, ~4-5GB per cycle)
+  # Individual contributions (largest file, ~1-2GB per cycle)
   fec_individual:
     cachePattern: "type=fec_bulk/year={year}/indiv{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/indiv{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
   # Committee-to-candidate contributions
   fec_pas2:
     cachePattern: "type=fec_bulk/year={year}/pas2{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/pas2{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
   # Inter-committee transactions (other)
   fec_oth:
     cachePattern: "type=fec_bulk/year={year}/oth{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oth{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
   # Operating expenditures
   fec_oppexp:
     cachePattern: "type=fec_bulk/year={year}/oppexp{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oppexp{yearSuffix}.zip"
     dimensions:
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -104,42 +122,49 @@ column_templates:
     type: string
     nullable: false
     comment: FEC candidate ID (e.g., H0AL01234, S0AK00567, P80000722)
+    source: CAND_ID
 
   candidate_name_column: &candidate_name_column
     name: candidate_name
     type: string
     nullable: true
     comment: Candidate name (LAST, FIRST MIDDLE)
+    source: CAND_NAME
 
   candidate_party_column: &candidate_party_column
     name: party
     type: string
     nullable: true
     comment: Party affiliation (DEM, REP, LIB, GRN, IND, etc.)
+    source: CAND_PTY_AFFILIATION
 
   candidate_office_column: &candidate_office_column
     name: office
     type: string
     nullable: true
     comment: Office sought (H=House, S=Senate, P=President)
+    source: CAND_OFFICE
 
   candidate_state_column: &candidate_state_column
     name: state
     type: string
     nullable: true
     comment: Two-letter state abbreviation (US postal code)
+    source: CAND_OFFICE_ST
 
   candidate_district_column: &candidate_district_column
     name: district
     type: string
     nullable: true
     comment: Congressional district number (00 for at-large/Senate/President)
+    source: CAND_OFFICE_DISTRICT
 
   election_year_column: &election_year_column
     name: election_year
     type: integer
     nullable: true
     comment: Election year (even-numbered)
+    source: CAND_ELECTION_YR
 
   # --- Committee Columns ---
 
@@ -148,12 +173,14 @@ column_templates:
     type: string
     nullable: false
     comment: FEC committee ID (e.g., C00000042)
+    source: CMTE_ID
 
   committee_name_column: &committee_name_column
     name: committee_name
     type: string
     nullable: true
     comment: Committee name
+    source: CMTE_NM
 
   committee_type_column: &committee_type_column
     name: committee_type
@@ -166,6 +193,7 @@ column_templates:
       Y=Party qualified, Z=National party nonfederal, N=PAC nonqualified,
       Q=PAC qualified, I=Independent expenditure filer (person), C=Communication cost filer,
       E=Independent expenditure filer (not a committee), O=Super PAC
+    source: CMTE_TP
 
   # --- Transaction Columns ---
 
@@ -174,12 +202,14 @@ column_templates:
     type: string
     nullable: true
     comment: Transaction date (MMDDYYYY format in source)
+    source: TRANSACTION_DT
 
   amount_column: &amount_column
     name: amount
     type: double
     nullable: true
     comment: Transaction amount in USD (negative for refunds)
+    source: TRANSACTION_AMT
 
   # --- Filing Columns ---
 
@@ -188,18 +218,21 @@ column_templates:
     type: integer
     nullable: true
     comment: FEC election year for this record
+    source: FEC_ELECTION_YR
 
   filing_id_column: &filing_id_column
     name: filing_id
     type: long
     nullable: true
     comment: FEC filing ID number
+    source: FILE_NUM
 
   amendment_indicator_column: &amendment_indicator_column
     name: amendment_indicator
     type: string
     nullable: true
     comment: Amendment indicator (N=new, A=amendment, T=termination)
+    source: AMNDT_IND
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -229,11 +262,10 @@ partitionedTables:
     columns:
       - *candidate_id_column
       - *candidate_name_column
-      - *candidate_party_column
-      - name: party_affiliation
+      - name: party
         type: string
         nullable: true
-        comment: Detailed party affiliation code
+        comment: Party affiliation code (DEM, REP, LIB, GRN, IND, etc.)
         source: CAND_PTY_AFFILIATION
       - *candidate_office_column
       - *candidate_state_column
@@ -302,7 +334,7 @@ partitionedTables:
     dimensions:
       type:
         - candidates
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -430,7 +462,7 @@ partitionedTables:
     dimensions:
       type:
         - committees
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -506,7 +538,7 @@ partitionedTables:
     dimensions:
       type:
         - candidate_committee_linkages
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -654,7 +686,7 @@ partitionedTables:
     dimensions:
       type:
         - individual_contributions
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -810,7 +842,7 @@ partitionedTables:
     dimensions:
       type:
         - committee_contributions
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -966,7 +998,7 @@ partitionedTables:
     dimensions:
       type:
         - intercommittee_transactions
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1141,7 +1173,7 @@ partitionedTables:
     dimensions:
       type:
         - operating_expenditures
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1192,8 +1224,16 @@ partitionedTables:
       (CSV with headers).
 
     columns:
-      - *candidate_id_column
-      - *candidate_name_column
+      - name: candidate_id
+        type: string
+        nullable: true
+        comment: FEC candidate ID
+        source: cand_id
+      - name: candidate_name
+        type: string
+        nullable: true
+        comment: Candidate name
+        source: cand_name
       - name: spender_id
         type: string
         nullable: true
@@ -1204,7 +1244,11 @@ partitionedTables:
         nullable: true
         comment: Committee/spender name
         source: spe_nam
-      - *election_year_column
+      - name: election_year
+        type: integer
+        nullable: true
+        comment: FEC election year
+        source: fec_election_yr
       - name: support_oppose
         type: string
         nullable: true
@@ -1220,45 +1264,61 @@ partitionedTables:
         nullable: true
         comment: Payee name
         source: pay
-      - *transaction_date_column
-      - *amount_column
+      - name: transaction_date
+        type: string
+        nullable: true
+        comment: Expenditure date
+        source: exp_date
+      - name: amount
+        type: double
+        nullable: true
+        comment: Expenditure amount in USD
+        source: exp_amo
       - name: candidate_office
         type: string
         nullable: true
         comment: Office sought (H/S/P)
-        source: can_off
+        source: can_office
       - name: candidate_state
         type: string
         nullable: true
         comment: Candidate state
-        source: can_off_sta
+        source: can_office_state
       - name: candidate_district
         type: string
         nullable: true
         comment: Candidate district
-        source: can_off_dis
+        source: can_office_dis
       - name: candidate_party
         type: string
         nullable: true
         comment: Candidate party
-        source: can_par_aff
+        source: cand_pty_aff
       - name: prev_file_num
         type: long
         nullable: true
         comment: Previous file number (for amendments)
         source: prev_file_num
-      - *amendment_indicator_column
-      - *filing_id_column
+      - name: amendment_indicator
+        type: string
+        nullable: true
+        comment: Amendment indicator
+        source: amndt_ind
+      - name: filing_id
+        type: long
+        nullable: true
+        comment: FEC filing ID number
+        source: file_num
       - name: transaction_id
         type: string
         nullable: true
         comment: Transaction ID
-        source: tra_id
+        source: tran_id
       - name: image_num
         type: string
         nullable: true
         comment: Image number
-        source: ima_num
+        source: image_num
 
     source:
       type: http
@@ -1275,7 +1335,7 @@ partitionedTables:
     dimensions:
       type:
         - independent_expenditures
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1321,52 +1381,76 @@ partitionedTables:
       general election. Source: ElectioneeringComm_{YYYY}.csv (CSV with headers).
 
     columns:
-      - name: committee_name
+      - name: candidate_id
         type: string
         nullable: true
-        comment: Committee/organization name
-        source: cmte_nm
-      - *committee_id_column
-      - *candidate_id_column
-      - *candidate_name_column
+        comment: FEC candidate ID
+        source: CANDIDATE_ID
+      - name: candidate_name
+        type: string
+        nullable: true
+        comment: Candidate name
+        source: CANDIDATE_NAME
       - name: candidate_office
         type: string
         nullable: true
         comment: Office sought (H/S/P)
-        source: can_off
+        source: CANDIDATE_OFFICE
       - name: candidate_state
         type: string
         nullable: true
         comment: Candidate state
-        source: can_off_sta
+        source: CANDIDATE_STATE
       - name: candidate_district
         type: string
         nullable: true
         comment: Candidate district
-        source: can_off_dis
-      - name: election_type
+        source: CANDIDATE_DISTRICT
+      - name: committee_id
         type: string
         nullable: true
-        comment: Election type (P=primary, G=general)
-        source: election_tp
+        comment: Committee ID
+        source: COMMITTEE_ID
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: Committee/organization name
+        source: COMMITTEE_NAME
+      - name: payee_name
+        type: string
+        nullable: true
+        comment: Payee name
+        source: PAYEE_NAME
+      - name: disbursement_description
+        type: string
+        nullable: true
+        comment: Description of the communication/disbursement
+        source: DISBURSEMENT_DESCRIPTION
+      - name: disbursement_date
+        type: string
+        nullable: true
+        comment: Disbursement date
+        source: DISBURSEMENT_DATE
       - name: communication_date
         type: string
         nullable: true
         comment: Communication date
-        source: comm_dt
-      - *amount_column
-      - name: communication_description
-        type: string
+        source: COMMUNICATION_DATE
+      - name: amount
+        type: double
         nullable: true
-        comment: Description of the communication
-        source: comm_title
-      - *filing_id_column
-      - *amendment_indicator_column
-      - name: report_year
+        comment: Reported disbursement amount in USD
+        source: REPORTED_DISBURSEMENT_AMOUNT
+      - name: number_of_candidates
         type: integer
         nullable: true
-        comment: Report year
-        source: rpt_yr
+        comment: Number of candidates targeted
+        source: NUMBER_OF_CANDIDATES
+      - name: calculated_candidate_share
+        type: double
+        nullable: true
+        comment: Calculated per-candidate share of disbursement
+        source: CALCULATED_CANDIDATE_SHARE
 
     source:
       type: http
@@ -1383,7 +1467,7 @@ partitionedTables:
     dimensions:
       type:
         - electioneering_communications
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1405,7 +1489,7 @@ partitionedTables:
     vectorize:
       enabled: true
       columns:
-        - name: communication_description
+        - name: disbursement_description
           comment: >
             Electioneering communication description — broadcast ad content
             referencing candidates near elections.
@@ -1429,52 +1513,81 @@ partitionedTables:
       candidates. Source: CommunicationCosts_{YYYY}.csv (CSV with headers).
 
     columns:
+      - name: committee_id
+        type: string
+        nullable: true
+        comment: Committee ID
+        source: CMTE_ID
       - name: committee_name
         type: string
         nullable: true
         comment: Reporting organization name
-        source: cmte_nm
-      - *committee_id_column
-      - *candidate_id_column
-      - *candidate_name_column
+        source: CMTE_NM
+      - name: candidate_id
+        type: string
+        nullable: true
+        comment: FEC candidate ID
+        source: CAND_ID
+      - name: candidate_name
+        type: string
+        nullable: true
+        comment: Candidate name
+        source: CAND_NAME
       - name: candidate_office
         type: string
         nullable: true
         comment: Office sought (H/S/P)
-        source: cand_off
+        source: CAND_OFFICE
       - name: candidate_state
         type: string
         nullable: true
         comment: Candidate state
-        source: cand_off_st
+        source: CAND_STATE
       - name: candidate_district
         type: string
         nullable: true
         comment: Candidate district
-        source: cand_off_dist
+        source: CAND_OFFICE_DISTRICT
+      - name: party
+        type: string
+        nullable: true
+        comment: Candidate party affiliation
+        source: CAND_PTY_AFFILIATION
       - name: support_oppose
         type: string
         nullable: true
         comment: Support/oppose indicator (S=support, O=oppose)
-        source: support_oppose_indicator
+        source: SUPPORT_OPPOSE_IND
       - name: communication_type
         type: string
         nullable: true
-        comment: Communication type (e.g., direct mail, phone bank)
-        source: communication_tp
-      - name: communication_date
-        type: string
-        nullable: true
-        comment: Communication date
-        source: communication_dt
-      - *amount_column
+        comment: Communication type
+        source: COMMUNICATION_TP
       - name: communication_class
         type: string
         nullable: true
         comment: Communication class
-        source: communication_class
-      - *filing_id_column
-      - *amendment_indicator_column
+        source: COMMUNICATION_CLASS
+      - name: transaction_date
+        type: string
+        nullable: true
+        comment: Transaction date
+        source: TRANSACTION_DT
+      - name: amount
+        type: double
+        nullable: true
+        comment: Transaction amount in USD
+        source: TRANSACTION_AMT
+      - name: purpose
+        type: string
+        nullable: true
+        comment: Purpose of communication
+        source: PURPOSE
+      - name: filing_id
+        type: long
+        nullable: true
+        comment: FEC filing ID number
+        source: FILE_NUM
 
     source:
       type: http
@@ -1491,7 +1604,7 @@ partitionedTables:
     dimensions:
       type:
         - communication_costs
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1529,17 +1642,41 @@ partitionedTables:
       PAC contribution breakdowns. Source: candidate_summary_{YYYY}.csv (CSV with headers).
 
     columns:
-      - *candidate_id_column
-      - *candidate_name_column
+      - name: candidate_id
+        type: string
+        nullable: false
+        comment: FEC candidate ID (e.g., H0AL01234, S0AK00567, P80000722)
+        source: Cand_Id
+      - name: candidate_name
+        type: string
+        nullable: true
+        comment: Candidate name (LAST, FIRST MIDDLE)
+        source: Cand_Name
       - name: incumbent_challenger
         type: string
         nullable: true
         comment: Incumbent/challenger/open status
         source: Cand_Incumbent_Challenger_Open_Seat
-      - *candidate_office_column
-      - *candidate_state_column
-      - *candidate_district_column
-      - *candidate_party_column
+      - name: office
+        type: string
+        nullable: true
+        comment: Office sought (H=House, S=Senate, P=President)
+        source: Cand_Office
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state abbreviation (US postal code)
+        source: Cand_Office_St
+      - name: district
+        type: string
+        nullable: true
+        comment: Congressional district number (00 for at-large/Senate/President)
+        source: Cand_Office_Dist
+      - name: party
+        type: string
+        nullable: true
+        comment: Party affiliation (DEM, REP, LIB, GRN, IND, etc.)
+        source: Cand_Party_Affiliation
       - name: total_receipts
         type: double
         nullable: true
@@ -1549,7 +1686,7 @@ partitionedTables:
         type: double
         nullable: true
         comment: Transfers from authorized committees
-        source: Trans_From_Auth
+        source: Transfer_From_Other_Auth_Committee
       - name: total_disbursements
         type: double
         nullable: true
@@ -1559,52 +1696,52 @@ partitionedTables:
         type: double
         nullable: true
         comment: Transfers to authorized committees
-        source: Trans_to_Auth
+        source: Transfer_To_Other_Auth_Committee
       - name: cash_begin
         type: double
         nullable: true
         comment: Cash on hand at beginning of period
-        source: Begin_Cash
+        source: Cash_On_Hand_BOP
       - name: cash_end
         type: double
         nullable: true
         comment: Cash on hand at end of period
-        source: End_Cash
+        source: Cash_On_Hand_COP
       - name: contributions_from_candidate
         type: double
         nullable: true
         comment: Contributions from the candidate
-        source: Cand_Contrib
+        source: Cand_Contribution
       - name: loans_from_candidate
         type: double
         nullable: true
         comment: Loans from the candidate
-        source: Cand_Loans
+        source: Cand_Loan
       - name: other_loans
         type: double
         nullable: true
         comment: Other loans
-        source: Other_Loans
+        source: Other_Loan
       - name: loan_repayments_candidate
         type: double
         nullable: true
         comment: Candidate loan repayments
-        source: Cand_Loan_Repay
+        source: Cand_Loan_Repayment
       - name: other_loan_repayments
         type: double
         nullable: true
         comment: Other loan repayments
-        source: Other_Loan_Repay
+        source: Other_Loan_Repayment
       - name: debts_owed_by
         type: double
         nullable: true
         comment: Debts owed by committee
-        source: Debts_Owed_By
+        source: Debt_Owed_By_Committee
       - name: total_individual_contributions
         type: double
         nullable: true
         comment: Total individual contributions
-        source: Total_Individual_Contribution
+        source: Individual_Contribution
       - name: individual_itemized
         type: double
         nullable: true
@@ -1618,8 +1755,8 @@ partitionedTables:
       - name: pac_contributions
         type: double
         nullable: true
-        comment: Contributions from other political committees (PACs)
-        source: Individual_Contribution_from_Political_Parties
+        comment: Contributions from political party committees
+        source: Party_Committee_Contribution
       - name: other_committee_contributions
         type: double
         nullable: true
@@ -1634,12 +1771,12 @@ partitionedTables:
         type: double
         nullable: true
         comment: Refunds to individuals
-        source: Refund_Individual_Contribution
+        source: Individual_Refund
       - name: refunds_committee
         type: double
         nullable: true
         comment: Refunds to committees
-        source: Refund_Committee_Contribution
+        source: Other_Committee_Refund
 
     source:
       type: http
@@ -1656,7 +1793,7 @@ partitionedTables:
     dimensions:
       type:
         - candidate_summaries
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1695,14 +1832,26 @@ partitionedTables:
       Source: committee_summary_{YYYY}.csv (CSV with headers).
 
     columns:
-      - *committee_id_column
-      - *committee_name_column
-      - *committee_type_column
+      - name: committee_id
+        type: string
+        nullable: false
+        comment: FEC committee ID (e.g., C00000042)
+        source: CMTE_ID
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: Committee name
+        source: CMTE_NM
+      - name: committee_type
+        type: string
+        nullable: true
+        comment: Committee type code
+        source: CMTE_TP
       - name: designation
         type: string
         nullable: true
         comment: Committee designation
-        source: Cmte_Dsgn
+        source: CMTE_DSGN
       - name: filing_frequency
         type: string
         nullable: true
@@ -1849,7 +1998,7 @@ partitionedTables:
     dimensions:
       type:
         - committee_summaries
-      year: "${FEC_YEAR_RANGE:2010,2012,2014,2016,2018,2020,2022,2024}"
+      year: *fec_election_cycles
 
     materialize:
       enabled: true
@@ -1984,7 +2133,7 @@ constraints:
         targetColumns: [state_abbreviation]
 
   electioneering_communications:
-    primaryKey: [type, year, filing_id, candidate_id]
+    primaryKey: [type, year, committee_id, candidate_id, communication_date]
     foreignKeys:
       - columns: [committee_id]
         targetTable: committees

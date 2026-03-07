@@ -573,16 +573,123 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {
-    // For streams we must buffer to byte[] first so we can retry
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    byte[] transferBuf = new byte[8192];
-    int n;
-    while ((n = content.read(transferBuf)) != -1) {
-      baos.write(transferBuf, 0, n);
-    }
-    byte[] data = baos.toByteArray();
+    streamMultipartUpload(path, content);
+  }
 
-    writeMultipartWithRetry(path, data);
+  /**
+   * Streams an InputStream directly to S3 using multipart upload.
+   * Each part is buffered to exactly {@code partSize} bytes (16 MB) before uploading,
+   * so peak memory usage is O(partSize) regardless of total file size.
+   */
+  private void streamMultipartUpload(String path, InputStream content) throws IOException {
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
+    final int partSize = 16 * 1024 * 1024; // 16 MB parts
+
+    ObjectMetadata objectMetadata = new ObjectMetadata();
+    String contentType = guessContentType(path);
+    if (contentType != null) {
+      objectMetadata.setContentType(contentType);
+    }
+
+    // Read first part to check if content is empty
+    byte[] partBuf = new byte[partSize];
+    int firstPartLen = readFully(content, partBuf);
+
+    if (firstPartLen <= 0) {
+      // Zero-byte object: simple put
+      objectMetadata.setContentLength(0);
+      try (InputStream empty = new ByteArrayInputStream(new byte[0])) {
+        s3Client.putObject(
+            new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata));
+      }
+      return;
+    }
+
+    // If content fits in one part and is < 5MB, use simple put (multipart min is 5MB)
+    boolean streamDone = firstPartLen < partSize;
+    if (streamDone && firstPartLen < 5 * 1024 * 1024) {
+      objectMetadata.setContentLength(firstPartLen);
+      try (InputStream partStream = new ByteArrayInputStream(partBuf, 0, firstPartLen)) {
+        s3Client.putObject(
+            new PutObjectRequest(s3Uri.bucket, s3Uri.key, partStream, objectMetadata));
+      }
+      return;
+    }
+
+    // Multipart upload — stream parts as we read them
+    InitiateMultipartUploadRequest initRequest =
+        new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
+            .withObjectMetadata(objectMetadata);
+    InitiateMultipartUploadResult initResponse =
+        s3Client.initiateMultipartUpload(initRequest);
+    String uploadId = initResponse.getUploadId();
+
+    try {
+      List<PartETag> partETags = new ArrayList<>();
+      int partNumber = 1;
+
+      // Upload first part
+      UploadPartRequest uploadRequest = new UploadPartRequest()
+          .withBucketName(s3Uri.bucket)
+          .withKey(s3Uri.key)
+          .withUploadId(uploadId)
+          .withPartNumber(partNumber++)
+          .withInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen))
+          .withPartSize(firstPartLen);
+      partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+
+      // Stream remaining parts
+      while (!streamDone) {
+        int partLen = readFully(content, partBuf);
+        if (partLen <= 0) {
+          break;
+        }
+        streamDone = partLen < partSize;
+
+        uploadRequest = new UploadPartRequest()
+            .withBucketName(s3Uri.bucket)
+            .withKey(s3Uri.key)
+            .withUploadId(uploadId)
+            .withPartNumber(partNumber++)
+            .withInputStream(new ByteArrayInputStream(partBuf, 0, partLen))
+            .withPartSize(partLen);
+        partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+      }
+
+      // Complete
+      s3Client.completeMultipartUpload(
+          new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags));
+
+    } catch (Exception e) {
+      try {
+        s3Client.abortMultipartUpload(
+            new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
+      } catch (Exception abortEx) {
+        LOGGER.warn("Failed to abort multipart upload for s3://{}/{}: {}",
+            s3Uri.bucket, s3Uri.key, abortEx.toString());
+      }
+      if (e instanceof IOException) {
+        throw (IOException) e;
+      }
+      throw new IOException("Failed streaming multipart upload to S3: " + path, e);
+    }
+  }
+
+  /**
+   * Reads from an InputStream into a buffer, filling as much as possible.
+   * Returns the total bytes read, or -1 if the stream is exhausted.
+   */
+  private static int readFully(InputStream in, byte[] buf) throws IOException {
+    int total = 0;
+    while (total < buf.length) {
+      int n = in.read(buf, total, buf.length - total);
+      if (n < 0) {
+        break;
+      }
+      total += n;
+    }
+    return total;
   }
 
   /**

@@ -290,7 +290,7 @@ public class HttpSource implements DataSource {
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
         if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
             || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
-          char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
+          char delimiter = resolveDelimiter(respConfig);
           LOGGER.info("Streaming CSV from raw cache: {}", rawCacheFilePath);
           return parseDelimitedResponseStreaming(rawCacheFilePath, delimiter);
         }
@@ -1041,12 +1041,12 @@ public class HttpSource implements DataSource {
 
     // Handle CSV format
     if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV) {
-      return parseDelimitedResponse(response, ',');
+      return parseDelimitedResponse(response, resolveDelimiter(respConfig));
     }
 
     // Handle TSV format
     if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
-      return parseDelimitedResponse(response, '\t');
+      return parseDelimitedResponse(response, resolveDelimiter(respConfig));
     }
 
     if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON) {
@@ -1111,11 +1111,21 @@ public class HttpSource implements DataSource {
    * @return Iterator over rows, each row is a Map with column names as keys
    * @throws IOException if reading from cache fails
    */
+  private static char resolveDelimiter(HttpSourceConfig.ResponseConfig respConfig) {
+    String custom = respConfig.getDelimiter();
+    if (custom != null && !custom.isEmpty()) {
+      return custom.charAt(0);
+    }
+    return respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
+  }
+
   private Iterator<Map<String, Object>> parseDelimitedResponseStreaming(String cachePath, char delimiter)
       throws IOException {
     LOGGER.info("Streaming from cache: {}", cachePath);
+    HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
     return new LazyCSVIterator(storageProvider, cachePath, delimiter,
-        config.getRowFilter(), config.getWideToNarrow());
+        config.getRowFilter(), config.getWideToNarrow(),
+        respConfig.isHasHeader(), respConfig.getColumnNames());
   }
 
   /**
@@ -1147,7 +1157,8 @@ public class HttpSource implements DataSource {
 
     LazyCSVIterator(StorageProvider provider, String cachePath, char delimiter,
         HttpSourceConfig.RowFilterConfig filter,
-        HttpSourceConfig.WideToNarrowConfig wideToNarrow) throws IOException {
+        HttpSourceConfig.WideToNarrowConfig wideToNarrow,
+        boolean hasHeader, String columnNames) throws IOException {
       this.delimiter = delimiter;
       this.wideToNarrow = wideToNarrow;
       this.reader =
@@ -1164,18 +1175,49 @@ public class HttpSource implements DataSource {
       this.valueColumnNames = new ArrayList<String>();
       this.expandedRowQueue = new java.util.ArrayDeque<Map<String, Object>>();
 
-      // Parse header row
-      String headerLine = reader.readLine();
-      if (headerLine == null) {
-        this.headers = new String[0];
-        this.filterColumnIndex = -1;
-        this.filterRegex = null;
-        this.maxRows = 0;
-        exhausted = true;
-        return;
+      // Determine headers: use explicit columnNames, read from file, or generate positional
+      if (!hasHeader && columnNames != null && !columnNames.isEmpty()) {
+        // Headerless file with explicit column names from config
+        this.headers = parseDelimitedLine(columnNames, delimiter);
+        LOGGER.info("Using {} explicit column names for headerless CSV (from cache: {})",
+            headers.length, cachePath);
+      } else if (hasHeader) {
+        // Read header row from file
+        String headerLine = reader.readLine();
+        if (headerLine == null) {
+          this.headers = new String[0];
+          this.filterColumnIndex = -1;
+          this.filterRegex = null;
+          this.maxRows = 0;
+          exhausted = true;
+          return;
+        }
+        this.headers = parseDelimitedLine(headerLine, delimiter);
+        LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
+      } else {
+        // Headerless file without explicit names — peek first line for column count
+        String firstLine = reader.readLine();
+        if (firstLine == null) {
+          this.headers = new String[0];
+          this.filterColumnIndex = -1;
+          this.filterRegex = null;
+          this.maxRows = 0;
+          exhausted = true;
+          return;
+        }
+        String[] firstFields = parseDelimitedLine(firstLine, delimiter);
+        this.headers = new String[firstFields.length];
+        for (int i = 0; i < firstFields.length; i++) {
+          this.headers[i] = "field_" + i;
+        }
+        LOGGER.info("Generated {} positional column names for headerless CSV", headers.length);
+        // Push the first line back as data by pre-parsing it
+        Map<String, Object> firstRow = new LinkedHashMap<String, Object>();
+        for (int i = 0; i < headers.length && i < firstFields.length; i++) {
+          firstRow.put(headers[i], firstFields[i]);
+        }
+        expandedRowQueue.add(firstRow);
       }
-      this.headers = parseDelimitedLine(headerLine, delimiter);
-      LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
 
       // Setup wide-to-narrow column indices
       if (wideToNarrow != null && wideToNarrow.isEnabled()) {
@@ -1438,14 +1480,22 @@ public class HttpSource implements DataSource {
 
     // Stream through the CSV line by line
     try (BufferedReader reader = new BufferedReader(sourceReader)) {
-      // Parse header row
-      String headerLine = reader.readLine();
-      if (headerLine == null) {
-        return result;
+      // Determine headers
+      HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
+      String[] headers;
+      if (!respConfig.isHasHeader() && respConfig.getColumnNames() != null) {
+        // Headerless file with explicit column names
+        headers = parseDelimitedLine(respConfig.getColumnNames(), delimiter);
+        LOGGER.debug("Using {} explicit column names for headerless CSV", headers.length);
+      } else {
+        // Parse header row from file
+        String headerLine = reader.readLine();
+        if (headerLine == null) {
+          return result;
+        }
+        headers = parseDelimitedLine(headerLine, delimiter);
+        LOGGER.debug("Parsed {} columns from header", headers.length);
       }
-
-      String[] headers = parseDelimitedLine(headerLine, delimiter);
-      LOGGER.debug("Parsed {} columns from header", headers.length);
 
       // Find filter column index if filtering is enabled
       int filterColumnIndex = -1;
@@ -1709,38 +1759,7 @@ public class HttpSource implements DataSource {
    * Supports {varName} for variables and {env:VAR_NAME} for environment variables.
    */
   private String substituteVariables(String template, Map<String, String> variables) {
-    if (template == null || template.isEmpty()) {
-      return template;
-    }
-
-    StringBuffer result = new StringBuffer();
-    Matcher matcher = VAR_PATTERN.matcher(template);
-
-    while (matcher.find()) {
-      String varExpr = matcher.group(1);
-      String replacement;
-
-      Matcher envMatcher = ENV_PATTERN.matcher(varExpr);
-      if (envMatcher.matches()) {
-        // Environment variable
-        String envName = envMatcher.group(1);
-        replacement = System.getenv(envName);
-        if (replacement == null) {
-          replacement = System.getProperty(envName, "");
-        }
-      } else {
-        // Regular variable
-        replacement = variables != null ? variables.get(varExpr) : null;
-        if (replacement == null) {
-          replacement = matcher.group(0); // Keep original if not found
-        }
-      }
-
-      matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-    }
-    matcher.appendTail(result);
-
-    return result.toString();
+    return VariableResolver.substitute(template, variables);
   }
 
   /**

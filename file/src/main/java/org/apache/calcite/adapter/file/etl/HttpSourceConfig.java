@@ -829,17 +829,24 @@ public class HttpSourceConfig {
     private final String dataPath;
     private final String errorPath;
     private final PaginationConfig pagination;
+    private final boolean hasHeader;
+    private final String columnNames;
+    private final String delimiter;
 
     private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
-        PaginationConfig pagination) {
+        PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter) {
       this.format = format;
       this.dataPath = dataPath;
       this.errorPath = errorPath;
       this.pagination = pagination;
+      this.hasHeader = hasHeader;
+      this.columnNames = columnNames;
+      this.delimiter = delimiter;
     }
 
     public static ResponseConfig defaults() {
-      return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none());
+      return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none(),
+          true, null, null);
     }
 
     public ResponseFormat getFormat() {
@@ -864,6 +871,27 @@ public class HttpSourceConfig {
       return pagination;
     }
 
+    /** Whether the CSV/TSV file has a header row. Defaults to true. */
+    public boolean isHasHeader() {
+      return hasHeader;
+    }
+
+    /**
+     * Explicit column names for headerless CSV/TSV files.
+     * Delimiter-separated string (e.g., "COL1|COL2|COL3" for pipe-delimited).
+     */
+    public String getColumnNames() {
+      return columnNames;
+    }
+
+    /**
+     * Custom delimiter character for CSV files (e.g., "|" for pipe-delimited).
+     * If null, defaults to comma for CSV and tab for TSV.
+     */
+    public String getDelimiter() {
+      return delimiter;
+    }
+
     @SuppressWarnings("unchecked")
     public static ResponseConfig fromMap(Map<String, Object> map) {
       if (map == null) {
@@ -883,7 +911,14 @@ public class HttpSourceConfig {
           ? PaginationConfig.fromMap((Map<String, Object>) paginationObj)
           : PaginationConfig.none();
 
-      return new ResponseConfig(format, dataPath, errorPath, pagination);
+      // CSV/TSV header and delimiter configuration
+      Object hasHeaderObj = map.get("hasHeader");
+      boolean hasHeader = hasHeaderObj == null || Boolean.TRUE.equals(hasHeaderObj);
+      String columnNames = (String) map.get("columnNames");
+      String delimiter = (String) map.get("delimiter");
+
+      return new ResponseConfig(format, dataPath, errorPath, pagination,
+          hasHeader, columnNames, delimiter);
     }
   }
 

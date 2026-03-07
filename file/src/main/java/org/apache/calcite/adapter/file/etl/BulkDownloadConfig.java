@@ -99,11 +99,7 @@ public final class BulkDownloadConfig {
    * @return The resolved cache path
    */
   public String resolveCachePath(Map<String, String> variables) {
-    String resolved = cachePattern;
-    for (Map.Entry<String, String> entry : variables.entrySet()) {
-      resolved = resolved.replace("{" + entry.getKey() + "}", entry.getValue());
-    }
-    return resolved;
+    return VariableResolver.substitute(cachePattern, variables);
   }
 
   /**
@@ -113,11 +109,7 @@ public final class BulkDownloadConfig {
    * @return The resolved download URL
    */
   public String resolveUrl(Map<String, String> variables) {
-    String resolved = url;
-    for (Map.Entry<String, String> entry : variables.entrySet()) {
-      resolved = resolved.replace("{" + entry.getKey() + "}", entry.getValue());
-    }
-    return resolved;
+    return VariableResolver.substitute(url, variables);
   }
 
   /**
