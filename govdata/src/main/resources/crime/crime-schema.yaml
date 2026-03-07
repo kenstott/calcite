@@ -164,7 +164,7 @@ dimension_values:
     - 'property-crime'
     - 'homicide'
     - 'aggravated-assault'
-    - 'rape-legacy'
+    - 'rape'
     - 'robbery'
     - 'burglary'
     - 'larceny'
@@ -177,16 +177,12 @@ dimension_values:
     - 'property-crime'
     - 'homicide'
     - 'aggravated-assault'
-    - 'rape-legacy'
-    - 'rape-revised'
+    - 'rape'
     - 'robbery'
     - 'burglary'
     - 'larceny'
     - 'motor-vehicle-theft'
     - 'arson'
-    - 'human-trafficing'
-    - 'human-trafficking-commercial'
-    - 'human-trafficking-servitude'
 
   # Arrest offense categories - numeric codes from /LATEST/lookup/offenses?type=arrest
   # Use 'all' for all offenses combined
