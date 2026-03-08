@@ -486,9 +486,9 @@ get_heap_config() {
     _HEAP_MIN="4g"
     _HEAP_MAX="5g"
   elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then
-    # SEC Secondary (23-39), prices (40), compact (42-58): lighter workload
-    _HEAP_MIN="1g"
-    _HEAP_MAX="2g"
+    # SEC Secondary (23-39), prices (40), compact (42-58): tracker preload needs ~2.5GB
+    _HEAP_MIN="2g"
+    _HEAP_MAX="3g"
   else
     # SEC Primary (1-17: 10-K/10-Q), non-SEC data (18-22), crime (21): need full heap
     _HEAP_MIN="2g"
