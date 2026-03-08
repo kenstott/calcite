@@ -19,6 +19,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
+# Tee all output to a timestamped log file while preserving terminal output
+POOL_LOG_DIR="$SCRIPT_DIR/runs"
+mkdir -p "$POOL_LOG_DIR"
+POOL_LOG="$POOL_LOG_DIR/pool-$(date '+%Y%m%d-%H%M%S').log"
+exec > >(tee -a "$POOL_LOG") 2>&1
+echo "Pool log: $POOL_LOG"
+
 MAX_WORKERS=99       # Effectively unlimited — memory budget is the real constraint
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
