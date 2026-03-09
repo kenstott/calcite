@@ -241,19 +241,8 @@ public class DocumentETLProcessor {
             continue;
           }
 
-          // Download document - returns storage provider path (can be S3)
-          String documentPath = documentSource.downloadDocument(docVariables);
-
-          // Convert document using String-based method for S3 compatibility
-          ConversionMetadata conversionMetadata = new ConversionMetadata(outputDirectory);
-          // Pass document metadata as hints so converters can use them
-          for (Map.Entry<String, String> entry : docVariables.entrySet()) {
-            conversionMetadata.setHint(entry.getKey(), entry.getValue());
-          }
-          List<String> converted =
-              documentConverter.convert(documentPath,
-              outputDirectory,
-              conversionMetadata);
+          List<String> converted = processDocumentWithRetry(
+              docVariables, documentSource, outputDirectory);
 
           outputFiles.addAll(converted);
           documentsProcessed++;
@@ -413,6 +402,80 @@ public class DocumentETLProcessor {
         allOutputFiles,
         allErrors,
         duration);
+  }
+
+  private static final int DOC_MAX_RETRIES = 3;
+  private static final long DOC_RETRY_INITIAL_DELAY_MS = 5000;
+
+  /**
+   * Downloads and converts a single document, retrying on transient errors.
+   * Each retry waits with exponential backoff (5s, 10s, 20s).
+   */
+  private List<String> processDocumentWithRetry(
+      Map<String, String> docVariables, DocumentSource documentSource,
+      String outputDirectory) throws IOException {
+    IOException lastException = null;
+    for (int attempt = 0; attempt < DOC_MAX_RETRIES; attempt++) {
+      try {
+        String documentPath = documentSource.downloadDocument(docVariables);
+        ConversionMetadata conversionMetadata = new ConversionMetadata(outputDirectory);
+        for (Map.Entry<String, String> entry : docVariables.entrySet()) {
+          conversionMetadata.setHint(entry.getKey(), entry.getValue());
+        }
+        return documentConverter.convert(documentPath, outputDirectory, conversionMetadata);
+      } catch (IOException e) {
+        lastException = e;
+        if (attempt < DOC_MAX_RETRIES - 1 && isTransientError(e)) {
+          long delay = DOC_RETRY_INITIAL_DELAY_MS * (1L << attempt);
+          LOGGER.warn("Transient error processing {} - retrying in {}ms (attempt {}/{}): {}",
+              docVariables.get("document"), delay, attempt + 1, DOC_MAX_RETRIES,
+              e.getMessage());
+          try {
+            Thread.sleep(delay);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw e;
+          }
+        } else {
+          throw e;
+        }
+      }
+    }
+    throw lastException;
+  }
+
+  /**
+   * Returns whether an IOException represents a transient error worth retrying
+   * at the document level. Covers HTTP 5xx, truncated streams, timeouts, and
+   * connection resets.
+   */
+  private static boolean isTransientError(IOException e) {
+    // Walk the cause chain — transient root causes are often wrapped
+    Throwable t = e;
+    while (t != null) {
+      String msg = t.getMessage();
+      if (msg != null) {
+        String lower = msg.toLowerCase();
+        if (lower.contains("http 50") // 500, 502, 503, 504
+            || lower.contains("timed out")
+            || lower.contains("timeout")
+            || lower.contains("connection reset")
+            || lower.contains("connection closed")
+            || lower.contains("broken pipe")
+            || lower.contains("premature end")
+            || lower.contains("premature eof")
+            || lower.contains("unexpected end")
+            || lower.contains("end of zlib")
+            || lower.contains("end of content-length")) {
+          return true;
+        }
+      }
+      if (t instanceof java.io.EOFException) {
+        return true;
+      }
+      t = t.getCause();
+    }
+    return false;
   }
 
   /**
