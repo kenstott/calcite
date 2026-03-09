@@ -37,6 +37,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -93,6 +95,8 @@ public class HttpSource implements DataSource {
   private final VariableNormalizer variableNormalizer;
   private final StorageProvider storageProvider;
   private final String rawCachePath;
+  /** Local filesystem path for raw cache, used instead of S3 to reduce API calls. */
+  private final String localRawCachePath;
   private long lastRequestTime;
 
   /**
@@ -133,6 +137,7 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
+    this.localRawCachePath = computeLocalRawCachePath(rawCachePath);
   }
 
   /**
@@ -151,6 +156,7 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
+    this.localRawCachePath = null;
   }
 
   /**
@@ -758,6 +764,19 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponse(InputStream input, String cachePath) throws IOException {
+    if (isLocalPath(cachePath)) {
+      File file = new File(cachePath);
+      file.getParentFile().mkdirs();
+      try (FileOutputStream fos = new FileOutputStream(file)) {
+        byte[] buffer = new byte[8192];
+        int len;
+        while ((len = input.read(buffer)) != -1) {
+          fos.write(buffer, 0, len);
+        }
+      }
+      LOGGER.info("Cached response (local): {}", cachePath);
+      return cachePath;
+    }
     String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
     storageProvider.createDirectories(parentPath);
     storageProvider.writeFile(cachePath, input);
@@ -774,6 +793,14 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponseString(String response, String cachePath) throws IOException {
+    if (isLocalPath(cachePath)) {
+      File file = new File(cachePath);
+      file.getParentFile().mkdirs();
+      byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+      Files.write(Paths.get(cachePath), bytes);
+      LOGGER.info("Cached response (local): {} ({} bytes)", cachePath, bytes.length);
+      return cachePath;
+    }
     String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
     storageProvider.createDirectories(parentPath);
     byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
@@ -836,6 +863,10 @@ public class HttpSource implements DataSource {
    * @throws IOException if reading fails
    */
   private String readFromCache(String cachePath) throws IOException {
+    if (isLocalPath(cachePath)) {
+      byte[] bytes = Files.readAllBytes(Paths.get(cachePath));
+      return new String(bytes, StandardCharsets.UTF_8);
+    }
     try (InputStream is = storageProvider.openInputStream(cachePath);
          java.io.Reader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
       StringBuilder sb = new StringBuilder();
@@ -892,10 +923,23 @@ public class HttpSource implements DataSource {
           }
 
           // Write to cache
-          try (InputStream fis = new FileInputStream(tempFile)) {
-            String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
-            storageProvider.createDirectories(parentPath);
-            storageProvider.writeFile(cachePath, fis);
+          if (isLocalPath(cachePath)) {
+            File cacheFile = new File(cachePath);
+            cacheFile.getParentFile().mkdirs();
+            try (InputStream fis = new FileInputStream(tempFile);
+                 FileOutputStream fos = new FileOutputStream(cacheFile)) {
+              byte[] copyBuf = new byte[65536];
+              int copyLen;
+              while ((copyLen = fis.read(copyBuf)) > 0) {
+                fos.write(copyBuf, 0, copyLen);
+              }
+            }
+          } else {
+            try (InputStream fis = new FileInputStream(tempFile)) {
+              String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+              storageProvider.createDirectories(parentPath);
+              storageProvider.writeFile(cachePath, fis);
+            }
           }
           tempFile.delete();
           LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
@@ -1123,7 +1167,14 @@ public class HttpSource implements DataSource {
       throws IOException {
     LOGGER.info("Streaming from cache: {}", cachePath);
     HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
-    return new LazyCSVIterator(storageProvider, cachePath, delimiter,
+    // Open input stream: local file or storage provider
+    InputStream inputStream;
+    if (isLocalPath(cachePath)) {
+      inputStream = new FileInputStream(cachePath);
+    } else {
+      inputStream = storageProvider.openInputStream(cachePath);
+    }
+    return new LazyCSVIterator(inputStream, cachePath, delimiter,
         config.getRowFilter(), config.getWideToNarrow(),
         respConfig.isHasHeader(), respConfig.getColumnNames());
   }
@@ -1155,14 +1206,14 @@ public class HttpSource implements DataSource {
     private int skippedRows;
     private long lastLogTime;
 
-    LazyCSVIterator(StorageProvider provider, String cachePath, char delimiter,
+    LazyCSVIterator(InputStream inputStream, String cachePath, char delimiter,
         HttpSourceConfig.RowFilterConfig filter,
         HttpSourceConfig.WideToNarrowConfig wideToNarrow,
         boolean hasHeader, String columnNames) throws IOException {
       this.delimiter = delimiter;
       this.wideToNarrow = wideToNarrow;
       this.reader =
-          new BufferedReader(new InputStreamReader(provider.openInputStream(cachePath), StandardCharsets.UTF_8));
+          new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
       this.exhausted = false;
       this.lineNumber = 0;
       this.matchedRows = 0;
@@ -1917,12 +1968,71 @@ public class HttpSource implements DataSource {
     return new HttpSource(config, hooksConfig);
   }
 
-  // --- Raw Response Caching (StorageProvider-based) ---
+  // --- Raw Response Caching (StorageProvider-based, with local filesystem optimization) ---
+
+  /**
+   * Computes the local filesystem cache path to use instead of S3 for raw caching.
+   *
+   * <p>When rawCachePath points to S3, using S3 for per-response caching generates
+   * one PUT per API call (e.g., 2.88M PUTs for crime data). This method computes
+   * a local filesystem mirror path to avoid those S3 calls entirely.
+   *
+   * <p>The local cache base can be set via the {@code ETL_LOCAL_RAW_CACHE} environment
+   * variable. If not set and the rawCachePath starts with {@code s3://}, defaults
+   * to {@code /tmp/etl-raw-cache}.
+   *
+   * @param rawCachePath the configured raw cache path (may be S3 or local)
+   * @return local filesystem path for raw cache, or null if local caching is not applicable
+   */
+  private static String computeLocalRawCachePath(String rawCachePath) {
+    if (rawCachePath == null) {
+      return null;
+    }
+
+    String localCacheBase = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCacheBase == null && rawCachePath.startsWith("s3://")) {
+      // Default: mirror S3 raw cache path locally under /tmp
+      localCacheBase = "/tmp/etl-raw-cache";
+    }
+
+    if (localCacheBase == null) {
+      return null;
+    }
+
+    // Extract the meaningful part of the path (after bucket name)
+    String suffix = rawCachePath;
+    if (suffix.startsWith("s3://")) {
+      // s3://bucket/path -> path
+      int slashIdx = suffix.indexOf('/', 5);
+      suffix = slashIdx >= 0 ? suffix.substring(slashIdx + 1) : "";
+    } else if (suffix.startsWith("gs://")) {
+      int slashIdx = suffix.indexOf('/', 5);
+      suffix = slashIdx >= 0 ? suffix.substring(slashIdx + 1) : "";
+    }
+
+    if (suffix.isEmpty()) {
+      return localCacheBase;
+    }
+
+    return localCacheBase + "/" + suffix;
+  }
+
+  /**
+   * Checks whether a cache path refers to a local file (not a cloud storage path).
+   */
+  private static boolean isLocalPath(String path) {
+    return path != null
+        && !path.startsWith("s3://")
+        && !path.startsWith("gs://");
+  }
 
   /**
    * Checks if raw cache is enabled and available.
    */
   private boolean isRawCacheEnabled() {
+    if (localRawCachePath != null && config.getRawCache().isEnabled()) {
+      return true;
+    }
     return config.getRawCache().isEnabled()
         && storageProvider != null
         && rawCachePath != null;
@@ -1934,8 +2044,10 @@ public class HttpSource implements DataSource {
    * Example: s3://bucket/.raw/type=regional_income/year=2020/tablename=CAGDP2/response.json
    */
   private String buildRawCachePath(Map<String, String> variables) {
-    StringBuilder path = new StringBuilder(rawCachePath);
-    if (!rawCachePath.endsWith("/")) {
+    // Use local filesystem cache if available (avoids S3 PUT per API response)
+    String basePath = localRawCachePath != null ? localRawCachePath : rawCachePath;
+    StringBuilder path = new StringBuilder(basePath);
+    if (!basePath.endsWith("/")) {
       path.append("/");
     }
 
@@ -1971,7 +2083,13 @@ public class HttpSource implements DataSource {
     try {
       // Immutable data - if cache exists, it's valid
       // Staleness is determined by IncrementalTracker, not by TTL
-      if (!storageProvider.exists(cachePath)) {
+      boolean exists;
+      if (isLocalPath(cachePath)) {
+        exists = new File(cachePath).exists();
+      } else {
+        exists = storageProvider != null && storageProvider.exists(cachePath);
+      }
+      if (!exists) {
         LOGGER.debug("Raw cache miss: {}", cachePath);
         return false;
       }
@@ -1991,6 +2109,12 @@ public class HttpSource implements DataSource {
    * @throws IOException if read fails
    */
   private String readRawCache(String cachePath) throws IOException {
+    if (isLocalPath(cachePath)) {
+      byte[] bytes = Files.readAllBytes(Paths.get(cachePath));
+      String content = new String(bytes, StandardCharsets.UTF_8);
+      LOGGER.info("Raw cache hit (local): {} ({} bytes)", cachePath, content.length());
+      return content;
+    }
     try (InputStream is = storageProvider.openInputStream(cachePath)) {
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
       byte[] buffer = new byte[8192];
@@ -2012,6 +2136,13 @@ public class HttpSource implements DataSource {
    */
   private void writeRawCache(String cachePath, String content) {
     try {
+      if (isLocalPath(cachePath)) {
+        File file = new File(cachePath);
+        file.getParentFile().mkdirs();
+        Files.write(Paths.get(cachePath), content.getBytes(StandardCharsets.UTF_8));
+        LOGGER.info("Raw cache written (local): {} ({} bytes)", cachePath, content.length());
+        return;
+      }
       // Ensure parent directory exists
       String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
       storageProvider.createDirectories(parentPath);

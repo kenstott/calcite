@@ -40,8 +40,10 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /**
@@ -79,6 +81,21 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       System.getenv("DUCKDB_MEMORY_LIMIT") != null
           ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
+  /**
+   * Reads an integer from an environment variable with a default fallback.
+   */
+  private static int getEnvInt(String name, int defaultValue) {
+    String val = System.getenv(name);
+    if (val != null) {
+      try {
+        return Integer.parseInt(val.trim());
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return defaultValue;
+  }
+
   private final StorageProvider storageProvider;
   private final String warehousePath;
   private final IncrementalTracker incrementalTracker;
@@ -103,6 +120,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** Accumulated data files for bulk commit. */
   private final List<org.apache.iceberg.DataFile> pendingDataFiles =
       new ArrayList<org.apache.iceberg.DataFile>();
+
+  /** Accumulated transformed rows per partition key, awaiting flush to S3. */
+  private final Map<String, List<Map<String, Object>>> partitionBuffers =
+      new LinkedHashMap<String, List<Map<String, Object>>>();
+  /** Partition variables per buffer key, for writing. */
+  private final Map<String, Map<String, String>> partitionVarsMap =
+      new HashMap<String, Map<String, String>>();
+  /** Total rows currently buffered across all partitions. */
+  private long bufferedRowCount = 0;
+
+  /** Flush threshold per partition (rows). Configurable via ETL_FLUSH_THRESHOLD env var. */
+  private static final int DEFAULT_FLUSH_THRESHOLD = getEnvInt("ETL_FLUSH_THRESHOLD", 50000);
+  /** Max total buffered rows across all partitions. Configurable via ETL_MAX_BUFFERED_ROWS. */
+  private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 500000);
+  private int flushThreshold = DEFAULT_FLUSH_THRESHOLD;
+  private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
 
   /**
    * Represents a staged batch ready for commit.
@@ -165,7 +198,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       this.batchSize = DEFAULT_BATCH_SIZE;
       this.stagingMode = MaterializeOptionsConfig.StagingMode.REMOTE;
     }
-    LOGGER.info("Using batchSize={}, stagingMode={}", batchSize, stagingMode);
+    LOGGER.info("Using batchSize={}, stagingMode={}, flushThreshold={}, maxBufferedRows={}",
+        batchSize, stagingMode, flushThreshold, maxBufferedRows);
 
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
@@ -638,13 +672,101 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Transform rows: map source field names to target column names
     List<Map<String, Object>> transformedRows = transformRows(rows, partitionVariables);
 
-    // Use Iceberg's native Parquet writer with proper field IDs
-    org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(transformedRows, partitionVariables);
+    // Build canonical partition key from sorted partition variables
+    String partitionKey = buildPartitionKey(partitionVariables);
 
+    // Append transformed rows to partition buffer
+    List<Map<String, Object>> buffer = partitionBuffers.get(partitionKey);
+    if (buffer == null) {
+      buffer = new ArrayList<Map<String, Object>>();
+      partitionBuffers.put(partitionKey, buffer);
+      partitionVarsMap.put(partitionKey, partitionVariables);
+    }
+    buffer.addAll(transformedRows);
+    bufferedRowCount += transformedRows.size();
+
+    // Flush this partition if it exceeds the per-partition threshold
+    if (buffer.size() >= flushThreshold) {
+      flushPartition(partitionKey);
+    }
+
+    // If total buffered rows exceed the global max, flush the largest partition
+    if (bufferedRowCount > maxBufferedRows) {
+      flushLargestPartition();
+    }
+  }
+
+  /**
+   * Builds a canonical partition key string from partition variables.
+   * Uses sorted key=value pairs so the same partition always produces the same key.
+   */
+  private String buildPartitionKey(Map<String, String> partitionVariables) {
+    if (partitionVariables == null || partitionVariables.isEmpty()) {
+      return "";
+    }
+    TreeMap<String, String> sorted = new TreeMap<String, String>(partitionVariables);
+    StringBuilder sb = new StringBuilder();
+    for (Map.Entry<String, String> entry : sorted.entrySet()) {
+      if (sb.length() > 0) {
+        sb.append("|");
+      }
+      sb.append(entry.getKey()).append("=").append(entry.getValue());
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Flushes a single partition buffer to S3 via the Iceberg table writer.
+   */
+  private void flushPartition(String partitionKey) throws IOException {
+    List<Map<String, Object>> rows = partitionBuffers.get(partitionKey);
+    if (rows == null || rows.isEmpty()) {
+      return;
+    }
+    Map<String, String> partVars = partitionVarsMap.get(partitionKey);
+    int rowCount = rows.size();
+
+    org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
-      LOGGER.debug("Staged batch {} (1 file) for bulk commit: {}",
-          pendingStagedBatches.size() + 1, partitionVariables);
+    }
+
+    LOGGER.info("Flushed {} buffered rows for partition [{}] to S3", rowCount,
+        partitionKey.isEmpty() ? "unpartitioned" : partitionKey);
+
+    rows.clear();
+    bufferedRowCount -= rowCount;
+    partitionBuffers.remove(partitionKey);
+    partitionVarsMap.remove(partitionKey);
+  }
+
+  /**
+   * Flushes the largest partition buffer to stay within memory limits.
+   */
+  private void flushLargestPartition() throws IOException {
+    String largestKey = null;
+    int largestSize = 0;
+    for (Map.Entry<String, List<Map<String, Object>>> entry : partitionBuffers.entrySet()) {
+      if (entry.getValue().size() > largestSize) {
+        largestSize = entry.getValue().size();
+        largestKey = entry.getKey();
+      }
+    }
+    if (largestKey != null) {
+      LOGGER.info("Total buffered rows ({}) exceeds max ({}), flushing largest partition [{}] ({} rows)",
+          bufferedRowCount, maxBufferedRows, largestKey, largestSize);
+      flushPartition(largestKey);
+    }
+  }
+
+  /**
+   * Flushes all remaining partition buffers to S3.
+   */
+  private void flushAllPartitions() throws IOException {
+    // Copy keys to avoid ConcurrentModificationException during iteration
+    List<String> keys = new ArrayList<String>(partitionBuffers.keySet());
+    for (String key : keys) {
+      flushPartition(key);
     }
   }
 
@@ -1528,6 +1650,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throw new IllegalStateException("Writer not initialized");
     }
 
+    // Flush all remaining buffered rows before commit
+    if (!partitionBuffers.isEmpty()) {
+      LOGGER.info("Flushing {} buffered partitions ({} rows) before commit",
+          partitionBuffers.size(), bufferedRowCount);
+      flushAllPartitions();
+    }
+
     // Bulk commit all pending data files in a single Iceberg transaction
     if (!pendingDataFiles.isEmpty()) {
       LOGGER.info("Bulk committing {} data files from {} batches to Iceberg",
@@ -1688,6 +1817,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       } catch (SQLException e) {
         LOGGER.warn("Failed to close DuckDB connection: {}", e.getMessage());
       }
+    }
+
+    // Warn about unflushed partition buffers (data loss on crash/close without commit)
+    if (!partitionBuffers.isEmpty()) {
+      LOGGER.warn("Closing writer with {} unflushed partition buffers ({} rows) - data will be lost",
+          partitionBuffers.size(), bufferedRowCount);
+      partitionBuffers.clear();
+      partitionVarsMap.clear();
+      bufferedRowCount = 0;
     }
 
     // Cleanup any uncommitted staging directories to prevent disk space leaks

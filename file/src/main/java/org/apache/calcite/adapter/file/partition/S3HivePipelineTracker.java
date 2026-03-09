@@ -113,6 +113,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** When true, skip compaction and file deletion during reads (for parallel worker mode). */
   private final boolean noCompact;
 
+  /** Pending state writes awaiting flush to S3. */
+  private final List<PendingState> pendingStates = new ArrayList<PendingState>();
+  /** Flush threshold for pending states. */
+  private static final int PENDING_FLUSH_THRESHOLD = parsePendingFlushThreshold();
+  /** Whether flush-on-shutdown hook has been registered. */
+  private volatile boolean shutdownHookRegistered = false;
+
   /**
    * Create an S3-backed pipeline tracker.
    *
@@ -885,44 +892,33 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /**
-   * Write a state row to S3 as an append-only parquet file.
+   * Buffer a state row for later batch-flush to S3.
+   *
+   * <p>Instead of writing one parquet file per state change (which causes
+   * millions of S3 PUT calls for large ETL jobs), state changes are buffered
+   * in memory and flushed when the buffer reaches {@link #PENDING_FLUSH_THRESHOLD},
+   * when {@link #close()} is called, or when {@link #flushPendingStates()} is
+   * called explicitly.
+   *
+   * <p>The in-memory {@link #stageCache} is still updated immediately by callers
+   * (e.g. {@link #markComplete}), so reads remain correct without flushing.
    */
   private void writeState(String sourceKey, String tableName, String phase,
       String state, long rowCount, String configHash, String signature,
       String errorMessage) {
     long asOf = System.currentTimeMillis();
-    String year = "_table_complete".equals(sourceKey)
-        ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
-    String safeSourceKey = sanitizeHiveValue(sourceKey);
-    String fileName = UUID.randomUUID().toString() + ".parquet";
-    String path = bucketPath + "/year=" + year + "/source_key=" + safeSourceKey
-        + "/" + fileName;
+    ensureShutdownHook();
 
-    String sql = "COPY ("
-        + "SELECT ? AS source_key, ? AS table_name, ? AS phase, ? AS state, "
-        + "CAST(? AS BIGINT) AS row_count, ? AS config_hash, ? AS signature, "
-        + "? AS error_message, CAST(? AS BIGINT) AS as_of"
-        + ") TO '" + path + "' (FORMAT PARQUET)";
-
-    // Synchronize on connectionLock — DuckDB JDBC connection is not thread-safe
-    // for concurrent prepareStatement/executeUpdate calls
+    boolean shouldFlush = false;
     synchronized (connectionLock) {
-      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-        stmt.setString(1, sourceKey);
-        stmt.setString(2, tableName);
-        stmt.setString(3, phase);
-        stmt.setString(4, state);
-        stmt.setLong(5, rowCount);
-        stmt.setString(6, configHash);
-        stmt.setString(7, signature);
-        stmt.setString(8, errorMessage);
-        stmt.setLong(9, asOf);
-        stmt.executeUpdate();
-        LOGGER.debug("Wrote tracker state to {}", path);
-      } catch (SQLException e) {
-        throw new RuntimeException(
-            "Failed to write tracker state to " + path + ": " + e.getMessage(), e);
+      pendingStates.add(new PendingState(sourceKey, tableName, phase,
+          state, rowCount, configHash, signature, errorMessage, asOf));
+      if (pendingStates.size() >= PENDING_FLUSH_THRESHOLD) {
+        shouldFlush = true;
       }
+    }
+    if (shouldFlush) {
+      flushPendingStates();
     }
   }
 
@@ -1533,7 +1529,159 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return String.valueOf(cal.get(java.util.Calendar.YEAR));
   }
 
+  // ===== Write-Behind Buffering =====
+
+  private static int parsePendingFlushThreshold() {
+    String env = System.getenv("ETL_TRACKER_FLUSH_THRESHOLD");
+    if (env != null && !env.isEmpty()) {
+      try {
+        return Integer.parseInt(env);
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return 500;
+  }
+
+  /**
+   * Flush all pending tracker state writes to S3 as batched parquet files.
+   *
+   * <p>Groups pending states by year partition and writes one parquet file per year,
+   * dramatically reducing S3 PUT calls compared to writing one file per state change.
+   */
+  public void flushPendingStates() {
+    List<PendingState> toFlush;
+    synchronized (connectionLock) {
+      if (pendingStates.isEmpty()) {
+        return;
+      }
+      toFlush = new ArrayList<PendingState>(pendingStates);
+      pendingStates.clear();
+    }
+
+    // Group by year (for S3 path partitioning)
+    Map<String, List<PendingState>> byYear = new LinkedHashMap<String, List<PendingState>>();
+    for (PendingState ps : toFlush) {
+      String year = "_table_complete".equals(ps.sourceKey)
+          ? COMPLETION_YEAR : extractYear(ps.sourceKey, ps.asOf);
+      List<PendingState> list = byYear.get(year);
+      if (list == null) {
+        list = new ArrayList<PendingState>();
+        byYear.put(year, list);
+      }
+      list.add(ps);
+    }
+
+    for (Map.Entry<String, List<PendingState>> entry : byYear.entrySet()) {
+      String year = entry.getKey();
+      List<PendingState> states = entry.getValue();
+      // Use UUID for unique file name
+      String batchId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+      String path = bucketPath + "/year=" + year + "/source_key=_batch_" + batchId
+          + "/batch.parquet";
+
+      // Build a temp DuckDB table, insert all states, COPY TO S3 as one file
+      synchronized (connectionLock) {
+        try {
+          Connection conn = getConnection();
+          // Create temp table
+          try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("CREATE TEMP TABLE IF NOT EXISTS pending_flush ("
+                + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
+                + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
+                + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
+            stmt.executeUpdate("DELETE FROM pending_flush");
+          }
+          // Batch insert
+          try (PreparedStatement pstmt = conn.prepareStatement(
+              "INSERT INTO pending_flush VALUES (?,?,?,?,?,?,?,?,?)")) {
+            for (PendingState ps : states) {
+              pstmt.setString(1, ps.sourceKey);
+              pstmt.setString(2, ps.tableName);
+              pstmt.setString(3, ps.phase);
+              pstmt.setString(4, ps.state);
+              pstmt.setLong(5, ps.rowCount);
+              pstmt.setString(6, ps.configHash);
+              pstmt.setString(7, ps.signature);
+              pstmt.setString(8, ps.errorMessage);
+              pstmt.setLong(9, ps.asOf);
+              pstmt.addBatch();
+            }
+            pstmt.executeBatch();
+          }
+          // COPY to S3 as single file
+          try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("COPY pending_flush TO '" + path + "' (FORMAT PARQUET)");
+          }
+          LOGGER.info("Flushed {} tracker states to {} (year={})",
+              states.size(), path, year);
+        } catch (SQLException e) {
+          LOGGER.error("Failed to flush {} pending tracker states: {}",
+              states.size(), e.getMessage());
+          // Re-add failed states back to pending for retry
+          synchronized (connectionLock) {
+            pendingStates.addAll(0, states);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Ensure a JVM shutdown hook is registered to flush pending states.
+   * Called lazily on first writeState to avoid registering hooks for
+   * tracker instances that only read.
+   */
+  private void ensureShutdownHook() {
+    if (!shutdownHookRegistered) {
+      shutdownHookRegistered = true;
+      final S3HivePipelineTracker tracker = this;
+      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            tracker.flushPendingStates();
+          } catch (Exception e) {
+            // best effort on shutdown
+          }
+        }
+      }, "tracker-flush-shutdown"));
+    }
+  }
+
+  /** Buffered state entry awaiting flush to S3. */
+  private static class PendingState {
+    final String sourceKey;
+    final String tableName;
+    final String phase;
+    final String state;
+    final long rowCount;
+    final String configHash;
+    final String signature;
+    final String errorMessage;
+    final long asOf;
+
+    PendingState(String sourceKey, String tableName, String phase,
+        String state, long rowCount, String configHash, String signature,
+        String errorMessage, long asOf) {
+      this.sourceKey = sourceKey;
+      this.tableName = tableName;
+      this.phase = phase;
+      this.state = state;
+      this.rowCount = rowCount;
+      this.configHash = configHash;
+      this.signature = signature;
+      this.errorMessage = errorMessage;
+      this.asOf = asOf;
+    }
+  }
+
   @Override public void close() {
+    // Flush any pending states before closing the connection
+    try {
+      flushPendingStates();
+    } catch (Exception e) {
+      LOGGER.warn("Error flushing pending tracker states on close: {}", e.getMessage());
+    }
     synchronized (connectionLock) {
       if (connection != null) {
         try {
