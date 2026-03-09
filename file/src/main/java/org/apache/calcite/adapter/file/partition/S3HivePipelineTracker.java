@@ -463,7 +463,33 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       LOGGER.info("Scanned tracker year={} from compacted file: "
           + "{} source keys, {} completed tables, {}ms",
           year, counts[0], counts[1], elapsed);
-      return Collections.emptyList(); // fast path — no individual files to clean up
+
+      // Merge any individual files written after compaction by other workers.
+      // Without this, concurrent workers' tracker writes would be invisible.
+      String prefix = "year=" + year + "/source_key=";
+      List<String> stragglers = listTrackerFiles(prefix);
+      if (!stragglers.isEmpty()) {
+        LOGGER.info("Found {} individual tracker files alongside compacted file for year={}, "
+            + "merging to ensure concurrent worker data is included", stragglers.size(), year);
+        java.io.File tempDir = null;
+        try {
+          tempDir = downloadTrackerFilesParallel(stragglers, year);
+          String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+          int[] extra = readTrackerGlobAllPhases(localGlob);
+          if (extra != null) {
+            LOGGER.info("Merged {} extra source keys, {} tables from individual files for year={}",
+                extra[0], extra[1], year);
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Failed to merge straggler files for year={}: {}", year, e.getMessage());
+        } finally {
+          if (tempDir != null) {
+            deleteDir(tempDir);
+          }
+        }
+      }
+
+      return Collections.emptyList(); // compacted + stragglers merged — no files to delete
     }
 
     // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.
