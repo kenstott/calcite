@@ -518,15 +518,7 @@ run_etl() {
 
   # Build extra flags
   local extra_flags=""
-  if [ "${ETL_COMPACT_ONLY:-}" = "true" ]; then
-    extra_flags="--compact-only"
-    echo "[$worker_id] COMPACT-ONLY mode: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
-  elif [ "${ETL_NO_COMPACT:-}" = "true" ]; then
-    extra_flags="--no-compact"
-    echo "[$worker_id] NO-COMPACT mode: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
-  else
-    echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
-  fi
+  echo "[$worker_id] Starting ETL with model: $model_file (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   if [ -n "${ETL_PARALLEL_THREADS:-}" ] && [ "${ETL_PARALLEL_THREADS:-0}" -gt 1 ]; then
     extra_flags="$extra_flags --threads $ETL_PARALLEL_THREADS"
     echo "[$worker_id] Parallel entity threads: $ETL_PARALLEL_THREADS"

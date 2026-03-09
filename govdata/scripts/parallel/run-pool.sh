@@ -29,8 +29,6 @@ echo "Pool log: $POOL_LOG"
 MAX_WORKERS=99       # Effectively unlimited — memory budget is the real constraint
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
-COMPACT_ONLY=false
-NO_COMPACT=false
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 
 # Parse flags
@@ -56,10 +54,6 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -p requires a numeric argument (parallel entity threads)" >&2; exit 1
       fi
       PARALLEL_THREADS=$2; shift 2 ;;
-    -c|--compact-only)
-      COMPACT_ONLY=true; shift ;;
-    -n|--no-compact)
-      NO_COMPACT=true; shift ;;
     *) break ;;
   esac
 done
@@ -67,12 +61,6 @@ done
 TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
 # Export flags so worker scripts pass them to EtlRunner
-if [ "$COMPACT_ONLY" = "true" ]; then
-  export ETL_COMPACT_ONLY=true
-fi
-if [ "$NO_COMPACT" = "true" ]; then
-  export ETL_NO_COMPACT=true
-fi
 if [ "$PARALLEL_THREADS" -gt 0 ]; then
   export ETL_PARALLEL_THREADS=$PARALLEL_THREADS
 fi
@@ -84,8 +72,6 @@ if [ $# -eq 0 ]; then
   echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
   echo "  $0 -r 2000 18-26          — reserve 2GB for OS (default: ${OS_RESERVE_MB}MB)"
   echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
-  echo "  $0 -c 1-22                — compact tracker data only (no ETL processing)"
-  echo "  $0 -n 1-17,23-40          — no compaction on read (for parallel workers)"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
   exit 1
@@ -119,13 +105,7 @@ mkdir -p "$PID_DIR"
 total=${#queue[@]}
 total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 budget_mb=$((total_mem_mb - OS_RESERVE_MB))
-if [ "$COMPACT_ONLY" = "true" ]; then
-  echo "=== Pool Runner (COMPACT-ONLY): $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
-elif [ "$NO_COMPACT" = "true" ]; then
-  echo "=== Pool Runner (NO-COMPACT): $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
-else
-  echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
-fi
+echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
 if [ "$MAX_WORKERS" -lt 99 ]; then
   echo "    Hard cap: max $MAX_WORKERS concurrent"
 fi

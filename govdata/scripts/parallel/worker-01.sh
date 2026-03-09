@@ -12,6 +12,6 @@ mkdir -p "$MODEL_DIR"
 
 CURRENT_YEAR=$(date +%Y)
 generate_sec_primary_model 2026 "$CURRENT_YEAR" "$MODEL_DIR/sec-primary-current.json"
-ETL_NO_COMPACT=true run_etl "$MODEL_DIR/sec-primary-current.json" "$WORKER_ID"
+run_etl "$MODEL_DIR/sec-primary-current.json" "$WORKER_ID"
 
 log_info "$WORKER_ID complete"
