@@ -466,30 +466,41 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
       // Merge any individual files written after compaction by other workers.
       // Without this, concurrent workers' tracker writes would be invisible.
+      // Process in batches to avoid OOM when hundreds of thousands of files exist.
       String prefix = "year=" + year + "/source_key=";
       List<String> stragglers = listTrackerFiles(prefix);
       if (!stragglers.isEmpty()) {
         LOGGER.info("Found {} individual tracker files alongside compacted file for year={}, "
-            + "merging to ensure concurrent worker data is included", stragglers.size(), year);
-        java.io.File tempDir = null;
-        try {
-          tempDir = downloadTrackerFilesParallel(stragglers, year);
-          String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
-          int[] extra = readTrackerGlobAllPhases(localGlob);
-          if (extra != null) {
-            LOGGER.info("Merged {} extra source keys, {} tables from individual files for year={}",
-                extra[0], extra[1], year);
+            + "merging in batches of {}", stragglers.size(), year, READ_BATCH_SIZE);
+        int totalExtra = 0;
+        for (int i = 0; i < stragglers.size(); i += READ_BATCH_SIZE) {
+          int end = Math.min(i + READ_BATCH_SIZE, stragglers.size());
+          List<String> batch = stragglers.subList(i, end);
+          java.io.File tempDir = null;
+          try {
+            tempDir = downloadTrackerFilesParallel(batch, year);
+            String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+            int[] extra = readTrackerGlobAllPhases(localGlob);
+            if (extra != null) {
+              totalExtra += extra[1];
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Failed to merge straggler batch {}/{} for year={}: {}",
+                (i / READ_BATCH_SIZE) + 1,
+                (stragglers.size() + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE,
+                year, e.getMessage());
+          } finally {
+            if (tempDir != null) {
+              deleteDir(tempDir);
+            }
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to merge straggler files for year={}: {}", year, e.getMessage());
-        } finally {
-          if (tempDir != null) {
-            deleteDir(tempDir);
-          }
+        }
+        if (totalExtra > 0) {
+          LOGGER.info("Merged {} extra tables from individual files for year={}", totalExtra, year);
         }
       }
 
-      return Collections.emptyList(); // compacted + stragglers merged — no files to delete
+      return stragglers; // return individual files so caller can delete them
     }
 
     // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.
@@ -504,19 +515,29 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptyList();
     }
 
-    // Download all files in parallel to a local temp dir, then read from disk.
-    // This is orders of magnitude faster than having DuckDB read each file
-    // individually over HTTPS (which serializes TLS handshakes).
-    java.io.File tempDir = null;
+    // Download files in batches to a local temp dir, then read from disk.
+    // Batching avoids OOM when hundreds of thousands of files exist.
+    int totalSourceKeys = 0;
+    int totalTables = 0;
     try {
-      tempDir = downloadTrackerFilesParallel(files, year);
-      String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
-      // Read ALL phases (not just the requested one) so the compacted file
-      // contains complete data. Otherwise phase data read first "shadows"
-      // other phases when the compacted file replaces raw files.
-      int[] localCounts = readTrackerGlobAllPhases(localGlob);
-      int totalSourceKeys = localCounts != null ? localCounts[0] : 0;
-      int totalTables = localCounts != null ? localCounts[1] : 0;
+      for (int i = 0; i < files.size(); i += READ_BATCH_SIZE) {
+        int end = Math.min(i + READ_BATCH_SIZE, files.size());
+        List<String> batch = files.subList(i, end);
+        java.io.File tempDir = null;
+        try {
+          tempDir = downloadTrackerFilesParallel(batch, year);
+          String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+          int[] batchCounts = readTrackerGlobAllPhases(localGlob);
+          if (batchCounts != null) {
+            totalSourceKeys += batchCounts[0];
+            totalTables += batchCounts[1];
+          }
+        } finally {
+          if (tempDir != null) {
+            deleteDir(tempDir);
+          }
+        }
+      }
 
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("Scanned tracker year={}: {} source keys, {} completed tables, {}ms "
@@ -525,19 +546,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (!noCompact) {
         compactFromCache(year);
       }
-      return files; // return the files that were successfully read (and compacted if enabled)
+      return files;
     } catch (Exception e) {
-      LOGGER.warn("Parallel download failed for year={}, falling back to batched S3 reads: {}",
+      LOGGER.warn("Batched download failed for year={}, falling back to direct S3 reads: {}",
           year, e.getMessage());
-      // Fallback: batched S3 reads (all phases)
       if (readBatchedFromS3(files, year, start)) {
         return files;
       }
       return null;
-    } finally {
-      if (tempDir != null) {
-        deleteDir(tempDir);
-      }
     }
   }
 
