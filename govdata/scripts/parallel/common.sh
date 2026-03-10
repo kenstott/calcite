@@ -478,9 +478,9 @@ get_heap_config() {
   num=$(echo "$worker_id" | grep -oP '\d+' | head -1)
 
   if [ "$num" -eq 20 ]; then
-    # GEO (20): TIGER ZCTA 2024 shapefile has 33K+ records, needs ~4GB to parse
+    # GEO (20): TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing
     _HEAP_MIN="4g"
-    _HEAP_MAX="5g"
+    _HEAP_MAX="6g"
   elif [ "$num" -eq 41 ]; then
     # REF (41): GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows, needs more heap
     _HEAP_MIN="3g"

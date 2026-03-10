@@ -1590,7 +1590,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        start: 2017  # B28002 (internet subscriptions) first available in ACS 2017
       geography: *all_geographies
 
     columns:

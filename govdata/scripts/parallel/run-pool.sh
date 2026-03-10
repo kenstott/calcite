@@ -193,15 +193,31 @@ get_available_mb() {
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
 # A worker is only launched if its max heap fits within the remaining budget.
+# Workers that can never fit (heap > budget) are skipped with a warning.
 fill_pool() {
-  while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$queue_idx" -lt "$total" ]; do
-    local next_num="${queue[$queue_idx]}"
+  local scan_idx=$queue_idx
+  while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$scan_idx" -lt "$total" ]; do
+    local next_num="${queue[$scan_idx]}"
     local next_heap_mb
     next_heap_mb=$(get_worker_heap_mb "$next_num")
     local next_id
     next_id=$(printf "worker-%02d" "$next_num")
 
-    # Check 1: Would this worker's heap exceed the memory budget?
+    # Check: Would this worker's heap exceed the total memory budget even alone?
+    # If so, skip permanently — it can never run on this machine.
+    if [ "$next_heap_mb" -gt "$budget_mb" ]; then
+      log_info "SKIPPING ${next_id}: needs ${next_heap_mb}MB but budget is only ${budget_mb}MB — cannot run on this machine"
+      ((done_count++)) || true
+      ((failed_count++)) || true
+      # Advance queue past this worker
+      if [ "$scan_idx" -eq "$queue_idx" ]; then
+        ((queue_idx++)) || true
+      fi
+      ((scan_idx++)) || true
+      continue
+    fi
+
+    # Check 1: Would this worker's heap exceed remaining budget?
     local projected=$((committed_mb + next_heap_mb))
     if [ "$projected" -gt "$budget_mb" ]; then
       log_info "Memory budget: ${next_id} needs ${next_heap_mb}MB, committed=${committed_mb}MB, budget=${budget_mb}MB — holding"
@@ -209,15 +225,22 @@ fill_pool() {
     fi
 
     # Check 2: Is actual available memory sufficient? (belt + suspenders)
-    local avail_mb
-    avail_mb=$(get_available_mb)
-    if [ "$avail_mb" -lt "$((next_heap_mb + OS_RESERVE_MB / 2))" ]; then
-      log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_heap_mb}MB — holding"
-      break
+    # When no workers are running, trust the budget check — JVM doesn't allocate
+    # max heap immediately and Linux reclaims page cache under pressure.
+    if [ "${#active_pids[@]}" -gt 0 ]; then
+      local avail_mb
+      avail_mb=$(get_available_mb)
+      if [ "$avail_mb" -lt "$((next_heap_mb + OS_RESERVE_MB / 2))" ]; then
+        log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_heap_mb}MB — holding"
+        break
+      fi
     fi
 
+    # Advance queue_idx to match scan_idx if we skipped any
+    queue_idx=$scan_idx
     launch_worker "${queue[$queue_idx]}" || true
     ((queue_idx++)) || true
+    scan_idx=$queue_idx
   done
 }
 
