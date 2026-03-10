@@ -31,6 +31,9 @@ import java.util.Map;
  * and each partition's full combinations are expanded on demand via
  * {@link DimensionIterator#expandPartition(DimensionPartitionPlan, String)}.
  *
+ * <p>Supports multiple CUSTOM dimensions (e.g., Census tables with both
+ * {@code dataset} and {@code variables} resolved by the same dimension resolver).
+ *
  * @see DimensionIterator#planPartitions(Map)
  * @see DimensionIterator#expandPartition(DimensionPartitionPlan, String)
  */
@@ -40,8 +43,15 @@ public class DimensionPartitionPlan {
   private final List<String> contextValues;
   private final String customDimName;
   private final DimensionConfig customDimConfig;
+  private final List<String> customDimNames;
+  private final List<DimensionConfig> customDimConfigs;
   private final Map<String, List<Map<String, String>>> prefixByContext;
 
+  /**
+   * Creates a partition plan with a single CUSTOM dimension.
+   *
+   * @deprecated Use the multi-custom constructor instead
+   */
   DimensionPartitionPlan(String contextKey, List<String> contextValues,
       String customDimName, DimensionConfig customDimConfig,
       Map<String, List<Map<String, String>>> prefixByContext) {
@@ -49,6 +59,31 @@ public class DimensionPartitionPlan {
     this.contextValues = Collections.unmodifiableList(new ArrayList<String>(contextValues));
     this.customDimName = customDimName;
     this.customDimConfig = customDimConfig;
+    this.customDimNames = Collections.singletonList(customDimName);
+    this.customDimConfigs = Collections.singletonList(customDimConfig);
+    this.prefixByContext = prefixByContext;
+  }
+
+  /**
+   * Creates a partition plan with multiple CUSTOM dimensions.
+   *
+   * @param contextKey The dimension key used to partition
+   * @param contextValues Distinct values of the context key
+   * @param customDimNames Names of all CUSTOM dimensions (in declaration order)
+   * @param customDimConfigs Configs of all CUSTOM dimensions (in declaration order)
+   * @param prefixByContext Prefix combinations grouped by context key value
+   */
+  DimensionPartitionPlan(String contextKey, List<String> contextValues,
+      List<String> customDimNames, List<DimensionConfig> customDimConfigs,
+      Map<String, List<Map<String, String>>> prefixByContext) {
+    this.contextKey = contextKey;
+    this.contextValues = Collections.unmodifiableList(new ArrayList<String>(contextValues));
+    this.customDimNames = Collections.unmodifiableList(new ArrayList<String>(customDimNames));
+    this.customDimConfigs = Collections.unmodifiableList(
+        new ArrayList<DimensionConfig>(customDimConfigs));
+    // Keep single-dim fields for backward compatibility
+    this.customDimName = customDimNames.isEmpty() ? null : customDimNames.get(0);
+    this.customDimConfig = customDimConfigs.isEmpty() ? null : customDimConfigs.get(0);
     this.prefixByContext = prefixByContext;
   }
 
@@ -67,14 +102,24 @@ public class DimensionPartitionPlan {
     return contextValues.size();
   }
 
-  /** Name of the CUSTOM dimension (e.g., "ori"). */
+  /** Name of the first CUSTOM dimension (e.g., "ori"). */
   public String getCustomDimName() {
     return customDimName;
   }
 
-  /** Config of the CUSTOM dimension. */
+  /** Config of the first CUSTOM dimension. */
   public DimensionConfig getCustomDimConfig() {
     return customDimConfig;
+  }
+
+  /** Names of all CUSTOM dimensions in declaration order. */
+  public List<String> getCustomDimNames() {
+    return customDimNames;
+  }
+
+  /** Configs of all CUSTOM dimensions in declaration order. */
+  public List<DimensionConfig> getCustomDimConfigs() {
+    return customDimConfigs;
   }
 
   /** Prefix combinations for a specific context value. */
@@ -95,7 +140,7 @@ public class DimensionPartitionPlan {
   @Override public String toString() {
     return "DimensionPartitionPlan{contextKey=" + contextKey
         + ", partitions=" + contextValues.size()
-        + ", customDim=" + customDimName
+        + ", customDims=" + customDimNames
         + ", totalPrefix=" + getTotalPrefixCount() + "}";
   }
 }
