@@ -20,6 +20,7 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
@@ -774,33 +775,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String compactedPath = bucketPath + "/year=" + year
         + "/_compacted/" + UUID.randomUUID().toString() + ".parquet";
 
-    // Collect all cached entries for this year
-    List<String[]> rows = new ArrayList<String[]>();
-    for (Map.Entry<String, Set<String>> entry : stageCache.entrySet()) {
-      String key = entry.getKey();
-      int sep = key.indexOf('\0');
-      if (sep < 0) {
-        continue;
-      }
-      String sourceKey = key.substring(0, sep);
-      String phase = key.substring(sep + 1);
-      String skYear = "_table_complete".equals(sourceKey)
-          ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
-      if (!year.equals(skYear)) {
-        continue;
-      }
-      for (String tableName : entry.getValue()) {
-        rows.add(new String[]{sourceKey, tableName, phase});
-      }
-    }
-
-    if (rows.isEmpty()) {
-      LOGGER.info("No cached tracker data to compact for year={}", year);
-      return;
-    }
-
-    // Write via DuckDB temp table (handles large row counts efficiently)
+    // Write directly from stageCache to DuckDB temp table, avoiding
+    // an intermediate ArrayList that duplicates all the data in memory.
     String tableName = "_compact_" + year.replace("-", "_");
+    int rowCount = 0;
     try {
       Connection conn = getConnection();
       try (Statement stmt = conn.createStatement()) {
@@ -814,14 +792,45 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       try (PreparedStatement ps = conn.prepareStatement(
           "INSERT INTO " + tableName
               + " VALUES (?, ?, ?, 'complete', 0, NULL, NULL, NULL, ?)")) {
-        for (String[] row : rows) {
-          ps.setString(1, row[0]);
-          ps.setString(2, row[1]);
-          ps.setString(3, row[2]);
-          ps.setLong(4, asOf);
-          ps.addBatch();
+        int batchSize = 0;
+        for (Map.Entry<String, Set<String>> entry : stageCache.entrySet()) {
+          String key = entry.getKey();
+          int sep = key.indexOf('\0');
+          if (sep < 0) {
+            continue;
+          }
+          String sourceKey = key.substring(0, sep);
+          String phase = key.substring(sep + 1);
+          String skYear = "_table_complete".equals(sourceKey)
+              ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
+          if (!year.equals(skYear)) {
+            continue;
+          }
+          for (String tbl : entry.getValue()) {
+            ps.setString(1, sourceKey);
+            ps.setString(2, tbl);
+            ps.setString(3, phase);
+            ps.setLong(4, asOf);
+            ps.addBatch();
+            batchSize++;
+            rowCount++;
+            if (batchSize >= 10000) {
+              ps.executeBatch();
+              batchSize = 0;
+            }
+          }
         }
-        ps.executeBatch();
+        if (batchSize > 0) {
+          ps.executeBatch();
+        }
+      }
+
+      if (rowCount == 0) {
+        LOGGER.info("No cached tracker data to compact for year={}", year);
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute("DROP TABLE IF EXISTS " + tableName);
+        }
+        return;
       }
 
       try (Statement stmt = conn.createStatement()) {
@@ -832,7 +841,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
       long elapsed = System.currentTimeMillis() - start;
       LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms",
-          year, rows.size(), elapsed);
+          year, rowCount, elapsed);
     } catch (SQLException e) {
       LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
       try (Statement stmt = getConnection().createStatement()) {
@@ -860,11 +869,22 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       int slash = path.indexOf('/');
       String bucket = slash > 0 ? path.substring(0, slash) : path;
 
+      List<DeleteObjectsRequest.KeyVersion> batch =
+          new ArrayList<DeleteObjectsRequest.KeyVersion>();
       for (String file : files) {
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
-        client.deleteObject(bucket, key);
+        batch.add(new DeleteObjectsRequest.KeyVersion(key));
+        if (batch.size() >= 1000) {
+          client.deleteObjects(
+              new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+          batch.clear();
+        }
+      }
+      if (!batch.isEmpty()) {
+        client.deleteObjects(
+            new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
       }
       LOGGER.info("Deleted {} compacted files for year={}", files.size(), year);
     } catch (Exception e) {
@@ -884,17 +904,30 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       int slash = path.indexOf('/');
       String bucket = slash > 0 ? path.substring(0, slash) : path;
 
+      // Batch delete: up to 1000 keys per S3 DeleteObjects request
+      List<DeleteObjectsRequest.KeyVersion> batch =
+          new ArrayList<DeleteObjectsRequest.KeyVersion>();
       int deleted = 0;
       for (String file : s3Files) {
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
-        client.deleteObject(bucket, key);
-        deleted++;
-        if (deleted % 10000 == 0) {
-          LOGGER.info("Deleted {}/{} compacted tracker files for year={}...",
-              deleted, s3Files.size(), year);
+        batch.add(new DeleteObjectsRequest.KeyVersion(key));
+        if (batch.size() >= 1000) {
+          client.deleteObjects(
+              new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+          deleted += batch.size();
+          batch.clear();
+          if (deleted % 10000 == 0) {
+            LOGGER.info("Deleted {}/{} compacted tracker files for year={}...",
+                deleted, s3Files.size(), year);
+          }
         }
+      }
+      if (!batch.isEmpty()) {
+        client.deleteObjects(
+            new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+        deleted += batch.size();
       }
       LOGGER.info("Deleted {} individual tracker files for year={} (compacted)",
           deleted, year);
