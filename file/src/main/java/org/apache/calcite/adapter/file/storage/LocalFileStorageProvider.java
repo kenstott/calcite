@@ -111,6 +111,28 @@ public class LocalFileStorageProvider implements StorageProvider {
     return new FileInputStream(file);
   }
 
+  @Override public byte[] readRange(String path, long offset, long length) throws IOException {
+    File file = parsePath(path).toFile();
+    try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+      raf.seek(offset);
+      byte[] buffer = new byte[(int) length];
+      int totalRead = 0;
+      while (totalRead < length) {
+        int read = raf.read(buffer, totalRead, (int) length - totalRead);
+        if (read == -1) {
+          break;
+        }
+        totalRead += read;
+      }
+      if (totalRead < length) {
+        byte[] trimmed = new byte[totalRead];
+        System.arraycopy(buffer, 0, trimmed, 0, totalRead);
+        return trimmed;
+      }
+      return buffer;
+    }
+  }
+
   @Override public Reader openReader(String path) throws IOException {
     // Handle file:// URLs
     if (path.startsWith("file:")) {

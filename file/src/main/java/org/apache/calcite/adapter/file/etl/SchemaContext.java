@@ -40,6 +40,7 @@ public class SchemaContext {
   private final IncrementalTracker incrementalTracker;
   private final String sourceDirectory;
   private final String materializeDirectory;
+  private final String operatingDirectory;
   private final Map<String, Object> attributes;
 
   private SchemaContext(Builder builder) {
@@ -52,6 +53,7 @@ public class SchemaContext {
         ? builder.incrementalTracker : IncrementalTracker.NOOP;
     this.sourceDirectory = builder.sourceDirectory;
     this.materializeDirectory = builder.materializeDirectory;
+    this.operatingDirectory = builder.operatingDirectory;
     this.attributes = new HashMap<String, Object>();
   }
 
@@ -112,6 +114,18 @@ public class SchemaContext {
    */
   public String getMaterializeDirectory() {
     return materializeDirectory;
+  }
+
+  /**
+   * Returns the operating directory (e.g., {@code .aperio/<schema>}) for local caching.
+   *
+   * <p>This is the local filesystem directory where the schema stores its working data.
+   * The raw cache is placed under {@code <operatingDirectory>/cache/raw}.
+   *
+   * @return operating directory path, or null if not configured
+   */
+  public String getOperatingDirectory() {
+    return operatingDirectory;
   }
 
   /**
@@ -205,6 +219,7 @@ public class SchemaContext {
     private IncrementalTracker incrementalTracker;
     private String sourceDirectory;
     private String materializeDirectory;
+    private String operatingDirectory;
 
     public Builder config(SchemaConfig config) {
       this.config = config;
@@ -238,6 +253,14 @@ public class SchemaContext {
 
     public Builder materializeDirectory(String materializeDirectory) {
       this.materializeDirectory = materializeDirectory;
+      return this;
+    }
+
+    /**
+     * Sets the operating directory for local caching (e.g., {@code .aperio/<schema>}).
+     */
+    public Builder operatingDirectory(String operatingDirectory) {
+      this.operatingDirectory = operatingDirectory;
       return this;
     }
 

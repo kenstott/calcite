@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.etl.cache.BundleArchiver;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -23,6 +24,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +86,7 @@ public class SchemaLifecycleProcessor {
   private final StorageProvider sourceStorageProvider;  // For raw/source data
   private final String sourceDirectory;
   private final String materializeDirectory;
+  private final String operatingDirectory;
   private final IncrementalTracker incrementalTracker;
   private final SchemaLifecycleListener schemaListener;
   private final TableLifecycleListener defaultTableListener;
@@ -98,6 +102,7 @@ public class SchemaLifecycleProcessor {
         ? builder.sourceDirectory : config.getSourceDirectory();
     this.materializeDirectory = builder.materializeDirectory != null
         ? builder.materializeDirectory : config.getMaterializeDirectory();
+    this.operatingDirectory = builder.operatingDirectory;
     this.incrementalTracker = builder.incrementalTracker != null
         ? builder.incrementalTracker : IncrementalTracker.NOOP;
     this.schemaListener = builder.schemaListener != null
@@ -128,6 +133,7 @@ public class SchemaLifecycleProcessor {
         .sourceStorageProvider(sourceStorageProvider)
         .sourceDirectory(sourceDirectory)
         .materializeDirectory(materializeDirectory)
+        .operatingDirectory(operatingDirectory)
         .incrementalTracker(incrementalTracker)
         .build();
 
@@ -291,6 +297,9 @@ public class SchemaLifecycleProcessor {
       // Phase 4: Execute schema-level post-processing scripts
       executeSchemaPostProcessing(schemaContext);
 
+      // Phase 4b: Archive raw cache to S3 bundles
+      archiveRawCache(schemaContext);
+
       // Phase 5: Schema post-processing hooks
       long elapsed = System.currentTimeMillis() - startTime;
       resultBuilder.elapsedMs(elapsed);
@@ -370,7 +379,8 @@ public class SchemaLifecycleProcessor {
         new EtlPipeline.LoggingProgressListener(),
         context.getIncrementalTracker(),
         dataProvider,
-        dataWriter);
+        dataWriter,
+        context.getSchemaContext().getOperatingDirectory());
 
     return pipeline.execute();
   }
@@ -416,6 +426,35 @@ public class SchemaLifecycleProcessor {
    * <p>Post-processing scripts are executed after all tables have been materialized.
    * They run in order, respecting any dependencies defined between them.
    * Common use cases include GPU-based embedding generation and VSS index rebuilding.
+   *
+   * @param schemaContext Schema context
+   */
+  private void archiveRawCache(SchemaContext schemaContext) {
+    String opDir = schemaContext.getOperatingDirectory();
+    if (opDir == null) {
+      return;
+    }
+    String localCacheDir = opDir + "/cache/raw";
+    java.io.File cacheDir = new java.io.File(localCacheDir);
+    if (!cacheDir.exists() || !cacheDir.isDirectory()) {
+      return;
+    }
+    StorageProvider source = sourceStorageProvider;
+    if (source == null || "local".equals(source.getStorageType())) {
+      LOGGER.debug("Skipping raw cache archive — no remote storage provider");
+      return;
+    }
+    String schemaName = config.getName();
+    String bundleId = "run-" + new SimpleDateFormat("yyyyMMdd'T'HHmm").format(new Date());
+    try {
+      BundleArchiver.archive(localCacheDir, source, schemaName, bundleId);
+    } catch (Exception e) {
+      LOGGER.warn("Raw cache archive failed (non-fatal): {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Executes schema-level post-processing scripts.
    *
    * @param schemaContext Schema context
    */
@@ -849,6 +888,7 @@ public class SchemaLifecycleProcessor {
     private StorageProvider sourceStorageProvider;  // For raw/source data
     private String sourceDirectory;
     private String materializeDirectory;
+    private String operatingDirectory;
     private IncrementalTracker incrementalTracker;
     private SchemaLifecycleListener schemaListener;
     private TableLifecycleListener defaultTableListener;
@@ -949,6 +989,19 @@ public class SchemaLifecycleProcessor {
      */
     public Builder materializeDirectory(String directory) {
       this.materializeDirectory = directory;
+      return this;
+    }
+
+    /**
+     * Sets the operating directory for local caching (e.g., {@code .aperio/<schema>}).
+     *
+     * <p>Used to derive the local raw cache path: {@code <operatingDirectory>/cache/raw}.
+     *
+     * @param directory The operating directory path
+     * @return this builder
+     */
+    public Builder operatingDirectory(String directory) {
+      this.operatingDirectory = directory;
       return this;
     }
 

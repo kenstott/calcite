@@ -65,6 +65,20 @@ public interface StorageProvider {
   Reader openReader(String path) throws IOException;
 
   /**
+   * Reads a byte range from a file.
+   *
+   * @param path File path
+   * @param offset Starting byte offset
+   * @param length Number of bytes to read
+   * @return byte array containing the requested range
+   * @throws IOException If an I/O error occurs
+   */
+  default byte[] readRange(String path, long offset, long length) throws IOException {
+    throw new UnsupportedOperationException(
+        "Range reads are not supported by " + getStorageType() + " storage provider");
+  }
+
+  /**
    * Checks if a path exists.
    *
    * @param path The path to check

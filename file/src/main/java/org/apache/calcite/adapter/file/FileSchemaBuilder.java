@@ -313,6 +313,13 @@ public class FileSchemaBuilder {
       LOGGER.debug("Using materializeDirectory from operand: {}", materializeDir);
     }
 
+    // If operand has operatingDirectory, pass it through for local cache paths
+    String operatingDir = (String) operandOverrides.get("operatingDirectory");
+    if (operatingDir != null && !operatingDir.isEmpty()) {
+      etlBuilder.operatingDirectory(operatingDir);
+      LOGGER.debug("Using operatingDirectory from operand: {}", operatingDir);
+    }
+
     try {
       SchemaResult result = etlBuilder.build().process();
       LOGGER.info("ETL complete: {} tables, {} rows in {}ms",

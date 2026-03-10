@@ -352,6 +352,17 @@ public class S3StorageProvider implements StorageProvider {
     return object.getObjectContent();
   }
 
+  @Override public byte[] readRange(String path, long offset, long length) throws IOException {
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
+    GetObjectRequest request = new GetObjectRequest(s3Uri.bucket, s3Uri.key)
+        .withRange(offset, offset + length - 1);
+    S3Object object = s3Client.getObject(request);
+    try (InputStream is = object.getObjectContent()) {
+      return readAllBytes(is);
+    }
+  }
+
   @Override public Reader openReader(String path) throws IOException {
     return new InputStreamReader(openInputStream(path), StandardCharsets.UTF_8);
   }

@@ -97,6 +97,8 @@ public class HttpSource implements DataSource {
   private final String rawCachePath;
   /** Local filesystem path for raw cache, used instead of S3 to reduce API calls. */
   private final String localRawCachePath;
+  /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
+  private final String operatingDirectory;
   private long lastRequestTime;
 
   /**
@@ -105,7 +107,7 @@ public class HttpSource implements DataSource {
    * @param config HTTP source configuration
    */
   public HttpSource(HttpSourceConfig config) {
-    this(config, (HooksConfig) null, null, null);
+    this(config, (HooksConfig) null, null, null, null);
   }
 
   /**
@@ -115,7 +117,7 @@ public class HttpSource implements DataSource {
    * @param hooksConfig Optional hooks configuration for response transformation
    */
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig) {
-    this(config, hooksConfig, null, null);
+    this(config, hooksConfig, null, null, null);
   }
 
   /**
@@ -128,6 +130,20 @@ public class HttpSource implements DataSource {
    */
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
       StorageProvider storageProvider, String rawCachePath) {
+    this(config, hooksConfig, storageProvider, rawCachePath, null);
+  }
+
+  /**
+   * Creates a new HttpSource with configuration, hooks, storage provider, and operating directory.
+   *
+   * @param config HTTP source configuration
+   * @param hooksConfig Optional hooks configuration for response transformation
+   * @param storageProvider Storage provider for raw response caching (S3, local, etc.)
+   * @param rawCachePath Base path for raw response cache (e.g., s3://bucket/.raw)
+   * @param operatingDirectory Operating directory for local cache (e.g., .aperio/schema); may be null
+   */
+  public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
+      StorageProvider storageProvider, String rawCachePath, String operatingDirectory) {
     this.config = config;
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
@@ -137,6 +153,7 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
+    this.operatingDirectory = operatingDirectory;
     this.localRawCachePath = computeLocalRawCachePath(rawCachePath);
   }
 
@@ -156,6 +173,7 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
+    this.operatingDirectory = null;
     this.localRawCachePath = null;
   }
 
@@ -1984,22 +2002,25 @@ public class HttpSource implements DataSource {
    * @param rawCachePath the configured raw cache path (may be S3 or local)
    * @return local filesystem path for raw cache, or null if local caching is not applicable
    */
-  private static String computeLocalRawCachePath(String rawCachePath) {
+  private String computeLocalRawCachePath(String rawCachePath) {
     if (rawCachePath == null) {
       return null;
     }
 
+    // Determine the local cache base directory:
+    // 1. ETL_LOCAL_RAW_CACHE env var (explicit override)
+    // 2. operatingDirectory from model operands (e.g., .aperio/<schema>/cache/raw)
+    // 3. Fallback: <workingDir>/.aperio/cache/raw
     String localCacheBase = System.getenv("ETL_LOCAL_RAW_CACHE");
-    if (localCacheBase == null && rawCachePath.startsWith("s3://")) {
-      // Default: mirror S3 raw cache path locally under /tmp
-      localCacheBase = "/tmp/etl-raw-cache";
+    if (localCacheBase == null && operatingDirectory != null) {
+      localCacheBase = operatingDirectory + "/cache/raw";
     }
-
     if (localCacheBase == null) {
-      return null;
+      String workDir = System.getProperty("user.dir", System.getProperty("user.home", "/tmp"));
+      localCacheBase = workDir + "/.aperio/cache/raw";
     }
 
-    // Extract the meaningful part of the path (after bucket name)
+    // Extract the meaningful part of the path (after bucket name for cloud paths)
     String suffix = rawCachePath;
     if (suffix.startsWith("s3://")) {
       // s3://bucket/path -> path
@@ -2140,7 +2161,8 @@ public class HttpSource implements DataSource {
         File file = new File(cachePath);
         file.getParentFile().mkdirs();
         Files.write(Paths.get(cachePath), content.getBytes(StandardCharsets.UTF_8));
-        LOGGER.info("Raw cache written (local): {} ({} bytes)", cachePath, content.length());
+        LOGGER.debug("Raw cache written (local): {} ({} bytes)", cachePath, content.length());
+        evictLocalCacheIfNeeded();
         return;
       }
       // Ensure parent directory exists
@@ -2152,6 +2174,116 @@ public class HttpSource implements DataSource {
       LOGGER.info("Raw cache written: {} ({} bytes)", cachePath, content.length());
     } catch (IOException e) {
       LOGGER.warn("Failed to write raw cache: {} - {}", cachePath, e.getMessage());
+    }
+  }
+
+  /** Tracks bytes written since last eviction check to avoid scanning on every write. */
+  private static final java.util.concurrent.atomic.AtomicLong bytesSinceEvictionCheck =
+      new java.util.concurrent.atomic.AtomicLong(0);
+
+  /** Check eviction every 50MB of writes. */
+  private static final long EVICTION_CHECK_INTERVAL_BYTES = 50L * 1024 * 1024;
+
+  /**
+   * Evicts oldest cache files when local raw cache exceeds the size limit.
+   * The limit is configurable via ETL_RAW_CACHE_MAX_MB (default: 2048MB).
+   * Eviction removes the oldest files (by last-modified time) until the cache
+   * is at 80% of the limit.
+   */
+  private void evictLocalCacheIfNeeded() {
+    if (localRawCachePath == null) {
+      return;
+    }
+
+    // Only check periodically to avoid scanning on every write
+    if (bytesSinceEvictionCheck.addAndGet(1024) < EVICTION_CHECK_INTERVAL_BYTES) {
+      return;
+    }
+    bytesSinceEvictionCheck.set(0);
+
+    // Find the cache root - same priority as computeLocalRawCachePath:
+    // 1. ETL_LOCAL_RAW_CACHE env var, 2. operatingDirectory, 3. fallback
+    String cacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (cacheRoot == null && operatingDirectory != null) {
+      cacheRoot = operatingDirectory + "/cache/raw";
+    }
+    if (cacheRoot == null) {
+      String workDir = System.getProperty("user.dir", System.getProperty("user.home", "/tmp"));
+      cacheRoot = workDir + "/.aperio/cache/raw";
+    }
+    File rootDir = new File(cacheRoot);
+    if (!rootDir.exists()) {
+      return;
+    }
+
+    long maxBytes = Long.parseLong(System.getProperty("calcite.etl.rawCacheMaxMb",
+        System.getenv("ETL_RAW_CACHE_MAX_MB") != null
+            ? System.getenv("ETL_RAW_CACHE_MAX_MB") : "2048")) * 1024L * 1024L;
+
+    // Collect all files with their sizes and timestamps
+    List<File> allFiles = new ArrayList<File>();
+    collectFiles(rootDir, allFiles);
+
+    long totalSize = 0;
+    for (File f : allFiles) {
+      totalSize += f.length();
+    }
+
+    if (totalSize <= maxBytes) {
+      return;
+    }
+
+    // Sort by last-modified ascending (oldest first)
+    Collections.sort(allFiles, new java.util.Comparator<File>() {
+      @Override public int compare(File a, File b) {
+        return Long.compare(a.lastModified(), b.lastModified());
+      }
+    });
+
+    long targetSize = (long) (maxBytes * 0.8); // Evict down to 80%
+    long evictedBytes = 0;
+    int evictedCount = 0;
+    for (File f : allFiles) {
+      if (totalSize <= targetSize) {
+        break;
+      }
+      long fileSize = f.length();
+      if (f.delete()) {
+        totalSize -= fileSize;
+        evictedBytes += fileSize;
+        evictedCount++;
+        // Clean up empty parent directories
+        File parent = f.getParentFile();
+        while (parent != null && !parent.equals(rootDir)) {
+          String[] children = parent.list();
+          if (children != null && children.length == 0) {
+            parent.delete();
+            parent = parent.getParentFile();
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    if (evictedCount > 0) {
+      LOGGER.info("Raw cache eviction: removed {} files ({} MB) to stay within {} MB limit",
+          evictedCount, evictedBytes / (1024 * 1024), maxBytes / (1024 * 1024));
+    }
+  }
+
+  /** Recursively collects all files under a directory. */
+  private static void collectFiles(File dir, List<File> result) {
+    File[] children = dir.listFiles();
+    if (children == null) {
+      return;
+    }
+    for (File child : children) {
+      if (child.isDirectory()) {
+        collectFiles(child, result);
+      } else {
+        result.add(child);
+      }
     }
   }
 
