@@ -88,6 +88,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** In-memory cache of table completions for the duration of this tracker instance. */
   private final Map<String, CachedCompletion> completionCache =
       new ConcurrentHashMap<String, CachedCompletion>();
+  /** True after preloadAllCompletions has run (even if no markers found). */
+  private volatile boolean completionsPreloaded;
   /**
    * In-memory cache of completed tables per (sourceKey, phase).
    * Key format: "sourceKey\0phase" → Set of completed table names.
@@ -1400,6 +1402,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return memoryCached;
     }
 
+    // If preloadAllCompletions already ran, the cache is authoritative — no need for per-table S3 queries
+    if (completionsPreloaded) {
+      return null;
+    }
+
     long queryStart = System.currentTimeMillis();
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
@@ -1489,11 +1496,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
         LOGGER.info("No table completion markers found ({}ms)", System.currentTimeMillis() - start);
+        completionsPreloaded = true;
         return;
       }
       LOGGER.warn("Failed to preload table completions: {}", msg);
       return;
     }
+    completionsPreloaded = true;
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("Preloaded {} table completion markers in {}ms", count, elapsed);
   }
