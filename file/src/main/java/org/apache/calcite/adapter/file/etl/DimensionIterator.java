@@ -535,8 +535,13 @@ public class DimensionIterator {
       step = 1;
     }
 
+    List<Integer> excludeYears = config.getExcludeYears();
     List<String> values = new ArrayList<String>();
     for (int year = start; year <= effectiveEnd; year += step) {
+      if (excludeYears != null && excludeYears.contains(year)) {
+        LOGGER.debug("Year range dimension '{}' excluding year {}", config.getName(), year);
+        continue;
+      }
       values.add(String.valueOf(year));
     }
 

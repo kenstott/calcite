@@ -204,6 +204,11 @@ public class EtlPipeline {
     int successfulBatches = 0;
     int failedBatches = 0;
     int skippedBatches = 0;
+    int consecutiveFailures = 0;
+    final int maxConsecutiveFailures = Integer.parseInt(
+        System.getProperty("calcite.etl.maxConsecutiveFailures",
+            System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") != null
+                ? System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") : "10"));
     List<String> errors = new ArrayList<String>();
 
     MaterializationWriter writer = null;
@@ -733,6 +738,7 @@ public class EtlPipeline {
                     processedCount, neededCount, pipelineName);
                 totalRows += batchRows;
                 successfulBatches++;
+                consecutiveFailures = 0;
 
                 if (progressListener != null) {
                   progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
@@ -743,12 +749,23 @@ public class EtlPipeline {
                 }
 
               } catch (IOException e) {
+                consecutiveFailures++;
                 String errorMsg =
                     String.format("Batch %d (partition %d/%d) failed: %s",
                         processedCount, pi + 1, partCount, e.getMessage());
                 LOGGER.error(errorMsg, e);
                 errors.add(errorMsg);
                 incrementalTracker.invalidateTableCompletion(pipelineName);
+
+                if (consecutiveFailures >= maxConsecutiveFailures) {
+                  LOGGER.error("Aborting table '{}': {} consecutive failures — "
+                      + "data source appears unreachable (last error: {})",
+                      pipelineName, consecutiveFailures, e.getMessage());
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      variables, null, e.getMessage());
+                  throw new IOException("Aborting after " + consecutiveFailures
+                      + " consecutive failures", e);
+                }
 
                 EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
                     determineErrorAction(e, config.getErrorHandling());
@@ -919,6 +936,7 @@ public class EtlPipeline {
                   processedCount, neededCount, pipelineName);
               totalRows += batchRows;
               successfulBatches++;
+              consecutiveFailures = 0;
 
               if (progressListener != null) {
                 progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
@@ -929,11 +947,22 @@ public class EtlPipeline {
               }
 
             } catch (IOException e) {
+              consecutiveFailures++;
               String errorMsg =
                   String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
               LOGGER.error(errorMsg, e);
               errors.add(errorMsg);
               incrementalTracker.invalidateTableCompletion(pipelineName);
+
+              if (consecutiveFailures >= maxConsecutiveFailures) {
+                LOGGER.error("Aborting table '{}': {} consecutive failures — "
+                    + "data source appears unreachable (last error: {})",
+                    pipelineName, consecutiveFailures, e.getMessage());
+                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                    variables, null, e.getMessage());
+                throw new IOException("Aborting after " + consecutiveFailures
+                    + " consecutive failures", e);
+              }
 
               EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
                   determineErrorAction(e, config.getErrorHandling());

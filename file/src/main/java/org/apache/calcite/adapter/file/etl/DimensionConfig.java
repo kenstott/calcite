@@ -79,6 +79,7 @@ public class DimensionConfig {
   private final String source;
   private final String path;
   private final Map<String, String> properties;
+  private final List<Integer> excludeYears;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -97,6 +98,9 @@ public class DimensionConfig {
     this.properties = builder.properties != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.properties))
         : Collections.<String, String>emptyMap();
+    this.excludeYears = builder.excludeYears != null
+        ? Collections.unmodifiableList(new ArrayList<Integer>(builder.excludeYears))
+        : Collections.<Integer>emptyList();
   }
 
   /**
@@ -255,6 +259,14 @@ public class DimensionConfig {
   }
 
   /**
+   * Returns years to exclude from YEAR_RANGE dimensions.
+   * For example, excludeYears: [2011] will skip year 2011 in the generated range.
+   */
+  public List<Integer> getExcludeYears() {
+    return excludeYears;
+  }
+
+  /**
    * Creates a new builder for DimensionConfig.
    */
   public static Builder builder() {
@@ -371,6 +383,18 @@ public class DimensionConfig {
       builder.path((String) pathObj);
     }
 
+    // Parse excludeYears (list of years to skip in YEAR_RANGE)
+    Object excludeYearsObj = map.get("excludeYears");
+    if (excludeYearsObj instanceof List) {
+      List<Integer> excludeList = new ArrayList<Integer>();
+      for (Object v : (List<?>) excludeYearsObj) {
+        if (v instanceof Number) {
+          excludeList.add(((Number) v).intValue());
+        }
+      }
+      builder.excludeYears(excludeList);
+    }
+
     // Parse custom properties (for CUSTOM type dimensions)
     // Properties are stored as-is; variable resolution happens at runtime
     Object propsObj = map.get("properties");
@@ -481,6 +505,7 @@ public class DimensionConfig {
     private String source;
     private String path;
     private Map<String, String> properties;
+    private List<Integer> excludeYears;
 
     public Builder name(String name) {
       this.name = name;
@@ -539,6 +564,11 @@ public class DimensionConfig {
 
     public Builder properties(Map<String, String> properties) {
       this.properties = properties;
+      return this;
+    }
+
+    public Builder excludeYears(List<Integer> excludeYears) {
+      this.excludeYears = excludeYears;
       return this;
     }
 

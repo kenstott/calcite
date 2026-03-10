@@ -278,8 +278,8 @@ public class HttpSource implements DataSource {
       return fetchWithBatching(variables);
     }
 
-    // Build the URL with variables substituted
-    String url = substituteVariables(config.getUrl(), variables);
+    // Build the URL with variables substituted (check urlRules for year-dependent URLs)
+    String url = substituteVariables(config.getEffectiveUrl(variables), variables);
 
     // Build query parameters
     Map<String, String> params = new LinkedHashMap<String, String>();
@@ -430,7 +430,7 @@ public class HttpSource implements DataSource {
 
     // Fetch each batch
     List<Map<String, Object>> allData = new ArrayList<Map<String, Object>>();
-    String url = substituteVariables(config.getUrl(), variables);
+    String url = substituteVariables(config.getEffectiveUrl(variables), variables);
 
     for (int i = 0; i < batches.size(); i++) {
       List<String> batch = batches.get(i);

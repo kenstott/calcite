@@ -411,12 +411,23 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
+      year:
+        <<: *tiger_year_range
+        excludeYears: [2011]  # No ZCTA shapefile published for 2011
 
     # TIGER tables use TigerDataProvider for binary shapefile handling
+    # ZCTA naming changed between census vintages:
+    #   2010: ZCTA5/2010/tl_2010_us_zcta510.zip (nested subdir)
+    #   2012-2019: ZCTA5/tl_{year}_us_zcta510.zip (2010-census vintage)
+    #   2020+: ZCTA520/tl_{year}_us_zcta520.zip (2020-census vintage)
     source:
       type: http
       url: "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA520/tl_{year}_us_zcta520.zip"
+      urlRules:
+        - yearRange: [2010, 2010]
+          url: "https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/tl_2010_us_zcta510.zip"
+        - yearRange: [2012, 2019]
+          url: "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA5/tl_{year}_us_zcta510.zip"
       method: GET
       response:
         format: json
@@ -1028,11 +1039,24 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
+      year:
+        <<: *tiger_year_range
+        excludeYears: [2011]  # No UAC shapefile published for 2011
 
+    # UAC naming changed between census vintages:
+    #   2012-2022: UAC/tl_{year}_us_uac10.zip (2010-census vintage)
+    #   2023: UAC/tl_{year}_us_uac20.zip (2020-census vintage, same dir)
+    #   2024+: UAC20/tl_{year}_us_uac20.zip (2020-census vintage, new dir)
     source:
       type: http
-      url: "https://www2.census.gov/geo/tiger/TIGER{year}/UAC/tl_{year}_us_uac20.zip"
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/UAC20/tl_{year}_us_uac20.zip"
+      urlRules:
+        - yearRange: [2010, 2010]
+          url: "https://www2.census.gov/geo/tiger/TIGER2010/UAC/2010/tl_2010_us_uac10.zip"
+        - yearRange: [2012, 2022]
+          url: "https://www2.census.gov/geo/tiger/TIGER{year}/UAC/tl_{year}_us_uac10.zip"
+        - yearRange: [2023, 2023]
+          url: "https://www2.census.gov/geo/tiger/TIGER{year}/UAC/tl_{year}_us_uac20.zip"
       method: GET
       response:
         format: json
@@ -1098,12 +1122,25 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
+      year:
+        <<: *tiger_year_range
+        excludeYears: [2011]  # No PUMA shapefile published for 2011
       state_fips: *all_state_fips
 
+    # PUMA naming changed between census vintages:
+    #   2012-2021: PUMA/tl_{year}_{fips}_puma10.zip (2010-census vintage)
+    #   2022-2023: PUMA/tl_{year}_{fips}_puma20.zip (2020-census vintage, same dir)
+    #   2024+: PUMA20/tl_{year}_{fips}_puma20.zip (2020-census vintage, new dir)
     source:
       type: http
       url: "https://www2.census.gov/geo/tiger/TIGER{year}/PUMA20/tl_{year}_{state_fips}_puma20.zip"
+      urlRules:
+        - yearRange: [2010, 2010]
+          url: "https://www2.census.gov/geo/tiger/TIGER2010/PUMA5/2010/tl_2010_{state_fips}_puma10.zip"
+        - yearRange: [2012, 2021]
+          url: "https://www2.census.gov/geo/tiger/TIGER{year}/PUMA/tl_{year}_{state_fips}_puma10.zip"
+        - yearRange: [2022, 2023]
+          url: "https://www2.census.gov/geo/tiger/TIGER{year}/PUMA/tl_{year}_{state_fips}_puma20.zip"
       method: GET
       response:
         format: json

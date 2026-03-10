@@ -16,8 +16,10 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -141,6 +143,9 @@ public class HttpSourceConfig {
   // Source type: "http", "document", or "bulkDownload"
   private final String sourceType;
 
+  // URL rules for year-dependent URL selection (e.g., TIGER ZCTA vintage changes)
+  private final List<UrlRule> urlRules;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -167,6 +172,9 @@ public class HttpSourceConfig {
     this.wideToNarrow = builder.wideToNarrow;
     this.documentSource = builder.documentSource;
     this.sourceType = builder.sourceType != null ? builder.sourceType : determineSourceType(builder);
+    this.urlRules = builder.urlRules != null
+        ? Collections.unmodifiableList(new ArrayList<UrlRule>(builder.urlRules))
+        : Collections.<UrlRule>emptyList();
   }
 
   private static String determineSourceType(Builder builder) {
@@ -181,6 +189,37 @@ public class HttpSourceConfig {
 
   public String getUrl() {
     return url;
+  }
+
+  /**
+   * Returns the effective URL for the given variables, checking urlRules first.
+   * If the variables contain a "year" key and a matching urlRule exists,
+   * that rule's URL is returned; otherwise the default URL is used.
+   */
+  public String getEffectiveUrl(Map<String, String> variables) {
+    if (urlRules != null && !urlRules.isEmpty() && variables != null) {
+      String yearStr = variables.get("year");
+      if (yearStr != null) {
+        try {
+          int year = Integer.parseInt(yearStr);
+          for (UrlRule rule : urlRules) {
+            if (year >= rule.getYearMin() && year <= rule.getYearMax()) {
+              return rule.getUrl();
+            }
+          }
+        } catch (NumberFormatException e) {
+          // Not a numeric year, fall through to default
+        }
+      }
+    }
+    return url;
+  }
+
+  /**
+   * Returns the URL rules for year-dependent URL selection.
+   */
+  public List<UrlRule> getUrlRules() {
+    return urlRules;
   }
 
   public HttpMethod getMethod() {
@@ -495,6 +534,24 @@ public class HttpSourceConfig {
     Object wideToNarrowObj = map.get("wideToNarrow");
     if (wideToNarrowObj instanceof Map) {
       builder.wideToNarrow(WideToNarrowConfig.fromMap((Map<String, Object>) wideToNarrowObj));
+    }
+
+    // Parse URL rules for year-dependent URL selection
+    Object urlRulesObj = map.get("urlRules");
+    if (urlRulesObj instanceof List) {
+      List<UrlRule> rules = new ArrayList<UrlRule>();
+      for (Object ruleObj : (List<?>) urlRulesObj) {
+        if (ruleObj instanceof Map) {
+          @SuppressWarnings("unchecked")
+          UrlRule rule = UrlRule.fromMap((Map<String, Object>) ruleObj);
+          if (rule != null) {
+            rules.add(rule);
+          }
+        }
+      }
+      if (!rules.isEmpty()) {
+        builder.urlRules(rules);
+      }
     }
 
     // Parse source type
@@ -1848,6 +1905,50 @@ public class HttpSourceConfig {
   }
 
   /**
+   * URL rule for year-dependent URL selection.
+   * When the year dimension falls within [yearMin, yearMax], the rule's URL is used
+   * instead of the default URL.
+   */
+  public static class UrlRule {
+    private final int yearMin;
+    private final int yearMax;
+    private final String url;
+
+    public UrlRule(int yearMin, int yearMax, String url) {
+      this.yearMin = yearMin;
+      this.yearMax = yearMax;
+      this.url = url;
+    }
+
+    public int getYearMin() {
+      return yearMin;
+    }
+
+    public int getYearMax() {
+      return yearMax;
+    }
+
+    public String getUrl() {
+      return url;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static UrlRule fromMap(Map<String, Object> map) {
+      Object rangeObj = map.get("yearRange");
+      String ruleUrl = (String) map.get("url");
+      if (rangeObj instanceof List && ruleUrl != null) {
+        List<?> range = (List<?>) rangeObj;
+        if (range.size() == 2) {
+          int min = ((Number) range.get(0)).intValue();
+          int max = ((Number) range.get(1)).intValue();
+          return new UrlRule(min, max, ruleUrl);
+        }
+      }
+      return null;
+    }
+  }
+
+  /**
    * Builder for HttpSourceConfig.
    */
   public static class Builder {
@@ -1870,6 +1971,7 @@ public class HttpSourceConfig {
     private WideToNarrowConfig wideToNarrow;
     private DocumentSourceConfig documentSource;
     private String sourceType;
+    private List<UrlRule> urlRules;
 
     public Builder url(String url) {
       this.url = url;
@@ -1963,6 +2065,11 @@ public class HttpSourceConfig {
 
     public Builder sourceType(String sourceType) {
       this.sourceType = sourceType;
+      return this;
+    }
+
+    public Builder urlRules(List<UrlRule> urlRules) {
+      this.urlRules = urlRules;
       return this;
     }
 

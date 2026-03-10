@@ -318,18 +318,20 @@ public class FileSchemaBuilder {
       LOGGER.info("ETL complete: {} tables, {} rows in {}ms",
           result.getTotalTables(), result.getTotalRows(), result.getElapsedMs());
 
-      // Check for failed tables and throw if any failed
+      // Log failed tables and exclude them from schema (but don't abort)
       if (result.getFailedTables() > 0) {
         StringBuilder errorMsg = new StringBuilder();
-        errorMsg.append("ETL failed for ").append(result.getFailedTables()).append(" tables:");
+        errorMsg.append("ETL had ").append(result.getFailedTables())
+            .append(" failed table(s) (excluded from schema):");
         for (Map.Entry<String, org.apache.calcite.adapter.file.etl.EtlResult> entry
             : result.getTableResults().entrySet()) {
           if (entry.getValue().isFailed()) {
             errorMsg.append("\n  - ").append(entry.getKey()).append(": ")
                 .append(entry.getValue().getFailureMessage());
+            excludedTables.add(entry.getKey());
           }
         }
-        throw new RuntimeException(errorMsg.toString());
+        LOGGER.warn(errorMsg.toString());
       }
 
       // Track tables that were skipped by isEnabled hook
