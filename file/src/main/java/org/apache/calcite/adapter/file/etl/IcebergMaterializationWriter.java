@@ -134,8 +134,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final int DEFAULT_FLUSH_THRESHOLD = getEnvInt("ETL_FLUSH_THRESHOLD", 50000);
   /** Max total buffered rows across all partitions. Configurable via ETL_MAX_BUFFERED_ROWS. */
   private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 500000);
+  /** Intermediate commit threshold: commit pending data files when count exceeds this.
+   *  Configurable via ETL_COMMIT_THRESHOLD. Default 1000 files (~50M rows at 50k/file). */
+  private static final int COMMIT_FILE_THRESHOLD = getEnvInt("ETL_COMMIT_THRESHOLD", 1000);
   private int flushThreshold = DEFAULT_FLUSH_THRESHOLD;
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
+  private long totalCommittedFiles = 0;
 
   /**
    * Represents a staged batch ready for commit.
@@ -738,6 +742,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     bufferedRowCount -= rowCount;
     partitionBuffers.remove(partitionKey);
     partitionVarsMap.remove(partitionKey);
+
+    // Intermediate commit to bound memory: commit pending data files when threshold exceeded
+    if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD) {
+      intermediateCommit();
+    }
   }
 
   /**
@@ -756,6 +765,48 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       LOGGER.info("Total buffered rows ({}) exceeds max ({}), flushing largest partition [{}] ({} rows)",
           bufferedRowCount, maxBufferedRows, largestKey, largestSize);
       flushPartition(largestKey);
+    }
+  }
+
+  /**
+   * Performs an intermediate Iceberg commit to release accumulated DataFile metadata.
+   * This bounds memory usage for long-running ETL sessions (e.g., crime data at 126+ hours).
+   * Each intermediate commit creates a new Iceberg snapshot.
+   */
+  /**
+   * Commits a list of data files in chunks to avoid holding too many in a single
+   * Iceberg append operation. Each chunk creates one snapshot.
+   */
+  private void commitInChunks(List<org.apache.iceberg.DataFile> files) throws IOException {
+    int total = files.size();
+    int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
+    for (int i = 0; i < total; i += chunkSize) {
+      int end = Math.min(i + chunkSize, total);
+      List<org.apache.iceberg.DataFile> chunk = files.subList(i, end);
+      long commitStart = System.currentTimeMillis();
+      tableWriter.bulkCommitDataFiles(chunk);
+      totalCommittedFiles += chunk.size();
+      long elapsed = System.currentTimeMillis() - commitStart;
+      LOGGER.info("Committed chunk {}-{} of {} files in {}ms ({} total committed)",
+          i, end, total, elapsed, totalCommittedFiles);
+    }
+  }
+
+  private void intermediateCommit() throws IOException {
+    int fileCount = pendingDataFiles.size();
+    LOGGER.info("Intermediate commit: {} pending data files (threshold: {}), {} total committed so far",
+        fileCount, COMMIT_FILE_THRESHOLD, totalCommittedFiles);
+    try {
+      commitInChunks(pendingDataFiles);
+    } catch (Exception e) {
+      LOGGER.error("Intermediate commit failed: {}", e.getMessage());
+      throw new IOException("Intermediate commit failed", e);
+    } finally {
+      for (StagedBatch batch : pendingStagedBatches) {
+        cleanupStagingDirectory(batch.stagingPath);
+      }
+      pendingStagedBatches.clear();
+      pendingDataFiles.clear();
     }
   }
 
@@ -1657,18 +1708,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       flushAllPartitions();
     }
 
-    // Bulk commit all pending data files in a single Iceberg transaction
+    // Commit all pending data files (chunked to avoid memory pressure)
     if (!pendingDataFiles.isEmpty()) {
-      LOGGER.info("Bulk committing {} data files from {} batches to Iceberg",
-          pendingDataFiles.size(), pendingStagedBatches.size());
+      LOGGER.info("Final commit: {} pending data files ({} already committed via intermediate commits)",
+          pendingDataFiles.size(), totalCommittedFiles);
       long commitStart = System.currentTimeMillis();
 
       try {
-        // Single Iceberg commit for all accumulated files - O(1) metadata operations
-        tableWriter.bulkCommitDataFiles(pendingDataFiles);
+        commitInChunks(pendingDataFiles);
 
         long commitElapsed = System.currentTimeMillis() - commitStart;
-        LOGGER.info("Bulk commit complete: {} files in {}ms", pendingDataFiles.size(), commitElapsed);
+        LOGGER.info("Final commit complete: {} files in {}ms ({} total across all commits)",
+            pendingDataFiles.size(), commitElapsed, totalCommittedFiles);
 
         // Store table and column comments as Iceberg properties
         storeTableMetadata();

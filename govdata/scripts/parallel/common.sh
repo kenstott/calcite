@@ -489,12 +489,16 @@ get_heap_config() {
     # FEC (60): Individual contributions has 3M+ rows/year, streaming to Iceberg
     _HEAP_MIN="4g"
     _HEAP_MAX="5g"
+  elif [ "$num" -eq 21 ]; then
+    # Crime (21): large dimension expansion (type × year × state × offense × ori), long-running
+    _HEAP_MIN="3g"
+    _HEAP_MAX="4g"
   elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then
     # SEC Secondary (23-39), prices (40), compact (42-58): tracker preload needs ~2.5GB
     _HEAP_MIN="2g"
     _HEAP_MAX="3g"
   else
-    # SEC Primary (1-17: 10-K/10-Q), non-SEC data (18-22), crime (21): need full heap
+    # SEC Primary (1-17: 10-K/10-Q), non-SEC data (18-22): standard heap
     _HEAP_MIN="2g"
     _HEAP_MAX="3g"
   fi
