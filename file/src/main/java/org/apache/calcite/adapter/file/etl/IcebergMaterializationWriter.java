@@ -133,13 +133,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** Flush threshold per partition (rows). Configurable via ETL_FLUSH_THRESHOLD env var. */
   private static final int DEFAULT_FLUSH_THRESHOLD = getEnvInt("ETL_FLUSH_THRESHOLD", 50000);
   /** Max total buffered rows across all partitions. Configurable via ETL_MAX_BUFFERED_ROWS. */
-  private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 500000);
+  private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 200000);
   /** Intermediate commit threshold: commit pending data files when count exceeds this.
    *  Configurable via ETL_COMMIT_THRESHOLD. Default 1000 files (~50M rows at 50k/file). */
   private static final int COMMIT_FILE_THRESHOLD = getEnvInt("ETL_COMMIT_THRESHOLD", 1000);
   private int flushThreshold = DEFAULT_FLUSH_THRESHOLD;
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
   private long totalCommittedFiles = 0;
+  /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
+  private java.util.Set<String> icebergPartitionColumns = java.util.Collections.emptySet();
 
   /**
    * Represents a staged batch ready for commit.
@@ -204,6 +206,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
     LOGGER.info("Using batchSize={}, stagingMode={}, flushThreshold={}, maxBufferedRows={}",
         batchSize, stagingMode, flushThreshold, maxBufferedRows);
+
+    // Extract Iceberg partition columns for buffer key construction
+    MaterializePartitionConfig partConfig = config.getPartition();
+    if (partConfig != null && partConfig.getColumns() != null && !partConfig.getColumns().isEmpty()) {
+      this.icebergPartitionColumns = new java.util.HashSet<String>(partConfig.getColumns());
+      LOGGER.info("Iceberg partition columns for buffer key: {}", icebergPartitionColumns);
+    }
 
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
@@ -684,7 +693,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (buffer == null) {
       buffer = new ArrayList<Map<String, Object>>();
       partitionBuffers.put(partitionKey, buffer);
-      partitionVarsMap.put(partitionKey, partitionVariables);
+      // Store only Iceberg partition columns for writeRecords —
+      // non-partition dimensions are already embedded in the transformed rows
+      if (!icebergPartitionColumns.isEmpty()) {
+        Map<String, String> icebergVars = new HashMap<String, String>();
+        for (Map.Entry<String, String> e : partitionVariables.entrySet()) {
+          if (icebergPartitionColumns.contains(e.getKey())) {
+            icebergVars.put(e.getKey(), e.getValue());
+          }
+        }
+        partitionVarsMap.put(partitionKey, icebergVars);
+      } else {
+        partitionVarsMap.put(partitionKey, partitionVariables);
+      }
     }
     buffer.addAll(transformedRows);
     bufferedRowCount += transformedRows.size();
@@ -702,13 +723,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Builds a canonical partition key string from partition variables.
-   * Uses sorted key=value pairs so the same partition always produces the same key.
+   * Uses only the Iceberg partition columns (not all dimension variables) so that
+   * rows from different non-partition dimensions accumulate in the same buffer,
+   * producing fewer, larger parquet files.
    */
   private String buildPartitionKey(Map<String, String> partitionVariables) {
     if (partitionVariables == null || partitionVariables.isEmpty()) {
       return "";
     }
-    TreeMap<String, String> sorted = new TreeMap<String, String>(partitionVariables);
+    TreeMap<String, String> sorted = new TreeMap<String, String>();
+    for (Map.Entry<String, String> entry : partitionVariables.entrySet()) {
+      // If icebergPartitionColumns is configured, only include those in the key
+      if (icebergPartitionColumns.isEmpty()
+          || icebergPartitionColumns.contains(entry.getKey())) {
+        sorted.put(entry.getKey(), entry.getValue());
+      }
+    }
     StringBuilder sb = new StringBuilder();
     for (Map.Entry<String, String> entry : sorted.entrySet()) {
       if (sb.length() > 0) {
