@@ -11,7 +11,7 @@
 # Features:
 #   - Cross-references with geo.states via state_abbr
 #   - Hive-style partitioning for efficient querying
-#   - Rate-limited API integration (2 req/sec)
+#   - Rate-limited API integration (10 req/sec)
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:crime}"
@@ -284,7 +284,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -364,7 +364,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -437,7 +437,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -494,7 +494,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -550,7 +550,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -636,7 +636,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -702,7 +702,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -762,7 +762,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -822,7 +822,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -887,7 +887,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -947,7 +947,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1011,7 +1011,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1071,7 +1071,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1132,7 +1132,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1204,7 +1204,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1315,7 +1315,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1432,7 +1432,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1532,7 +1532,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1627,7 +1627,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1710,7 +1710,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
