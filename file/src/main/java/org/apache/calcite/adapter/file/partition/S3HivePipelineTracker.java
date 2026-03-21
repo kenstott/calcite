@@ -85,6 +85,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private AmazonS3 s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
+  /** Cached processed keys per table from single S3 scan. null = not yet scanned. */
+  private volatile Map<String, Set<String>> processedKeysCache;
   /** In-memory cache of table completions for the duration of this tracker instance. */
   private final Map<String, CachedCompletion> completionCache =
       new ConcurrentHashMap<String, CachedCompletion>();
@@ -1250,63 +1252,78 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
 
-    // Note: we intentionally do NOT cache "no data" across tables.
-    // A "No files found" for one table does not mean other tables lack tracker data.
-
-    // Pre-compute flattened keys for all combinations (reused for matching later)
-    String[] flatKeys = new String[allCombinations.size()];
-    for (int i = 0; i < allCombinations.size(); i++) {
-      flatKeys[i] = flattenKeyValues(allCombinations.get(i));
+    // Scan tracker S3 bucket once, cache results for all tables
+    if (processedKeysCache == null) {
+      processedKeysCache = loadAllProcessedKeys();
     }
 
-    // Single glob across all years — batch files are source_key=_batch_<hash>/batch.parquet
-    // Using one glob avoids per-year S3 listings which are very slow with 18K+ files
+    Set<String> processedKeys = processedKeysCache.get(alternateName);
+    if (processedKeys == null || processedKeys.isEmpty()) {
+      LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
+          alternateName, allCombinations.size());
+      return allIndices(allCombinations.size());
+    }
+
+    LOGGER.info("Tracker found {} processed keys for {} (out of {} total)",
+        processedKeys.size(), alternateName, allCombinations.size());
+
+    // Pre-compute flattened keys and match against cached processed set
+    Set<Integer> unprocessed = new HashSet<Integer>();
+    for (int i = 0; i < allCombinations.size(); i++) {
+      String flat = flattenKeyValues(allCombinations.get(i));
+      if (!processedKeys.contains(flat)) {
+        unprocessed.add(i);
+      }
+    }
+    return unprocessed;
+  }
+
+  /** Scan all tracker batch files once and return processed keys grouped by table name. */
+  private Map<String, Set<String>> loadAllProcessedKeys() {
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
     String globPath = bucketPath + "/year=*/source_key=_batch_*/*.parquet";
 
-    Set<String> processedKeys = new HashSet<String>();
-
-    String sql = "SELECT source_key FROM ("
-        + "  SELECT source_key, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+    String sql = "SELECT table_name, source_key FROM ("
+        + "  SELECT table_name, source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY table_name, source_key ORDER BY as_of DESC) AS rn "
         + "  FROM read_parquet('" + globPath + "', "
         + "hive_partitioning=true, union_by_name=true) "
-        + "  WHERE table_name = ? AND phase = 'incremental'"
+        + "  WHERE phase = 'incremental'"
         + ") WHERE rn = 1 AND state = 'complete'";
 
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, alternateName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          processedKeys.add(rs.getString("source_key"));
+    long start = System.currentTimeMillis();
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql);
+         ResultSet rs = stmt.executeQuery()) {
+      while (rs.next()) {
+        String tableName = rs.getString("table_name");
+        String sourceKey = rs.getString("source_key");
+        Set<String> keys = result.get(tableName);
+        if (keys == null) {
+          keys = new HashSet<String>();
+          result.put(tableName, keys);
         }
+        keys.add(sourceKey);
       }
+      hasAnyTrackerData = !result.isEmpty();
+      long elapsed = System.currentTimeMillis() - start;
+      int totalKeys = 0;
+      for (Set<String> v : result.values()) {
+        totalKeys += v.size();
+      }
+      LOGGER.info("Tracker scan complete: {} tables, {} processed keys in {}ms",
+          result.size(), totalKeys, elapsed);
     } catch (SQLException e) {
       String msg = e.getMessage();
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
-            alternateName, allCombinations.size());
-        return allIndices(allCombinations.size());
+        LOGGER.info("No tracker batch files found ({}ms)",
+            System.currentTimeMillis() - start);
+        return result;
       }
-      LOGGER.debug("Error filtering unprocessed for {}: {}",
-          alternateName, msg);
+      LOGGER.debug("Error loading tracker data: {}", msg);
     }
-
-    // Cache positive result only — presence of data is safe to cache
-    if (!processedKeys.isEmpty()) {
-      hasAnyTrackerData = true;
-      LOGGER.info("Tracker found {} processed keys for {} (out of {} total)",
-          processedKeys.size(), alternateName, allCombinations.size());
-    }
-
-    Set<Integer> unprocessed = new HashSet<Integer>();
-    for (int i = 0; i < allCombinations.size(); i++) {
-      if (!processedKeys.contains(flatKeys[i])) {
-        unprocessed.add(i);
-      }
-    }
-    return unprocessed;
+    return result;
   }
 
   private Set<Integer> allIndices(int size) {
