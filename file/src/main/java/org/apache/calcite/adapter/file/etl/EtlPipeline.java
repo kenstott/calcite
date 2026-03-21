@@ -618,6 +618,46 @@ public class EtlPipeline {
         int partCount = contextValues.size();
         int actualTotalBatches = 0;
 
+        // Pre-query Iceberg for existing partitions to skip redundant regeneration.
+        // If tracker says "not processed" but Iceberg already has the partition data,
+        // mark combos as processed and skip them (avoids re-fetching + re-writing).
+        java.util.Set<Map<String, String>> existingIcebergPartitions =
+            java.util.Collections.emptySet();
+        List<String> icebergPartitionColumns = Collections.emptyList();
+        if (!forceReprocessAll && materializeConfig != null
+            && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
+            && materializeConfig.isEnabled()) {
+          MaterializePartitionConfig partConfig = materializeConfig.getPartition();
+          icebergPartitionColumns = partConfig != null
+              ? partConfig.getColumns() : Collections.<String>emptyList();
+          if (!icebergPartitionColumns.isEmpty()) {
+            Map<String, Object> catalogConfig = buildIcebergCatalogConfig(materializeConfig);
+            String targetTableId = materializeConfig.getTargetTableId();
+            if (targetTableId == null || targetTableId.isEmpty()) {
+              targetTableId = materializeConfig.getName();
+            }
+            if (targetTableId == null || targetTableId.isEmpty()) {
+              targetTableId = config.getName();
+            }
+            LOGGER.info("Skip-if-materialized: querying Iceberg table '{}' for existing partitions",
+                targetTableId);
+            try {
+              existingIcebergPartitions = IcebergMaterializationWriter.getExistingPartitions(
+                  catalogConfig, targetTableId, icebergPartitionColumns);
+            } catch (Exception e) {
+              LOGGER.warn("Skip-if-materialized: failed to query Iceberg partitions for '{}': {}",
+                  targetTableId, e.getMessage());
+            }
+            if (!existingIcebergPartitions.isEmpty()) {
+              LOGGER.info("Found {} existing Iceberg partitions for skip-if-materialized check",
+                  existingIcebergPartitions.size());
+            } else {
+              LOGGER.info("Skip-if-materialized: no existing partitions found for '{}'",
+                  targetTableId);
+            }
+          }
+        }
+
         for (int pi = 0; pi < partCount; pi++) {
           String contextValue = contextValues.get(pi);
 
@@ -649,6 +689,36 @@ public class EtlPipeline {
                 partCombos.size());
             continue;
           }
+
+          // Skip-if-materialized: if tracker says unprocessed but Iceberg already has
+          // the partition data, mark all combos as processed and skip regeneration.
+          if (!existingIcebergPartitions.isEmpty() && !icebergPartitionColumns.isEmpty()
+              && !unprocessedIndices.isEmpty()) {
+            // Extract the Iceberg partition key from the first unprocessed combo
+            Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
+            Map<String, String> icebergKey = new java.util.LinkedHashMap<String, String>();
+            for (String col : icebergPartitionColumns) {
+              String val = sampleCombo.get(col);
+              if (val != null) {
+                icebergKey.put(col, val);
+              }
+            }
+            if (existingIcebergPartitions.contains(icebergKey)) {
+              // Iceberg already has this partition — mark all unprocessed combos as done
+              int skippedCount = unprocessedIndices.size();
+              for (int idx : unprocessedIndices) {
+                incrementalTracker.markProcessedWithRowCount(
+                    pipelineName, pipelineName, partCombos.get(idx), null, -1);
+              }
+              skippedBatches += partCombos.size();
+              LOGGER.info("Partition {}/{} ({}={}): skipped {} combos — Iceberg partition {} "
+                  + "already materialized",
+                  pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
+                  skippedCount, icebergKey);
+              continue;
+            }
+          }
+
           skippedBatches += partCombos.size() - unprocessedIndices.size();
           LOGGER.info("Partition {}/{} ({}={}): {} unprocessed of {} combinations",
               pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
@@ -2075,10 +2145,16 @@ public class EtlPipeline {
   }
 
   /**
-   * Returns the configured parallel thread count from the {@code calcite.etl.threads}
-   * system property. Returns 1 (sequential) if not set or invalid.
+   * Returns the configured parallel thread count. Checks the per-table
+   * {@code httpSource.parallel} config first, then falls back to the
+   * {@code calcite.etl.threads} system property. Returns 1 (sequential) if neither is set.
    */
-  private static int getParallelThreadCount() {
+  private int getParallelThreadCount() {
+    // Per-table parallel config takes precedence
+    HttpSourceConfig sourceConfig = config.getSource();
+    if (sourceConfig != null && sourceConfig.getParallel() > 1) {
+      return sourceConfig.getParallel();
+    }
     try {
       return Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
     } catch (NumberFormatException e) {

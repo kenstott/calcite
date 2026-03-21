@@ -143,6 +143,9 @@ public class HttpSourceConfig {
   // Source type: "http", "document", or "bulkDownload"
   private final String sourceType;
 
+  // Parallel fetch thread count (default 1 = sequential)
+  private final int parallel;
+
   // URL rules for year-dependent URL selection (e.g., TIGER ZCTA vintage changes)
   private final List<UrlRule> urlRules;
 
@@ -175,6 +178,7 @@ public class HttpSourceConfig {
     this.urlRules = builder.urlRules != null
         ? Collections.unmodifiableList(new ArrayList<UrlRule>(builder.urlRules))
         : Collections.<UrlRule>emptyList();
+    this.parallel = builder.parallel > 0 ? builder.parallel : 1;
   }
 
   private static String determineSourceType(Builder builder) {
@@ -426,6 +430,13 @@ public class HttpSourceConfig {
     return sourceType;
   }
 
+  /**
+   * Returns the number of parallel HTTP fetch threads (default 1 = sequential).
+   */
+  public int getParallel() {
+    return parallel;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -552,6 +563,12 @@ public class HttpSourceConfig {
       if (!rules.isEmpty()) {
         builder.urlRules(rules);
       }
+    }
+
+    // Parse parallel fetch thread count
+    Object parallelObj = map.get("parallel");
+    if (parallelObj instanceof Number) {
+      builder.parallel(((Number) parallelObj).intValue());
     }
 
     // Parse source type
@@ -1972,6 +1989,7 @@ public class HttpSourceConfig {
     private DocumentSourceConfig documentSource;
     private String sourceType;
     private List<UrlRule> urlRules;
+    private int parallel = 1;
 
     public Builder url(String url) {
       this.url = url;
@@ -2070,6 +2088,11 @@ public class HttpSourceConfig {
 
     public Builder urlRules(List<UrlRule> urlRules) {
       this.urlRules = urlRules;
+      return this;
+    }
+
+    public Builder parallel(int parallel) {
+      this.parallel = parallel;
       return this;
     }
 

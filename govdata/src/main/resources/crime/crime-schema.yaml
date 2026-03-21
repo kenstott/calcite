@@ -633,6 +633,7 @@ partitionedTables:
       type: http
       url: "https://cde.ucr.cjis.gov/LATEST/summarized/agency/{ori}/{offense}?from=01-{year}&to=12-{year}"
       method: GET
+      parallel: 5
       response:
         format: json
       rateLimit:

@@ -47,6 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -99,7 +100,8 @@ public class HttpSource implements DataSource {
   private final String localRawCachePath;
   /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
   private final String operatingDirectory;
-  private long lastRequestTime;
+  /** CAS-based slot reservation for lock-free rate limiting across parallel threads. */
+  private final AtomicLong nextAllowedNanos = new AtomicLong();
 
   /**
    * Creates a new HttpSource with the given configuration.
@@ -148,7 +150,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    this.lastRequestTime = 0;
+    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
     this.responseTransformer = loadResponseTransformer(hooksConfig);
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     this.storageProvider = storageProvider;
@@ -168,7 +170,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    this.lastRequestTime = 0;
+    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
     this.responseTransformer = responseTransformer;
     this.variableNormalizer = null;
     this.storageProvider = null;
@@ -1875,27 +1877,34 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Enforces rate limiting.
+   * Enforces rate limiting using lock-free CAS-based slot reservation.
+   * Each thread reserves a time slot on a timeline, allowing multiple threads
+   * to make concurrent requests while respecting the global rate limit.
    */
-  private synchronized void enforceRateLimit() {
+  private void enforceRateLimit() {
     int rps = config.getRateLimit().getRequestsPerSecond();
     if (rps <= 0) {
       return;
     }
 
-    long minInterval = 1000 / rps;
-    long now = System.currentTimeMillis();
-    long elapsed = now - lastRequestTime;
-
-    if (elapsed < minInterval) {
-      try {
-        Thread.sleep(minInterval - elapsed);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+    long intervalNanos = 1000000000L / rps;
+    while (true) {
+      long current = nextAllowedNanos.get();
+      long now = System.nanoTime();
+      long next = Math.max(now, current) + intervalNanos;
+      if (nextAllowedNanos.compareAndSet(current, next)) {
+        long sleepNanos = Math.max(0, current - now);
+        if (sleepNanos > 0) {
+          try {
+            Thread.sleep(sleepNanos / 1000000, (int) (sleepNanos % 1000000));
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+        return;
       }
+      // CAS failed (another thread reserved a slot), retry
     }
-
-    lastRequestTime = System.currentTimeMillis();
   }
 
   /**

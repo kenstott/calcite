@@ -1253,21 +1253,22 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // Note: we intentionally do NOT cache "no data" across tables.
     // A "No files found" for one table does not mean other tables lack tracker data.
 
-    // Build targeted globs from the known combinations instead of scanning source_key=*
-    // Use extractYear to target specific year partitions instead of year=*
     // Pre-compute flattened keys for all combinations (reused for matching later)
+    // Build year-level globs using _batch_* to match actual write path structure
     String[] flatKeys = new String[allCombinations.size()];
-    List<String> sourceKeyPaths = new ArrayList<String>();
+    Set<String> yearSet = new LinkedHashSet<String>();
     for (int i = 0; i < allCombinations.size(); i++) {
       String flat = flattenKeyValues(allCombinations.get(i));
       flatKeys[i] = flat;
-      String year = extractYear(flat, System.currentTimeMillis());
-      sourceKeyPaths.add(bucketPath + "/year=" + year + "/source_key="
-          + sanitizeHiveValue(flat) + "/*.parquet");
+      yearSet.add(extractYear(flat, System.currentTimeMillis()));
     }
 
-    // Deduplicate paths (multiple combinations may map to the same glob)
-    List<String> uniquePaths = new ArrayList<String>(new LinkedHashSet<String>(sourceKeyPaths));
+    // One glob per year — batch files are stored as source_key=_batch_<hash>/batch.parquet
+    List<String> uniquePaths = new ArrayList<String>();
+    for (String year : yearSet) {
+      uniquePaths.add(bucketPath + "/year=" + year
+          + "/source_key=_batch_*/*.parquet");
+    }
 
     // Query in chunks to avoid OOM with large dimension spaces (e.g., 3M+ combinations)
     Set<String> processedKeys = new HashSet<String>();
