@@ -1254,87 +1254,50 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // A "No files found" for one table does not mean other tables lack tracker data.
 
     // Pre-compute flattened keys for all combinations (reused for matching later)
-    // Build year-level globs using _batch_* to match actual write path structure
     String[] flatKeys = new String[allCombinations.size()];
-    Set<String> yearSet = new LinkedHashSet<String>();
     for (int i = 0; i < allCombinations.size(); i++) {
-      String flat = flattenKeyValues(allCombinations.get(i));
-      flatKeys[i] = flat;
-      yearSet.add(extractYear(flat, System.currentTimeMillis()));
+      flatKeys[i] = flattenKeyValues(allCombinations.get(i));
     }
 
-    // One glob per year — batch files are stored as source_key=_batch_<hash>/batch.parquet
-    List<String> uniquePaths = new ArrayList<String>();
-    for (String year : yearSet) {
-      uniquePaths.add(bucketPath + "/year=" + year
-          + "/source_key=_batch_*/*.parquet");
-    }
+    // Single glob across all years — batch files are source_key=_batch_<hash>/batch.parquet
+    // Using one glob avoids per-year S3 listings which are very slow with 18K+ files
+    String globPath = bucketPath + "/year=*/source_key=_batch_*/*.parquet";
 
-    // Query in chunks to avoid OOM with large dimension spaces (e.g., 3M+ combinations)
     Set<String> processedKeys = new HashSet<String>();
-    boolean anyNoFiles = false;
 
-    for (int offset = 0; offset < uniquePaths.size(); offset += FILTER_CHUNK_SIZE) {
-      int end = Math.min(offset + FILTER_CHUNK_SIZE, uniquePaths.size());
-      List<String> chunk = uniquePaths.subList(offset, end);
+    String sql = "SELECT source_key FROM ("
+        + "  SELECT source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+        + "  FROM read_parquet('" + globPath + "', "
+        + "hive_partitioning=true, union_by_name=true) "
+        + "  WHERE table_name = ? AND phase = 'incremental'"
+        + ") WHERE rn = 1 AND state = 'complete'";
 
-      if (uniquePaths.size() > FILTER_CHUNK_SIZE) {
-        LOGGER.info("Filtering chunk {}-{} of {} unique paths for {}",
-            offset, end, uniquePaths.size(), alternateName);
-      }
-
-      // Build path list for this chunk
-      StringBuilder pathList = new StringBuilder();
-      pathList.append("[");
-      boolean first = true;
-      for (String p : chunk) {
-        if (!first) {
-          pathList.append(", ");
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          processedKeys.add(rs.getString("source_key"));
         }
-        pathList.append("'").append(p).append("'");
-        first = false;
       }
-      pathList.append("]");
-
-      String sql = "SELECT source_key FROM ("
-          + "  SELECT source_key, state, ROW_NUMBER() OVER "
-          + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
-          + "  FROM read_parquet(" + pathList + ", "
-          + "hive_partitioning=true, union_by_name=true) "
-          + "  WHERE table_name = ? AND phase = 'incremental'"
-          + ") WHERE rn = 1 AND state = 'complete'";
-
-      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-        stmt.setString(1, alternateName);
-        try (ResultSet rs = stmt.executeQuery()) {
-          while (rs.next()) {
-            processedKeys.add(rs.getString("source_key"));
-          }
-        }
-      } catch (SQLException e) {
-        String msg = e.getMessage();
-        if (msg != null && (msg.contains("No files found")
-            || msg.contains("Could not find")
-            || msg.contains("HTTP 404"))) {
-          anyNoFiles = true;
-          // Continue to next chunk — other chunks may have data
-          continue;
-        }
-        LOGGER.debug("Error filtering unprocessed for {} (chunk {}-{}): {}",
-            alternateName, offset, end, msg);
+    } catch (SQLException e) {
+      String msg = e.getMessage();
+      if (msg != null && (msg.contains("No files found")
+          || msg.contains("Could not find")
+          || msg.contains("HTTP 404"))) {
+        LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
+            alternateName, allCombinations.size());
+        return allIndices(allCombinations.size());
       }
+      LOGGER.debug("Error filtering unprocessed for {}: {}",
+          alternateName, msg);
     }
 
     // Cache positive result only — presence of data is safe to cache
     if (!processedKeys.isEmpty()) {
       hasAnyTrackerData = true;
-    }
-
-    // If ALL chunks returned "no files" and nothing was found, return all as unprocessed
-    if (processedKeys.isEmpty() && anyNoFiles) {
-      LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
-          alternateName, allCombinations.size());
-      return allIndices(allCombinations.size());
+      LOGGER.info("Tracker found {} processed keys for {} (out of {} total)",
+          processedKeys.size(), alternateName, allCombinations.size());
     }
 
     Set<Integer> unprocessed = new HashSet<Integer>();
