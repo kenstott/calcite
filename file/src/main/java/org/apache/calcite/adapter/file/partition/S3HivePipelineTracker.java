@@ -1287,7 +1287,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "  SELECT table_name, source_key, state, ROW_NUMBER() OVER "
         + "    (PARTITION BY table_name, source_key ORDER BY as_of DESC) AS rn "
         + "  FROM read_parquet('" + globPath + "', "
-        + "hive_partitioning=true, union_by_name=true) "
+        + "hive_partitioning=false, union_by_name=true) "
         + "  WHERE phase = 'incremental'"
         + ") WHERE rn = 1 AND state = 'complete'";
 
