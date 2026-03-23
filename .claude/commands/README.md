@@ -13,6 +13,49 @@ This directory contains custom commands for Claude Code to help with Calcite ada
 | `/project:test:quick` | Quick test run for development | `/project:test:quick file` |
 | `/project:test:all` | Run all adapter tests comprehensively | `/project:test:all` |
 
+### Java Code Quality Skills
+
+| Command | Description |
+|---------|-------------|
+| `/project:java-style` | Naming, packages, exceptions, annotations, null safety |
+| `/project:java-testing` | JUnit 5, fixtures, tags, assertions |
+| `/project:java-logging` | SLF4J/CalciteTrace conventions, log levels |
+| `/project:java-build` | Gradle KTS, dependencies, modules, build profiles |
+
+### Calcite Skills
+
+| Command | Description |
+|---------|-------------|
+| `/project:calcite:debug` | Plan dumps, planner tracing, Volcano search space, rule diagnosis |
+| `/project:calcite:rules` | Write/register rules, operand matching, avoid infinite loops |
+| `/project:calcite:schema` | SchemaFactory, Table, TableScan implementation |
+| `/project:calcite:types` | RelDataType, type inference, nullable handling |
+| `/project:calcite:rex` | RexNode construction, RexBuilder, type checking |
+| `/project:calcite:relbuilder` | RelBuilder patterns, field refs, trait sets |
+| `/project:calcite:conventions` | Conventions, trait propagation, DuckDB/JDBC |
+| `/project:calcite:metadata` | RelMetadataProvider, cost model, statistics |
+| `/project:calcite:sql-parser` | SqlNode visitors, custom DDL, parser config |
+| `/project:calcite:extensions` | Custom operators, functions, aggregates |
+
+### SQL & Query Skills
+
+| Command | Description |
+|---------|-------------|
+| `/project:sql-patterns` | Supported SQL, edge cases, dialect handling |
+| `/project:query-testing` | Full-stack SQL tests, plan assertions |
+
+### Debugging & Diagnostics Skills
+
+| Command | Description |
+|---------|-------------|
+| `/project:java-heap-debug` | JVM tuning, heap dumps, memory patterns |
+
+### Architecture Skills
+
+| Command | Description |
+|---------|-------------|
+| `/project:project-modules` | Module ownership, dependencies, where code goes |
+
 ## Usage Examples
 
 ### Run regression tests for file adapter

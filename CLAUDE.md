@@ -8,6 +8,7 @@ This project uses a modular guideline system for better organization and effecti
 - **CLAUDE-TESTING.md** - Comprehensive testing guidelines and command patterns
 - **CLAUDE-ADAPTERS.md** - Adapter-specific knowledge and debugging
 - **CLAUDE-TROUBLESHOOTING.md** - Systematic debug workflows and error patterns
+- **CLAUDE-TEAMS.md** - Team definitions, agent mappings, and coordination workflows
 
 All `CLAUDE*.md` files are automatically loaded by Claude Code.
 
@@ -69,6 +70,13 @@ duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/to/file.parquet')"
 - Verification requirements
 - Decision trees
 - Communication standards
+
+### When Coordinating Team Work
+→ See **CLAUDE-TEAMS.md** for:
+- Team definitions and scope
+- Agent-to-team mapping
+- Inter-team workflows
+- Task routing decision tree
 
 ## 🔧 LEGACY COMMANDS (PRESERVED)
 
