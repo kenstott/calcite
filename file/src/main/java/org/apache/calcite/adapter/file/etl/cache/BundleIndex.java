@@ -126,6 +126,7 @@ public class BundleIndex {
       BundleEntry be = entry.getValue();
       sb.append("{\"key\":\"").append(escapeJson(key)).append("\"");
       if (be.isBundled()) {
+        sb.append(",\"bundleFile\":\"").append(escapeJson(be.getBundleFile())).append("\"");
         sb.append(",\"offset\":").append(be.getOffset());
       } else {
         sb.append(",\"storage\":\"object\"");
