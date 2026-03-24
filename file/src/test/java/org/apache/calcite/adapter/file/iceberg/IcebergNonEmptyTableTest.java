@@ -33,6 +33,7 @@ import org.apache.iceberg.parquet.Parquet;
 import org.apache.iceberg.types.Types;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test for Iceberg tables with actual data to ensure DuckDB's iceberg_scan works properly.
  */
+@Tag("integration")
 public class IcebergNonEmptyTableTest extends BaseFileTest {
 
   @TempDir

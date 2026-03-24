@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -59,6 +62,8 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 @SuppressWarnings("deprecation")
 @Tag("unit")
 public class RefreshableTableTest extends BaseFileTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(RefreshableTableTest.class);
 
   /**
    * Checks if refresh functionality is supported by the current engine.
@@ -268,22 +273,19 @@ public class RefreshableTableTest extends BaseFileTest {
       }
 
       if (cacheDir != null) {
-        System.out.println("Found cache directory: " + cacheDir.getAbsolutePath());
+        LOGGER.debug("Found cache directory: {}", cacheDir.getAbsolutePath());
 
         // Check for .conversions.json (note: plural!)
         File conversionFile = new File(cacheDir, ".conversions.json");
         if (conversionFile.exists()) {
           String conversionContent = new String(java.nio.file.Files.readAllBytes(conversionFile.toPath()));
-          System.out.println("=== .conversions.json contents ===");
-          System.out.println(conversionContent);
-          System.out.println("=================================");
+          LOGGER.debug(".conversions.json contents: {}", conversionContent);
 
           // Log the content for debugging but don't assert - with concurrent tests this may find wrong directory
           // The fact that DUCKDB queries work proves the file is written correctly
-          System.out.println("Note: .conversions.json found, DUCKDB table discovery is working");
-          System.out.println("✓ .conversions.json file found and contains expected tables for DUCKDB compatibility");
+          LOGGER.debug(".conversions.json found, DUCKDB table discovery is working");
         } else {
-          System.out.println("WARNING: .conversions.json not found at: " + conversionFile.getAbsolutePath());
+          LOGGER.debug("WARNING: .conversions.json not found at: {}", conversionFile.getAbsolutePath());
 
           // Check if it's in the conversions subdirectory
           File conversionsDir = new File(cacheDir, "conversions");
@@ -291,35 +293,32 @@ public class RefreshableTableTest extends BaseFileTest {
             File conversionFileInDir = new File(conversionsDir, ".conversions.json");
             if (conversionFileInDir.exists()) {
               String conversionContent = new String(java.nio.file.Files.readAllBytes(conversionFileInDir.toPath()));
-              System.out.println("=== .conversions.json found in conversions/ subdirectory ===");
-              System.out.println(conversionContent);
-              System.out.println("=================================");
+              LOGGER.debug(".conversions.json found in conversions/ subdirectory: {}", conversionContent);
 
               // Log the content for debugging but don't assert - with concurrent tests this may find wrong directory
               // The fact that DUCKDB queries work proves the file is written correctly
-              System.out.println("Note: .conversions.json found in conversions/, DUCKDB table discovery is working");
-              System.out.println("✓ .conversions.json file found in conversions/ and contains expected tables for DUCKDB compatibility");
+              LOGGER.debug(".conversions.json found in conversions/, DUCKDB table discovery is working");
             } else {
-              System.out.println("Files in conversions directory:");
+              LOGGER.debug("Files in conversions directory:");
               File[] convFiles = conversionsDir.listFiles();
               if (convFiles != null) {
                 for (File cf : convFiles) {
-                  System.out.println("  - " + cf.getName());
+                  LOGGER.debug("  - {}", cf.getName());
                 }
               }
             }
           }
 
-          System.out.println("Files in cache directory:");
+          LOGGER.debug("Files in cache directory:");
           File[] files = cacheDir.listFiles();
           if (files != null) {
             for (File f : files) {
-              System.out.println("  - " + f.getName() + (f.isDirectory() ? "/" : ""));
+              LOGGER.debug("  - {}{}", f.getName(), f.isDirectory() ? "/" : "");
             }
           }
         }
       } else {
-        System.out.println("WARNING: Could not find ephemeral cache directory");
+        LOGGER.debug("WARNING: Could not find ephemeral cache directory");
       }
 
       // Verify both tables exist - for DuckDB, we need to query them directly to trigger conversion
@@ -416,7 +415,7 @@ public class RefreshableTableTest extends BaseFileTest {
     Map<String, Object> partitionSpec = new HashMap<>();
     partitionSpec.put("style", "hive");
     partitionSpec.put(
-        "columns", Arrays.asList(
+        "columnDefinitions", Arrays.asList(
         Map.of("name", "year", "type", "INTEGER"),
         Map.of("name", "month", "type", "INTEGER")));
     partitionConfig.put("partitions", partitionSpec);
@@ -425,7 +424,7 @@ public class RefreshableTableTest extends BaseFileTest {
 
     // Build model with refresh configuration and partitioned tables
     String partitionedTablesJson = "[{\"name\": \"sales\", \"pattern\": \"**/*.parquet\", " +
-        "\"partitions\": {\"style\": \"hive\", \"columns\": [" +
+        "\"partitions\": {\"style\": \"hive\", \"columnDefinitions\": [" +
         "{\"name\": \"year\", \"type\": \"INTEGER\"}, {\"name\": \"month\", \"type\": \"INTEGER\"}]}}]";
     String model =
         buildTestModel("partitioned", salesDir.toString(), "refreshInterval", "1 second",
@@ -470,14 +469,14 @@ public class RefreshableTableTest extends BaseFileTest {
         // Get actual column names from result set metadata
         java.sql.ResultSetMetaData rsmd = rs.getMetaData();
         int columnCount = rsmd.getColumnCount();
-        System.out.println("Column names in result set:");
+        LOGGER.debug("Column names in result set:");
         for (int i = 1; i <= columnCount; i++) {
-          System.out.println("  Column " + i + ": " + rsmd.getColumnName(i) + " (type: " + rsmd.getColumnTypeName(i) + ")");
+          LOGGER.debug("  Column {}: {} (type: {})", i, rsmd.getColumnName(i), rsmd.getColumnTypeName(i));
         }
 
         // Print actual values to debug
-        System.out.println("Values: id=" + rs.getObject("id") + ", year=" + rs.getObject("year") +
-                         ", month=" + rs.getObject("month"));
+        LOGGER.debug("Values: id={}, year={}, month={}", rs.getObject("id"), rs.getObject("year"),
+                     rs.getObject("month"));
 
         // Now query with correct column names (Parquet uses lowercase)
         assertFalse(rs.next()); // Should only have one record due to LIMIT 1
@@ -492,7 +491,7 @@ public class RefreshableTableTest extends BaseFileTest {
         assertEquals("300.0", rs.getString("amount"));
         assertEquals("Doodad", rs.getString("product"));
         assertEquals("2023", rs.getString("year"));
-        assertEquals("03", rs.getString("month"));
+        assertEquals("3", rs.getString("month"));
         assertFalse(rs.next()); // Should only have one record
       }
 
@@ -521,13 +520,12 @@ public class RefreshableTableTest extends BaseFileTest {
       }
 
       // Print success summary
-      System.out.println("\n=== PARTITIONED TABLE REFRESH TEST SUMMARY ===");
-      System.out.println("✅ Initial state: 2 partitions (2023/01, 2023/02) with 2 records");
-      System.out.println("✅ Added 2023/03 partition → Automatically discovered (3 records total)");
-      System.out.println("✅ Added 2024/01 partition → Automatically discovered (4 records total)");
-      System.out.println("✅ Partition pruning works: year=2023 returns 3 records, year=2024 returns 1 record");
-      System.out.println("✅ RefreshablePartitionedParquetTable successfully discovers new partitions!");
-      System.out.println("==============================================\n");
+      LOGGER.debug("PARTITIONED TABLE REFRESH TEST SUMMARY");
+      LOGGER.debug("Initial state: 2 partitions (2023/01, 2023/02) with 2 records");
+      LOGGER.debug("Added 2023/03 partition - Automatically discovered (3 records total)");
+      LOGGER.debug("Added 2024/01 partition - Automatically discovered (4 records total)");
+      LOGGER.debug("Partition pruning works: year=2023 returns 3 records, year=2024 returns 1 record");
+      LOGGER.debug("RefreshablePartitionedParquetTable successfully discovers new partitions!");
     }
   }
 
@@ -587,9 +585,9 @@ public class RefreshableTableTest extends BaseFileTest {
     File salesDir = new File(tempDir.toFile(), "sales_data");
     salesDir.mkdirs();
 
-    System.out.println("[DEBUG] testCustomRegexPartitions - tempDir: " + tempDir.toString());
-    System.out.println("[DEBUG] testCustomRegexPartitions - salesDir: " + salesDir.getAbsolutePath());
-    System.out.println("[DEBUG] testCustomRegexPartitions - salesDir exists: " + salesDir.exists());
+    LOGGER.debug("testCustomRegexPartitions - tempDir: {}", tempDir.toString());
+    LOGGER.debug("testCustomRegexPartitions - salesDir: {}", salesDir.getAbsolutePath());
+    LOGGER.debug("testCustomRegexPartitions - salesDir exists: {}", salesDir.exists());
 
     // Create Avro schema
     Schema avroSchema = Schema.createRecord("SalesRecord", "", "sales", false);
@@ -607,15 +605,15 @@ public class RefreshableTableTest extends BaseFileTest {
     createParquetFile(file2, avroSchema,
         createRecord(avroSchema, 2, 200.0, "Gadget"));
 
-    System.out.println("[DEBUG] Created parquet file 1: " + file1.getAbsolutePath() + ", exists: " + file1.exists() + ", size: " + file1.length());
-    System.out.println("[DEBUG] Created parquet file 2: " + file2.getAbsolutePath() + ", exists: " + file2.exists() + ", size: " + file2.length());
+    LOGGER.debug("Created parquet file 1: {}, exists: {}, size: {}", file1.getAbsolutePath(), file1.exists(), file1.length());
+    LOGGER.debug("Created parquet file 2: {}, exists: {}, size: {}", file2.getAbsolutePath(), file2.exists(), file2.length());
 
     // List all files in salesDir
-    System.out.println("[DEBUG] Files in salesDir:");
+    LOGGER.debug("Files in salesDir:");
     File[] files = salesDir.listFiles();
     if (files != null) {
       for (File f : files) {
-        System.out.println("  - " + f.getName() + " (size: " + f.length() + ")");
+        LOGGER.debug("  - {} (size: {})", f.getName(), f.length());
       }
     }
 
@@ -637,7 +635,7 @@ public class RefreshableTableTest extends BaseFileTest {
         buildTestModel("CUSTOM", tempDir.toString(), "refreshInterval", "1 second",
         "partitionedTables", partitionedTablesJson);
 
-    System.out.println("[DEBUG] Model configuration: " + model);
+    LOGGER.debug("Model configuration: {}", model);
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
@@ -645,27 +643,27 @@ public class RefreshableTableTest extends BaseFileTest {
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps)) {
 
       // List tables in the schema - for DuckDB, just try to query the expected table
-      System.out.println("[DEBUG] Checking if sales_custom table exists in CUSTOM schema:");
+      LOGGER.debug("Checking if sales_custom table exists in CUSTOM schema:");
       try (Statement stmt = connection.createStatement()) {
         // Try to get count from the table to verify it exists
         try {
           ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM sales_custom");
           if (rs.next()) {
-            System.out.println("  - sales_custom exists with " + rs.getInt(1) + " records");
+            LOGGER.debug("  - sales_custom exists with {} records", rs.getInt(1));
           }
           rs.close();
         } catch (Exception e) {
-          System.out.println("  - sales_custom not found: " + e.getMessage());
+          LOGGER.debug("  - sales_custom not found: {}", e.getMessage());
         }
       }
 
       // Verify initial files are available
-      System.out.println("[DEBUG] Executing query: SELECT COUNT(*) FROM sales_custom");
+      LOGGER.debug("Executing query: SELECT COUNT(*) FROM sales_custom");
       try (Statement stmt = connection.createStatement();
            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM sales_custom")) {
         assertTrue(rs.next());
         int count = rs.getInt(1);
-        System.out.println("[DEBUG] Initial count result: " + count);
+        LOGGER.debug("Initial count result: {}", count);
         assertEquals(2, count);
       }
 
@@ -751,13 +749,12 @@ public class RefreshableTableTest extends BaseFileTest {
         assertFalse(rs.next());
       }
 
-      System.out.println("\n=== CUSTOM REGEX PARTITION TEST SUMMARY ===");
-      System.out.println("✅ Custom regex pattern 'sales_(\\d{4})_(\\d{2})\\.parquet$' correctly extracts year and month");
-      System.out.println("✅ Partition columns extracted successfully");
-      System.out.println("✅ Partition pruning works with custom regex partitions");
-      System.out.println("✅ New partitions automatically discovered after refresh");
-      System.out.println("✅ Aggregations work correctly with typed partition columns");
-      System.out.println("==========================================\n");
+      LOGGER.debug("CUSTOM REGEX PARTITION TEST SUMMARY");
+      LOGGER.debug("Custom regex pattern correctly extracts year and month");
+      LOGGER.debug("Partition columns extracted successfully");
+      LOGGER.debug("Partition pruning works with custom regex partitions");
+      LOGGER.debug("New partitions automatically discovered after refresh");
+      LOGGER.debug("Aggregations work correctly with typed partition columns");
     }
   }
 }

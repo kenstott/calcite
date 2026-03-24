@@ -451,7 +451,8 @@ public class MaterializeConfig {
     }
 
     public MaterializeConfig build() {
-      if (output == null) {
+      // Skip output validation for disabled materialization
+      if (output == null && (enabled == null || enabled)) {
         throw new IllegalArgumentException("Output configuration is required");
       }
       return new MaterializeConfig(this);

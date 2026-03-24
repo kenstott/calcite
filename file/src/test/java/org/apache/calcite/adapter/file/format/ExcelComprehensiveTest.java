@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.file.format;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -54,6 +55,15 @@ public class ExcelComprehensiveTest {
 
   @TempDir
   public File tempDir;
+
+  @AfterEach
+  void cleanUp() {
+    // Clean up .aperio directory created by FileSchema to allow @TempDir cleanup
+    File aperioDir = new File(tempDir, ".aperio");
+    if (aperioDir.exists()) {
+      deleteRecursive(aperioDir);
+    }
+  }
 
   @Test void testBasicExcelFile() throws Exception {
     File excelFile = new File(tempDir, "employees.xlsx");
@@ -301,6 +311,10 @@ public class ExcelComprehensiveTest {
     File excelFile = new File(tempDir, "empty.xlsx");
     createEmptyExcel(excelFile);
 
+    // Also create a non-empty xlsx to debug table discovery
+    File debugExcelFile = new File(tempDir, "debug_test.xlsx");
+    createBasicExcel(debugExcelFile);
+
     String model = createModel(tempDir);
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model);
@@ -317,6 +331,7 @@ public class ExcelComprehensiveTest {
       }
     }
   }
+
 
   @Test void testExcelWithMergedCells() throws Exception {
     File excelFile = new File(tempDir, "merged.xlsx");
@@ -694,5 +709,17 @@ public class ExcelComprehensiveTest {
 
       workbook.write(fos);
     }
+  }
+
+  private static void deleteRecursive(File file) {
+    if (file.isDirectory()) {
+      File[] children = file.listFiles();
+      if (children != null) {
+        for (File child : children) {
+          deleteRecursive(child);
+        }
+      }
+    }
+    file.delete();
   }
 }

@@ -109,11 +109,6 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source,
       Map<String, Object> options, String columnNameCasing) {
-    // If source is a StorageProviderSource, assume JSON format since it's used in JsonTable
-    if (source instanceof org.apache.calcite.adapter.file.storage.StorageProviderSource) {
-      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
-    }
-
     Source sourceSansGz = source.trim(".gz");
     Source sourceSansJson = sourceSansGz.trimOrNull(".json");
     Source sourceSansYaml = sourceSansGz.trimOrNull(".yaml");

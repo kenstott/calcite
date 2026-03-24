@@ -583,6 +583,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Auto-detected local storage from directory path: {}", directory);
     }
 
+    // Default to "local" when tables or partitioned tables are explicitly listed without a directory
+    if (storageType == null && ((tables != null && !tables.isEmpty())
+        || operand.get("partitionedTables") != null)) {
+      storageType = "local";
+      LOGGER.info("Auto-detected local storage from explicit tables/partitionedTables configuration");
+    }
+
     // Validate storageType is set
     if (storageType == null) {
       throw new IllegalStateException(
@@ -784,12 +791,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("[FileSchemaFactory] ==> *** USING REGULAR FILESCHEMA FOR SCHEMA: {} ***", name);
     LOGGER.info("[FileSchemaFactory] ==> - directoryPath={}, storageType='{}'",
                directoryPath != null ? directoryPath : "null", storageType);
-    // Pass user-configured baseDirectory or null to let FileSchema use its default
-    // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
-    // Pass null for File parameter - all file access goes through StorageProvider with directoryPath
-    // Pass canonicalSchemaName for consistent .aperio directory naming (e.g., "econ" vs "ECON")
+    // Pass resolved directoryPath as sourceDirectory so table URLs resolve relative to data directory
+    // Falls back to modelFileDirPath (model file parent) for model-relative URL resolution
+    File resolvedSourceDir = directoryPath != null ? new File(directoryPath)
+        : modelFileDirPath != null ? new File(modelFileDirPath) : null;
     FileSchema fileSchema =
-        new FileSchema(parentSchema, name, null, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
+        new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 

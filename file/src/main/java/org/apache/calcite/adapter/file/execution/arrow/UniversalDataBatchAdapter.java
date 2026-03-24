@@ -107,8 +107,9 @@ public class UniversalDataBatchAdapter {
   private static ArrowType convertSqlTypeToArrow(SqlTypeName sqlType) {
     switch (sqlType) {
     case INTEGER:
-    case BIGINT:
       return new ArrowType.Int(32, true);
+    case BIGINT:
+      return new ArrowType.Int(64, true);
     case DOUBLE:
     case DECIMAL:
       return new ArrowType.FloatingPoint(

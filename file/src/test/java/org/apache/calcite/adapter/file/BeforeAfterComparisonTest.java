@@ -41,10 +41,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Direct comparison of query performance with and without optimizations.
  */
-@Tag("performance")public class BeforeAfterComparisonTest {
+@Tag("performance")
+public class BeforeAfterComparisonTest {
+
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(BeforeAfterComparisonTest.class);
 
   @TempDir
   java.nio.file.Path tempDir;
@@ -57,10 +68,7 @@ import java.util.Random;
   }
 
   @Test public void compareOptimizationEffectiveness() throws Exception {
-    System.out.println("\n"
-  + "=".repeat(80));
-    System.out.println("OPTIMIZATION EFFECTIVENESS COMPARISON");
-    System.out.println("=".repeat(80));
+    LOGGER.debug("OPTIMIZATION EFFECTIVENESS COMPARISON");
 
     // Test queries
     String[] queries = {
@@ -94,14 +102,12 @@ import java.util.Random;
     };
 
     // Run WITHOUT optimizations (no statistics)
-    System.out.println("\n--- WITHOUT OPTIMIZATIONS (No Statistics) ---");
+    LOGGER.debug("--- WITHOUT OPTIMIZATIONS (No Statistics) ---");
     Connection withoutOpt = createConnectionWithoutOptimizations();
     long[] timesWithout = new long[queries.length];
     Object[] resultsWithout = new Object[queries.length];
 
     for (int i = 0; i < queries.length; i++) {
-      System.out.println("\n"
-  + descriptions[i] + ":");
       long time = 0;
       Object result = null;
 
@@ -117,20 +123,17 @@ import java.util.Random;
 
       timesWithout[i] = time / 3;
       resultsWithout[i] = result;
-
-      System.out.println("  Time: " + timesWithout[i] + " ms");
-      System.out.println("  Result: " + result);
+      LOGGER.debug("{}: {} ms, result: {}", descriptions[i],
+          timesWithout[i], result);
     }
 
     // Run WITH optimizations (with statistics)
-    System.out.println("\n--- WITH OPTIMIZATIONS (Statistics + Rules) ---");
+    LOGGER.debug("--- WITH OPTIMIZATIONS (Statistics + Rules) ---");
     Connection withOpt = createConnectionWithOptimizations();
     long[] timesWith = new long[queries.length];
     Object[] resultsWith = new Object[queries.length];
 
     for (int i = 0; i < queries.length; i++) {
-      System.out.println("\n"
-  + descriptions[i] + ":");
       long time = 0;
       Object result = null;
 
@@ -146,66 +149,36 @@ import java.util.Random;
 
       timesWith[i] = time / 3;
       resultsWith[i] = result;
-
-      System.out.println("  Time: " + timesWith[i] + " ms");
-      System.out.println("  Result: " + result);
+      LOGGER.debug("{}: {} ms, result: {}", descriptions[i],
+          timesWith[i], result);
     }
 
     // Summary comparison
-    System.out.println("\n"
-  + "=".repeat(80));
-    System.out.println("PERFORMANCE COMPARISON SUMMARY");
-    System.out.println("=".repeat(80));
-    System.out.println("\n| Query | Without Opt (ms) | With Opt (ms) | Speedup | Result Match |");
-    System.out.println("|-------|-----------------|---------------|---------|--------------|");
-
-    double totalSpeedup = 0;
-    int count = 0;
-
     for (int i = 0; i < queries.length; i++) {
       double speedup = (double) timesWithout[i] / timesWith[i];
-      boolean resultMatch = String.valueOf(resultsWithout[i]).equals(String.valueOf(resultsWith[i]));
-
-      System.out.printf("| %-35s | %15d | %13d | %7.2fx | %12s |\n",
-                       descriptions[i].substring(0, Math.min(35, descriptions[i].length())),
-                       timesWithout[i], timesWith[i], speedup,
-                       resultMatch ? "✅ Yes" : "❌ No");
-
-      if (speedup > 0) {
-        totalSpeedup += speedup;
-        count++;
-      }
+      LOGGER.debug("{}: without={} ms, with={} ms, speedup={:.2f}x",
+          descriptions[i], timesWithout[i], timesWith[i], speedup);
     }
 
-    System.out.println("\nAverage speedup: " + String.format("%.2fx", totalSpeedup / count));
-
     // Verify statistics are being used
-    System.out.println("\n"
-  + "=".repeat(80));
-    System.out.println("STATISTICS VERIFICATION");
-    System.out.println("=".repeat(80));
-
     File cacheDir = tempDir.resolve("opt_cache").toFile();
     File statsFile = new File(cacheDir, "comparison_test.aperio_stats");
+    assertTrue(statsFile.exists(),
+        "Statistics file should have been created at: "
+            + statsFile.getAbsolutePath());
 
-    if (statsFile.exists()) {
-      TableStatistics stats = StatisticsCache.loadStatistics(statsFile);
-      System.out.println("\n✅ Statistics file found and loaded");
-      System.out.println("  Row count: " + stats.getRowCount());
+    TableStatistics stats = StatisticsCache.loadStatistics(statsFile);
+    assertNotNull(stats, "Should be able to load statistics");
+    assertTrue(stats.getRowCount() > 0,
+        "Statistics should report positive row count");
+    LOGGER.debug("Statistics: {} rows", stats.getRowCount());
 
-      ColumnStatistics amountStats = stats.getColumnStatistics("amount");
-      if (amountStats != null) {
-        System.out.println("  amount min: " + amountStats.getMinValue());
-        System.out.println("  amount max: " + amountStats.getMaxValue());
-        System.out.println("  (Query 'amount > 2000' can be eliminated since max < 2000)");
-      }
-
-      ColumnStatistics customerStats = stats.getColumnStatistics("customer_id");
-      if (customerStats != null && customerStats.getHllSketch() != null) {
-        System.out.println("  customer_id HLL estimate: " + customerStats.getHllSketch().getEstimate());
-      }
-    } else {
-      System.out.println("❌ No statistics file found");
+    // Verify results match between optimized and non-optimized queries
+    for (int i = 0; i < queries.length; i++) {
+      assertEquals(String.valueOf(resultsWithout[i]),
+          String.valueOf(resultsWith[i]),
+          "Query '" + descriptions[i]
+              + "' should produce same results with and without optimizations");
     }
 
     withoutOpt.close();
@@ -245,7 +218,7 @@ import java.util.Random;
         builder.buildStatistics(new org.apache.calcite.adapter.file.DirectFileSource(testFile),
         cacheDir);
 
-    System.out.println("\nGenerated statistics: " + stats.getRowCount() + " rows");
+    LOGGER.debug("Generated statistics: {} rows", stats.getRowCount());
 
     // Create connection with statistics enabled
     System.setProperty("calcite.file.statistics.cache.directory", cacheDir.getAbsolutePath());
@@ -339,6 +312,6 @@ import java.util.Random;
       }
     }
 
-    System.out.println("Created test file: " + rowCount + " rows");
+    LOGGER.debug("Created test file: {} rows", rowCount);
   }
 }

@@ -364,11 +364,11 @@ public class MixedFormatGlobTest extends BaseFileTest {
       Set<String> tableNames = schema.getTableNames();
       assertEquals(4, tableNames.size());
       // NOTE: Table names starting with numbers get underscore prefixes due to smart casing convention
-      // Actual names will be: _2023_sales, _2023_products, _2024_sales, _2024_config
-      assertTrue(tableNames.contains("_2023_sales"));
-      assertTrue(tableNames.contains("_2023_products"));
-      assertTrue(tableNames.contains("_2024_sales"));
-      assertTrue(tableNames.contains("_2024_config"));
+      // Directory separators are replaced with double underscores
+      assertTrue(tableNames.contains("_2023__sales"));
+      assertTrue(tableNames.contains("_2023__products"));
+      assertTrue(tableNames.contains("_2024__sales"));
+      assertTrue(tableNames.contains("_2024__config"));
     }
   }
 

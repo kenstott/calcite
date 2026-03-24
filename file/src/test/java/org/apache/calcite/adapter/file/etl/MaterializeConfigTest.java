@@ -78,10 +78,12 @@ public class MaterializeConfigTest {
     assertEquals("zstd", config.getCompression());
   }
 
-  @Test void testMaterializeOutputConfigRequiresLocation() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      MaterializeOutputConfig.builder().build();
-    });
+  @Test void testMaterializeOutputConfigWithoutLocation() {
+    // Location is optional - if not specified, baseDirectory is used directly
+    MaterializeOutputConfig config = MaterializeOutputConfig.builder().build();
+    assertNull(config.getLocation());
+    assertEquals("parquet", config.getFormat());
+    assertEquals("snappy", config.getCompression());
   }
 
   @Test void testMaterializePartitionConfigBuilder() {

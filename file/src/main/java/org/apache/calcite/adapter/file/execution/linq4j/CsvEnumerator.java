@@ -187,7 +187,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       final int field = fields.get(0);
       return new SingleColumnRowConverter(fieldTypes.get(field), field, typeConverter);
     } else {
-      return arrayConverter(fieldTypes, fields, false);
+      return arrayConverter(fieldTypes, fields, false, true, typeConverter);
     }
   }
 

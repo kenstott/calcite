@@ -172,7 +172,9 @@ public class PartitionedTableTest {
 
     // Create schema configuration with no partition config
     Map<String, Object> operand = new HashMap<>();
+    operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put(
         "partitionedTables", java.util.Arrays.asList(
         createPartitionedTableConfig("events", "events/**/*.parquet", null)));
@@ -213,7 +215,7 @@ public class PartitionedTableTest {
     Map<String, Object> partitionConfig = new HashMap<>();
     partitionConfig.put("style", "directory");
     partitionConfig.put(
-        "columns", java.util.Arrays.asList(
+        "columnDefinitions", java.util.Arrays.asList(
         new HashMap<String, Object>() {{
           put("name", "year");
           put("type", "INTEGER");
@@ -230,6 +232,7 @@ public class PartitionedTableTest {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with typed partition columns
@@ -296,6 +299,7 @@ public class PartitionedTableTest {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with partition awareness

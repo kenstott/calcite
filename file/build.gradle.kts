@@ -156,11 +156,23 @@ tasks.test {
             excludeTags(*tags.toTypedArray())
         }
     }
+    maxHeapSize = "2g"
     jvmArgs(
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED",
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.netty,ALL-UNNAMED",
-        "--add-modules=jdk.incubator.vector"
+        "--add-modules=jdk.incubator.vector",
+        // Mockito 5.x on Java 21 requires byte-buddy agent attachment
+        "-XX:+EnableDynamicAgentLoading",
+        "-Djdk.attach.allowAttachSelf=true"
     )
+    // Attach byte-buddy-agent as JVM agent to avoid self-attach failures under load
+    doFirst {
+        val byteBuddyAgent = configurations.testRuntimeClasspath.get().files
+            .find { it.name.contains("byte-buddy-agent") }
+        if (byteBuddyAgent != null) {
+            jvmArgs("-javaagent:${byteBuddyAgent.absolutePath}")
+        }
+    }
 }
 
 // Task to print test classpath for performance test script
