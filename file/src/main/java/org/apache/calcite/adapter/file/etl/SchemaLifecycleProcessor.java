@@ -297,8 +297,12 @@ public class SchemaLifecycleProcessor {
       // Phase 4: Execute schema-level post-processing scripts
       executeSchemaPostProcessing(schemaContext);
 
-      // Phase 4b: Archive raw cache to S3 bundles
-      archiveRawCache(schemaContext);
+      // Phase 4b: Archive raw cache to S3 bundles (only if new data was written)
+      if (resultBuilder.getTotalRows() > 0) {
+        archiveRawCache(schemaContext);
+      } else {
+        LOGGER.info("Skipping raw cache archive — no new data was written");
+      }
 
       // Phase 5: Schema post-processing hooks
       long elapsed = System.currentTimeMillis() - startTime;
