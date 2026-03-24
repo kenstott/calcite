@@ -65,6 +65,33 @@ public class BundleArchiver {
   }
 
   /**
+   * Checks whether a complete archive exists for the given schema.
+   *
+   * <p>An archive is considered complete if at least one index file
+   * ({@code .idx.jsonl} or {@code .idx-NNN.jsonl}) exists in the
+   * schema's bundle prefix. A partial archive (chunks uploaded but
+   * no index) is considered incomplete.
+   *
+   * @param storageProvider S3 storage provider
+   * @param schemaName Schema name for S3 path prefix
+   * @return true if a complete archive exists
+   */
+  public static boolean hasCompleteArchive(StorageProvider storageProvider, String schemaName) {
+    String prefix = "bundles/" + schemaName + "/";
+    try {
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(prefix, false);
+      for (StorageProvider.FileEntry entry : files) {
+        if (entry.getPath().endsWith(".jsonl") && entry.getPath().contains(".idx")) {
+          return true;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to check archive status for '{}': {}", schemaName, e.getMessage());
+    }
+    return false;
+  }
+
+  /**
    * Archives the local raw cache to S3.
    *
    * @param localCacheDir Local cache directory (e.g., {@code .aperio/<schema>/cache/raw})
