@@ -85,8 +85,8 @@ public class BundleArchiverTest {
 
     BundleArchiver.archive(cacheDir.toString(), provider, "myschema", "run-20260310T1423");
 
-    // Should produce a bundle file and an index file
-    assertTrue(provider.writtenFiles.containsKey("bundles/myschema/run-20260310T1423.bin"));
+    // Should produce a chunked bundle file and an index file
+    assertTrue(provider.writtenFiles.containsKey("bundles/myschema/run-20260310T1423-001.bin"));
     assertTrue(provider.writtenFiles.containsKey("bundles/myschema/run-20260310T1423.idx.jsonl"));
 
     // Verify index content
@@ -97,7 +97,7 @@ public class BundleArchiverTest {
     assertTrue(indexContent.contains("file2.csv"));
 
     // Verify bundle content contains both files' data
-    byte[] bundleContent = provider.writtenFiles.get("bundles/myschema/run-20260310T1423.bin");
+    byte[] bundleContent = provider.writtenFiles.get("bundles/myschema/run-20260310T1423-001.bin");
     String bundleStr = new String(bundleContent, StandardCharsets.UTF_8);
     assertTrue(bundleStr.contains("data1"));
     assertTrue(bundleStr.contains("data2"));
@@ -147,8 +147,8 @@ public class BundleArchiverTest {
 
     BundleArchiver.archive(cacheDir.toString(), provider, "schema", "run-001", 100);
 
-    // Bundle for small files
-    assertTrue(provider.writtenFiles.containsKey("bundles/schema/run-001.bin"));
+    // Bundle for small files (chunked naming: run-001-001.bin)
+    assertTrue(provider.writtenFiles.containsKey("bundles/schema/run-001-001.bin"));
 
     // Individual upload for large file
     assertTrue(provider.writtenFiles.containsKey("objects/schema/big.shp"));
