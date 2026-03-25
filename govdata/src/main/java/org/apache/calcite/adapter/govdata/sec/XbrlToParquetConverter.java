@@ -3484,6 +3484,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String officerTitle = getElementText(reportingOwner, "officerTitle");
 
         // Process all transaction and holding types for this reporting owner
+        int sizeBefore = dataList.size();
         addNonDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addNonDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
@@ -3492,6 +3493,14 @@ public class XbrlToParquetConverter implements FileConverter {
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
+
+        // If no transactions or holdings were found (e.g., Form 3 with noSecuritiesOwned),
+        // create an initial appointment record to preserve the insider relationship data
+        if (dataList.size() == sizeBefore) {
+          addInitialAppointmentRecord(cik, filingType, filingDate, accession,
+              reportingPersonCik, reportingPersonName, isDirector, isOfficer,
+              isTenPercentOwner, officerTitle, dataList);
+        }
       }
     } else {
       // Fallback for documents without explicit reporting owner structure
@@ -3511,6 +3520,12 @@ public class XbrlToParquetConverter implements FileConverter {
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
+
+      if (dataList.isEmpty()) {
+        addInitialAppointmentRecord(cik, filingType, filingDate, accession,
+            reportingPersonCik, reportingPersonName, isDirector, isOfficer,
+            isTenPercentOwner, officerTitle, dataList);
+      }
     }
 
     return dataList;
@@ -3776,6 +3791,47 @@ public class XbrlToParquetConverter implements FileConverter {
 
       dataList.add(data);
     }
+  }
+
+  /**
+   * Creates an initial appointment record for insiders with no securities owned.
+   *
+   * <p>Form 3 filings with {@code <noSecuritiesOwned>} indicate a newly appointed insider
+   * who holds zero shares. This method preserves the insider relationship data
+   * (name, CIK, role flags, officer title) that would otherwise be lost.
+   *
+   * <p>The record uses {@code transaction_code = "I"} (Initial appointment, no holdings)
+   * with {@code shares_owned_after = 0} to distinguish from holdings ({@code "H"})
+   * and transactions ({@code "P"}, {@code "S"}, etc.).
+   */
+  private void addInitialAppointmentRecord(String cik, String filingType, String filingDate,
+      String accession, String reportingPersonCik, String reportingPersonName,
+      boolean isDirector, boolean isOfficer, boolean isTenPercentOwner, String officerTitle,
+      List<Map<String, Object>> dataList) {
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("accession_number", accession);
+    data.put("cik", cik);
+    data.put("filing_date", filingDate);
+    data.put("filing_type", filingType);
+    data.put("year", extractYearFromDate(filingDate));
+    data.put("reporting_person_cik", reportingPersonCik);
+    data.put("reporting_person_name", reportingPersonName);
+    data.put("is_director", isDirector);
+    data.put("is_officer", isOfficer);
+    data.put("is_ten_percent_owner", isTenPercentOwner);
+    data.put("officer_title", officerTitle);
+    data.put("transaction_date", filingDate);
+    data.put("transaction_code", "I"); // I = Initial appointment, no securities owned
+    data.put("security_title", null);
+    data.put("shares_transacted", null);
+    data.put("price_per_share", null);
+    data.put("shares_owned_after", 0.0);
+    data.put("acquired_disposed_code", null);
+    data.put("ownership_type", null);
+    data.put("footnotes", "No securities beneficially owned at time of initial filing");
+
+    dataList.add(data);
   }
 
   /**

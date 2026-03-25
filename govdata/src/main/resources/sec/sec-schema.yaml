@@ -800,7 +800,7 @@ partitionedTables:
       - name: transaction_code
         type: string
         nullable: true
-        comment: Transaction code (P=purchase, S=sale, A=award, H=holding)
+        comment: Transaction code (P=purchase, S=sale, A=award, H=holding, I=initial appointment with no securities)
       - name: security_title
         type: string
         nullable: true
