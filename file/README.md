@@ -26,6 +26,7 @@ Storage providers can be configured at two levels:
 - **Amazon S3** - List and access all files in S3 bucket
 - **HDFS** - Direct access to Hadoop Distributed File System clusters
 - **HTTP/HTTPS** - Access files from web servers
+- **FTP/SFTP** - Access files from FTP and SFTP servers
 - **SharePoint** - Browse SharePoint document libraries
 
 **Table-level** (auto-detected from URL):
@@ -58,6 +59,8 @@ data/
 ├── products.parquet   → SELECT * FROM products
 └── reports/*.xlsx     → SELECT * FROM reports (combined)
 ```
+
+**Table Naming**: Files in subdirectories use `__` (double underscore) as the directory separator in table names, while spaces in filenames become `_` (single underscore). For example: `subdir/my file.csv` produces table name `subdir__my_file`.
 
 **Persistent Optimization Layer**: Statistics that survive restarts.
 - HyperLogLog sketches for instant COUNT(DISTINCT)
@@ -410,6 +413,17 @@ Once configured, query the materialized view like any table:
 SELECT * FROM analytics.unified_customer_view WHERE lifetime_value > 1000;
 ```
 
+### Iceberg Table Compaction
+
+The `CompactionRunner` is a standalone CLI tool that compacts small Iceberg data files into larger files, improving query performance for tables with many small files from frequent writes. It connects directly to the warehouse via Hadoop filesystem and supports S3-compatible storage including R2 and MinIO.
+
+```bash
+java -cp govdata-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
+  --warehouse s3://bucket/warehouse --table my_table
+```
+
+For full details on arguments, environment variables, and inline compaction config, see [Iceberg Integration - Table Compaction](docs/iceberg-integration.md#table-compaction).
+
 ### Multi-Table Extraction
 
 Extract multiple tables from various file formats:
@@ -697,6 +711,7 @@ JOIN analytics.customers a ON r.customer_id = a.id;
 ### Advanced Features
 - [CSV Type Inference](docs/csv-type-inference.md) - Automatic column type detection
 - [Apache Iceberg Integration](docs/iceberg-integration.md) - Time travel and schema evolution
+- [Vector Search](docs/vector-search.md) - Similarity functions and embedding generation
 
 ### Reference
 - [API Reference](docs/api-reference.md) - Programmatic usage

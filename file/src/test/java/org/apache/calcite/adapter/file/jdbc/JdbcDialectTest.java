@@ -543,7 +543,7 @@ public class JdbcDialectTest {
     String sql =
         dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
-        "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM iceberg.`s3://bucket/warehouse/table`",
+        "CREATE OR REPLACE VIEW \"myschema\".\"mytable\" AS SELECT * FROM aperio_iceberg.myschema.mytable",
         sql);
   }
 
