@@ -79,6 +79,29 @@ dependencies {
     // DuckDB for performance comparison tests and optional execution engine
     compileOnly("org.duckdb:duckdb_jdbc:1.4.3.0")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    // ClickHouse for optional execution engine
+    compileOnly("com.clickhouse:clickhouse-jdbc:0.7.1:all")
+    testImplementation("com.clickhouse:clickhouse-jdbc:0.7.1:all")
+    // Trino JDBC driver for optional Trino execution engine
+    compileOnly("io.trino:trino-jdbc:439")
+    testImplementation("io.trino:trino-jdbc:439")
+    // Spark SQL via Thrift Server (Hive JDBC driver - thin jar)
+    // Uses the thin hive-jdbc jar with selective transitive deps to avoid the standalone
+    // fat jar's SLF4J/Parquet conflicts. The driver is loaded dynamically via Class.forName().
+    testRuntimeOnly("org.apache.hive:hive-jdbc:2.3.9") {
+      exclude(group = "org.apache.logging.log4j")
+      exclude(group = "org.slf4j")
+      exclude(group = "org.apache.parquet")
+      exclude(group = "org.apache.hadoop")
+      exclude(group = "org.apache.hive", module = "hive-exec")
+      exclude(group = "org.apache.hive", module = "hive-metastore")
+      exclude(group = "org.apache.hive", module = "hive-shims")
+      exclude(group = "com.fasterxml.jackson.core")
+      exclude(group = "com.google.guava")
+      exclude(group = "commons-codec")
+      exclude(group = "commons-logging")
+      exclude(group = "net.sf.opencsv")
+    }
     // Test dependencies for mock-based tests
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.apache.hadoop:hadoop-minicluster:3.3.6")

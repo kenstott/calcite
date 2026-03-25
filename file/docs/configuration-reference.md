@@ -104,7 +104,7 @@ services:
 
 Each schema operates as an independent instance with its own:
 - **Unique name** (required) - Schema names must be unique within the same connection
-- Execution engine (Parquet (default), DuckDB, Arrow, Vectorized, LINQ4J)
+- Execution engine (Parquet (default), DuckDB, Arrow, Trino, Spark, ClickHouse, LINQ4J)
 - Storage provider (Local, S3, HTTP, SharePoint)
 - Memory and performance settings
 - Name transformation rules
@@ -162,6 +162,18 @@ Each schema operates as an independent instance with its own:
           "memory_limit": "16GB",
           "threads": 32,
           "enable_progress_bar": false
+        }
+      }
+    },
+    {
+      "name": "iceberg_warehouse",
+      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+      "operand": {
+        "directory": "s3://bucket/warehouse",
+        "executionEngine": "spark",     // Thrift Server with Iceberg catalog
+        "sparkConfig": {
+          "host": "spark-cluster.internal",
+          "icebergWarehouse": "s3://bucket/warehouse"
         }
       }
     },
@@ -325,7 +337,9 @@ The File Adapter implements **specialized execution engines** rather than a one-
 
 - **Parquet**: Handles unlimited dataset sizes through spillover
 - **Arrow**: Maximizes in-memory performance with SIMD vectorization
-- **DuckDB**: Provides advanced SQL analytics capabilities
+- **DuckDB**: Provides advanced SQL analytics capabilities (embedded)
+- **Spark**: Distributed SQL via Thrift Server with native Iceberg catalog support
+- **ClickHouse**: High-performance OLAP with columnar storage (server or local mode)
 - **LINQ4J**: Offers simple, low-overhead row processing
 
 This specialization ensures optimal performance for each use case without compromising functionality.
@@ -407,6 +421,182 @@ Best for in-memory processing of smaller datasets.
   }
 }
 ```
+
+### Trino Engine
+
+Trino execution via an external [Trino](https://trino.io/) cluster. Like Spark, Trino is **server-only** — a running Trino server is required. Unlike Spark (which creates views over backtick Parquet paths), Trino creates external tables via `CREATE TABLE ... WITH (external_location)` and registers Iceberg tables via `CALL iceberg.system.register_table()`.
+
+**The execution engine is primarily for acid testing.** For production use, the recommended pattern is catalog export: Aperio discovers files, `TrinoConfig.generateCatalogFiles()` writes Trino catalog property files, and users query via native Trino.
+
+```json
+{
+  "executionEngine": "TRINO",
+  "trinoConfig": {
+    "host": "localhost",
+    "port": "8080",
+    "catalog": "hive",
+    "schema": "default",
+    "icebergCatalog": "iceberg",
+    "warehouseDir": "/data/warehouse"
+  }
+}
+```
+
+#### Trino Configuration Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | String | `localhost` | Trino server hostname |
+| `port` | String | `8080` | Trino server port |
+| `catalog` | String | `hive` | Hive catalog for Parquet external tables |
+| `schema` | String | `default` | Default schema within the catalog |
+| `user` | String | - | Trino user (defaults to system user) |
+| `password` | String | - | Password for secured clusters (optional) |
+| `icebergCatalog` | String | `iceberg` | Separate catalog for Iceberg connector |
+| `warehouseDir` | String | `/data/warehouse` | Warehouse directory for metastore |
+| `s3AccessKey` | String | - | AWS access key for S3 |
+| `s3SecretKey` | String | - | AWS secret key for S3 |
+| `s3Endpoint` | String | - | Custom S3 endpoint (MinIO/R2) |
+
+Any additional keys in `trinoConfig` that are not in the table above are passed through as Trino `SET SESSION` commands at connection time.
+
+#### Catalog Export (Production Pattern)
+
+Generate Trino catalog files for native querying:
+
+```java
+TrinoConfig config = new TrinoConfig(configMap);
+config.generateCatalogFiles("/path/to/trino/etc/catalog");
+```
+
+This writes `hive.properties` and `iceberg.properties` files that the Trino server reads on startup. The generated files include S3 credentials if configured. This is the recommended production pattern — Aperio handles file discovery and ingestion, Trino handles distributed querying.
+
+#### Running Trino (Docker)
+
+```bash
+# Generate catalog files, then start Trino with data and catalogs mounted
+docker run -d --name trino \
+  -p 8080:8080 \
+  -v /data:/data \
+  -v /path/to/catalogs:/etc/trino/catalog \
+  trinodb/trino:439
+```
+
+Trino typically takes 10-15 seconds to start. The adapter polls via JDBC until ready.
+
+#### Trino vs DuckDB
+
+| Capability | DuckDB | Trino |
+|------------|--------|-------|
+| Deployment | Embedded (in-process) | Server only |
+| Parquet access | Direct glob patterns | External tables via catalog |
+| Iceberg | Via DuckDB extension | Native connector |
+| S3 access | Via httpfs extension | Via Hive/Iceberg connector |
+| Distributed | No | Yes (cluster) |
+| Best for | Single-node analytics | Federated queries, data mesh |
+| Recommended use | Default engine | Native catalog export |
+
+### Spark Engine
+
+Spark SQL execution via an external [Spark Thrift Server](https://spark.apache.org/docs/latest/sql-distributed-sql-engine.html) (HiveServer2 protocol). Unlike DuckDB (embedded) and ClickHouse (embedded or server), Spark is **server-only** — a running Thrift Server is required.
+
+All queries originate as Calcite SQL and are translated to Spark SQL automatically. Parquet and Iceberg tables are handled transparently — no manual catalog or table registration is needed.
+
+```json
+{
+  "executionEngine": "spark",
+  "sparkConfig": {
+    "host": "localhost",
+    "port": "10000",
+    "database": "default"
+  }
+}
+```
+
+#### Spark Configuration Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | String | `localhost` | Thrift Server hostname |
+| `port` | String | `10000` | Thrift Server port (HiveServer2) |
+| `database` | String | `default` | Spark SQL database for schema isolation |
+| `user` | String | - | Username for secured clusters (optional) |
+| `password` | String | - | Password for secured clusters (optional) |
+| `icebergCatalogType` | String | `hadoop` | Iceberg catalog type: `hadoop`, `hive`, or `rest` |
+| `icebergWarehouse` | String | - | Iceberg warehouse path (defaults to schema directory) |
+| `maxMemory` | String | - | Executor memory (e.g., `"4g"`, `"512m"`) |
+| `maxThreads` | Integer | 0 | Executor cores (0 = Spark default) |
+
+Any additional keys in `sparkConfig` that are not in the table above are passed through as Spark SQL `SET` commands at session startup. This allows arbitrary Spark configuration:
+
+```json
+{
+  "sparkConfig": {
+    "host": "spark-cluster.internal",
+    "spark.sql.shuffle.partitions": "200",
+    "spark.sql.adaptive.enabled": "true"
+  }
+}
+```
+
+#### S3 Configuration
+
+When the schema's storage provider is S3, credentials are automatically propagated to Spark:
+
+```json
+{
+  "sparkConfig": {
+    "host": "spark-cluster.internal",
+    "icebergWarehouse": "s3://bucket/warehouse"
+  },
+  "storageType": "s3",
+  "storageConfig": {
+    "accessKey": "${AWS_ACCESS_KEY_ID}",
+    "secretKey": "${AWS_SECRET_ACCESS_KEY}",
+    "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+  }
+}
+```
+
+#### Running a Spark Thrift Server (Docker)
+
+For local development and testing, start a Spark Thrift Server via Docker:
+
+```bash
+# Download Iceberg runtime (needed for Iceberg table support)
+curl -sL -o /tmp/iceberg-runtime.jar \
+  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.4.0/iceberg-spark-runtime-3.5_2.12-1.4.0.jar
+
+# Start Spark Thrift Server
+docker run -d --name spark-thrift \
+  -p 10000:10000 \
+  -v /data:/data \
+  -v /tmp/iceberg-runtime.jar:/opt/iceberg/iceberg-runtime.jar \
+  apache/spark:3.5.1 \
+  /opt/spark/bin/spark-submit \
+    --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
+    --master "local[2]" \
+    --jars /opt/iceberg/iceberg-runtime.jar \
+    --conf spark.driver.extraJavaOptions=-Dderby.system.home=/tmp/derby \
+    --hiveconf hive.server2.thrift.port=10000 \
+    local:///opt/spark/jars/spark-hive-thriftserver_2.12-3.5.1.jar
+```
+
+**Note:** Use `spark-submit` with `HiveThriftServer2` class directly (foreground mode). The `start-thriftserver.sh` script runs as a daemon and will cause the container to exit.
+
+The Thrift Server needs the Iceberg runtime jar on its classpath for Iceberg table support. The base `apache/spark` image does not include it — download from Maven Central and mount via `--jars`. No other special server setup is required; the adapter configures everything else at connection time.
+
+#### Engine Comparison
+
+| Capability | DuckDB | ClickHouse | Trino | Spark |
+|------------|--------|------------|-------|-------|
+| Deployment | Embedded (in-process) | Server or `clickhouse-local` | Server only | Server only (Thrift) |
+| Iceberg | Via DuckDB extension | Via `iceberg()` function | Native connector | Native catalog |
+| S3 access | Via httpfs extension | Via S3 functions | Via Hive/Iceberg connector | Via Hadoop S3A |
+| Distributed | No | Yes (cluster) | Yes (cluster) | Yes (cluster) |
+| Parquet access | Direct glob | `file()` function | External tables via catalog | Backtick `parquet.\`path\`` |
+| Best for | Single-node analytics | OLAP, large aggregations | Federated queries, data mesh | Distributed ETL |
+| Recommended use | Default engine | OLAP workloads | Native catalog export | Legacy only |
 
 ## Storage Provider Configuration
 
@@ -823,6 +1013,35 @@ materialize:
 | `incrementalKeys` | List | [] | Columns for incremental tracking (e.g., `[year]`) |
 | `maxRetries` | Integer | 3 | Max retry attempts on failure |
 | `retryDelayMs` | Long | 1000 | Delay between retries |
+
+### CompactionRunner CLI Reference
+
+The `CompactionRunner` is a standalone command-line tool for Iceberg table compaction, independent of the ETL pipeline. Use it for ad-hoc compaction of tables that have accumulated small files.
+
+```bash
+java -cp govdata-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
+  --warehouse s3://bucket/warehouse --table table_name
+```
+
+#### CLI Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--warehouse` | String | (required) | Warehouse root path (e.g., `s3://bucket/warehouse`) |
+| `--table` | String | (required) | Table name within the warehouse |
+| `--target-file-size` | Long | `134217728` (128MB) | Target file size in bytes after compaction |
+| `--min-files` | Integer | `3` | Minimum number of small files to trigger compaction |
+| `--small-file-size` | Long | `10485760` (10MB) | Files smaller than this are compaction candidates |
+
+#### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AWS_ACCESS_KEY_ID` | For S3 | AWS access key for S3/R2/MinIO |
+| `AWS_SECRET_ACCESS_KEY` | For S3 | AWS secret key for S3/R2/MinIO |
+| `AWS_ENDPOINT_OVERRIDE` | No | Custom endpoint URL (enables path-style access and R2/MinIO compatibility) |
+
+For full documentation, see [Iceberg Integration - Table Compaction](iceberg-integration.md#table-compaction).
 
 ### Error and Retry Handling
 
