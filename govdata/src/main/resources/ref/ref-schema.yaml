@@ -213,6 +213,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # GLEIF CIK MAPPING — LEI <-> SEC CIK bridge table
@@ -280,6 +283,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # FIGI INSTRUMENTS — OpenFIGI instrument identifiers
@@ -383,6 +389,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # CONSTRAINTS

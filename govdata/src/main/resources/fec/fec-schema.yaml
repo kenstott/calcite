@@ -352,6 +352,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # COMMITTEES — Political committee registrations
@@ -480,6 +483,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # CANDIDATE-COMMITTEE LINKAGES — Which committees support which candidates
@@ -556,6 +562,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # INDIVIDUAL CONTRIBUTIONS — Itemized individual contributions (>$200)
@@ -704,6 +713,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -860,6 +872,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -1016,6 +1031,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -1191,6 +1209,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -1353,6 +1374,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -1485,6 +1509,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
     vectorize:
       enabled: true
@@ -1622,6 +1649,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # CANDIDATE SUMMARIES — Aggregated candidate financial totals
@@ -1811,6 +1841,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # COMMITTEE SUMMARIES — Aggregated committee financial totals
@@ -2016,6 +2049,9 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # CONSTRAINTS

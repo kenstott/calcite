@@ -303,6 +303,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_agencies
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDE OFFENSES - Summarized crime rates by state, offense, and month
@@ -383,6 +386,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_offenses
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -456,6 +462,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_police_employment
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -513,6 +522,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_hate_crimes
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -569,6 +581,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_use_of_force
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -657,6 +672,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_crime_agency
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -722,6 +740,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_arrests
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -782,6 +803,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_shr
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -842,6 +866,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_leoka
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -907,6 +934,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_trends
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDE SUPPLEMENTAL - Stolen and recovered property values
@@ -967,6 +997,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_supplemental
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1031,6 +1064,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_cargo_theft
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1091,6 +1127,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_human_trafficking
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1152,6 +1191,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_participation
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1224,6 +1266,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: cde_estimates
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1335,6 +1380,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: bjs_nibrs_estimates
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # BJS NCVS PERSONAL - National Crime Victimization Survey
@@ -1452,6 +1500,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: bjs_ncvs_personal
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1552,6 +1603,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: bjs_ncvs_personal_pop
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1647,6 +1701,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: bjs_ncvs_household
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1730,6 +1787,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
         tableName: bjs_ncvs_household_pop
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 

@@ -263,6 +263,9 @@ iceberg_defaults: &iceberg_defaults
   targetFileSizeBytes: 134217728  # 128MB
   runMaintenance: true
   snapshotRetentionDays: 7
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
 
 parquet_defaults: &parquet_defaults
   compression: snappy

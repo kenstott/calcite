@@ -210,6 +210,9 @@ materializationDefaults:
     warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
     icebergTableName: "${TABLE_NAME}"
     catalogType: hadoop
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
     # Iceberg-specific options
     partitionBy:
       - type
@@ -298,6 +301,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_population
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS INCOME - Household income statistics
@@ -363,6 +369,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_income
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS HOUSING - Housing unit statistics
@@ -443,6 +452,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_housing
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS EDUCATION - Educational attainment
@@ -523,6 +535,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_education
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS EMPLOYMENT - Employment and labor force statistics
@@ -598,6 +613,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_employment
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS POVERTY - Poverty statistics
@@ -663,6 +681,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_poverty
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # DECENNIAL POPULATION - Unified table for 2000, 2010, 2020
@@ -750,6 +771,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: decennial_population
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS RACE & ETHNICITY - Detailed race and Hispanic origin breakdown
@@ -843,6 +867,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_race_ethnicity
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS AGE - Age distribution and median age
@@ -915,6 +942,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_age
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS COMMUTING - Transportation to work patterns
@@ -1003,6 +1033,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_commuting
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS HEALTH INSURANCE - Health insurance coverage
@@ -1075,6 +1108,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_health_insurance
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS LANGUAGE - Language spoken at home
@@ -1157,6 +1193,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_language
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS DISABILITY - Disability status
@@ -1234,6 +1273,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_disability
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS VETERANS - Veteran status
@@ -1306,6 +1348,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_veterans
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS MIGRATION - Geographic mobility in the past year
@@ -1383,6 +1428,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_migration
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS OCCUPATION - Employment by occupation
@@ -1460,6 +1508,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_occupation
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS INDUSTRY - Employment by industry
@@ -1577,6 +1628,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_industry
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS INTERNET - Internet and computer access
@@ -1656,6 +1710,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_internet
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS NATIVITY - Nativity and citizenship status
@@ -1728,6 +1785,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_nativity
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS MARITAL STATUS - Marital status
@@ -1841,6 +1901,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_marital_status
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS HOUSEHOLD TYPE - Household and family composition
@@ -1928,6 +1991,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_household_type
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS HOUSING TENURE - Homeownership and rental status
@@ -2005,6 +2071,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_housing_tenure
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS INCOME DISTRIBUTION - Income brackets and Gini coefficient
@@ -2092,6 +2161,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs_income_distribution
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # DECENNIAL HOUSING - Housing from decennial census
@@ -2163,6 +2235,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: decennial_housing
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # POPULATION ESTIMATES PROGRAM (PEP)
@@ -2243,6 +2318,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: pep_population
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # COUNTY BUSINESS PATTERNS (CBP)
@@ -2324,6 +2402,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: cbp_establishments
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # ACS 1-YEAR ESTIMATES
@@ -2396,6 +2477,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs1_population
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # ACS 1-YEAR INCOME - Current year income statistics
@@ -2452,6 +2536,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: acs1_income
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # ECONOMIC CENSUS
@@ -2546,6 +2633,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: economic_census
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # SAIPE - SMALL AREA INCOME AND POVERTY ESTIMATES
@@ -2629,6 +2719,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: saipe_poverty
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # SAHIE - SMALL AREA HEALTH INSURANCE ESTIMATES
@@ -2705,6 +2798,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: sahie_insurance
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # BUSINESS DYNAMICS STATISTICS (BDS)
@@ -2791,6 +2887,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: bds_dynamics
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # ANNUAL BUSINESS SURVEY (ABS)
@@ -2865,6 +2964,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: abs_characteristics
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # NONEMPLOYER STATISTICS
@@ -2944,6 +3046,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: nonemployer_statistics
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # BUILDING PERMITS SURVEY
@@ -3052,6 +3157,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: building_permits
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # QUARTERLY WORKFORCE INDICATORS (QWI)
@@ -3155,6 +3263,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: qwi_employment
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # LEHD/LODES - Origin-Destination Employment Statistics
@@ -3259,6 +3370,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: lodes_workplace
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # INTERNATIONAL TRADE
@@ -3335,6 +3449,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: trade_exports
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # TRADE IMPORTS - Annual imports by country
@@ -3406,6 +3523,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: trade_imports
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # SQL VIEWS

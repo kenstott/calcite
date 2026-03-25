@@ -301,6 +301,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: nws_stations
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # NWS ALERTS - Active severe weather alerts (no auth)
@@ -394,6 +397,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: nws_alerts
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDO STATIONS - Climate observation station metadata (requires NOAA_CDO_TOKEN)
@@ -480,6 +486,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: cdo_stations
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDO MONTHLY SUMMARIES (GSOM) - Monthly climate data (requires NOAA_CDO_TOKEN)
@@ -561,6 +570,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: cdo_monthly_summaries
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -639,6 +651,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: cdo_annual_summaries
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -724,6 +739,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: epa_annual_aqi
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
