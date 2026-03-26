@@ -204,24 +204,17 @@ class SchemaLifecycleProcessorTest {
   }
 
   @Test void testBuilderRequiresMaterializeDirectory() {
-    // Build config without materializeDirectory
-    Map<String, Object> sourceMap = new LinkedHashMap<String, Object>();
-    sourceMap.put("type", "http");
-    sourceMap.put("url", "http://localhost:9999/test");
-    Map<String, Object> responseMap = new LinkedHashMap<String, Object>();
-    responseMap.put("dataPath", "data");
-    sourceMap.put("response", responseMap);
-
-    Map<String, Object> tableMap = new LinkedHashMap<String, Object>();
-    tableMap.put("name", "t");
-    tableMap.put("source", sourceMap);
-
-    EtlPipelineConfig tableConfig = EtlPipelineConfig.fromMap(tableMap);
-
+    // Build a config without materializeDirectory at either level
+    // Use createTableMap which includes a materialize section in the table itself
+    // but the schema-level materializeDirectory is null
     SchemaConfig config = SchemaConfig.builder()
         .name("no_mat_dir")
-        .addTable(tableConfig)
+        .addTable(EtlPipelineConfig.fromMap(createTableMap("test")))
         .build();
+
+    // Verify schema-level materializeDirectory is null
+    assertNull(config.getMaterializeDirectory(),
+        "Schema-level materializeDirectory should be null");
 
     try {
       SchemaLifecycleProcessor.builder()

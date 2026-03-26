@@ -71,12 +71,15 @@ class DuckDBJdbcSchemaFactoryCoverageTest {
     assertNotNull(config, "Parser config must not be null");
   }
 
-  @Test void testGetParserConfigLexIsOracle() {
+  @Test void testGetParserConfigUsesOracleLexBase() {
     SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
-    assertEquals(Lex.ORACLE.unquotedCasing, config.unquotedCasing(),
-        "Unquoted casing should match ORACLE lex");
+    // The parser config starts with ORACLE lex but overrides unquotedCasing to TO_LOWER.
+    // ORACLE lex defaults: quotedCasing=UNCHANGED, unquotedCasing=TO_UPPER, caseSensitive=true
+    // DuckDB override: unquotedCasing=TO_LOWER (for lowercase identifier normalization)
     assertEquals(Lex.ORACLE.quotedCasing, config.quotedCasing(),
-        "Quoted casing should match ORACLE lex");
+        "Quoted casing should match ORACLE lex (UNCHANGED)");
+    assertEquals(Casing.TO_LOWER, config.unquotedCasing(),
+        "Unquoted casing should be TO_LOWER (overriding ORACLE default of TO_UPPER)");
   }
 
   @Test void testGetParserConfigUnquotedCasingIsToLower() {
