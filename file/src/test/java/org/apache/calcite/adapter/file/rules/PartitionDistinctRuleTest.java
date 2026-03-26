@@ -205,7 +205,7 @@ public class PartitionDistinctRuleTest {
   }
 
   private void setupCalciteConnection(String executionEngine) throws Exception {
-    calciteConn = DriverManager.getConnection("jdbc:calcite:");
+    calciteConn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection = calciteConn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 

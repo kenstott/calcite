@@ -255,10 +255,10 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       LOGGER.debug("[CsvEnumerator.deduceRowType] Read header: {}",
                   (strings != null ? "length=" + strings.length + ", content=" + String.join(",", strings) : "null"));
       if (strings == null) {
-        strings = new String[]{"EmptyFileHasNoColumns:boolean"};
+        strings = new String[]{"EmptyFileHasNoColumns:string"};
       } else if (strings.length == 0) {
         LOGGER.warn("[CsvEnumerator.deduceRowType] ERROR: Empty header row read from source: {}", source.path());
-        strings = new String[]{"EmptyFileHasNoColumns:boolean"};
+        strings = new String[]{"EmptyFileHasNoColumns:string"};
       }
       for (String string : strings) {
         final String name;

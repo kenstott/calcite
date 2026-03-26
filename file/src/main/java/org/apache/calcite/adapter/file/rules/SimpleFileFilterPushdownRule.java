@@ -156,8 +156,9 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
 
         switch (operator) {
           case EQUALS:
-            // filter = value: true if min <= filter <= max, false if filter < min || filter > max
-            return checkTrue ? (filter.compareTo(min) >= 0 && filter.compareTo(max) <= 0) :
+            // filter = value: always true ONLY if min == max == filterValue (all rows have same value)
+            // always false if filter < min || filter > max (value is outside data range)
+            return checkTrue ? (filter.compareTo(min) == 0 && filter.compareTo(max) == 0) :
                               (filter.compareTo(min) < 0 || filter.compareTo(max) > 0);
           case LESS_THAN:
             // filter < value: true if max < filter, false if min >= filter
@@ -172,9 +173,10 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
             // filter >= value: true if min >= filter, false if max < filter
             return checkTrue ? min.compareTo(filter) >= 0 : max.compareTo(filter) < 0;
           case NOT_EQUALS:
-            // filter != value: true if filter < min || filter > max, false if min <= filter <= max
+            // filter != value: always true if filter < min || filter > max (value is outside data range)
+            // always false ONLY if min == max == filterValue (all rows have same value)
             return checkTrue ? (filter.compareTo(min) < 0 || filter.compareTo(max) > 0) :
-                              (filter.compareTo(min) >= 0 && filter.compareTo(max) <= 0);
+                              (filter.compareTo(min) == 0 && filter.compareTo(max) == 0);
         }
       }
     } catch (Exception e) {

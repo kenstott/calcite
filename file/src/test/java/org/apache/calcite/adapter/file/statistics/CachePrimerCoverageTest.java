@@ -169,7 +169,7 @@ public class CachePrimerCoverageTest {
     createCsvFile(tempDir2, "beta.csv",
         "val_y\n10\n20\n30\n");
 
-    Connection conn = DriverManager.getConnection("jdbc:calcite:");
+    Connection conn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calcConn = conn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calcConn.getRootSchema();
 
@@ -352,7 +352,7 @@ public class CachePrimerCoverageTest {
     operand.put("directory", dir.toString());
     operand.put("ephemeralCache", true);
 
-    Connection conn = DriverManager.getConnection("jdbc:calcite:");
+    Connection conn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calcConn = conn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calcConn.getRootSchema();
 

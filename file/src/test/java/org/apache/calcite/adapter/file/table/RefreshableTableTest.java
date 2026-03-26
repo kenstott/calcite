@@ -322,17 +322,37 @@ public class RefreshableTableTest extends BaseFileTest {
       }
 
       // Verify both tables exist - for DuckDB, we need to query them directly to trigger conversion
-      // First trigger conversion by querying the tables
+      // First trigger conversion by querying the tables with retry for Parquet conversion timing
       try (Statement stmt = connection.createStatement()) {
-        // Query data1 to ensure it exists and is converted if needed
-        ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) FROM data1");
-        assertTrue(rs1.next(), "Should be able to query data1");
-        rs1.close();
+        // Query data1 with retry to allow Parquet conversion to complete
+        boolean data1Ok = false;
+        for (int attempt = 0; attempt < 5 && !data1Ok; attempt++) {
+          try {
+            ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) FROM data1");
+            assertTrue(rs1.next(), "Should be able to query data1");
+            rs1.close();
+            data1Ok = true;
+          } catch (Exception e) {
+            LOGGER.debug("data1 query attempt {} failed: {}", attempt, e.getMessage());
+            Thread.sleep(500);
+          }
+        }
+        assertTrue(data1Ok, "Should be able to query data1 after retries");
 
-        // Query data2 to ensure it exists and is converted if needed
-        ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) FROM data2");
-        assertTrue(rs2.next(), "Should be able to query data2");
-        rs2.close();
+        // Query data2 with retry to allow Parquet conversion to complete
+        boolean data2Ok = false;
+        for (int attempt = 0; attempt < 5 && !data2Ok; attempt++) {
+          try {
+            ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) FROM data2");
+            assertTrue(rs2.next(), "Should be able to query data2");
+            rs2.close();
+            data2Ok = true;
+          } catch (Exception e) {
+            LOGGER.debug("data2 query attempt {} failed: {}", attempt, e.getMessage());
+            Thread.sleep(500);
+          }
+        }
+        assertTrue(data2Ok, "Should be able to query data2 after retries");
       }
 
       // Create new file after schema creation

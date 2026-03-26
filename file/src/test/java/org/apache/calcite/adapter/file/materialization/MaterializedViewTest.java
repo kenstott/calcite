@@ -277,6 +277,7 @@ public class MaterializedViewTest {
       operand.put("executionEngine", "parquet");
       operand.put("materializations", materializations);
       operand.put("primeCache", false);
+      operand.put("ephemeralCache", true);
 
       rootSchema.add("parquet_mv_test",
           FileSchemaFactory.INSTANCE.create(

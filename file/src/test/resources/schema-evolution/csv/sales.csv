@@ -1,0 +1,6 @@
+id,product,amount,region,date
+1,Widget,10.50,EAST,2024-01-15
+2,Gadget,25.00,WEST,2024-02-20
+3,Gizmo,15.75,EAST,2024-03-10
+4,Widget,12.00,WEST,2024-04-01
+5,Gadget,30.00,EAST,2024-05-15

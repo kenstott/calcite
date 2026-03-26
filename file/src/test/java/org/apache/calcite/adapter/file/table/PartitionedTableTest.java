@@ -126,7 +126,7 @@ public class PartitionedTableTest {
         createPartitionedTableConfig("sales", "sales/**/*.parquet", null)));
 
     // Run queries
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -180,7 +180,7 @@ public class PartitionedTableTest {
         createPartitionedTableConfig("events", "events/**/*.parquet", null)));
 
     // Run queries - should work but without partition columns
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -236,7 +236,7 @@ public class PartitionedTableTest {
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with typed partition columns
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -303,7 +303,7 @@ public class PartitionedTableTest {
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with partition awareness
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();

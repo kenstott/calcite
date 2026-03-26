@@ -163,6 +163,8 @@ class TrinoJdbcSchemaFactoryTest {
     assertEquals("hive", props.getProperty("connector.name"));
     assertEquals("file", props.getProperty("hive.metastore"));
     assertEquals("/data/warehouse", props.getProperty("hive.metastore.catalog.dir"));
+    assertEquals("allow-all", props.getProperty("hive.security"));
+    assertEquals("true", props.getProperty("hive.non-managed-table-writes-enabled"));
     assertNull(props.getProperty("hive.s3.aws-access-key"));
   }
 
@@ -184,8 +186,7 @@ class TrinoJdbcSchemaFactoryTest {
     TrinoConfig config = new TrinoConfig();
     Properties props = config.getIcebergCatalogProperties();
     assertEquals("iceberg", props.getProperty("connector.name"));
-    assertEquals("hive", props.getProperty("iceberg.catalog.type"));
-    assertEquals("file", props.getProperty("hive.metastore"));
+    assertEquals("TESTING_FILE_METASTORE", props.getProperty("iceberg.catalog.type"));
     assertEquals("/data/warehouse", props.getProperty("hive.metastore.catalog.dir"));
   }
 

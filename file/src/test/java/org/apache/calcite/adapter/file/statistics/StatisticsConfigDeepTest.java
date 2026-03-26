@@ -118,13 +118,23 @@ public class StatisticsConfigDeepTest {
   // ===== fromSystemProperties =====
 
   @Test void testFromSystemPropertiesDefaults() {
-    // Without setting any system properties, should use defaults from the property strings
-    StatisticsConfig config = StatisticsConfig.fromSystemProperties();
-    assertNotNull(config);
-    // The method reads from system properties with defaults
-    // Default hll.enabled is "false" in fromSystemProperties
-    assertFalse(config.isHllEnabled());
-    assertEquals(14, config.getHllPrecision());
+    // Save and clear the system property so other tests don't leak into this one
+    String saved = System.getProperty("calcite.file.statistics.hll.enabled");
+    try {
+      System.clearProperty("calcite.file.statistics.hll.enabled");
+
+      // Without setting any system properties, should use defaults from the property strings
+      StatisticsConfig config = StatisticsConfig.fromSystemProperties();
+      assertNotNull(config);
+      // The method reads from system properties with defaults
+      // Default hll.enabled is "false" in fromSystemProperties
+      assertFalse(config.isHllEnabled());
+      assertEquals(14, config.getHllPrecision());
+    } finally {
+      if (saved != null) {
+        System.setProperty("calcite.file.statistics.hll.enabled", saved);
+      }
+    }
   }
 
   // ===== toString =====

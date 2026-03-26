@@ -122,6 +122,9 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
       return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
     } else if (sourceSansYaml != null) {
       return deduceRowType(typeFactory, source, "yaml", options, columnNameCasing);
+    } else if (source instanceof org.apache.calcite.adapter.file.storage.StorageProviderSource) {
+      // StorageProviderSource (HTTP) without a recognizable extension: default to JSON
+      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + source);
     }

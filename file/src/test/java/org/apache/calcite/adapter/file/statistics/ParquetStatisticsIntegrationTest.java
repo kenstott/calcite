@@ -266,7 +266,9 @@ import static org.junit.jupiter.api.Assertions.*;
   +
         "      \"operand\": {\n"
   +
-        "        \"directory\": \"%s\"\n"
+        "        \"directory\": \"%s\",\n"
+  +
+        "        \"ephemeralCache\": true\n"
   +
         "      }\n"
   +
@@ -388,14 +390,23 @@ import static org.junit.jupiter.api.Assertions.*;
   }
 
   private File findStatsCacheFile(File parquetFile) {
-    // Look for statistics cache file in the cache directory we're using
+    // Look for statistics cache file in the .stats subdirectory
+    // StatisticsBuilder places stats in a .stats subdir under the cache directory
     String baseName = parquetFile.getName();
     int lastDot = baseName.lastIndexOf('.');
     if (lastDot > 0) {
       baseName = baseName.substring(0, lastDot);
     }
 
-    File statsFile = new File(cacheDir, baseName + ".aperio_stats");
+    // Check .stats subdirectory first (where StatisticsBuilder puts them)
+    File statsDir = new File(cacheDir, ".stats");
+    File statsFile = new File(statsDir, baseName + ".aperio_stats");
+    if (statsFile.exists()) {
+      return statsFile;
+    }
+
+    // Fall back to checking directly in cacheDir
+    statsFile = new File(cacheDir, baseName + ".aperio_stats");
     return statsFile.exists() ? statsFile : null;
   }
 

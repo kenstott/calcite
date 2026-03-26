@@ -20,19 +20,13 @@ import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -59,22 +53,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class CountStarStatisticsRuleTest {
 
   private File tempDir;
-  private File cacheDir;
   private Connection calciteConn;
-  private String savedCacheDirectory;
 
   @BeforeEach
   public void setUp() throws Exception {
     tempDir = Files.createTempDirectory("countstar-test-").toFile();
-    cacheDir = new File(tempDir, "stats_cache");
-    cacheDir.mkdirs();
-
-    // Save existing system properties
-    savedCacheDirectory =
-        System.getProperty("calcite.file.statistics.cache.directory");
-
-    System.setProperty("calcite.file.statistics.cache.directory",
-        cacheDir.getAbsolutePath());
 
     createTestData();
     setupCalciteConnection();
@@ -85,9 +68,6 @@ public class CountStarStatisticsRuleTest {
     if (calciteConn != null) {
       calciteConn.close();
     }
-
-    restoreProperty("calcite.file.statistics.cache.directory",
-        savedCacheDirectory);
 
     if (tempDir != null && tempDir.exists()) {
       deleteDirectory(tempDir);
@@ -136,55 +116,47 @@ public class CountStarStatisticsRuleTest {
   /**
    * Test the fallback behavior: even without statistics the query should
    * still return the correct count by scanning the parquet file.
+   * Uses a fresh ephemeral connection with no prior cached statistics.
    */
   @Test public void testNoStatsFallback() throws Exception {
-    // Clear cache directory to remove any cached stats
-    deleteDirectory(cacheDir);
-    cacheDir.mkdirs();
+    // Create a fresh connection with ephemeral cache to ensure no cached stats
+    try (Connection freshConn =
+             DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER")) {
+      CalciteConnection freshCalcite = freshConn.unwrap(CalciteConnection.class);
+      SchemaPlus rootSchema = freshCalcite.getRootSchema();
 
-    String query = "SELECT COUNT(*) FROM files.\"count_test\"";
+      Map<String, Object> operand = new LinkedHashMap<>();
+      operand.put("directory", tempDir.toString());
+      operand.put("executionEngine", "parquet");
+      operand.put("ephemeralCache", true);
 
-    try (Statement stmt = calciteConn.createStatement();
-         ResultSet rs = stmt.executeQuery(query)) {
-      assertTrue(rs.next(), "Should have a result row");
-      long result = rs.getLong(1);
-      assertEquals(500, result,
-          "COUNT(*) should return 500 even without statistics");
+      rootSchema.add("files",
+          FileSchemaFactory.INSTANCE.create(rootSchema, "files", operand));
+
+      String query = "SELECT COUNT(*) FROM files.\"count_test\"";
+
+      try (Statement stmt = freshConn.createStatement();
+           ResultSet rs = stmt.executeQuery(query)) {
+        assertTrue(rs.next(), "Should have a result row");
+        long result = rs.getLong(1);
+        assertEquals(500, result,
+            "COUNT(*) should return 500 even without statistics");
+      }
     }
   }
 
-  @SuppressWarnings("deprecation")
   private void createTestData() throws Exception {
-    File file = new File(tempDir, "count_test.parquet");
-
-    String schemaString =
-        "{\"type\": \"record\",\"name\": \"CountRecord\",\"fields\": ["
-            + "  {\"name\": \"id\", \"type\": \"int\"},"
-            + "  {\"name\": \"value\", \"type\": \"double\"},"
-            + "  {\"name\": \"category\", \"type\": \"string\"}"
-            + "]}";
-
-    Schema avroSchema = new Schema.Parser().parse(schemaString);
-
-    try (ParquetWriter<GenericRecord> writer =
-             AvroParquetWriter
-                 .<GenericRecord>builder(
-                     new org.apache.hadoop.fs.Path(file.getAbsolutePath()))
-                 .withSchema(avroSchema)
-                 .withCompressionCodec(CompressionCodecName.SNAPPY)
-                 .build()) {
+    File file = new File(tempDir, "count_test.csv");
+    try (FileWriter writer = new FileWriter(file)) {
+      writer.write("id:int,value:double,category:string\n");
       for (int i = 0; i < 500; i++) {
-        GenericRecord record = new GenericData.Record(avroSchema);
-        record.put("id", i + 1);
-        record.put("value", 10.0 + i);
-        record.put("category", "Cat" + (i % 5));
-        writer.write(record);
+        writer.write((i + 1) + "," + (10.0 + i) + ",Cat" + (i % 5) + "\n");
       }
     }
   }
 
   private void setupCalciteConnection() throws Exception {
-    calciteConn = DriverManager.getConnection("jdbc:calcite:");
+    calciteConn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection =
         calciteConn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -196,14 +168,6 @@ public class CountStarStatisticsRuleTest {
 
     rootSchema.add("files",
         FileSchemaFactory.INSTANCE.create(rootSchema, "files", operand));
-  }
-
-  private static void restoreProperty(String key, String savedValue) {
-    if (savedValue == null) {
-      System.clearProperty(key);
-    } else {
-      System.setProperty(key, savedValue);
-    }
   }
 
   private void deleteDirectory(File dir) {

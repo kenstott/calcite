@@ -23,7 +23,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -122,8 +126,9 @@ public class FileLockingSynchronizationTest {
         "No connections should fail");
 
     // Verify that only one Parquet file was created (not multiple)
-    File[] parquetFiles = sharedCacheDir.listFiles((dir, name) -> name.endsWith(".parquet"));
-    assertConversionCount(parquetFiles, 1, 2);  // Allow up to 2 due to potential race conditions
+    // Parquet files may be in a subdirectory (e.g., .aperio/<schema>/.parquet_cache/)
+    List<File> parquetFilesList = findParquetFilesRecursively(sharedCacheDir);
+    assertConversionCount(parquetFilesList.toArray(new File[0]), 1, 2);  // Allow up to 2 due to potential race conditions
   }
 
   @Test public void testConcurrentRefreshWithSharedCache() throws Exception {
@@ -254,11 +259,17 @@ public class FileLockingSynchronizationTest {
     executor.awaitTermination(5, TimeUnit.SECONDS);
 
     // Each CSV should have exactly one corresponding Parquet file
+    // Parquet files may be in a subdirectory
+    List<File> allParquetFiles = findParquetFilesRecursively(sharedCacheDir);
     for (int i = 0; i < 5; i++) {
-      final int tableIndex = i;
-      File[] parquetFiles =
-          sharedCacheDir.listFiles((dir, name) -> name.startsWith("table" + tableIndex) && name.endsWith(".parquet"));
-      assertConversionCount(parquetFiles, 1, 2);  // Allow up to 2 due to timing
+      final String prefix = "table" + i;
+      List<File> tableParquetFiles = new ArrayList<>();
+      for (File f : allParquetFiles) {
+        if (f.getName().startsWith(prefix) && f.getName().endsWith(".parquet")) {
+          tableParquetFiles.add(f);
+        }
+      }
+      assertConversionCount(tableParquetFiles.toArray(new File[0]), 1, 2);  // Allow up to 2 due to timing
     }
   }
 
@@ -274,7 +285,8 @@ public class FileLockingSynchronizationTest {
         + "      operand: {\n"
         + "        directory: '" + dataDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
-        + "        parquetCacheDirectory: '" + cacheDir.getAbsolutePath().replace("\\", "\\\\") + "'\n"
+        + "        parquetCacheDirectory: '" + cacheDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -294,6 +306,7 @@ public class FileLockingSynchronizationTest {
         + "        directory: '" + dataDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
         + "        parquetCacheDirectory: '" + cacheDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true,\n"
         + "        refreshInterval: '1s'\n"
         + "      }\n"
         + "    }\n"
@@ -308,6 +321,23 @@ public class FileLockingSynchronizationTest {
         writer.write(i + ",name" + i + "," + (i * 10) + "\n");
       }
     }
+  }
+
+  private List<File> findParquetFilesRecursively(File directory) {
+    List<File> parquetFiles = new ArrayList<>();
+    try {
+      Files.walkFileTree(directory.toPath(), new SimpleFileVisitor<Path>() {
+        @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+          if (file.toString().endsWith(".parquet")) {
+            parquetFiles.add(file.toFile());
+          }
+          return FileVisitResult.CONTINUE;
+        }
+      });
+    } catch (IOException e) {
+      // Ignore walk errors
+    }
+    return parquetFiles;
   }
 
   private void assertConversionCount(File[] files, int min, int max) {

@@ -195,13 +195,14 @@ public class BeforeAfterComparisonTest {
     System.setProperty("calcite.file.statistics.join.reorder.enabled", "false");
     System.setProperty("calcite.file.statistics.column.pruning.enabled", "false");
 
-    Connection conn = DriverManager.getConnection("jdbc:calcite:");
+    Connection conn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection = conn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
 
     rootSchema.add("FILES", FileSchemaFactory.INSTANCE.create(rootSchema, "FILES", operand));
 
@@ -226,13 +227,14 @@ public class BeforeAfterComparisonTest {
     System.setProperty("calcite.file.statistics.join.reorder.enabled", "true");
     System.setProperty("calcite.file.statistics.column.pruning.enabled", "true");
 
-    Connection conn = DriverManager.getConnection("jdbc:calcite:");
+    Connection conn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection = conn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
 
     rootSchema.add("FILES", FileSchemaFactory.INSTANCE.create(rootSchema, "FILES", operand));
 

@@ -39,7 +39,7 @@ import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.sql.Connection;
-import java.sql.DriverManager;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -132,7 +132,13 @@ public class ClickHouseJdbcSchemaFactory {
     LOGGER.info("ClickHouse config: {}", config);
 
     try {
-      Class.forName("com.clickhouse.jdbc.ClickHouseDriver");
+      // Create a dedicated driver instance instead of using DriverManager.
+      // DriverManager is a JVM-global singleton; when multiple JDBC drivers
+      // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
+      // dispatch to the wrong driver. Direct driver.connect() is deterministic.
+      final java.sql.Driver clickhouseDriver =
+          (java.sql.Driver) Class.forName("com.clickhouse.jdbc.ClickHouseDriver")
+              .getDeclaredConstructor().newInstance();
 
       String jdbcUrl;
       Process localProcess = null;
@@ -218,8 +224,8 @@ public class ClickHouseJdbcSchemaFactory {
         }
       }
 
-      // Create initial connection for setup
-      Connection setupConn = DriverManager.getConnection(jdbcUrl);
+      // Create initial connection for setup using direct driver instance
+      Connection setupConn = clickhouseDriver.connect(jdbcUrl, new java.util.Properties());
 
       // Apply ClickHouse settings
       String[] settings = config.toClickHouseSettings();
@@ -247,11 +253,13 @@ public class ClickHouseJdbcSchemaFactory {
       // Register SQL views from operand
       registerSqlViewsInClickHouse(setupConn, schemaName, operand);
 
-      // Create DataSource for new connections
-      final String finalJdbcUrl = jdbcUrl;
+      // Create DataSource for new connections - use schemaName as the database
+      // so that JDBC metadata queries find the views created in the schema's database
+      final String finalJdbcUrl = String.format("jdbc:clickhouse://%s:%s/%s",
+          config.getHost(), config.getPort(), schemaName);
       DataSource dataSource = new DataSource() {
         @Override public Connection getConnection() throws SQLException {
-          return DriverManager.getConnection(finalJdbcUrl);
+          return clickhouseDriver.connect(finalJdbcUrl, new java.util.Properties());
         }
 
         @Override public Connection getConnection(String username, String password) throws SQLException {
@@ -300,7 +308,8 @@ public class ClickHouseJdbcSchemaFactory {
     Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
     ClickHouseConvention convention = ClickHouseConvention.of(dialect, expression, schemaName);
 
-    return new ClickHouseJdbcSchema(dataSource, dialect, convention, null, schemaName,
+    // ClickHouse maps databases to catalogs (no schema concept within databases)
+    return new ClickHouseJdbcSchema(dataSource, dialect, convention, schemaName, null,
         directoryPath, recursive, setupConn, fileSchema, localProcess);
   }
 
@@ -310,7 +319,7 @@ public class ClickHouseJdbcSchemaFactory {
   private static SqlDialect createClickHouseDialect() {
     SqlDialect.Context context = SqlDialect.EMPTY_CONTEXT
         .withDatabaseProduct(SqlDialect.DatabaseProduct.CLICKHOUSE)
-        .withIdentifierQuoteString("\"")
+        .withIdentifierQuoteString("`")
         .withNullCollation(NullCollation.LAST)
         .withUnquotedCasing(Casing.TO_LOWER)
         .withQuotedCasing(Casing.UNCHANGED)

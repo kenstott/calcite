@@ -444,7 +444,9 @@ public class PptxTableTest extends BaseFileTest {
   +
         "      \"operand\": {\n"
   +
-        "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\"\n"
+        "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+  +
+        "        \"ephemeralCache\": true\n"
   +
         "      }\n"
   +

@@ -23,19 +23,13 @@ import org.apache.calcite.adapter.file.statistics.StatisticsCache;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -168,33 +162,14 @@ public class HLLCountDistinctRuleTest {
     }
   }
 
-  @SuppressWarnings("deprecation")
   private void createTestData() throws Exception {
-    File file = new File(tempDir, "hll_test.parquet");
-
-    String schemaString =
-        "{\"type\": \"record\",\"name\": \"HLLRecord\",\"fields\": ["
-            + "  {\"name\": \"customer_id\", \"type\": \"int\"},"
-            + "  {\"name\": \"product_id\", \"type\": \"int\"},"
-            + "  {\"name\": \"amount\", \"type\": \"double\"}"
-            + "]}";
-
-    Schema avroSchema = new Schema.Parser().parse(schemaString);
+    File file = new File(tempDir, "hll_test.csv");
     Random random = new Random(42);
-
-    try (ParquetWriter<GenericRecord> writer =
-             AvroParquetWriter
-                 .<GenericRecord>builder(
-                     new org.apache.hadoop.fs.Path(file.getAbsolutePath()))
-                 .withSchema(avroSchema)
-                 .withCompressionCodec(CompressionCodecName.SNAPPY)
-                 .build()) {
+    try (FileWriter writer = new FileWriter(file)) {
+      writer.write("customer_id:int,product_id:int,amount:double\n");
       for (int i = 0; i < 1000; i++) {
-        GenericRecord record = new GenericData.Record(avroSchema);
-        record.put("customer_id", random.nextInt(200));
-        record.put("product_id", random.nextInt(50));
-        record.put("amount", 10.0 + random.nextDouble() * 500.0);
-        writer.write(record);
+        writer.write(random.nextInt(200) + "," + random.nextInt(50) + ","
+            + String.format("%.2f", 10.0 + random.nextDouble() * 500.0) + "\n");
       }
     }
   }
@@ -220,7 +195,7 @@ public class HLLCountDistinctRuleTest {
   }
 
   private void setupCalciteConnection() throws Exception {
-    calciteConn = DriverManager.getConnection("jdbc:calcite:");
+    calciteConn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection =
         calciteConn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();

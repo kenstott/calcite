@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
+
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
@@ -112,7 +112,13 @@ public class SparkJdbcSchemaFactory {
     LOGGER.info("Spark config: {}", config);
 
     try {
-      Class.forName("org.apache.hive.jdbc.HiveDriver");
+      // Create a dedicated driver instance instead of using DriverManager.
+      // DriverManager is a JVM-global singleton; when multiple JDBC drivers
+      // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
+      // dispatch to the wrong driver. Direct driver.connect() is deterministic.
+      final java.sql.Driver sparkDriver =
+          (java.sql.Driver) Class.forName("org.apache.hive.jdbc.HiveDriver")
+              .getDeclaredConstructor().newInstance();
 
       // Build JDBC URL via SparkSqlDialect
       Map<String, String> urlConfig = new HashMap<>();
@@ -130,12 +136,17 @@ public class SparkJdbcSchemaFactory {
             parentSchema, schemaName, directoryPath, recursive, fileSchema);
       }
 
-      // Create initial connection for setup
+      // Create initial connection for setup using direct driver instance
       Connection setupConn;
       if (config.getUser() != null) {
-        setupConn = DriverManager.getConnection(jdbcUrl, config.getUser(), config.getPassword());
+        java.util.Properties connProps = new java.util.Properties();
+        connProps.setProperty("user", config.getUser());
+        if (config.getPassword() != null) {
+          connProps.setProperty("password", config.getPassword());
+        }
+        setupConn = sparkDriver.connect(jdbcUrl, connProps);
       } else {
-        setupConn = DriverManager.getConnection(jdbcUrl);
+        setupConn = sparkDriver.connect(jdbcUrl, new java.util.Properties());
       }
 
       // Apply Spark session settings
@@ -165,26 +176,41 @@ public class SparkJdbcSchemaFactory {
         LOGGER.warn("Failed to create database '{}': {}", schemaName, e.getMessage());
       }
 
-      // Register files as views
-      registerFilesAsViews(setupConn, directoryPath, recursive, schemaName, fileSchema);
+      // Register files as views (Spark lowercases unquoted names,
+      // and qualifyName() quotes identifiers, so we must pass the lowercased name)
+      String sparkSchemaLower = schemaName.toLowerCase(java.util.Locale.ROOT);
+      registerFilesAsViews(setupConn, directoryPath, recursive, sparkSchemaLower, fileSchema);
 
       // Register SQL views from operand
-      registerSqlViewsInSpark(setupConn, schemaName, operand);
+      registerSqlViewsInSpark(setupConn, sparkSchemaLower, operand);
 
-      // Create DataSource for new connections
-      final String finalJdbcUrl = jdbcUrl;
+      // Create DataSource URL targeting the actual database (Spark lowercases names)
+      final String sparkDbName = schemaName.toLowerCase(java.util.Locale.ROOT);
+      final String finalJdbcUrl = String.format("jdbc:hive2://%s:%s/%s",
+          config.getHost(), config.getPort(), sparkDbName);
       final String user = config.getUser();
       final String password = config.getPassword();
       DataSource dataSource = new DataSource() {
         @Override public Connection getConnection() throws SQLException {
+          java.util.Properties props = new java.util.Properties();
           if (user != null) {
-            return DriverManager.getConnection(finalJdbcUrl, user, password);
+            props.setProperty("user", user);
+            if (password != null) {
+              props.setProperty("password", password);
+            }
           }
-          return DriverManager.getConnection(finalJdbcUrl);
+          return sparkDriver.connect(finalJdbcUrl, props);
         }
 
         @Override public Connection getConnection(String username, String pwd) throws SQLException {
-          return DriverManager.getConnection(finalJdbcUrl, username, pwd);
+          java.util.Properties props = new java.util.Properties();
+          if (username != null) {
+            props.setProperty("user", username);
+          }
+          if (pwd != null) {
+            props.setProperty("password", pwd);
+          }
+          return sparkDriver.connect(finalJdbcUrl, props);
         }
 
         @Override public PrintWriter getLogWriter() { return null; }
@@ -224,11 +250,12 @@ public class SparkJdbcSchemaFactory {
       SchemaPlus parentSchema, String schemaName, String directoryPath, boolean recursive,
       org.apache.calcite.adapter.file.FileSchema fileSchema) {
 
+    String sparkDb = schemaName.toLowerCase(java.util.Locale.ROOT);
     SqlDialect dialect = createSparkDialect();
-    Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
-    SparkConvention convention = SparkConvention.of(dialect, expression, schemaName);
+    Expression expression = Schemas.subSchemaExpression(parentSchema, sparkDb, JdbcSchema.class);
+    SparkConvention convention = SparkConvention.of(dialect, expression, sparkDb);
 
-    return new SparkJdbcSchema(dataSource, dialect, convention, null, schemaName,
+    return new SparkJdbcSchema(dataSource, dialect, convention, sparkDb, null,
         directoryPath, recursive, setupConn, fileSchema);
   }
 

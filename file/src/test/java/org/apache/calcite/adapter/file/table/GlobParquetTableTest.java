@@ -298,7 +298,7 @@ public class GlobParquetTableTest {
 
   private void setupCalciteConnectionWithPartitionedTable(String pattern)
       throws Exception {
-    calciteConn = DriverManager.getConnection("jdbc:calcite:");
+    calciteConn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection =
         calciteConn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();

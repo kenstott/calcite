@@ -26,6 +26,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -354,5 +356,429 @@ public class HttpSourceTest {
 
     // Should return null when keyColumns is missing
     assertEquals(null, config);
+  }
+
+  // --- New tests for expanded code path coverage ---
+
+  @Test void testPaginationConfigCursorBased() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "cursor");
+    map.put("cursorParam", "next_cursor");
+    map.put("pageSize", 200);
+
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.PaginationType.CURSOR, pagination.getType());
+    assertEquals("next_cursor", pagination.getCursorParam());
+    assertEquals(200, pagination.getPageSize());
+    assertNull(pagination.getLimitParam());
+    assertNull(pagination.getOffsetParam());
+    assertNull(pagination.getPageParam());
+  }
+
+  @Test void testPaginationConfigPageBased() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "page");
+    map.put("pageParam", "page");
+    map.put("pageSize", 50);
+
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.PaginationType.PAGE, pagination.getType());
+    assertEquals("page", pagination.getPageParam());
+    assertEquals(50, pagination.getPageSize());
+    assertNull(pagination.getLimitParam());
+    assertNull(pagination.getOffsetParam());
+    assertNull(pagination.getCursorParam());
+  }
+
+  @Test void testPaginationConfigFromMapNone() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "none");
+
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.PaginationType.NONE, pagination.getType());
+  }
+
+  @Test void testPaginationConfigFromMapNull() {
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(null);
+
+    assertEquals(HttpSourceConfig.PaginationType.NONE, pagination.getType());
+  }
+
+  @Test void testPaginationConfigFromMapDefaultPageSize() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "offset");
+    map.put("limitParam", "limit");
+    map.put("offsetParam", "offset");
+    // No pageSize specified - should default to 1000
+
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.PaginationType.OFFSET, pagination.getType());
+    assertEquals(1000, pagination.getPageSize());
+  }
+
+  @Test void testAuthConfigFromMapBasicAuth() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "basic");
+    map.put("username", "admin");
+    map.put("password", "secret123");
+
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.AuthType.BASIC, auth.getType());
+    assertEquals("admin", auth.getUsername());
+    assertEquals("secret123", auth.getPassword());
+  }
+
+  @Test void testAuthConfigFromMapBearerAuth() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "bearer");
+    map.put("name", "Authorization");
+    map.put("value", "Bearer eyJhbGciOiJIUzI1NiJ9.test");
+
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.AuthType.BEARER, auth.getType());
+    assertEquals("Authorization", auth.getName());
+    assertEquals("Bearer eyJhbGciOiJIUzI1NiJ9.test", auth.getValue());
+  }
+
+  @Test void testAuthConfigFromMapNone() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    // No type specified
+
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.AuthType.NONE, auth.getType());
+  }
+
+  @Test void testAuthConfigFromMapNull() {
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(null);
+
+    assertEquals(HttpSourceConfig.AuthType.NONE, auth.getType());
+  }
+
+  @Test void testAuthConfigFromMapInvalidType() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "nonexistent_auth");
+
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.AuthType.NONE, auth.getType());
+  }
+
+  @Test void testAuthConfigFromMapOAuth2() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "oauth2");
+    map.put("name", "Authorization");
+    map.put("value", "Bearer oauth_token_here");
+
+    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.AuthType.OAUTH2, auth.getType());
+    assertEquals("Authorization", auth.getName());
+  }
+
+  @Test void testResponseConfigWithCsvFormat() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+    map.put("hasHeader", true);
+    map.put("delimiter", "|");
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.CSV, response.getFormat());
+    assertTrue(response.isHasHeader());
+    assertEquals("|", response.getDelimiter());
+    assertNull(response.getDataPath());
+  }
+
+  @Test void testResponseConfigWithTsvFormat() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "tsv");
+    map.put("hasHeader", false);
+    map.put("columnNames", "COL1|COL2|COL3");
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.TSV, response.getFormat());
+    assertFalse(response.isHasHeader());
+    assertEquals("COL1|COL2|COL3", response.getColumnNames());
+  }
+
+  @Test void testResponseConfigWithErrorPath() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "json");
+    map.put("dataPath", "$.data.results");
+    map.put("errorPath", "BEAAPI.Results.Error");
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.JSON, response.getFormat());
+    assertEquals("$.data.results", response.getDataPath());
+    assertEquals("BEAAPI.Results.Error", response.getErrorPath());
+  }
+
+  @Test void testResponseConfigDefaults() {
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.defaults();
+
+    assertEquals(HttpSourceConfig.ResponseFormat.JSON, response.getFormat());
+    assertNull(response.getDataPath());
+    assertNull(response.getErrorPath());
+    assertTrue(response.isHasHeader());
+    assertNull(response.getColumnNames());
+    assertNull(response.getDelimiter());
+    assertEquals(HttpSourceConfig.PaginationType.NONE, response.getPagination().getType());
+  }
+
+  @Test void testHttpSourceConfigPostMethodWithBodyTemplate() {
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    body.put("seriesid", Arrays.asList("CUUR0000SA0", "CUUR0000AA0"));
+    body.put("startyear", "{year}");
+    body.put("endyear", "{year}");
+    body.put("registrationkey", "{env:BLS_API_KEY}");
+
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.bls.gov/publicAPI/v2/timeseries/data/")
+        .method(HttpSourceConfig.HttpMethod.POST)
+        .body(body)
+        .bodyFormat(HttpSourceConfig.BodyFormat.JSON)
+        .build();
+
+    assertEquals("https://api.bls.gov/publicAPI/v2/timeseries/data/", config.getUrl());
+    assertEquals(HttpSourceConfig.HttpMethod.POST, config.getMethod());
+    assertTrue(config.hasBody());
+    assertEquals(4, config.getBody().size());
+    assertEquals("{year}", config.getBody().get("startyear"));
+    assertEquals(HttpSourceConfig.BodyFormat.JSON, config.getBodyFormat());
+  }
+
+  @Test void testHttpSourceConfigPostMethodFromMap() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("url", "https://api.example.com/graphql");
+    map.put("method", "POST");
+
+    Map<String, Object> bodyMap = new LinkedHashMap<String, Object>();
+    bodyMap.put("query", "{ users { id name } }");
+    map.put("body", bodyMap);
+    map.put("bodyFormat", "JSON");
+
+    Map<String, String> headers = new LinkedHashMap<String, String>();
+    headers.put("Content-Type", "application/json");
+    map.put("headers", headers);
+
+    HttpSourceConfig config = HttpSourceConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.HttpMethod.POST, config.getMethod());
+    assertTrue(config.hasBody());
+    assertEquals("{ users { id name } }", config.getBody().get("query"));
+    assertEquals(HttpSourceConfig.BodyFormat.JSON, config.getBodyFormat());
+    assertEquals("application/json", config.getHeaders().get("Content-Type"));
+  }
+
+  @Test void testHttpSourceConfigFormUrlEncodedBody() {
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    body.put("grant_type", "client_credentials");
+    body.put("client_id", "{env:CLIENT_ID}");
+
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://auth.example.com/token")
+        .method(HttpSourceConfig.HttpMethod.POST)
+        .body(body)
+        .bodyFormat(HttpSourceConfig.BodyFormat.FORM_URLENCODED)
+        .build();
+
+    assertEquals(HttpSourceConfig.BodyFormat.FORM_URLENCODED, config.getBodyFormat());
+    assertTrue(config.hasBody());
+  }
+
+  @Test void testWideToNarrowConfigNoPattern() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("GeoFIPS", "GeoName", "Description"));
+    // No valueColumnPattern - all non-key columns should be value columns
+    map.put("keyColumnName", "Period");
+    map.put("valueColumnName", "Amount");
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertNotNull(config);
+    assertEquals(3, config.getKeyColumns().size());
+    assertNull(config.getValueColumnPattern());
+    assertEquals("Period", config.getKeyColumnName());
+    assertEquals("Amount", config.getValueColumnName());
+    assertTrue(config.isEnabled());
+
+    // Without pattern, all non-key columns are value columns
+    assertTrue(config.isValueColumn("2020"));
+    assertTrue(config.isValueColumn("SomeRandomColumn"));
+    assertFalse(config.isValueColumn("GeoFIPS"));
+    assertFalse(config.isValueColumn("GeoName"));
+    assertFalse(config.isValueColumn("Description"));
+  }
+
+  @Test void testWideToNarrowConfigColumnMapping() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("FIPS", "Name"));
+    map.put("keyColumnName", "Year");
+    map.put("valueColumnName", "Value");
+
+    Map<String, String> columnMapping = new LinkedHashMap<String, String>();
+    columnMapping.put("FIPS", "geo_fips");
+    columnMapping.put("Name", "geo_name");
+    map.put("columnMapping", columnMapping);
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertNotNull(config);
+    assertTrue(config.hasColumnMapping());
+    assertEquals("geo_fips", config.getOutputColumnName("FIPS"));
+    assertEquals("geo_name", config.getOutputColumnName("Name"));
+    assertEquals("UnmappedCol", config.getOutputColumnName("UnmappedCol"));
+  }
+
+  @Test void testWideToNarrowConfigToString() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("ID", "Name"));
+    map.put("valueColumnPattern", "^\\d{4}$");
+    map.put("keyColumnName", "Year");
+    map.put("valueColumnName", "Amount");
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    String str = config.toString();
+    assertTrue(str.contains("keyColumns="));
+    assertTrue(str.contains("valueColumnPattern="));
+    assertTrue(str.contains("Year"));
+    assertTrue(str.contains("Amount"));
+  }
+
+  @Test void testHttpSourceConstructorAndGetType() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/v1/data")
+        .method(HttpSourceConfig.HttpMethod.GET)
+        .auth(HttpSourceConfig.AuthConfig.bearer("my_token"))
+        .response(HttpSourceConfig.ResponseConfig.fromMap(
+            new HashMap<String, Object>() {{
+              put("format", "json");
+              put("dataPath", "$.results");
+            }}))
+        .build();
+
+    HttpSource source = new HttpSource(config);
+    assertEquals("http", source.getType());
+  }
+
+  @Test void testHttpSourceWithCacheEnabled() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .cache(HttpSourceConfig.CacheConfig.fromMap(
+            new HashMap<String, Object>() {{
+              put("enabled", true);
+              put("ttlSeconds", 1800);
+            }}))
+        .build();
+
+    HttpSource source = new HttpSource(config);
+    assertEquals("http", source.getType());
+    // Close should not throw
+    source.close();
+  }
+
+  @Test void testHttpSourceConfigBulkDownload() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://example.com/data.zip")
+        .bulkDownload("annual_data")
+        .extractPattern("*.csv")
+        .build();
+
+    assertTrue(config.isBulkDownloadSource());
+    assertEquals("annual_data", config.getBulkDownload());
+    assertEquals("*.csv", config.getExtractPattern());
+  }
+
+  @Test void testHttpSourceConfigParallel() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .parallel(4)
+        .build();
+
+    assertEquals(4, config.getParallel());
+  }
+
+  @Test void testHttpSourceConfigDefaultParallel() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .build();
+
+    assertEquals(1, config.getParallel());
+  }
+
+  @Test void testHttpSourceConfigSourceType() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .build();
+
+    assertEquals("http", config.getSourceType());
+    assertFalse(config.isDocumentSource());
+    assertFalse(config.isBulkDownloadSource());
+    assertFalse(config.hasBody());
+    assertFalse(config.hasBatching());
+    assertFalse(config.hasRowFilter());
+    assertFalse(config.hasResponsePartitioning());
+    assertFalse(config.hasWideToNarrow());
+  }
+
+  @Test void testHttpSourceConfigNoBody() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .build();
+
+    assertFalse(config.hasBody());
+    assertTrue(config.getBody().isEmpty());
+    assertEquals(HttpSourceConfig.BodyFormat.JSON, config.getBodyFormat());
+  }
+
+  @Test void testRateLimitConfigFromMapPartial() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("requestsPerSecond", 20);
+    // Other fields use defaults
+
+    HttpSourceConfig.RateLimitConfig rateLimit = HttpSourceConfig.RateLimitConfig.fromMap(map);
+
+    assertEquals(20, rateLimit.getRequestsPerSecond());
+    // Defaults for unspecified
+    assertEquals(2, rateLimit.getRetryOn().length);
+    assertEquals(3, rateLimit.getMaxRetries());
+    assertEquals(1000, rateLimit.getRetryBackoffMs());
+  }
+
+  @Test void testResponseConfigFromMapWithCsvPagination() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+    map.put("hasHeader", true);
+
+    Map<String, Object> paginationMap = new HashMap<String, Object>();
+    paginationMap.put("type", "cursor");
+    paginationMap.put("cursorParam", "cursor");
+    paginationMap.put("pageSize", 250);
+    map.put("pagination", paginationMap);
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.CSV, response.getFormat());
+    assertEquals(HttpSourceConfig.PaginationType.CURSOR, response.getPagination().getType());
+    assertEquals("cursor", response.getPagination().getCursorParam());
+    assertEquals(250, response.getPagination().getPageSize());
   }
 }

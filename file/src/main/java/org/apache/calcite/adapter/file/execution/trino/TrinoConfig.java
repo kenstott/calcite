@@ -171,6 +171,8 @@ public class TrinoConfig {
     props.setProperty("connector.name", "hive");
     props.setProperty("hive.metastore", "file");
     props.setProperty("hive.metastore.catalog.dir", warehouseDir);
+    props.setProperty("hive.security", "allow-all");
+    props.setProperty("hive.non-managed-table-writes-enabled", "true");
     if (s3AccessKey != null && s3SecretKey != null) {
       props.setProperty("hive.s3.aws-access-key", s3AccessKey);
       props.setProperty("hive.s3.aws-secret-key", s3SecretKey);
@@ -190,8 +192,7 @@ public class TrinoConfig {
   public Properties getIcebergCatalogProperties() {
     Properties props = new Properties();
     props.setProperty("connector.name", "iceberg");
-    props.setProperty("iceberg.catalog.type", "hive");
-    props.setProperty("hive.metastore", "file");
+    props.setProperty("iceberg.catalog.type", "TESTING_FILE_METASTORE");
     props.setProperty("hive.metastore.catalog.dir", warehouseDir);
     if (s3AccessKey != null && s3SecretKey != null) {
       props.setProperty("hive.s3.aws-access-key", s3AccessKey);

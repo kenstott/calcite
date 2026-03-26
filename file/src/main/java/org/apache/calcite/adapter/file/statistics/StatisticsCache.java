@@ -338,20 +338,21 @@ public class StatisticsCache {
       return true;
     }
 
-    // If rename failed, try copy and delete (for cross-filesystem moves)
+    // If rename failed, try atomic move (for cross-filesystem moves)
     try {
-      java.nio.file.Files.copy(source.toPath(), destination.toPath(),
+      java.nio.file.Files.move(source.toPath(), destination.toPath(),
                                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
       return true;
-    } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-      // Atomic move not supported, try regular copy
+    } catch (java.nio.file.AtomicMoveNotSupportedException
+        | UnsupportedOperationException e) {
+      // Atomic move not supported, try regular copy-then-delete
       try {
         java.nio.file.Files.copy(source.toPath(), destination.toPath(),
                                  java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        source.delete();
         return true;
       } catch (IOException copyException) {
-        // Re-throw the original move exception
         throw new IOException("Failed to move file from " + source + " to " + destination,
             copyException);
       }

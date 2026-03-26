@@ -394,6 +394,7 @@ public class ExcelComprehensiveTest {
         + "      operand: {\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true,\n"
         + engineLine
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER',\n"
@@ -420,6 +421,7 @@ public class ExcelComprehensiveTest {
         + "      operand: {\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true,\n"
         + "        executionEngine: '" + engine + "',\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER',\n"
@@ -446,6 +448,7 @@ public class ExcelComprehensiveTest {
         + "      operand: {\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true,\n"
         + "        executionEngine: '" + engine + "',\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER',\n"

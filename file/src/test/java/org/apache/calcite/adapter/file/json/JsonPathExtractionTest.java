@@ -130,6 +130,8 @@ public class JsonPathExtractionTest {
   +
         "      \"operand\": {\n"
   +
+        "        \"ephemeralCache\": true,\n"
+  +
         "        \"tables\": [\n"
   +
         "          {\n"
@@ -278,6 +280,8 @@ public class JsonPathExtractionTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
   +
         "      \"operand\": {\n"
+  +
+        "        \"ephemeralCache\": true,\n"
   +
         "        \"tables\": [\n"
   +

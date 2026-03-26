@@ -186,7 +186,8 @@ tasks.test {
         "--add-modules=jdk.incubator.vector",
         // Mockito 5.x on Java 21 requires byte-buddy agent attachment
         "-XX:+EnableDynamicAgentLoading",
-        "-Djdk.attach.allowAttachSelf=true"
+        "-Djdk.attach.allowAttachSelf=true",
+        "-Djava.util.concurrent.ForkJoinPool.common.maximumSpares=256"
     )
     // Attach byte-buddy-agent as JVM agent to avoid self-attach failures under load
     doFirst {

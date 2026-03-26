@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
+
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
@@ -117,7 +117,13 @@ public class TrinoJdbcSchemaFactory {
     LOGGER.info("Trino config: {}", config);
 
     try {
-      Class.forName("io.trino.jdbc.TrinoDriver");
+      // Create a dedicated driver instance instead of using DriverManager.
+      // DriverManager is a JVM-global singleton; when multiple JDBC drivers
+      // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
+      // dispatch to the wrong driver. Direct driver.connect() is deterministic.
+      final java.sql.Driver trinoDriver =
+          (java.sql.Driver) Class.forName("io.trino.jdbc.TrinoDriver")
+              .getDeclaredConstructor().newInstance();
 
       // Build JDBC URL via TrinoDialect
       Map<String, String> urlConfig = new HashMap<>();
@@ -133,7 +139,8 @@ public class TrinoJdbcSchemaFactory {
       if (sharedInfo != null) {
         LOGGER.info("Reusing existing Trino connection for: {}", jdbcUrl);
         return createSchemaWithConnection(sharedInfo.dataSource, sharedInfo.setupConnection,
-            parentSchema, schemaName, directoryPath, recursive, fileSchema);
+            parentSchema, schemaName, config.getCatalog(),
+            directoryPath, recursive, fileSchema);
       }
 
       // Create initial connection for setup
@@ -144,12 +151,12 @@ public class TrinoJdbcSchemaFactory {
         if (config.getPassword() != null) {
           connProps.setProperty("password", config.getPassword());
         }
-        setupConn = DriverManager.getConnection(jdbcUrl, connProps);
+        setupConn = trinoDriver.connect(jdbcUrl, connProps);
       } else {
         // Trino requires a user; default to current system user
         Properties connProps = new Properties();
         connProps.setProperty("user", System.getProperty("user.name", "trino"));
-        setupConn = DriverManager.getConnection(jdbcUrl, connProps);
+        setupConn = trinoDriver.connect(jdbcUrl, connProps);
       }
 
       // Apply session settings
@@ -176,14 +183,18 @@ public class TrinoJdbcSchemaFactory {
             config.getCatalog(), schemaName, e.getMessage(), config.getCatalog());
       }
 
-      // Register files as external tables
-      registerFilesAsTables(setupConn, directoryPath, recursive, schemaName, fileSchema, config);
+      // Register files as external tables (Trino lowercases unquoted schema names,
+      // and qualifyName() quotes identifiers, so we must pass the lowercased name)
+      String trinoSchemaLower = schemaName.toLowerCase(java.util.Locale.ROOT);
+      registerFilesAsTables(setupConn, directoryPath, recursive, trinoSchemaLower, fileSchema, config);
 
       // Register SQL views from operand
-      registerSqlViewsInTrino(setupConn, schemaName, config, operand);
+      registerSqlViewsInTrino(setupConn, trinoSchemaLower, config, operand);
 
-      // Create DataSource for new connections
-      final String finalJdbcUrl = jdbcUrl;
+      // Create DataSource URL targeting the actual schema (Trino lowercases unquoted names)
+      final String trinoSchemaName = schemaName.toLowerCase(java.util.Locale.ROOT);
+      final String finalJdbcUrl = String.format("jdbc:trino://%s:%s/%s/%s",
+          config.getHost(), config.getPort(), config.getCatalog(), trinoSchemaName);
       final String user = config.getUser();
       final String password = config.getPassword();
       DataSource dataSource = new DataSource() {
@@ -197,7 +208,7 @@ public class TrinoJdbcSchemaFactory {
           } else {
             props.setProperty("user", System.getProperty("user.name", "trino"));
           }
-          return DriverManager.getConnection(finalJdbcUrl, props);
+          return trinoDriver.connect(finalJdbcUrl, props);
         }
 
         @Override public Connection getConnection(String username, String pwd) throws SQLException {
@@ -206,7 +217,7 @@ public class TrinoJdbcSchemaFactory {
           if (pwd != null) {
             props.setProperty("password", pwd);
           }
-          return DriverManager.getConnection(finalJdbcUrl, props);
+          return trinoDriver.connect(finalJdbcUrl, props);
         }
 
         @Override public PrintWriter getLogWriter() { return null; }
@@ -232,7 +243,7 @@ public class TrinoJdbcSchemaFactory {
       INSTANCE_POOL.put(poolKey, sharedInfo);
 
       return createSchemaWithConnection(dataSource, setupConn, parentSchema, schemaName,
-          directoryPath, recursive, fileSchema);
+          config.getCatalog(), directoryPath, recursive, fileSchema);
 
     } catch (Exception e) {
       throw new RuntimeException("Failed to create Trino JDBC schema", e);
@@ -243,14 +254,16 @@ public class TrinoJdbcSchemaFactory {
    * Creates a TrinoJdbcSchema with the given connection setup.
    */
   private static JdbcSchema createSchemaWithConnection(DataSource dataSource, Connection setupConn,
-      SchemaPlus parentSchema, String schemaName, String directoryPath, boolean recursive,
+      SchemaPlus parentSchema, String schemaName, String trinoCatalog,
+      String directoryPath, boolean recursive,
       org.apache.calcite.adapter.file.FileSchema fileSchema) {
 
+    String trinoSchema = schemaName.toLowerCase(java.util.Locale.ROOT);
     SqlDialect dialect = createTrinoDialect();
-    Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
-    TrinoConvention convention = TrinoConvention.of(dialect, expression, schemaName);
+    Expression expression = Schemas.subSchemaExpression(parentSchema, trinoSchema, JdbcSchema.class);
+    TrinoConvention convention = TrinoConvention.of(dialect, expression, trinoSchema);
 
-    return new TrinoJdbcSchema(dataSource, dialect, convention, null, schemaName,
+    return new TrinoJdbcSchema(dataSource, dialect, convention, trinoCatalog, trinoSchema,
         directoryPath, recursive, setupConn, fileSchema);
   }
 
