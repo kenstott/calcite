@@ -16,11 +16,14 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,10 +49,41 @@ public class DuckDBPartitionStatusStoreTest {
   Path tempDir;
 
   private DuckDBPartitionStatusStore store;
+  private String baseDir;
 
   @BeforeEach
-  void setUp() {
-    store = DuckDBPartitionStatusStore.getInstance(tempDir.toString());
+  void setUp() throws Exception {
+    // Clear the static OPEN_STORES map to avoid interference between tests
+    clearOpenStores();
+    // Use a unique subdirectory for each test
+    baseDir = new File(tempDir.toFile(), "store_" + System.nanoTime()).getAbsolutePath();
+    new File(baseDir).mkdirs();
+    store = DuckDBPartitionStatusStore.getInstance(baseDir);
+  }
+
+  @AfterEach
+  void tearDown() throws Exception {
+    clearOpenStores();
+  }
+
+  /**
+   * Clear the static OPEN_STORES map via reflection.
+   */
+  @SuppressWarnings("unchecked")
+  private void clearOpenStores() throws Exception {
+    Field field = DuckDBPartitionStatusStore.class.getDeclaredField("OPEN_STORES");
+    field.setAccessible(true);
+    Map<String, DuckDBPartitionStatusStore> openStores =
+        (Map<String, DuckDBPartitionStatusStore>) field.get(null);
+    // Close all open stores
+    for (DuckDBPartitionStatusStore s : new ArrayList<>(openStores.values())) {
+      try {
+        s.close();
+      } catch (Exception ignored) {
+        // ignore
+      }
+    }
+    openStores.clear();
   }
 
   // ===== Basic IncrementalTracker operations =====
