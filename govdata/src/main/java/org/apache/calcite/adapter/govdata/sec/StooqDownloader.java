@@ -32,7 +32,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -216,7 +218,8 @@ public class StooqDownloader {
   }
 
   /**
-   * Downloads data for a single ticker.
+   * Downloads data for a single ticker using a single HTTP request for the full date range.
+   * Records are grouped by year and only written to parquet for years that need updating.
    */
   private void downloadTickerData(String basePath, AlphaVantageDownloader.TickerCikPair pair,
                                   int startYear, int endYear) {
@@ -238,16 +241,15 @@ public class StooqDownloader {
         .atTime(16, 30)
         .atZone(estZone);
 
+    // Determine which years need downloading and their output paths
+    Map<Integer, String> yearsNeedingDownload = new HashMap<Integer, String>();
+    String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
+
     for (int year = startYear; year <= endYear; year++) {
-      // Build the path using StorageProvider.resolvePath for S3 compatibility
-      // Uses year-only partitioning to match sec-schema.yaml pattern
-      String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
       String yearDir = storageProvider.resolvePath(stockPricesDir, String.format("year=%d", year));
+      String fullPath = storageProvider.resolvePath(yearDir,
+          String.format("%s_%s_prices.parquet", pair.cik, pair.ticker.toLowerCase()));
 
-      String fullPath =
-          storageProvider.resolvePath(yearDir, String.format("%s_%s_prices.parquet", pair.cik, pair.ticker.toLowerCase()));
-
-      // Check if data already exists and determine if refresh is needed
       boolean needsDownload;
       try {
         needsDownload = needsDownload(fullPath, year, currentYear, nowEst, todayMarketClose);
@@ -256,32 +258,57 @@ public class StooqDownloader {
         needsDownload = true;
       }
 
-      if (!needsDownload) {
-        continue;
+      if (needsDownload) {
+        yearsNeedingDownload.put(year, fullPath);
+      }
+    }
+
+    // If all years are cached, skip the HTTP request entirely
+    if (yearsNeedingDownload.isEmpty()) {
+      LOGGER.debug("All years cached for ticker {}, skipping HTTP request", pair.ticker);
+      return;
+    }
+
+    try {
+      // Fetch ALL data from Stooq in one request for the full date range
+      List<StockPriceRecord> allPrices = fetchWithRateLimiting(pair.ticker, startYear, endYear);
+
+      if (allPrices.isEmpty()) {
+        LOGGER.warn("No data returned for {} - ticker may be delisted or invalid", pair.ticker);
+        return;
       }
 
-      try {
-        // Fetch data from Stooq with rate limiting
-        List<StockPriceRecord> prices = fetchWithRateLimiting(pair.ticker, year);
-
-        if (prices.isEmpty()) {
-          LOGGER.warn("No data returned for {} year {} - ticker may be delisted or invalid",
-              pair.ticker, year);
-          continue;
+      // Group records by year
+      Map<Integer, List<StockPriceRecord>> pricesByYear =
+          new HashMap<Integer, List<StockPriceRecord>>();
+      for (StockPriceRecord record : allPrices) {
+        int year = Integer.parseInt(record.date.substring(0, 4));
+        List<StockPriceRecord> yearRecords = pricesByYear.get(year);
+        if (yearRecords == null) {
+          yearRecords = new ArrayList<StockPriceRecord>();
+          pricesByYear.put(year, yearRecords);
         }
-
-        // Write to Parquet using StorageProvider
-        writeToParquet(fullPath, prices, pair.cik, pair.ticker, year);
-
-        LOGGER.info("Downloaded {} price records for {} year {}",
-            prices.size(), pair.ticker, year);
-
-      } catch (IOException e) {
-        LOGGER.warn("Failed to download {} for year {}: {}", pair.ticker, year, e.getMessage());
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new RuntimeException("Download interrupted for " + pair.ticker, e);
+        yearRecords.add(record);
       }
+
+      // Write parquet files only for years that need updating
+      for (Map.Entry<Integer, String> entry : yearsNeedingDownload.entrySet()) {
+        int year = entry.getKey();
+        String fullPath = entry.getValue();
+        List<StockPriceRecord> yearPrices = pricesByYear.get(year);
+
+        if (yearPrices != null && !yearPrices.isEmpty()) {
+          writeToParquet(fullPath, yearPrices, pair.cik, pair.ticker, year);
+          LOGGER.info("Downloaded {} price records for {} year {}",
+              yearPrices.size(), pair.ticker, year);
+        }
+      }
+
+    } catch (IOException e) {
+      LOGGER.warn("Failed to download {} prices: {}", pair.ticker, e.getMessage());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Download interrupted for " + pair.ticker, e);
     }
   }
 
@@ -322,8 +349,13 @@ public class StooqDownloader {
 
   /**
    * Fetches data with automatic rate limiting and retry on rate limit errors.
+   *
+   * @param ticker Stock ticker symbol
+   * @param startYear Start year for date range
+   * @param endYear End year for date range
+   * @return List of all stock price records across the date range
    */
-  List<StockPriceRecord> fetchWithRateLimiting(String ticker, int year)
+  List<StockPriceRecord> fetchWithRateLimiting(String ticker, int startYear, int endYear)
       throws IOException, InterruptedException {
 
     int attempts = 0;
@@ -338,7 +370,7 @@ public class StooqDownloader {
 
       HttpURLConnection conn = null;
       try {
-        String url = buildStooqUrl(ticker, year, year);
+        String url = buildStooqUrl(ticker, startYear, endYear);
         conn = createConnection(url);
         int responseCode = conn.getResponseCode();
 
@@ -380,6 +412,8 @@ public class StooqDownloader {
                 if (cacheManifest != null) {
                   cacheManifest.markTickerUnavailable(ticker, "no_data_from_stooq");
                 }
+                // Reset backoff - this is confirmed no-data, not rate limiting
+                rateLimiter.onSuccess();
                 return new ArrayList<StockPriceRecord>();  // Return empty, don't throw
               }
               // First empty response - might be rate limiting, retry
@@ -394,25 +428,30 @@ public class StooqDownloader {
           }
         }
 
-        // Success - parse response
+        // Success - parse response (no year filtering - return all records)
         List<StockPriceRecord> records;
         BufferedReader reader = null;
         try {
           reader =
               new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-          records = parseCsvResponse(reader, year);
+          records = parseCsvResponse(reader);
         } finally {
           if (reader != null) {
             reader.close();
           }
         }
 
-        // If we got a 200 but no records, the ticker may not exist for this year
+        // If we got a 200 but no records, the ticker may not exist on Stooq
         if (records.isEmpty()) {
           emptyResponseCount++;
           if (emptyResponseCount >= 2) {
-            LOGGER.info("Ticker {} has no price data for year {} on Stooq", ticker, year);
-            // Don't mark as unavailable for single year - might have data for other years
+            LOGGER.info("Ticker {} has no price data on Stooq", ticker);
+            if (cacheManifest != null) {
+              cacheManifest.markTickerUnavailable(ticker, "no_data_from_stooq");
+            }
+            // Reset backoff - confirmed no-data, not rate limiting
+            rateLimiter.onSuccess();
+            return records;
           }
         }
 
@@ -472,7 +511,46 @@ public class StooqDownloader {
   }
 
   /**
-   * Parses CSV response into StockPriceRecord objects.
+   * Parses CSV response into StockPriceRecord objects without year filtering.
+   * Returns all records from the response.
+   *
+   * @param reader The BufferedReader for the CSV response
+   * @return List of all parsed stock price records
+   * @throws IOException If an I/O error occurs
+   */
+  List<StockPriceRecord> parseCsvResponse(BufferedReader reader) throws IOException {
+    List<StockPriceRecord> prices = new ArrayList<StockPriceRecord>();
+    String line;
+    boolean headerSkipped = false;
+
+    while ((line = reader.readLine()) != null) {
+      if (!headerSkipped) {
+        headerSkipped = true;
+        continue;  // Skip header: "Date,Open,High,Low,Close,Volume"
+      }
+
+      String[] parts = line.split(",");
+      if (parts.length < 5) {
+        continue;  // Invalid row
+      }
+
+      StockPriceRecord record = new StockPriceRecord();
+      record.date = parts[0];  // YYYY-MM-DD format
+      record.open = parseDouble(parts[1]);
+      record.high = parseDouble(parts[2]);
+      record.low = parseDouble(parts[3]);
+      record.close = parseDouble(parts[4]);
+      record.adjClose = record.close;  // Stooq returns adjusted prices
+      record.volume = parts.length > 5 ? parseLong(parts[5]) : null;
+
+      prices.add(record);
+    }
+
+    return prices;
+  }
+
+  /**
+   * Parses CSV response into StockPriceRecord objects, filtered by year.
    *
    * @param reader The BufferedReader for the CSV response
    * @param filterYear The year to filter by (only records from this year are included)

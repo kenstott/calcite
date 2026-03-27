@@ -103,7 +103,11 @@ PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
 total=${#queue[@]}
-total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+if [ "$(uname)" = "Darwin" ]; then
+  total_mem_mb=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
+else
+  total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+fi
 budget_mb=$((total_mem_mb - OS_RESERVE_MB))
 echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
 if [ "$MAX_WORKERS" -lt 99 ]; then
@@ -169,9 +173,14 @@ launch_worker() {
   local log_file="$log_dir/launch.log"
   mkdir -p "$log_dir"
 
-  # setsid gives each worker its own process group so 'kill 0' in the worker
-  # trap only kills that worker's processes, not the pool runner or other workers
-  setsid nohup bash "$script" >> "$log_file" 2>&1 &
+  # Give each worker its own process group so 'kill 0' in the worker
+  # trap only kills that worker's processes, not the pool runner or other workers.
+  # macOS lacks setsid; use a subshell trick to create a new process group instead.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup bash "$script" >> "$log_file" 2>&1 &
+  else
+    (exec nohup bash "$script" >> "$log_file" 2>&1) &
+  fi
   local pid=$!
   echo "$pid" > "$PID_DIR/${id}.pid"
 
@@ -188,7 +197,15 @@ launch_worker() {
 
 # Check available system memory in MB
 get_available_mb() {
-  awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
+  if [ "$(uname)" = "Darwin" ]; then
+    # Parse vm_stat pages free + inactive, multiply by page size
+    local page_size=$(sysctl -n hw.pagesize)
+    local free_pages=$(vm_stat | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
+    local inactive_pages=$(vm_stat | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}')
+    echo $(( (free_pages + inactive_pages) * page_size / 1024 / 1024 ))
+  else
+    awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
+  fi
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.

@@ -475,7 +475,7 @@ get_heap_config() {
 
   # Extract worker number (e.g., "worker-21" -> 21)
   local num
-  num=$(echo "$worker_id" | grep -oP '\d+' | head -1)
+  num=$(echo "$worker_id" | grep -oE '[0-9]+' | head -1)
 
   if [ "$num" -eq 20 ]; then
     # GEO (20): TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing

@@ -172,7 +172,7 @@ class StooqDownloaderIntegrationTest {
   @Test void testFetchWithRateLimitingSuccess() throws Exception {
     // Test direct fetch method
     List<StooqDownloader.StockPriceRecord> records =
-        downloader.fetchWithRateLimiting("AAPL", 2023);
+        downloader.fetchWithRateLimiting("AAPL", 2023, 2023);
 
     assertNotNull(records);
     assertFalse(records.isEmpty(), "Should return some price records for AAPL 2023");
@@ -189,7 +189,7 @@ class StooqDownloaderIntegrationTest {
   @Test void testInvalidTickerReturnsEmptyList() throws Exception {
     // Invalid tickers should return empty list, not throw
     List<StooqDownloader.StockPriceRecord> records =
-        downloader.fetchWithRateLimiting("XXYZZ123456", 2023);
+        downloader.fetchWithRateLimiting("XXYZZ123456", 2023, 2023);
 
     assertNotNull(records);
     // Invalid ticker may return empty or header-only response
