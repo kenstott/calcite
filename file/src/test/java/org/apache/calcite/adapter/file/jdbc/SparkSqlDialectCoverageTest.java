@@ -148,7 +148,8 @@ public class SparkSqlDialectCoverageTest {
   @Test public void testCreateIcebergViewSql() {
     String sql = dialect.createIcebergViewSql("schema", "view", "s3://bucket/table");
     assertTrue(sql.contains("CREATE OR REPLACE VIEW"));
-    assertTrue(sql.contains("iceberg.`"));
+    // Spark references Iceberg tables via the aperio_iceberg catalog, not iceberg.`path`
+    assertTrue(sql.contains("aperio_iceberg."));
   }
 
   @Test public void testCreateIcebergViewSqlNullSchema() {

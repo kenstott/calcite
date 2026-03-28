@@ -395,45 +395,65 @@ public class StooqDownloader {
           continue;
         }
 
-        // Check for small response - could be rate limiting OR no data
-        String contentLength = conn.getHeaderField("Content-Length");
-        if (contentLength != null) {
-          try {
-            long length = Long.parseLong(contentLength);
-            // Very small response (< 50 bytes) - could be no data or rate limit
-            if (length < 50) {
-              emptyResponseCount++;
-              // If we get multiple empty responses (2+), likely no data (not rate limiting)
-              // Rate limiting would eventually succeed after backoff
-              if (emptyResponseCount >= 2) {
-                LOGGER.info("Ticker {} appears to have no data on Stooq ({}B response, attempt {})",
-                    ticker, length, attempts);
-                // Mark as unavailable if we have a cache manifest
-                if (cacheManifest != null) {
-                  cacheManifest.markTickerUnavailable(ticker, "no_data_from_stooq");
-                }
-                // Reset backoff - this is confirmed no-data, not rate limiting
-                rateLimiter.onSuccess();
-                return new ArrayList<StockPriceRecord>();  // Return empty, don't throw
-              }
-              // First empty response - might be rate limiting, retry
-              LOGGER.debug("Small response ({}B) for {}, may be rate limited, retrying",
-                  length, ticker);
-              rateLimiter.onRateLimited();
-              conn.disconnect();
-              continue;
-            }
-          } catch (NumberFormatException e) {
-            // Ignore, not rate limiting
-          }
-        }
-
-        // Success - parse response (no year filtering - return all records)
+        // Read the response body
         List<StockPriceRecord> records;
+        String responseBody = null;
         BufferedReader reader = null;
         try {
           reader =
               new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+
+          // Check Content-Length for small responses that need body inspection
+          String contentLength = conn.getHeaderField("Content-Length");
+          boolean smallResponse = false;
+          if (contentLength != null) {
+            try {
+              long length = Long.parseLong(contentLength);
+              smallResponse = length < 50;
+            } catch (NumberFormatException e) {
+              // Ignore
+            }
+          }
+
+          if (smallResponse) {
+            // Read the full body to distinguish rate limiting from no-data
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+              sb.append(line).append('\n');
+            }
+            responseBody = sb.toString().trim();
+
+            // Check if this is a daily hits limit (not per-ticker no-data)
+            if (responseBody.toLowerCase().contains("limit")
+                || responseBody.toLowerCase().contains("exceeded")) {
+              LOGGER.warn("Stooq daily limit hit for ticker {} (response: {}), backing off",
+                  ticker, responseBody);
+              rateLimiter.onRateLimited();
+              conn.disconnect();
+              continue;
+            }
+
+            // Genuine small/empty response — could be no-data or soft rate limit
+            emptyResponseCount++;
+            if (emptyResponseCount >= 2) {
+              LOGGER.info("Ticker {} appears to have no data on Stooq (response: {}, attempt {})",
+                  ticker, responseBody, attempts);
+              if (cacheManifest != null) {
+                cacheManifest.markTickerUnavailable(ticker, "no_data_from_stooq");
+              }
+              rateLimiter.onSuccess();
+              return new ArrayList<StockPriceRecord>();
+            }
+            // First empty — might be transient, retry
+            LOGGER.debug("Small response for {}: '{}', may be rate limited, retrying",
+                ticker, responseBody);
+            rateLimiter.onRateLimited();
+            conn.disconnect();
+            continue;
+          }
+
+          // Normal-sized response — parse CSV
           records = parseCsvResponse(reader);
         } finally {
           if (reader != null) {

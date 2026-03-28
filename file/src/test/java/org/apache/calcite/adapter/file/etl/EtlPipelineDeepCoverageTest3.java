@@ -238,9 +238,13 @@ public class EtlPipelineDeepCoverageTest3 {
     String orig = System.getProperty("calcite.etl.threads");
     try {
       System.clearProperty("calcite.etl.threads");
+      // getParallelThreadCount is an instance method, so we need an EtlPipeline instance
+      EtlPipelineConfig config = createHttpConfig("test_threads", null);
+      StorageProvider sp = mock(StorageProvider.class);
+      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
       Method m = EtlPipeline.class.getDeclaredMethod("getParallelThreadCount");
       m.setAccessible(true);
-      assertEquals(1, (int) m.invoke(null));
+      assertEquals(1, (int) m.invoke(pipeline));
     } finally {
       if (orig != null) {
         System.setProperty("calcite.etl.threads", orig);
@@ -254,9 +258,13 @@ public class EtlPipelineDeepCoverageTest3 {
     String orig = System.getProperty("calcite.etl.threads");
     try {
       System.setProperty("calcite.etl.threads", "4");
+      // getParallelThreadCount is an instance method, so we need an EtlPipeline instance
+      EtlPipelineConfig config = createHttpConfig("test_threads", null);
+      StorageProvider sp = mock(StorageProvider.class);
+      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
       Method m = EtlPipeline.class.getDeclaredMethod("getParallelThreadCount");
       m.setAccessible(true);
-      assertEquals(4, (int) m.invoke(null));
+      assertEquals(4, (int) m.invoke(pipeline));
     } finally {
       if (orig != null) {
         System.setProperty("calcite.etl.threads", orig);
@@ -270,9 +278,13 @@ public class EtlPipelineDeepCoverageTest3 {
     String orig = System.getProperty("calcite.etl.threads");
     try {
       System.setProperty("calcite.etl.threads", "abc");
+      // getParallelThreadCount is an instance method, so we need an EtlPipeline instance
+      EtlPipelineConfig config = createHttpConfig("test_threads", null);
+      StorageProvider sp = mock(StorageProvider.class);
+      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
       Method m = EtlPipeline.class.getDeclaredMethod("getParallelThreadCount");
       m.setAccessible(true);
-      assertEquals(1, (int) m.invoke(null));
+      assertEquals(1, (int) m.invoke(pipeline));
     } finally {
       if (orig != null) {
         System.setProperty("calcite.etl.threads", orig);

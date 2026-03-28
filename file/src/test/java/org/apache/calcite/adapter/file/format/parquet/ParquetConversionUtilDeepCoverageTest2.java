@@ -241,7 +241,9 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue((Boolean) method.invoke(null, "NA"));
     assertTrue((Boolean) method.invoke(null, "N/A"));
     assertFalse((Boolean) method.invoke(null, "value"));
-    assertFalse((Boolean) method.invoke(null, ""));
+    // Empty string IS a null representation per NullEquivalents (both in the default set
+    // and because trimmed empty strings return true)
+    assertTrue((Boolean) method.invoke(null, ""));
   }
 
   @Test

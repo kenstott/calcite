@@ -117,3 +117,5 @@ govdata/runs/
 govdata/.env.prod
 govdata/scripts/parallel/runs
 
+.claude/worktrees/
+runs/
