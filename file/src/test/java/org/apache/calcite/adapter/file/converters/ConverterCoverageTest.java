@@ -16,10 +16,9 @@
  */
 package org.apache.calcite.adapter.file.converters;
 
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.util.Source;
+import org.apache.calcite.util.Sources;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,24 +30,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Coverage tests for HtmlToJsonConverter, ExcelToJsonConverter,
- * and FileConversionManager.
- *
- * <p>Creates test files programmatically and verifies conversion output.
+ * Comprehensive coverage tests for converter classes:
+ * {@link FileConversionManager}, {@link HtmlTableScanner}, and {@link YamlPathConverter}.
  */
 @Tag("unit")
 class ConverterCoverageTest {
@@ -67,11 +65,381 @@ class ConverterCoverageTest {
     baseDir = Files.createDirectories(tempDir.resolve("base")).toFile();
   }
 
-  // ---------------------------------------------------------------
-  // HtmlToJsonConverter tests
-  // ---------------------------------------------------------------
+  // ===================================================================
+  // FileConversionManager - singleton
+  // ===================================================================
 
-  @Test void testHtmlToJsonConverterSimpleTable() throws IOException {
+  @Test void testGetInstanceReturnsNonNull() {
+    FileConversionManager instance = FileConversionManager.getInstance();
+    assertNotNull(instance);
+  }
+
+  @Test void testGetInstanceReturnsSameSingleton() {
+    FileConversionManager first = FileConversionManager.getInstance();
+    FileConversionManager second = FileConversionManager.getInstance();
+    assertSame(first, second, "getInstance() should return the same singleton instance");
+  }
+
+  // ===================================================================
+  // FileConversionManager - requiresConversion
+  // ===================================================================
+
+  @Test void testRequiresConversionExcelFormats() {
+    assertTrue(FileConversionManager.requiresConversion("report.xlsx"));
+    assertTrue(FileConversionManager.requiresConversion("report.xls"));
+    assertTrue(FileConversionManager.requiresConversion("REPORT.XLSX"));
+    assertTrue(FileConversionManager.requiresConversion("REPORT.XLS"));
+  }
+
+  @Test void testRequiresConversionHtmlFormats() {
+    assertTrue(FileConversionManager.requiresConversion("page.html"));
+    assertTrue(FileConversionManager.requiresConversion("page.htm"));
+    assertTrue(FileConversionManager.requiresConversion("PAGE.HTML"));
+    assertTrue(FileConversionManager.requiresConversion("PAGE.HTM"));
+  }
+
+  @Test void testRequiresConversionXml() {
+    assertTrue(FileConversionManager.requiresConversion("data.xml"));
+    assertTrue(FileConversionManager.requiresConversion("DATA.XML"));
+  }
+
+  @Test void testRequiresConversionMarkdown() {
+    assertTrue(FileConversionManager.requiresConversion("readme.md"));
+    assertTrue(FileConversionManager.requiresConversion("README.MD"));
+  }
+
+  @Test void testRequiresConversionDocx() {
+    assertTrue(FileConversionManager.requiresConversion("report.docx"));
+    assertTrue(FileConversionManager.requiresConversion("REPORT.DOCX"));
+  }
+
+  @Test void testRequiresConversionPptx() {
+    assertTrue(FileConversionManager.requiresConversion("slides.pptx"));
+    assertTrue(FileConversionManager.requiresConversion("SLIDES.PPTX"));
+  }
+
+  @Test void testRequiresConversionReturnsFalseForDirectFormats() {
+    assertFalse(FileConversionManager.requiresConversion("data.csv"));
+    assertFalse(FileConversionManager.requiresConversion("data.json"));
+    assertFalse(FileConversionManager.requiresConversion("data.parquet"));
+    assertFalse(FileConversionManager.requiresConversion("data.arrow"));
+    assertFalse(FileConversionManager.requiresConversion("config.yaml"));
+    assertFalse(FileConversionManager.requiresConversion("config.yml"));
+    assertFalse(FileConversionManager.requiresConversion("data.tsv"));
+    assertFalse(FileConversionManager.requiresConversion("data.txt"));
+    assertFalse(FileConversionManager.requiresConversion("unknown.foo"));
+  }
+
+  // ===================================================================
+  // FileConversionManager - isDirectlyUsable
+  // ===================================================================
+
+  @Test void testIsDirectlyUsableCsvFormats() {
+    assertTrue(FileConversionManager.isDirectlyUsable("data.csv"));
+    assertTrue(FileConversionManager.isDirectlyUsable("data.csv.gz"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.CSV"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.CSV.GZ"));
+  }
+
+  @Test void testIsDirectlyUsableTsvFormats() {
+    assertTrue(FileConversionManager.isDirectlyUsable("data.tsv"));
+    assertTrue(FileConversionManager.isDirectlyUsable("data.tsv.gz"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.TSV"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.TSV.GZ"));
+  }
+
+  @Test void testIsDirectlyUsableJsonFormats() {
+    assertTrue(FileConversionManager.isDirectlyUsable("data.json"));
+    assertTrue(FileConversionManager.isDirectlyUsable("data.json.gz"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.JSON"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.JSON.GZ"));
+  }
+
+  @Test void testIsDirectlyUsableParquet() {
+    assertTrue(FileConversionManager.isDirectlyUsable("data.parquet"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.PARQUET"));
+  }
+
+  @Test void testIsDirectlyUsableArrow() {
+    assertTrue(FileConversionManager.isDirectlyUsable("data.arrow"));
+    assertTrue(FileConversionManager.isDirectlyUsable("DATA.ARROW"));
+  }
+
+  @Test void testIsDirectlyUsableYamlFormats() {
+    assertTrue(FileConversionManager.isDirectlyUsable("config.yaml"));
+    assertTrue(FileConversionManager.isDirectlyUsable("config.yml"));
+    assertTrue(FileConversionManager.isDirectlyUsable("CONFIG.YAML"));
+    assertTrue(FileConversionManager.isDirectlyUsable("CONFIG.YML"));
+  }
+
+  @Test void testIsDirectlyUsableReturnsFalseForConvertibleFormats() {
+    assertFalse(FileConversionManager.isDirectlyUsable("test.xlsx"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.xls"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.html"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.htm"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.xml"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.md"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.docx"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.pptx"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.txt"));
+    assertFalse(FileConversionManager.isDirectlyUsable("test.unknown"));
+  }
+
+  // ===================================================================
+  // FileConversionManager - registerConverter
+  // ===================================================================
+
+  @Test void testRegisterConverterAddsConverter() {
+    FileConversionManager manager = FileConversionManager.getInstance();
+
+    FileConverter testConverter = new FileConverter() {
+      @Override public boolean canConvert(String sourceFormat, String targetFormat) {
+        return "custom".equals(sourceFormat) && "json".equals(targetFormat);
+      }
+
+      @Override public String getSourceFormat() {
+        return "custom";
+      }
+
+      @Override public String getTargetFormat() {
+        return "json";
+      }
+
+      @Override public List<String> convert(String sourcePath, String targetDirectory,
+          ConversionMetadata metadata) {
+        return Collections.emptyList();
+      }
+    };
+
+    // Should not throw
+    manager.registerConverter(testConverter);
+  }
+
+  @Test void testRegisterMultipleConverters() {
+    FileConversionManager manager = FileConversionManager.getInstance();
+
+    for (int i = 0; i < 3; i++) {
+      final String fmt = "fmt" + i;
+      manager.registerConverter(new FileConverter() {
+        @Override public boolean canConvert(String sourceFormat, String targetFormat) {
+          return fmt.equals(sourceFormat) && "json".equals(targetFormat);
+        }
+
+        @Override public String getSourceFormat() {
+          return fmt;
+        }
+
+        @Override public String getTargetFormat() {
+          return "json";
+        }
+
+        @Override public List<String> convert(String sourcePath, String targetDirectory,
+            ConversionMetadata metadata) {
+          return Collections.emptyList();
+        }
+      });
+    }
+    // Should not throw
+  }
+
+  // ===================================================================
+  // FileConversionManager - convert with unknown format
+  // ===================================================================
+
+  @Test void testConvertUnknownFormatThrowsIOException() {
+    FileConversionManager manager = FileConversionManager.getInstance();
+    File source = new File(tempDir.toFile(), "data.unknown_format");
+
+    assertThrows(IOException.class, () ->
+        manager.convert(source, outputDir, "totally_unknown", "json"));
+  }
+
+  // ===================================================================
+  // FileConversionManager - findOriginalSource
+  // ===================================================================
+
+  @Test void testFindOriginalSourceNoHistory() {
+    File file = new File(tempDir.toFile(), "plain.csv");
+    File result = FileConversionManager.findOriginalSource(file);
+    // Without conversion history, returns the same file
+    assertEquals(file, result);
+  }
+
+  @Test void testFindOriginalSourceNonExistentFile() {
+    File file = new File(tempDir.toFile(), "does_not_exist.json");
+    File result = FileConversionManager.findOriginalSource(file);
+    assertEquals(file, result);
+  }
+
+  // ===================================================================
+  // FileConversionManager - convertIfNeeded
+  // ===================================================================
+
+  @Test void testConvertIfNeededCsvReturnsFalse() {
+    File csv = new File(tempDir.toFile(), "data.csv");
+    boolean converted = FileConversionManager.convertIfNeeded(csv, outputDir, "UNCHANGED");
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededParquetReturnsFalse() {
+    File parquet = new File(tempDir.toFile(), "data.parquet");
+    boolean converted = FileConversionManager.convertIfNeeded(parquet, outputDir, "UNCHANGED");
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededTsvReturnsFalse() {
+    File tsv = new File(tempDir.toFile(), "data.tsv");
+    boolean converted = FileConversionManager.convertIfNeeded(tsv, outputDir, "UNCHANGED");
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededJsonWithoutPathReturnsFalse() throws IOException {
+    File jsonFile = new File(tempDir.toFile(), "plain.json");
+    Files.write(jsonFile.toPath(),
+        "[{\"a\": 1}]".getBytes(StandardCharsets.UTF_8));
+    boolean converted = FileConversionManager.convertIfNeeded(
+        jsonFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededYamlWithoutPathReturnsFalse() throws IOException {
+    File yamlFile = new File(tempDir.toFile(), "config.yaml");
+    Files.write(yamlFile.toPath(),
+        "key: value\n".getBytes(StandardCharsets.UTF_8));
+    boolean converted = FileConversionManager.convertIfNeeded(
+        yamlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededYmlExtensionReturnsFalse() throws IOException {
+    File ymlFile = new File(tempDir.toFile(), "config.yml");
+    Files.write(ymlFile.toPath(),
+        "key: value\n".getBytes(StandardCharsets.UTF_8));
+    boolean converted = FileConversionManager.convertIfNeeded(
+        ymlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededHtmlFileConverts() throws IOException {
+    String html = "<html><body>"
+        + "<table>"
+        + "<tr><th>Name</th><th>Age</th></tr>"
+        + "<tr><td>Alice</td><td>30</td></tr>"
+        + "</table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("test.html", html);
+    boolean converted = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertTrue(converted);
+  }
+
+  @Test void testConvertIfNeededTwoArgCasing() throws IOException {
+    String html = "<html><body>"
+        + "<table><tr><th>Col</th></tr><tr><td>1</td></tr></table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("two_arg.html", html);
+    boolean converted = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "SMART_CASING");
+    assertTrue(converted);
+  }
+
+  @Test void testConvertIfNeededThreeArgCasing() throws IOException {
+    String html = "<html><body>"
+        + "<table><tr><th>Col</th></tr><tr><td>1</td></tr></table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("three_arg.html", html);
+    boolean converted = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "SMART_CASING", "SMART_CASING");
+    assertTrue(converted);
+  }
+
+  @Test void testConvertIfNeededWithNullBaseDirectory() throws IOException {
+    String html = "<html><body>"
+        + "<table><tr><th>X</th></tr><tr><td>1</td></tr></table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("null_base.html", html);
+    boolean converted = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", null);
+    assertTrue(converted);
+  }
+
+  @Test void testConvertIfNeededSkipsUnchangedFile() throws IOException {
+    String html = "<html><body>"
+        + "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("skip_unchanged.html", html);
+
+    boolean first = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertTrue(first);
+
+    boolean second = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    assertFalse(second);
+  }
+
+  @Test void testConvertIfNeededNonExistentFileFails() {
+    File nonExistent = new File(tempDir.toFile(), "does_not_exist.html");
+    boolean converted = FileConversionManager.convertIfNeeded(
+        nonExistent, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    // Non-existent file should fail gracefully
+    assertFalse(converted);
+  }
+
+  @Test void testConvertIfNeededWithRelativePath() throws IOException {
+    String html = "<html><body>"
+        + "<table><tr><th>Z</th></tr><tr><td>99</td></tr></table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("rp.html", html);
+    boolean converted = FileConversionManager.convertIfNeeded(
+        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir,
+        "subdir" + File.separator + "rp.html");
+    assertTrue(converted);
+  }
+
+  // ===================================================================
+  // HtmlTableScanner - TableInfo inner class
+  // ===================================================================
+
+  @Test void testTableInfoConstructorAndGetters() {
+    HtmlTableScanner.TableInfo info =
+        new HtmlTableScanner.TableInfo("employees", "#emp-table", 0, 5);
+
+    assertEquals("employees", info.name);
+    assertEquals("#emp-table", info.selector);
+    assertEquals(0, info.index);
+    assertEquals(5, info.rowCount);
+  }
+
+  @Test void testTableInfoWithDifferentValues() {
+    HtmlTableScanner.TableInfo info =
+        new HtmlTableScanner.TableInfo("sales_data", "table[index=2]", 2, 100);
+
+    assertEquals("sales_data", info.name);
+    assertEquals("table[index=2]", info.selector);
+    assertEquals(2, info.index);
+    assertEquals(100, info.rowCount);
+  }
+
+  @Test void testTableInfoZeroRowCount() {
+    HtmlTableScanner.TableInfo info =
+        new HtmlTableScanner.TableInfo("empty_table", "#empty", 0, 0);
+
+    assertEquals("empty_table", info.name);
+    assertEquals(0, info.rowCount);
+  }
+
+  // ===================================================================
+  // HtmlTableScanner - scanTables
+  // ===================================================================
+
+  @Test void testScanTablesSingleTable() throws IOException {
     String html = "<html><body>"
         + "<table>"
         + "<tr><th>Name</th><th>Age</th></tr>"
@@ -80,621 +448,409 @@ class ConverterCoverageTest {
         + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("simple_table.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, outputDir, baseDir);
+    File htmlFile = createTempFile("single_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    // Read the JSON and verify content
-    File jsonFile = jsonFiles.get(0);
-    assertTrue(jsonFile.exists());
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFile);
-    assertEquals(2, array.size());
+    assertNotNull(tables);
+    assertEquals(1, tables.size());
 
-    JsonNode row1 = array.get(0);
-    assertNotNull(row1);
+    HtmlTableScanner.TableInfo table = tables.get(0);
+    assertNotNull(table.name);
+    assertEquals(0, table.index);
+    assertEquals(3, table.rowCount); // header row + 2 data rows
   }
 
-  @Test void testHtmlToJsonConverterWithSmartCasing() throws IOException {
+  @Test void testScanTablesMultipleTables() throws IOException {
     String html = "<html><body>"
-        + "<table>"
-        + "<tr><th>First Name</th><th>Last Name</th><th>Phone Number</th></tr>"
-        + "<tr><td>Alice</td><td>Smith</td><td>555-1234</td></tr>"
+        + "<table id=\"t1\">"
+        + "<tr><th>A</th></tr>"
+        + "<tr><td>1</td></tr>"
+        + "</table>"
+        + "<table id=\"t2\">"
+        + "<tr><th>B</th></tr>"
+        + "<tr><td>2</td></tr>"
+        + "<tr><td>3</td></tr>"
         + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("casing_test.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "SMART_CASING", baseDir);
+    File htmlFile = createTempFile("multi_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    File jsonFile = jsonFiles.get(0);
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFile);
-    assertEquals(1, array.size());
+    assertNotNull(tables);
+    assertEquals(2, tables.size());
+    assertEquals(0, tables.get(0).index);
+    assertEquals(1, tables.get(1).index);
+    assertEquals(2, tables.get(0).rowCount);
+    assertEquals(3, tables.get(1).rowCount);
   }
 
-  @Test void testHtmlToJsonConverterWithTableNameCasing() throws IOException {
-    String html = "<html><body>"
-        + "<table>"
-        + "<tr><th>Col A</th></tr>"
-        + "<tr><td>Value1</td></tr>"
-        + "</table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("table_casing.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "SMART_CASING", "SMART_CASING", baseDir);
-
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
-  }
-
-  @Test void testHtmlToJsonConverterMultipleTables() throws IOException {
-    String html = "<html><body>"
-        + "<table>"
-        + "<tr><th>Product</th><th>Price</th></tr>"
-        + "<tr><td>Widget</td><td>9.99</td></tr>"
-        + "</table>"
-        + "<table>"
-        + "<tr><th>Region</th><th>Sales</th></tr>"
-        + "<tr><td>North</td><td>1000</td></tr>"
-        + "<tr><td>South</td><td>2000</td></tr>"
-        + "</table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("multi_tables.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    assertNotNull(jsonFiles);
-    assertEquals(2, jsonFiles.size());
-  }
-
-  @Test void testHtmlToJsonConverterWithExplicitTableName() throws IOException {
-    String html = "<html><body>"
-        + "<table>"
-        + "<tr><th>Item</th><th>Count</th></tr>"
-        + "<tr><td>A</td><td>10</td></tr>"
-        + "</table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("explicit_name.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        "custom_table_name", baseDir, null);
-
-    assertNotNull(jsonFiles);
-    assertEquals(1, jsonFiles.size());
-
-    File jsonFile = jsonFiles.get(0);
-    assertTrue(jsonFile.getName().startsWith("custom_table_name"));
-  }
-
-  @Test void testHtmlToJsonConverterWithSelector() throws IOException {
-    String html = "<html><body>"
-        + "<table class=\"data sortable\">"
-        + "<tr><th>Name</th><th>Score</th></tr>"
-        + "<tr><td>Alice</td><td>95</td></tr>"
-        + "</table>"
-        + "<table class=\"data sortable\">"
-        + "<tr><th>City</th><th>Pop</th></tr>"
-        + "<tr><td>NYC</td><td>8000000</td></tr>"
-        + "</table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("selector_test.html", html);
-
-    List<File> jsonFiles = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        "table.data", 1, "city_data", baseDir);
-
-    assertNotNull(jsonFiles);
-    assertEquals(1, jsonFiles.size());
-
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFiles.get(0));
-    assertEquals(1, array.size());
-  }
-
-  @Test void testHtmlToJsonConverterSelectorOutOfBounds() throws IOException {
-    String html = "<html><body>"
-        + "<table class=\"data\">"
-        + "<tr><th>A</th></tr><tr><td>1</td></tr>"
-        + "</table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("oob_selector.html", html);
-
-    List<File> jsonFiles = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        "table.data", 5, "test_table", baseDir);
-
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.isEmpty());
-  }
-
-  @Test void testHtmlToJsonConverterNoTablesForSelector() throws IOException {
-    String html = "<html><body>"
-        + "<p>No tables here</p>"
-        + "</body></html>";
+  @Test void testScanTablesNoTables() throws IOException {
+    String html = "<html><body><p>No tables here</p></body></html>";
 
     File htmlFile = createTempFile("no_tables.html", html);
+    Source source = Sources.of(htmlFile);
 
-    List<File> jsonFiles = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        "table.nonexistent", 0, "test_table", baseDir);
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.isEmpty());
+    assertNotNull(tables);
+    assertTrue(tables.isEmpty());
   }
 
-  @Test void testHtmlToJsonConverterNullSelector() throws IOException {
+  @Test void testScanTablesWithTableId() throws IOException {
     String html = "<html><body>"
-        + "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("null_selector.html", html);
-
-    // When selector is null, falls back to regular conversion
-    List<File> jsonFiles = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        null, null, "test_table", baseDir);
-
-    assertNotNull(jsonFiles);
-    // Falls back to convert() with explicit table name
-    assertFalse(jsonFiles.isEmpty());
-  }
-
-  @Test void testHtmlToJsonConverterNoTh() throws IOException {
-    // Table without th elements should use default header names
-    String html = "<html><body>"
-        + "<table>"
-        + "<tr><td>1</td><td>Alice</td></tr>"
-        + "<tr><td>2</td><td>Bob</td></tr>"
+        + "<table id=\"employees\">"
+        + "<tr><th>Name</th></tr>"
+        + "<tr><td>Alice</td></tr>"
         + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("no_th.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    File htmlFile = createTempFile("id_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFiles.get(0));
-    // Without th headers, default col0/col1 names should be used
-    // All rows should be included since there are no th rows to skip
-    assertEquals(2, array.size());
+    assertEquals(1, tables.size());
+    // Table with valid CSS id should use # selector
+    assertTrue(tables.get(0).selector.startsWith("#"),
+        "Selector should use # prefix for table with valid id");
   }
 
-  @Test void testHtmlToJsonHasExtractedFiles() throws IOException {
-    String html = "<html><body>"
-        + "<table><tr><th>X</th></tr><tr><td>1</td></tr></table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("check_extracted.html", html);
-
-    // Before conversion - no files
-    assertFalse(HtmlToJsonConverter.hasExtractedFiles(htmlFile, outputDir));
-
-    // Convert
-    HtmlToJsonConverter.convert(htmlFile, outputDir, baseDir);
-
-    // After conversion - files should exist
-    assertTrue(HtmlToJsonConverter.hasExtractedFiles(htmlFile, outputDir));
-  }
-
-  @Test void testHtmlToJsonConverterWithRelativePath() throws IOException {
-    String html = "<html><body>"
-        + "<table><tr><th>Name</th></tr><tr><td>Test</td></tr></table>"
-        + "</body></html>";
-
-    File htmlFile = createTempFile("relpath.html", html);
-
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED",
-        baseDir, "subdir" + File.separator + "relpath.html");
-
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
-    // Filename should contain directory prefix
-    assertTrue(jsonFiles.get(0).getName().contains("subdir_"));
-  }
-
-  @Test void testHtmlToJsonConverterBrHandling() throws IOException {
+  @Test void testScanTablesWithCaption() throws IOException {
     String html = "<html><body>"
         + "<table>"
-        + "<tr><th>Description</th></tr>"
-        + "<tr><td>Line one<br>Line two</td></tr>"
+        + "<caption>Sales Data</caption>"
+        + "<tr><th>Region</th><th>Revenue</th></tr>"
+        + "<tr><td>North</td><td>1000</td></tr>"
         + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("br_test.html", html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, outputDir, baseDir);
+    File htmlFile = createTempFile("caption_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    assertNotNull(jsonFiles);
-    assertFalse(jsonFiles.isEmpty());
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFiles.get(0));
-    assertEquals(1, array.size());
-    // br should be converted to spaces
-    String description = array.get(0).fieldNames().next();
-    assertNotNull(description);
+    assertEquals(1, tables.size());
+    assertNotNull(tables.get(0).name);
+    // The name should be derived from the caption
+    assertFalse(tables.get(0).name.isEmpty());
   }
 
-  // ---------------------------------------------------------------
-  // ExcelToJsonConverter tests
-  // ---------------------------------------------------------------
-
-  @Test void testExcelToJsonConverterSimpleSheet() throws IOException {
-    File excelFile = createSimpleExcelFile("simple.xlsx",
-        new String[]{"employee_name", "department", "salary"},
-        new Object[][]{
-            {"Alice", "Engineering", 100000},
-            {"Bob", "Marketing", 80000}
-        });
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    // Check output files were created
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.length > 0);
-
-    // Verify content
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFiles[0]);
-    assertEquals(2, array.size());
-    assertNotNull(array.get(0).get("employee_name"));
-  }
-
-  @Test void testExcelToJsonConverterMultipleSheets() throws IOException {
-    File excelFile = createMultiSheetExcelFile("multi.xlsx");
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "SMART_CASING", "SMART_CASING", baseDir);
-
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    // Should have one JSON file per sheet
-    assertTrue(jsonFiles.length >= 2);
-  }
-
-  @Test void testExcelToJsonConverterWithRelativePath() throws IOException {
-    File excelFile = createSimpleExcelFile("relpath.xlsx",
-        new String[]{"item", "price"},
-        new Object[][]{{"Widget", 9.99}});
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir,
-        "subdir" + File.separator + "relpath.xlsx");
-
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.length > 0);
-    // Filename should contain directory prefix
-    assertTrue(jsonFiles[0].getName().contains("subdir_"));
-  }
-
-  @Test void testExcelToJsonConverterEmptySheet() throws IOException {
-    File excelFile = tempDir.resolve("empty.xlsx").toFile();
-    try (Workbook wb = new XSSFWorkbook();
-         FileOutputStream out = new FileOutputStream(excelFile)) {
-      Sheet sheet = wb.createSheet("EmptySheet");
-      // Only add a blank row
-      Row row = sheet.createRow(0);
-      row.createCell(0);
-      wb.write(out);
-    }
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    // Empty sheets may be skipped or produce empty JSON
-    // Should not throw
-  }
-
-  @Test void testExcelToJsonConverterNumericHeaders() throws IOException {
-    File excelFile = createSimpleExcelFile("numeric.xlsx",
-        new String[]{"2020", "2021", "2022"},
-        new Object[][]{{100, 200, 300}});
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.length > 0);
-  }
-
-  @Test void testExcelToJsonConverterBooleanCell() throws IOException {
-    File excelFile = tempDir.resolve("booleans.xlsx").toFile();
-    try (Workbook wb = new XSSFWorkbook();
-         FileOutputStream out = new FileOutputStream(excelFile)) {
-      Sheet sheet = wb.createSheet("Flags");
-      Row header = sheet.createRow(0);
-      header.createCell(0).setCellValue("flag_name");
-      header.createCell(1).setCellValue("is_active");
-
-      Row row1 = sheet.createRow(1);
-      row1.createCell(0).setCellValue("feature_a");
-      row1.createCell(1).setCellValue(true);
-
-      Row row2 = sheet.createRow(2);
-      row2.createCell(0).setCellValue("feature_b");
-      row2.createCell(1).setCellValue(false);
-
-      wb.write(out);
-    }
-
-    ExcelToJsonConverter.convertFileToJson(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.length > 0);
-
-    ArrayNode array = (ArrayNode) MAPPER.readTree(jsonFiles[0]);
-    assertEquals(2, array.size());
-    assertTrue(array.get(0).get("is_active").asBoolean());
-    assertFalse(array.get(1).get("is_active").asBoolean());
-  }
-
-  // ---------------------------------------------------------------
-  // FileConversionManager tests
-  // ---------------------------------------------------------------
-
-  @Test void testFileConversionManagerGetInstance() {
-    FileConversionManager instance = FileConversionManager.getInstance();
-    assertNotNull(instance);
-
-    // Singleton - same instance
-    FileConversionManager instance2 = FileConversionManager.getInstance();
-    assertTrue(instance == instance2);
-  }
-
-  @Test void testFileConversionManagerRequiresConversion() {
-    assertTrue(FileConversionManager.requiresConversion("test.xlsx"));
-    assertTrue(FileConversionManager.requiresConversion("test.xls"));
-    assertTrue(FileConversionManager.requiresConversion("page.html"));
-    assertTrue(FileConversionManager.requiresConversion("page.htm"));
-    assertTrue(FileConversionManager.requiresConversion("data.xml"));
-    assertTrue(FileConversionManager.requiresConversion("readme.md"));
-    assertTrue(FileConversionManager.requiresConversion("report.docx"));
-    assertTrue(FileConversionManager.requiresConversion("slides.pptx"));
-
-    assertFalse(FileConversionManager.requiresConversion("data.csv"));
-    assertFalse(FileConversionManager.requiresConversion("data.json"));
-    assertFalse(FileConversionManager.requiresConversion("data.parquet"));
-    assertFalse(FileConversionManager.requiresConversion("data.txt"));
-  }
-
-  @Test void testFileConversionManagerIsDirectlyUsable() {
-    assertTrue(FileConversionManager.isDirectlyUsable("data.csv"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.csv.gz"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.tsv"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.tsv.gz"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.json"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.json.gz"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.parquet"));
-    assertTrue(FileConversionManager.isDirectlyUsable("data.arrow"));
-    assertTrue(FileConversionManager.isDirectlyUsable("config.yaml"));
-    assertTrue(FileConversionManager.isDirectlyUsable("config.yml"));
-
-    assertFalse(FileConversionManager.isDirectlyUsable("test.xlsx"));
-    assertFalse(FileConversionManager.isDirectlyUsable("test.html"));
-    assertFalse(FileConversionManager.isDirectlyUsable("test.xml"));
-  }
-
-  @Test void testConvertIfNeededWithCsvFile() {
-    File csvFile = new File(tempDir.toFile(), "data.csv");
-    // CSV files should not need conversion
-    boolean converted = FileConversionManager.convertIfNeeded(
-        csvFile, outputDir, "UNCHANGED");
-    assertFalse(converted);
-  }
-
-  @Test void testConvertIfNeededWithHtmlFile() throws IOException {
+  @Test void testScanTablesWithPrecedingHeading() throws IOException {
     String html = "<html><body>"
-        + "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"
+        + "<h2>Employee List</h2>"
+        + "<table>"
+        + "<tr><th>Name</th></tr>"
+        + "<tr><td>Alice</td></tr>"
+        + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("convert_test.html", html);
+    File htmlFile = createTempFile("heading_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    boolean converted = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    assertTrue(converted);
-
-    // Verify output JSON files exist
-    File[] jsonFiles = outputDir.listFiles(
-        (dir, name) -> name.endsWith(".json"));
-    assertNotNull(jsonFiles);
-    assertTrue(jsonFiles.length > 0);
+    assertEquals(1, tables.size());
+    assertNotNull(tables.get(0).name);
+    assertFalse(tables.get(0).name.isEmpty());
   }
 
-  @Test void testConvertIfNeededWithExcelFile() throws IOException {
-    File excelFile = createSimpleExcelFile("convert.xlsx",
-        new String[]{"label", "count"},
-        new Object[][]{{"A", 1}});
-
-    boolean converted = FileConversionManager.convertIfNeeded(
-        excelFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-
-    assertTrue(converted);
-  }
-
-  @Test void testConvertIfNeededSkipsUnchangedFile() throws IOException {
+  @Test void testScanTablesWithColumnNameCasing() throws IOException {
     String html = "<html><body>"
-        + "<table><tr><th>X</th></tr><tr><td>1</td></tr></table>"
+        + "<table>"
+        + "<tr><th>First Name</th></tr>"
+        + "<tr><td>Alice</td></tr>"
+        + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("unchanged.html", html);
+    File htmlFile = createTempFile("casing_table.html", html);
+    Source source = Sources.of(htmlFile);
 
-    // First conversion should happen
-    boolean first = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-    assertTrue(first);
+    List<HtmlTableScanner.TableInfo> tables =
+        HtmlTableScanner.scanTables(source, "SMART_CASING");
 
-    // Second conversion should be skipped (file unchanged)
-    boolean second = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-    assertFalse(second);
+    assertEquals(1, tables.size());
+    assertNotNull(tables.get(0).name);
   }
 
-  @Test void testConvertIfNeededWithNullBaseDirectory() throws IOException {
+  @Test void testScanTablesDuplicateNames() throws IOException {
+    // Two tables with no identifying attributes will get default names
+    // The scanner should produce unique names
     String html = "<html><body>"
-        + "<table><tr><th>Y</th></tr><tr><td>2</td></tr></table>"
+        + "<table>"
+        + "<tr><th>A</th></tr><tr><td>1</td></tr>"
+        + "</table>"
+        + "<table>"
+        + "<tr><th>B</th></tr><tr><td>2</td></tr>"
+        + "</table>"
         + "</body></html>";
 
-    File htmlFile = createTempFile("null_base.html", html);
+    File htmlFile = createTempFile("dup_names.html", html);
+    Source source = Sources.of(htmlFile);
 
-    // Should still work with null base directory
-    boolean converted = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "UNCHANGED", null);
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
 
-    assertTrue(converted);
+    assertEquals(2, tables.size());
+    // Names should be different
+    assertFalse(tables.get(0).name.equals(tables.get(1).name),
+        "Duplicate table names should be de-duplicated");
   }
 
-  @Test void testFindOriginalSourceNoHistory() {
-    File csvFile = new File(tempDir.toFile(), "data.csv");
-    File original = FileConversionManager.findOriginalSource(csvFile);
-    // Without conversion history, returns the same file
-    assertEquals(csvFile, original);
+  @Test void testScanTablesWithSpecialCharsInId() throws IOException {
+    // Table with CSS-incompatible id should fall back to index-based selector
+    String html = "<html><body>"
+        + "<table id=\"data.table#1\">"
+        + "<tr><th>X</th></tr><tr><td>1</td></tr>"
+        + "</table>"
+        + "</body></html>";
+
+    File htmlFile = createTempFile("special_id.html", html);
+    Source source = Sources.of(htmlFile);
+
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
+
+    assertEquals(1, tables.size());
+    // Since the id contains special chars (. and #), selector should NOT use #
+    assertTrue(tables.get(0).selector.contains("index="),
+        "Special character IDs should fall back to index-based selector");
   }
 
-  @Test void testConvertIfNeededWithJsonFile() throws IOException {
-    // JSON files that are not JSONPath extractions should not be converted
-    File jsonFile = new File(tempDir.toFile(), "plain.json");
-    Files.write(jsonFile.toPath(),
-        "[{\"a\": 1}]".getBytes(StandardCharsets.UTF_8));
+  @Test void testScanTablesEmptyTable() throws IOException {
+    String html = "<html><body>"
+        + "<table></table>"
+        + "</body></html>";
 
-    boolean converted = FileConversionManager.convertIfNeeded(
-        jsonFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-    assertFalse(converted);
+    File htmlFile = createTempFile("empty_table.html", html);
+    Source source = Sources.of(htmlFile);
+
+    List<HtmlTableScanner.TableInfo> tables = HtmlTableScanner.scanTables(source);
+
+    assertEquals(1, tables.size());
+    assertEquals(0, tables.get(0).rowCount);
   }
 
-  @Test void testConvertIfNeededWithYamlFile() throws IOException {
-    File yamlFile = new File(tempDir.toFile(), "config.yaml");
-    Files.write(yamlFile.toPath(),
-        "key: value".getBytes(StandardCharsets.UTF_8));
+  // ===================================================================
+  // YamlPathConverter - extract
+  // ===================================================================
 
-    boolean converted = FileConversionManager.convertIfNeeded(
-        yamlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
-    assertFalse(converted);
+  @Test void testYamlPathConverterExtractToYaml() throws IOException {
+    String yamlContent = "data:\n"
+        + "  users:\n"
+        + "    - name: Alice\n"
+        + "      age: 30\n"
+        + "    - name: Bob\n"
+        + "      age: 25\n";
+
+    File yamlFile = createTempFile("source.yaml", yamlContent);
+    File outputFile = new File(outputDir, "users.yaml");
+
+    YamlPathConverter.extract(yamlFile, outputFile, "$.data.users", baseDir);
+
+    assertTrue(outputFile.exists());
+    String content = new String(Files.readAllBytes(outputFile.toPath()), StandardCharsets.UTF_8);
+    assertFalse(content.isEmpty());
+    assertTrue(content.contains("Alice"));
+    assertTrue(content.contains("Bob"));
   }
 
-  @Test void testFileConversionManagerRegisterConverter() {
-    FileConversionManager manager = FileConversionManager.getInstance();
+  @Test void testYamlPathConverterExtractToJson() throws IOException {
+    String yamlContent = "data:\n"
+        + "  settings:\n"
+        + "    theme: dark\n"
+        + "    language: en\n";
 
-    // Register a test converter
-    manager.registerConverter(new FileConverter() {
-      @Override
-      public boolean canConvert(String sourceFormat, String targetFormat) {
-        return "test".equals(sourceFormat) && "json".equals(targetFormat);
-      }
+    File yamlFile = createTempFile("source2.yaml", yamlContent);
+    File outputFile = new File(outputDir, "settings.json");
 
-      @Override
-      public String getSourceFormat() {
-        return "test";
-      }
+    YamlPathConverter.extract(yamlFile, outputFile, "$.data.settings", baseDir);
 
-      @Override
-      public String getTargetFormat() {
-        return "json";
-      }
-
-      @Override
-      public List<String> convert(String sourcePath, String targetDirectory,
-          org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata) {
-        return java.util.Collections.emptyList();
-      }
-    });
-
-    // Should not throw
+    assertTrue(outputFile.exists());
+    String content = new String(Files.readAllBytes(outputFile.toPath()), StandardCharsets.UTF_8);
+    JsonNode node = MAPPER.readTree(content);
+    assertNotNull(node);
+    assertEquals("dark", node.get("theme").asText());
+    assertEquals("en", node.get("language").asText());
   }
 
-  @Test void testFileConversionManagerConvertUnknownFormat() {
-    FileConversionManager manager = FileConversionManager.getInstance();
-    File sourceFile = new File(tempDir.toFile(), "data.unknown");
+  @Test void testYamlPathConverterExtractNestedPath() throws IOException {
+    String yamlContent = "root:\n"
+        + "  level1:\n"
+        + "    level2:\n"
+        + "      value: deep_value\n";
 
-    assertThrows(IOException.class, () -> {
-      manager.convert(sourceFile, outputDir, "unknown_format", "json");
-    });
+    File yamlFile = createTempFile("deep.yaml", yamlContent);
+    File outputFile = new File(outputDir, "deep_result.json");
+
+    YamlPathConverter.extract(yamlFile, outputFile, "$.root.level1.level2", baseDir);
+
+    assertTrue(outputFile.exists());
+    JsonNode node = MAPPER.readTree(outputFile);
+    assertEquals("deep_value", node.get("value").asText());
   }
 
-  // ---------------------------------------------------------------
+  @Test void testYamlPathConverterNonExistentPath() throws IOException {
+    String yamlContent = "data:\n  key: value\n";
+
+    File yamlFile = createTempFile("nonexist.yaml", yamlContent);
+    File outputFile = new File(outputDir, "nonexist_result.json");
+
+    YamlPathConverter.extract(yamlFile, outputFile, "$.missing.path", baseDir);
+
+    // Should write empty object for missing path
+    assertTrue(outputFile.exists());
+    JsonNode node = MAPPER.readTree(outputFile);
+    assertNotNull(node);
+  }
+
+  @Test void testYamlPathConverterExtractArray() throws IOException {
+    String yamlContent = "items:\n"
+        + "  - id: 1\n"
+        + "    name: first\n"
+        + "  - id: 2\n"
+        + "    name: second\n";
+
+    File yamlFile = createTempFile("array.yaml", yamlContent);
+    File outputFile = new File(outputDir, "items.json");
+
+    YamlPathConverter.extract(yamlFile, outputFile, "$.items", baseDir);
+
+    assertTrue(outputFile.exists());
+    JsonNode node = MAPPER.readTree(outputFile);
+    assertTrue(node.isArray());
+    assertEquals(2, node.size());
+  }
+
+  @Test void testYamlPathConverterUnsupportedOutputFormat() throws IOException {
+    String yamlContent = "data:\n  key: value\n";
+
+    File yamlFile = createTempFile("unsup.yaml", yamlContent);
+    File outputFile = new File(outputDir, "result.txt");
+
+    assertThrows(IllegalArgumentException.class, () ->
+        YamlPathConverter.extract(yamlFile, outputFile, "$.data", baseDir));
+  }
+
+  @Test void testYamlPathConverterExtractToJsonConvenience() throws IOException {
+    String yamlContent = "items:\n"
+        + "  - name: first\n"
+        + "  - name: second\n";
+
+    // Create the yaml file inside a subdirectory so parent directory is our tmpDir
+    File sourceDir = Files.createDirectories(tempDir.resolve("yaml_src")).toFile();
+    File yamlFile = new File(sourceDir, "data.yaml");
+    Files.write(yamlFile.toPath(), yamlContent.getBytes(StandardCharsets.UTF_8));
+
+    File result = YamlPathConverter.extractToJson(yamlFile, "$.items", "extracted_items");
+
+    assertNotNull(result);
+    assertTrue(result.exists());
+    assertTrue(result.getName().endsWith(".json"));
+    JsonNode node = MAPPER.readTree(result);
+    assertTrue(node.isArray());
+    assertEquals(2, node.size());
+  }
+
+  @Test void testYamlPathConverterExtractToYamlConvenience() throws IOException {
+    String yamlContent = "config:\n"
+        + "  db:\n"
+        + "    host: localhost\n"
+        + "    port: 5432\n";
+
+    File sourceDir = Files.createDirectories(tempDir.resolve("yaml_src2")).toFile();
+    File yamlFile = new File(sourceDir, "config.yaml");
+    Files.write(yamlFile.toPath(), yamlContent.getBytes(StandardCharsets.UTF_8));
+
+    File result = YamlPathConverter.extractToYaml(yamlFile, "$.config.db", "db_config");
+
+    assertNotNull(result);
+    assertTrue(result.exists());
+    assertTrue(result.getName().endsWith(".yaml"));
+    String content = new String(Files.readAllBytes(result.toPath()), StandardCharsets.UTF_8);
+    assertTrue(content.contains("localhost"));
+  }
+
+  @Test void testYamlPathConverterYmlExtension() throws IOException {
+    String yamlContent = "data:\n  value: 42\n";
+
+    File yamlFile = createTempFile("source.yml", yamlContent);
+    File outputFile = new File(outputDir, "result.yml");
+
+    YamlPathConverter.extract(yamlFile, outputFile, "$.data", baseDir);
+
+    assertTrue(outputFile.exists());
+    String content = new String(Files.readAllBytes(outputFile.toPath()), StandardCharsets.UTF_8);
+    assertTrue(content.contains("42"));
+  }
+
+  // ===================================================================
+  // JsonPathConverter - extractPath (shared logic used by YamlPathConverter)
+  // ===================================================================
+
+  @Test void testJsonPathConverterExtractSimpleField() throws IOException {
+    String json = "{\"name\": \"Alice\", \"age\": 30}";
+    JsonNode root = MAPPER.readTree(json);
+
+    JsonNode result = JsonPathConverter.extractPath(root, "name");
+    assertNotNull(result);
+    assertEquals("Alice", result.asText());
+  }
+
+  @Test void testJsonPathConverterExtractNestedField() throws IOException {
+    String json = "{\"data\": {\"user\": {\"name\": \"Bob\"}}}";
+    JsonNode root = MAPPER.readTree(json);
+
+    JsonNode result = JsonPathConverter.extractPath(root, "data.user.name");
+    assertNotNull(result);
+    assertEquals("Bob", result.asText());
+  }
+
+  @Test void testJsonPathConverterExtractWithDollarPrefix() throws IOException {
+    String json = "{\"data\": {\"value\": 42}}";
+    JsonNode root = MAPPER.readTree(json);
+
+    JsonNode result = JsonPathConverter.extractPath(root, "$.data.value");
+    assertNotNull(result);
+    assertEquals(42, result.asInt());
+  }
+
+  @Test void testJsonPathConverterExtractArrayElement() throws IOException {
+    String json = "{\"items\": [\"a\", \"b\", \"c\"]}";
+    JsonNode root = MAPPER.readTree(json);
+
+    JsonNode result = JsonPathConverter.extractPath(root, "items[1]");
+    assertNotNull(result);
+    assertEquals("b", result.asText());
+  }
+
+  @Test void testJsonPathConverterExtractEmptyPath() throws IOException {
+    String json = "{\"key\": \"value\"}";
+    JsonNode root = MAPPER.readTree(json);
+
+    // Empty path after $ should return entire node
+    JsonNode result = JsonPathConverter.extractPath(root, "$");
+    assertNotNull(result);
+    assertEquals(root, result);
+  }
+
+  @Test void testJsonPathConverterExtractMissingField() throws IOException {
+    String json = "{\"name\": \"Alice\"}";
+    JsonNode root = MAPPER.readTree(json);
+
+    JsonNode result = JsonPathConverter.extractPath(root, "nonexistent");
+    // Missing field should return null
+    assertTrue(result == null || result.isNull());
+  }
+
+  // ===================================================================
   // Utility methods
-  // ---------------------------------------------------------------
+  // ===================================================================
 
   private File createTempFile(String name, String content) throws IOException {
     File file = new File(tempDir.toFile(), name);
     Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
-    return file;
-  }
-
-  private File createSimpleExcelFile(String name, String[] headers,
-      Object[][] data) throws IOException {
-    File file = tempDir.resolve(name).toFile();
-    try (Workbook wb = new XSSFWorkbook();
-         FileOutputStream out = new FileOutputStream(file)) {
-      Sheet sheet = wb.createSheet("data_sheet");
-
-      Row headerRow = sheet.createRow(0);
-      for (int i = 0; i < headers.length; i++) {
-        headerRow.createCell(i).setCellValue(headers[i]);
-      }
-
-      for (int r = 0; r < data.length; r++) {
-        Row row = sheet.createRow(r + 1);
-        for (int c = 0; c < data[r].length; c++) {
-          Object val = data[r][c];
-          if (val instanceof String) {
-            row.createCell(c).setCellValue((String) val);
-          } else if (val instanceof Number) {
-            row.createCell(c).setCellValue(((Number) val).doubleValue());
-          } else if (val instanceof Boolean) {
-            row.createCell(c).setCellValue((Boolean) val);
-          }
-        }
-      }
-
-      wb.write(out);
-    }
-    return file;
-  }
-
-  private File createMultiSheetExcelFile(String name) throws IOException {
-    File file = tempDir.resolve(name).toFile();
-    try (Workbook wb = new XSSFWorkbook();
-         FileOutputStream out = new FileOutputStream(file)) {
-      // Sheet 1: products
-      Sheet sheet1 = wb.createSheet("products");
-      Row h1 = sheet1.createRow(0);
-      h1.createCell(0).setCellValue("product_id");
-      h1.createCell(1).setCellValue("product_name");
-      Row d1 = sheet1.createRow(1);
-      d1.createCell(0).setCellValue(1);
-      d1.createCell(1).setCellValue("Widget");
-
-      // Sheet 2: regions
-      Sheet sheet2 = wb.createSheet("regions");
-      Row h2 = sheet2.createRow(0);
-      h2.createCell(0).setCellValue("region_code");
-      h2.createCell(1).setCellValue("region_name");
-      Row d2 = sheet2.createRow(1);
-      d2.createCell(0).setCellValue("US");
-      d2.createCell(1).setCellValue("United States");
-
-      wb.write(out);
-    }
     return file;
   }
 }

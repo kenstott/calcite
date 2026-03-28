@@ -306,6 +306,8 @@ public class S3StorageProviderCoverageTest {
     when(s3Object.getObjectContent()).thenReturn(s3Is);
     when(s3Object.getObjectMetadata()).thenReturn(objMeta);
     when(mockS3.getObject(any(GetObjectRequest.class))).thenReturn(s3Object);
+    // Mock getObjectMetadata for hasChanged check when persistent cache is active
+    when(mockS3.getObjectMetadata(anyString(), anyString())).thenReturn(objMeta);
 
     try (Reader reader = provider.openReader("s3://mybucket/data.txt")) {
       assertNotNull(reader);

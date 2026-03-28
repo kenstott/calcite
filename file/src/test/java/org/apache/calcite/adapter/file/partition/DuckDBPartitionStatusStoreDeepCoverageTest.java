@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.reflect.Field;
+import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -32,7 +32,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,41 +52,24 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
 
   @BeforeEach
   void setUp() {
-    // Clear the static OPEN_STORES map to avoid interference between tests
-    clearOpenStores();
-    store = DuckDBPartitionStatusStore.getInstance(tempDir.toString());
+    // Use a unique subdirectory per test to ensure data isolation and avoid
+    // interfering with stores from concurrently-running test classes.
+    String baseDir =
+        new File(tempDir.toFile(), "store_" + System.nanoTime()).getAbsolutePath();
+    new File(baseDir).mkdirs();
+    store = DuckDBPartitionStatusStore.getInstance(baseDir);
   }
 
   @AfterEach
   void tearDown() {
+    // Only close our own store instance — do NOT clear the global OPEN_STORES map,
+    // as that would destroy connections used by concurrently-running test classes.
     if (store != null) {
       try {
         store.close();
       } catch (Exception e) {
         // ignore
       }
-    }
-    clearOpenStores();
-  }
-
-  @SuppressWarnings("unchecked")
-  private void clearOpenStores() {
-    try {
-      Field openStores = DuckDBPartitionStatusStore.class.getDeclaredField("OPEN_STORES");
-      openStores.setAccessible(true);
-      Map<String, DuckDBPartitionStatusStore> map =
-          (Map<String, DuckDBPartitionStatusStore>) openStores.get(null);
-      // Close all stores before clearing
-      for (DuckDBPartitionStatusStore s : map.values()) {
-        try {
-          s.close();
-        } catch (Exception e) {
-          // ignore
-        }
-      }
-      map.clear();
-    } catch (Exception e) {
-      // ignore
     }
   }
 

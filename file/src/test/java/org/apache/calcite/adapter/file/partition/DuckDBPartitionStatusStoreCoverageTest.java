@@ -51,10 +51,8 @@ public class DuckDBPartitionStatusStoreCoverageTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    // Clear the static OPEN_STORES map to avoid interference between tests
-    clearOpenStores();
-
-    // Use a unique subdirectory for each test
+    // Use a unique subdirectory for each test to avoid data leakage
+    // and avoid closing stores from other concurrently-running test classes.
     baseDir = new File(tempDir.toFile(), "store_" + System.nanoTime()).getAbsolutePath();
     new File(baseDir).mkdirs();
     store = DuckDBPartitionStatusStore.getInstance(baseDir);
@@ -63,34 +61,30 @@ public class DuckDBPartitionStatusStoreCoverageTest {
 
   @AfterEach
   void tearDown() throws Exception {
-    clearOpenStores();
+    // Only close our own store instance — do NOT clear the global OPEN_STORES map,
+    // as that would destroy connections used by concurrently-running test classes.
+    closeCurrentStore();
   }
 
   /**
-   * Clear the static OPEN_STORES map via reflection.
+   * Close only the current test's store instance and remove it from OPEN_STORES.
    */
-  @SuppressWarnings("unchecked")
-  private void clearOpenStores() throws Exception {
-    Field field = DuckDBPartitionStatusStore.class.getDeclaredField("OPEN_STORES");
-    field.setAccessible(true);
-    Map<String, DuckDBPartitionStatusStore> openStores =
-        (Map<String, DuckDBPartitionStatusStore>) field.get(null);
-    // Close all open stores
-    for (DuckDBPartitionStatusStore s : new ArrayList<>(openStores.values())) {
+  private void closeCurrentStore() {
+    if (store != null) {
       try {
-        s.close();
+        store.close();
       } catch (Exception ignored) {
         // ignore
       }
+      store = null;
     }
-    openStores.clear();
   }
 
   /**
    * Get a fresh store instance with a new unique directory to avoid data leakage.
    */
   private DuckDBPartitionStatusStore freshStore() throws Exception {
-    clearOpenStores();
+    closeCurrentStore();
     baseDir = new java.io.File(tempDir.toFile(), "store_" + System.nanoTime()).getAbsolutePath();
     new java.io.File(baseDir).mkdirs();
     return DuckDBPartitionStatusStore.getInstance(baseDir);
@@ -299,7 +293,6 @@ public class DuckDBPartitionStatusStoreCoverageTest {
   }
 
   @Test void testGetInstanceReturnsSameStore() throws Exception {
-    clearOpenStores();
     String dir = new File(tempDir.toFile(), "singleton_" + System.nanoTime()).getAbsolutePath();
     new File(dir).mkdirs();
 
@@ -309,7 +302,8 @@ public class DuckDBPartitionStatusStoreCoverageTest {
     // Should be the same instance
     assertTrue(store1 == store2);
 
-    clearOpenStores();
+    // Clean up the store we just created
+    store1.close();
   }
 
   @Test void testPipelineTrackerMethods() throws Exception {

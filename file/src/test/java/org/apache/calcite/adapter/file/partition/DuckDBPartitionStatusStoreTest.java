@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,9 +52,8 @@ public class DuckDBPartitionStatusStoreTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    // Clear the static OPEN_STORES map to avoid interference between tests
-    clearOpenStores();
-    // Use a unique subdirectory for each test
+    // Use a unique subdirectory per test to ensure data isolation and avoid
+    // interfering with stores from concurrently-running test classes.
     baseDir = new File(tempDir.toFile(), "store_" + System.nanoTime()).getAbsolutePath();
     new File(baseDir).mkdirs();
     store = DuckDBPartitionStatusStore.getInstance(baseDir);
@@ -63,27 +61,15 @@ public class DuckDBPartitionStatusStoreTest {
 
   @AfterEach
   void tearDown() throws Exception {
-    clearOpenStores();
-  }
-
-  /**
-   * Clear the static OPEN_STORES map via reflection.
-   */
-  @SuppressWarnings("unchecked")
-  private void clearOpenStores() throws Exception {
-    Field field = DuckDBPartitionStatusStore.class.getDeclaredField("OPEN_STORES");
-    field.setAccessible(true);
-    Map<String, DuckDBPartitionStatusStore> openStores =
-        (Map<String, DuckDBPartitionStatusStore>) field.get(null);
-    // Close all open stores
-    for (DuckDBPartitionStatusStore s : new ArrayList<>(openStores.values())) {
+    // Only close our own store instance — do NOT clear the global OPEN_STORES map,
+    // as that would destroy connections used by concurrently-running test classes.
+    if (store != null) {
       try {
-        s.close();
+        store.close();
       } catch (Exception ignored) {
         // ignore
       }
     }
-    openStores.clear();
   }
 
   // ===== Basic IncrementalTracker operations =====
