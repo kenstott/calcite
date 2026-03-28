@@ -51,7 +51,7 @@ class StooqDownloaderIntegrationTest {
     tempDir = Files.createTempDirectory("stooq-test");
     storageProvider = new LocalFileStorageProvider();
     // Use shorter rate limit for testing but still be respectful
-    downloader = new StooqDownloader(storageProvider, null, null, 500, 5000, 3);
+    downloader = new StooqDownloader(storageProvider, null, null, 500, 5000, 3, 60);
   }
 
   @AfterEach
@@ -222,7 +222,7 @@ class StooqDownloaderIntegrationTest {
     Thread.sleep(100);
 
     // Second download - should use cache for historical year
-    StooqDownloader downloader2 = new StooqDownloader(storageProvider, null, null, 500, 5000, 3);
+    StooqDownloader downloader2 = new StooqDownloader(storageProvider, null, null, 500, 5000, 3, 60);
     long start2 = System.currentTimeMillis();
     downloader2.downloadStockPrices(basePath, pairs, historicalYear, historicalYear);
     long elapsed2 = System.currentTimeMillis() - start2;

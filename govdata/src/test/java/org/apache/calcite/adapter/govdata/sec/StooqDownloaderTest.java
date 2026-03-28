@@ -272,7 +272,7 @@ class StooqDownloaderTest {
   @Test void testConstructorWithCustomRateLimiting() {
     StorageProvider storageProvider = new LocalFileStorageProvider();
     StooqDownloader customDownloader =
-        new StooqDownloader(storageProvider, null, null, 500, 5000, 5);
+        new StooqDownloader(storageProvider, null, null, 500, 5000, 5, 60);
     assertNotNull(customDownloader);
   }
 

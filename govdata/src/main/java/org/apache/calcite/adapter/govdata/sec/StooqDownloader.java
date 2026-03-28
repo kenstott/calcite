@@ -77,6 +77,9 @@ public class StooqDownloader {
   // Parallel downloads - keep low to avoid triggering rate limits
   private static final int MAX_PARALLEL_DOWNLOADS = 1;  // Sequential recommended
 
+  /** Default batch timeout: 1 hour. Configurable via STOCK_PRICE_BATCH_TIMEOUT_MINUTES env var. */
+  private static final long DEFAULT_BATCH_TIMEOUT_MINUTES = 60;
+
   // Avro schema for stock price records - matches sec-schema.yaml stock_prices table
   private static final String STOCK_PRICE_SCHEMA = "{"
       + "\"type\": \"record\","
@@ -103,6 +106,7 @@ public class StooqDownloader {
   private final String password;  // Optional, from STOOQ_PASSWORD
   private final ExecutorService downloadExecutor;
   private final RateLimiter rateLimiter;
+  private final long batchTimeoutMs;
   private final List<String> failedTickers = new ArrayList<String>();
   private SecCacheManifest cacheManifest;  // Optional, for tracking unavailable tickers
 
@@ -117,7 +121,8 @@ public class StooqDownloader {
     this(storageProvider, username, password,
         getEnvLong("STOCK_PRICE_BASE_RATE_LIMIT_MS", RateLimiter.DEFAULT_BASE_RATE_LIMIT_MS),
         getEnvLong("STOCK_PRICE_MAX_BACKOFF_MS", RateLimiter.DEFAULT_MAX_BACKOFF_MS),
-        getEnvInt("STOCK_PRICE_MAX_RETRIES", RateLimiter.DEFAULT_MAX_RETRIES));
+        getEnvInt("STOCK_PRICE_MAX_RETRIES", RateLimiter.DEFAULT_MAX_RETRIES),
+        getEnvLong("STOCK_PRICE_BATCH_TIMEOUT_MINUTES", DEFAULT_BATCH_TIMEOUT_MINUTES));
   }
 
   /**
@@ -129,9 +134,11 @@ public class StooqDownloader {
    * @param baseRateLimitMs Base milliseconds between requests
    * @param maxBackoffMs Maximum backoff on rate limiting
    * @param maxRetries Maximum retry attempts per ticker
+   * @param batchTimeoutMinutes Maximum minutes for the entire batch before aborting
    */
   public StooqDownloader(StorageProvider storageProvider, String username, String password,
-                         long baseRateLimitMs, long maxBackoffMs, int maxRetries) {
+                         long baseRateLimitMs, long maxBackoffMs, int maxRetries,
+                         long batchTimeoutMinutes) {
     if (storageProvider == null) {
       throw new IllegalArgumentException("StorageProvider is required");
     }
@@ -140,6 +147,7 @@ public class StooqDownloader {
     this.password = password;
     this.downloadExecutor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS);
     this.rateLimiter = new RateLimiter(baseRateLimitMs, maxBackoffMs, maxRetries);
+    this.batchTimeoutMs = TimeUnit.MINUTES.toMillis(batchTimeoutMinutes);
   }
 
   private static long getEnvLong(String name, long defaultValue) {
@@ -177,15 +185,25 @@ public class StooqDownloader {
   public void downloadStockPrices(String basePath,
                                   List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs,
                                   int startYear, int endYear) {
-    LOGGER.info("Starting Stooq stock price downloads for {} tickers from {} to {}",
-        tickerCikPairs.size(), startYear, endYear);
+    LOGGER.info("Starting Stooq stock price downloads for {} tickers from {} to {} "
+            + "(batch timeout: {} minutes)",
+        tickerCikPairs.size(), startYear, endYear,
+        TimeUnit.MILLISECONDS.toMinutes(batchTimeoutMs));
 
     failedTickers.clear();
+    final long batchDeadline = System.currentTimeMillis() + batchTimeoutMs;
     List<CompletableFuture<Void>> futures = new ArrayList<CompletableFuture<Void>>();
 
     for (final AlphaVantageDownloader.TickerCikPair pair : tickerCikPairs) {
       CompletableFuture<Void> future = CompletableFuture.runAsync(new Runnable() {
         @Override public void run() {
+          if (System.currentTimeMillis() >= batchDeadline) {
+            LOGGER.warn("Batch timeout reached, skipping ticker {}", pair.ticker);
+            synchronized (failedTickers) {
+              failedTickers.add(pair.ticker);
+            }
+            return;
+          }
           try {
             downloadTickerData(basePath, pair, startYear, endYear);
           } catch (Exception e) {
@@ -208,6 +226,15 @@ public class StooqDownloader {
     } catch (InterruptedException e) {
       LOGGER.warn("Download executor interrupted: {}", e.getMessage());
       Thread.currentThread().interrupt();
+    }
+
+    boolean timedOut = System.currentTimeMillis() >= batchDeadline;
+    if (timedOut) {
+      LOGGER.warn("Stooq batch timed out after {} minutes. "
+              + "Completed tickers: {}, failed/skipped: {}. "
+              + "Configure STOCK_PRICE_BATCH_TIMEOUT_MINUTES to adjust.",
+          TimeUnit.MILLISECONDS.toMinutes(batchTimeoutMs),
+          tickerCikPairs.size() - failedTickers.size(), failedTickers.size());
     }
 
     if (!failedTickers.isEmpty()) {
