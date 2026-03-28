@@ -380,7 +380,7 @@ class DocumentSourceUtilityCoverageTest {
     org.mockito.Mockito.when(mockConfig.getHeaders())
         .thenReturn(new HashMap<String, String>());
     org.mockito.Mockito.when(mockConfig.getRateLimit()).thenReturn(mockRateLimit);
-    org.mockito.Mockito.when(mockRateLimit.getRequestsPerSecond()).thenReturn(10.0);
+    org.mockito.Mockito.when(mockRateLimit.getRequestsPerSecond()).thenReturn(10);
 
     return new DocumentSource(mockConfig, mockStorage, "/tmp/cache");
   }
