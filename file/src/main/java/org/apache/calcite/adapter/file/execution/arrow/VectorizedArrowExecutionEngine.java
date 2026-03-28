@@ -84,6 +84,7 @@ public final class VectorizedArrowExecutionEngine {
     int rowCount = input.getRowCount();
     BitVector selectionVector = new BitVector("selection", ALLOCATOR);
     selectionVector.allocateNew(rowCount);
+    selectionVector.setValueCount(rowCount);
 
     // Build selection vector using chunked processing
     for (int i = 0; i < rowCount; i += 8) {
@@ -93,6 +94,8 @@ public final class VectorizedArrowExecutionEngine {
         Object value = input.getVector(columnIndex).getObject(j);
         if (predicate.test(value)) {
           selectionVector.set(j, 1);
+        } else {
+          selectionVector.set(j, 0);
         }
       }
     }
