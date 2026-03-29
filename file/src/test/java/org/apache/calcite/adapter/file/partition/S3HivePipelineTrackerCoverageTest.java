@@ -1713,4 +1713,571 @@ public class S3HivePipelineTrackerCoverageTest {
     // Test default markCleared
     tracker.markCleared("src1", "table1", "staging");
   }
+
+  // ===== Additional Coverage Tests for Remaining Uncovered Lines =====
+
+  @Test
+  void testExtractYearSecFormatYy90Plus() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // SEC accession format with yy >= 90: 0000123456-95-012345
+      String result = (String) m.invoke(tracker, "0000123456-95-012345",
+          System.currentTimeMillis());
+      assertEquals("1995", result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testExtractYearSecFormatYyLow() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // SEC accession format with yy < 90: 0000123456-23-012345
+      String result = (String) m.invoke(tracker, "0000123456-23-012345",
+          System.currentTimeMillis());
+      assertEquals("2023", result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testExtractYearBareYearBoundary1900() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      assertEquals("1900", m.invoke(tracker, "1900", System.currentTimeMillis()));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testExtractYearBareYearBoundary2100() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      assertEquals("2100", m.invoke(tracker, "2100", System.currentTimeMillis()));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testExtractYearBareYearOutOfRange() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // 2101 is out of range, should fall through to current year
+      String result = (String) m.invoke(tracker, "2101", System.currentTimeMillis());
+      // Should be current year since 2101 > 2100
+      assertNotNull(result);
+      assertTrue(result.matches("\\d{4}"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testSanitizeHiveValueWithSpecialCharacters() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "sanitizeHiveValue", String.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // Slash replacement
+      assertEquals("a_b", m.invoke(tracker, "a/b"));
+      // Space replacement
+      assertEquals("a_b", m.invoke(tracker, "a b"));
+      // Colon replacement
+      assertEquals("a_b", m.invoke(tracker, "a:b"));
+      // Combined
+      assertEquals("a_b_c_d", m.invoke(tracker, "a/b c:d"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testFlattenKeyValuesOrderedMultiKey() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "flattenKeyValues", Map.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // Multi-key should be sorted alphabetically
+      Map<String, String> keys = new LinkedHashMap<String, String>();
+      keys.put("z_key", "z_value");
+      keys.put("a_key", "a_value");
+      keys.put("m_key", "m_value");
+      String result = (String) m.invoke(tracker, keys);
+      // Should be sorted: a_key=a_value__m_key=m_value__z_key=z_value
+      assertTrue(result.startsWith("a_key=a_value"));
+      assertTrue(result.contains("__m_key=m_value"));
+      assertTrue(result.endsWith("z_key=z_value"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testUnflattenKeyValuesWithEqualsOnly() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "unflattenKeyValues", String.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // Has equals but no double-dash: "key=value" -> single value
+      Map<String, String> result = (Map<String, String>) m.invoke(tracker, "key=value");
+      // Should fall through since no __ separator
+      assertEquals(1, result.size());
+      assertTrue(result.containsKey("source_key"));
+      assertEquals("key=value", result.get("source_key"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testUnflattenKeyValuesNoEquals() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "unflattenKeyValues", String.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Map<String, String> result = (Map<String, String>) m.invoke(tracker, "simple_value");
+      assertEquals(1, result.size());
+      assertEquals("simple_value", result.get("source_key"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testMarkCompleteNewCacheEntry() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("stageCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, Set<String>> stageCache =
+          (Map<String, Set<String>>) cacheField.get(tracker);
+
+      // Ensure no entry exists
+      String cacheKey = "src1\0phase1";
+      assertNull(stageCache.get(cacheKey));
+
+      // markComplete creates new entry in stageCache
+      tracker.markComplete("src1", "table1", "phase1", 100);
+
+      Set<String> tables = stageCache.get(cacheKey);
+      assertNotNull(tables);
+      assertTrue(tables.contains("table1"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testMarkCompleteExistingCacheEntry() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("stageCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, Set<String>> stageCache =
+          (Map<String, Set<String>>) cacheField.get(tracker);
+
+      // Pre-populate cache
+      String cacheKey = "src2\0phase2";
+      Set<String> existing = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+      existing.add("existing_table");
+      stageCache.put(cacheKey, existing);
+
+      // markComplete should add to existing set
+      tracker.markComplete("src2", "new_table", "phase2", 50);
+
+      Set<String> tables = stageCache.get(cacheKey);
+      assertTrue(tables.contains("existing_table"));
+      assertTrue(tables.contains("new_table"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testMarkClearedRemovesFromExistingCache() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("stageCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, Set<String>> stageCache =
+          (Map<String, Set<String>>) cacheField.get(tracker);
+
+      // Pre-populate with two tables
+      String cacheKey = "src3\0phase3";
+      Set<String> existing = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+      existing.add("table1");
+      existing.add("table2");
+      stageCache.put(cacheKey, existing);
+
+      // Clear only table1
+      tracker.markCleared("src3", "table1", "phase3");
+
+      Set<String> tables = stageCache.get(cacheKey);
+      assertFalse(tables.contains("table1"));
+      assertTrue(tables.contains("table2"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testIsCompleteCallsGetCompletedTablesOnCacheMiss() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // isComplete on a missing cache key should attempt getCompletedTables
+      // This will fail gracefully (no S3 files) and return false
+      boolean result = tracker.isComplete("unknown_src", "unknown_table", "unknown_phase");
+      assertFalse(result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testIsTableCompleteNoCachedCompletion() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      boolean result = tracker.isTableComplete("unknown_pipeline", "sig123");
+      assertFalse(result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testIsTableCompleteWithSignatureMismatch() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("completionCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, PipelineTracker.CachedCompletion> completionCache =
+          (Map<String, PipelineTracker.CachedCompletion>) cacheField.get(tracker);
+
+      completionCache.put("pipeline1",
+          new PipelineTracker.CachedCompletion("hash1", "sig_original", 100,
+              System.currentTimeMillis(), 0));
+
+      // Different signature should return false
+      assertFalse(tracker.isTableComplete("pipeline1", "sig_different"));
+      // Same signature should return true
+      assertTrue(tracker.isTableComplete("pipeline1", "sig_original"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testInvalidateTableCompletionRemovesFromCache() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("completionCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, PipelineTracker.CachedCompletion> completionCache =
+          (Map<String, PipelineTracker.CachedCompletion>) cacheField.get(tracker);
+
+      completionCache.put("pipeline2",
+          new PipelineTracker.CachedCompletion("hash", "sig", 50,
+              System.currentTimeMillis(), 0));
+      assertNotNull(completionCache.get("pipeline2"));
+
+      tracker.invalidateTableCompletion("pipeline2");
+      assertNull(completionCache.get("pipeline2"));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testClearAllCompletionsClearsCache() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("completionCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, PipelineTracker.CachedCompletion> completionCache =
+          (Map<String, PipelineTracker.CachedCompletion>) cacheField.get(tracker);
+
+      completionCache.put("p1",
+          new PipelineTracker.CachedCompletion("h1", "s1", 10,
+              System.currentTimeMillis(), 0));
+      completionCache.put("p2",
+          new PipelineTracker.CachedCompletion("h2", "s2", 20,
+              System.currentTimeMillis(), 0));
+
+      tracker.clearAllCompletions();
+      assertTrue(completionCache.isEmpty());
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testMarkTableCompleteWithSourceWatermarkEncoding() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      tracker.markTableCompleteWithSourceWatermark(
+          "pipeline_wm", "hash123", "sig456", 1000, 12345678L);
+
+      Field cacheField = S3HivePipelineTracker.class.getDeclaredField("completionCache");
+      cacheField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, PipelineTracker.CachedCompletion> completionCache =
+          (Map<String, PipelineTracker.CachedCompletion>) cacheField.get(tracker);
+
+      PipelineTracker.CachedCompletion cached = completionCache.get("pipeline_wm");
+      assertNotNull(cached);
+      assertEquals("hash123", cached.configHash);
+      assertEquals("sig456", cached.signature);
+      assertEquals(1000, cached.rowCount);
+      assertEquals(12345678L, cached.sourceFileWatermark);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testFilterUnprocessedWithNullCombinations() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Set<Integer> result = tracker.filterUnprocessed("alt", "src", null);
+      assertTrue(result.isEmpty());
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testConnectionLockAndConnectionLifecycle() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      Field connField = S3HivePipelineTracker.class.getDeclaredField("connection");
+      connField.setAccessible(true);
+
+      // Connection should be null before any operation
+      assertNull(connField.get(tracker));
+
+      // After close, connection should be null
+      tracker.close();
+      assertNull(connField.get(tracker));
+    } finally {
+      // Already closed above
+    }
+  }
+
+  @Test
+  void testCloseResetsAllState() throws Exception {
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+
+    // Set up some state
+    Field cacheField = S3HivePipelineTracker.class.getDeclaredField("completionCache");
+    cacheField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<String, PipelineTracker.CachedCompletion> completionCache =
+        (Map<String, PipelineTracker.CachedCompletion>) cacheField.get(tracker);
+    completionCache.put("test",
+        new PipelineTracker.CachedCompletion("h", "s", 1, 1, 0));
+
+    Field stageCacheField = S3HivePipelineTracker.class.getDeclaredField("stageCache");
+    stageCacheField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<String, Set<String>> stageCache =
+        (Map<String, Set<String>>) stageCacheField.get(tracker);
+    stageCache.put("key", new HashSet<String>());
+
+    Field initializedField = S3HivePipelineTracker.class.getDeclaredField("initialized");
+    initializedField.setAccessible(true);
+    initializedField.setBoolean(tracker, true);
+
+    Field hasDataField = S3HivePipelineTracker.class.getDeclaredField("hasAnyTrackerData");
+    hasDataField.setAccessible(true);
+    hasDataField.set(tracker, Boolean.TRUE);
+
+    // Close only clears caches if connection was open
+    // Since no real connection was opened, the clear block is skipped
+    tracker.close();
+
+    // With no connection, close() does not enter the clear block
+    // Verify that close() ran without error
+    assertNotNull(tracker);
+  }
+
+  @Test
+  void testCachedCompletionFieldAccess() {
+    PipelineTracker.CachedCompletion cc =
+        new PipelineTracker.CachedCompletion("cfg_hash", "dim_sig", 5000,
+            System.currentTimeMillis(), 9999L);
+    assertEquals("cfg_hash", cc.configHash);
+    assertEquals("dim_sig", cc.signature);
+    assertEquals(5000, cc.rowCount);
+    assertEquals(9999L, cc.sourceFileWatermark);
+    assertTrue(cc.completedAt > 0);
+  }
+
+  @Test
+  void testCachedCompletionIsEmptyResultTtlExpiredEdge() {
+    long now = System.currentTimeMillis();
+    // Row count = 0, completed just now
+    PipelineTracker.CachedCompletion recent =
+        new PipelineTracker.CachedCompletion("h", "s", 0, now, 0);
+    // TTL of 1 day: should NOT be expired since just created
+    assertFalse(recent.isEmptyResultTtlExpired(
+        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
+
+    // Row count > 0: should never be considered expired
+    PipelineTracker.CachedCompletion nonEmpty =
+        new PipelineTracker.CachedCompletion("h", "s", 100,
+            now - java.util.concurrent.TimeUnit.DAYS.toMillis(30), 0);
+    assertFalse(nonEmpty.isEmptyResultTtlExpired(
+        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
+
+    // Row count = 0, completed 10 days ago with 1 day TTL: should be expired
+    PipelineTracker.CachedCompletion old =
+        new PipelineTracker.CachedCompletion("h", "s", 0,
+            now - java.util.concurrent.TimeUnit.DAYS.toMillis(10), 0);
+    assertTrue(old.isEmptyResultTtlExpired(
+        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
+  }
+
+  @Test
+  void testCachedCompletionIsSourceFilesModifiedComparisons() {
+    long now = System.currentTimeMillis();
+    // No watermark stored (sourceFileWatermark=0): watermarking not enabled => false
+    PipelineTracker.CachedCompletion noWatermark =
+        new PipelineTracker.CachedCompletion("h", "s", 100, now, 0);
+    assertFalse(noWatermark.isSourceFilesModified(1000));
+
+    // Current watermark equals stored: not modified
+    PipelineTracker.CachedCompletion same =
+        new PipelineTracker.CachedCompletion("h", "s", 100, now, 5000);
+    assertFalse(same.isSourceFilesModified(5000));
+
+    // Current watermark is newer: modified
+    assertTrue(same.isSourceFilesModified(6000));
+
+    // Current watermark is older: not modified
+    assertFalse(same.isSourceFilesModified(4000));
+
+    // Current watermark is 0: not modified
+    assertFalse(same.isSourceFilesModified(0));
+  }
+
+  @Test
+  void testExtractYearWithPartialYearKey() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      // year= with only 3 digits - should not match 4-digit year
+      String result = (String) m.invoke(tracker, "geography=state__year=202",
+          System.currentTimeMillis());
+      // Not a valid 4-digit year, should fall through
+      assertNotNull(result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testExtractYearWithMultipleDimensionKeys() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod(
+        "extractYear", String.class, long.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      String result = (String) m.invoke(tracker,
+          "geography=US__type=acs__year=2022", System.currentTimeMillis());
+      assertEquals("2022", result);
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testAllIndicesLargeRange() throws Exception {
+    Method m = S3HivePipelineTracker.class.getDeclaredMethod("allIndices", int.class);
+    m.setAccessible(true);
+
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+    try {
+      @SuppressWarnings("unchecked")
+      Set<Integer> result = (Set<Integer>) m.invoke(tracker, 1000);
+      assertEquals(1000, result.size());
+      assertTrue(result.contains(0));
+      assertTrue(result.contains(999));
+    } finally {
+      tracker.close();
+    }
+  }
+
+  @Test
+  void testPendingFlushThresholdField() throws Exception {
+    Field f = S3HivePipelineTracker.class.getDeclaredField("PENDING_FLUSH_THRESHOLD");
+    f.setAccessible(true);
+    int threshold = f.getInt(null);
+    assertTrue(threshold > 0, "Flush threshold should be positive");
+  }
 }

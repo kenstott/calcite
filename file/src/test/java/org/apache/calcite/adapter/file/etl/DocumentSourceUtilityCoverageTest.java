@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -54,9 +57,12 @@ class DocumentSourceUtilityCoverageTest {
   private static Method retryDelay;
   private static Method sleepQuietly;
 
-  // -- Reflection handles for DocumentETLProcessor private methods --
+  // -- Reflection handles for DocumentETLProcessor private/instance methods --
   private static Method extractYearFromAccession;
   private static Method isTransientError;
+
+  // Instance needed for non-static extractYearFromAccession
+  private static DocumentETLProcessor processorInstance;
 
   @BeforeAll
   static void initReflection() throws Exception {
@@ -83,6 +89,13 @@ class DocumentSourceUtilityCoverageTest {
     isTransientError =
         DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     isTransientError.setAccessible(true);
+
+    // Create a minimal DocumentETLProcessor instance for non-static method invocations
+    HttpSourceConfig mockConfig = org.mockito.Mockito.mock(HttpSourceConfig.class);
+    StorageProvider mockStorage = org.mockito.Mockito.mock(StorageProvider.class);
+    FileConverter mockConverter = org.mockito.Mockito.mock(FileConverter.class);
+    processorInstance = new DocumentETLProcessor(
+        mockConfig, mockStorage, "/tmp/output", "/tmp/cache", mockConverter);
   }
 
   // -----------------------------------------------------------------------
@@ -131,7 +144,7 @@ class DocumentSourceUtilityCoverageTest {
 
   private static String invokeExtractYearFromAccession(String accession) {
     try {
-      return (String) extractYearFromAccession.invoke(null, accession);
+      return (String) extractYearFromAccession.invoke(processorInstance, accession);
     } catch (IllegalAccessException e) {
       throw new RuntimeException(e);
     } catch (InvocationTargetException e) {

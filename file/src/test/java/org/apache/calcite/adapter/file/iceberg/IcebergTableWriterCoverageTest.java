@@ -32,15 +32,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -853,6 +858,357 @@ public class IcebergTableWriterCoverageTest {
     Path vhPath = java.nio.file.Paths.get(metadataDir, "version-hint.text");
     assertTrue(Files.exists(vhPath) || true,
         "version-hint.text should be present or ensureVersionHint ran without error");
+  }
+
+  // ---- normalizeS3Path tests (via reflection) ----
+
+  @Test
+  void testNormalizeS3PathNull() throws Exception {
+    Table table = createSimpleTable("norm_null");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertNull(m.invoke(writer, (Object) null));
+  }
+
+  @Test
+  void testNormalizeS3PathS3aSingleSlash() throws Exception {
+    Table table = createSimpleTable("norm_s3a_single");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertEquals("s3a://bucket/key", m.invoke(writer, "s3a:/bucket/key"));
+  }
+
+  @Test
+  void testNormalizeS3PathS3aDoubleSlash() throws Exception {
+    Table table = createSimpleTable("norm_s3a_double");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertEquals("s3a://bucket/key", m.invoke(writer, "s3a://bucket/key"));
+  }
+
+  @Test
+  void testNormalizeS3PathS3SingleSlash() throws Exception {
+    Table table = createSimpleTable("norm_s3_single");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertEquals("s3://bucket/key", m.invoke(writer, "s3:/bucket/key"));
+  }
+
+  @Test
+  void testNormalizeS3PathS3DoubleSlash() throws Exception {
+    Table table = createSimpleTable("norm_s3_double");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertEquals("s3://bucket/key", m.invoke(writer, "s3://bucket/key"));
+  }
+
+  @Test
+  void testNormalizeS3PathLocalPath() throws Exception {
+    Table table = createSimpleTable("norm_local");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
+    m.setAccessible(true);
+    assertEquals("/tmp/data.parquet", m.invoke(writer, "/tmp/data.parquet"));
+  }
+
+  // ---- buildPartitionPathFromKey tests (via reflection) ----
+
+  @Test
+  void testBuildPartitionPathFromKeyEmpty() throws Exception {
+    Schema schema = new Schema(
+        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table = IcebergCatalogManager.createTable(
+        catalogConfig, "path_empty_spec", schema, PartitionSpec.unpartitioned());
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "buildPartitionPathFromKey",
+        org.apache.iceberg.PartitionKey.class,
+        PartitionSpec.class);
+    m.setAccessible(true);
+    String result = (String) m.invoke(writer,
+        new org.apache.iceberg.PartitionKey(PartitionSpec.unpartitioned(), schema),
+        PartitionSpec.unpartitioned());
+    assertEquals("", result);
+  }
+
+  // ---- buildDataFileFromPath tests (via reflection) ----
+
+  @Test
+  void testBuildDataFileFromPathNoPartition() throws Exception {
+    Table table = createSimpleTable("build_df_unpart");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "buildDataFile", String.class, long.class);
+    m.setAccessible(true);
+
+    DataFile df = (DataFile) m.invoke(writer,
+        table.location() + "/data/file001.parquet", 1024L);
+    assertNotNull(df);
+    assertEquals(1024, df.fileSizeInBytes());
+  }
+
+  @Test
+  void testBuildDataFileFromPathWithPartition() throws Exception {
+    Table table = createPartitionedTable("build_df_part");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "buildDataFile", String.class, long.class);
+    m.setAccessible(true);
+
+    DataFile df = (DataFile) m.invoke(writer,
+        table.location() + "/data/year=2024/file001.parquet", 2048L);
+    assertNotNull(df);
+    assertEquals(2048, df.fileSizeInBytes());
+  }
+
+  @Test
+  void testBuildDataFileFromPathWithMultiPartition() throws Exception {
+    Schema schema = new Schema(
+        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+        Types.NestedField.optional(2, "year", Types.IntegerType.get()),
+        Types.NestedField.optional(3, "region", Types.StringType.get()));
+    PartitionSpec spec = PartitionSpec.builderFor(schema)
+        .identity("year")
+        .identity("region")
+        .build();
+    Table table = IcebergCatalogManager.createTable(
+        catalogConfig, "build_df_multi", schema, spec);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "buildDataFile", String.class, long.class);
+    m.setAccessible(true);
+
+    DataFile df = (DataFile) m.invoke(writer,
+        table.location() + "/data/year=2024/region=US/file001.parquet", 4096L);
+    assertNotNull(df);
+    assertEquals(4096, df.fileSizeInBytes());
+  }
+
+  @Test
+  void testBuildDataFileFromPathNoDataDir() throws Exception {
+    Table table = createSimpleTable("build_df_nodata");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "buildDataFile", String.class, long.class);
+    m.setAccessible(true);
+
+    // Path without /data/ should still work
+    DataFile df = (DataFile) m.invoke(writer, "/some/path/file.parquet", 512L);
+    assertNotNull(df);
+  }
+
+  // ---- ensureVersionHint edge cases ----
+
+  @Test
+  void testEnsureVersionHintNoMetadataFiles() throws Exception {
+    Schema schema = new Schema(
+        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table = IcebergCatalogManager.createTable(
+        catalogConfig, "vh_no_meta", schema, PartitionSpec.unpartitioned());
+
+    // Create a writer with a mock storage provider that returns empty metadata list
+    StorageProvider emptyMetaProvider = new StorageProvider() {
+      @Override public java.io.InputStream openInputStream(String path) { return null; }
+      @Override public void writeFile(String path, java.io.InputStream data) { }
+      @Override public void writeFile(String path, byte[] data) { }
+      @Override public boolean delete(String path) { return false; }
+      @Override public int deleteBatch(List<String> paths) { return 0; }
+      @Override public String getStorageType() { return "test"; }
+      @Override public List<FileEntry> listFiles(String path, boolean recursive) {
+        return Collections.emptyList();
+      }
+      @Override public void createDirectories(String path) { }
+      @Override public String resolvePath(String base, String relative) { return base + "/" + relative; }
+      @Override public FileMetadata getMetadata(String path) throws IOException {
+        throw new IOException("Not found");
+      }
+      @Override public Map<String, String> getS3Config() { return Collections.emptyMap(); }
+      @Override public void ensureLifecycleRule(String prefix, int days) { }
+      @Override public boolean isDirectory(String path) { return false; }
+      @Override public boolean exists(String path) { return false; }
+      @Override public java.io.Reader openReader(String path) {
+        return new java.io.StringReader("");
+      }
+    };
+
+    IcebergTableWriter writer = new IcebergTableWriter(table, emptyMetaProvider);
+    // Call ensureVersionHint via reflection - should not throw
+    Method m = IcebergTableWriter.class.getDeclaredMethod("ensureVersionHint");
+    m.setAccessible(true);
+    m.invoke(writer);
+  }
+
+  // ---- removeOrphanFiles tests ----
+
+  @Test
+  void testRemoveOrphanFilesEmptyTable() throws Exception {
+    Table table = createSimpleTable("orphan_empty");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    // removeOrphanFiles is private; invoke via reflection
+    java.lang.reflect.Method removeMethod =
+        IcebergTableWriter.class.getDeclaredMethod("removeOrphanFiles", long.class);
+    removeMethod.setAccessible(true);
+    int removed = (Integer) removeMethod.invoke(writer, System.currentTimeMillis());
+    assertEquals(0, removed);
+  }
+
+  @Test
+  void testRemoveOrphanFilesTableWithData() throws Exception {
+    Table table = createPartitionedTable("orphan_data");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    // Write and commit data
+    List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("data", "test");
+    row.put("year", 2024);
+    records.add(row);
+    Map<String, String> partVals = new HashMap<String, String>();
+    partVals.put("year", "2024");
+    DataFile df = writer.writeRecords(records, partVals);
+    List<DataFile> files = new ArrayList<DataFile>();
+    files.add(df);
+    writer.commitDataFiles(files, null);
+
+    // All files are referenced so none should be orphans
+    java.lang.reflect.Method removeMethod2 =
+        IcebergTableWriter.class.getDeclaredMethod("removeOrphanFiles", long.class);
+    removeMethod2.setAccessible(true);
+    int removed = (Integer) removeMethod2.invoke(writer, System.currentTimeMillis());
+    assertEquals(0, removed);
+  }
+
+  // ---- coercePartitionValue via reflection ----
+
+  @Test
+  void testCoercePartitionValueNullEmpty() throws Exception {
+    Table table = createPartitionedTable("coerce_part_null2");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    Method m = IcebergTableWriter.class.getDeclaredMethod(
+        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    m.setAccessible(true);
+
+    org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
+    assertNull(m.invoke(writer, null, field));
+    assertNull(m.invoke(writer, "", field));
+    assertNull(m.invoke(writer, " - ", field));
+  }
+
+  // ---- Date field coercion in writeRecords ----
+
+  @Test
+  void testWriteRecordsDateCoercion() throws Exception {
+    // Test that DATE type with null values and epoch-day integers works
+    Schema schema = new Schema(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "date_col", Types.DateType.get()));
+
+    Table table = IcebergCatalogManager.createTable(
+        catalogConfig, "date_coerce2", schema, PartitionSpec.unpartitioned());
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+    // Test with null date
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("name", "null-date");
+    row1.put("date_col", null);
+    records.add(row1);
+
+    // Test with another null date - tests that null handling in coerceValue works
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("name", "null-date-2");
+    // Omit date_col entirely to test missing field handling
+    records.add(row2);
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(2, df.recordCount());
+  }
+
+  // ---- Decimal field coercion ----
+
+  @Test
+  void testWriteRecordsDecimalCoercion() throws Exception {
+    Schema schema = new Schema(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "amount",
+            Types.DecimalType.of(10, 2)));
+
+    Table table = IcebergCatalogManager.createTable(
+        catalogConfig, "decimal_coerce", schema, PartitionSpec.unpartitioned());
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("name", "bigdecimal-val");
+    row1.put("amount", new java.math.BigDecimal("123.45"));
+    records.add(row1);
+
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("name", "bigdecimal-val2");
+    row2.put("amount", new java.math.BigDecimal("456.78"));
+    records.add(row2);
+
+    Map<String, Object> row3 = new HashMap<String, Object>();
+    row3.put("name", "null-decimal");
+    row3.put("amount", null);
+    records.add(row3);
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(3, df.recordCount());
+  }
+
+  // ---- Multiple writes and commits ----
+
+  @Test
+  void testMultipleWritesAndBulkCommit() throws Exception {
+    Table table = createPartitionedTable("multi_writes");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<DataFile> allFiles = new ArrayList<DataFile>();
+    for (int y = 2020; y <= 2025; y++) {
+      List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+      for (int i = 0; i < 10; i++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("id", y * 100 + i);
+        row.put("data", "data-" + y + "-" + i);
+        row.put("year", y);
+        records.add(row);
+      }
+      Map<String, String> partVals = new HashMap<String, String>();
+      partVals.put("year", String.valueOf(y));
+      DataFile df = writer.writeRecords(records, partVals);
+      assertNotNull(df);
+      allFiles.add(df);
+    }
+
+    writer.bulkCommitDataFiles(allFiles);
+
+    // Table should now have data
+    assertNotNull(table.currentSnapshot());
+  }
+
+  // ---- getTable Tests ----
+
+  @Test
+  void testGetTable() {
+    Table table = createSimpleTable("get_table_test");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    assertEquals(table, writer.getTable());
   }
 
   // ---- Helper methods ----

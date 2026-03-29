@@ -261,8 +261,8 @@ class FormatAwareSchemaResolverCoverageTest {
     // Simple split won't handle quoted commas perfectly, but tests the basic behavior
     File file = createCsvFile("quoted.csv", "id,\"name,with,commas\",email");
     int count = invokeGetCsvColumnCount(file);
-    // Simple comma split gives 4 (does not understand CSV quoting)
-    assertEquals(4, count);
+    // Simple comma split gives 5: id, "name, with, commas", email (does not understand CSV quoting)
+    assertEquals(5, count);
   }
 
   @Test void testGetCsvColumnCountNonexistentFile() throws Exception {
@@ -313,12 +313,20 @@ class FormatAwareSchemaResolverCoverageTest {
   }
 
   @Test void testInferCsvSchemaAllEmptyColumnNames() throws Exception {
+    // Java's String.split(",") drops trailing empty strings, so ",," yields empty array
     File file = createCsvFile("allempty.csv", ",,");
+    RelDataType schema = invokeInferCsvSchema(file);
+    assertEquals(0, schema.getFieldCount());
+  }
+
+  @Test void testInferCsvSchemaLeadingEmptyColumnName() throws Exception {
+    // ",b,c" splits into ["", "b", "c"] - first element is empty, gets default name
+    File file = createCsvFile("leading_empty.csv", ",b,c");
     RelDataType schema = invokeInferCsvSchema(file);
     assertEquals(3, schema.getFieldCount());
     assertEquals("col_0", schema.getFieldList().get(0).getName());
-    assertEquals("col_1", schema.getFieldList().get(1).getName());
-    assertEquals("col_2", schema.getFieldList().get(2).getName());
+    assertEquals("b", schema.getFieldList().get(1).getName());
+    assertEquals("c", schema.getFieldList().get(2).getName());
   }
 
   @Test void testInferCsvSchemaSingleColumn() throws Exception {

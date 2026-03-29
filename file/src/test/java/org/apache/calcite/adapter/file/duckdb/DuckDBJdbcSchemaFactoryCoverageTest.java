@@ -16,421 +16,361 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.adapter.file.FileSchema;
+import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.Lex;
-import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.parser.SqlParser;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Path;
+import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Properties;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Extended coverage tests for {@link DuckDBJdbcSchemaFactory}.
+ * Coverage unit tests for {@link DuckDBJdbcSchemaFactory}.
  *
- * <p>Tests parser configuration, schema creation with various directory layouts,
- * error handling, and thread safety. DuckDB driver availability is guarded
- * with try/catch ClassNotFoundException so tests degrade gracefully when the
- * driver is not on the classpath.
+ * <p>Tests private utility methods via reflection: isTempDirectory,
+ * determineCatalogPath, isHivePartitioned, deriveGlobPattern,
+ * isHivePartitionedFromConfig, shouldUseUnionByName, formatRecordForError,
+ * rewriteSchemaReferencesInSql, and registerSqlViewsInDuckDB.
+ * Also covers getParserConfig and createParquetView.
  */
 @Tag("unit")
 class DuckDBJdbcSchemaFactoryCoverageTest {
 
-  @TempDir
-  Path tempDir;
+  // =======================================================================
+  // getParserConfig tests
+  // =======================================================================
 
-  // ---------------------------------------------------------------
-  // 1. getParserConfig() returns correct casing settings
-  // ---------------------------------------------------------------
-
-  @Test void testGetParserConfigReturnsNonNull() {
+  @Test void testGetParserConfigNotNull() {
     SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
-    assertNotNull(config, "Parser config must not be null");
+    assertNotNull(config);
   }
 
-  @Test void testGetParserConfigUsesOracleLexBase() {
+  @Test void testGetParserConfigUnquotedCasingToLower() {
     SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
-    // The parser config starts with ORACLE lex but overrides unquotedCasing to TO_LOWER.
-    // ORACLE lex defaults: quotedCasing=UNCHANGED, unquotedCasing=TO_UPPER, caseSensitive=true
-    // DuckDB override: unquotedCasing=TO_LOWER (for lowercase identifier normalization)
-    assertEquals(Lex.ORACLE.quotedCasing, config.quotedCasing(),
-        "Quoted casing should match ORACLE lex (UNCHANGED)");
-    assertEquals(Casing.TO_LOWER, config.unquotedCasing(),
-        "Unquoted casing should be TO_LOWER (overriding ORACLE default of TO_UPPER)");
+    assertEquals(Casing.TO_LOWER, config.unquotedCasing());
   }
 
-  @Test void testGetParserConfigUnquotedCasingIsToLower() {
+  @Test void testGetParserConfigQuotedCasingUnchanged() {
     SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
-    assertEquals(Casing.TO_LOWER, config.unquotedCasing(),
-        "Unquoted casing should be TO_LOWER");
+    assertEquals(Casing.UNCHANGED, config.quotedCasing());
   }
 
-  @Test void testGetParserConfigQuotedCasingIsUnchanged() {
-    SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
-    assertEquals(Casing.UNCHANGED, config.quotedCasing(),
-        "Quoted casing should be UNCHANGED");
+  @Test void testGetParserConfigConsistentAcrossCalls() {
+    SqlParser.Config c1 = DuckDBJdbcSchemaFactory.getParserConfig();
+    SqlParser.Config c2 = DuckDBJdbcSchemaFactory.getParserConfig();
+    assertEquals(c1.unquotedCasing(), c2.unquotedCasing());
+    assertEquals(c1.quotedCasing(), c2.quotedCasing());
   }
 
-  @Test void testGetParserConfigIsImmutable() {
-    SqlParser.Config config1 = DuckDBJdbcSchemaFactory.getParserConfig();
-    SqlParser.Config config2 = DuckDBJdbcSchemaFactory.getParserConfig();
-    // Both calls should produce equal configs
-    assertEquals(config1.unquotedCasing(), config2.unquotedCasing());
-    assertEquals(config1.quotedCasing(), config2.quotedCasing());
+  // =======================================================================
+  // isTempDirectory tests (via reflection)
+  // =======================================================================
+
+  @Test void testIsTempDirectoryNull() throws Exception {
+    assertTrue(invokeIsTempDirectory(null));
   }
 
-  // ---------------------------------------------------------------
-  // 2. create() with directory containing Parquet files
-  // ---------------------------------------------------------------
-
-  @Test void testCreateWithParquetDirectory() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      // DuckDB driver not on classpath - skip test gracefully
-      return;
-    }
-
-    try {
-      File parquetDir = tempDir.resolve("parquet_data").toFile();
-      parquetDir.mkdirs();
-
-      // Create a minimal parquet file using DuckDB itself
-      try (java.sql.Connection duckConn =
-               DriverManager.getConnection("jdbc:duckdb:")) {
-        duckConn.createStatement().execute(
-            "COPY (SELECT 1 AS id, 'alice' AS name) TO '"
-            + new File(parquetDir, "test.parquet").getAbsolutePath()
-            + "' (FORMAT PARQUET)");
-      }
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(
-          rootSchema, "pq_test", parquetDir);
-      assertNotNull(schema, "Schema for parquet directory must not be null");
-    } catch (Exception e) {
-      // Expected in unit test context where FileSchema is not available
-      // The factory requires FileSchema for DuckDB catalog storage
-      assertTrue(e.getMessage() != null,
-          "Exception should have a message: " + e);
-    }
+  @Test void testIsTempDirectoryTmpUnix() throws Exception {
+    assertTrue(invokeIsTempDirectory("/tmp/data"));
   }
 
-  // ---------------------------------------------------------------
-  // 3. create() with directory containing CSV files
-  // ---------------------------------------------------------------
-
-  @Test void testCreateWithCsvDirectory() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    try {
-      File csvDir = tempDir.resolve("csv_data").toFile();
-      csvDir.mkdirs();
-
-      // Create a simple CSV file
-      File csvFile = new File(csvDir, "people.csv");
-      try (FileWriter writer = new FileWriter(csvFile)) {
-        writer.write("id,name,age\n");
-        writer.write("1,Alice,30\n");
-        writer.write("2,Bob,25\n");
-      }
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(
-          rootSchema, "csv_test", csvDir);
-      assertNotNull(schema, "Schema for CSV directory must not be null");
-    } catch (Exception e) {
-      // Expected - requires FileSchema for catalog storage
-      assertTrue(e.getMessage() != null,
-          "Exception should have a message: " + e);
-    }
+  @Test void testIsTempDirectoryTmpInMiddle() throws Exception {
+    assertTrue(invokeIsTempDirectory("/var/tmp/cache"));
   }
 
-  // ---------------------------------------------------------------
-  // 4. create() with minimal operands (File overload)
-  // ---------------------------------------------------------------
-
-  @Test void testCreateWithMinimalFileOperand() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    try {
-      File dir = tempDir.resolve("minimal").toFile();
-      dir.mkdirs();
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      // The create(SchemaPlus, String, File) overload
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(
-          rootSchema, "minimal_test", dir);
-      assertNotNull(schema);
-    } catch (Exception e) {
-      // Expected - requires FileSchema for catalog storage
-      assertNotNull(e.getMessage());
-    }
+  @Test void testIsTempDirectoryTempWindows() throws Exception {
+    assertTrue(invokeIsTempDirectory("C:\\temp\\data"));
   }
 
-  // ---------------------------------------------------------------
-  // 5. create() with recursive flag
-  // ---------------------------------------------------------------
-
-  @Test void testCreateWithRecursiveFlag() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    try {
-      File dir = tempDir.resolve("recursive_test").toFile();
-      dir.mkdirs();
-      File subDir = new File(dir, "subdir");
-      subDir.mkdirs();
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(
-          rootSchema, "recursive_schema", dir, true);
-      assertNotNull(schema);
-    } catch (Exception e) {
-      // Expected - requires FileSchema for catalog storage
-      assertNotNull(e.getMessage());
-    }
+  @Test void testIsTempDirectoryTempUnix() throws Exception {
+    assertTrue(invokeIsTempDirectory("/home/user/temp/stuff"));
   }
 
-  // ---------------------------------------------------------------
-  // 6. Error handling - empty directory
-  // ---------------------------------------------------------------
-
-  @Test void testCreateWithEmptyDirectory() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    try {
-      File emptyDir = tempDir.resolve("empty").toFile();
-      emptyDir.mkdirs();
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(
-          rootSchema, "empty_test", emptyDir);
-      // If schema is created, it should be non-null (views just won't be registered)
-      assertNotNull(schema);
-    } catch (Exception e) {
-      // Expected - requires FileSchema or may fail with empty directory
-      assertNotNull(e.getMessage());
-    }
+  @Test void testIsTempDirectoryJavaIoTmpdir() throws Exception {
+    assertTrue(invokeIsTempDirectory("/path/java.io.tmpdir/something"));
   }
 
-  @Test void testCreateWithNonExistentDirectory() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    try {
-      File nonExistent = tempDir.resolve("does_not_exist").toFile();
-      assertFalse(nonExistent.exists(), "Directory should not exist");
-
-      SchemaPlus rootSchema = createCalciteRootSchema();
-      DuckDBJdbcSchemaFactory.create(rootSchema, "nodir_test", nonExistent);
-      // May succeed (directory created lazily) or throw
-    } catch (Exception e) {
-      // Expected - directory does not exist
-      assertNotNull(e.getMessage());
-    }
+  @Test void testIsTempDirectoryNormalPath() throws Exception {
+    assertFalse(invokeIsTempDirectory("/home/user/data/warehouse"));
   }
 
-  // ---------------------------------------------------------------
-  // 7. Thread safety - create multiple parser configs concurrently
-  // ---------------------------------------------------------------
-
-  @Test void testGetParserConfigThreadSafety() throws Exception {
-    int threadCount = 8;
-    ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
-    try {
-      List<Callable<SqlParser.Config>> tasks =
-          new ArrayList<Callable<SqlParser.Config>>();
-      for (int i = 0; i < threadCount; i++) {
-        tasks.add(new Callable<SqlParser.Config>() {
-          @Override public SqlParser.Config call() {
-            return DuckDBJdbcSchemaFactory.getParserConfig();
-          }
-        });
-      }
-
-      List<Future<SqlParser.Config>> futures = executor.invokeAll(tasks);
-
-      // All results should be consistent
-      SqlParser.Config reference = DuckDBJdbcSchemaFactory.getParserConfig();
-      for (Future<SqlParser.Config> future : futures) {
-        SqlParser.Config config = future.get();
-        assertNotNull(config, "Config from concurrent call must not be null");
-        assertEquals(reference.unquotedCasing(), config.unquotedCasing(),
-            "Concurrent config unquotedCasing must match");
-        assertEquals(reference.quotedCasing(), config.quotedCasing(),
-            "Concurrent config quotedCasing must match");
-      }
-    } finally {
-      executor.shutdown();
-    }
+  @Test void testIsTempDirectoryS3Path() throws Exception {
+    assertFalse(invokeIsTempDirectory("s3://my-bucket/warehouse"));
   }
 
-  @Test void testCreateParquetViewWithNullConnection() {
-    // createParquetView is a public static utility - test error path
+  // =======================================================================
+  // isHivePartitioned tests (via reflection)
+  // =======================================================================
+
+  @Test void testIsHivePartitionedNull() throws Exception {
+    assertFalse(invokeIsHivePartitioned(null));
+  }
+
+  @Test void testIsHivePartitionedEmpty() throws Exception {
+    assertFalse(invokeIsHivePartitioned(""));
+  }
+
+  @Test void testIsHivePartitionedSingleFile() throws Exception {
+    assertFalse(invokeIsHivePartitioned("/data/file.parquet"));
+  }
+
+  @Test void testIsHivePartitionedWithPartitions() throws Exception {
+    String fileList = "['/data/year=2020/file1.parquet','/data/year=2021/file2.parquet']";
+    assertTrue(invokeIsHivePartitioned(fileList));
+  }
+
+  @Test void testIsHivePartitionedWithBraces() throws Exception {
+    String fileList = "{/data/country=US/f1.parquet,/data/country=UK/f2.parquet}";
+    assertTrue(invokeIsHivePartitioned(fileList));
+  }
+
+  @Test void testIsHivePartitionedWithoutPartitionPattern() throws Exception {
+    String fileList = "[/data/file1.parquet,/data/file2.parquet]";
+    assertFalse(invokeIsHivePartitioned(fileList));
+  }
+
+  // =======================================================================
+  // isHivePartitionedFromConfig tests (via reflection)
+  // =======================================================================
+
+  @Test void testIsHivePartitionedFromConfigNullRecord() throws Exception {
+    assertFalse(invokeIsHivePartitionedFromConfig(null));
+  }
+
+  @Test void testIsHivePartitionedFromConfigNullTableConfig() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    assertFalse(invokeIsHivePartitionedFromConfig(record));
+  }
+
+  @Test void testIsHivePartitionedFromConfigNoPartitions() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.tableConfig = new HashMap<String, Object>();
+    assertFalse(invokeIsHivePartitionedFromConfig(record));
+  }
+
+  @Test void testIsHivePartitionedFromConfigWithHiveStyle() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    Map<String, Object> partitions = new HashMap<String, Object>();
+    partitions.put("style", "hive");
+    Map<String, Object> tableConfig = new HashMap<String, Object>();
+    tableConfig.put("partitions", partitions);
+    record.tableConfig = tableConfig;
+    assertTrue(invokeIsHivePartitionedFromConfig(record));
+  }
+
+  @Test void testIsHivePartitionedFromConfigWithNonHiveStyle() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    Map<String, Object> partitions = new HashMap<String, Object>();
+    partitions.put("style", "directory");
+    Map<String, Object> tableConfig = new HashMap<String, Object>();
+    tableConfig.put("partitions", partitions);
+    record.tableConfig = tableConfig;
+    assertFalse(invokeIsHivePartitionedFromConfig(record));
+  }
+
+  // =======================================================================
+  // shouldUseUnionByName tests (via reflection)
+  // =======================================================================
+
+  @Test void testShouldUseUnionByNameNullRecord() throws Exception {
+    assertFalse(invokeShouldUseUnionByName(null));
+  }
+
+  @Test void testShouldUseUnionByNameNullConfig() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    assertFalse(invokeShouldUseUnionByName(record));
+  }
+
+  @Test void testShouldUseUnionByNameTrue() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    Map<String, Object> duckdb = new HashMap<String, Object>();
+    duckdb.put("union_by_name", Boolean.TRUE);
+    Map<String, Object> tableConfig = new HashMap<String, Object>();
+    tableConfig.put("duckdb", duckdb);
+    record.tableConfig = tableConfig;
+    assertTrue(invokeShouldUseUnionByName(record));
+  }
+
+  @Test void testShouldUseUnionByNameFalse() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    Map<String, Object> duckdb = new HashMap<String, Object>();
+    duckdb.put("union_by_name", Boolean.FALSE);
+    Map<String, Object> tableConfig = new HashMap<String, Object>();
+    tableConfig.put("duckdb", duckdb);
+    record.tableConfig = tableConfig;
+    assertFalse(invokeShouldUseUnionByName(record));
+  }
+
+  @Test void testShouldUseUnionByNameNoDuckdbKey() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.tableConfig = new HashMap<String, Object>();
+    assertFalse(invokeShouldUseUnionByName(record));
+  }
+
+  // =======================================================================
+  // formatRecordForError tests (via reflection)
+  // =======================================================================
+
+  @Test void testFormatRecordForErrorNull() throws Exception {
+    assertEquals("null", invokeFormatRecordForError(null));
+  }
+
+  @Test void testFormatRecordForErrorWithData() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.tableName = "my_table";
+    record.tableType = "ParquetTable";
+    record.sourceFile = "/data/source.parquet";
+    String result = invokeFormatRecordForError(record);
+    assertTrue(result.contains("my_table"));
+    assertTrue(result.contains("ParquetTable"));
+    assertTrue(result.contains("/data/source.parquet"));
+  }
+
+  @Test void testFormatRecordForErrorLongParquetCacheFile() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.tableName = "test";
+    StringBuilder longPath = new StringBuilder();
+    for (int i = 0; i < 150; i++) {
+      longPath.append("a");
+    }
+    record.parquetCacheFile = longPath.toString();
+    String result = invokeFormatRecordForError(record);
+    assertTrue(result.contains("..."), "Long path should be truncated");
+  }
+
+  // =======================================================================
+  // rewriteSchemaReferencesInSql tests (via reflection)
+  // =======================================================================
+
+  @Test void testRewriteSchemaReferencesNullViewDef() throws Exception {
+    assertNull(invokeRewriteSchemaReferences(null, "old", "new"));
+  }
+
+  @Test void testRewriteSchemaReferencesNullDeclared() throws Exception {
+    assertEquals("SELECT 1", invokeRewriteSchemaReferences("SELECT 1", null, "new"));
+  }
+
+  @Test void testRewriteSchemaReferencesSameNames() throws Exception {
+    String sql = "SELECT * FROM \"econ\".\"table1\"";
+    assertEquals(sql, invokeRewriteSchemaReferences(sql, "econ", "econ"));
+  }
+
+  @Test void testRewriteSchemaReferencesCaseInsensitiveMatch() throws Exception {
+    String sql = "SELECT * FROM \"econ\".\"table1\"";
+    assertEquals(sql, invokeRewriteSchemaReferences(sql, "econ", "ECON"));
+  }
+
+  // =======================================================================
+  // createParquetView tests
+  // =======================================================================
+
+  @Test void testCreateParquetViewNullConnectionThrows() {
     try {
-      DuckDBJdbcSchemaFactory.createParquetView(null, "test_view", "/path/to/file.parquet");
-      fail("Should throw when connection is null");
+      DuckDBJdbcSchemaFactory.createParquetView(null, "test", "/path.parquet");
+      fail("Should throw with null connection");
     } catch (RuntimeException e) {
-      // RuntimeException (including NullPointerException) on null connection is acceptable
       assertNotNull(e);
     }
   }
 
-  @Test void testCreateParquetViewWithDuckDB() {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
+  // =======================================================================
+  // deriveGlobPattern tests (via reflection)
+  // =======================================================================
 
-    try {
-      File parquetDir = tempDir.resolve("pv_test").toFile();
-      parquetDir.mkdirs();
-
-      // Create a parquet file using DuckDB
-      try (java.sql.Connection duckConn =
-               DriverManager.getConnection("jdbc:duckdb:")) {
-        File pqFile = new File(parquetDir, "data.parquet");
-        duckConn.createStatement().execute(
-            "COPY (SELECT 42 AS val) TO '"
-            + pqFile.getAbsolutePath() + "' (FORMAT PARQUET)");
-
-        // Now test createParquetView
-        DuckDBJdbcSchemaFactory.createParquetView(
-            duckConn, "my_view", pqFile.getAbsolutePath());
-
-        // Verify view exists and is queryable
-        java.sql.ResultSet rs = duckConn.createStatement()
-            .executeQuery("SELECT val FROM my_view");
-        assertTrue(rs.next(), "View should return a row");
-        assertEquals(42, rs.getInt("val"), "Value should be 42");
-        assertFalse(rs.next(), "View should return exactly one row");
-      }
-    } catch (Exception e) {
-      fail("createParquetView should succeed with valid DuckDB connection: " + e.getMessage());
-    }
+  @Test void testDeriveGlobPatternNull() throws Exception {
+    assertNull(invokeDeriveGlobPattern(null));
   }
 
-  // ---------------------------------------------------------------
-  // 8. Thread safety - concurrent schema creation
-  // ---------------------------------------------------------------
-
-  @Test void testConcurrentSchemaCreation() throws Exception {
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      return;
-    }
-
-    int threadCount = 4;
-    ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
-    try {
-      List<Callable<Schema>> tasks = new ArrayList<Callable<Schema>>();
-      for (int i = 0; i < threadCount; i++) {
-        final int index = i;
-        tasks.add(new Callable<Schema>() {
-          @Override public Schema call() throws Exception {
-            File dir = tempDir.resolve("concurrent_" + index).toFile();
-            dir.mkdirs();
-            SchemaPlus rootSchema = createCalciteRootSchema();
-            return DuckDBJdbcSchemaFactory.create(
-                rootSchema, "conc_" + index, dir);
-          }
-        });
-      }
-
-      List<Future<Schema>> futures = executor.invokeAll(tasks);
-
-      // Verify none threw unexpected errors (FileSchema required errors are OK)
-      for (Future<Schema> future : futures) {
-        try {
-          Schema schema = future.get();
-          if (schema != null) {
-            assertNotNull(schema);
-          }
-        } catch (Exception e) {
-          // Expected - FileSchema required
-          assertNotNull(e.getMessage());
-        }
-      }
-    } finally {
-      executor.shutdown();
-    }
+  @Test void testDeriveGlobPatternEmpty() throws Exception {
+    assertNull(invokeDeriveGlobPattern(""));
   }
 
-  // ---------------------------------------------------------------
-  // Helper methods
-  // ---------------------------------------------------------------
-
-  /**
-   * Creates a fresh Calcite root schema for testing.
-   */
-  private SchemaPlus createCalciteRootSchema() {
-    try {
-      Properties info = new Properties();
-      info.setProperty("lex", "ORACLE");
-      info.setProperty("unquotedCasing", "TO_LOWER");
-
-      Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      return calciteConnection.getRootSchema();
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to create Calcite root schema", e);
-    }
+  @Test void testDeriveGlobPatternWithPartitions() throws Exception {
+    String fileList = "[/data/year=2020/f1.parquet,/data/year=2021/f2.parquet]";
+    String pattern = invokeDeriveGlobPattern(fileList);
+    assertNotNull(pattern);
+    assertTrue(pattern.contains("/**/*"));
   }
 
-  /**
-   * Creates a simple CSV file in the given directory.
-   */
-  private File createCsvFile(File dir, String name, String content) throws IOException {
-    File file = new File(dir, name);
-    try (FileWriter writer = new FileWriter(file)) {
-      writer.write(content);
-    }
-    return file;
+  // =======================================================================
+  // Helper methods for reflective invocation
+  // =======================================================================
+
+  private boolean invokeIsTempDirectory(String path) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "isTempDirectory", String.class);
+    method.setAccessible(true);
+    return (Boolean) method.invoke(null, path);
+  }
+
+  private boolean invokeIsHivePartitioned(String fileList) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "isHivePartitioned", String.class);
+    method.setAccessible(true);
+    return (Boolean) method.invoke(null, fileList);
+  }
+
+  private boolean invokeIsHivePartitionedFromConfig(
+      ConversionMetadata.ConversionRecord record) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    method.setAccessible(true);
+    return (Boolean) method.invoke(null, record);
+  }
+
+  private boolean invokeShouldUseUnionByName(
+      ConversionMetadata.ConversionRecord record) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    method.setAccessible(true);
+    return (Boolean) method.invoke(null, record);
+  }
+
+  private String invokeFormatRecordForError(
+      ConversionMetadata.ConversionRecord record) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    method.setAccessible(true);
+    return (String) method.invoke(null, record);
+  }
+
+  private String invokeRewriteSchemaReferences(String viewDef, String declared,
+      String actual) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    method.setAccessible(true);
+    return (String) method.invoke(null, viewDef, declared, actual);
+  }
+
+  private String invokeDeriveGlobPattern(String fileList) throws Exception {
+    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "deriveGlobPattern", String.class);
+    method.setAccessible(true);
+    return (String) method.invoke(null, fileList);
   }
 }

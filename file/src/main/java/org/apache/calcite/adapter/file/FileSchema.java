@@ -108,9 +108,31 @@ import java.util.regex.Pattern;
  *       across multiple FileSchema instances may cause conflicts</li>
  * </ul>
  */
-public class FileSchema extends AbstractSchema implements CommentableSchema {
+public class FileSchema extends AbstractSchema implements CommentableSchema, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileSchema.class);
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+
+  /** Registry of all FileSchema instances for cleanup. */
+  private static final List<java.lang.ref.WeakReference<FileSchema>> INSTANCES =
+      Collections.synchronizedList(new ArrayList<java.lang.ref.WeakReference<FileSchema>>());
+
+  static {
+    // Register JVM shutdown hook to clean up all refresh schedulers
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> closeAll(), "FileSchema-Cleanup"));
+  }
+
+  /** Closes all active FileSchema instances (shuts down refresh schedulers). */
+  public static void closeAll() {
+    synchronized (INSTANCES) {
+      for (java.lang.ref.WeakReference<FileSchema> ref : INSTANCES) {
+        FileSchema schema = ref.get();
+        if (schema != null) {
+          schema.close();
+        }
+      }
+      INSTANCES.clear();
+    }
+  }
 
   /** Brand name for cache and metadata directory */
   public static final String BRAND = "aperio";
@@ -588,6 +610,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // This is especially important for DUCKDB's internal PARQUET FileSchema
       startPeriodicRefresh();
     }
+
+    // Register this instance for lifecycle management (test cleanup, etc.)
+    INSTANCES.add(new java.lang.ref.WeakReference<>(this));
   }
 
   /**
@@ -618,6 +643,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Error during periodic refresh for schema '{}'", name, e);
       }
     }, seconds, seconds, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Shuts down the refresh scheduler and releases resources.
+   * This should be called when the schema is no longer needed.
+   */
+  @Override public void close() {
+    if (refreshScheduler != null && !refreshScheduler.isShutdown()) {
+      LOGGER.debug("Shutting down refresh scheduler for schema '{}'", name);
+      refreshScheduler.shutdownNow();
+    }
   }
 
   /**

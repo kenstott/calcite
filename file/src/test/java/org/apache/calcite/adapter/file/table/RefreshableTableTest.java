@@ -28,6 +28,7 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -86,6 +87,12 @@ public class RefreshableTableTest extends BaseFileTest {
   public void setUp() throws IOException {
     testFile = new File(tempDir.toFile(), "test.json");
     writeJsonData("[{\"id\": 1, \"name\": \"Alice\"}]");
+  }
+
+  @AfterEach
+  public void tearDown() {
+    // Shut down all refresh schedulers to prevent daemon thread leaks
+    FileSchema.closeAll();
   }
 
   @Test public void testRefreshInterval() {

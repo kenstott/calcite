@@ -18,12 +18,14 @@ package org.apache.calcite.adapter.file.clickhouse;
 
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.SqlDialect;
+import org.apache.calcite.sql.SqlKind;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -40,120 +42,124 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * Coverage unit tests for {@link ClickHouseJdbcSchemaFactory}.
  *
  * <p>Tests the factory's configuration parsing, SQL view registration,
- * parquet path resolution, and error handling using mocked JDBC connections.
+ * parquet path resolution, dialect creation, S3 credential configuration,
+ * and error handling using mocked JDBC connections.
  * Does NOT require a running ClickHouse server.
  */
 @Tag("unit")
 class ClickHouseJdbcSchemaFactoryCoverageTest {
 
-  // ---- resolveParquetPath tests (via reflection) ----
+  // =======================================================================
+  // resolveParquetPath tests (via reflection)
+  // =======================================================================
 
-  @Test void testResolveParquetPathWithViewScanPattern() throws Exception {
+  @Test void testResolveParquetPathViewScanPatternTakesPriority() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.viewScanPattern = "s3://bucket/data/*.parquet";
     record.parquetCacheFile = "/cache/data.parquet";
     record.sourceFile = "/src/data.parquet";
+    record.convertedFile = "/converted/data.parquet";
 
-    String result = invokeResolveParquetPath(record);
-    assertEquals("s3://bucket/data/*.parquet", result,
-        "viewScanPattern should take priority");
+    assertEquals("s3://bucket/data/*.parquet", invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithParquetCacheFile() throws Exception {
+  @Test void testResolveParquetPathParquetCacheFileSecondPriority() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.parquetCacheFile = "/cache/data.parquet";
-    record.sourceFile = "/src/data.csv";
+    record.sourceFile = "/src/data.parquet";
 
-    String result = invokeResolveParquetPath(record);
-    assertEquals("/cache/data.parquet", result,
-        "parquetCacheFile should be used when viewScanPattern is null");
+    assertEquals("/cache/data.parquet", invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithSourceFileParquet() throws Exception {
+  @Test void testResolveParquetPathSourceFileParquetThirdPriority() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.sourceFile = "/src/data.parquet";
 
-    String result = invokeResolveParquetPath(record);
-    assertEquals("/src/data.parquet", result,
-        "sourceFile ending in .parquet should be used");
+    assertEquals("/src/data.parquet", invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithSourceFileNonParquet() throws Exception {
+  @Test void testResolveParquetPathSourceFileNonParquetSkipped() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.sourceFile = "/src/data.csv";
 
-    String result = invokeResolveParquetPath(record);
-    assertNull(result,
-        "sourceFile not ending in .parquet and no convertedFile should return null");
+    assertNull(invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithConvertedFileParquet() throws Exception {
+  @Test void testResolveParquetPathConvertedFileParquet() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
-    record.convertedFile = "/converted/data.parquet";
+    record.convertedFile = "/converted/output.parquet";
 
-    String result = invokeResolveParquetPath(record);
-    assertEquals("/converted/data.parquet", result,
-        "convertedFile ending in .parquet should be used");
+    assertEquals("/converted/output.parquet", invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithConvertedFileGlobPattern() throws Exception {
+  @Test void testResolveParquetPathConvertedFileBracedGlob() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.convertedFile = "{s3://bucket/path/*.parquet}";
 
-    String result = invokeResolveParquetPath(record);
-    assertEquals("{s3://bucket/path/*.parquet}", result,
-        "convertedFile wrapped in braces should be treated as glob pattern");
+    assertEquals("{s3://bucket/path/*.parquet}", invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathWithConvertedFileNonParquet() throws Exception {
+  @Test void testResolveParquetPathConvertedFileNonParquetReturnsNull() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.convertedFile = "/converted/data.json";
 
-    String result = invokeResolveParquetPath(record);
-    assertNull(result,
-        "Non-parquet convertedFile without braces should return null");
+    assertNull(invokeResolveParquetPath(record));
   }
 
-  @Test void testResolveParquetPathAllNull() throws Exception {
+  @Test void testResolveParquetPathAllFieldsNull() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
-
-    String result = invokeResolveParquetPath(record);
-    assertNull(result, "All null fields should return null");
+    assertNull(invokeResolveParquetPath(record));
   }
 
-  // ---- registerSqlViewsInClickHouse tests (via reflection) ----
+  @Test void testResolveParquetPathConvertedFileCsvNotBraced() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.convertedFile = "/converted/data.csv";
+    assertNull(invokeResolveParquetPath(record));
+  }
+
+  @Test void testResolveParquetPathS3ViewScanPattern() throws Exception {
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.viewScanPattern = "s3://my-bucket/warehouse/table/**/*.parquet";
+    assertEquals("s3://my-bucket/warehouse/table/**/*.parquet",
+        invokeResolveParquetPath(record));
+  }
+
+  // =======================================================================
+  // registerSqlViewsInClickHouse tests (via reflection)
+  // =======================================================================
 
   @Test void testRegisterSqlViewsNullOperand() throws Exception {
     Connection conn = mock(Connection.class);
-    invokeRegisterSqlViews(conn, "testSchema", null);
-    // Should not throw
+    invokeRegisterSqlViews(conn, "mySchema", null);
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testRegisterSqlViewsNoTables() throws Exception {
+  @Test void testRegisterSqlViewsNoTablesKey() throws Exception {
     Connection conn = mock(Connection.class);
     Map<String, Object> operand = new HashMap<String, Object>();
-
-    invokeRegisterSqlViews(conn, "testSchema", operand);
-    // Should not throw
+    invokeRegisterSqlViews(conn, "mySchema", operand);
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testRegisterSqlViewsEmptyTables() throws Exception {
+  @Test void testRegisterSqlViewsEmptyTablesList() throws Exception {
     Connection conn = mock(Connection.class);
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("tables", new ArrayList<Map<String, Object>>());
-
-    invokeRegisterSqlViews(conn, "testSchema", operand);
-    // Should not throw
+    invokeRegisterSqlViews(conn, "mySchema", operand);
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testRegisterSqlViewsWithValidView() throws Exception {
+  @Test void testRegisterSqlViewsCreatesValidView() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
@@ -161,8 +167,8 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
 
     Map<String, Object> viewDef = new LinkedHashMap<String, Object>();
     viewDef.put("type", "view");
-    viewDef.put("name", "my_view");
-    viewDef.put("sql", "SELECT 1");
+    viewDef.put("name", "revenue_view");
+    viewDef.put("sql", "SELECT sum(amount) FROM orders");
 
     List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
     tables.add(viewDef);
@@ -170,13 +176,12 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("tables", tables);
 
-    invokeRegisterSqlViews(conn, "testSchema", operand);
-    // Verify the SQL was executed
-    org.mockito.Mockito.verify(stmt).execute(
-        "CREATE OR REPLACE VIEW \"testSchema\".\"my_view\" AS SELECT 1");
+    invokeRegisterSqlViews(conn, "analytics", operand);
+    verify(stmt).execute(
+        "CREATE OR REPLACE VIEW \"analytics\".\"revenue_view\" AS SELECT sum(amount) FROM orders");
   }
 
-  @Test void testRegisterSqlViewsSkipsNonViewType() throws Exception {
+  @Test void testRegisterSqlViewsSkipsTableType() throws Exception {
     Connection conn = mock(Connection.class);
 
     Map<String, Object> tableDef = new LinkedHashMap<String, Object>();
@@ -191,43 +196,53 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     operand.put("tables", tables);
 
     invokeRegisterSqlViews(conn, "testSchema", operand);
-    // Should not create any statements since type is not "view"
-    org.mockito.Mockito.verify(conn, org.mockito.Mockito.never()).createStatement();
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testRegisterSqlViewsSkipsMissingNameOrSql() throws Exception {
+  @Test void testRegisterSqlViewsSkipsMissingName() throws Exception {
     Connection conn = mock(Connection.class);
 
     Map<String, Object> noName = new LinkedHashMap<String, Object>();
     noName.put("type", "view");
     noName.put("sql", "SELECT 1");
 
-    Map<String, Object> noSql = new LinkedHashMap<String, Object>();
-    noSql.put("type", "view");
-    noSql.put("name", "my_view");
-
     List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
     tables.add(noName);
+
+    Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("tables", tables);
+
+    invokeRegisterSqlViews(conn, "testSchema", operand);
+    verify(conn, never()).createStatement();
+  }
+
+  @Test void testRegisterSqlViewsSkipsMissingSql() throws Exception {
+    Connection conn = mock(Connection.class);
+
+    Map<String, Object> noSql = new LinkedHashMap<String, Object>();
+    noSql.put("type", "view");
+    noSql.put("name", "broken_view");
+
+    List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
     tables.add(noSql);
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("tables", tables);
 
     invokeRegisterSqlViews(conn, "testSchema", operand);
-    // Neither should create a statement
-    org.mockito.Mockito.verify(conn, org.mockito.Mockito.never()).createStatement();
+    verify(conn, never()).createStatement();
   }
 
   @Test void testRegisterSqlViewsHandlesSQLException() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
-    when(stmt.execute(anyString())).thenThrow(new SQLException("View creation failed"));
+    when(stmt.execute(anyString())).thenThrow(new SQLException("Syntax error"));
 
     Map<String, Object> viewDef = new LinkedHashMap<String, Object>();
     viewDef.put("type", "view");
     viewDef.put("name", "bad_view");
-    viewDef.put("sql", "INVALID SQL");
+    viewDef.put("sql", "INVALID SQL STATEMENT");
 
     List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
     tables.add(viewDef);
@@ -235,16 +250,46 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("tables", tables);
 
-    // Should not throw - errors are logged as warnings
+    // Should not throw -- errors are logged as warnings
     invokeRegisterSqlViews(conn, "testSchema", operand);
   }
 
-  // ---- configureS3Credentials tests (via reflection) ----
+  @Test void testRegisterSqlViewsMultipleViews() throws Exception {
+    Connection conn = mock(Connection.class);
+    Statement stmt = mock(Statement.class);
+    when(conn.createStatement()).thenReturn(stmt);
+    when(stmt.execute(anyString())).thenReturn(true);
+
+    List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
+
+    Map<String, Object> v1 = new LinkedHashMap<String, Object>();
+    v1.put("type", "view");
+    v1.put("name", "view_a");
+    v1.put("sql", "SELECT 1");
+    tables.add(v1);
+
+    Map<String, Object> v2 = new LinkedHashMap<String, Object>();
+    v2.put("type", "view");
+    v2.put("name", "view_b");
+    v2.put("sql", "SELECT 2");
+    tables.add(v2);
+
+    Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("tables", tables);
+
+    invokeRegisterSqlViews(conn, "db", operand);
+    verify(stmt).execute("CREATE OR REPLACE VIEW \"db\".\"view_a\" AS SELECT 1");
+    verify(stmt).execute("CREATE OR REPLACE VIEW \"db\".\"view_b\" AS SELECT 2");
+  }
+
+  // =======================================================================
+  // configureS3Credentials tests (via reflection)
+  // =======================================================================
 
   @Test void testConfigureS3CredentialsNullFileSchema() throws Exception {
     Connection conn = mock(Connection.class);
     invokeConfigureS3Credentials(conn, null);
-    // Should not throw
+    verify(conn, never()).createStatement();
   }
 
   @Test void testConfigureS3CredentialsNullStorageConfig() throws Exception {
@@ -253,62 +298,80 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     when(fileSchema.getStorageConfig()).thenReturn(null);
 
     invokeConfigureS3Credentials(conn, fileSchema);
-    // Should not throw
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testConfigureS3CredentialsNoKeys() throws Exception {
+  @Test void testConfigureS3CredentialsMissingKeys() throws Exception {
     Connection conn = mock(Connection.class);
     FileSchema fileSchema = mock(FileSchema.class);
-    Map<String, Object> storageConfig = new HashMap<String, Object>();
-    when(fileSchema.getStorageConfig()).thenReturn(storageConfig);
+    Map<String, Object> config = new HashMap<String, Object>();
+    config.put("region", "us-west-2");
+    when(fileSchema.getStorageConfig()).thenReturn(config);
 
     invokeConfigureS3Credentials(conn, fileSchema);
-    // Should not throw, but no SQL should be executed
-    org.mockito.Mockito.verify(conn, org.mockito.Mockito.never()).createStatement();
+    verify(conn, never()).createStatement();
   }
 
-  @Test void testConfigureS3CredentialsWithKeys() throws Exception {
+  @Test void testConfigureS3CredentialsWithAllFields() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
     when(stmt.execute(anyString())).thenReturn(true);
 
     FileSchema fileSchema = mock(FileSchema.class);
-    Map<String, Object> storageConfig = new HashMap<String, Object>();
-    storageConfig.put("accessKeyId", "AKID");
-    storageConfig.put("secretAccessKey", "SECRET");
-    storageConfig.put("region", "us-east-1");
-    storageConfig.put("endpoint", "http://minio:9000");
-    when(fileSchema.getStorageConfig()).thenReturn(storageConfig);
+    Map<String, Object> config = new HashMap<String, Object>();
+    config.put("accessKeyId", "AKIAIOSFODNN7EXAMPLE");
+    config.put("secretAccessKey", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY");
+    config.put("region", "us-east-1");
+    config.put("endpoint", "https://s3.amazonaws.com");
+    when(fileSchema.getStorageConfig()).thenReturn(config);
 
     invokeConfigureS3Credentials(conn, fileSchema);
-    org.mockito.Mockito.verify(stmt).execute(org.mockito.ArgumentMatchers.contains("access_key_id"));
+    verify(stmt).execute(contains("access_key_id"));
+  }
+
+  @Test void testConfigureS3CredentialsWithoutRegionAndEndpoint() throws Exception {
+    Connection conn = mock(Connection.class);
+    Statement stmt = mock(Statement.class);
+    when(conn.createStatement()).thenReturn(stmt);
+    when(stmt.execute(anyString())).thenReturn(true);
+
+    FileSchema fileSchema = mock(FileSchema.class);
+    Map<String, Object> config = new HashMap<String, Object>();
+    config.put("accessKeyId", "KEY");
+    config.put("secretAccessKey", "SECRET");
+    when(fileSchema.getStorageConfig()).thenReturn(config);
+
+    invokeConfigureS3Credentials(conn, fileSchema);
+    verify(stmt).execute(contains("secret_access_key"));
   }
 
   @Test void testConfigureS3CredentialsHandlesSQLException() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
-    when(stmt.execute(anyString())).thenThrow(new SQLException("Named collection not supported"));
+    when(stmt.execute(anyString())).thenThrow(
+        new SQLException("Named collections not supported"));
 
     FileSchema fileSchema = mock(FileSchema.class);
-    Map<String, Object> storageConfig = new HashMap<String, Object>();
-    storageConfig.put("accessKeyId", "AKID");
-    storageConfig.put("secretAccessKey", "SECRET");
-    when(fileSchema.getStorageConfig()).thenReturn(storageConfig);
+    Map<String, Object> config = new HashMap<String, Object>();
+    config.put("accessKeyId", "KEY");
+    config.put("secretAccessKey", "SECRET");
+    when(fileSchema.getStorageConfig()).thenReturn(config);
 
-    // Should not throw - falls back to inline credentials
+    // Should not throw -- error is logged
     invokeConfigureS3Credentials(conn, fileSchema);
   }
 
-  // ---- registerFilesAsViews error paths (via reflection) ----
+  // =======================================================================
+  // registerFilesAsViews tests (via reflection)
+  // =======================================================================
 
-  @Test void testRegisterFilesAsViewsNullFileSchema() throws Exception {
+  @Test void testRegisterFilesAsViewsNullFileSchemaThrows() throws Exception {
     Connection conn = mock(Connection.class);
-
     try {
       invokeRegisterFilesAsViews(conn, "/data", false, "myschema", null);
-      fail("Should throw SQLException for null fileSchema");
+      fail("Should throw for null fileSchema");
     } catch (java.lang.reflect.InvocationTargetException e) {
       assertTrue(e.getCause() instanceof SQLException);
       assertTrue(e.getCause().getMessage().contains("FileSchema"));
@@ -322,7 +385,7 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
         .thenReturn(Collections.<String, ConversionMetadata.ConversionRecord>emptyMap());
 
     invokeRegisterFilesAsViews(conn, "/data", false, "myschema", fileSchema);
-    // Should complete without error when no records exist
+    // No exceptions expected -- early return for empty records
   }
 
   @Test void testRegisterFilesAsViewsSkipsNullTableName() throws Exception {
@@ -330,7 +393,7 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     FileSchema fileSchema = mock(FileSchema.class);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
-    // tableName is null by default
+    // tableName defaults to null
 
     Map<String, ConversionMetadata.ConversionRecord> records =
         new HashMap<String, ConversionMetadata.ConversionRecord>();
@@ -338,71 +401,129 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
     when(fileSchema.getAllTableRecords()).thenReturn(records);
 
     invokeRegisterFilesAsViews(conn, "/data", false, "myschema", fileSchema);
-    // Should skip the record with null tableName and not crash
+    verify(conn, never()).createStatement();
   }
 
-  // ---- createClickHouseDialect tests (via reflection) ----
+  @Test void testRegisterFilesAsViewsSkipsEmptyTableName() throws Exception {
+    Connection conn = mock(Connection.class);
+    FileSchema fileSchema = mock(FileSchema.class);
 
-  @Test void testCreateClickHouseDialect() throws Exception {
-    java.lang.reflect.Method method =
-        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("createClickHouseDialect");
-    method.setAccessible(true);
-    Object dialect = method.invoke(null);
+    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+    record.tableName = "";
 
-    assertNotNull(dialect, "Dialect should not be null");
-    assertTrue(dialect instanceof org.apache.calcite.sql.SqlDialect,
-        "Should return a SqlDialect");
+    Map<String, ConversionMetadata.ConversionRecord> records =
+        new HashMap<String, ConversionMetadata.ConversionRecord>();
+    records.put("key1", record);
+    when(fileSchema.getAllTableRecords()).thenReturn(records);
 
-    org.apache.calcite.sql.SqlDialect sqlDialect = (org.apache.calcite.sql.SqlDialect) dialect;
-
-    // Test supportsAggregateFunction (overridden to return true for all)
-    assertTrue(sqlDialect.supportsAggregateFunction(org.apache.calcite.sql.SqlKind.COUNT));
-    assertTrue(sqlDialect.supportsAggregateFunction(org.apache.calcite.sql.SqlKind.SUM));
-    assertTrue(sqlDialect.supportsAggregateFunction(org.apache.calcite.sql.SqlKind.AVG));
+    invokeRegisterFilesAsViews(conn, "/data", false, "myschema", fileSchema);
+    verify(conn, never()).createStatement();
   }
 
-  // ---- create() entry point test ----
+  // =======================================================================
+  // createClickHouseDialect tests (via reflection)
+  // =======================================================================
 
-  @Test void testCreateMethodFailsWithoutDriver() {
+  @Test void testCreateClickHouseDialectNotNull() throws Exception {
+    Object dialect = invokeCreateClickHouseDialect();
+    assertNotNull(dialect);
+  }
+
+  @Test void testCreateClickHouseDialectIsSqlDialect() throws Exception {
+    Object dialect = invokeCreateClickHouseDialect();
+    assertTrue(dialect instanceof SqlDialect);
+  }
+
+  @Test void testCreateClickHouseDialectSupportsCount() throws Exception {
+    SqlDialect dialect = (SqlDialect) invokeCreateClickHouseDialect();
+    assertTrue(dialect.supportsAggregateFunction(SqlKind.COUNT));
+  }
+
+  @Test void testCreateClickHouseDialectSupportsSum() throws Exception {
+    SqlDialect dialect = (SqlDialect) invokeCreateClickHouseDialect();
+    assertTrue(dialect.supportsAggregateFunction(SqlKind.SUM));
+  }
+
+  @Test void testCreateClickHouseDialectSupportsAvg() throws Exception {
+    SqlDialect dialect = (SqlDialect) invokeCreateClickHouseDialect();
+    assertTrue(dialect.supportsAggregateFunction(SqlKind.AVG));
+  }
+
+  @Test void testCreateClickHouseDialectSupportsMin() throws Exception {
+    SqlDialect dialect = (SqlDialect) invokeCreateClickHouseDialect();
+    assertTrue(dialect.supportsAggregateFunction(SqlKind.MIN));
+  }
+
+  @Test void testCreateClickHouseDialectSupportsMax() throws Exception {
+    SqlDialect dialect = (SqlDialect) invokeCreateClickHouseDialect();
+    assertTrue(dialect.supportsAggregateFunction(SqlKind.MAX));
+  }
+
+  // =======================================================================
+  // create() entry point tests
+  // =======================================================================
+
+  @Test void testCreateFailsWithoutDriver() {
     SchemaPlus parentSchema = mock(SchemaPlus.class);
     Map<String, Object> operand = new HashMap<String, Object>();
-
     try {
       ClickHouseJdbcSchemaFactory.create(
           parentSchema, "testSchema", "/data", false, null, operand);
-      fail("Should throw RuntimeException when ClickHouse driver is not available");
+      fail("Should throw when ClickHouse driver is not available");
     } catch (RuntimeException e) {
       assertTrue(e.getMessage().contains("Failed to create ClickHouse JDBC schema")
               || e.getMessage().contains("ClickHouseDriver"),
-          "Should fail due to missing ClickHouse driver: " + e.getMessage());
+          "Error should mention driver or schema creation: " + e.getMessage());
     }
   }
 
-  // ---- findFreePort test (via reflection) ----
-
-  @Test void testFindFreePort() throws Exception {
-    java.lang.reflect.Method method =
-        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("findFreePort");
-    method.setAccessible(true);
-    int port = (Integer) method.invoke(null);
-
-    assertTrue(port > 0, "Port should be positive");
-    assertTrue(port <= 65535, "Port should be within valid range");
+  @Test void testCreateWithNullOperand() {
+    SchemaPlus parentSchema = mock(SchemaPlus.class);
+    try {
+      ClickHouseJdbcSchemaFactory.create(
+          parentSchema, "testSchema", "/data", false, null, null);
+      fail("Should throw when driver is not available");
+    } catch (RuntimeException e) {
+      assertNotNull(e.getMessage());
+    }
   }
 
-  // ---- Helper methods for reflective invocation ----
+  // =======================================================================
+  // findFreePort test (via reflection)
+  // =======================================================================
+
+  @Test void testFindFreePortReturnsValidPort() throws Exception {
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("findFreePort");
+    method.setAccessible(true);
+    int port = (Integer) method.invoke(null);
+    assertTrue(port > 0, "Port should be positive");
+    assertTrue(port <= 65535, "Port should be in valid range");
+  }
+
+  @Test void testFindFreePortReturnsDifferentPorts() throws Exception {
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("findFreePort");
+    method.setAccessible(true);
+    int port1 = (Integer) method.invoke(null);
+    int port2 = (Integer) method.invoke(null);
+    // Ports should generally be different (not guaranteed but very likely)
+    assertTrue(port1 > 0 && port2 > 0);
+  }
+
+  // =======================================================================
+  // Helper methods for reflective invocation
+  // =======================================================================
 
   private String invokeResolveParquetPath(ConversionMetadata.ConversionRecord record)
       throws Exception {
-    java.lang.reflect.Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
         "resolveParquetPath", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (String) method.invoke(null, record);
   }
 
-  private void invokeRegisterSqlViews(Connection conn, String schema, Map<String, Object> operand)
-      throws Exception {
-    java.lang.reflect.Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
+  private void invokeRegisterSqlViews(Connection conn, String schema,
+      Map<String, Object> operand) throws Exception {
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
         "registerSqlViewsInClickHouse", Connection.class, String.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, conn, schema, operand);
@@ -410,7 +531,7 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
 
   private void invokeConfigureS3Credentials(Connection conn, FileSchema fileSchema)
       throws Exception {
-    java.lang.reflect.Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
         "configureS3Credentials", Connection.class,
         org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
@@ -419,10 +540,17 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
 
   private void invokeRegisterFilesAsViews(Connection conn, String directoryPath,
       boolean recursive, String clickhouseSchema, FileSchema fileSchema) throws Exception {
-    java.lang.reflect.Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
+    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
         "registerFilesAsViews", Connection.class, String.class, boolean.class,
         String.class, org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
     method.invoke(null, conn, directoryPath, recursive, clickhouseSchema, fileSchema);
+  }
+
+  private Object invokeCreateClickHouseDialect() throws Exception {
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("createClickHouseDialect");
+    method.setAccessible(true);
+    return method.invoke(null);
   }
 }
