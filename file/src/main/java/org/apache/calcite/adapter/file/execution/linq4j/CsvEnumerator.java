@@ -185,7 +185,8 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
     if (fields.size() == 1) {
       final int field = fields.get(0);
-      return new SingleColumnRowConverter(fieldTypes.get(field), field, typeConverter);
+      RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
+      return new SingleColumnRowConverter(fieldType, field, typeConverter);
     } else {
       return arrayConverter(fieldTypes, fields, false, true, typeConverter);
     }
@@ -209,7 +210,8 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
     if (fields.size() == 1) {
       final int field = fields.get(0);
-      return new SingleColumnRowConverter(fieldTypes.get(field), field, blankStringsAsNull, typeConverter);
+      RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
+      return new SingleColumnRowConverter(fieldType, field, blankStringsAsNull, typeConverter);
     } else {
       return arrayConverter(fieldTypes, fields, false, blankStringsAsNull, typeConverter);
     }
@@ -589,7 +591,8 @@ public class CsvEnumerator<E> implements Enumerator<E> {
           LOGGER.warn("[ArrayRowConverter] Row data: {}", java.util.Arrays.toString(strings));
           throw new ArrayIndexOutOfBoundsException("Index " + field + " out of bounds for length " + strings.length);
         }
-        objects[i] = convert(fieldTypes.get(field), strings[field]);
+        RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
+        objects[i] = convert(fieldType, strings[field]);
       }
       return objects;
     }
@@ -599,14 +602,15 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       objects[0] = System.currentTimeMillis();
       for (int i = 0; i < fields.size(); i++) {
         int field = fields.get(i);
-        objects[i + 1] = convert(fieldTypes.get(field), strings[field]);
+        RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
+        objects[i + 1] = convert(fieldType, strings[field]);
       }
       return objects;
     }
 
     @SuppressWarnings("JavaUtilDate")
     private @Nullable Object convert(@Nullable RelDataType fieldType, @Nullable String string) {
-      if (fieldType == null || string == null) {
+      if (fieldType == null || string == null || typeConverter == null) {
         LOGGER.debug("[ArrayRowConverter.convert] fieldType={}, string={} -> returning string as-is",
                     (fieldType != null ? fieldType.getSqlTypeName() : "null"),
                     (string != null ? "'" + string + "'" : "null"));
@@ -615,7 +619,6 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       LOGGER.debug("[ArrayRowConverter.convert] Processing fieldType={}, string='{}', blankStringsAsNull={}",
                   fieldType.getSqlTypeName(), string, blankStringsAsNull);
 
-      // Always use CsvTypeConverter - no fallback needed
       LOGGER.debug("[ArrayRowConverter] Using CsvTypeConverter for fieldType={}, string='{}'", fieldType.getSqlTypeName(), string);
       Object result = typeConverter.convert(string, fieldType.getSqlTypeName());
       LOGGER.debug("[ArrayRowConverter] CsvTypeConverter returned: {} (type: {})", result, (result != null ? result.getClass().getSimpleName() : "null"));

@@ -240,6 +240,14 @@ public class SqlIntegrationCoverageTest {
     // empty_table.csv - headers only
     writeFile(dir, "empty_table.csv",
         "col_a,col_b,col_c\n");
+
+    // Join test tables: customers, items, purchases
+    writeFile(dir, "customers.csv",
+        "cust_id,cust_name\n1,Alice\n2,Bob\n");
+    writeFile(dir, "items.csv",
+        "item_id,item_name,price\n10,Widget,5.00\n20,Gadget,15.00\n");
+    writeFile(dir, "purchases.csv",
+        "purchase_id,cust_id,item_id,qty\n100,1,10,2\n101,2,20,1\n102,1,20,3\n");
   }
 
   // ===============================================================
@@ -1712,16 +1720,8 @@ public class SqlIntegrationCoverageTest {
 
   @Test
   void testJoinMultipleTables() throws Exception {
-    String dir = tempDir.resolve("join_multi").toString();
-    new File(dir).mkdirs();
-    writeFile(dir, "customers.csv",
-        "cust_id,cust_name\n1,Alice\n2,Bob\n");
-    writeFile(dir, "items.csv",
-        "item_id,item_name,price\n10,Widget,5.00\n20,Gadget,15.00\n");
-    writeFile(dir, "purchases.csv",
-        "purchase_id,cust_id,item_id,qty\n100,1,10,2\n101,2,20,1\n102,1,20,3\n");
-
-    try (Connection conn = createConnection(dir);
+    // customers, items, purchases CSVs are created in @BeforeEach alongside other tables
+    try (Connection conn = createConnection(tempDir.toString());
          Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery(
              "select c.cust_name, i.item_name, p.qty "

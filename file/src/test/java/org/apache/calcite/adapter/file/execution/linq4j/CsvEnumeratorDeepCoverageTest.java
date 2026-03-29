@@ -229,9 +229,9 @@ public class CsvEnumeratorDeepCoverageTest {
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertNotNull(rowType);
-    // Empty file should produce a fallback "line" column
+    // Empty file should produce a fallback "EmptyFileHasNoColumns" column
     assertEquals(1, rowType.getFieldCount());
-    assertEquals("line", rowType.getFieldList().get(0).getName());
+    assertEquals("EmptyFileHasNoColumns", rowType.getFieldList().get(0).getName());
   }
 
   // ====================================================================

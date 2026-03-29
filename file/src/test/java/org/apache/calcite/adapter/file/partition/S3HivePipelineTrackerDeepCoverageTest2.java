@@ -71,7 +71,7 @@ class S3HivePipelineTrackerDeepCoverageTest2 {
 
     // SEC accession format: 0000123456-YY-012345
     assertEquals("2024", m.invoke(tracker, "0000123456-24-012345", 0L));
-    assertEquals("2099", m.invoke(tracker, "0000123456-99-012345", 0L)); // 90+ => 1900+
+    assertEquals("1999", m.invoke(tracker, "0000123456-99-012345", 0L)); // 90+ => 1900+
     assertEquals("1995", m.invoke(tracker, "0000123456-95-999999", 0L));
   }
 

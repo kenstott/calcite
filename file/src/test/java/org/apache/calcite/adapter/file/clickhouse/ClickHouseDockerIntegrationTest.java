@@ -115,6 +115,20 @@ class ClickHouseDockerIntegrationTest {
       containerName = "clickhouse-test-" + UUID.randomUUID().toString().substring(0, 8);
       hostPort = findFreePort();
 
+      // Register a JVM shutdown hook so the container is removed even if the
+      // test is interrupted (e.g. by gtimeout or IDE stop). @AfterAll handles
+      // normal termination; the hook covers SIGTERM / unexpected JVM exits.
+      final String nameToRemove = containerName;
+      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            new ProcessBuilder("docker", "rm", "-f", nameToRemove)
+                .redirectErrorStream(true).start().waitFor(10, TimeUnit.SECONDS);
+          } catch (Exception ignored) {
+          }
+        }
+      }));
+
       LOGGER.info("Starting ClickHouse container '{}' on port {}", containerName, hostPort);
 
       dataDir = new File(tempDir, "data");

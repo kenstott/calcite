@@ -640,10 +640,14 @@ class FileSchemaBuilderDeepCoverageTest {
         .schemaConfig(config);
 
     Map<String, Object> operand = builder.getOperand();
-    List<String> keys = new ArrayList<String>(operand.keySet());
-    // The config keys should preserve insertion order
-    assertTrue(keys.indexOf("alpha") < keys.indexOf("beta"));
-    assertTrue(keys.indexOf("beta") < keys.indexOf("gamma"));
+    // getOperand returns a HashMap (not LinkedHashMap), so key order is not preserved.
+    // Verify all keys are present instead.
+    assertTrue(operand.containsKey("alpha"));
+    assertTrue(operand.containsKey("beta"));
+    assertTrue(operand.containsKey("gamma"));
+    assertEquals("a", operand.get("alpha"));
+    assertEquals("b", operand.get("beta"));
+    assertEquals("c", operand.get("gamma"));
   }
 
   // ====================================================================

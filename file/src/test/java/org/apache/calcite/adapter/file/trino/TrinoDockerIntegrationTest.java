@@ -120,6 +120,20 @@ class TrinoDockerIntegrationTest {
       containerName = "trino-test-" + UUID.randomUUID().toString().substring(0, 8);
       hostPort = findFreePort();
 
+      // Register a JVM shutdown hook so the container is removed even if the
+      // test is interrupted (e.g. by gtimeout or IDE stop). @AfterAll handles
+      // normal termination; the hook covers SIGTERM / unexpected JVM exits.
+      final String nameToRemove = containerName;
+      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            new ProcessBuilder("docker", "rm", "-f", nameToRemove)
+                .redirectErrorStream(true).start().waitFor(10, TimeUnit.SECONDS);
+          } catch (Exception ignored) {
+          }
+        }
+      }));
+
       LOGGER.info("Starting Trino container '{}' on port {}", containerName, hostPort);
 
       // Create data directory for test files
@@ -784,10 +798,13 @@ class TrinoDockerIntegrationTest {
         try {
           Statement stmt = conn.createStatement();
           try {
-            ResultSet rs = stmt.executeQuery("SELECT 1");
+            // Use a query that requires worker nodes to be ready,
+            // not just the coordinator
+            ResultSet rs = stmt.executeQuery(
+                "SELECT count(*) FROM system.runtime.nodes WHERE state = 'active'");
             try {
-              if (rs.next()) {
-                LOGGER.info("Trino is ready!");
+              if (rs.next() && rs.getInt(1) > 0) {
+                LOGGER.info("Trino is ready with {} active node(s)!", rs.getInt(1));
                 return;
               }
             } finally {

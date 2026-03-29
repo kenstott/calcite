@@ -313,10 +313,13 @@ class FormatAwareSchemaResolverCoverageTest {
   }
 
   @Test void testInferCsvSchemaAllEmptyColumnNames() throws Exception {
-    // Java's String.split(",") drops trailing empty strings, so ",," yields empty array
+    // ",," splits into ["", "", ""] with split(",", -1), giving 3 empty-named columns
     File file = createCsvFile("allempty.csv", ",,");
     RelDataType schema = invokeInferCsvSchema(file);
-    assertEquals(0, schema.getFieldCount());
+    assertEquals(3, schema.getFieldCount());
+    assertEquals("col_0", schema.getFieldList().get(0).getName());
+    assertEquals("col_1", schema.getFieldList().get(1).getName());
+    assertEquals("col_2", schema.getFieldList().get(2).getName());
   }
 
   @Test void testInferCsvSchemaLeadingEmptyColumnName() throws Exception {
