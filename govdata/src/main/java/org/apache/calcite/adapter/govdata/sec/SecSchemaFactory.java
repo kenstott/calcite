@@ -744,8 +744,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Create HttpSourceConfig from YAML-style configuration
           HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
 
+          // Wrap storage provider with local staging to batch SEC parquet writes,
+          // reducing R2 Class A operations from ~10/filing to ~1/batch of filings.
+          LocalStagingStorageProvider stagingProvider =
+              new LocalStagingStorageProvider(storageProvider);
+
           // Get or create document converter with vectorization enabled if configured
-          FileConverter documentConverter = getOrCreateXbrlConverter(operand);
+          FileConverter documentConverter = getOrCreateXbrlConverter(operand, stagingProvider);
 
           // Initialize filing cache if not yet done
           if (this.filingCache == null && this.secOperatingDirectory != null) {
@@ -853,6 +858,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           } else {
             result = processor.processEntities(entities);
           }
+
+          // Flush any remaining staged parquet files to R2 as final batch
+          stagingProvider.flushAll();
 
           LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
               result.getDocumentsProcessed(),
@@ -1694,6 +1702,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand) {
+    return getOrCreateXbrlConverter(operand, storageProvider);
+  }
+
+  private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand,
+      StorageProvider converterStorageProvider) {
     try {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
@@ -1706,12 +1719,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       try {
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class, boolean.class)
-            .newInstance(storageProvider, enableVectorization);
+            .newInstance(converterStorageProvider, enableVectorization);
       } catch (NoSuchMethodException e) {
         // Fall back to single-arg constructor (vectorization disabled)
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class)
-            .newInstance(storageProvider);
+            .newInstance(converterStorageProvider);
       }
     } catch (Exception e) {
       LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
