@@ -1088,27 +1088,37 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     Set<String> tables = new LinkedHashSet<String>();
     String year = extractYear(sourceKey, System.currentTimeMillis());
-    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
-        + "/*.parquet";
+    String prefix = "year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey) + "/";
+    List<String> files = listTrackerFiles(prefix);
 
-    String sql = "SELECT table_name, state FROM ("
-        + "  SELECT table_name, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY table_name ORDER BY as_of DESC) AS rn "
-        + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
-        + "  WHERE source_key = ? AND phase = ?"
-        + ") WHERE rn = 1 AND state = 'complete'";
-
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, sourceKey);
-      stmt.setString(2, phase);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          tables.add(rs.getString("table_name"));
+    if (!files.isEmpty()) {
+      java.io.File tempDir = null;
+      try {
+        tempDir = downloadTrackerFilesParallel(files, year);
+        String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+        String sql = "SELECT table_name FROM ("
+            + "  SELECT table_name, state, ROW_NUMBER() OVER "
+            + "    (PARTITION BY table_name ORDER BY as_of DESC) AS rn "
+            + "  FROM read_parquet('" + localGlob + "', union_by_name=true) "
+            + "  WHERE phase = ?"
+            + ") WHERE rn = 1 AND state = 'complete'";
+        synchronized (connectionLock) {
+          try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+            stmt.setString(1, phase);
+            try (ResultSet rs = stmt.executeQuery()) {
+              while (rs.next()) {
+                tables.add(rs.getString("table_name"));
+              }
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading tracker for {}/{}: {}", sourceKey, phase, e.getMessage());
+      } finally {
+        if (tempDir != null) {
+          deleteDir(tempDir);
         }
       }
-    } catch (SQLException e) {
-      LOGGER.debug("Error getting completed tables for {}/{}: {}",
-          sourceKey, phase, e.getMessage());
     }
     // Cache the result (even if empty — prevents repeated S3 queries for missing data)
     stageCache.put(cacheKey, tables);
@@ -1611,8 +1621,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /**
    * Flush all pending tracker state writes to S3 as batched parquet files.
    *
-   * <p>Groups pending states by year partition and writes one parquet file per year,
-   * dramatically reducing S3 PUT calls compared to writing one file per state change.
+   * <p>Groups pending states by (year, sourceKey) and writes one parquet file per group.
+   * Files are written to the correct hive-partitioned path:
+   * {@code year={Y}/source_key={key}/{uuid}.parquet}, which is where
+   * {@link #getCompletedTables} reads from.
+   *
+   * <p>Writes use the AWS SDK directly (not DuckDB COPY TO) to avoid DuckDB httpfs
+   * URL-encoding the {@code =} signs in hive-partition directory names, which causes
+   * R2/S3 to return HTTP 400.
    */
   public void flushPendingStates() {
     List<PendingState> toFlush;
@@ -1624,70 +1640,127 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       pendingStates.clear();
     }
 
-    // Group by year (for S3 path partitioning)
-    Map<String, List<PendingState>> byYear = new LinkedHashMap<String, List<PendingState>>();
+    // Group by (year, sourceKey) — preserves the hive path layout that readers expect.
+    // Key format: year + NUL + sourceKey
+    Map<String, List<PendingState>> bySourceKey =
+        new LinkedHashMap<String, List<PendingState>>();
     for (PendingState ps : toFlush) {
       String year = "_table_complete".equals(ps.sourceKey)
           ? COMPLETION_YEAR : extractYear(ps.sourceKey, ps.asOf);
-      List<PendingState> list = byYear.get(year);
+      String groupKey = year + "\0" + ps.sourceKey;
+      List<PendingState> list = bySourceKey.get(groupKey);
       if (list == null) {
         list = new ArrayList<PendingState>();
-        byYear.put(year, list);
+        bySourceKey.put(groupKey, list);
       }
       list.add(ps);
     }
 
-    for (Map.Entry<String, List<PendingState>> entry : byYear.entrySet()) {
-      String year = entry.getKey();
-      List<PendingState> states = entry.getValue();
-      // Use UUID for unique file name
-      String batchId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-      String path = bucketPath + "/year=" + year + "/source_key=_batch_" + batchId
-          + "/batch.parquet";
+    List<PendingState> failed = new ArrayList<PendingState>();
+    int flushedCount = 0;
 
-      // Build a temp DuckDB table, insert all states, COPY TO S3 as one file
+    for (Map.Entry<String, List<PendingState>> entry : bySourceKey.entrySet()) {
+      String groupKey = entry.getKey();
+      int sep = groupKey.indexOf('\0');
+      String year = groupKey.substring(0, sep);
+      String sourceKey = groupKey.substring(sep + 1);
+      List<PendingState> states = entry.getValue();
+
+      String uuid = UUID.randomUUID().toString();
+      String s3Path = bucketPath + "/year=" + year + "/source_key="
+          + sanitizeHiveValue(sourceKey) + "/" + uuid + ".parquet";
+
+      try {
+        writeParquetViaAwsSdk(s3Path, states);
+        flushedCount += states.size();
+        LOGGER.info("Flushed {} tracker states to {}", states.size(), s3Path);
+      } catch (Exception e) {
+        LOGGER.error("Failed to flush {} tracker states for source_key={}: {}",
+            states.size(), sourceKey, e.getMessage());
+        failed.addAll(states);
+      }
+    }
+
+    if (!failed.isEmpty()) {
+      // Re-queue failed states for retry on the next flush
       synchronized (connectionLock) {
-        try {
-          Connection conn = getConnection();
-          // Create temp table
-          try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("CREATE TEMP TABLE IF NOT EXISTS pending_flush ("
-                + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
-                + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
-                + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
-            stmt.executeUpdate("DELETE FROM pending_flush");
-          }
-          // Batch insert
-          try (PreparedStatement pstmt = conn.prepareStatement(
-              "INSERT INTO pending_flush VALUES (?,?,?,?,?,?,?,?,?)")) {
-            for (PendingState ps : states) {
-              pstmt.setString(1, ps.sourceKey);
-              pstmt.setString(2, ps.tableName);
-              pstmt.setString(3, ps.phase);
-              pstmt.setString(4, ps.state);
-              pstmt.setLong(5, ps.rowCount);
-              pstmt.setString(6, ps.configHash);
-              pstmt.setString(7, ps.signature);
-              pstmt.setString(8, ps.errorMessage);
-              pstmt.setLong(9, ps.asOf);
-              pstmt.addBatch();
-            }
-            pstmt.executeBatch();
-          }
-          // COPY to S3 as single file
-          try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("COPY pending_flush TO '" + path + "' (FORMAT PARQUET)");
-          }
-          LOGGER.info("Flushed {} tracker states to {} (year={})",
-              states.size(), path, year);
-        } catch (SQLException e) {
-          LOGGER.error("Failed to flush {} pending tracker states: {}",
-              states.size(), e.getMessage());
-          // Re-add failed states back to pending for retry
-          synchronized (connectionLock) {
-            pendingStates.addAll(0, states);
-          }
+        pendingStates.addAll(0, failed);
+      }
+    }
+
+    if (flushedCount > 0) {
+      LOGGER.info("Flushed {} total tracker states across {} source keys",
+          flushedCount, bySourceKey.size() - (failed.isEmpty() ? 0 : 1));
+    }
+  }
+
+  /**
+   * Write pending tracker states to a local temp parquet file, then upload
+   * to S3 via the AWS SDK.
+   *
+   * <p>Using DuckDB {@code COPY TO 's3://...'} for paths containing {@code =}
+   * (hive-partition names like {@code year=2026}) causes DuckDB httpfs to
+   * URL-encode the {@code =} as {@code %3D}, resulting in HTTP 400 from R2/S3.
+   * Writing locally and uploading with the SDK avoids this entirely.
+   *
+   * @param s3Path  full S3 URI including hive partition directories
+   * @param states  pending state rows to write
+   * @throws Exception if the local write or S3 upload fails
+   */
+  private void writeParquetViaAwsSdk(String s3Path, List<PendingState> states)
+      throws Exception {
+    // Parse s3://bucket/key
+    String pathWithoutScheme = s3Path.startsWith("s3://") ? s3Path.substring(5) : s3Path;
+    int firstSlash = pathWithoutScheme.indexOf('/');
+    String bucket = pathWithoutScheme.substring(0, firstSlash);
+    String key = pathWithoutScheme.substring(firstSlash + 1);
+
+    // Write to a local temp file using DuckDB (no S3 involvement — no URL-encoding issue)
+    java.io.File tempFile = java.io.File.createTempFile("tracker-flush-", ".parquet");
+    try {
+      synchronized (connectionLock) {
+        Connection conn = getConnection();
+        try (Statement stmt = conn.createStatement()) {
+          stmt.executeUpdate("CREATE TEMP TABLE IF NOT EXISTS pending_flush_aws ("
+              + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
+              + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
+              + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
+          stmt.executeUpdate("DELETE FROM pending_flush_aws");
         }
+        try (PreparedStatement pstmt = conn.prepareStatement(
+            "INSERT INTO pending_flush_aws VALUES (?,?,?,?,?,?,?,?,?)")) {
+          for (PendingState ps : states) {
+            pstmt.setString(1, ps.sourceKey);
+            pstmt.setString(2, ps.tableName);
+            pstmt.setString(3, ps.phase);
+            pstmt.setString(4, ps.state);
+            pstmt.setLong(5, ps.rowCount);
+            pstmt.setString(6, ps.configHash);
+            pstmt.setString(7, ps.signature);
+            pstmt.setString(8, ps.errorMessage);
+            pstmt.setLong(9, ps.asOf);
+            pstmt.addBatch();
+          }
+          pstmt.executeBatch();
+        }
+        try (Statement stmt = conn.createStatement()) {
+          stmt.executeUpdate("COPY pending_flush_aws TO '"
+              + tempFile.getAbsolutePath().replace("'", "''")
+              + "' (FORMAT PARQUET)");
+        }
+      }
+
+      // Upload the local parquet file to S3 using the AWS SDK.
+      // The SDK does NOT URL-encode = signs in object keys.
+      com.amazonaws.services.s3.model.ObjectMetadata metadata =
+          new com.amazonaws.services.s3.model.ObjectMetadata();
+      metadata.setContentLength(tempFile.length());
+      try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile)) {
+        getS3Client().putObject(bucket, key, fis, metadata);
+      }
+    } finally {
+      if (tempFile.exists() && !tempFile.delete()) {
+        LOGGER.warn("Could not delete temp tracker file: {}", tempFile.getAbsolutePath());
       }
     }
   }
