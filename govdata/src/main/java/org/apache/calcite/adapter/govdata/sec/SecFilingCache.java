@@ -67,6 +67,13 @@ public class SecFilingCache implements AutoCloseable {
   private final String parquetBaseDir;
 
   /**
+   * In-memory cache of known parquet file paths in S3.
+   * Populated by {@link #preloadFileInventory()} to eliminate per-file LIST ops during
+   * self-healing checks.  When null, fileExists() falls back to live S3 queries.
+   */
+  private volatile java.util.Set<String> s3FileCache = null;
+
+  /**
    * Create a new filing cache backed by a PipelineTracker.
    *
    * @param tracker PipelineTracker for state persistence
@@ -109,6 +116,48 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
+   * Scans the entire {@code source=sec} parquet directory once and caches all known file
+   * paths in memory.
+   *
+   * <p>After this call, {@link #checkS3Files} answers existence queries from the
+   * in-memory set — zero additional Class A LIST ops per filing check.
+   *
+   * <p>Cost: one paginated {@code ListObjectsV2} scan of the sec parquet prefix
+   * (roughly 1 Class A op per 1 000 files on the bucket).  Compare this to the
+   * alternative: up to 11 Class A LIST ops per {@code fileExists()} call × 8 calls
+   * per filing = 88 Class A ops per self-healing check.
+   *
+   * <p>Thread-safety note: this replaces the cache atomically.  Workers operating on
+   * disjoint filing ranges see the same consistent snapshot.  Files written by other
+   * workers AFTER this scan are not in the cache; they will not be visible via the
+   * cache but the tracker will have marked them complete before self-healing would
+   * ever run for those filings.
+   */
+  public void preloadFileInventory() {
+    long start = System.currentTimeMillis();
+    String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(secDir, true);
+      java.util.Set<String> cache = new java.util.HashSet<String>(entries.size() * 2);
+      int count = 0;
+      for (StorageProvider.FileEntry entry : entries) {
+        if (!entry.isDirectory()) {
+          cache.add(entry.getPath());
+          count++;
+        }
+      }
+      this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
+      long elapsed = System.currentTimeMillis() - start;
+      LOGGER.info("preloadFileInventory: cached {} sec parquet paths from {} in {}ms",
+          count, secDir, elapsed);
+    } catch (IOException e) {
+      LOGGER.warn("preloadFileInventory failed — falling back to per-file S3 checks: {}",
+          e.getMessage());
+      // Leave s3FileCache null; fileExists() will use live S3 queries
+    }
+  }
+
+  /**
    * Check if a filing needs processing.
    *
    * <p>Implements self-healing: if files exist in S3 but tracker has no state,
@@ -138,7 +187,7 @@ public class SecFilingCache implements AutoCloseable {
 
     if (completedTables.isEmpty()) {
       // Not in tracker - check if files exist (self-healing)
-      FileInventory inventory = checkS3Files(cik, accession);
+      FileInventory inventory = checkS3Files(cik, accession, filingDate);
       if (inventory.isComplete(form, vectorizationEnabled)) {
         // Files exist, heal tracker
         recordInventory(accession, inventory);
@@ -176,7 +225,7 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     // Partial state in tracker - verify against S3 (self-healing for partial)
-    FileInventory s3Inventory = checkS3Files(cik, accession);
+    FileInventory s3Inventory = checkS3Files(cik, accession, filingDate);
     if (s3Inventory.isComplete(form, vectorizationEnabled)) {
       recordInventory(accession, s3Inventory);
       return ProcessingDecision.skip("Self-healed: now complete");
@@ -228,25 +277,78 @@ public class SecFilingCache implements AutoCloseable {
    * Check which output files exist in S3.
    */
   public FileInventory checkS3Files(String cik, String accession) {
+    return checkS3Files(cik, accession, null);
+  }
+
+  /**
+   * Check which output files exist in S3.
+   *
+   * @param filingDate ISO date string (e.g. "2024-03-15") used to build an exact year= partition
+   *                   path. When non-null this avoids a glob scan across all years (saves
+   *                   10 Class A LIST ops per call). Pass null to fall back to the year=* glob.
+   */
+  public FileInventory checkS3Files(String cik, String accession, String filingDate) {
     String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
 
     FileInventory.Builder builder = FileInventory.builder();
 
-    builder.hasMetadata(fileExists(secDir, cik, accession, "metadata"));
-    builder.hasFacts(fileExists(secDir, cik, accession, "facts"));
-    builder.hasContexts(fileExists(secDir, cik, accession, "contexts"));
-    builder.hasRelationships(fileExists(secDir, cik, accession, "relationships"));
-    builder.hasMda(fileExists(secDir, cik, accession, "mda"));
-    builder.hasInsider(fileExists(secDir, cik, accession, "insider"));
-    builder.hasEarnings(fileExists(secDir, cik, accession, "earnings"));
-    builder.hasChunks(fileExists(secDir, cik, accession, "chunks"));
+    builder.hasMetadata(fileExists(secDir, cik, accession, "metadata", filingDate));
+    builder.hasFacts(fileExists(secDir, cik, accession, "facts", filingDate));
+    builder.hasContexts(fileExists(secDir, cik, accession, "contexts", filingDate));
+    builder.hasRelationships(fileExists(secDir, cik, accession, "relationships", filingDate));
+    builder.hasMda(fileExists(secDir, cik, accession, "mda", filingDate));
+    builder.hasInsider(fileExists(secDir, cik, accession, "insider", filingDate));
+    builder.hasEarnings(fileExists(secDir, cik, accession, "earnings", filingDate));
+    builder.hasChunks(fileExists(secDir, cik, accession, "chunks", filingDate));
 
     return builder.build();
   }
 
-  private boolean fileExists(String secDir, String cik, String accession, String suffix) {
+  /**
+   * Returns the 4-digit year string from an ISO filing date ("YYYY-MM-DD").
+   * Falls back to null if the date is missing or malformed.
+   */
+  private static String yearFromFilingDate(String filingDate) {
+    if (filingDate != null && filingDate.length() >= 4) {
+      String year = filingDate.substring(0, 4);
+      try {
+        int y = Integer.parseInt(year);
+        if (y >= 2000 && y <= 2099) {
+          return year;
+        }
+      } catch (NumberFormatException ignored) {
+        // fall through to null
+      }
+    }
+    return null;
+  }
+
+  private boolean fileExists(String secDir, String cik, String accession, String suffix,
+      String filingDate) {
     String fileName = cik + "_" + accession + "_" + suffix + ".parquet";
-    String pattern = storageProvider.resolvePath(secDir, "year=*/" + fileName);
+
+    // Fast path: check in-memory cache populated by preloadFileInventory() — zero Class A ops.
+    java.util.Set<String> cache = this.s3FileCache;
+    if (cache != null) {
+      String year = yearFromFilingDate(filingDate);
+      if (year != null) {
+        String exactPath = storageProvider.resolvePath(secDir, "year=" + year + "/" + fileName);
+        return cache.contains(exactPath);
+      }
+      // No year available; scan cache for any path ending with the filename
+      for (String path : cache) {
+        if (path.endsWith("/" + fileName)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Slow path: live S3 query.  Use exact year partition when available to avoid the
+    // 11-iteration year=* glob that generates 11 Class A LIST ops per call.
+    String year = yearFromFilingDate(filingDate);
+    String yearSegment = (year != null) ? "year=" + year : "year=*";
+    String pattern = storageProvider.resolvePath(secDir, yearSegment + "/" + fileName);
     try {
       return storageProvider.exists(pattern);
     } catch (IOException e) {

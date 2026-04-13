@@ -296,6 +296,7 @@ public class DocumentETLProcessor {
    * @throws IOException If processing fails fatally
    */
   public DocumentETLResult processEntities(List<Map<String, String>> entities) throws IOException {
+    prewarmExistsCache(extractYearsFromEntities(entities));
     long startTime = System.currentTimeMillis();
     int totalProcessed = 0;
     int totalSkipped = 0;
@@ -350,6 +351,7 @@ public class DocumentETLProcessor {
    */
   public DocumentETLResult processEntitiesParallel(
       List<Map<String, String>> entities, int threadCount) throws IOException {
+    prewarmExistsCache(extractYearsFromEntities(entities));
     long startTime = System.currentTimeMillis();
     final AtomicInteger totalProcessed = new AtomicInteger();
     final AtomicInteger totalSkipped = new AtomicInteger();
@@ -765,6 +767,49 @@ public class DocumentETLProcessor {
       }
     }
     return -1;
+  }
+
+  /**
+   * Pre-warms the existsCache by listing all files in each output year partition.
+   * Replaces per-filing storageProvider.exists() (Class A R2 HEAD ops) with a single
+   * LIST per year. Called once before processing begins.
+   *
+   * @param years set of 4-digit year strings to list (e.g., {@code {"2025","2026"}})
+   */
+  private void prewarmExistsCache(Set<String> years) {
+    if (documentTracker != null) {
+      return;
+    }
+    for (String year : years) {
+      String yearPrefix = outputDirectory + "/year=" + year;
+      try {
+        List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearPrefix, true);
+        int count = 0;
+        for (StorageProvider.FileEntry entry : entries) {
+          if (!entry.isDirectory()) {
+            existsCache.add(entry.getPath());
+            count++;
+          }
+        }
+        LOGGER.info("Pre-warmed existsCache with {} files from {}", count, yearPrefix);
+      } catch (IOException e) {
+        LOGGER.warn("Could not pre-warm existsCache for {}: {}", yearPrefix, e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Extracts the unique year values from an entity list for existsCache pre-warming.
+   */
+  private Set<String> extractYearsFromEntities(List<Map<String, String>> entities) {
+    Set<String> years = new HashSet<String>();
+    for (Map<String, String> entity : entities) {
+      String year = entity.get("year");
+      if (year != null && !year.isEmpty()) {
+        years.add(year);
+      }
+    }
+    return years;
   }
 
   /**
