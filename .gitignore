@@ -119,3 +119,4 @@ govdata/scripts/parallel/runs
 
 .claude/worktrees/
 runs/
+.claude/scheduled_tasks.lock
