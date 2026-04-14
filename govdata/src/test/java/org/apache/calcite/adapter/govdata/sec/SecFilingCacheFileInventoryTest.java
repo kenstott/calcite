@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Verifies the three-tier strategy for {@code fileExists()} calls:
  * <ol>
- *   <li>In-memory cache (populated by {@link SecFilingCache#preloadFileInventory()}) —
+ *   <li>In-memory cache (populated by {@link SecFilingCache#preloadFileInventory(int, int)}) —
  *       zero Class A ops after initial scan.</li>
  *   <li>Exact year path (derived from {@code filingDate}) — 1 Class B HEAD op, not 11
  *       Class A LIST ops, when cache is unavailable.</li>
@@ -69,11 +69,11 @@ public class SecFilingCacheFileInventoryTest {
     SecFilingCache cache = new SecFilingCache(
         new InMemoryPipelineTracker(), provider, PARQUET_BASE);
 
-    cache.preloadFileInventory();
+    cache.preloadFileInventory(2024, 2024);
 
-    // listFiles should have been called once (for the sec dir scan)
+    // listFiles should have been called once (one year partition = one listFiles call)
     assertEquals(1, provider.listFilesCallCount(),
-        "preloadFileInventory must call listFiles exactly once");
+        "preloadFileInventory must call listFiles once per year (one year here)");
     // exists() must NOT have been called — everything from the cache
     assertEquals(0, provider.existsCallCount(),
         "preloadFileInventory must not call exists()");
@@ -95,7 +95,7 @@ public class SecFilingCacheFileInventoryTest {
   }
 
   // -------------------------------------------------------------------------
-  // 2. Cache hit for unknown year (no filingDate) — linear scan, no exists()
+  // 2. Cache hit for unknown year (no filingDate) — O(1) byName map lookup, no exists()
   // -------------------------------------------------------------------------
 
   @Test
@@ -107,12 +107,12 @@ public class SecFilingCacheFileInventoryTest {
     TrackingStorageProvider provider = new TrackingStorageProvider(knownPaths);
     SecFilingCache cache = new SecFilingCache(
         new InMemoryPipelineTracker(), provider, PARQUET_BASE);
-    cache.preloadFileInventory();
+    cache.preloadFileInventory(2024, 2024);
     provider.resetCounters();
 
-    // null filingDate — cache must still answer via linear suffix scan
+    // null filingDate — cache must still answer via byName map (O(1))
     FileInventory inventory = cache.checkS3Files(cik, accession, null);
-    assertTrue(inventory.hasMetadata(), "metadata found via cache suffix scan");
+    assertTrue(inventory.hasMetadata(), "metadata found via cache byName map");
     assertEquals(0, provider.existsCallCount(),
         "no exists() calls when cache is available, even without filingDate");
   }
@@ -131,7 +131,7 @@ public class SecFilingCacheFileInventoryTest {
     TrackingStorageProvider provider = new TrackingStorageProvider(knownPaths);
     SecFilingCache cache = new SecFilingCache(
         new InMemoryPipelineTracker(), provider, PARQUET_BASE);
-    cache.preloadFileInventory();
+    cache.preloadFileInventory(2024, 2024);
     provider.resetCounters();
 
     // Check a filing NOT in the cache
@@ -239,7 +239,7 @@ public class SecFilingCacheFileInventoryTest {
     InMemoryPipelineTracker tracker = new InMemoryPipelineTracker();
     SecFilingCache cache = new SecFilingCache(tracker, provider, PARQUET_BASE);
 
-    cache.preloadFileInventory();
+    cache.preloadFileInventory(2024, 2024);
     provider.resetCounters();  // reset after the single listFiles scan
 
     ProcessingDecision decision = cache.checkFiling(cik, accession, formType, filingDate, false);

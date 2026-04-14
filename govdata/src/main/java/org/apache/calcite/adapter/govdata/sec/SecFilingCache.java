@@ -68,10 +68,17 @@ public class SecFilingCache implements AutoCloseable {
 
   /**
    * In-memory cache of known parquet file paths in S3.
-   * Populated by {@link #preloadFileInventory()} to eliminate per-file LIST ops during
+   * Populated by {@link #preloadFileInventory(int, int)} to eliminate per-file LIST ops during
    * self-healing checks.  When null, fileExists() falls back to live S3 queries.
    */
   private volatile java.util.Set<String> s3FileCache = null;
+
+  /**
+   * Secondary index: parquet filename (without directory) → full S3 path.
+   * Populated alongside {@link #s3FileCache} to enable O(1) lookups when the
+   * filing date (and therefore year partition) is unknown.
+   */
+  private volatile java.util.Map<String, String> s3FileCacheByName = null;
 
   /**
    * Create a new filing cache backed by a PipelineTracker.
@@ -116,45 +123,58 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
-   * Scans the entire {@code source=sec} parquet directory once and caches all known file
-   * paths in memory.
+   * Scans only the {@code source=sec/year=YYYY/} partitions for {@code startYear..endYear}
+   * and caches all known file paths in memory.
    *
    * <p>After this call, {@link #checkS3Files} answers existence queries from the
    * in-memory set — zero additional Class A LIST ops per filing check.
    *
-   * <p>Cost: one paginated {@code ListObjectsV2} scan of the sec parquet prefix
-   * (roughly 1 Class A op per 1 000 files on the bucket).  Compare this to the
-   * alternative: up to 11 Class A LIST ops per {@code fileExists()} call × 8 calls
-   * per filing = 88 Class A ops per self-healing check.
+   * <p>Cost: one paginated {@code ListObjectsV2} scan per year partition
+   * (roughly 1 Class A op per 1 000 files in each year).  Scoping to the worker's
+   * actual year range avoids listing the full multi-million-file {@code source=sec/}
+   * prefix that would otherwise cost 1 000+ Class A ops and take many minutes.
    *
-   * <p>Thread-safety note: this replaces the cache atomically.  Workers operating on
+   * <p>Thread-safety note: both caches are replaced atomically.  Workers operating on
    * disjoint filing ranges see the same consistent snapshot.  Files written by other
    * workers AFTER this scan are not in the cache; they will not be visible via the
    * cache but the tracker will have marked them complete before self-healing would
    * ever run for those filings.
+   *
+   * @param startYear first year partition to include (e.g. 2026)
+   * @param endYear   last year partition to include (inclusive)
    */
-  public void preloadFileInventory() {
+  public void preloadFileInventory(int startYear, int endYear) {
     long start = System.currentTimeMillis();
     String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
-    try {
-      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(secDir, true);
-      java.util.Set<String> cache = new java.util.HashSet<String>(entries.size() * 2);
-      int count = 0;
-      for (StorageProvider.FileEntry entry : entries) {
-        if (!entry.isDirectory()) {
-          cache.add(entry.getPath());
-          count++;
+    java.util.Set<String> cache = new java.util.HashSet<String>();
+    java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
+    int totalCount = 0;
+    for (int year = startYear; year <= endYear; year++) {
+      String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
+      try {
+        List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
+        int yearCount = 0;
+        for (StorageProvider.FileEntry entry : entries) {
+          if (!entry.isDirectory()) {
+            String path = entry.getPath();
+            cache.add(path);
+            int slash = path.lastIndexOf('/');
+            String name = (slash >= 0) ? path.substring(slash + 1) : path;
+            byName.put(name, path);
+            yearCount++;
+          }
         }
+        LOGGER.debug("preloadFileInventory: year={} loaded {} files", year, yearCount);
+        totalCount += yearCount;
+      } catch (IOException e) {
+        LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
       }
-      this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
-      long elapsed = System.currentTimeMillis() - start;
-      LOGGER.info("preloadFileInventory: cached {} sec parquet paths from {} in {}ms",
-          count, secDir, elapsed);
-    } catch (IOException e) {
-      LOGGER.warn("preloadFileInventory failed — falling back to per-file S3 checks: {}",
-          e.getMessage());
-      // Leave s3FileCache null; fileExists() will use live S3 queries
     }
+    this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
+    this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("preloadFileInventory: cached {} sec parquet paths (years {}-{}) in {}ms",
+        totalCount, startYear, endYear, elapsed);
   }
 
   /**
@@ -335,7 +355,12 @@ public class SecFilingCache implements AutoCloseable {
         String exactPath = storageProvider.resolvePath(secDir, "year=" + year + "/" + fileName);
         return cache.contains(exactPath);
       }
-      // No year available; scan cache for any path ending with the filename
+      // No year available; use filename-keyed map for O(1) lookup instead of O(N) scan.
+      java.util.Map<String, String> byName = this.s3FileCacheByName;
+      if (byName != null) {
+        return byName.containsKey(fileName);
+      }
+      // byName not populated (e.g. populated by old callers); fall back to linear scan.
       for (String path : cache) {
         if (path.endsWith("/" + fileName)) {
           return true;

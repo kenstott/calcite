@@ -809,14 +809,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             if (!allAccessions.isEmpty()) {
               cache.preload(allAccessions);
             }
-            // Bulk-scan the sec parquet directory once so that self-healing file-existence
-            // checks cost zero Class A LIST ops (answered from in-memory set).
-            cache.preloadFileInventory();
+            // Bulk-scan only the worker's year partitions once so that self-healing
+            // file-existence checks cost zero Class A LIST ops (answered from in-memory set).
+            cache.preloadFileInventory(startYear, endYear);
           }
 
           // Ensure file inventory is pre-loaded even when indexCache is unavailable
           if (indexCache == null && cache != null) {
-            cache.preloadFileInventory();
+            cache.preloadFileInventory(startYear, endYear);
           }
 
           // Narrow CIK list to only those with unprocessed filings
