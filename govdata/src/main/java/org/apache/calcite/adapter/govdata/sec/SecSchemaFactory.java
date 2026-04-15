@@ -944,7 +944,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Get incremental tracker for skipping already-materialized partitions
     IncrementalTracker incrementalTracker =
-        PipelineTrackerFactory.createFromOperand(this.currentOperand, this.secOperatingDirectory);
+        PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
 
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
