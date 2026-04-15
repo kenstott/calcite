@@ -345,6 +345,11 @@ generate_single_schema_model() {
     fec)
       operand_body="\"dataSource\": \"fec\""
       ;;
+    fedregister)
+      operand_body="\"dataSource\": \"fedregister\",
+      \"startYear\": 2010,
+      \"endYear\": $(date +%Y)"
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1
@@ -489,6 +494,10 @@ get_heap_config() {
     # FEC (60): Individual contributions has 3M+ rows/year, streaming to Iceberg
     _HEAP_MIN="4g"
     _HEAP_MAX="5g"
+  elif [ "$num" -eq 61 ]; then
+    # FedRegister (61): 4 doc_types x 16 years x ~85 pages/partition pagination
+    _HEAP_MIN="2g"
+    _HEAP_MAX="3g"
   elif [ "$num" -eq 21 ]; then
     # Crime (21): large dimension expansion (type × year × state × offense × ori), long-running
     _HEAP_MIN="3g"

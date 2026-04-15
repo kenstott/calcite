@@ -1353,6 +1353,7 @@ partitionedTables:
       - name: embedding
         type: array<double>
         nullable: true
+        bulkGenerator: gpu_embeddings
         comment: 384-dim snowflake-arctic-embed-xs embedding via GPU bulk generation
       - name: content_type
         type: string

@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
+import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
@@ -58,6 +59,7 @@ import java.util.Map;
  *   <li>weather - NWS weather stations/alerts, NOAA CDO climate data, EPA air quality</li>
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
+ *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -241,10 +243,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "campaign_finance":
         return new FecSchemaFactory();
 
+      case "fedregister":
+      case "federal_register":
+      case "fr":
+        return new FedRegisterSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
+            + " fedregister");
     }
   }
 
