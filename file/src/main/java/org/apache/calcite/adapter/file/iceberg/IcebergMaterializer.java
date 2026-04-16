@@ -2233,23 +2233,24 @@ public class IcebergMaterializer {
       String accessKey = s3Config.get("accessKeyId");
       String secretKey = s3Config.get("secretAccessKey");
       String endpoint = s3Config.get("endpoint");
-      String region = s3Config.get("region");
+      String region = s3Config.getOrDefault("region", "auto");
 
       if (accessKey != null && secretKey != null) {
-        stmt.execute("SET s3_access_key_id='" + accessKey + "'");
-        stmt.execute("SET s3_secret_access_key='" + secretKey + "'");
-      }
-      if (endpoint != null) {
-        // DuckDB SET s3_endpoint expects hostname only (no https:// prefix)
-        String endpointHost = endpoint.replaceFirst("^https?://", "");
-        stmt.execute("SET s3_endpoint='" + endpointHost + "'");
-        stmt.execute("SET s3_url_style='path'");
-        stmt.execute("SET s3_use_ssl='true'");
-      }
-      if (region != null) {
-        stmt.execute("SET s3_region='" + region + "'");
-      } else {
-        stmt.execute("SET s3_region='auto'");
+        // Endpoint hostname only (no https:// prefix) as required by DuckDB CREATE SECRET
+        String endpointHost = endpoint != null ? endpoint.replaceFirst("^https?://", "") : null;
+
+        StringBuilder secret = new StringBuilder(
+            "CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
+        secret.append(", KEY_ID '").append(accessKey).append("'");
+        secret.append(", SECRET '").append(secretKey).append("'");
+        if (endpointHost != null) {
+          secret.append(", ENDPOINT '").append(endpointHost).append("'");
+          secret.append(", USE_SSL true");
+          secret.append(", URL_STYLE 'path'");
+        }
+        secret.append(", REGION '").append(region).append("'");
+        secret.append(")");
+        stmt.execute(secret.toString());
       }
     } catch (SQLException e) {
       LOGGER.debug("S3 configuration skipped: {}", e.getMessage());
