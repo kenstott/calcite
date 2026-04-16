@@ -393,6 +393,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000  # Prevent OOM on first run — each year can have hundreds of thousands of filings
       output:
         pattern: "year=*/"
       partition:
