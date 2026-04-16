@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -64,6 +65,7 @@ public class IcebergMaterializerR2IntegrationTest {
   private static final String WAREHOUSE =
       "s3a://" + BUCKET + "/ci-test/iceberg-r2-validate";
   private static final String TABLE_ID = "filing_metadata_ci_test";
+  private static final String BATCH_TABLE_ID = "filing_metadata_ci_batch_test";
 
   // Apple Inc. — small, well-known, reliably has 2024 filings.
   private static final String ROW_FILTER = "cik = '0000320193'";
@@ -150,5 +152,74 @@ public class IcebergMaterializerR2IntegrationTest {
             + result.getSuccessCount()
             + " failedCount=" + result.getFailedCount()
             + " skippedCount=" + result.getSkippedCount());
+  }
+
+  /**
+   * Verifies the row-batching path ({@code processWithRowBatchingToIceberg}) works end-to-end.
+   * Uses rowBatchSize=5 so Apple's ~13 filings are processed in 3 LIMIT/OFFSET pages,
+   * confirming the OOM-prevention mechanism introduced for the production first run.
+   */
+  @Test
+  public void testMaterializeWithRowBatching() throws IOException {
+    Map<String, Object> storageConfig = new HashMap<String, Object>();
+    storageConfig.put("accessKeyId", accessKey);
+    storageConfig.put("secretAccessKey", secretKey);
+    storageConfig.put("endpoint", endpoint);
+    storageConfig.put("region", "auto");
+    S3StorageProvider storageProvider = new S3StorageProvider(storageConfig);
+
+    List<IcebergCatalogManager.ColumnDef> tableColumns = Arrays.asList(
+        new IcebergCatalogManager.ColumnDef("cik", "string"),
+        new IcebergCatalogManager.ColumnDef("accession_number", "string"),
+        new IcebergCatalogManager.ColumnDef("filing_type", "string"),
+        new IcebergCatalogManager.ColumnDef("filing_date", "string"),
+        new IcebergCatalogManager.ColumnDef("year", "int"),
+        new IcebergCatalogManager.ColumnDef("primary_document", "string"),
+        new IcebergCatalogManager.ColumnDef("company_name", "string"),
+        new IcebergCatalogManager.ColumnDef("period_of_report", "string"),
+        new IcebergCatalogManager.ColumnDef("acceptance_datetime", "string"),
+        new IcebergCatalogManager.ColumnDef("file_size", "long"),
+        new IcebergCatalogManager.ColumnDef("fiscal_year", "int"),
+        new IcebergCatalogManager.ColumnDef("state_of_incorporation", "string"),
+        new IcebergCatalogManager.ColumnDef("fiscal_year_end", "string"),
+        new IcebergCatalogManager.ColumnDef("business_address", "string"),
+        new IcebergCatalogManager.ColumnDef("mailing_address", "string"),
+        new IcebergCatalogManager.ColumnDef("phone", "string"),
+        new IcebergCatalogManager.ColumnDef("sic_code", "string"),
+        new IcebergCatalogManager.ColumnDef("irs_number", "string"),
+        new IcebergCatalogManager.ColumnDef("ticker", "string")
+    );
+
+    List<PartitionedTableConfig.ColumnDefinition> partitionColumns =
+        Collections.singletonList(new PartitionedTableConfig.ColumnDefinition("year", "int"));
+
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(SOURCE_PATTERN)
+            .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
+            .targetTableId(BATCH_TABLE_ID)
+            .sourceTableName("filing_metadata")
+            .tableColumns(tableColumns)
+            .partitionColumns(partitionColumns)
+            .batchPartitionColumns(Collections.singletonList("year"))
+            .incrementalKeys(Collections.singletonList("year"))
+            .yearRange(2024, 2024)
+            .rowFilter(ROW_FILTER)
+            .rowBatchSize(5)  // Forces LIMIT/OFFSET paging: 3 pages over Apple's ~13 rows
+            .icebergTableLocation(WAREHOUSE + "/" + BATCH_TABLE_ID)
+            .accessionColumn("accession_number")
+            .description("filing_metadata row-batch CI test")
+            .build();
+
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(WAREHOUSE, storageProvider, IncrementalTracker.NOOP);
+
+    IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+
+    assertEquals(0, result.getFailedCount(),
+        "Expected no failed batches with row batching enabled");
+    assertTrue(result.getSuccessCount() > 0,
+        "Expected at least one successful batch with row batching, got successCount="
+            + result.getSuccessCount());
   }
 }
