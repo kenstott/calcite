@@ -2240,8 +2240,11 @@ public class IcebergMaterializer {
         stmt.execute("SET s3_secret_access_key='" + secretKey + "'");
       }
       if (endpoint != null) {
-        stmt.execute("SET s3_endpoint='" + endpoint + "'");
+        // DuckDB SET s3_endpoint expects hostname only (no https:// prefix)
+        String endpointHost = endpoint.replaceFirst("^https?://", "");
+        stmt.execute("SET s3_endpoint='" + endpointHost + "'");
         stmt.execute("SET s3_url_style='path'");
+        stmt.execute("SET s3_use_ssl='true'");
       }
       if (region != null) {
         stmt.execute("SET s3_region='" + region + "'");
