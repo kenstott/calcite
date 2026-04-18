@@ -11,12 +11,14 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
+import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -175,6 +177,83 @@ public class SecFilingCache implements AutoCloseable {
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("preloadFileInventory: cached {} sec parquet paths (years {}-{}) in {}ms",
         totalCount, startYear, endYear, elapsed);
+  }
+
+  /**
+   * Filter index candidates to the unprocessed work queue, self-healing tracker state in
+   * parallel for accessions whose S3 files exist but have no tracker entry.
+   *
+   * <p>Pass 1 is pure in-memory (uses preloaded tracker + file inventory — no R2 ops).
+   * Pass 2 writes self-heal tracker entries concurrently, reducing wall-clock time from
+   * O(n &times; R2_latency) to O(n / threads &times; R2_latency).
+   *
+   * @param candidates           index entries already filtered by year and form type
+   * @param vectorizationEnabled whether vectorized chunks are required for completeness
+   * @param selfHealThreads      thread-pool size for parallel self-heal writes (capped at 50)
+   * @return entries that still need ETL processing
+   */
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads) {
+
+    List<EdgarFullIndexCache.IndexEntry> toProcess =
+        new ArrayList<EdgarFullIndexCache.IndexEntry>();
+    final List<EdgarFullIndexCache.IndexEntry> toSelfHeal =
+        new ArrayList<EdgarFullIndexCache.IndexEntry>();
+
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+        continue;
+      }
+      Set<String> completed = tracker.getCompletedTables(ie.accession, PHASE_STAGING);
+      if (!completed.isEmpty()) {
+        FormType form = FormType.fromString(ie.formType);
+        FileInventory inv = inventoryFromCompletedTables(completed);
+        if (inv.isComplete(form, vectorizationEnabled)) {
+          continue;
+        }
+        toProcess.add(ie);
+        continue;
+      }
+      FileInventory s3Inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
+      if (s3Inv.hasAnyFiles()) {
+        toSelfHeal.add(ie);
+        FormType form = FormType.fromString(ie.formType);
+        if (!s3Inv.isComplete(form, vectorizationEnabled)) {
+          toProcess.add(ie);
+        }
+      } else {
+        toProcess.add(ie);
+      }
+    }
+
+    if (!toSelfHeal.isEmpty()) {
+      int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
+      LOGGER.info("Self-healing {} accessions with {} threads", toSelfHeal.size(), poolSize);
+      long healStart = System.currentTimeMillis();
+      java.util.concurrent.ExecutorService pool =
+          java.util.concurrent.Executors.newFixedThreadPool(poolSize);
+      for (final EdgarFullIndexCache.IndexEntry ie : toSelfHeal) {
+        pool.submit(new Runnable() {
+          @Override public void run() {
+            FileInventory inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
+            recordInventory(ie.accession, inv);
+          }
+        });
+      }
+      pool.shutdown();
+      try {
+        pool.awaitTermination(30, java.util.concurrent.TimeUnit.MINUTES);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        LOGGER.warn("Self-heal batch interrupted");
+      }
+      LOGGER.info("Self-heal complete: {} accessions in {}ms",
+          toSelfHeal.size(), System.currentTimeMillis() - healStart);
+    }
+
+    return toProcess;
   }
 
   /**
@@ -579,6 +658,30 @@ public class SecFilingCache implements AutoCloseable {
       } catch (Exception e) {
         LOGGER.error("Error closing tracker: {}", e.getMessage());
       }
+    }
+  }
+
+  /**
+   * Returns the ETL high-water mark date for the given run key, or null if not set.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   */
+  public LocalDate readEtlHighWaterMark(String runKey) {
+    if (tracker instanceof S3HivePipelineTracker) {
+      return ((S3HivePipelineTracker) tracker).readEtlHighWaterMark(runKey);
+    }
+    return null;
+  }
+
+  /**
+   * Persists the ETL high-water mark date for the given run key. No-op for non-S3 trackers.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @param date   the high-water mark to store
+   */
+  public void writeEtlHighWaterMark(String runKey, LocalDate date) {
+    if (tracker instanceof S3HivePipelineTracker) {
+      ((S3HivePipelineTracker) tracker).writeEtlHighWaterMark(runKey, date);
     }
   }
 

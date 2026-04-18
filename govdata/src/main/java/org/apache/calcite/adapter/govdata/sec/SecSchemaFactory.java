@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -773,8 +774,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 @Override public void markProcessed(String cik, String accession, String formType,
                     java.util.List<String> outputFiles) {
                   String form = formType != null ? formType : "UNKNOWN";
-                  FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
-                  cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
+                  if (outputFiles == null || outputFiles.isEmpty()) {
+                    cache.markNoXbrl(cik, accession, form, "");
+                  } else {
+                    FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
+                    cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
+                  }
                 }
                 @Override public boolean areAllProcessed(String cik,
                     java.util.List<String> accessions, java.util.List<String> formTypes) {
@@ -819,18 +824,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             cache.preloadFileInventory(startYear, endYear);
           }
 
-          // Narrow CIK list to only those with unprocessed filings
-          if (indexCache != null) {
-            Set<String> activeCiks = new java.util.LinkedHashSet<String>();
-            for (int year = startYear; year <= endYear; year++) {
-              activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes, documentTracker));
-            }
-            int originalSize = ciks.size();
-            ciks = new ArrayList<String>(activeCiks);
-            LOGGER.info("Narrowed CIK list from {} to {} using full-index (tracker-filtered)",
-                originalSize, ciks.size());
-          }
-
           // Create processor - pass cache directory as String to support S3 paths
           DocumentETLProcessor processor = new DocumentETLProcessor(
               httpSourceConfig,
@@ -842,29 +835,58 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               documentTracker,
               indexCache);
 
-          // Build entity list with CIKs and year range
-          List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
-          for (String cik : ciks) {
-            String normalizedCik = normalizeCik(cik);
+          int threads = Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
+          if (indexCache instanceof EdgarFullIndexCache) {
+            // Accession-centric path: full-index → filter year + form types
+            // → fast in-memory filter + parallel self-heal → execute on final dataset
+            List<EdgarFullIndexCache.IndexEntry> allEntries =
+                new ArrayList<EdgarFullIndexCache.IndexEntry>();
             for (int year = startYear; year <= endYear; year++) {
-              Map<String, String> entity = new HashMap<String, String>();
-              entity.put("cik", normalizedCik);
-              entity.put("year", String.valueOf(year));
-              entities.add(entity);
+              allEntries.addAll(((EdgarFullIndexCache) indexCache)
+                  .getActiveAccessions(year, filingTypes, null));
             }
-          }
-
-          LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
-              ciks.size(), (endYear - startYear + 1), entities.size());
-
-          // Process all entities (parallel if --threads > 1)
-          int threads = Integer.parseInt(
-              System.getProperty("calcite.etl.threads", "1"));
-          if (threads > 1) {
-            LOGGER.info("Using {} parallel entity threads", threads);
-            result = processor.processEntitiesParallel(entities, threads);
+            LOGGER.info("Full-index returned {} candidates (years {}-{}), filtering...",
+                allEntries.size(), startYear, endYear);
+            int selfHealThreads = Integer.parseInt(
+                System.getProperty("calcite.etl.selfheal.threads", "50"));
+            List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)
+                ? cache.filterAndSelfHeal(allEntries, isVectorizedChunksEnabled(), selfHealThreads)
+                : allEntries;
+            List<DocumentETLProcessor.AccessionRef> activeAccessions =
+                new ArrayList<DocumentETLProcessor.AccessionRef>();
+            for (EdgarFullIndexCache.IndexEntry entry : filtered) {
+              activeAccessions.add(new DocumentETLProcessor.AccessionRef(
+                  entry.cik, entry.accession, entry.formType, entry.filingDate));
+            }
+            LOGGER.info("Processing {} accessions from full-index (years {}-{})",
+                activeAccessions.size(), startYear, endYear);
+            if (threads > 1) {
+              LOGGER.info("Using {} parallel threads for {} accessions",
+                  threads, activeAccessions.size());
+              result = processor.processAccessionsParallel(activeAccessions, threads);
+            } else {
+              result = processor.processAccessions(activeAccessions);
+            }
           } else {
-            result = processor.processEntities(entities);
+            // CIK-centric fallback (when full-index cache is unavailable)
+            List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
+            for (String cik : ciks) {
+              String normalizedCik = normalizeCik(cik);
+              for (int year = startYear; year <= endYear; year++) {
+                Map<String, String> entity = new HashMap<String, String>();
+                entity.put("cik", normalizedCik);
+                entity.put("year", String.valueOf(year));
+                entities.add(entity);
+              }
+            }
+            LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations (CIK-centric fallback)",
+                ciks.size(), (endYear - startYear + 1), entities.size());
+            if (threads > 1) {
+              LOGGER.info("Using {} parallel entity threads", threads);
+              result = processor.processEntitiesParallel(entities, threads);
+            } else {
+              result = processor.processEntities(entities);
+            }
           }
 
           // Flush any remaining staged parquet files to R2 as final batch

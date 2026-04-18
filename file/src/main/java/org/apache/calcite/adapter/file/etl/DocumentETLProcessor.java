@@ -304,6 +304,8 @@ public class DocumentETLProcessor {
     List<String> allOutputFiles = new ArrayList<String>();
     List<String> allErrors = new ArrayList<String>();
 
+    int entityCount = 0;
+    int totalEntities = entities.size();
     for (Map<String, String> entityVariables : entities) {
       try {
         DocumentETLResult result = processEntity(entityVariables);
@@ -322,7 +324,10 @@ public class DocumentETLProcessor {
         String errorMsg = "Failed to process entity " + entityVariables + ": " + e.getMessage();
         LOGGER.error(errorMsg);
         allErrors.add(errorMsg);
-        // Continue with next entity
+      }
+      entityCount++;
+      if (entityCount % 500 == 0) {
+        LOGGER.info("ETL progress: {}/{} entities processed", entityCount, totalEntities);
       }
     }
 
@@ -356,6 +361,8 @@ public class DocumentETLProcessor {
     final AtomicInteger totalProcessed = new AtomicInteger();
     final AtomicInteger totalSkipped = new AtomicInteger();
     final AtomicInteger totalFailed = new AtomicInteger();
+    final AtomicInteger entityCount = new AtomicInteger();
+    final int totalEntities = entities.size();
     final List<String> allOutputFiles = Collections.synchronizedList(new ArrayList<String>());
     final List<String> allErrors = Collections.synchronizedList(new ArrayList<String>());
 
@@ -379,6 +386,10 @@ public class DocumentETLProcessor {
             totalFailed.incrementAndGet();
             allErrors.add("Failed: " + entityVariables + ": " + e.getMessage());
             LOGGER.error("Failed to process entity {}: {}", entityVariables, e.getMessage());
+          }
+          int count = entityCount.incrementAndGet();
+          if (count % 500 == 0) {
+            LOGGER.info("ETL progress: {}/{} entities processed", count, totalEntities);
           }
           return null;
         }
@@ -404,6 +415,265 @@ public class DocumentETLProcessor {
         allOutputFiles,
         allErrors,
         duration);
+  }
+
+  /**
+   * Processes a single accession whose metadata is already known from the full-index cache.
+   *
+   * <p>Unlike {@link #processEntity}, this method fetches the filing {@code index.json} to
+   * obtain the primary document (skipping the per-CIK {@code submissions.json} call) and
+   * calls {@link ProcessedDocumentTracker#markProcessed} unconditionally — even for
+   * zero-output filings — so the accession is never re-queued on subsequent runs.
+   *
+   * @param cik        Normalized 10-digit zero-padded CIK
+   * @param accession  Accession number with dashes (e.g. {@code 0000320193-25-000006})
+   * @param formType   Form type (e.g. {@code 10-K}, {@code 4})
+   * @param filingDate ISO filing date (e.g. {@code 2025-01-15})
+   * @return processing result
+   */
+  public DocumentETLResult processAccession(
+      String cik, String accession, String formType, String filingDate) {
+    long startTime = System.currentTimeMillis();
+
+    if (documentTracker != null && documentTracker.isProcessed(cik, accession, formType)) {
+      return new DocumentETLResult(0, 1, 0,
+          Collections.<String>emptyList(), Collections.<String>emptyList(),
+          System.currentTimeMillis() - startTime);
+    }
+
+    DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDirectory);
+
+    String cikUrl = cik.replaceFirst("^0+", "");
+    String accessionNoDashes = accession.replace("-", "");
+    String indexUrl = "https://www.sec.gov/Archives/edgar/data/"
+        + cikUrl + "/" + accessionNoDashes + "/index.json";
+
+    String primaryDocument;
+    try {
+      primaryDocument = fetchPrimaryDocumentFromIndex(documentSource, indexUrl, formType);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to fetch index.json for {}/{}: {}", cik, accession, e.getMessage());
+      if (documentTracker != null) {
+        documentTracker.markProcessed(cik, accession, formType,
+            Collections.<String>emptyList());
+      }
+      return new DocumentETLResult(0, 0, 1,
+          Collections.<String>emptyList(),
+          Collections.singletonList(
+              "index.json fetch failed for " + accession + ": " + e.getMessage()),
+          System.currentTimeMillis() - startTime);
+    }
+
+    if (primaryDocument == null || primaryDocument.isEmpty()) {
+      LOGGER.debug("No primary document found for {}/{} form {}", cik, accession, formType);
+      if (documentTracker != null) {
+        documentTracker.markProcessed(cik, accession, formType,
+            Collections.<String>emptyList());
+      }
+      return new DocumentETLResult(0, 1, 0,
+          Collections.<String>emptyList(), Collections.<String>emptyList(),
+          System.currentTimeMillis() - startTime);
+    }
+
+    Map<String, String> docVariables = new HashMap<String, String>();
+    docVariables.put("cik", cik);
+    docVariables.put("cik_url", cikUrl);
+    docVariables.put("accession", accession);
+    docVariables.put("accession_url", accessionNoDashes);
+    docVariables.put("form", formType);
+    docVariables.put("filingDate", filingDate);
+    docVariables.put("document", primaryDocument);
+
+    List<String> converted;
+    List<String> errors = new ArrayList<String>();
+    int processed = 0;
+    int failed = 0;
+
+    try {
+      converted = processDocumentWithRetry(docVariables, documentSource, outputDirectory);
+      processed = 1;
+    } catch (IOException e) {
+      converted = Collections.<String>emptyList();
+      failed = 1;
+      errors.add("Failed to process " + accession + ": " + e.getMessage());
+      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, e.getMessage());
+    }
+
+    // Always mark processed — zero-output and errors are valid terminal states
+    if (documentTracker != null) {
+      documentTracker.markProcessed(cik, accession, formType, converted);
+    }
+
+    return new DocumentETLResult(processed, 0, failed,
+        converted, errors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Processes a list of accessions using the accession-centric path.
+   *
+   * @param accessions List of accessions to process
+   * @return Aggregated processing result
+   */
+  public DocumentETLResult processAccessions(List<AccessionRef> accessions) {
+    prewarmExistsCache(extractYearsFromAccessions(accessions));
+    long startTime = System.currentTimeMillis();
+    int totalProcessed = 0;
+    int totalSkipped = 0;
+    int totalFailed = 0;
+    List<String> allOutputFiles = new ArrayList<String>();
+    List<String> allErrors = new ArrayList<String>();
+
+    int count = 0;
+    int total = accessions.size();
+    for (AccessionRef ref : accessions) {
+      DocumentETLResult result =
+          processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      totalProcessed += result.getDocumentsProcessed();
+      totalSkipped += result.getDocumentsSkipped();
+      totalFailed += result.getDocumentsFailed();
+      allOutputFiles.addAll(result.getOutputFiles());
+      allErrors.addAll(result.getErrors());
+      count++;
+      if (count % 500 == 0) {
+        LOGGER.info("ETL progress: {}/{} accessions processed", count, total);
+      }
+    }
+
+    return new DocumentETLResult(totalProcessed, totalSkipped, totalFailed,
+        allOutputFiles, allErrors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Processes accessions in parallel using a thread pool.
+   *
+   * @param accessions  List of accessions to process
+   * @param threadCount Number of parallel threads
+   * @return Aggregated processing result
+   */
+  public DocumentETLResult processAccessionsParallel(
+      List<AccessionRef> accessions, int threadCount) {
+    prewarmExistsCache(extractYearsFromAccessions(accessions));
+    long startTime = System.currentTimeMillis();
+    final AtomicInteger totalProcessed = new AtomicInteger();
+    final AtomicInteger totalSkipped = new AtomicInteger();
+    final AtomicInteger totalFailed = new AtomicInteger();
+    final AtomicInteger count = new AtomicInteger();
+    final int total = accessions.size();
+    final List<String> allOutputFiles =
+        Collections.synchronizedList(new ArrayList<String>());
+    final List<String> allErrors =
+        Collections.synchronizedList(new ArrayList<String>());
+
+    ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+    List<Future<?>> futures = new ArrayList<Future<?>>();
+
+    for (final AccessionRef ref : accessions) {
+      futures.add(executor.submit(new Callable<Void>() {
+        @Override public Void call() {
+          DocumentETLResult result =
+              processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          totalProcessed.addAndGet(result.getDocumentsProcessed());
+          totalSkipped.addAndGet(result.getDocumentsSkipped());
+          totalFailed.addAndGet(result.getDocumentsFailed());
+          allOutputFiles.addAll(result.getOutputFiles());
+          allErrors.addAll(result.getErrors());
+          int c = count.incrementAndGet();
+          if (c % 500 == 0) {
+            LOGGER.info("ETL progress: {}/{} accessions processed", c, total);
+          }
+          return null;
+        }
+      }));
+    }
+
+    for (Future<?> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+      }
+    }
+    executor.shutdown();
+
+    return new DocumentETLResult(totalProcessed.get(), totalSkipped.get(), totalFailed.get(),
+        allOutputFiles, allErrors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Fetches the EDGAR filing {@code index.json} and returns the primary document filename.
+   *
+   * <p>The index at {@code .../edgar/data/{cik}/{accession}/index.json} lists directory
+   * contents. The primary document is the item whose {@code type} field matches the form
+   * type. For Form 3/4/5, XSL transform prefixes ({@code xslF345X*\/}) are stripped.
+   *
+   * @return primary document filename, or null if not found
+   */
+  private String fetchPrimaryDocumentFromIndex(
+      DocumentSource documentSource, String indexUrl, String formType) throws IOException {
+    String indexJson = documentSource.fetchUrlContent(indexUrl);
+
+    int directoryIdx = indexJson.indexOf("\"directory\"");
+    if (directoryIdx < 0) {
+      return null;
+    }
+    int itemsIdx = indexJson.indexOf("\"item\"", directoryIdx);
+    if (itemsIdx < 0) {
+      return null;
+    }
+    int arrayStart = indexJson.indexOf("[", itemsIdx);
+    if (arrayStart < 0) {
+      return null;
+    }
+    int arrayEnd = findMatchingBracket(indexJson, arrayStart);
+    if (arrayEnd < 0) {
+      return null;
+    }
+
+    String itemsArray = indexJson.substring(arrayStart + 1, arrayEnd);
+    int pos = 0;
+    while (pos < itemsArray.length()) {
+      int objStart = itemsArray.indexOf("{", pos);
+      if (objStart < 0) {
+        break;
+      }
+      int objEnd = findMatchingBracket(itemsArray, objStart);
+      if (objEnd < 0) {
+        break;
+      }
+      String item = itemsArray.substring(objStart, objEnd + 1);
+      String type = extractJsonStringField(item, "type");
+      String name = extractJsonStringField(item, "name");
+      pos = objEnd + 1;
+      if (type == null || name == null || name.isEmpty()) {
+        continue;
+      }
+      if (!type.equalsIgnoreCase(formType) && !type.startsWith(formType + "/")) {
+        continue;
+      }
+      if (formType.equals("3") || formType.equals("4") || formType.equals("5")
+          || formType.startsWith("3/") || formType.startsWith("4/")
+          || formType.startsWith("5/")) {
+        if (name.startsWith("xslF345X")) {
+          int slashIdx = name.indexOf('/');
+          if (slashIdx > 0) {
+            name = name.substring(slashIdx + 1);
+            LOGGER.debug("Stripped XSL prefix from Form {} document: {}", formType, name);
+          }
+        }
+      }
+      return name;
+    }
+    return null;
+  }
+
+  private Set<String> extractYearsFromAccessions(List<AccessionRef> accessions) {
+    Set<String> years = new HashSet<String>();
+    for (AccessionRef ref : accessions) {
+      if (ref.filingDate != null && ref.filingDate.length() >= 4) {
+        years.add(ref.filingDate.substring(0, 4));
+      }
+    }
+    return years;
   }
 
   private static final int DOC_MAX_RETRIES = 3;
@@ -906,6 +1176,25 @@ public class DocumentETLProcessor {
      * @param message Progress message
      */
     void onProgress(int processed, int total, String message);
+  }
+
+  /** Descriptor for one accession in the accession-centric ETL path. */
+  public static class AccessionRef {
+    public final String cik;
+    public final String accession;
+    public final String formType;
+    public final String filingDate;
+
+    public AccessionRef(String cik, String accession, String formType, String filingDate) {
+      this.cik = cik;
+      this.accession = accession;
+      this.formType = formType;
+      this.filingDate = filingDate;
+    }
+
+    @Override public String toString() {
+      return cik + "/" + accession + "(" + formType + ")";
+    }
   }
 
   /**

@@ -214,6 +214,84 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
     return result;
   }
 
+  /**
+   * Returns active CIKs filtered to only accessions filed after the high-water mark.
+   *
+   * <p>Accessions with {@code date_filed <= highWaterMark} are excluded entirely —
+   * they were evaluated in a previous run. Only new accessions (after HWM) are
+   * considered, reducing the entity corpus from ~38K to ~2K per incremental run.
+   */
+  public Set<String> getActiveCiks(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker, LocalDate highWaterMark) {
+    Set<String> result = new HashSet<String>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      List<IndexEntry> matching = new ArrayList<IndexEntry>();
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year != year) {
+          continue;
+        }
+        if (!matchesFilingType(ie.formType, filingTypes)) {
+          continue;
+        }
+        if (highWaterMark != null && ie.filingDate != null && !ie.filingDate.isEmpty()) {
+          try {
+            if (!LocalDate.parse(ie.filingDate).isAfter(highWaterMark)) {
+              continue;
+            }
+          } catch (Exception e) {
+            // unparseable date: include it to be safe
+          }
+        }
+        matching.add(ie);
+      }
+      if (matching.isEmpty()) {
+        continue;
+      }
+      if (tracker == null) {
+        result.add(entry.getKey());
+        continue;
+      }
+      List<String> accessions = new ArrayList<String>(matching.size());
+      List<String> formTypes = new ArrayList<String>(matching.size());
+      for (IndexEntry ie : matching) {
+        accessions.add(ie.accession);
+        formTypes.add(ie.formType);
+      }
+      if (!tracker.areAllProcessed(entry.getKey(), accessions, formTypes)) {
+        result.add(entry.getKey());
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Returns unprocessed accessions filtered by year and form types.
+   *
+   * @param year        Filing year
+   * @param filingTypes Form types to include, or null for all
+   * @param tracker     Tracker for per-accession processed-status checks, or null to include all
+   * @return list of unprocessed IndexEntry objects for the given year
+   */
+  public List<IndexEntry> getActiveAccessions(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker) {
+    List<IndexEntry> result = new ArrayList<IndexEntry>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year != year) {
+          continue;
+        }
+        if (!matchesFilingType(ie.formType, filingTypes)) {
+          continue;
+        }
+        if (tracker != null && tracker.isProcessed(ie.cik, ie.accession, ie.formType)) {
+          continue;
+        }
+        result.add(ie);
+      }
+    }
+    return result;
+  }
+
   /** Check whether a form type matches the requested filing types. */
   private static boolean matchesFilingType(String formType, List<String> filingTypes) {
     if (filingTypes == null || filingTypes.isEmpty()) {

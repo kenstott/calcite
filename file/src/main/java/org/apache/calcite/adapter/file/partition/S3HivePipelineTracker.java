@@ -20,20 +20,28 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.DeleteObjectsRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -258,39 +266,48 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.execute("INSTALL httpfs");
       stmt.execute("LOAD httpfs");
 
-      // Configure S3 - credentials must come from config (model.json operand)
-      String region = config.get("region");
-      if (region != null && !region.isEmpty()) {
-        stmt.execute("SET s3_region = '" + region + "'");
-      }
-
       String accessKey = config.get("accessKeyId");
       String secretKey = config.get("secretAccessKey");
-      if (accessKey != null && !accessKey.isEmpty()
-          && secretKey != null && !secretKey.isEmpty()) {
-        stmt.execute("SET s3_access_key_id = '" + accessKey + "'");
-        stmt.execute("SET s3_secret_access_key = '" + secretKey + "'");
-      } else {
+      if (accessKey == null || accessKey.isEmpty()
+          || secretKey == null || secretKey.isEmpty()) {
         LOGGER.warn("S3 tracker missing accessKeyId/secretAccessKey in config. "
             + "Provide credentials via model.json operand. Available keys: {}",
             config.keySet());
+        return;
+      }
+
+      // Default region to 'auto' when a custom endpoint is configured (e.g. R2).
+      // Without this, DuckDB httpfs defaults to 'us-east-1', causing HTTP 400 on R2 reads.
+      String region = config.get("region");
+      if ((region == null || region.isEmpty()) && endpoint != null && !endpoint.isEmpty()) {
+        region = "auto";
       }
 
       String sessionToken = config.get("sessionToken");
-      if (sessionToken != null && !sessionToken.isEmpty()) {
-        stmt.execute("SET s3_session_token = '" + sessionToken + "'");
-      }
 
+      StringBuilder sql = new StringBuilder(
+          "CREATE OR REPLACE SECRET s3_tracker_secret (TYPE S3");
+      sql.append(", KEY_ID '").append(accessKey).append("'");
+      sql.append(", SECRET '").append(secretKey).append("'");
+      if (region != null && !region.isEmpty()) {
+        sql.append(", REGION '").append(region).append("'");
+      }
+      if (sessionToken != null && !sessionToken.isEmpty()) {
+        sql.append(", SESSION_TOKEN '").append(sessionToken).append("'");
+      }
       if (endpoint != null && !endpoint.isEmpty()) {
-        stmt.execute("SET s3_endpoint = '" + endpoint.replaceAll("https?://", "") + "'");
-        stmt.execute("SET s3_url_style = 'path'");
+        String host = endpoint.replaceAll("https?://", "");
+        sql.append(", ENDPOINT '").append(host).append("'");
+        sql.append(", URL_STYLE 'path'");
         if (endpoint.startsWith("http://")) {
-          stmt.execute("SET s3_use_ssl = false");
+          sql.append(", USE_SSL false");
         }
       }
+      sql.append(")");
+      stmt.execute(sql.toString());
 
-      LOGGER.info("Initialized S3 httpfs extension for tracker at {} (endpoint={})",
-          bucketPath, endpoint);
+      LOGGER.info("Initialized S3 httpfs extension for tracker at {} (endpoint={}, region={})",
+          bucketPath, endpoint, region);
     }
   }
 
@@ -653,6 +670,23 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     long downloadElapsed = System.currentTimeMillis() - downloadStart;
     LOGGER.info("Downloaded {} tracker files in {}ms ({} errors, {} threads)",
         completed.get(), downloadElapsed, errors.get(), threads);
+
+    // Remove corrupt/empty files — DuckDB read_parquet fails the entire glob if any file
+    // is below the 8-byte PAR1 magic minimum (happens after JVM-killed mid-upload).
+    int corrupt = 0;
+    java.io.File[] downloaded = tempDir.listFiles();
+    if (downloaded != null) {
+      for (java.io.File f : downloaded) {
+        if (f.length() < 8) {
+          f.delete();
+          corrupt++;
+        }
+      }
+    }
+    if (corrupt > 0) {
+      LOGGER.warn("Removed {} corrupt/empty tracker files from tempDir (size < 8 bytes)",
+          corrupt);
+    }
 
     if (errors.get() > total / 2) {
       throw new RuntimeException("Too many download errors: " + errors.get() + "/" + total);
@@ -1810,6 +1844,67 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       this.signature = signature;
       this.errorMessage = errorMessage;
       this.asOf = asOf;
+    }
+  }
+
+  /**
+   * Reads the ETL high-water mark date for the given run key.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @return the stored date, or null if none has been written yet
+   */
+  public LocalDate readEtlHighWaterMark(String runKey) {
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) : "";
+    String s3Key = (keyPrefix.isEmpty() ? "" : keyPrefix + "/")
+        + "_meta/etl_hwm/" + runKey + ".txt";
+    try {
+      S3Object obj = getS3Client().getObject(bucket, s3Key);
+      try (InputStream is = obj.getObjectContent()) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[64];
+        int n;
+        while ((n = is.read(buf)) != -1) {
+          baos.write(buf, 0, n);
+        }
+        return LocalDate.parse(baos.toString(StandardCharsets.UTF_8.name()).trim());
+      }
+    } catch (AmazonS3Exception e) {
+      if ("NoSuchKey".equals(e.getErrorCode())) {
+        return null;
+      }
+      LOGGER.warn("Failed to read ETL high-water mark ({}): {}", runKey, e.getMessage());
+      return null;
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read ETL high-water mark ({}): {}", runKey, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Writes the ETL high-water mark date for the given run key.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @param date   the high-water mark to store
+   */
+  public void writeEtlHighWaterMark(String runKey, LocalDate date) {
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) : "";
+    String s3Key = (keyPrefix.isEmpty() ? "" : keyPrefix + "/")
+        + "_meta/etl_hwm/" + runKey + ".txt";
+    try {
+      byte[] bytes = date.toString().getBytes(StandardCharsets.UTF_8);
+      ObjectMetadata meta = new ObjectMetadata();
+      meta.setContentLength(bytes.length);
+      meta.setContentType("text/plain");
+      getS3Client().putObject(bucket, s3Key, new ByteArrayInputStream(bytes), meta);
+      LOGGER.info("Wrote ETL high-water mark ({}): {}", runKey, date);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write ETL high-water mark ({}): {}", runKey, e.getMessage());
     }
   }
 
