@@ -204,6 +204,16 @@ public class SecFilingCache implements AutoCloseable {
 
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
       if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+        // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
+        // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
+        // Clear the stale marker and reprocess so they produce _insider.parquet output.
+        FormType form = FormType.fromString(ie.formType);
+        if (form.expectsInsider()) {
+          LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
+              ie.formType, ie.accession);
+          clearNoXbrl(ie.accession);
+          toProcess.add(ie);
+        }
         continue;
       }
       Set<String> completed = tracker.getCompletedTables(ie.accession, PHASE_STAGING);
@@ -267,9 +277,15 @@ public class SecFilingCache implements AutoCloseable {
 
     FormType form = FormType.fromString(formType);
 
-    // Check for no_xbrl marker
+    // Check for no_xbrl marker — but insider forms (3/4/5) should never be no_xbrl;
+    // if they have this marker it's a stale bug artifact, clear it and reprocess.
     if (tracker.isComplete(accession, TABLE_NO_XBRL, PHASE_STAGING)) {
-      return ProcessingDecision.skip("No XBRL data available");
+      if (form.expectsInsider()) {
+        LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}", formType, accession);
+        clearNoXbrl(accession);
+      } else {
+        return ProcessingDecision.skip("No XBRL data available");
+      }
     }
 
     // Check for error state with retry limit
@@ -480,6 +496,44 @@ public class SecFilingCache implements AutoCloseable {
   public void markNoXbrl(String cik, String accession, String formType, String filingDate) {
     tracker.markComplete(accession, TABLE_NO_XBRL, PHASE_STAGING, 0);
     LOGGER.debug("Marked no_xbrl: {}:{}", cik, accession);
+  }
+
+  /**
+   * Clear the no_xbrl marker so the filing will be reprocessed.
+   * Used to fix accessions incorrectly marked no_xbrl due to converter bugs.
+   */
+  public void clearNoXbrl(String accession) {
+    tracker.markCleared(accession, TABLE_NO_XBRL, PHASE_STAGING);
+    LOGGER.debug("Cleared no_xbrl marker for accession: {}", accession);
+  }
+
+  /**
+   * Clear stale no_xbrl markers for insider forms (3/4/5) in the given candidates.
+   *
+   * <p>Unlike {@link #filterAndSelfHeal}, this method does NOT add cleared entries to any
+   * processing queue — it is a pure cleanup pass, intended for historical year sweeps where
+   * the current worker is not responsible for reprocessing.
+   *
+   * @param candidates index entries to inspect
+   * @return number of entries cleared
+   */
+  public int clearStaleInsiderNoXbrl(List<EdgarFullIndexCache.IndexEntry> candidates) {
+    int cleared = 0;
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+        FormType form = FormType.fromString(ie.formType);
+        if (form.expectsInsider()) {
+          LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
+              ie.formType, ie.accession);
+          clearNoXbrl(ie.accession);
+          cleared++;
+        }
+      }
+    }
+    if (cleared > 0) {
+      LOGGER.info("Cleared {} stale no_xbrl entries for insider forms (historical sweep)", cleared);
+    }
+    return cleared;
   }
 
   /**

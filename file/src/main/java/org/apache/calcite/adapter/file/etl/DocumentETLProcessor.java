@@ -647,18 +647,22 @@ public class DocumentETLProcessor {
       if (type == null || name == null || name.isEmpty()) {
         continue;
       }
-      if (!type.equalsIgnoreCase(formType) && !type.startsWith(formType + "/")) {
-        continue;
-      }
-      if (formType.equals("3") || formType.equals("4") || formType.equals("5")
-          || formType.startsWith("3/") || formType.startsWith("4/")
-          || formType.startsWith("5/")) {
-        if (name.startsWith("xslF345X")) {
-          int slashIdx = name.indexOf('/');
-          if (slashIdx > 0) {
-            name = name.substring(slashIdx + 1);
-            LOGGER.debug("Stripped XSL prefix from Form {} document: {}", formType, name);
-          }
+      boolean isInsiderFormType = formType.equals("3") || formType.equals("4")
+          || formType.equals("5") || formType.startsWith("3/")
+          || formType.startsWith("4/") || formType.startsWith("5/");
+      if (isInsiderFormType) {
+        // EDGAR uses type="text.gif" for all items in insider form filings; bypass type filter.
+        // Accept only .xml files that are not the XSLT viewer or SGML submission wrapper.
+        if (name.startsWith("xslF345X") || name.endsWith(".txt")
+            || name.endsWith(".html") || name.endsWith(".htm")) {
+          continue;
+        }
+        if (!name.toLowerCase().endsWith(".xml")) {
+          continue;
+        }
+      } else {
+        if (!type.equalsIgnoreCase(formType) && !type.startsWith(formType + "/")) {
+          continue;
         }
       }
       return name;

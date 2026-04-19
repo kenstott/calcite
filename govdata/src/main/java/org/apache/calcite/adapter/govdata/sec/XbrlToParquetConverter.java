@@ -197,6 +197,13 @@ public class XbrlToParquetConverter implements FileConverter {
         return process13DGForm(sourceFilePath, targetDirectoryPath, metadata);
       }
 
+      // Fast path: Forms 3/4/5 are XML ownership documents — parse directly as XML
+      // bypassing the HTML/inline-XBRL detection path which would fail on xslF345X HTML files
+      if (hintFilingType != null && isInsiderForm(null, hintFilingType)) {
+        LOGGER.info("Insider form {} detected, parsing XML directly: {}", hintFilingType, fileName);
+        return processInsiderXmlForm(sourceFilePath, targetDirectoryPath, metadata);
+      }
+
       Document doc = null;
       boolean isInlineXbrl = false;
 
@@ -631,6 +638,10 @@ public class XbrlToParquetConverter implements FileConverter {
       if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
         return date;
       }
+      // Normalize compact YYYYMMDD format (used by some older SEC filings)
+      if (date.matches("\\d{8}")) {
+        return date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
+      }
     }
 
     // Try to extract from document period end date (standard XBRL)
@@ -741,9 +752,63 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    // Insider form fallback: use latest transactionDate or signatureDate across all transactions.
+    // Forms 3/4/5 may lack periodOfReport or XBRL metadata but always have transaction/signature dates.
+    String insiderFallback = extractInsiderFormPeriodDate(doc);
+    if (insiderFallback != null) {
+      LOGGER.debug("Extracted period end date from insider transaction/signature date: " + insiderFallback);
+      return insiderFallback;
+    }
+
     // Return null if no date found - let the caller handle this
     LOGGER.warn("Could not extract period end date from: " + filename);
     return null;
+  }
+
+  private String extractInsiderFormPeriodDate(Document doc) {
+    String latest = null;
+    // Scan nonDerivativeTransaction, derivativeTransaction, nonDerivativeHolding, derivativeHolding
+    String[] txnTags = {"nonDerivativeTransaction", "derivativeTransaction",
+        "nonDerivativeHolding", "derivativeHolding"};
+    for (String tag : txnTags) {
+      NodeList nodes = doc.getElementsByTagName(tag);
+      for (int i = 0; i < nodes.getLength(); i++) {
+        Element el = (Element) nodes.item(i);
+        String date = getElementText(el, "transactionDate", "value");
+        if (date != null && date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          if (latest == null || date.compareTo(latest) > 0) {
+            latest = date;
+          }
+        }
+        // YYYYMMDD compact format
+        if (date != null && date.matches("\\d{8}")) {
+          String normalized = date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
+          if (latest == null || normalized.compareTo(latest) > 0) {
+            latest = normalized;
+          }
+        }
+      }
+    }
+    if (latest != null) {
+      return latest;
+    }
+    // Last resort: signatureDate on the ownershipDocument
+    NodeList sigDates = doc.getElementsByTagName("signatureDate");
+    for (int i = 0; i < sigDates.getLength(); i++) {
+      String date = sigDates.item(i).getTextContent().trim();
+      if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+        if (latest == null || date.compareTo(latest) > 0) {
+          latest = date;
+        }
+      }
+      if (date.matches("\\d{8}")) {
+        String normalized = date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
+        if (latest == null || normalized.compareTo(latest) > 0) {
+          latest = normalized;
+        }
+      }
+    }
+    return latest;
   }
 
   private List<Map<String, Object>> writeFactsToParquet(Document doc, String outputPath,
@@ -3358,8 +3423,63 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Also check for ownershipDocument root element
+    if (doc == null) {
+      return false;
+    }
     NodeList ownershipDocs = doc.getElementsByTagName("ownershipDocument");
     return ownershipDocs.getLength() > 0;
+  }
+
+  /**
+   * Parse a Form 3/4/5 XML file directly and delegate to convertInsiderForm.
+   * Bypasses the HTML/inline-XBRL detection path so that ownership XML documents
+   * are never mistaken for plain HTML pages.
+   */
+  private List<String> processInsiderXmlForm(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
+    String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1);
+    String accession = metadata != null ? metadata.getHint("accession") : null;
+    if (accession == null || accession.isEmpty()) {
+      accession = extractAccessionFromPath(sourceFilePath);
+    }
+    Document doc;
+    try {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
+        doc = builder.parse(is);
+      }
+    } catch (org.xml.sax.SAXParseException e) {
+      LOGGER.info("XML parse failed for insider form {}: {} — falling back to JSoup", fileName, e.getMessage());
+      doc = parseWithJsoupFallback(sourceFilePath);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to parse insider form {}: {}", fileName, e.getMessage());
+      return new ArrayList<String>();
+    }
+    if (doc == null) {
+      LOGGER.warn("No parseable document found for insider form: {}", fileName);
+      return new ArrayList<String>();
+    }
+    String cik = extractCik(doc, sourceFilePath);
+    if (cik == null || cik.equals("0000000000")) {
+      LOGGER.warn("Could not extract CIK from insider form: {}", fileName);
+      return new ArrayList<String>();
+    }
+    String filingType = extractFilingType(doc, sourceFilePath);
+    if (filingType == null || filingType.equals("UNKNOWN")) {
+      String hintForm = metadata != null ? metadata.getHint("form") : null;
+      filingType = hintForm != null ? hintForm : "4";
+    }
+    String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
+    String hintFilingDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String actualFilingDate = (hintFilingDate != null) ? hintFilingDate : periodEndDate;
+    if (actualFilingDate == null) {
+      actualFilingDate = String.valueOf(java.time.Year.now().getValue()) + "-01-01";
+    }
+    LOGGER.info("Processing insider form {} CIK={} period={} accession={}",
+        filingType, cik, periodEndDate, accession);
+    return convertInsiderForm(doc, sourceFilePath, targetDirectoryPath, cik, filingType, actualFilingDate, accession);
   }
 
   /**
