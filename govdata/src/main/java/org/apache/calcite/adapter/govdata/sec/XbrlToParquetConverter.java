@@ -634,9 +634,12 @@ public class XbrlToParquetConverter implements FileConverter {
     NodeList periodOfReports = doc.getElementsByTagName("periodOfReport");
     if (periodOfReports.getLength() > 0) {
       String date = periodOfReports.item(0).getTextContent().trim();
-      // Validate date format (should be YYYY-MM-DD)
+      // Validate date format (should be YYYY-MM-DD); also strip timezone offset (e.g. 2026-03-18-05:00)
       if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
         return date;
+      }
+      if (date.length() > 10 && date.substring(0, 10).matches("\\d{4}-\\d{2}-\\d{2}")) {
+        return date.substring(0, 10);
       }
       // Normalize compact YYYYMMDD format (used by some older SEC filings)
       if (date.matches("\\d{8}")) {
@@ -796,6 +799,10 @@ public class XbrlToParquetConverter implements FileConverter {
     NodeList sigDates = doc.getElementsByTagName("signatureDate");
     for (int i = 0; i < sigDates.getLength(); i++) {
       String date = sigDates.item(i).getTextContent().trim();
+      // Strip timezone offset (e.g. 2026-03-18-05:00 → 2026-03-18)
+      if (date.length() > 10 && date.substring(0, 10).matches("\\d{4}-\\d{2}-\\d{2}")) {
+        date = date.substring(0, 10);
+      }
       if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
         if (latest == null || date.compareTo(latest) > 0) {
           latest = date;
