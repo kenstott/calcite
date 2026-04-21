@@ -4351,9 +4351,28 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 searchPath, pattern, storageProvider.getStorageType());
 
     try {
-      // Use StorageProvider listing to find files matching the pattern
-      boolean recursive = pattern.contains("**") || pattern.contains("/");
-      List<StorageProvider.FileEntry> allFiles = storageProvider.listFiles(searchPath, recursive);
+      // Use StorageProvider listing to find files matching the pattern.
+      // For patterns with "/" but no "**" (fixed depth, e.g. "year=*/*.parquet"),
+      // do a bounded two-pass listing: list top-level dirs, then list each subdir.
+      // This avoids an unbounded recursive scan of the entire bucket.
+      boolean hasDoubleWildcard = pattern.contains("**");
+      boolean hasSlash = pattern.contains("/");
+      List<StorageProvider.FileEntry> allFiles;
+      if (!hasDoubleWildcard && hasSlash) {
+        List<StorageProvider.FileEntry> topLevel = storageProvider.listFiles(searchPath, false);
+        allFiles = new ArrayList<>();
+        for (StorageProvider.FileEntry entry : topLevel) {
+          if (entry.isDirectory()) {
+            try {
+              allFiles.addAll(storageProvider.listFiles(entry.getPath(), false));
+            } catch (Exception e) {
+              LOGGER.warn("findMatchingFiles: error listing subdir {}: {}", entry.getPath(), e.getMessage());
+            }
+          }
+        }
+      } else {
+        allFiles = storageProvider.listFiles(searchPath, hasDoubleWildcard);
+      }
 
       LOGGER.debug("findMatchingFiles: StorageProvider returned {} files", allFiles.size());
 

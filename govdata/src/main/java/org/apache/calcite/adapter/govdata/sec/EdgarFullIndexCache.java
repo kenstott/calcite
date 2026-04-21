@@ -536,14 +536,14 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
   }
 
   /** Parsed entry from a company.idx line. */
-  static class IndexEntry {
-    final String companyName;
-    final String formType;
-    final String cik;
-    final String filingDate;
-    final String accession;
-    final int year;
-    final int quarter;
+  public static class IndexEntry {
+    public final String companyName;
+    public final String formType;
+    public final String cik;
+    public final String filingDate;
+    public final String accession;
+    public final int year;
+    public final int quarter;
 
     IndexEntry(String companyName, String formType, String cik,
         String filingDate, String accession, int year, int quarter) {
