@@ -1041,7 +1041,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("cik", cik);
     data.put("accession_number", accessionNumber);
-    data.put("filing_type", filingType);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
 
     // Extract year for Iceberg partitioning
@@ -1074,7 +1074,14 @@ public class XbrlToParquetConverter implements FileConverter {
                                            extractDeiValue(doc, "EntityIncorporationStateCountryCode", "StateOrCountryOfIncorporation");
     data.put("state_of_incorporation", stateOfIncorp);
 
-    String fiscalYearEnd = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
+    // Fetch authoritative company info from EDGAR submissions.json (ticker, sic, fiscalYearEnd)
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+
+    String fiscalYearEndRaw = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
+    String fiscalYearEnd = normalizeFiscalYearEnd(fiscalYearEndRaw);
+    if (fiscalYearEnd == null && submissionsInfo.containsKey("fiscal_year_end_mmdd")) {
+      fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
+    }
     data.put("fiscal_year_end", fiscalYearEnd);
 
     String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
@@ -1089,28 +1096,92 @@ public class XbrlToParquetConverter implements FileConverter {
     String docType = extractDeiValue(doc, "DocumentType", "FormType");
     data.put("document_type", docType);
 
-    String periodEnd = extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate");
+    String periodEnd = normalizeDateToIso(
+        extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate"));
     data.put("period_end_date", periodEnd);
     data.put("period_of_report", periodEnd);
     data.put("primary_document", filename);
 
-    // Try to extract SIC code
+    // SIC code: try XBRL DEI first, fall back to submissions.json
     String sicStr = extractDeiValue(doc, "EntityStandardIndustrialClassificationCode", "SicCode");
+    if (sicStr == null) {
+      sicStr = submissionsInfo.get("sic_code");
+    }
     data.put("sic_code", sicStr);
 
     String irsNumber = extractDeiValue(doc, "EntityTaxIdentificationNumber", "IrsNumber");
     data.put("irs_number", irsNumber);
 
-    // Set remaining fields to null/defaults
+    // Ticker from EDGAR company_tickers.json reverse lookup
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+
+    // fiscal_year derived from period_of_report
+    Integer fiscalYear = null;
+    if (periodEnd != null && periodEnd.length() >= 4) {
+      try {
+        fiscalYear = Integer.parseInt(periodEnd.substring(0, 4));
+      } catch (NumberFormatException ignored) { }
+    }
+
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
-    data.put("fiscal_year", null);
+    data.put("fiscal_year", fiscalYear);
 
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
     LOGGER.info("Successfully wrote " + dataList.size() + " metadata records to " + outputPath);
+  }
+
+  // ---- DQ helpers ----
+
+  public static String normalizeFilingType(String filingType) {
+    if (filingType == null) return null;
+    String t = filingType.trim().toUpperCase().replace(" ", "");
+    switch (t) {
+      case "10K":    return "10-K";
+      case "10Q":    return "10-Q";
+      case "10KA":   // fall-through
+      case "10K/A":  return "10-K/A";
+      case "10QA":   // fall-through
+      case "10Q/A":  return "10-Q/A";
+      default:       return filingType;
+    }
+  }
+
+  public static String normalizeDateToIso(String raw) {
+    if (raw == null || raw.trim().isEmpty()) return null;
+    String d = raw.trim().replaceAll("\\s+", " ").replaceAll("\\s+,", ",");
+    List<DateTimeFormatter> fmts = new ArrayList<>();
+    fmts.add(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH));
+    for (DateTimeFormatter fmt : fmts) {
+      try {
+        return LocalDate.parse(d, fmt).format(DateTimeFormatter.ISO_LOCAL_DATE);
+      } catch (Exception ignored) { }
+    }
+    return raw;
+  }
+
+  public static String normalizeFiscalYearEnd(String raw) {
+    if (raw == null) return null;
+    String s = raw.trim();
+    if (s.matches("\\d{4}")) {
+      return "--" + s.substring(0, 2) + "-" + s.substring(2);
+    }
+    if (s.startsWith("--") && s.matches("--\\d{2}-\\d{2}")) {
+      return s;
+    }
+    String iso = normalizeDateToIso(s);
+    if (iso != null && iso.matches("\\d{4}-\\d{2}-\\d{2}")) {
+      return "--" + iso.substring(5);
+    }
+    return raw;
   }
 
   private String extractDeiValue(Document doc, String... possibleTags) {
@@ -4190,10 +4261,13 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
     data.put("accession_number", accession);
-    data.put("filing_type", filingType);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
 
     int year = 0;
@@ -4215,16 +4289,18 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("primary_document", filename);
     data.put("document_type", filingType);
 
-    // DEI fields not available from plain HTML (no XBRL)
+    // Enrich from EDGAR submissions.json for fields unavailable in plain HTML
+    String fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
     data.put("state_of_incorporation", null);
-    data.put("fiscal_year_end", null);
+    data.put("fiscal_year_end", fiscalYearEnd);
     data.put("business_address", null);
     data.put("mailing_address", null);
     data.put("phone", null);
     data.put("period_end_date", null);
     data.put("period_of_report", null);
-    data.put("sic_code", null);
+    data.put("sic_code", submissionsInfo.get("sic_code"));
     data.put("irs_number", null);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
     data.put("fiscal_year", null);
@@ -5354,19 +5430,36 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
     data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
+    data.put("year", Integer.parseInt(partitionYear));
     data.put("company_name", companyInfo.get("company_name"));
     data.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
-    data.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
-    data.put("sic_code", companyInfo.get("sic_code"));
+    String fiscalYearEnd = normalizeFiscalYearEnd(companyInfo.get("fiscal_year_end"));
+    if (fiscalYearEnd == null) {
+      fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
+    }
+    data.put("fiscal_year_end", fiscalYearEnd);
+    String sicCode = companyInfo.get("sic_code");
+    if (sicCode == null) sicCode = submissionsInfo.get("sic_code");
+    data.put("sic_code", sicCode);
     data.put("irs_number", companyInfo.get("irs_number"));
     data.put("business_address", companyInfo.get("business_address"));
     data.put("mailing_address", companyInfo.get("mailing_address"));
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+    data.put("fiscal_year", null);
+    data.put("period_of_report", null);
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    data.put("filing_url", filename);
+    data.put("primary_document", filename);
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
@@ -5387,20 +5480,30 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
     data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
-    // We don't have company info from inline XBRL that failed to parse
+    data.put("year", Integer.parseInt(partitionYear));
     data.put("company_name", null);
     data.put("state_of_incorporation", null);
-    data.put("fiscal_year_end", null);
-    data.put("sic_code", null);
+    data.put("fiscal_year_end", normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd")));
+    data.put("sic_code", submissionsInfo.get("sic_code"));
     data.put("irs_number", null);
     data.put("business_address", null);
     data.put("mailing_address", null);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+    data.put("fiscal_year", null);
+    data.put("period_of_report", null);
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    data.put("filing_url", filename);
+    data.put("primary_document", filename);
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
