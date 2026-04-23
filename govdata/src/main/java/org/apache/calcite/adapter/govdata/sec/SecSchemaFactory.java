@@ -1172,6 +1172,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
+    // Derive fileChunkSize from rowBatchSize to prevent OOM in file-list processing path.
+    // processWithFileChunkingToIceberg() loads all rows from fileChunkSize files into memory.
+    // With ~332 rows/file for facts tables, fileChunkSize=5000 (default) = 1.66M rows → OOM (Error, not Exception).
+    // Using rowBatchSize/500 keeps each chunk under rowBatchSize rows (e.g., 50000/500=100 files × 332=33200 rows).
+    int fileChunkSize = 0;
+    if (rowBatchSize > 0) {
+      fileChunkSize = Math.max(1, rowBatchSize / 500);
+      LOGGER.info("Derived fileChunkSize={} from rowBatchSize={} for table '{}'",
+          fileChunkSize, rowBatchSize, tableName);
+    }
+
     // Extract full table columns from YAML config for Iceberg table creation
     List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
     LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
@@ -1195,6 +1206,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .yearRange(startYear, endYear)
         .computedColumns(computedColumns)
         .rowBatchSize(rowBatchSize)
+        .fileChunkSize(fileChunkSize)
         .rowFilter(rowFilter)
         .icebergTableLocation(warehousePath + "/" + icebergTableName)
         .accessionColumn("accession_number")

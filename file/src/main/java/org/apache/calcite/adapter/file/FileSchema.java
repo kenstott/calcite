@@ -4212,10 +4212,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET");
         LOGGER.info("Updated conversion record for '{}' to ICEBERG_PARQUET", tableName);
       } else {
-        LOGGER.debug("Iceberg table '{}' does not exist at warehouse: {}", icebergTableName, warehousePath);
+        LOGGER.warn("Iceberg table '{}' not found at warehouse '{}' — table '{}' will use parquet_scan glob fallback (slow). "
+            + "Run ETL with autoDownload=true to materialize.", icebergTableName, warehousePath, tableName);
       }
     } catch (Exception e) {
-      LOGGER.debug("Could not check for existing Iceberg table '{}': {}", tableName, e.getMessage());
+      LOGGER.warn("Failed to check Iceberg table '{}' at warehouse '{}': {} — table '{}' will use parquet_scan glob fallback.",
+          icebergTableName, warehousePath, e.getMessage(), tableName);
     }
   }
 

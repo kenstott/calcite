@@ -16,28 +16,25 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Queries Apple (CIK 0000320193) filing data from Cloudflare R2 materialized S3 data
- * via the govdata Calcite adapter with autoDownload=false.
- *
- * <p>Bootstraps DuckDB with iceberg_scan views for existing S3 Iceberg tables
- * (currently filing_metadata) before creating the Calcite connection.
- * financial_line_items will be available once ETL workers finish materializing it.
+ * Queries Apple (CIK 0000320193) filing_metadata from Cloudflare R2 via the govdata
+ * Calcite adapter with autoDownload=false and executionEngine=parquet.
  */
 @Tag("integration")
 public class AaplRevenueR2IntegrationTest {
@@ -49,80 +46,8 @@ public class AaplRevenueR2IntegrationTest {
       "7c2a89d9f0f976116a69654026c9c47a33e8c3af2293f83d8204b1cf92a2e577";
   private static final String R2_ENDPOINT =
       "https://21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com";
-  private static final String R2_ENDPOINT_HOST =
-      "21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com";
   private static final String R2_PARQUET_DIR = "s3://govdata-parquet-v1";
-  private static final String R2_CACHE_DIR = "s3://govdata-raw-v1";
   private static final String APPLE_CIK = "0000320193";
-
-  private static final String FILING_METADATA_BASE =
-      "s3://govdata-parquet-v1/source=sec/SEC/filing_metadata";
-
-  /**
-   * Pre-populate the shared DuckDB file with iceberg_scan views for tables that
-   * exist in S3. This runs before Calcite connections are opened so that the
-   * DuckDB JDBC schema discovers these views on startup.
-   *
-   * <p>DuckDB's iceberg_scan requires the path to include the metadata version file
-   * (e.g., metadata/v3.metadata.json) because version-hint.text is in the metadata/
-   * subdirectory, not at the table root. We read the version hint dynamically.
-   */
-  @BeforeAll
-  static void bootstrapDuckDBViews() throws Exception {
-    File workingDir = new File(System.getProperty("user.dir"));
-    File duckdbDir = new File(workingDir, ".aperio/.duckdb");
-    duckdbDir.mkdirs();
-    File dbFile = new File(duckdbDir, "shared.duckdb");
-
-    LOGGER.info("Bootstrapping DuckDB at: {}", dbFile.getAbsolutePath());
-
-    Class.forName("org.duckdb.DuckDBDriver");
-    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:" + dbFile.getAbsolutePath())) {
-      // Install extensions
-      try { conn.createStatement().execute("INSTALL httpfs"); } catch (Exception ignored) { }
-      conn.createStatement().execute("LOAD httpfs");
-      try { conn.createStatement().execute("INSTALL iceberg"); } catch (Exception ignored) { }
-      conn.createStatement().execute("LOAD iceberg");
-
-      // Configure S3 for R2 (PERSISTENT so it survives connection reuse)
-      conn.createStatement().execute(
-          "CREATE OR REPLACE PERSISTENT SECRET duckdb_s3_secret ("
-          + "TYPE s3, PROVIDER config, "
-          + "KEY_ID '" + R2_ACCESS_KEY + "', "
-          + "SECRET '" + R2_SECRET_KEY + "', "
-          + "ENDPOINT '" + R2_ENDPOINT_HOST + "', "
-          + "URL_STYLE 'path', "
-          + "USE_SSL true"
-          + ")");
-
-      // Read version hint to find the latest Iceberg metadata version
-      String versionHintPath = FILING_METADATA_BASE + "/metadata/version-hint.text";
-      String version;
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT trim(content) FROM read_text('" + versionHintPath + "')")) {
-        assertTrue(rs.next(), "version-hint.text must exist at " + versionHintPath);
-        version = rs.getString(1);
-      }
-      LOGGER.info("filing_metadata Iceberg version: {}", version);
-
-      String metadataPath = FILING_METADATA_BASE + "/metadata/v" + version + ".metadata.json";
-
-      // Create DuckDB schema to match Calcite schema name
-      conn.createStatement().execute("CREATE SCHEMA IF NOT EXISTS sec");
-
-      // Bootstrap filing_metadata Iceberg view
-      conn.createStatement().execute(
-          "CREATE OR REPLACE VIEW sec.filing_metadata AS "
-          + "SELECT * FROM iceberg_scan('" + metadataPath + "')");
-
-      // Verify
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT COUNT(*) FROM sec.filing_metadata WHERE cik = '" + APPLE_CIK + "'")) {
-        rs.next();
-        LOGGER.info("Bootstrap complete: {} Apple rows in filing_metadata", rs.getLong(1));
-      }
-    }
-  }
 
   private Connection createConnection() throws Exception {
     String modelJson =
@@ -135,17 +60,20 @@ public class AaplRevenueR2IntegrationTest {
         + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "    \"operand\": {"
         + "      \"dataSource\": \"sec\","
-        + "      \"executionEngine\": \"DUCKDB\","
-        + "      \"database_filename\": \"shared.duckdb\","
-        + "      \"ephemeralCache\": false,"
+        + "      \"executionEngine\": \"duckdb\","
+        + "      \"autoDownload\": false,"
         + "      \"ciks\": [\"" + APPLE_CIK + "\"],"
         + "      \"filingTypes\": [\"10-K\", \"10-Q\", \"8-K\"],"
         + "      \"startYear\": 2020,"
         + "      \"endYear\": 2025,"
-        + "      \"autoDownload\": false,"
         + "      \"directory\": \"" + R2_PARQUET_DIR + "\","
-        + "      \"cacheDirectory\": \"" + R2_CACHE_DIR + "\","
+        + "      \"storageType\": \"s3\","
         + "      \"s3Config\": {"
+        + "        \"accessKeyId\": \"" + R2_ACCESS_KEY + "\","
+        + "        \"secretAccessKey\": \"" + R2_SECRET_KEY + "\","
+        + "        \"endpoint\": \"" + R2_ENDPOINT + "\""
+        + "      },"
+        + "      \"storageConfig\": {"
         + "        \"accessKeyId\": \"" + R2_ACCESS_KEY + "\","
         + "        \"secretAccessKey\": \"" + R2_SECRET_KEY + "\","
         + "        \"endpoint\": \"" + R2_ENDPOINT + "\""
@@ -158,62 +86,102 @@ public class AaplRevenueR2IntegrationTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
     props.setProperty("model", "inline:" + modelJson);
-
     return DriverManager.getConnection("jdbc:calcite:", props);
   }
 
   @Test
   void testAppleFilings() throws Exception {
-    LOGGER.info("=== Apple Filings via govdata Calcite adapter (R2 S3) ===");
+    LOGGER.info("=== Apple filings via govdata Calcite adapter (R2, parquet engine) ===");
 
     try (Connection conn = createConnection();
          Statement stmt = conn.createStatement()) {
 
       String sql =
-          "SELECT cik, company_name, ticker, filing_type, filing_date, period_of_report"
+          "SELECT cik, filing_type, ticker, filing_date, period_of_report"
           + " FROM \"sec\".\"filing_metadata\""
           + " WHERE cik = '" + APPLE_CIK + "'"
           + " ORDER BY filing_date";
 
-      LOGGER.info("Executing: {}", sql);
-
       int rowCount = 0;
       try (ResultSet rs = stmt.executeQuery(sql)) {
-        java.sql.ResultSetMetaData meta = rs.getMetaData();
-        int cols = meta.getColumnCount();
-        StringBuilder header = new StringBuilder();
-        for (int i = 1; i <= cols; i++) {
-          header.append(meta.getColumnName(i)).append("\t");
-        }
-        LOGGER.info("{}", header);
-        LOGGER.info("------------------------------------------------------");
         while (rs.next()) {
-          StringBuilder row = new StringBuilder();
-          for (int i = 1; i <= cols; i++) {
-            row.append(rs.getString(i)).append("\t");
-          }
-          LOGGER.info("{}", row);
+          LOGGER.info("filing_type={} ticker={} filing_date={} period_of_report={}",
+              rs.getString("filing_type"), rs.getString("ticker"),
+              rs.getString("filing_date"), rs.getString("period_of_report"));
           rowCount++;
         }
       }
-
-      LOGGER.info("Total Apple filings in filing_metadata: {}", rowCount);
-      assertTrue(rowCount > 0, "Expected filing_metadata rows for AAPL from R2");
+      LOGGER.info("Total Apple filings: {}", rowCount);
+      assertTrue(rowCount > 0, "Expected Apple filings from R2");
     }
   }
 
+  /**
+   * Verifies DQ-patched fields for AAPL 2023 10-K/10-Q filings through the full
+   * Calcite govdata model stack: filing_type normalized, ticker=AAPL, sic_code
+   * populated, fiscal_year_end in --MM-DD format, period_of_report in YYYY-MM-DD.
+   */
   @Test
-  void testAvailableTables() throws Exception {
-    LOGGER.info("=== Available tables in SEC schema (R2 S3) ===");
+  void testApple2023DqFields() throws Exception {
+    LOGGER.info("=== Apple 2023 DQ-patched fields via Calcite govdata model ===");
 
-    try (Connection conn = createConnection()) {
-      java.sql.DatabaseMetaData meta = conn.getMetaData();
-      try (ResultSet tables = meta.getTables(null, "sec", "%", new String[]{"TABLE"})) {
-        while (tables.next()) {
-          String tableName = tables.getString("TABLE_NAME");
-          LOGGER.info("Table: {}", tableName);
+    try (Connection conn = createConnection();
+         Statement stmt = conn.createStatement()) {
+
+      String sql =
+          "SELECT filing_type, ticker, sic_code, fiscal_year_end, period_of_report"
+          + " FROM \"sec\".\"filing_metadata\""
+          + " WHERE cik = '" + APPLE_CIK + "'"
+          + " AND filing_date >= '2023-01-01' AND filing_date < '2024-01-01'"
+          + " AND filing_type IN ('10-K', '10-Q')"
+          + " ORDER BY period_of_report";
+
+      LOGGER.info("Executing: {}", sql);
+
+      List<String> filingTypes = new ArrayList<>();
+      List<String> tickers = new ArrayList<>();
+      List<String> sicCodes = new ArrayList<>();
+      List<String> fiscalYearEnds = new ArrayList<>();
+      List<String> periodsOfReport = new ArrayList<>();
+
+      try (ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          String ft = rs.getString("filing_type");
+          String tk = rs.getString("ticker");
+          String sic = rs.getString("sic_code");
+          String fye = rs.getString("fiscal_year_end");
+          String por = rs.getString("period_of_report");
+          LOGGER.info("filing_type={} ticker={} sic_code={} fiscal_year_end={} period_of_report={}",
+              ft, tk, sic, fye, por);
+          if (ft != null) filingTypes.add(ft);
+          if (tk != null) tickers.add(tk);
+          if (sic != null && !sic.isEmpty()) sicCodes.add(sic);
+          if (fye != null) fiscalYearEnds.add(fye);
+          if (por != null) periodsOfReport.add(por);
         }
       }
+
+      LOGGER.info("2023 10-K/10-Q rows: {}", filingTypes.size());
+
+      assertFalse(filingTypes.isEmpty(),
+          "Expected 10-K or 10-Q filings for AAPL in 2023");
+
+      for (String ft : filingTypes) {
+        assertTrue(ft.equals("10-K") || ft.equals("10-Q"),
+            "filing_type must be normalized, got: " + ft);
+      }
+
+      assertTrue(tickers.stream().anyMatch(t -> "AAPL".equalsIgnoreCase(t)),
+          "At least one row must have ticker=AAPL; got: " + tickers);
+
+      assertFalse(sicCodes.isEmpty(),
+          "sic_code must be populated; got empty");
+
+      assertTrue(fiscalYearEnds.stream().anyMatch(f -> f.startsWith("--")),
+          "fiscal_year_end must be in --MM-DD format; got: " + fiscalYearEnds);
+
+      assertTrue(periodsOfReport.stream().anyMatch(p -> p.matches("\\d{4}-\\d{2}-\\d{2}")),
+          "period_of_report must be ISO YYYY-MM-DD; got: " + periodsOfReport);
     }
   }
 }

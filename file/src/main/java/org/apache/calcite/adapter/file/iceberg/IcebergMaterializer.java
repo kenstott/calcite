@@ -730,7 +730,7 @@ public class IcebergMaterializer {
         // Check for "No files found" - this means source data doesn't exist for this table/batch
         // This is expected when running a 10-K job but the table needs Form 4 or 8-K data
         if (message != null && message.contains("No files found")) {
-          LOGGER.debug("Batch {} has no source files, skipping (table may require different filing type)", batch);
+          LOGGER.warn("Batch {} has no source files, skipping (table may require different filing type)", batch);
           return true;  // Treat as success - no data to process is OK
         }
 

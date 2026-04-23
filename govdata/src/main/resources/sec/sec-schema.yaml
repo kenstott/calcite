@@ -18,6 +18,7 @@
 schemaName: "${SCHEMA_NAME:sec}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=sec"
+refreshInterval: "PT1H"
 
 comment: >
   Securities and Exchange Commission financial data including XBRL filings (10-K, 10-Q, 8-K),
