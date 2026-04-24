@@ -1622,6 +1622,16 @@ public class IcebergMaterializer {
       }
     }
 
+    // If the extracted suffix still contains a wildcard, the per-accession optimization
+    // cannot work (e.g. pattern "*insider*.parquet" → suffix "insider*.parquet" is not
+    // a literal suffix we can match against batch-named files like "insider_batch_0000.parquet").
+    // Return null so the caller falls back to glob-based processing.
+    if (fileSuffix.contains("*")) {
+      LOGGER.debug("File suffix '{}' contains wildcard - skipping per-accession optimization, using glob fallback",
+          fileSuffix);
+      return null;
+    }
+
     // Cache key includes year and file suffix
     String cacheKey = year + ":" + fileSuffix;
     if (sourceAccessionsCache.containsKey(cacheKey)) {
@@ -2041,14 +2051,8 @@ public class IcebergMaterializer {
   private Set<String> getTrackedAccessions(String tableId, String yearValue) {
     Set<String> accessions = new HashSet<String>();
     try {
-      Set<Map<String, String>> allProcessed = incrementalTracker.getProcessedKeyValues(tableId);
-      for (Map<String, String> keyValues : allProcessed) {
-        if (yearValue != null) {
-          String entryYear = keyValues.get("year");
-          if (!yearValue.equals(entryYear)) {
-            continue;
-          }
-        }
+      Set<Map<String, String>> processed = incrementalTracker.getProcessedKeyValues(tableId, yearValue);
+      for (Map<String, String> keyValues : processed) {
         for (Map.Entry<String, String> entry : keyValues.entrySet()) {
           if (!"year".equals(entry.getKey())) {
             accessions.add(entry.getValue());

@@ -1221,9 +1221,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
-    // S3 tracker: scan all partitions for this alternate name
+    return getProcessedKeyValues(alternateName, null);
+  }
+
+  @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName,
+      String year) {
     Set<Map<String, String>> result = new HashSet<>();
-    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
+    String glob = year != null
+        ? bucketPath + "/year=" + year + "/source_key=*/*.parquet"
+        : bucketPath + "/year=*/source_key=*/*.parquet";
 
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "

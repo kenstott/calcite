@@ -195,6 +195,15 @@ dimension_values:
     - "S-3"
     - "424B2"
     - "424B5"
+    - "3"
+    - "4"
+    - "5"
+    - "13F-HR"
+    - "13F-HR/A"
+    - "SC 13D"
+    - "SC 13D/A"
+    - "SC 13G"
+    - "SC 13G/A"
 
   # --- Year Range ---
   # SEC defaults to 2010 (vs global 2000) due to XBRL adoption timeline
@@ -289,7 +298,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: filing_metadata
-    pattern: "year=*/*_metadata.parquet"
+    pattern: "year=*/*metadata*.parquet"
     partitions: *sec_partitions
 
     comment: >
@@ -413,7 +422,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: financial_line_items
-    pattern: "year=*/*_facts.parquet"
+    pattern: "year=*/*facts*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -505,7 +514,7 @@ partitionedTables:
 
   - name: filing_contexts
     enabled: true
-    pattern: "year=*/*_contexts.parquet"
+    pattern: "year=*/*contexts*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -586,7 +595,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: mda_sections
-    pattern: "year=*/*_mda.parquet"
+    pattern: "year=*/*mda*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -642,6 +651,8 @@ partitionedTables:
         - "10-K/A"
         - "10-Q"
         - "10-Q/A"
+        - "8-K"
+        - "8-K/A"
       year: *year_range
 
     materialize:
@@ -663,7 +674,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: xbrl_relationships
-    pattern: "year=*/*_relationships.parquet"
+    pattern: "year=*/*relationships*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -750,7 +761,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: insider_transactions
-    pattern: "year=*/*_insider.parquet"
+    pattern: "year=*/*insider*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -865,7 +876,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: institutional_holdings
-    pattern: "year=*/*_13f.parquet"
+    pattern: "year=*/*13f*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -980,7 +991,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: beneficial_ownership
-    pattern: "year=*/*_13dg.parquet"
+    pattern: "year=*/*13dg*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1100,7 +1111,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: earnings_transcripts
-    pattern: "year=*/*_earnings.parquet"
+    pattern: "year=*/*earnings*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1297,7 +1308,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: vectorized_chunks
-    pattern: "year=*/*_chunks.parquet"
+    pattern: "year=*/*chunks*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: true
@@ -1390,9 +1401,7 @@ partitionedTables:
     dimensions:
       cik:
         type: inherited
-      filing_type:
-        - "10-K"
-        - "10-Q"
+      filing_type: *all_filing_types
       year: *year_range
 
     materialize:

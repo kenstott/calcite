@@ -654,7 +654,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("DEBUG: Mock data mode - created mock Parquet files");
 
         // Also create mock stock prices if enabled
-        boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
+        boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", false);
         if (fetchStockPrices) {
           LOGGER.debug("Creating mock stock prices for testing");
           createMockStockPrices(this.secOperatingDirectory, ciks, startYear, endYear);
@@ -679,7 +679,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Download stock prices (still needed as separate step)
-      boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
+      boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", false);
       if (fetchStockPrices) {
         List<String> ciks = getCiksFromConfig(operand);
         int startYear = (Integer) operand.getOrDefault("startYear", 2020);
@@ -905,8 +905,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Download stock prices via Stooq (separate from EDGAR filings)
         Object fetchStockPricesObj = operand.get("fetchStockPrices");
-        boolean fetchStockPrices = fetchStockPricesObj == null ? true
-            : Boolean.parseBoolean(fetchStockPricesObj.toString());
+        boolean fetchStockPrices = fetchStockPricesObj != null
+            && Boolean.parseBoolean(fetchStockPricesObj.toString());
         if (fetchStockPrices) {
           LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
               ciks.size(), startYear, endYear);
@@ -3748,6 +3748,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param minSizeBytes Minimum file size - files smaller than this are considered empty
    */
   private void cleanupEmptyParquetFiles(String baseDir, String pattern, long minSizeBytes) {
+    if (baseDir != null && (baseDir.startsWith("s3://") || baseDir.startsWith("s3a://"))) {
+      return;
+    }
     try {
       LOGGER.debug("Cleaning up empty parquet files in {} matching: {}", baseDir, pattern);
 
