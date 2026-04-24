@@ -46,6 +46,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Materializes data to Iceberg tables with batched processing to prevent OOM.
@@ -68,10 +74,18 @@ import java.util.UUID;
 public class IcebergMaterializer {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergMaterializer.class);
 
-  private static final int DEFAULT_MAX_RETRIES = 3;
-  private static final long DEFAULT_RETRY_DELAY_MS = 1000;
+  private static final int DEFAULT_MAX_RETRIES = 5;
+  private static final long DEFAULT_RETRY_DELAY_MS = 30000;
   private static final int DEFAULT_THREADS = 2;
   private static final int DEFAULT_FILE_CHUNK_SIZE = 5000;
+
+  /**
+   * Per-chunk DuckDB query timeout in seconds. DuckDB JDBC does not implement
+   * setQueryTimeout(), so we enforce this via a daemon thread + connection close.
+   * Observed worst-case chunk time is ~22 min; 30 min gives headroom while
+   * catching R2 network stalls that hang indefinitely (4+ hours observed).
+   */
+  private static final long CHUNK_QUERY_TIMEOUT_SECONDS = 1800L;
 
   /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
   private static final String DUCKDB_MEMORY_LIMIT =
@@ -689,11 +703,26 @@ public class IcebergMaterializer {
   private boolean processBatchWithRetry(MaterializationConfig config, Table table,
       Map<String, String> batch, Set<String> excludeAccessions) {
     int attempts = 0;
+    String checkpointPath = buildChunkProgressPath(config, batch);
 
     while (attempts < maxRetries) {
       attempts++;
+      int startChunkIndex = 0;
+      if (attempts > 1) {
+        // Re-read excluded accessions so the exclude set reflects anything already committed
+        // to Iceberg by a previous attempt (tracker self-heal picks these up on restart).
+        excludeAccessions = getExcludedAccessions(config, table, batch);
+        LOGGER.info("Retry attempt {}: refreshed exclude set to {} accessions for batch {}",
+            attempts, excludeAccessions.size(), batch);
+        // Read the chunk-progress checkpoint to resume mid-batch rather than from chunk 1.
+        startChunkIndex = readChunkProgress(checkpointPath);
+        if (startChunkIndex > 0) {
+          LOGGER.info("Retry attempt {}: resuming from chunk {} via checkpoint {}",
+              attempts, startChunkIndex, checkpointPath);
+        }
+      }
       try {
-        Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions);
+        Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions, startChunkIndex, checkpointPath);
         String accessionCol = config.getAccessionColumn();
         String yearValue = batch.get("year");
 
@@ -711,6 +740,10 @@ public class IcebergMaterializer {
           LOGGER.info("Tracked {} newly materialized accessions for {}/year={}",
               newAccessions.size(), config.getTargetTableId(), yearValue);
         }
+
+        // Batch fully committed — remove the chunk-progress checkpoint so a fresh
+        // retry of this batch starts from chunk 0 (no stale resumption point).
+        clearChunkProgress(checkpointPath);
 
         // Self-heal: if DuckDB returned 0 new rows, ensure tracker has entries for
         // all source accessions. This handles the case where data exists in Iceberg
@@ -739,7 +772,7 @@ public class IcebergMaterializer {
 
         if (attempts < maxRetries) {
           try {
-            Thread.sleep(retryDelayMs * attempts); // Exponential backoff
+            Thread.sleep(retryDelayMs * (1L << (attempts - 1))); // 30s, 60s, 120s, 240s
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             return false;
@@ -802,9 +835,12 @@ public class IcebergMaterializer {
    * <p>When rowBatchSize > 0, uses row-level batching to prevent OOM for large tables.
    *
    * @param excludeAccessions Accession numbers to skip (already processed)
+   * @param startChunkIndex First chunk index to process (0 = start from beginning; >0 = resume)
+   * @param checkpointPath S3 path for the chunk-progress checkpoint file
    */
   private Set<String> processBatch(MaterializationConfig config, Table table,
-      Map<String, String> batch, Set<String> excludeAccessions) throws SQLException, IOException {
+      Map<String, String> batch, Set<String> excludeAccessions,
+      int startChunkIndex, String checkpointPath) throws SQLException, IOException {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
 
     Set<String> newAccessions = new HashSet<String>();
@@ -872,10 +908,11 @@ public class IcebergMaterializer {
           LOGGER.info("File-list optimization: 0 new files for year={}, skipping batch", year);
           return newAccessions;
         }
-        LOGGER.info("File-list optimization: {} new files for year={} (chunk size={})",
-            newFilePaths.size(), year, config.getFileChunkSize());
+        LOGGER.info("File-list optimization: {} new files for year={} (chunk size={}, startChunk={})",
+            newFilePaths.size(), year, config.getFileChunkSize(), startChunkIndex);
         processWithFileChunkingToIceberg(config, conn, table, newFilePaths,
-            partitionValues, typedPartitionFilter, newAccessions);
+            partitionValues, typedPartitionFilter, newAccessions,
+            startChunkIndex, checkpointPath);
       } else {
         // Fall back to glob-based processing
         if (excludeAccessions != null && excludeAccessions.size() > 100) {
@@ -1045,18 +1082,18 @@ public class IcebergMaterializer {
    */
   private void processWithFileChunkingToIceberg(MaterializationConfig config, Connection conn,
       Table table, List<String> newFilePaths, Map<String, String> partitionValues,
-      Map<String, Object> typedPartitionFilter, Set<String> newAccessions)
+      Map<String, Object> typedPartitionFilter, Set<String> newAccessions,
+      int startChunkIndex, String checkpointPath)
       throws SQLException, IOException {
 
     int fileChunkSize = config.getFileChunkSize();
     int totalFiles = newFilePaths.size();
     int totalChunks = (totalFiles + fileChunkSize - 1) / fileChunkSize;
-    LOGGER.info("File chunking: {} files in {} chunks of {} for table {}",
-        totalFiles, totalChunks, fileChunkSize, config.getTargetTableId());
+    LOGGER.info("File chunking: {} files in {} chunks of {} for table {} (starting at chunk {})",
+        totalFiles, totalChunks, fileChunkSize, config.getTargetTableId(), startChunkIndex);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
-    int commitInterval = 10;
     int chunkNum = 0;
     long processedRows = 0;
     long totalStartTime = System.currentTimeMillis();
@@ -1064,12 +1101,16 @@ public class IcebergMaterializer {
 
     for (int i = 0; i < totalFiles; i += fileChunkSize) {
       chunkNum++;
+      if (chunkNum <= startChunkIndex) {
+        LOGGER.debug("File chunk {}/{}: skipping (already committed in previous attempt)", chunkNum, totalChunks);
+        continue;
+      }
       List<String> chunk = newFilePaths.subList(i, Math.min(i + fileChunkSize, totalFiles));
       String sql = buildSelectSqlForFileList(config, chunk);
       LOGGER.info("File chunk {}/{}: querying {} files", chunkNum, totalChunks, chunk.size());
 
       long chunkStart = System.currentTimeMillis();
-      List<Map<String, Object>> rows = fetchRows(conn, sql);
+      List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, CHUNK_QUERY_TIMEOUT_SECONDS);
       long chunkElapsed = System.currentTimeMillis() - chunkStart;
 
       if (rows.isEmpty()) {
@@ -1094,23 +1135,109 @@ public class IcebergMaterializer {
       processedRows += rows.size();
       rows.clear();
 
-      if (dataFiles.size() >= commitInterval) {
+      if (!dataFiles.isEmpty()) {
         writer.commitDataFiles(dataFiles, typedPartitionFilter);
-        LOGGER.info("Incremental commit: {} Iceberg files at chunk {}", dataFiles.size(), chunkNum);
+        LOGGER.info("Chunk commit: {} Iceberg files at chunk {}/{}", dataFiles.size(), chunkNum, totalChunks);
         dataFiles.clear();
         dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
+        // Checkpoint after every commit so retries resume from the exact chunk rather than chunk 0.
+        writeChunkProgress(checkpointPath, chunkNum);
       }
-    }
-
-    if (!dataFiles.isEmpty()) {
-      writer.commitDataFiles(dataFiles, typedPartitionFilter);
-      LOGGER.info("Final commit: {} Iceberg files committed", dataFiles.size());
     }
 
     long totalElapsed = System.currentTimeMillis() - totalStartTime;
     totalRowsWritten += processedRows;
     LOGGER.info("File chunking completed: {}/{} chunks, {} rows in {}ms",
         chunkNum, totalChunks, processedRows, totalElapsed);
+  }
+
+  /**
+   * Returns the S3 path for the chunk-progress checkpoint file for a given batch.
+   * Path: {@code <warehousePath>/chunk-progress/<tableId>/<batchKey>.json}
+   */
+  private String buildChunkProgressPath(MaterializationConfig config, Map<String, String> batch) {
+    List<String> sortedKeys = new ArrayList<String>(batch.keySet());
+    Collections.sort(sortedKeys);
+    List<String> parts = new ArrayList<String>(sortedKeys.size());
+    for (String k : sortedKeys) {
+      parts.add(k + "=" + batch.get(k));
+    }
+    String key = parts.isEmpty() ? "all" : join("_", parts);
+    return warehousePath + "/chunk-progress/" + config.getTargetTableId() + "/" + key + ".json";
+  }
+
+  private static String join(String sep, List<String> parts) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < parts.size(); i++) {
+      if (i > 0) {
+        sb.append(sep);
+      }
+      sb.append(parts.get(i));
+    }
+    return sb.toString();
+  }
+
+  /** Writes {@code {"lastCommittedChunk":N}} to the checkpoint path (1 S3 PUT). */
+  private void writeChunkProgress(String path, int lastCommittedChunk) {
+    if (storageProvider == null) {
+      return;
+    }
+    try {
+      byte[] content = ("{\"lastCommittedChunk\":" + lastCommittedChunk + "}")
+          .getBytes(StandardCharsets.UTF_8);
+      storageProvider.writeFile(path, content);
+      LOGGER.debug("Wrote chunk-progress checkpoint: lastCommittedChunk={} to {}", lastCommittedChunk, path);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write chunk-progress checkpoint to {}: {}", path, e.getMessage());
+    }
+  }
+
+  /**
+   * Reads the chunk-progress checkpoint and returns {@code lastCommittedChunk}, or 0 if absent.
+   * Returns 0 (start from beginning) on any read or parse failure.
+   */
+  private int readChunkProgress(String path) {
+    if (storageProvider == null) {
+      return 0;
+    }
+    try {
+      if (!storageProvider.exists(path)) {
+        return 0;
+      }
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(storageProvider.openInputStream(path), StandardCharsets.UTF_8))) {
+        String line = reader.readLine();
+        if (line == null) {
+          return 0;
+        }
+        // Parse {"lastCommittedChunk":N} — simple extraction, no JSON lib needed
+        int colon = line.indexOf(':');
+        int brace = line.lastIndexOf('}');
+        if (colon >= 0 && brace > colon) {
+          String numStr = line.substring(colon + 1, brace).trim();
+          return Integer.parseInt(numStr);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read chunk-progress checkpoint from {}: {} — starting from chunk 0",
+          path, e.getMessage());
+    }
+    return 0;
+  }
+
+  /** Deletes the chunk-progress checkpoint file after a fully successful batch. */
+  private void clearChunkProgress(String path) {
+    if (storageProvider == null) {
+      return;
+    }
+    try {
+      if (storageProvider.exists(path)) {
+        storageProvider.delete(path);
+        LOGGER.debug("Cleared chunk-progress checkpoint: {}", path);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to clear chunk-progress checkpoint {}: {}", path, e.getMessage());
+    }
   }
 
   /**
@@ -1158,7 +1285,6 @@ public class IcebergMaterializer {
   private List<Map<String, Object>> fetchRows(Connection conn, String sql) throws SQLException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try (Statement stmt = conn.createStatement()) {
-      stmt.setQueryTimeout(3600); // 1-hour hard ceiling per query
       try (ResultSet rs = stmt.executeQuery(sql)) {
         java.sql.ResultSetMetaData meta = rs.getMetaData();
         int colCount = meta.getColumnCount();
@@ -1176,6 +1302,58 @@ public class IcebergMaterializer {
       }
     }
     return rows;
+  }
+
+  /**
+   * Executes fetchRows on a daemon thread with a hard Java-level timeout.
+   * DuckDB JDBC does not implement Statement.setQueryTimeout(), so R2 network stalls
+   * can block indefinitely. On timeout, the connection is closed to unblock the DuckDB
+   * thread, and a SQLException is thrown so the caller's retry logic can resume from
+   * the last tracker-flushed chunk.
+   */
+  private List<Map<String, Object>> fetchRowsWithTimeout(
+      final Connection conn, final String sql, final long timeoutSeconds) throws SQLException {
+    final AtomicReference<List<Map<String, Object>>> result =
+        new AtomicReference<List<Map<String, Object>>>();
+    final AtomicReference<SQLException> error = new AtomicReference<SQLException>();
+    final CountDownLatch latch = new CountDownLatch(1);
+
+    Thread worker = new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          result.set(fetchRows(conn, sql));
+        } catch (SQLException e) {
+          error.set(e);
+        } finally {
+          latch.countDown();
+        }
+      }
+    });
+    worker.setDaemon(true);
+    worker.setName("duckdb-chunk-query");
+    worker.start();
+
+    boolean completed;
+    try {
+      completed = latch.await(timeoutSeconds, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      try { conn.close(); } catch (Exception ignored) { }
+      throw new SQLException("DuckDB chunk query interrupted");
+    }
+
+    if (!completed) {
+      LOGGER.warn("DuckDB chunk query timed out after {}s — closing connection to unblock",
+          timeoutSeconds);
+      try { conn.close(); } catch (Exception ignored) { }
+      throw new SQLException(
+          "DuckDB chunk query timed out after " + timeoutSeconds + "s (R2 network stall)");
+    }
+
+    if (error.get() != null) {
+      throw error.get();
+    }
+    return result.get();
   }
 
   /**
@@ -1622,15 +1800,10 @@ public class IcebergMaterializer {
       }
     }
 
-    // If the extracted suffix still contains a wildcard, the per-accession optimization
-    // cannot work (e.g. pattern "*insider*.parquet" → suffix "insider*.parquet" is not
-    // a literal suffix we can match against batch-named files like "insider_batch_0000.parquet").
-    // Return null so the caller falls back to glob-based processing.
-    if (fileSuffix.contains("*")) {
-      LOGGER.debug("File suffix '{}' contains wildcard - skipping per-accession optimization, using glob fallback",
-          fileSuffix);
-      return null;
-    }
+    // For multi-wildcard patterns like "*metadata*.parquet" (fileSuffix = "metadata*.parquet"),
+    // split into required substrings for sequential-contains matching instead of giving up.
+    // Single-wildcard patterns (fileSuffix has no "*") use the fast endsWith check.
+    final String[] suffixParts = fileSuffix.contains("*") ? fileSuffix.split("\\*", -1) : null;
 
     // Cache key includes year and file suffix
     String cacheKey = year + ":" + fileSuffix;
@@ -1665,7 +1838,25 @@ public class IcebergMaterializer {
       for (StorageProvider.FileEntry file : files) {
         String fileName = file.getName();
         // Only process files matching the table's suffix (e.g., _facts.parquet, _metadata.parquet)
-        if (!fileName.endsWith(fileSuffix)) {
+        if (suffixParts != null) {
+          // Multi-wildcard match: all parts must appear sequentially in the filename
+          boolean matches = true;
+          int searchFrom = 0;
+          for (String part : suffixParts) {
+            if (part.isEmpty()) {
+              continue;
+            }
+            int idx = fileName.indexOf(part, searchFrom);
+            if (idx < 0) {
+              matches = false;
+              break;
+            }
+            searchFrom = idx + part.length();
+          }
+          if (!matches) {
+            continue;
+          }
+        } else if (!fileName.endsWith(fileSuffix)) {
           continue;
         }
         // Extract CIK and accession from filename
@@ -2014,8 +2205,32 @@ public class IcebergMaterializer {
 
     // Step 1: Get accessions from tracker (cheap, local DuckDB)
     Set<String> trackedAccessions = getTrackedAccessions(config.getTargetTableId(), yearValue);
-    excludeAccessions.addAll(trackedAccessions);
     if (!trackedAccessions.isEmpty()) {
+      // Stale-tracker guard: if tracker has entries but Iceberg is genuinely empty (not a scan
+      // failure or partial partition), the tracker was populated from a pre-Iceberg run.
+      // Only invalidate when the Iceberg scan succeeds AND returns empty — never on exception.
+      if (table != null) {
+        Set<String> icebergAccessions;
+        boolean scanSucceeded;
+        try {
+          icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
+          scanSucceeded = true;
+        } catch (Exception e) {
+          LOGGER.warn("Could not scan Iceberg for stale-tracker check on {}/year={}: {} — "
+              + "keeping {} tracker entries as-is to avoid re-processing committed data",
+              config.getTargetTableId(), yearValue, e.getMessage(), trackedAccessions.size());
+          excludeAccessions.addAll(trackedAccessions);
+          return excludeAccessions;
+        }
+        if (scanSucceeded && icebergAccessions.isEmpty()) {
+          LOGGER.warn("Stale tracker detected for {}/year={}: {} entries but Iceberg is empty — "
+              + "invalidating tracker to force re-materialization",
+              config.getTargetTableId(), yearValue, trackedAccessions.size());
+          incrementalTracker.invalidateAll(config.getTargetTableId());
+          return excludeAccessions; // empty — allow full re-processing
+        }
+      }
+      excludeAccessions.addAll(trackedAccessions);
       LOGGER.info("Found {} tracked accessions for {}/year={}, skipping S3 scan",
           trackedAccessions.size(), config.getTargetTableId(), yearValue);
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Worker 02: SEC Primary 2025 (10-K/10-Q + Stock Prices)
+# Worker 02: SEC Primary 2025 (10-K/10-Q)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

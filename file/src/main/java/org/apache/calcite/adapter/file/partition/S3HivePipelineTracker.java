@@ -138,6 +138,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private static final int FLUSH_PARALLELISM = parseFlushParallelism();
   /** Whether flush-on-shutdown hook has been registered. */
   private volatile boolean shutdownHookRegistered = false;
+  /** S3 paths of individual tracker files written during this run, for shutdown compaction. */
+  private final List<String> flushedIndividualPaths =
+      Collections.synchronizedList(new ArrayList<String>());
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -981,6 +984,32 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  private void compactOnClose() {
+    if (noCompact || fullyScannedYears.isEmpty()) {
+      return;
+    }
+    for (String year : new HashSet<String>(fullyScannedYears)) {
+      try {
+        deleteCompactedFiles(year);
+        compactFromCache(year);
+        List<String> toDelete = new ArrayList<String>();
+        for (String path : flushedIndividualPaths) {
+          if (path.contains("/year=" + year + "/")) {
+            toDelete.add(path);
+          }
+        }
+        if (!toDelete.isEmpty()) {
+          deleteSpecificFiles(toDelete, year);
+        }
+        LOGGER.info("Shutdown compaction complete for year={}: {} individual files removed",
+            year, toDelete.size());
+      } catch (Exception e) {
+        LOGGER.warn("Shutdown compaction failed for year={}: {}", year, e.getMessage());
+      }
+    }
+    flushedIndividualPaths.clear();
+  }
+
   /**
    * List files under a prefix, including files in _compacted/ directories.
    */
@@ -1755,6 +1784,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           String sourceKey = (String) upload[3];
           try {
             uploadTempToS3(tempFile, s3Path);
+            flushedIndividualPaths.add(s3Path);
             flushedCount.addAndGet(states.size());
             LOGGER.info("Flushed {} tracker states to {}", states.size(), s3Path);
           } catch (Exception e) {
@@ -1875,6 +1905,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           } catch (Exception e) {
             // best effort on shutdown
           }
+          try {
+            tracker.compactOnClose();
+          } catch (Exception e) {
+            // best effort on shutdown
+          }
         }
       }, "tracker-flush-shutdown"));
     }
@@ -1974,6 +2009,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       flushPendingStates();
     } catch (Exception e) {
       LOGGER.warn("Error flushing pending tracker states on close: {}", e.getMessage());
+    }
+    try {
+      compactOnClose();
+    } catch (Exception e) {
+      LOGGER.warn("Error compacting tracker on close: {}", e.getMessage());
     }
     synchronized (connectionLock) {
       if (connection != null) {
