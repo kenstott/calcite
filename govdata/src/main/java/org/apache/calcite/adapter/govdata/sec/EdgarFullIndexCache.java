@@ -417,8 +417,8 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    *
    * <p>The file uses fixed-width columns:
    * <pre>
-   * Company Name (col 0-61) | Form Type (col 62-73) | CIK (col 74-85) |
-   * Date Filed (col 86-97) | File Name (col 98+)
+   * Company Name (col 0-61) | Form Type (col 62-73) | CIK (col 74-90) |
+   * Date Filed (col 91-100) | File Name (col 103+)
    * </pre>
    *
    * <p>Header lines and the dashes separator are skipped. The filename field
@@ -428,12 +428,12 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    * @return number of entries parsed
    */
   private int parseIndex(String content, int year, int quarter) {
-    // Fixed-width column positions from the header line:
-    // Company Name(0) Form Type(62) CIK(74) Date Filed(86) File Name(98)
+    // Fixed-width column positions from EDGAR company.idx format:
+    // Company Name(0) Form Type(62) CIK(74) Date Filed(91) File Name(103)
     final int formTypeStart = 62;
     final int cikStart = 74;
-    final int dateFiledStart = 86;
-    final int fileNameStart = 98;
+    final int dateFiledStart = 91;
+    final int fileNameStart = 103;
 
     int count = 0;
     boolean pastHeader = false;

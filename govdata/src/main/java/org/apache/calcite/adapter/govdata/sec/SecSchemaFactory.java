@@ -847,6 +847,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
             LOGGER.info("Full-index returned {} candidates (years {}-{}), filtering...",
                 allEntries.size(), startYear, endYear);
+            // Apply CIK filter when a specific list is configured (not _ALL_EDGAR_FILERS)
+            Object cikConfig = operand.get("ciks");
+            boolean isAllFilers = cikConfig instanceof String
+                && (((String) cikConfig).contains("_ALL_EDGAR_FILERS")
+                    || ((String) cikConfig).contains("_ALL"));
+            if (!isAllFilers && !ciks.isEmpty()) {
+              Set<String> cikSet = new java.util.HashSet<String>(ciks);
+              List<EdgarFullIndexCache.IndexEntry> cikFiltered =
+                  new ArrayList<EdgarFullIndexCache.IndexEntry>();
+              for (EdgarFullIndexCache.IndexEntry entry : allEntries) {
+                if (cikSet.contains(entry.cik)) {
+                  cikFiltered.add(entry);
+                }
+              }
+              LOGGER.info("CIK filter reduced {} candidates to {} for {} configured CIKs",
+                  allEntries.size(), cikFiltered.size(), ciks.size());
+              allEntries = cikFiltered;
+            }
             int selfHealThreads = Integer.parseInt(
                 System.getProperty("calcite.etl.selfheal.threads", "50"));
             List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)

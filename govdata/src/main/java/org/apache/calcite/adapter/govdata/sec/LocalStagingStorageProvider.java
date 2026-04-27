@@ -281,7 +281,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
   private File mergeWithDuckDB(List<File> filesToMerge, String tableType, int batchNum)
       throws IOException {
     File mergedFile = File.createTempFile(
-        "sec_merged_" + tableType + "_" + batchNum + "_", ".parquet");
+        "sec_merged_" + tableType + "_" + batchNum + "_", ".parquet", stagingDir);
     // Delete so DuckDB can create it fresh
     if (!mergedFile.delete()) {
       LOGGER.warn("Could not pre-delete temp merge file: {}", mergedFile.getAbsolutePath());
@@ -307,6 +307,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
 
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
+      stmt.execute("PRAGMA temp_directory='" + stagingDir.getAbsolutePath().replace("'", "''") + "'");
       stmt.execute(sql);
     } catch (Exception e) {
       deleteQuietly(mergedFile);

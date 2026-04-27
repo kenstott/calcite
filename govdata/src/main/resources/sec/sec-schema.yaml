@@ -90,7 +90,13 @@ column_templates:
     name: unit_ref
     type: string
     nullable: true
-    comment: Reference to unit element defining measurement units (e.g., 'USD', 'shares')
+    comment: Raw unit reference as reported in the source XBRL document
+
+  unit_ref_normalized_column: &unit_ref_normalized
+    name: unit_ref_normalized
+    type: string
+    nullable: true
+    comment: Canonical unit (e.g. USD, shares, pure, usdPerShare); equals unit_ref when no normalization rule matches
 
   numeric_value_column: &numeric_value
     name: numeric_value
@@ -445,6 +451,7 @@ partitionedTables:
       - *concept_column
       - *context_ref
       - *unit_ref
+      - *unit_ref_normalized
       - name: value
         type: string
         nullable: true
@@ -622,7 +629,15 @@ partitionedTables:
       - name: subsection
         type: string
         nullable: true
-        comment: Subsection name (e.g., 'Overview', 'Results of Operations')
+        comment: Immediate heading enclosing this chunk (null when no heading context)
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Full heading breadcrumb as ' > '-delimited string for cluster analysis
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: True when this chunk is a continuation of an oversized split element
       - name: paragraph_number
         type: int
         nullable: false
@@ -702,6 +717,10 @@ partitionedTables:
         type: string
         nullable: false
         comment: Arc role defining relationship type (e.g., parent-child, summation-item)
+      - name: link_role
+        type: string
+        nullable: true
+        comment: Role URI of the extended link element containing this arc (e.g., presentation role URL)
       - name: from_concept
         type: string
         nullable: false
@@ -1346,6 +1365,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: Parent section (e.g., 'Item 7', 'Note 1')
+      - name: subsection
+        type: string
+        nullable: true
+        comment: Heading immediately enclosing this chunk (e.g., 'Results of Operations')
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Full heading breadcrumb as ' > '-delimited string for community/cluster analysis
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: True when this chunk is a continuation piece of an oversized prose or atomic element
       - name: sequence
         type: int
         nullable: false
