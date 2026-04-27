@@ -1188,7 +1188,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: stock_prices
-    enabled: true
+    enabled: false
     pattern: "stock_prices/year=*/*_prices.parquet"
     partitions: *stock_partitions
     hooks:

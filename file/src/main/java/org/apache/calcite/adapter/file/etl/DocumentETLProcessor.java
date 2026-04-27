@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -90,6 +91,15 @@ public class DocumentETLProcessor {
   // In-memory cache fallback to avoid repeated S3 exists() checks when no tracker provided
   private final Set<String> existsCache = new HashSet<String>();
   private final Set<String> notExistsCache = new HashSet<String>();
+
+  // Per-CIK cache of accession → primaryDocument from data.sec.gov/submissions API.
+  // Avoids duplicate submissions.json fetches when a CIK has multiple accessions in the same run.
+  private final ConcurrentHashMap<String, Map<String, String>> cikSubmissionsCache =
+      new ConcurrentHashMap<String, Map<String, String>>();
+
+  // Limits diagnostic WARNs for submissions parse/miss — prevents log flooding.
+  private final AtomicInteger submissionsParseDiagCount = new AtomicInteger(0);
+  private final AtomicInteger submissionsMissDiagCount = new AtomicInteger(0);
 
   /**
    * Creates a new document ETL processor.
@@ -445,14 +455,12 @@ public class DocumentETLProcessor {
 
     String cikUrl = cik.replaceFirst("^0+", "");
     String accessionNoDashes = accession.replace("-", "");
-    String indexUrl = "https://www.sec.gov/Archives/edgar/data/"
-        + cikUrl + "/" + accessionNoDashes + "/index.json";
 
     String primaryDocument;
     try {
-      primaryDocument = fetchPrimaryDocumentFromIndex(documentSource, indexUrl, formType);
+      primaryDocument = fetchPrimaryDocumentFromSubmissions(documentSource, cik, accession);
     } catch (IOException e) {
-      LOGGER.warn("Failed to fetch index.json for {}/{}: {}", cik, accession, e.getMessage());
+      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
       if (documentTracker != null) {
         documentTracker.markProcessed(cik, accession, formType,
             Collections.<String>emptyList());
@@ -460,8 +468,21 @@ public class DocumentETLProcessor {
       return new DocumentETLResult(0, 0, 1,
           Collections.<String>emptyList(),
           Collections.singletonList(
-              "index.json fetch failed for " + accession + ": " + e.getMessage()),
+              "submissions.json fetch failed for " + accession + ": " + e.getMessage()),
           System.currentTimeMillis() - startTime);
+    }
+
+    // For Form 3/4/5 (insider trading), EDGAR returns XSL-transformed path like
+    // "xslF345X03/wf-form4_xxx.xml" — strip the prefix to get the raw XML filename.
+    if (primaryDocument != null && (formType.equals("3") || formType.equals("4")
+        || formType.equals("5") || formType.startsWith("3/")
+        || formType.startsWith("4/") || formType.startsWith("5/"))) {
+      if (primaryDocument.startsWith("xslF345X")) {
+        int slashIdx = primaryDocument.indexOf('/');
+        if (slashIdx > 0) {
+          primaryDocument = primaryDocument.substring(slashIdx + 1);
+        }
+      }
     }
 
     if (primaryDocument == null || primaryDocument.isEmpty()) {
@@ -600,74 +621,50 @@ public class DocumentETLProcessor {
   }
 
   /**
-   * Fetches the EDGAR filing {@code index.json} and returns the primary document filename.
+   * Looks up the primary document filename for an accession via the EDGAR submissions API.
    *
-   * <p>The index at {@code .../edgar/data/{cik}/{accession}/index.json} lists directory
-   * contents. The primary document is the item whose {@code type} field matches the form
-   * type. For Form 3/4/5, XSL transform prefixes ({@code xslF345X*\/}) are stripped.
+   * <p>Fetches {@code https://data.sec.gov/submissions/CIK{cik}.json} and returns the
+   * {@code primaryDocument} value whose {@code accessionNumber} matches the given accession.
+   * Results are cached per CIK so that multiple accessions from the same company only require
+   * one API call.
    *
    * @return primary document filename, or null if not found
    */
-  private String fetchPrimaryDocumentFromIndex(
-      DocumentSource documentSource, String indexUrl, String formType) throws IOException {
-    String indexJson = documentSource.fetchUrlContent(indexUrl);
-
-    int directoryIdx = indexJson.indexOf("\"directory\"");
-    if (directoryIdx < 0) {
-      return null;
-    }
-    int itemsIdx = indexJson.indexOf("\"item\"", directoryIdx);
-    if (itemsIdx < 0) {
-      return null;
-    }
-    int arrayStart = indexJson.indexOf("[", itemsIdx);
-    if (arrayStart < 0) {
-      return null;
-    }
-    int arrayEnd = findMatchingBracket(indexJson, arrayStart);
-    if (arrayEnd < 0) {
-      return null;
-    }
-
-    String itemsArray = indexJson.substring(arrayStart + 1, arrayEnd);
-    int pos = 0;
-    while (pos < itemsArray.length()) {
-      int objStart = itemsArray.indexOf("{", pos);
-      if (objStart < 0) {
-        break;
+  private String fetchPrimaryDocumentFromSubmissions(
+      DocumentSource documentSource, String cik, String accession) throws IOException {
+    Map<String, String> byAccession = cikSubmissionsCache.get(cik);
+    if (byAccession == null) {
+      String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
+      String submissionsJson = documentSource.fetchUrlContent(submissionsUrl);
+      List<String> accessionNumbers = extractJsonArray(submissionsJson, "accessionNumber");
+      List<String> primaryDocuments = extractJsonArray(submissionsJson, "primaryDocument");
+      Map<String, String> map = new HashMap<String, String>();
+      int count = Math.min(accessionNumbers.size(), primaryDocuments.size());
+      for (int i = 0; i < count; i++) {
+        map.put(accessionNumbers.get(i), primaryDocuments.get(i));
       }
-      int objEnd = findMatchingBracket(itemsArray, objStart);
-      if (objEnd < 0) {
-        break;
+      if (accessionNumbers.isEmpty() && submissionsParseDiagCount.get() < 5) {
+        int diagIdx = submissionsParseDiagCount.getAndIncrement();
+        LOGGER.warn("submissions.json parse [diag {}]: url={} responseLen={} "
+            + "accessionNumbers=0 — first 200 chars of response: [{}]",
+            diagIdx, submissionsUrl, submissionsJson.length(),
+            submissionsJson.length() > 200 ? submissionsJson.substring(0, 200) : submissionsJson);
       }
-      String item = itemsArray.substring(objStart, objEnd + 1);
-      String type = extractJsonStringField(item, "type");
-      String name = extractJsonStringField(item, "name");
-      pos = objEnd + 1;
-      if (type == null || name == null || name.isEmpty()) {
-        continue;
-      }
-      boolean isInsiderFormType = formType.equals("3") || formType.equals("4")
-          || formType.equals("5") || formType.startsWith("3/")
-          || formType.startsWith("4/") || formType.startsWith("5/");
-      if (isInsiderFormType) {
-        // EDGAR uses type="text.gif" for all items in insider form filings; bypass type filter.
-        // Accept only .xml files that are not the XSLT viewer or SGML submission wrapper.
-        if (name.startsWith("xslF345X") || name.endsWith(".txt")
-            || name.endsWith(".html") || name.endsWith(".htm")) {
-          continue;
-        }
-        if (!name.toLowerCase().endsWith(".xml")) {
-          continue;
-        }
-      } else {
-        if (!type.equalsIgnoreCase(formType) && !type.startsWith(formType + "/")) {
-          continue;
-        }
-      }
-      return name;
+      cikSubmissionsCache.putIfAbsent(cik, map);
+      byAccession = cikSubmissionsCache.get(cik);
     }
-    return null;
+    String result = byAccession.get(accession);
+    if (result == null && submissionsMissDiagCount.get() < 5) {
+      int mapSize = byAccession.size();
+      if (mapSize > 0) {
+        int diagIdx = submissionsMissDiagCount.getAndIncrement();
+        String sampleKey = byAccession.keySet().iterator().hasNext()
+            ? byAccession.keySet().iterator().next() : "(none)";
+        LOGGER.warn("submissions.json miss [diag {}]: cik={} accession={} mapSize={} sampleKey={}",
+            diagIdx, cik, accession, mapSize, sampleKey);
+      }
+    }
+    return result;
   }
 
   private Set<String> extractYearsFromAccessions(List<AccessionRef> accessions) {
@@ -1041,6 +1038,41 @@ public class DocumentETLProcessor {
       }
     }
     return -1;
+  }
+
+  /**
+   * Extracts a JSON string array by field name using simple string scanning (Java 8 compatible).
+   * Returns values from the first occurrence of {@code "fieldName": [...]}.
+   */
+  static List<String> extractJsonArray(String json, String fieldName) {
+    List<String> values = new ArrayList<String>();
+    int start = json.indexOf("\"" + fieldName + "\"");
+    if (start < 0) {
+      return values;
+    }
+    start = json.indexOf("[", start);
+    if (start < 0) {
+      return values;
+    }
+    int end = json.indexOf("]", start);
+    if (end < 0) {
+      return values;
+    }
+    String arrayContent = json.substring(start + 1, end);
+    int pos = 0;
+    while (pos < arrayContent.length()) {
+      int quoteStart = arrayContent.indexOf("\"", pos);
+      if (quoteStart < 0) {
+        break;
+      }
+      int quoteEnd = arrayContent.indexOf("\"", quoteStart + 1);
+      if (quoteEnd < 0) {
+        break;
+      }
+      values.add(arrayContent.substring(quoteStart + 1, quoteEnd));
+      pos = quoteEnd + 1;
+    }
+    return values;
   }
 
   /**
@@ -1443,48 +1475,7 @@ public class DocumentETLProcessor {
     }
 
     private List<String> extractJsonArray(String json, String fieldName) {
-      List<String> values = new ArrayList<String>();
-
-      // Simple JSON array extraction for field: ["value1", "value2", ...]
-      String pattern = "\"" + fieldName + "\"\\s*:\\s*\\[";
-      int start = json.indexOf(pattern.replace("\\s*", ""));
-      if (start < 0) {
-        // Try without strict matching
-        start = json.indexOf("\"" + fieldName + "\"");
-        if (start < 0) {
-          return values;
-        }
-        start = json.indexOf("[", start);
-        if (start < 0) {
-          return values;
-        }
-      } else {
-        start = json.indexOf("[", start);
-      }
-
-      int end = json.indexOf("]", start);
-      if (end < 0) {
-        return values;
-      }
-
-      String arrayContent = json.substring(start + 1, end);
-
-      // Extract string values
-      int pos = 0;
-      while (pos < arrayContent.length()) {
-        int quoteStart = arrayContent.indexOf("\"", pos);
-        if (quoteStart < 0) {
-          break;
-        }
-        int quoteEnd = arrayContent.indexOf("\"", quoteStart + 1);
-        if (quoteEnd < 0) {
-          break;
-        }
-        values.add(arrayContent.substring(quoteStart + 1, quoteEnd));
-        pos = quoteEnd + 1;
-      }
-
-      return values;
+      return DocumentETLProcessor.extractJsonArray(json, fieldName);
     }
 
     @Override public boolean hasNext() {

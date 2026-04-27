@@ -562,7 +562,7 @@ run_etl() {
     --verbose \
     $extra_flags \
     "$@" \
-    2>&1 | stdbuf -oL tee "$log_file"
+    2>&1 | tee "$log_file"
 
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
