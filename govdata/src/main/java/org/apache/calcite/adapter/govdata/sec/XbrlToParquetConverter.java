@@ -1347,10 +1347,15 @@ public class XbrlToParquetConverter implements FileConverter {
     // creates context elements without a namespace, and some DOM implementations don't
     // return null-namespace elements when using getElementsByTagNameNS("*", ...)
     List<Map<String, Object>> dataList = new ArrayList<>();
+    Set<String> seenContextIds = new java.util.HashSet<>();
     NodeList contexts = doc.getElementsByTagName("context");
 
     for (int i = 0; i < contexts.getLength(); i++) {
       Element context = (Element) contexts.item(i);
+      String contextId = context.getAttribute("id");
+      if (!seenContextIds.add(contextId)) {
+        continue;
+      }
       Map<String, Object> data = new HashMap<>();
 
       // Required data columns (cik and accession_number are in schema)
@@ -1368,7 +1373,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
       data.put("year", year);
-      data.put("context_id", context.getAttribute("id"));
+      data.put("context_id", contextId);
 
       // Extract entity information — try bare name first, then NS-wildcard
       NodeList identifiers = context.getElementsByTagName("identifier");
@@ -5017,7 +5022,7 @@ public class XbrlToParquetConverter implements FileConverter {
       chunk.put("cik", cik);
       chunk.put("accession_number", accession);
       chunk.put("year", year);
-      chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+      chunk.put("chunk_id", accession + "_earnings_" + earnings.get("paragraph_number"));
       chunk.put("source_type", "earnings");
       chunk.put("section", earnings.get("section_type"));
       chunk.put("sequence", sequence++);
