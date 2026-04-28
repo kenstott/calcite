@@ -1168,8 +1168,11 @@ public class XbrlToParquetConverter implements FileConverter {
 
     String periodEnd = normalizeDateToIso(
         extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate"));
+    if (periodEnd == null) {
+      periodEnd = normalizeDateToIso(getElementText(doc, "periodOfReport"));
+    }
     data.put("period_end_date", periodEnd);
-    data.put("period_of_report", periodEnd);
+    data.put("period_of_report", periodEnd != null ? periodEnd : filingDate);
     data.put("primary_document", filename);
 
     // SIC code: try XBRL DEI first, fall back to submissions.json
@@ -1231,6 +1234,8 @@ public class XbrlToParquetConverter implements FileConverter {
         .appendPattern("MMM d, yyyy").toFormatter(Locale.ENGLISH));
     fmts.add(DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH));
     fmts.add(DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("MM-dd-yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("M-d-yyyy", Locale.ENGLISH));
     fmts.add(DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH));
     for (DateTimeFormatter fmt : fmts) {
       try {
@@ -4566,7 +4571,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("cik", cik);
         chunk.put("accession_number", accession);
         chunk.put("year", year);
-        chunk.put("chunk_id", "item_" + itemNumber + "_" + paraSeq);
+        chunk.put("chunk_id", accession + "_item_" + i + "_" + paraSeq);
         chunk.put("source_type", "8k_item");
         chunk.put("section", "Item " + itemNumber);
         chunk.put("sequence", sequence++);
@@ -4631,7 +4636,7 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("mailing_address", null);
     data.put("phone", null);
     data.put("period_end_date", null);
-    data.put("period_of_report", null);
+    data.put("period_of_report", filingDate);
     data.put("sic_code", submissionsInfo.get("sic_code"));
     data.put("irs_number", null);
     data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
@@ -4686,7 +4691,7 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("cik", cik);
         data.put("accession_number", accession);
         data.put("year", year);  // Required for Iceberg partitioning
-        data.put("chunk_id", "remark_" + i);
+        data.put("chunk_id", accession + "_remark_" + i);
         data.put("source_type", "insider_remark");
         data.put("section", "Form " + filingType);
         data.put("sequence", sequence++);
@@ -4709,7 +4714,7 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("cik", cik);
         data.put("accession_number", accession);
         data.put("year", year);  // Required for Iceberg partitioning
-        data.put("chunk_id", "footnote_" + i);
+        data.put("chunk_id", accession + "_footnote_" + i);
         data.put("source_type", "insider_footnote");
         data.put("section", "Form " + filingType);
         data.put("sequence", sequence++);
@@ -4730,6 +4735,69 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Wrote " + dataList.size() + " vectorized insider chunks to " + outputPath);
     } else {
       LOGGER.info("Created empty chunks file (no content > 20 chars) for " + outputPath);
+    }
+  }
+
+  /**
+   * Downloads EX-99.x exhibit files for an 8-K filing into the accession cache directory.
+   * Skips files that are already cached. Parses the EDGAR formatted filing index to find
+   * exhibit links; does nothing if the index cannot be fetched.
+   */
+  private void downloadExhibitFilesForAccession(String cik, String accession,
+      String accessionDir) {
+    String cikNumeric = cik.replaceFirst("^0+", "");
+    String accessionNoDash = accession.replace("-", "");
+    String indexUrl = String.format(
+        "https://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.html",
+        cikNumeric, accessionNoDash, accession);
+
+    String indexHtml = downloadFile(indexUrl);
+    if (indexHtml == null) {
+      LOGGER.debug("Could not fetch 8-K exhibit index for {}", accession);
+      return;
+    }
+
+    LOGGER.info("Fetching 8-K exhibit index for {}", accession);
+
+    org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+    org.jsoup.select.Elements rows = doc.select("table tr");
+    String baseUrl = String.format(
+        "https://www.sec.gov/Archives/edgar/data/%s/%s", cikNumeric, accessionNoDash);
+
+    for (org.jsoup.nodes.Element row : rows) {
+      org.jsoup.select.Elements cells = row.select("td");
+      if (cells.size() < 4) {
+        continue;
+      }
+      String typeText = cells.get(3).text().trim().toUpperCase(Locale.ROOT);
+      if (!typeText.startsWith("EX-99")) {
+        continue;
+      }
+      org.jsoup.select.Elements links = cells.get(2).select("a[href]");
+      if (links.isEmpty()) {
+        continue;
+      }
+      String href = links.first().attr("href");
+      String filename = href.contains("/") ? href.substring(href.lastIndexOf('/') + 1) : href;
+      String filenameLower = filename.toLowerCase(Locale.ROOT);
+      if (!filenameLower.endsWith(".htm") && !filenameLower.endsWith(".html")) {
+        continue;
+      }
+
+      String targetPath = storageProvider.resolvePath(accessionDir, filename);
+      try {
+        if (storageProvider.exists(targetPath)) {
+          continue;
+        }
+        String exhibitContent = downloadFile(baseUrl + "/" + filename);
+        if (exhibitContent != null) {
+          storageProvider.writeFile(targetPath,
+              exhibitContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          LOGGER.info("Downloaded 8-K exhibit {} for {}", filename, accession);
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to download exhibit {}: {}", filename, e.getMessage());
+      }
     }
   }
 
@@ -4804,6 +4872,46 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
+      // Download EX-99.x exhibit files from EDGAR if not already cached
+      String accessionDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+      String primaryDocName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
+      if (accession != null && !accession.isEmpty() && cik != null && !cik.isEmpty()) {
+        downloadExhibitFilesForAccession(cik, accession, accessionDir);
+      }
+
+      // Process separately-downloaded exhibit files from the accession directory
+      try {
+        List<StorageProvider.FileEntry> exhibitFiles = storageProvider.listFiles(accessionDir, false);
+        for (StorageProvider.FileEntry entry : exhibitFiles) {
+          if (entry.isDirectory()) {
+            continue;
+          }
+          String entryName = entry.getName();
+          if (entryName.equals(primaryDocName)) {
+            continue;
+          }
+          String entryLower = entryName.toLowerCase(Locale.ROOT);
+          if (!entryLower.endsWith(".htm") && !entryLower.endsWith(".html")) {
+            continue;
+          }
+          try (InputStream exhibitIs = storageProvider.openInputStream(entry.getPath())) {
+            String exhibitContent = new String(readAllBytes(exhibitIs),
+                java.nio.charset.StandardCharsets.UTF_8);
+            List<Map<String, Object>> exhibitRecords =
+                extractEarningsFromExhibit(exhibitContent, cik, filingType, filingDate, accession);
+            if (!exhibitRecords.isEmpty()) {
+              LOGGER.info("Extracted {} earnings paragraphs from exhibit {} for {}",
+                  exhibitRecords.size(), entryName, accession);
+              earningsRecords.addAll(exhibitRecords);
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Failed to process exhibit {}: {}", entryName, e.getMessage());
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to list exhibits in {}: {}", accessionDir, e.getMessage());
+      }
+
       // 3. Write earnings_transcripts (unchanged - only when earnings content found)
       if (!earningsRecords.isEmpty()) {
         String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
@@ -4831,7 +4939,7 @@ public class XbrlToParquetConverter implements FileConverter {
           chunk.put("cik", cik);
           chunk.put("accession_number", accession);
           chunk.put("year", year);
-          chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+          chunk.put("chunk_id", accession + "_earnings_" + earnings.get("paragraph_number"));
           chunk.put("source_type", "earnings");
           chunk.put("section", earnings.get("section_type"));
           chunk.put("sequence", sequence++);
@@ -5054,46 +5162,102 @@ public class XbrlToParquetConverter implements FileConverter {
     return "other";
   }
 
-  /**
-   * Extract speaker name from paragraph (for transcripts).
-   */
   private String extractSpeaker(String text) {
-    // Look for patterns like "Name - Title:" or "Name:"
-    Pattern speakerPattern = Pattern.compile("^([A-Z][a-z]+ [A-Z][a-z]+)\\s*[-:]");
-    Matcher matcher = speakerPattern.matcher(text);
-
-    if (matcher.find()) {
-      return matcher.group(1);
+    // Press release: "...", said [First] [Last], [title].
+    Pattern afterQuote = Pattern.compile(
+        "said\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+)[,.]");
+    Matcher m1 = afterQuote.matcher(text);
+    if (m1.find()) {
+      return m1.group(1);
     }
-
+    // Press release: [First] [Last], [title], said: "..."
+    Pattern beforeQuote = Pattern.compile(
+        "^([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+)\\s*,.*?\\bsaid\\b");
+    Matcher m2 = beforeQuote.matcher(text);
+    if (m2.find()) {
+      return m2.group(1);
+    }
+    // Transcript ALL-CAPS format: "OPERATOR:" or "TIM COOK:" (max 2 words to avoid headers)
+    Pattern allCaps = Pattern.compile("^([A-Z]{2,}(?:\\s+[A-Z]{2,})?):");
+    Matcher m3 = allCaps.matcher(text);
+    if (m3.find()) {
+      String[] words = m3.group(1).split("\\s+");
+      String lastWord = words[words.length - 1].toLowerCase(Locale.ROOT);
+      if (!NON_SURNAME_WORDS.contains(lastWord)) {
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+          if (sb.length() > 0) sb.append(' ');
+          sb.append(Character.toUpperCase(word.charAt(0)))
+              .append(word.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return sb.toString();
+      }
+    }
+    // Transcript: "Name:" or "Name - Title:" (space required before dash to avoid compound words)
+    Pattern transcript = Pattern.compile("^([A-Z][a-z]+ [A-Z][a-z]+)(\\s*:|\\s+-)");
+    Matcher m4 = transcript.matcher(text);
+    if (m4.find()) {
+      String candidate = m4.group(1);
+      String lastName = candidate.substring(candidate.indexOf(' ') + 1).toLowerCase(Locale.ROOT);
+      if (!NON_SURNAME_WORDS.contains(lastName)) {
+        return candidate;
+      }
+    }
     return null;
   }
 
-  /**
-   * Extract speaker role from paragraph.
-   */
-  private String extractSpeakerRole(String text) {
-    // Look for patterns like "Name - CEO:" or "Name, Chief Executive Officer:"
-    Pattern rolePattern = Pattern.compile("[-,]\\s*([^:]+):");
-    Matcher matcher = rolePattern.matcher(text);
+  private static final java.util.Set<String> NON_SURNAME_WORDS =
+      new java.util.HashSet<>(java.util.Arrays.asList(
+          "contact", "metrics", "east", "west", "north", "south", "center",
+          "division", "update", "summary", "overview", "statement", "report",
+          "services", "solutions", "systems", "technologies", "products",
+          "reconciliation", "highlights", "guidance", "outlook", "segment"
+      ));
 
-    if (matcher.find()) {
-      String role = matcher.group(1).trim();
-
-      // Normalize common roles
-      if (role.contains("Chief Executive") || role.contains("CEO")) {
-        return "CEO";
-      } else if (role.contains("Chief Financial") || role.contains("CFO")) {
-        return "CFO";
-      } else if (role.contains("Analyst")) {
-        return "Analyst";
-      } else if (role.contains("Operator")) {
-        return "Operator";
-      }
-
-      return role;
+  private String normalizeRole(String role) {
+    if (role == null) {
+      return null;
     }
+    String upper = role.toUpperCase(Locale.ROOT);
+    if (upper.contains("CHIEF EXECUTIVE") || upper.contains("CEO")) {
+      return "CEO";
+    } else if (upper.contains("CHIEF FINANCIAL") || upper.contains("CFO")) {
+      return "CFO";
+    } else if (upper.contains("ANALYST")) {
+      return "Analyst";
+    } else if (upper.contains("OPERATOR")) {
+      return "Operator";
+    }
+    return role;
+  }
 
+  private String extractSpeakerRole(String text) {
+    // Press release after-quote: said [Name], [role] of [Company].
+    Pattern afterQuoteRole = Pattern.compile(
+        "said\\s+[A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+,\\s*([^.]+)\\.");
+    Matcher m1 = afterQuoteRole.matcher(text);
+    if (m1.find()) {
+      String role = m1.group(1).trim().replaceAll("\\s+of\\s+.*$", "").trim();
+      return normalizeRole(role);
+    }
+    // Press release before-quote: [Name], [role], said:
+    Pattern beforeQuoteRole = Pattern.compile(
+        "^[A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+,\\s*([^,]+),.*?\\bsaid\\b");
+    Matcher m2 = beforeQuoteRole.matcher(text);
+    if (m2.find()) {
+      String role = m2.group(1).trim().replaceAll("\\s+of\\s+.*$", "").trim();
+      return normalizeRole(role);
+    }
+    // Transcript: "Name - Role:" or "Name, Role:"
+    Pattern transcriptRole = Pattern.compile("[-,]\\s*([^:]+):");
+    Matcher m3 = transcriptRole.matcher(text);
+    if (m3.find()) {
+      String role = m3.group(1).trim().replaceAll(",?\\s*\\bsaid\\b\\s*$", "").trim();
+      if (role.isEmpty() || Character.isDigit(role.charAt(0))) {
+        return null;
+      }
+      return normalizeRole(role);
+    }
     return null;
   }
 
@@ -5739,7 +5903,7 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("mailing_address", companyInfo.get("mailing_address"));
     data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
     data.put("fiscal_year", null);
-    data.put("period_of_report", null);
+    data.put("period_of_report", filingDate);
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
@@ -5783,7 +5947,7 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("mailing_address", null);
     data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
     data.put("fiscal_year", null);
-    data.put("period_of_report", null);
+    data.put("period_of_report", filingDate);
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
@@ -5989,9 +6153,42 @@ public class XbrlToParquetConverter implements FileConverter {
       // We need to download it from EDGAR.
       Document infoTableDoc = download13FInfoTable(cik, accession);
 
+      // Extract report period from cover page (primary_doc.xml has it; info table does not)
+      String coverReportPeriod = getElementText(primaryDoc, "reportCalendarOrQuarter");
+      if (coverReportPeriod == null) {
+        coverReportPeriod = getElementText(primaryDoc, "periodOfReport");
+      }
+      if (coverReportPeriod == null) {
+        // HTML cover page: <table summary="Calendar Year or Quarter End">...<td class="FormDataR">12-31-2025</td>
+        NodeList tables = primaryDoc.getElementsByTagName("table");
+        outer:
+        for (int ti = 0; ti < tables.getLength(); ti++) {
+          Element table = (Element) tables.item(ti);
+          String summary = table.getAttribute("summary");
+          if (summary != null && summary.toLowerCase().contains("calendar year or quarter")) {
+            NodeList tds = table.getElementsByTagName("td");
+            for (int ti2 = 0; ti2 < tds.getLength(); ti2++) {
+              Element td = (Element) tds.item(ti2);
+              String cls = td.getAttribute("class");
+              if ("FormDataR".equals(cls)) {
+                String val = td.getTextContent().trim();
+                if (!val.isEmpty()) {
+                  coverReportPeriod = val;
+                  break outer;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (coverReportPeriod == null) {
+        coverReportPeriod = filingDate;
+      }
+      coverReportPeriod = normalizeDateToIso(coverReportPeriod);
+
       List<Map<String, Object>> holdings;
       if (infoTableDoc != null) {
-        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year);
+        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year, coverReportPeriod);
         // Extract manager name from primary doc if not in info table
         if (!holdings.isEmpty()) {
           String managerName = getElementText(primaryDoc, "filingManager");
@@ -6203,7 +6400,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * }</pre>
    */
   private List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
-      String filingType, String filingDate, String accession, int year) {
+      String filingType, String filingDate, String accession, int year, String reportPeriod) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Extract manager info from the primary doc (headerData or coverPage)
@@ -6212,12 +6409,6 @@ public class XbrlToParquetConverter implements FileConverter {
       managerName = getElementText(doc, "name");
     }
     String managerCik = cik;
-
-    // Extract report period
-    String reportPeriod = getElementText(doc, "reportCalendarOrQuarter");
-    if (reportPeriod == null) {
-      reportPeriod = getElementText(doc, "periodOfReport");
-    }
 
     // Find infoTable entries (handles both namespaced and non-namespaced)
     NodeList entries = doc.getElementsByTagName("infoTable");
@@ -6609,7 +6800,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("cik", cik);
         chunk.put("accession_number", accession);
         chunk.put("year", year);
-        chunk.put("chunk_id", "13dg_item_" + itemNumber + "_" + paraSeq);
+        chunk.put("chunk_id", accession + "_13dg_item_" + i + "_" + paraSeq);
         chunk.put("source_type", "13dg_item");
         chunk.put("section", "Item " + itemNumber);
         chunk.put("sequence", sequence++);

@@ -37,6 +37,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jsoup.Jsoup;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -45,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.Year;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -2695,6 +2698,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Use the vectorization flag set earlier based on checkFilingStatus()
       boolean needParquetReprocessing = needsVectorizationReprocessing;
 
+      // Download EX-99.x exhibits for 8-K filings before the early-return cache check,
+      // so exhibits are fetched even when the primary HTML is already cached on disk.
+      if (is8KForm) {
+        download8KExhibits(provider, cik, accession, accessionClean, accessionPath);
+      }
+
       // Critical fix: Detect inline XBRL in cached HTML files that need Parquet processing
       // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
       // but Parquet files were never generated due to cache logic gaps
@@ -3275,6 +3284,102 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     } catch (Exception e) {
       LOGGER.debug("Failed to construct XBRL filename for CIK {}: {}", cik, e.getMessage());
       return null;
+    }
+  }
+
+  /**
+   * Download EX-99.x exhibit files for an 8-K filing by parsing the EDGAR filing index HTML.
+   * Exhibits contain press releases and earnings call transcripts used for speaker extraction.
+   */
+  private void download8KExhibits(SecHttpStorageProvider provider, String cik,
+      String accession, String accessionClean, String accessionPath) {
+    String cikNumeric = cik.replaceFirst("^0+", "");
+    String indexUrl = String.format(Locale.ROOT,
+        "https://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.htm",
+        cikNumeric, accessionClean, accession);
+
+    LOGGER.info("Fetching 8-K exhibit index: {}", indexUrl);
+    try {
+      String indexHtml;
+      try (InputStream indexIs = provider.openInputStream(indexUrl)) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = indexIs.read(buf)) != -1) {
+          baos.write(buf, 0, n);
+        }
+        indexHtml = baos.toString(StandardCharsets.UTF_8.name());
+      }
+
+      org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+      for (org.jsoup.nodes.Element row : doc.select("tr")) {
+        org.jsoup.select.Elements cells = row.select("td");
+        boolean isExhibit99 = false;
+        String exhibitHref = null;
+
+        for (org.jsoup.nodes.Element cell : cells) {
+          String cellText = cell.text().trim();
+          if (cellText.startsWith("EX-99")) {
+            isExhibit99 = true;
+          }
+          org.jsoup.nodes.Element link = cell.selectFirst("a[href]");
+          if (link != null) {
+            String href = link.attr("href");
+            String hrefLower = href.toLowerCase(Locale.ROOT);
+            if (hrefLower.endsWith(".htm") || hrefLower.endsWith(".html")) {
+              exhibitHref = href;
+            }
+          }
+        }
+
+        if (!isExhibit99 || exhibitHref == null) {
+          continue;
+        }
+
+        String filename = exhibitHref.substring(exhibitHref.lastIndexOf('/') + 1);
+
+        if (cacheManifest.isFileDownloaded(cik, accession, filename)) {
+          LOGGER.debug("8-K exhibit already downloaded: {}", filename);
+          continue;
+        }
+
+        String exhibitPath = storageProvider.resolvePath(accessionPath, filename);
+        try {
+          if (storageProvider.exists(exhibitPath)
+              && storageProvider.getMetadata(exhibitPath).getSize() > 0) {
+            cacheManifest.markFileDownloaded(cik, accession, filename);
+            continue;
+          }
+        } catch (IOException e) {
+          // File doesn't exist yet
+        }
+
+        String exhibitUrl = String.format(Locale.ROOT,
+            "https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
+            cikNumeric, accessionClean, filename);
+
+        try (InputStream exhibitIs = provider.openInputStream(exhibitUrl)) {
+          ByteArrayOutputStream exhibitBaos = new ByteArrayOutputStream();
+          byte[] buf = new byte[8192];
+          int n;
+          while ((n = exhibitIs.read(buf)) != -1) {
+            exhibitBaos.write(buf, 0, n);
+          }
+          storageProvider.writeFile(exhibitPath, exhibitBaos.toByteArray());
+          cacheManifest.markFileDownloaded(cik, accession, filename);
+          LOGGER.info("Downloaded 8-K exhibit {} for accession {}", filename, accession);
+        } catch (Exception e) {
+          LOGGER.debug("Failed to download 8-K exhibit {}: {}", filename, e.getMessage());
+        }
+
+        try {
+          Thread.sleep(100);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.info("Failed to fetch 8-K exhibit index for {}: {}", accession, e.getMessage());
     }
   }
 

@@ -926,7 +926,7 @@ partitionedTables:
         nullable: true
         comment: CIK of the filing investment manager
       - name: report_period
-        type: string
+        type: date
         nullable: true
         comment: Calendar quarter end date for the report (ISO 8601)
       - name: issuer_name

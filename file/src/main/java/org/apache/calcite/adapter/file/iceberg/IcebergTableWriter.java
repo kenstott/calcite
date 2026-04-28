@@ -627,13 +627,20 @@ public class IcebergTableWriter {
         return value.toString();
       case DATE:
         if (value instanceof java.time.LocalDate) {
-          return (int) ((java.time.LocalDate) value).toEpochDay();
+          return value;
+        }
+        if (value instanceof Integer) {
+          return java.time.LocalDate.ofEpochDay((Integer) value);
         }
         if (value instanceof java.sql.Date) {
-          return (int) ((java.sql.Date) value).toLocalDate().toEpochDay();
+          return ((java.sql.Date) value).toLocalDate();
         }
         if (value instanceof String) {
-          return (int) java.time.LocalDate.parse((String) value).toEpochDay();
+          try {
+            return java.time.LocalDate.parse((String) value);
+          } catch (Exception e) {
+            return null;
+          }
         }
         return value;
       case TIMESTAMP:
