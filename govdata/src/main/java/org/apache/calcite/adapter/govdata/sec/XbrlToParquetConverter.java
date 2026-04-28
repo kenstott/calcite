@@ -1424,19 +1424,82 @@ public class XbrlToParquetConverter implements FileConverter {
   private String normalizeUnitRef(String unitRef) {
     if (unitRef == null) return null;
     String lower = unitRef.toLowerCase();
-    // Currency: case variants and XBRL-generated Unit_Standard_<currency>_<hash> forms
-    if (lower.equals("usd") || lower.equals("u_usd") || lower.startsWith("unit_standard_usd_")) return "USD";
-    if (lower.equals("eur") || lower.equals("u_eur") || lower.startsWith("unit_standard_eur_")) return "EUR";
-    if (lower.equals("cny") || lower.equals("u_cny") || lower.startsWith("unit_standard_cny_")) return "CNY";
-    // Shares: case variants and XBRL-generated form
+    // Currency: case variants, U_/Unit_ prefixes, and XBRL Unit_Standard_<currency>_<hash>
+    if (lower.equals("usd") || lower.equals("u_usd") || lower.equals("unit_usd")
+        || lower.startsWith("unit_standard_usd_")) return "USD";
+    if (lower.equals("eur") || lower.equals("u_eur")
+        || lower.startsWith("unit_standard_eur_")) return "EUR";
+    if (lower.equals("gbp") || lower.equals("u_gbp")
+        || lower.startsWith("unit_standard_gbp_")) return "GBP";
+    if (lower.equals("cad") || lower.equals("u_cad")
+        || lower.startsWith("unit_standard_cad_")) return "CAD";
+    if (lower.equals("aud") || lower.equals("u_aud")
+        || lower.startsWith("unit_standard_aud_")) return "AUD";
+    if (lower.equals("chf") || lower.equals("u_chf")
+        || lower.startsWith("unit_standard_chf_")) return "CHF";
+    if (lower.equals("jpy") || lower.equals("u_jpy")
+        || lower.startsWith("unit_standard_jpy_")) return "JPY";
+    if (lower.equals("cny") || lower.equals("u_cny") || lower.equals("rmb")
+        || lower.startsWith("unit_standard_cny_")) return "CNY";
+    if (lower.equals("hkd") || lower.equals("u_hkd") || lower.equals("unit_hkd")
+        || lower.startsWith("unit_standard_hkd_")) return "HKD";
+    if (lower.equals("sgd") || lower.equals("u_sgd")
+        || lower.startsWith("unit_standard_sgd_")) return "SGD";
+    if (lower.equals("czk") || lower.equals("u_czk")
+        || lower.startsWith("unit_standard_czk_")) return "CZK";
+    if (lower.equals("mxn") || lower.equals("u_mxn")
+        || lower.startsWith("unit_standard_mxn_")) return "MXN";
+    if (lower.equals("brl") || lower.equals("u_brl")
+        || lower.startsWith("unit_standard_brl_")) return "BRL";
+    if (lower.equals("inr") || lower.equals("u_inr")
+        || lower.startsWith("unit_standard_inr_")) return "INR";
+    if (lower.equals("krw") || lower.equals("u_krw")
+        || lower.startsWith("unit_standard_krw_")) return "KRW";
+    if (lower.equals("nzd") || lower.equals("u_nzd")
+        || lower.startsWith("unit_standard_nzd_")) return "NZD";
+    // Shares
     if (lower.equals("shares") || lower.equals("share") || lower.equals("u_shares")
-        || lower.equals("unit_shares") || lower.startsWith("unit_standard_shares_")) return "shares";
-    // Pure/ratio: case variants and XBRL-generated form (NOT "number" — counts are distinct from ratios)
-    if (lower.equals("pure") || lower.equals("u_pure") || lower.startsWith("unit_standard_pure_")) return "pure";
-    // USD-per-share: exact known variants only (startsWith would incorrectly catch U_USDPerShareXxx)
+        || lower.equals("unit_shares") || lower.equals("shares2")
+        || lower.startsWith("unit_standard_shares_")) return "shares";
+    // Pure/ratio and dimensionless
+    if (lower.equals("pure") || lower.equals("u_pure") || lower.equals("unit_pure")
+        || lower.startsWith("unit_standard_pure_")) return "pure";
+    if (lower.equals("multiplier")) return "pure";
+    // Number: generic counts and domain count-nouns
+    if (lower.equals("number") || lower.equals("u_number") || lower.equals("integer")
+        || lower.equals("unit") || lower.equals("u_segment") || lower.equals("segment")
+        || lower.equals("position") || lower.equals("security") || lower.equals("cases")
+        || lower.equals("claims") || lower.equals("claimant") || lower.equals("claim")
+        || lower.equals("project") || lower.equals("site") || lower.equals("lot")
+        || lower.equals("well") || lower.equals("wells") || lower.equals("brinesandwells")
+        || lower.equals("employee") || lower.equals("loan") || lower.equals("lawsuit")
+        || lower.equals("acquisition") || lower.equals("agent") || lower.equals("party")
+        || lower.equals("participant") || lower.equals("review") || lower.equals("office")
+        || lower.equals("data_center") || lower.equals("manufacturingsites")
+        || lower.equals("numberofpositions") || lower.equals("u_warrant")
+        || lower.equals("u_derivative") || lower.equals("u_security")
+        || lower.equals("property") || lower.equals("holding") || lower.equals("agency")
+        || lower.equals("instrument") || lower.equals("extension") || lower.equals("lease")
+        || lower.equals("u_right") || lower.equals("u_loan")
+        || lower.startsWith("unit_standard_item_")
+        || lower.startsWith("unit_standard_home_")
+        || lower.startsWith("unit_standard_aft_")
+        || lower.startsWith("unit_standard_letterofcredit_")) return "number";
+    // USD-per-share variants
     if (lower.equals("usdpershare") || lower.equals("usdpershares") || lower.equals("usdpshares")
-        || lower.equals("u_unitedstatesofamericadollarsshare")
+        || lower.equals("unit_usd_per_share") || lower.equals("u_unitedstatesofamericadollarsshare")
+        || lower.equals("usdsecurity") || lower.equals("usdsec")
+        || lower.equals("u_usdshares") || lower.equals("usdpersecurity")
         || lower.startsWith("unit_divide_usd_shares_")) return "usdPerShare";
+    // Time units
+    if (lower.equals("tradingdays")) return "day";
+    if (lower.equals("u_y") || lower.equals("y")) return "year";
+    // Physical units: normalize case only
+    if (lower.equals("mw")) return "MW";
+    if (lower.equals("mwh")) return "MWh";
+    if (lower.equals("sqft") || lower.equals("u_sqft")) return "sqft";
+    if (lower.equals("mi") || lower.equals("u_mi")) return "mi";
+    if (lower.equals("barrels") || lower.equals("bbl")) return "bbl";
     return unitRef;
   }
 

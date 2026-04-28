@@ -54,6 +54,12 @@ public class SemanticTextChunker {
   private static final Pattern PAGE_PATTERN = Pattern.compile(
       "(?i)^\\s*(page\\s*)?\\d+\\s*$|^\\s*-\\s*\\d+\\s*-\\s*$");
 
+  // SEC filing heading patterns for styled (non-h1-h6) elements
+  private static final Pattern PART_HEADING_PATTERN = Pattern.compile(
+      "(?i)^part\\s+[ivxIVX]+[.:]?(?:\\s+.*)?$");
+  private static final Pattern ITEM_HEADING_PATTERN = Pattern.compile(
+      "(?i)^item\\s+\\d+[a-zA-Z]?[.:]?(?:\\s+.*)?$");
+
   private final int targetSize;
   private final int minSize;
   private final int maxSize;
@@ -250,6 +256,12 @@ public class SemanticTextChunker {
         text = cleanText(element.text());
         type = ContentType.PARAGRAPH;
         footnoteRefs = extractFootnoteReferences(text);
+        // Detect styled headings common in SEC filings (bold spans, ITEM/PART patterns)
+        headingLevel = inferStyledHeadingLevel(element, text);
+        if (headingLevel > 0) {
+          type = ContentType.HEADING;
+          footnoteRefs = new ArrayList<>();
+        }
         break;
     }
 
@@ -583,6 +595,48 @@ public class SemanticTextChunker {
       return true;
     }
     return TOC_PATTERN.matcher(text).matches() || PAGE_PATTERN.matcher(text).matches();
+  }
+
+  private static int inferStyledHeadingLevel(Element element, String text) {
+    if (text == null || text.isEmpty() || text.length() > 200) {
+      return 0;
+    }
+    if (PART_HEADING_PATTERN.matcher(text).matches()) {
+      return 1;
+    }
+    if (ITEM_HEADING_PATTERN.matcher(text).matches()) {
+      return 2;
+    }
+    if (text.length() <= 150 && isEntirelyBold(element, text)) {
+      return 3;
+    }
+    return 0;
+  }
+
+  private static boolean isEntirelyBold(Element element, String fullText) {
+    if (isBoldStyle(element.attr("style"))) {
+      return true;
+    }
+    Elements boldSpans = element.select(
+        "span[style*=font-weight:700], span[style*=font-weight: 700],"
+        + " span[style*=font-weight:bold], b, strong");
+    if (boldSpans.isEmpty()) {
+      return false;
+    }
+    StringBuilder boldText = new StringBuilder();
+    for (Element b : boldSpans) {
+      boldText.append(b.text().trim()).append(" ");
+    }
+    return boldText.toString().trim().length() >= fullText.length() * 0.80;
+  }
+
+  private static boolean isBoldStyle(String style) {
+    if (style == null || style.isEmpty()) {
+      return false;
+    }
+    String s = style.replaceAll("\\s+", "").toLowerCase();
+    return s.contains("font-weight:700") || s.contains("font-weight:800")
+        || s.contains("font-weight:900") || s.contains("font-weight:bold");
   }
 
   private List<String> extractFootnoteReferences(String text) {
