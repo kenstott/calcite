@@ -3078,6 +3078,13 @@ public class SecDataFetcher {
         if (fye != null && !fye.isEmpty()) {
           info.put("fiscal_year_end_mmdd", fye);
         }
+        JsonNode mailing = node.path("addresses").path("mailing");
+        if (!mailing.isMissingNode()) {
+          String street1 = mailing.path("street1").asText(null);
+          if (street1 != null && !street1.isEmpty()) {
+            info.put("mailing_address", street1);
+          }
+        }
       }
     } catch (Exception e) {
       LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());

@@ -967,7 +967,12 @@ public class XbrlToParquetConverter implements FileConverter {
         Map<String, Object> cp = contextPeriodMap.get(contextRefVal);
         if (cp != null) {
           data.put("period_start", cp.get("period_start"));
-          data.put("period_end", cp.get("period_end"));
+          Object rawPeriodEnd = cp.get("period_end");
+          if (rawPeriodEnd instanceof String && ((String) rawPeriodEnd).matches("--\\d{2}-\\d{2}")) {
+            data.put("period_end", resolveRelativePeriodDate((String) rawPeriodEnd, filingDate));
+          } else {
+            data.put("period_end", rawPeriodEnd);
+          }
           data.put("is_instant", cp.get("is_instant"));
         } else {
           data.put("period_start", null);
@@ -1031,13 +1036,20 @@ public class XbrlToParquetConverter implements FileConverter {
         }
         data.put("element_id", elementId);
 
-        // Try to parse as numeric (using cleaned value)
-        try {
-          double numValue =
-              Double.parseDouble(cleanValue.replaceAll(",", ""));
-          data.put("numeric_value", numValue);
-        } catch (NumberFormatException e) {
-          data.put("numeric_value", null);
+        // Resolve numeric value with provenance
+        if (cleanValue == null || cleanValue.isEmpty()) {
+          data.put("value_numeric", null);
+          data.put("value_numeric_method", null);
+        } else {
+          try {
+            double numValue = Double.parseDouble(cleanValue.replaceAll(",", ""));
+            data.put("value_numeric", numValue);
+            data.put("value_numeric_method", "direct");
+          } catch (NumberFormatException e) {
+            Double heuristic = applyNumericHeuristic(cleanValue);
+            data.put("value_numeric", heuristic);
+            data.put("value_numeric_method", heuristic != null ? "heuristic" : null);
+          }
         }
 
         dataList.add(data);
@@ -1157,10 +1169,19 @@ public class XbrlToParquetConverter implements FileConverter {
     String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
     data.put("business_address", businessAddress);
 
-    String mailingAddress = extractDeiValue(doc, "EntityAddressMailingAddressLine1", "MailingAddress");
+    String mailingAddress = submissionsInfo.get("mailing_address");
     data.put("mailing_address", mailingAddress);
 
-    String phone = extractDeiValue(doc, "EntityPhoneNumber", "Phone");
+    String areaCode = extractDeiValue(doc, "CityAreaCode", "EntityPhoneAreaCode");
+    String localPhone = extractDeiValue(doc, "LocalPhoneNumber", "EntityPhoneNumber");
+    String phone = null;
+    if (areaCode != null && localPhone != null) {
+      phone = areaCode + localPhone;
+    } else if (localPhone != null) {
+      phone = localPhone;
+    } else if (areaCode != null) {
+      phone = areaCode;
+    }
     data.put("phone", phone);
 
     String docType = extractDeiValue(doc, "DocumentType", "FormType");
@@ -1221,6 +1242,52 @@ public class XbrlToParquetConverter implements FileConverter {
       case "10QA":   // fall-through
       case "10Q/A":  return "10-Q/A";
       default:       return filingType;
+    }
+  }
+
+  private static final Map<String, Double> NUMERIC_HEURISTICS;
+  static {
+    Map<String, Double> m = new java.util.LinkedHashMap<>();
+    // Nil markers → 0
+    m.put("—", 0.0); m.put("–", 0.0); m.put("-–", 0.0); m.put("-—", 0.0);
+    m.put("none", 0.0); m.put("nil", 0.0); m.put("no", 0.0); m.put("not", 0.0); m.put("null", 0.0);
+    // Word numerals → integer
+    m.put("one", 1.0); m.put("two", 2.0); m.put("three", 3.0); m.put("four", 4.0);
+    m.put("five", 5.0); m.put("six", 6.0); m.put("seven", 7.0); m.put("eight", 8.0);
+    m.put("nine", 9.0); m.put("ten", 10.0); m.put("eleven", 11.0); m.put("twelve", 12.0);
+    m.put("thirteen", 13.0); m.put("fourteen", 14.0); m.put("fifteen", 15.0);
+    m.put("sixteen", 16.0); m.put("seventeen", 17.0); m.put("eighteen", 18.0);
+    m.put("nineteen", 19.0); m.put("twenty", 20.0); m.put("thirty", 30.0);
+    m.put("forty", 40.0); m.put("fifty", 50.0); m.put("sixty", 60.0);
+    m.put("seventy", 70.0); m.put("eighty", 80.0); m.put("ninety", 90.0);
+    NUMERIC_HEURISTICS = java.util.Collections.unmodifiableMap(m);
+  }
+
+  private static Double applyNumericHeuristic(String value) {
+    if (value == null) return null;
+    String lower = value.trim().toLowerCase(Locale.ENGLISH);
+    Double direct = NUMERIC_HEURISTICS.get(lower);
+    if (direct != null) return direct;
+    // Compound word numerals up to ninety-nine (e.g. "twenty-one")
+    if (lower.contains("-")) {
+      String[] parts = lower.split("-", 2);
+      Double tens = NUMERIC_HEURISTICS.get(parts[0]);
+      Double ones = NUMERIC_HEURISTICS.get(parts[1]);
+      if (tens != null && ones != null && tens >= 20.0 && ones >= 1.0 && ones <= 9.0) {
+        return tens + ones;
+      }
+    }
+    return null;
+  }
+
+  private static String resolveRelativePeriodDate(String mmdd, String filingDate) {
+    try {
+      String monthDay = mmdd.substring(2); // "--07-31" → "07-31"
+      int filingYear = Integer.parseInt(filingDate.substring(0, 4));
+      String candidate = filingYear + "-" + monthDay;
+      return candidate.compareTo(filingDate) <= 0 ? candidate : (filingYear - 1) + "-" + monthDay;
+    } catch (Exception e) {
+      return null;
     }
   }
 
@@ -2008,15 +2075,14 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // Extract contexts from HTML (both ix:context and xbrli:context), deduplicating by id
+      // Extract contexts from HTML (ix:context, xbrli:context, i:context), deduplicating by id
+      // Some filers use xmlns:i as a short alias for the xbrli namespace (e.g. Limitless Projects)
       Map<String, org.jsoup.nodes.Element> contextById = new java.util.LinkedHashMap<>();
-      for (org.jsoup.nodes.Element ctx : jsoupDoc.getElementsByTag("ix:context")) {
-        String cid = ctx.attr("id");
-        if (!cid.isEmpty()) contextById.put(cid, ctx);
-      }
-      for (org.jsoup.nodes.Element ctx : jsoupDoc.getElementsByTag("xbrli:context")) {
-        String cid = ctx.attr("id");
-        if (!cid.isEmpty()) contextById.put(cid, ctx);
+      for (String ctxTag : new String[]{"ix:context", "xbrli:context", "i:context"}) {
+        for (org.jsoup.nodes.Element ctx : jsoupDoc.getElementsByTag(ctxTag)) {
+          String cid = ctx.attr("id");
+          if (!cid.isEmpty()) contextById.put(cid, ctx);
+        }
       }
       // Fallback CSS selector: only add elements not already captured and that look like contexts
       for (org.jsoup.nodes.Element ctx : jsoupDoc.select("[id^='c'],[id^='C']")) {
@@ -2034,10 +2100,12 @@ public class XbrlToParquetConverter implements FileConverter {
 
         // Extract entity, period, etc from context — use tag-name lookup for xbrli:* child elements
         org.jsoup.nodes.Element entity = context.getElementsByTag("xbrli:entity").first();
+        if (entity == null) entity = context.getElementsByTag("i:entity").first();
         if (entity == null) entity = context.getElementsByTag("entity").first();
         if (entity != null) {
           Element xmlEntity = doc.createElement("entity");
           org.jsoup.nodes.Element identifier = entity.getElementsByTag("xbrli:identifier").first();
+          if (identifier == null) identifier = entity.getElementsByTag("i:identifier").first();
           if (identifier == null) identifier = entity.getElementsByTag("identifier").first();
           if (identifier != null) {
             Element xmlIdentifier = doc.createElement("identifier");
@@ -2048,12 +2116,14 @@ public class XbrlToParquetConverter implements FileConverter {
           xmlContext.appendChild(xmlEntity);
         }
 
-        // Extract period — use tag-name lookup (not attribute selector) for xbrli:period child elements
+        // Extract period — use tag-name lookup for xbrli:period / i:period child elements
         org.jsoup.nodes.Element period = context.getElementsByTag("xbrli:period").first();
+        if (period == null) period = context.getElementsByTag("i:period").first();
         if (period == null) period = context.getElementsByTag("period").first();
         if (period != null) {
           Element xmlPeriod = doc.createElement("period");
           org.jsoup.nodes.Element instant = period.getElementsByTag("xbrli:instant").first();
+          if (instant == null) instant = period.getElementsByTag("i:instant").first();
           if (instant == null) instant = period.getElementsByTag("instant").first();
           if (instant != null) {
             Element xmlInstant = doc.createElement("instant");
@@ -2061,6 +2131,7 @@ public class XbrlToParquetConverter implements FileConverter {
             xmlPeriod.appendChild(xmlInstant);
           }
           org.jsoup.nodes.Element startDate = period.getElementsByTag("xbrli:startDate").first();
+          if (startDate == null) startDate = period.getElementsByTag("i:startDate").first();
           if (startDate == null) startDate = period.getElementsByTag("startDate").first();
           if (startDate != null) {
             Element xmlStart = doc.createElement("startDate");
@@ -2068,6 +2139,7 @@ public class XbrlToParquetConverter implements FileConverter {
             xmlPeriod.appendChild(xmlStart);
           }
           org.jsoup.nodes.Element endDate = period.getElementsByTag("xbrli:endDate").first();
+          if (endDate == null) endDate = period.getElementsByTag("i:endDate").first();
           if (endDate == null) endDate = period.getElementsByTag("endDate").first();
           if (endDate != null) {
             Element xmlEnd = doc.createElement("endDate");
@@ -2079,6 +2151,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
         // Extract segment — contains XBRL dimension/member pairs (axis=member)
         org.jsoup.nodes.Element segment = context.getElementsByTag("xbrli:segment").first();
+        if (segment == null) segment = context.getElementsByTag("i:segment").first();
         if (segment == null) segment = context.getElementsByTag("segment").first();
         if (segment != null) {
           Element xmlSegment = doc.createElement("segment");
@@ -3386,6 +3459,27 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     LOGGER.debug("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
+
+    // Fallback: linkbases embedded directly in the XSD (no linkbaseRef elements)
+    if (linkbaseRefs.getLength() == 0) {
+      boolean foundEmbedded = false;
+      String[] embeddedTypes = {"calculationLink", "presentationLink", "definitionLink"};
+      for (String linkType : embeddedTypes) {
+        NodeList embedded = xsdDoc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", linkType);
+        if (embedded.getLength() == 0) {
+          embedded = xsdDoc.getElementsByTagName("link:" + linkType);
+        }
+        if (embedded.getLength() > 0) {
+          foundEmbedded = true;
+          break;
+        }
+      }
+      if (foundEmbedded) {
+        LOGGER.debug("Detected linkbase arcs embedded directly in XSD — parsing XSD as linkbase document");
+        extractLinkbaseRelationships(xsdDoc, columns, dataList, cik, accession, filingDate, "mixed");
+        return;
+      }
+    }
 
     // Process each linkbase file
     for (int i = 0; i < linkbaseRefs.getLength(); i++) {

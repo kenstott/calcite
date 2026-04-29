@@ -102,6 +102,24 @@ resolve_classpath > /dev/null
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# On Ctrl-C or SIGTERM, kill all active workers before exiting
+cleanup() {
+  echo ""
+  echo "=== Interrupted — killing active workers ==="
+  for i in "${!active_pids[@]}"; do
+    local pid="${active_pids[$i]}"
+    local id="${active_labels[$i]}"
+    echo "  Killing $id (PID $pid)"
+    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.5
+    kill -KILL -"$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null || true
+  echo "=== All workers terminated ==="
+  exit 130
+}
+trap cleanup INT TERM
+
 total=${#queue[@]}
 if [ "$(uname)" = "Darwin" ]; then
   total_mem_mb=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))

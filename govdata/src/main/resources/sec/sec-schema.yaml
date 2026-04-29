@@ -98,11 +98,17 @@ column_templates:
     nullable: true
     comment: Canonical unit (e.g. USD, shares, pure, usdPerShare); equals unit_ref when no normalization rule matches
 
-  numeric_value_column: &numeric_value
-    name: numeric_value
+  value_numeric_column: &value_numeric
+    name: value_numeric
     type: double
     nullable: true
-    comment: Numeric value for monetary and numeric facts
+    comment: Best-effort numeric representation; not the original filing value
+
+  value_numeric_method_column: &value_numeric_method
+    name: value_numeric_method
+    type: string
+    nullable: true
+    comment: Provenance of value_numeric — direct, heuristic, or null if no conversion possible
 
   # --- Text Columns ---
 
@@ -460,7 +466,8 @@ partitionedTables:
         type: string
         nullable: true
         comment: Full text content for TextBlock elements (narrative disclosures)
-      - *numeric_value
+      - *value_numeric
+      - *value_numeric_method
       - *period_start
       - *period_end
       - name: is_instant
@@ -1478,7 +1485,7 @@ constraints:
     indexes:
       - [concept]
       - [period_end]
-      - [numeric_value]
+      - [value_numeric]
     foreignKeys:
       - columns: [cik, accession_number]
         targetTable: filing_metadata
@@ -1592,11 +1599,11 @@ views:
         fm.company_name,
         fm.ticker,
         fli.period_end,
-        fli.numeric_value as revenue
+        fli.value_numeric as revenue
       FROM financial_line_items fli
       JOIN filing_metadata fm ON fli.cik = fm.cik AND fli.accession_number = fm.accession_number
       WHERE fli.concept LIKE '%Revenue%'
-        AND fli.numeric_value IS NOT NULL
+        AND fli.value_numeric IS NOT NULL
       ORDER BY fm.cik, fli.period_end
 
   - name: insider_activity_summary
