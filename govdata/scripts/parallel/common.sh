@@ -506,6 +506,14 @@ get_heap_config() {
     # FedRegister (61): 4 doc_types x 16 years x ~85 pages/partition pagination
     _HEAP_MIN="2g"
     _HEAP_MAX="3g"
+  elif [ "$num" -eq 62 ]; then
+    # Cyber initial (62): full NVD catalog ~350k CVEs + OTX backfill needs extra heap
+    _HEAP_MIN="4g"
+    _HEAP_MAX="6g"
+  elif [ "$num" -ge 63 ] && [ "$num" -le 66 ]; then
+    # Cyber recurring (63=daily, 64=weekly, 65=hourly, 66=static): delta/incremental, lighter
+    _HEAP_MIN="2g"
+    _HEAP_MAX="3g"
   elif [ "$num" -eq 21 ]; then
     # Crime (21): large dimension expansion (type × year × state × offense × ori), long-running
     _HEAP_MIN="3g"

@@ -74,6 +74,9 @@ if [ $# -eq 0 ]; then
   echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
+  echo "  $0 all                    — all historical/initial workers (1-41, 60-62)"
+  echo "  $0 62                     — cyber initial load only"
+  echo "  $0 63-65                  — cyber recurring (daily/weekly/hourly)"
   exit 1
 fi
 
@@ -84,7 +87,10 @@ for arg in "$@"; do
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ]; then
-      for i in $(seq 1 58); do queue+=("$i"); done
+      # Historical/initial-load workers only — excludes recurring cadence workers 63-66
+      # (cyber daily/weekly/hourly/static). Run those explicitly or via cron.
+      for i in $(seq 1 41); do queue+=("$i"); done
+      for i in 60 61 62; do queue+=("$i"); done
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
     elif [[ "$part" =~ ^[0-9]+$ ]]; then

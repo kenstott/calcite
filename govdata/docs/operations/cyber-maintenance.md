@@ -2,17 +2,34 @@
 
 ## Quick Reference
 
-```bash
-# First-time setup
-./scripts/parallel/worker-cyber.sh initial
+Cyber workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
+`worker-cyber.sh` is the shared implementation; the numbered scripts are the pool entry points.
 
-# Recurring cadence (add to cron)
-./scripts/parallel/worker-cyber.sh hourly    # every 1–4 hours
-./scripts/parallel/worker-cyber.sh daily     # every 24 hours
-./scripts/parallel/worker-cyber.sh weekly    # weekly (e.g., Sunday 02:00)
+| Worker | Mode | Command | Schedule |
+|---|---|---|---|
+| worker-62 | initial | `./run-pool.sh 62` | Once, before any recurring runs |
+| worker-63 | daily | `./run-pool.sh 63` | Every 24 hours |
+| worker-64 | weekly | `./run-pool.sh 64` | Weekly (e.g., Sunday 02:00) |
+| worker-65 | hourly | `./run-pool.sh 65` | Every 1–4 hours |
+| worker-66 | static | `./run-pool.sh 66` | On-demand after framework updates |
+
+`./run-pool.sh all` includes worker-62 (initial) alongside all other historical-load workers.
+Workers 63–66 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+
+```bash
+# First-time setup (integrated with full historical pipeline)
+cd scripts/parallel
+./run-pool.sh all            # includes worker-62 (cyber initial)
+# — or cyber only —
+./run-pool.sh 62
+
+# Recurring cadence via run-pool (or use cron directly)
+./run-pool.sh 63             # daily NVD delta + KEV
+./run-pool.sh 64             # weekly ATT&CK, CWE, OSV, advisories
+./run-pool.sh 65             # hourly IOC feeds + OTX delta
 
 # On-demand: re-run static standards after a framework update
-./scripts/parallel/worker-cyber.sh static
+./run-pool.sh 66
 ```
 
 ---
