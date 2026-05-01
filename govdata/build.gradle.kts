@@ -99,8 +99,8 @@ tasks.test {
     // Increase heap size for tests that process large CSV files
     // BLS QCEW bulk downloads can have 250k+ rows per year, each with 20+ columns
     // Note: Keep maxHeapSize below system RAM to avoid OOM kills (exit code 137)
-    minHeapSize = "1g"
-    maxHeapSize = "4g"
+    minHeapSize = System.getenv("TEST_MIN_HEAP") ?: "1g"
+    maxHeapSize = System.getenv("TEST_MAX_HEAP") ?: "4g"
 
     // JVM crash debugging - generates detailed crash logs and heap dumps
     jvmArgs(
@@ -159,8 +159,8 @@ tasks.register<JavaExec>("etlRunner") {
     mainClass.set("org.apache.calcite.adapter.govdata.etl.EtlRunner")
 
     // Default JVM memory settings for processing large datasets
-    minHeapSize = "1g"
-    maxHeapSize = "4g"
+    minHeapSize = System.getenv("ETL_MIN_HEAP") ?: "1g"
+    maxHeapSize = System.getenv("ETL_MAX_HEAP") ?: "4g"
 
     // Pass through any command line arguments
     // Usage: ./gradlew :govdata:etlRunner --args="--model path/to/model.json"

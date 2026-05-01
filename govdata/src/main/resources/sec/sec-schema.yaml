@@ -510,6 +510,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
       output:
         pattern: "year=*/"
       partition:
@@ -592,6 +593,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
       output:
         pattern: "year=*/"
       partition:
@@ -679,6 +681,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 10000
       output:
         pattern: "year=*/"
       partition:
@@ -770,6 +773,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
       output:
         pattern: "year=*/"
       partition:
@@ -885,6 +889,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -1000,6 +1005,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -1120,6 +1126,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -1197,6 +1204,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 5000
       output:
         pattern: "year=*/"
       partition:
@@ -1317,6 +1325,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 100000
       output:
         pattern: "stock_prices/year=*/"
       partition:
@@ -1444,6 +1453,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 5000
       output:
         pattern: "year=*/"
       partition:

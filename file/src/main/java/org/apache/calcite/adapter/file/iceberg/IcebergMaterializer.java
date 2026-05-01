@@ -1003,8 +1003,11 @@ public class IcebergMaterializer {
 
     // Set DuckDB memory limit to prevent OOM
     try (Statement memStmt = conn.createStatement()) {
-      memStmt.execute("SET memory_limit='2GB'");
-      memStmt.execute("SET temp_directory='/tmp/duckdb_temp'");
+      memStmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      String tempDir = warehousePath != null
+          ? warehousePath + "/.duckdb_tmp"
+          : System.getProperty("java.io.tmpdir");
+      memStmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
     }
 
     String accessionCol = config.getAccessionColumn();
