@@ -1193,12 +1193,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Derive fileChunkSize from rowBatchSize to prevent OOM in file-list processing path.
-    // processWithFileChunkingToIceberg() loads all rows from fileChunkSize files into memory.
-    // With ~332 rows/file for facts tables, fileChunkSize=5000 (default) = 1.66M rows → OOM (Error, not Exception).
-    // Using rowBatchSize/500 keeps each chunk under rowBatchSize rows (e.g., 50000/500=100 files × 332=33200 rows).
+    // Determine fileChunkSize: YAML-configured value takes precedence over the derived value.
+    // processWithFileChunkingToIceberg() loads all rows from fileChunkSize files into memory at once,
+    // so large chunks risk both OOM and exceeding CHUNK_QUERY_TIMEOUT_SECONDS (1800s) over R2.
+    // Derivation fallback: rowBatchSize/500 (e.g., 50000/500=100 files × ~332 rows/file ≈ 33k rows).
     int fileChunkSize = 0;
-    if (rowBatchSize > 0) {
+    if (materializeConfig != null) {
+      Object configuredChunkSize = materializeConfig.get("fileChunkSize");
+      if (configuredChunkSize instanceof Number) {
+        fileChunkSize = ((Number) configuredChunkSize).intValue();
+        LOGGER.info("Using configured fileChunkSize={} for table '{}'", fileChunkSize, tableName);
+      }
+    }
+    if (fileChunkSize == 0 && rowBatchSize > 0) {
       fileChunkSize = Math.max(1, rowBatchSize / 500);
       LOGGER.info("Derived fileChunkSize={} from rowBatchSize={} for table '{}'",
           fileChunkSize, rowBatchSize, tableName);
