@@ -54,11 +54,14 @@ public class TestEnvironmentLoader {
     String cwd = System.getProperty("user.dir");
     LOGGER.info("Loading environment from working directory: {}", cwd);
 
-    // Look for .env.test file in the govdata module directory
+    // Look for .env.test (then .env.prod as fallback) in the govdata module directory
     Path[] possiblePaths = {
         Paths.get("govdata/.env.test"),
         Paths.get(".env.test"),
-        Paths.get("../.env.test")
+        Paths.get("../.env.test"),
+        Paths.get("govdata/.env.prod"),
+        Paths.get(".env.prod"),
+        Paths.get("../.env.prod")
     };
 
     File envFile = null;
@@ -66,13 +69,13 @@ public class TestEnvironmentLoader {
       LOGGER.debug("Checking path: {} (exists: {})", path.toAbsolutePath(), Files.exists(path));
       if (Files.exists(path)) {
         envFile = path.toFile();
-        LOGGER.info("Found .env.test at: {}", path.toAbsolutePath());
+        LOGGER.info("Found env file at: {}", path.toAbsolutePath());
         break;
       }
     }
 
     if (envFile == null || !envFile.exists()) {
-      LOGGER.warn("Warning: .env.test file not found. Tests may fail if they require environment variables.");
+      LOGGER.warn("Warning: .env.test/.env.prod not found. Tests may fail if they require environment variables.");
       LOGGER.warn("Searched paths:");
       for (Path path : possiblePaths) {
         LOGGER.warn("  - {} (absolute: {})", path, path.toAbsolutePath());
@@ -106,11 +109,11 @@ public class TestEnvironmentLoader {
         }
       }
 
-      LOGGER.info("Loaded {} environment variables from .env.test", ENV_VARS.size());
+      LOGGER.info("Loaded {} environment variables from env file", ENV_VARS.size());
       loaded = true;
 
     } catch (IOException e) {
-      LOGGER.warn("Warning: Failed to load .env.test file: {}", e.getMessage());
+      LOGGER.warn("Warning: Failed to load env file: {}", e.getMessage());
       loaded = true;
     }
   }

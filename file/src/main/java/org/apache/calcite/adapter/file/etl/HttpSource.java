@@ -386,7 +386,22 @@ public class HttpSource implements DataSource {
             continue;
         }
 
-        String response = executeRequest(url, pageParams, variables, null);  // No raw cache for pages
+        String response;
+        try {
+          response = executeRequest(url, pageParams, variables, null);
+        } catch (IOException e) {
+          // HTTP 400 during pagination means the API's skip/offset limit has been exceeded.
+          // Stop pagination and return whatever data we have collected so far.
+          // Other 4xx/5xx codes (403 rate-limit, 429 throttle, 500 server error) are real
+          // errors and should propagate so the caller can retry or fail properly.
+          if (e.getMessage() != null && e.getMessage().startsWith("HTTP 400")) {
+            LOGGER.info("Pagination stopped at offset={}: results window limit reached ({})",
+                offset, e.getMessage().split("\n")[0]);
+            hasMore = false;
+            continue;
+          }
+          throw e;
+        }
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
@@ -792,6 +807,9 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponse(InputStream input, String cachePath) throws IOException {
+    if (cachePath == null) {
+      return readResponse(input);
+    }
     if (isLocalPath(cachePath)) {
       File file = new File(cachePath);
       file.getParentFile().mkdirs();
@@ -821,6 +839,9 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponseString(String response, String cachePath) throws IOException {
+    if (cachePath == null) {
+      return response;
+    }
     if (isLocalPath(cachePath)) {
       File file = new File(cachePath);
       file.getParentFile().mkdirs();

@@ -25,6 +25,7 @@ import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
@@ -263,11 +264,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "cyberthreat":
         return new CyberSchemaFactory("cyber_threat");
 
+      case "health":
+      case "health_fda":
+      case "pharma":
+        return new HealthSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat");
+            + " fedregister, cyber_vuln, cyber_threat, health");
     }
   }
 
