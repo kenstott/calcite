@@ -310,6 +310,7 @@ class HealthAllTablesSmokeTest {
         "SELECT COUNT(*) FROM ("
         + "SELECT \"" + pkColumn + "\", COUNT(*) AS cnt"
         + " FROM \"" + schema + "\".\"" + table + "\""
+        + " WHERE \"" + pkColumn + "\" IS NOT NULL"
         + " GROUP BY \"" + pkColumn + "\""
         + " HAVING COUNT(*) > 1) t");
     if (dups > 0) {
@@ -326,12 +327,14 @@ class HealthAllTablesSmokeTest {
         "SELECT COUNT(*) FROM ("
         + "SELECT \"" + pkColumn + "\", COUNT(*) AS cnt"
         + " FROM \"" + schema + "\".\"" + table + "\""
+        + " WHERE \"" + pkColumn + "\" IS NOT NULL"
         + " GROUP BY \"" + pkColumn + "\""
         + " HAVING COUNT(*) > 1) t");
     if (dups > 0) {
       logExamples(conn,
           "SELECT \"" + pkColumn + "\", COUNT(*) AS cnt"
           + " FROM \"" + schema + "\".\"" + table + "\""
+          + " WHERE \"" + pkColumn + "\" IS NOT NULL"
           + " GROUP BY \"" + pkColumn + "\""
           + " HAVING COUNT(*) > 1"
           + " ORDER BY cnt DESC LIMIT 5",
