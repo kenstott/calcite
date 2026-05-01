@@ -1213,7 +1213,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Now register SQL views from table definitions for PARQUET engine
     // (DuckDB engine handles views separately as native DuckDB views)
-    registerSqlViews(parentSchema, name, tables, operand);
+    // Also merge YAML `views:` section entries (which lack type: "view") into the list.
+    List<Map<String, Object>> allTablesForViews = new ArrayList<>(tables != null ? tables : Collections.emptyList());
+    if (views != null) {
+      for (Map<String, Object> view : views) {
+        Map<String, Object> viewEntry = new HashMap<>(view);
+        viewEntry.put("type", "view");
+        allTablesForViews.add(viewEntry);
+      }
+    }
+    registerSqlViews(parentSchema, name, allTablesForViews, operand);
 
     // Register materializations with MaterializationService for optimizer substitution
     // This enables Calcite's optimizer to automatically substitute materialized views

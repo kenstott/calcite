@@ -52,6 +52,9 @@ dependencies {
     // HTML parsing for inline XBRL
     implementation("org.jsoup:jsoup")
 
+    // PDF text extraction for security advisories (cyber_vuln)
+    implementation("org.apache.pdfbox:pdfbox:2.0.31")
+
     // Geometry processing with JTS (lightweight)
     implementation("org.locationtech.jts:jts-core:1.19.0")
 

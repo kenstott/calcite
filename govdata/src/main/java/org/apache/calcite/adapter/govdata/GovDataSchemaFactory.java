@@ -19,6 +19,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
+import org.apache.calcite.adapter.govdata.cyber.CyberSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
@@ -60,6 +61,8 @@ import java.util.Map;
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
+ *   <li>cyber_vuln - Cybersecurity vulnerability data (NVD CVEs, CISA KEV, OSV, GitHub SA)</li>
+ *   <li>cyber_threat - Cyber threat intelligence (ATT&CK, IOC feeds, exploits, standards)</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -130,7 +133,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       if (!processedDependencies.contains(depDataSource)) {
         LOGGER.info("Processing dependency '{}' for schema '{}'", depDataSource, name);
 
-        String depOperatingDir = establishOperatingDirectory(depDataSource);
+        String depOperatingDir = establishOperatingDirectory(depDataSource, null);
         IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource, operand);
         SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
         Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource.toUpperCase());
@@ -145,7 +148,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Now add the main schema
-    String operatingDirectory = establishOperatingDirectory(dataSource);
+    String operatingDirectory = establishOperatingDirectory(dataSource, operand);
     IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name, operand);
 
     // Check for freshStart option - clears all completion tracking to force re-download
@@ -248,11 +251,23 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "fr":
         return new FedRegisterSchemaFactory();
 
+      case "cyber_vuln":
+      case "cybervuln":
+        return new CyberSchemaFactory("cyber_vuln");
+
+      case "cyber_vuln_smoke":
+      case "cybervulnsmoke":
+        return new CyberSchemaFactory("cyber_vuln_smoke");
+
+      case "cyber_threat":
+      case "cyberthreat":
+        return new CyberSchemaFactory("cyber_threat");
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister");
+            + " fedregister, cyber_vuln, cyber_threat");
     }
   }
 
@@ -398,7 +413,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * Establish the operating directory (.aperio/<dataSource>/).
    * Always on local filesystem (for file locking).
    */
-  private String establishOperatingDirectory(String dataSource) {
+  private String establishOperatingDirectory(String dataSource, Map<String, Object> operand) {
+    // Allow tests/callers to override the operating directory entirely
+    Object override = operand != null ? operand.get("operatingDirectory") : null;
+    if (override instanceof String && !((String) override).isEmpty()) {
+      String opDir = (String) override;
+      new File(opDir).mkdirs();
+      LOGGER.debug("Operating directory (override): {}", opDir);
+      return opDir;
+    }
+
     String workingDir = System.getProperty("user.dir");
     if ("/".equals(workingDir) || workingDir == null || workingDir.isEmpty()) {
       LOGGER.warn("Working directory is root or invalid, falling back to temp directory");
@@ -462,6 +486,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // FEC schema name
     String fecSchemaName = getStringOrDefault(operand, "fecSchemaName", "fec");
     System.setProperty("FEC_SCHEMA_NAME", fecSchemaName);
+
+    // CYBER schema names
+    String cyberVulnSchemaName = getStringOrDefault(operand, "cyberVulnSchemaName", "cyber_vuln");
+    System.setProperty("CYBER_VULN_SCHEMA_NAME", cyberVulnSchemaName);
+    String cyberThreatSchemaName = getStringOrDefault(operand, "cyberThreatSchemaName", "cyber_threat");
+    System.setProperty("CYBER_THREAT_SCHEMA_NAME", cyberThreatSchemaName);
 
     // Set parquet directory for cross-schema references (e.g., BeaDimensionResolver)
     // This allows dimension resolvers to find reference tables from other schemas

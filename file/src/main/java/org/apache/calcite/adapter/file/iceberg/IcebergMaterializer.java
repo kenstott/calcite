@@ -510,20 +510,27 @@ public class IcebergMaterializer {
     private final int skippedCount;
     private final long durationMs;
     private final boolean tableRecreated;
+    private final long totalRowsWritten;
 
     public MaterializationResult(String tableId, int successCount, int failedCount,
         int skippedCount, long durationMs) {
-      this(tableId, successCount, failedCount, skippedCount, durationMs, false);
+      this(tableId, successCount, failedCount, skippedCount, durationMs, false, 0L);
     }
 
     public MaterializationResult(String tableId, int successCount, int failedCount,
         int skippedCount, long durationMs, boolean tableRecreated) {
+      this(tableId, successCount, failedCount, skippedCount, durationMs, tableRecreated, 0L);
+    }
+
+    public MaterializationResult(String tableId, int successCount, int failedCount,
+        int skippedCount, long durationMs, boolean tableRecreated, long totalRowsWritten) {
       this.tableId = tableId;
       this.successCount = successCount;
       this.failedCount = failedCount;
       this.skippedCount = skippedCount;
       this.durationMs = durationMs;
       this.tableRecreated = tableRecreated;
+      this.totalRowsWritten = totalRowsWritten;
     }
 
     public String getTableId() {
@@ -556,6 +563,10 @@ public class IcebergMaterializer {
      */
     public boolean isTableRecreated() {
       return tableRecreated;
+    }
+
+    public long getTotalRowsWritten() {
+      return totalRowsWritten;
     }
 
     @Override public String toString() {
@@ -650,7 +661,7 @@ public class IcebergMaterializer {
     long durationMs = System.currentTimeMillis() - startTime;
     MaterializationResult result =
         new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount,
-            durationMs, tableWasRecreated);
+            durationMs, tableWasRecreated, totalRowsWritten);
 
     LOGGER.info("Materialization complete: {}", result);
 
@@ -1660,8 +1671,14 @@ public class IcebergMaterializer {
       return allAccessions;
     }
 
-    // Filter accessions to only those from the specified CIKs
+    // Filter accessions to only those from the specified CIKs.
+    // Always include batch files (synthetic CIK "_BATCH_") because CIK cannot be pre-filtered
+    // from the filename alone — the row-level rowFilter will handle filtering inside the file.
     Set<String> filteredAccessions = new HashSet<String>();
+    Set<String> batchAccessions = cikToAccessions.get("_BATCH_");
+    if (batchAccessions != null) {
+      filteredAccessions.addAll(batchAccessions);
+    }
     for (String cik : filterCiks) {
       Set<String> accessions = cikToAccessions.get(cik);
       if (accessions != null) {
@@ -1717,8 +1734,18 @@ public class IcebergMaterializer {
       return null;
     }
 
+    // Backward compat: pre-fix runs wrote "batch" as a single sentinel accession key to mean
+    // "all batch-style files for this year were processed." Honour that sentinel so years already
+    // tracked as done are not reprocessed. Batch-style accessions have a non-numeric first char;
+    // real SEC accessions always start with a digit (e.g. "0000320193-24-123456").
+    boolean legacyBatchDone = excludeAccessions != null && excludeAccessions.contains("batch");
+
     List<String> newPaths = new ArrayList<String>();
     for (String accession : sourceAccessions) {
+      boolean isBatchStyle = !accession.isEmpty() && !Character.isDigit(accession.charAt(0));
+      if (legacyBatchDone && isBatchStyle) {
+        continue; // Skip: legacy tracker sentinel covers all batch files for this year
+      }
       if (excludeAccessions == null || !excludeAccessions.contains(accession)) {
         String path = pathsMap.get(accession);
         if (path != null) {
@@ -1859,24 +1886,41 @@ public class IcebergMaterializer {
         } else if (!fileName.endsWith(fileSuffix)) {
           continue;
         }
-        // Extract CIK and accession from filename
-        // Example: 0000001750_0001104659-22-081498_facts.parquet
-        //          ^CIK        ^accession              ^suffix
+        // Extract CIK and accession from filename.
+        // Per-CIK format:  0000001750_0001104659-22-081498_facts.parquet
+        //                  ^CIK (digits) ^accession              ^suffix
+        // Batch format:    metadata_batch_0005.parquet  (CIK prefix is non-numeric)
+        //                  → use the strip-suffix filename as the unique accession key
         int underscoreIdx = fileName.indexOf('_');
+        String cik;
+        String accession;
         if (underscoreIdx > 0) {
-          String cik = fileName.substring(0, underscoreIdx);
-          int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
-          if (secondUnderscoreIdx > 0) {
-            String accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
-            Set<String> accessions = cikToAccessions.get(cik);
-            if (accessions == null) {
-              accessions = new HashSet<String>();
-              cikToAccessions.put(cik, accessions);
+          String cikCandidate = fileName.substring(0, underscoreIdx);
+          boolean isNumericCik = !cikCandidate.isEmpty() && cikCandidate.chars().allMatch(Character::isDigit);
+          if (isNumericCik) {
+            // Per-CIK file: {CIK}_{accession}_{suffix}
+            int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
+            if (secondUnderscoreIdx <= 0) {
+              continue;
             }
-            accessions.add(accession);
-            pathsMap.put(accession, basePath + fileName);
+            cik = cikCandidate;
+            accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
+          } else {
+            // Batch file: use strip-suffix filename as accession key, "_BATCH_" as synthetic CIK group
+            cik = "_BATCH_";
+            int dotIdx = fileName.lastIndexOf('.');
+            accession = dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName;
           }
+        } else {
+          continue;
         }
+        Set<String> accessions = cikToAccessions.get(cik);
+        if (accessions == null) {
+          accessions = new HashSet<String>();
+          cikToAccessions.put(cik, accessions);
+        }
+        accessions.add(accession);
+        pathsMap.put(accession, basePath + fileName);
       }
 
       long elapsed = System.currentTimeMillis() - startTime;

@@ -484,10 +484,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         }
       }
 
-      if (!missingDataColumns.isEmpty()) {
-        LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
-            + "Dropping and recreating table.",
-            targetTableId, missingDataColumns.size(), missingDataColumns);
+      // Also detect extra columns (schema drift) — existing table has more columns than expected
+      int expectedColumnCount = columnConfigs != null ? columnConfigs.size() : 0;
+      boolean hasExtraColumns = existingColumnNames.size() != expectedColumnCount
+          + actualPartitionColumnNames.size();
+
+      if (!missingDataColumns.isEmpty() || hasExtraColumns) {
+        if (!missingDataColumns.isEmpty()) {
+          LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
+              + "Dropping and recreating table.",
+              targetTableId, missingDataColumns.size(), missingDataColumns);
+        } else {
+          LOGGER.warn("Existing Iceberg table '{}' has schema drift "
+              + "(existing={} columns, expected={}). Dropping and recreating table.",
+              targetTableId, existingColumnNames.size(),
+              expectedColumnCount + actualPartitionColumnNames.size());
+        }
         IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
       } else {
         LOGGER.debug("Loading existing Iceberg table: {} (schema OK)", targetTableId);

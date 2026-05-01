@@ -590,9 +590,13 @@ public class HttpSource implements DataSource {
             "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
       }
 
-      // Set headers
+      // Set headers (skip headers whose value is empty after substitution — avoids
+      // APIs that treat an empty header as invalid, e.g. NVD's apiKey check)
       for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        conn.setRequestProperty(e.getKey(), substituteVariables(e.getValue(), variables));
+        String value = substituteVariables(e.getValue(), variables);
+        if (value != null && !value.isEmpty()) {
+          conn.setRequestProperty(e.getKey(), value);
+        }
       }
 
       // Apply authentication
@@ -704,9 +708,13 @@ public class HttpSource implements DataSource {
             "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
       }
 
-      // Set headers from config
+      // Set headers from config (skip empty values — avoids APIs treating an empty
+      // header as invalid)
       for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        conn.setRequestProperty(e.getKey(), substituteVariables(e.getValue(), variables));
+        String value = substituteVariables(e.getValue(), variables);
+        if (value != null && !value.isEmpty()) {
+          conn.setRequestProperty(e.getKey(), value);
+        }
       }
 
       // Log headers being used for debugging
@@ -1369,7 +1377,7 @@ public class HttpSource implements DataSource {
             if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
               filterValue = filterValue.substring(1, filterValue.length() - 1);
             }
-            if (!filterRegex.matcher(filterValue).matches()) {
+            if (!filterRegex.matcher(filterValue).find()) {
               skippedRows++;
               continue;
             }
@@ -1631,7 +1639,7 @@ public class HttpSource implements DataSource {
           if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
             filterValue = filterValue.substring(1, filterValue.length() - 1);
           }
-          if (!filterRegex.matcher(filterValue).matches()) {
+          if (!filterRegex.matcher(filterValue).find()) {
             skippedRows++;
             continue;
           }

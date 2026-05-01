@@ -66,6 +66,11 @@ public class IcebergMaterializerR2IntegrationTest {
       "s3a://" + BUCKET + "/ci-test/iceberg-r2-validate";
   private static final String TABLE_ID = "filing_metadata_ci_test";
   private static final String BATCH_TABLE_ID = "filing_metadata_ci_batch_test";
+  // Batch-style source pattern: {tableType}_batch_{N}.parquet files written by LocalStagingStorageProvider.
+  // Use first two metadata_batch files to keep test fast while covering multi-file discovery.
+  private static final String BATCH_SOURCE_PATTERN =
+      "s3://" + BUCKET + "/source=sec/year=*/metadata_batch*.parquet";
+  private static final String BATCH_STAGING_TABLE_ID = "filing_metadata_ci_batch_staging_test";
 
   // Apple Inc. — small, well-known, reliably has 2024 filings.
   private static final String ROW_FILTER = "cik = '0000320193'";
@@ -221,5 +226,79 @@ public class IcebergMaterializerR2IntegrationTest {
     assertTrue(result.getSuccessCount() > 0,
         "Expected at least one successful batch with row batching, got successCount="
             + result.getSuccessCount());
+  }
+
+  /**
+   * Verifies that batch-style staging files ({tableType}_batch_{N}.parquet) are each discovered
+   * and materialized individually — not collapsed to a single "batch" accession key.
+   * This is the regression test for the filename-parser bug where all batch files mapped to the
+   * same accession key and only the last file's path survived, causing ~103k filings to be
+   * silently dropped after the first materialization run.
+   */
+  @Test
+  public void testMaterializeBatchStagingFiles() throws IOException {
+    Map<String, Object> storageConfig = new HashMap<String, Object>();
+    storageConfig.put("accessKeyId", accessKey);
+    storageConfig.put("secretAccessKey", secretKey);
+    storageConfig.put("endpoint", endpoint);
+    storageConfig.put("region", "auto");
+    S3StorageProvider storageProvider = new S3StorageProvider(storageConfig);
+
+    List<IcebergCatalogManager.ColumnDef> tableColumns = Arrays.asList(
+        new IcebergCatalogManager.ColumnDef("cik", "string"),
+        new IcebergCatalogManager.ColumnDef("accession_number", "string"),
+        new IcebergCatalogManager.ColumnDef("filing_type", "string"),
+        new IcebergCatalogManager.ColumnDef("filing_date", "string"),
+        new IcebergCatalogManager.ColumnDef("year", "int"),
+        new IcebergCatalogManager.ColumnDef("primary_document", "string"),
+        new IcebergCatalogManager.ColumnDef("company_name", "string"),
+        new IcebergCatalogManager.ColumnDef("period_of_report", "string"),
+        new IcebergCatalogManager.ColumnDef("acceptance_datetime", "string"),
+        new IcebergCatalogManager.ColumnDef("file_size", "long"),
+        new IcebergCatalogManager.ColumnDef("fiscal_year", "int"),
+        new IcebergCatalogManager.ColumnDef("state_of_incorporation", "string"),
+        new IcebergCatalogManager.ColumnDef("fiscal_year_end", "string"),
+        new IcebergCatalogManager.ColumnDef("business_address", "string"),
+        new IcebergCatalogManager.ColumnDef("mailing_address", "string"),
+        new IcebergCatalogManager.ColumnDef("phone", "string"),
+        new IcebergCatalogManager.ColumnDef("sic_code", "string"),
+        new IcebergCatalogManager.ColumnDef("irs_number", "string"),
+        new IcebergCatalogManager.ColumnDef("ticker", "string")
+    );
+
+    List<PartitionedTableConfig.ColumnDefinition> partitionColumns =
+        Collections.singletonList(new PartitionedTableConfig.ColumnDefinition("year", "int"));
+
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(BATCH_SOURCE_PATTERN)
+            .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
+            .targetTableId(BATCH_STAGING_TABLE_ID)
+            .sourceTableName("filing_metadata")
+            .tableColumns(tableColumns)
+            .partitionColumns(partitionColumns)
+            .batchPartitionColumns(Collections.singletonList("year"))
+            .incrementalKeys(Collections.singletonList("year"))
+            .yearRange(2024, 2024)
+            .icebergTableLocation(WAREHOUSE + "/" + BATCH_STAGING_TABLE_ID)
+            .accessionColumn("accession_number")
+            .description("filing_metadata batch-staging CI test")
+            .build();
+
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(WAREHOUSE, storageProvider, IncrementalTracker.NOOP);
+
+    IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+
+    assertEquals(0, result.getFailedCount(),
+        "No batch files should fail: failedCount=" + result.getFailedCount());
+    // Pre-fix: all batch files collapsed to accession key "batch" → only 1 file's rows survived
+    // → totalRowsWritten == 100 (one batch file of 100 rows).
+    // Post-fix: each metadata_batch_*.parquet gets a unique accession key → all 226 files processed
+    // → totalRowsWritten > 100 for year=2024 alone.
+    assertTrue(result.getTotalRowsWritten() > 100,
+        "Expected more than 100 rows (all batch files), got totalRowsWritten="
+            + result.getTotalRowsWritten()
+            + " — pre-fix bug would only write 100 rows (last batch file only)");
   }
 }

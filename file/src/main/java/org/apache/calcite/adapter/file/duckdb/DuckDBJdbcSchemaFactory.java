@@ -39,6 +39,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1529,7 +1532,20 @@ public class DuckDBJdbcSchemaFactory {
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> tables = (List<Map<String, Object>>) operand.get("tables");
 
-    if (tables == null || tables.isEmpty()) {
+    // Also pick up entries from the YAML `views:` section (which lack type: "view")
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> yamlViews = (List<Map<String, Object>>) operand.get("views");
+
+    List<Map<String, Object>> allTables = new ArrayList<>(tables != null ? tables : Collections.emptyList());
+    if (yamlViews != null) {
+      for (Map<String, Object> view : yamlViews) {
+        Map<String, Object> viewEntry = new HashMap<>(view);
+        viewEntry.put("type", "view");
+        allTables.add(viewEntry);
+      }
+    }
+
+    if (allTables.isEmpty()) {
       LOGGER.debug("No tables in operand, skipping SQL view registration");
       return;
     }
@@ -1543,7 +1559,7 @@ public class DuckDBJdbcSchemaFactory {
     int viewCount = 0;
     int skippedCount = 0;
 
-    for (Map<String, Object> table : tables) {
+    for (Map<String, Object> table : allTables) {
       String tableType = (String) table.get("type");
 
       // Only process view definitions

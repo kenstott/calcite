@@ -152,7 +152,7 @@ public final class VariableResolver {
     while (matcher.find()) {
       String varExpr = matcher.group(1);
       String envName;
-      String defaultValue = "";
+      String defaultValue = null;
 
       // Support ${VAR:-default} syntax
       int colonIdx = varExpr.indexOf(":-");
@@ -176,12 +176,8 @@ public final class VariableResolver {
         resolved = System.getProperty(envName);
       }
       if (resolved == null || resolved.isEmpty()) {
-        resolved = defaultValue;
-      }
-
-      // If still empty, keep original placeholder for debugging
-      if (resolved.isEmpty()) {
-        resolved = "${" + varExpr + "}";
+        // Use explicit default when provided (even if empty); keep placeholder when no default
+        resolved = defaultValue != null ? defaultValue : "${" + varExpr + "}";
       }
 
       matcher.appendReplacement(result, Matcher.quoteReplacement(resolved));
