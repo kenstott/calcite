@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "cyber_vuln",
+  "schemas": [{
+    "name": "cyber_vuln",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "cyber_vuln",
+      "directory": "${CYBER_PARQUET_DIR}",
+      "cacheDirectory": "${CYBER_CACHE_DIR}",
+      "autoDownload": true,
+      "enabledTables": ["cwe_catalog", "osv_vulnerabilities", "vuln_cross_refs", "advisories"]
+    }
+  }]
+}

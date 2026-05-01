@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "defaultSchema": "cyber_threat",
+  "schemas": [{
+    "name": "cyber_threat",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "cyber_threat",
+      "directory": "${CYBER_PARQUET_DIR}",
+      "cacheDirectory": "${CYBER_CACHE_DIR}",
+      "autoDownload": true,
+      "enabledTables": [
+        "nist_controls",
+        "nist_csf_functions",
+        "cis_controls",
+        "owasp_top10",
+        "attack_to_nist_mappings"
+      ]
+    }
+  }]
+}

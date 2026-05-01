@@ -22,6 +22,8 @@ import org.apache.calcite.adapter.govdata.cyber.vuln.NvdDownloader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -127,8 +129,22 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
       new CweDownloader(sp, vulnDir).download();
       LOGGER.info("Cyber vuln autoDownload: starting CISA KEV download");
       new CisaKevDownloader(sp, vulnDir).download();
-      LOGGER.info("Cyber vuln autoDownload: starting NVD download");
-      new NvdDownloader(sp, vulnDir, nvdApiKey).download();
+
+      Object deltaDaysObj = operand.get("nvdDeltaDays");
+      int nvdDeltaDays = (deltaDaysObj instanceof Number)
+          ? ((Number) deltaDaysObj).intValue() : 0;
+
+      if (nvdDeltaDays > 0) {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+        String endDate = LocalDateTime.now().format(fmt);
+        String startDate = LocalDateTime.now().minusDays(nvdDeltaDays).format(fmt);
+        LOGGER.info("Cyber vuln autoDownload: starting NVD delta download ({} days)", nvdDeltaDays);
+        new NvdDownloader(sp, vulnDir, nvdApiKey, startDate, endDate).download();
+      } else {
+        LOGGER.info("Cyber vuln autoDownload: starting NVD full catalog download");
+        new NvdDownloader(sp, vulnDir, nvdApiKey).download();
+      }
+
       LOGGER.info("Cyber vuln autoDownload: all downloads complete");
     } catch (Exception e) {
       LOGGER.error("Cyber vuln autoDownload failed: {}", e.getMessage(), e);

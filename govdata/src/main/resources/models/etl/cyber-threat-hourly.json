@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "cyber_threat",
+  "schemas": [{
+    "name": "cyber_threat",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "cyber_threat",
+      "directory": "${CYBER_PARQUET_DIR}",
+      "cacheDirectory": "${CYBER_CACHE_DIR}",
+      "autoDownload": true,
+      "enabledTables": ["ioc_urls", "ioc_hashes", "ioc_ips", "ioc_mixed", "threat_pulses"]
+    }
+  }]
+}
