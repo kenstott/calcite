@@ -1,16 +1,16 @@
 # GovData Pipeline Operations Guide
 
 This guide explains how to set up and maintain the full GovData pipeline across all 12 schemas.
-The core orchestrator for all loading is `scripts/parallel/run-pool.sh`, which manages
-memory-aware concurrent execution of numbered worker scripts.
+The core orchestrator is `scripts/parallel/run-pool.sh`, which manages memory-aware concurrent
+execution of numbered worker scripts on a single machine.
 
 ---
 
 ## Worker Map
 
 ```
-SEC Primary (10-K/10-Q)         workers  1 – 17
-SEC Secondary (8-K/Proxy/etc.)  workers 23 – 39
+SEC Primary (10-K/10-Q)         workers  1 – 17    (worker-01 = 2026+, workers 02–17 = 2025–2010)
+SEC Secondary (8-K/Proxy/etc.)  workers 23 – 39    (worker-23 = 2026+, workers 24–39 = 2025–2010)
 SEC Stock Prices                worker  40
 Non-SEC schemas                 workers 18 – 22, 41, 60, 61
 Cyber                           workers 62 – 66
@@ -49,7 +49,7 @@ AWS_ENDPOINT_OVERRIDE=...                  # Cloudflare R2, MinIO, etc.
 CALCITE_TRACKER_S3_BUCKET=your-bucket
 
 # Optional but recommended
-CYBER_NVD_API_KEY=...                      # nvd.nist.gov/developers
+CYBER_NVD_API_KEY=...                      # nvd.nist.gov/developers (5× faster NVD downloads)
 CYBER_OTX_API_KEY=...                      # otx.alienvault.com
 CYBER_THREATFOX_API_KEY=...
 CYBER_GITHUB_TOKEN=ghp_...
@@ -60,90 +60,156 @@ FRED_API_KEY=...
 
 ---
 
+## Realistic Timing on a Single Machine
+
+The pool is memory-bounded, not core-bounded. On a typical 32GB machine the OS reserve leaves
+roughly 30GB budget. Worker heap sizes range from 3g to 6g, so 4–6 workers run concurrently.
+On 16GB, expect 3 concurrent; on 64GB, 8–10.
+
+Approximate per-worker runtimes (order of magnitude, varies significantly with network and I/O):
+
+| Worker | What it loads | Heap | Est. runtime |
+|---|---|---|---|
+| 1 | SEC primary 2026+ | 3g | 1–3 h |
+| 18 | Economic (BLS/FRED/BEA) | 3g | 3–6 h |
+| 19 | Census ACS 2010–2026 | 3g | 1–3 h |
+| 20 | Geographic (TIGER shapefiles) | 6g | 3–8 h |
+| 21 | Crime (FBI/BJS) | 4g | 4–10 h |
+| 22 | Weather (NWS/NOAA/EPA) | 3g | 2–5 h |
+| 23 | SEC secondary 2026+ | 3g | 1–4 h |
+| 40 | Stock prices 2010–2026 | 3g | 2–4 h |
+| 41 | Reference (GLEIF/CIK/FIGI) | 4g | 1–2 h |
+| 60 | FEC campaign finance | 5g | 4–8 h |
+| 61 | Federal Register 2010+ | 3g | 3–6 h |
+| 62 | Cyber initial (NVD full + standards + OTX) | 6g | 2–5 h |
+| 2–17 | SEC primary per year (×16) | 3g | 2–8 h each |
+| 24–39 | SEC secondary per year (×16) | 3g | 1–4 h each |
+
+With 4 concurrent workers, the 12 Phase 1 workers form roughly 3 batches → **~1 day**.
+The 32 historical SEC workers (2–17, 24–39) running 4 at a time → **3–5 days**.
+Total wall-clock time for a complete load from scratch: **4–6 days**.
+
+---
+
 ## Initial Setup Strategy
 
-The SEC historical corpus (2010–2025) contains millions of filings and takes several days to
-fully materialize. The recommended approach is to **load data that is immediately useful first**,
-then run the historical backfill in the background. Recurring updates can begin as soon as
-Phase 1 completes — you do not need to wait for the full backfill.
+The SEC historical corpus (2010–2025) takes several days to fully materialize. The recommended
+approach loads data in priority order so the pipeline is queryable within ~24 hours, with
+historical depth filling in afterward.
 
-### Phase 1 — Current data (hours, immediately queryable)
+### Step 1 — Highest priority: current-year SEC + reference data (queryable within hours)
 
-Run the current-year SEC workers alongside all non-SEC schemas. These produce a fully
-functional dataset: current filings, all economic and reference data, and all cyber intelligence.
+These are fast workers that unlock the rest of the pipeline: company identifiers (ref) are
+needed to cross-reference SEC filings, and current-year filings (2026+) are the most
+immediately useful data.
 
 ```bash
 cd scripts/parallel
 
-# Run all Phase 1 workers with memory-aware concurrency
-./run-pool.sh 1,18-23,40-41,60-62
+# Worker 41 (ref) first — GLEIF/CIK/OpenFIGI identifiers used by SEC cross-references
+# Workers 1, 23 — SEC primary and secondary for 2026+
+# Workers are listed in priority order; pool fills slots as they complete
+./run-pool.sh 41,1,23
 ```
 
-| Worker | Schema | What it loads |
-|---|---|---|
-| 1 | sec | Primary filings 2026–present (10-K, 10-K/A, 10-Q, 10-Q/A) |
-| 18 | econ | Economic data 2010–2026 (BLS, FRED, BEA, Treasury yields) |
-| 19 | census | ACS demographics 2010–2026 |
-| 20 | geo | TIGER shapefiles (2024) + HUD crosswalk |
-| 21 | crime | FBI/BJS crime statistics 2010–2026 |
-| 22 | weather | NWS/NOAA/EPA weather and air quality 2010–2026 |
-| 23 | sec | Secondary filings 2026–present (8-K, proxy, insider, 13F, 13D/G) |
-| 40 | sec | Stock prices 2010–2026 (Stooq) |
-| 41 | ref | Reference identifiers: GLEIF entities, CIK registry, OpenFIGI |
-| 60 | fec | FEC campaign finance bulk downloads |
-| 61 | fedregister | Federal Register documents 2010–present |
-| 62 | cyber | Cyber initial load: full NVD catalog, CWE, KEV, NIST/CIS/OWASP standards, OTX backfill |
+Expected wall time: **2–6 hours** (workers 1 and 23 run concurrently once 41 finishes
+or a slot opens; all three fit within 10g combined heap).
 
-**Notes:**
-- Workers 18–22, 40, 41, 60, 61 load their full historical range in a single run — they are
-  not year-sharded. Their internal incremental tracker skips rows already materialized on re-runs.
-- Worker 62 (cyber initial) downloads the full NVD CVE catalog (~350k CVEs). Expect 15–60 minutes
-  depending on whether `CYBER_NVD_API_KEY` is set (5× faster with a key).
+### Step 2 — Non-SEC schemas + cyber (run while Step 1 is finishing or immediately after)
 
-### Phase 2 — Historical SEC backfill (days, runs in background)
+These are independent of SEC and can run concurrently with each other. They cover full
+historical ranges in a single run — they are not year-sharded.
 
-Once Phase 1 is complete, launch the historical SEC workers. These cover each year from 2025 back
-to 2010 for both primary (10-K/10-Q) and secondary (8-K/proxy/insider/13F) filing types.
+Ordered by value / speed (fastest and highest-value first):
 
 ```bash
-cd scripts/parallel
+# Run in this order so the pool fills priority workers into early slots.
+# Slow, large-heap workers (20, 60, 62) are placed last so they don't block
+# fast workers from starting.
+./run-pool.sh 19,22,40,61,18,21,62,60,20
+```
 
-# Primary filings: 2025 (worker-02) back to 2010 (worker-17)
-# Secondary filings: 2025 (worker-24) back to 2010 (worker-39)
+| Worker | Schema | Est. runtime | Note |
+|---|---|---|---|
+| 19 | Census ACS | 1–3 h | Fast; full 2010–2026 in one run |
+| 22 | Weather | 2–5 h | Moderate |
+| 40 | Stock prices | 2–4 h | Useful for SEC cross-referencing |
+| 61 | Federal Register | 3–6 h | Moderate |
+| 18 | Economic | 3–6 h | BLS/FRED/BEA, many API calls |
+| 21 | Crime | 4–10 h | Large dimension expansion (4g heap) |
+| 62 | Cyber initial | 2–5 h | Full NVD catalog; faster with `CYBER_NVD_API_KEY` |
+| 60 | FEC | 4–8 h | 3M+ rows/year (5g heap) |
+| 20 | Geographic | 3–8 h | TIGER shapefiles (6g heap); placed last as it's the heaviest |
+
+Expected wall time for this step: **~1 day** (pool keeps 4 slots busy through all 9 workers).
+
+After Steps 1 and 2, all schemas have data. The pipeline is fully queryable with SEC coverage
+from 2026 onward. Proceed to Step 3 while queries run against current data.
+
+### Step 3 — Historical SEC backfill (runs in background over several days)
+
+Workers 2–17 (primary) and 24–39 (secondary) each cover one calendar year, from 2025 back
+to 2010. Run with the most recent years first so recent history is available sooner.
+
+```bash
+# Recent years first: 2025, 2024, 2023 primary + secondary
+./run-pool.sh 2,24,3,25,4,26
+
+# Then 2022–2019
+./run-pool.sh 5,27,6,28,7,29,8,30
+
+# Then 2018–2015
+./run-pool.sh 9,31,10,32,11,33,12,34
+
+# Then 2014–2010
+./run-pool.sh 13,35,14,36,15,37,16,38,17,39
+```
+
+Interleaving primary and secondary workers for the same year (e.g., `2,24` for 2025) means
+both filing types for a year are available at roughly the same time. Each group above takes
+roughly 12–24 hours on a 32GB machine with 4 concurrent slots.
+
+Alternatively, run all backfill workers at once and let the pool manage ordering:
+
+```bash
 ./run-pool.sh 2-17,24-39
 ```
 
-The pool runner processes these concurrently up to the available memory budget. On a machine with
-32GB RAM it typically runs 3–4 workers in parallel. On 64GB, 6–8. Each year takes 2–8 hours
-depending on filing volume; the full backfill typically completes in 2–5 days.
+If the backfill is interrupted, re-running the same command is safe — the tracker marks each
+filing individually and skips completed work.
 
-To run Phase 1 and Phase 2 together in a single command (for unattended overnight setup):
+### Summary timeline (32GB machine, 4 concurrent workers)
 
-```bash
-./run-pool.sh all
-# Equivalent to: ./run-pool.sh 1-41,60-62
 ```
-
-The `all` keyword always runs current-year and non-SEC workers first since their numbers are
-lower and the pool fills in numeric order.
+Day 0  Launch Steps 1 + 2 together
+       ├── Step 1 (41,1,23) completes in ~6h → current-year SEC is queryable
+       └── Step 2 (19,22,40,61,18,21,62,60,20) running in background
+Day 1  Step 2 finishes → all schemas queryable; launch Step 3 (historical SEC backfill)
+Day 2  2025, 2024, 2023 SEC complete
+Day 4  2022–2019 SEC complete
+Day 6  Full corpus 2010–2026 complete; start recurring update schedule
+```
 
 ---
 
 ## Recurring Updates
 
-Once the initial load is complete, set up the following recurring jobs. These are designed to
-be additive — re-running a worker never duplicates data; the tracker marks completed rows.
+Once the initial load is complete, set up the following recurring jobs. Re-running a worker
+never duplicates data — the tracker marks completed rows and skips them on subsequent runs.
 
 ### Daily (recommended: 06:00 UTC)
 
 ```bash
 cd scripts/parallel
 
-# SEC current year (picks up filings from today back to 2026-01-01)
+# SEC current year: picks up new filings since last run
 ./run-pool.sh 1,23
 
 # Cyber: delta NVD CVEs (last 1 day) + CISA KEV refresh
 ./run-pool.sh 63
+
+# Federal Register: auto-discovers current year; append-only
+./run-pool.sh 61
 ```
 
 ### Weekly (recommended: Sunday 02:00 UTC)
@@ -152,7 +218,7 @@ cd scripts/parallel
 cd scripts/parallel
 
 # Non-SEC full re-runs (idempotent; tracker skips already-complete rows)
-./run-pool.sh 18-22,40-41,60-61
+./run-pool.sh 18-22,40-41,60
 
 # Cyber: CWE, OSV, MITRE ATT&CK techniques, GitHub advisories, ATT&CK→NIST mappings
 ./run-pool.sh 64
@@ -163,18 +229,18 @@ cd scripts/parallel
 ```bash
 cd scripts/parallel
 
-# Cyber live IOC feeds + OTX delta (1 day window)
+# Cyber live IOC feeds + OTX delta (1-day window)
 CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 ```
 
 ### Cron reference
 
 ```cron
-# Daily — SEC current year + cyber CVE delta
-0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 1,23 && ./run-pool.sh 63
+# Daily — SEC current year + federal register + cyber CVE delta
+0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 1,23,61 && ./run-pool.sh 63
 
 # Weekly — non-SEC refresh + cyber ATT&CK/standards refresh
-0 2 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 18-22,40-41,60-61,64
+0 2 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 18-22,40-41,60,64
 
 # Hourly — cyber live IOC feeds
 0 */2 * * * cd /path/to/govdata/scripts/parallel && CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
@@ -204,71 +270,42 @@ CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 
 ---
 
-## Historical Backfill Notes
-
-Workers 2–17 (SEC primary) and 24–39 (SEC secondary) each cover a single calendar year.
-They are designed to run concurrently via the pool:
-
-```
-worker-02 → 2025 primary    worker-24 → 2025 secondary
-worker-03 → 2024 primary    worker-25 → 2024 secondary
-...
-worker-17 → 2010 primary    worker-39 → 2010 secondary
-```
-
-Because primary and secondary workers are independent (different filing types, different table
-partitions), running `./run-pool.sh 2-17,24-39` will execute them in parallel up to the memory
-budget. If you want to load recent history faster, run recent years first:
-
-```bash
-# Most recent 3 years first, then older years
-./run-pool.sh 2-4,24-26     # 2025, 2024, 2023
-./run-pool.sh 5-17,27-39    # 2022 back to 2010
-```
-
-If the backfill is interrupted (Ctrl-C, machine restart, timeout), re-running the same
-`run-pool.sh` command resumes safely — the tracker marks each filing individually, so completed
-work is never re-processed.
-
----
-
 ## Monitoring
 
 Each worker writes a timestamped log to `scripts/parallel/runs/<worker-id>/`:
 
 ```bash
-# Follow a running worker
+# Follow a specific worker
 tail -f scripts/parallel/runs/worker-01/launch.log
 
-# Pool-level log (all workers combined)
-tail -f scripts/parallel/runs/pool-*.log | tail -1
+# Pool-level log (all workers interleaved)
+ls -t scripts/parallel/runs/pool-*.log | head -1 | xargs tail -f
 
 # Check for errors across all workers
 grep -r "ERROR\|FAILED\|Exception" scripts/parallel/runs/*/launch.log
 ```
 
 The pool runner prints a live status line every 10 seconds showing running workers, memory
-committed, and last activity from each worker's log.
+committed vs budget, and the last logged activity line from each worker.
 
 ---
 
 ## Tuning Concurrency
 
-By default, `run-pool.sh` fills the pool based on the available memory budget (total RAM minus
-1.5 GB OS reserve). To adjust:
+By default the pool fills to the available memory budget (total RAM minus 1.5GB OS reserve).
 
 ```bash
-# Hard cap at 4 concurrent workers
+# Hard cap at 4 concurrent workers regardless of memory
 ./run-pool.sh -j 4 2-17,24-39
 
-# Reserve more memory for OS (useful on machines with many other processes)
+# Reserve more memory for OS (useful when other processes are running)
 ./run-pool.sh -r 4000 2-17,24-39
 
-# Run entity-level parallelism within each worker (4 threads per worker)
+# Entity-level parallelism within each worker (trades memory for speed)
 ./run-pool.sh -p 4 2-17,24-39
 
-# 90-minute inactivity timeout (default is 60 minutes)
-./run-pool.sh -t 90 2-17,24-39
+# Extend inactivity timeout for very large workers (default: 60 min)
+./run-pool.sh -t 120 20,60,62
 ```
 
 See [cyber-maintenance.md](cyber-maintenance.md) for cyber-specific operational details.
