@@ -77,7 +77,7 @@ Approximate per-worker runtimes (order of magnitude, varies significantly with n
 | 21 | Crime (FBI/BJS) | 4g | 4–10 h |
 | 22 | Weather (NWS/NOAA/EPA) | 3g | 2–5 h |
 | 23 | SEC secondary 2026+ | 3g | 1–4 h |
-| 40 | Stock prices 2010–2026 | 3g | 2–4 h |
+| 40 | Stock prices 2010–2026 | 3g | 1–3 days ⚠️ |
 | 41 | Reference (GLEIF/CIK/FIGI) | 4g | 1–2 h |
 | 60 | FEC campaign finance | 5g | 4–8 h |
 | 61 | Federal Register 2010+ | 3g | 3–6 h |
@@ -133,7 +133,7 @@ Ordered by value / speed (fastest and highest-value first):
 |---|---|---|---|
 | 19 | Census ACS | 1–3 h | Fast; full 2010–2026 in one run |
 | 22 | Weather | 2–5 h | Moderate |
-| 40 | Stock prices | 2–4 h | Useful for SEC cross-referencing |
+| 40 | Stock prices | 1–3 days ⚠️ | Stooq rate-limits per-ticker; see note below |
 | 61 | Federal Register | 3–6 h | Moderate |
 | 18 | Economic | 3–6 h | BLS/FRED/BEA, many API calls |
 | 21 | Crime | 4–10 h | Large dimension expansion (4g heap) |
@@ -141,7 +141,24 @@ Ordered by value / speed (fastest and highest-value first):
 | 60 | FEC | 4–8 h | 3M+ rows/year (5g heap) |
 | 20 | Geographic | 3–8 h | TIGER shapefiles (6g heap); placed last as it's the heaviest |
 
-Expected wall time for this step: **~1 day** (pool keeps 4 slots busy through all 9 workers).
+Expected wall time for this step: **~1–2 days** for workers 19, 22, 61, 18, 21, 62, 60, 20.
+Worker 40 (stock prices) is excluded from this group — see the note below.
+
+> **⚠️ Worker 40 — Stock Prices (Stooq rate limits)**
+> Worker 40 fetches daily prices for every ticker in `_ALL_EDGAR_FILERS` (thousands of symbols)
+> from Stooq, which enforces strict per-request rate limits. The full 2010–2026 backfill takes
+> **1–3 days** of throttled requests. Run it alone so it is not competing with other workers
+> for network bandwidth or pool slots that could otherwise be used productively:
+>
+> ```bash
+> # Run stock prices as a standalone job (leave it running in a separate terminal or tmux)
+> ./run-pool.sh 40
+> ```
+>
+> Because the tracker persists per-ticker completion state, you can safely stop and restart
+> worker 40 at any time — it resumes from where it left off. Stock prices are useful for
+> cross-referencing SEC filings but are not required for any other schema to function, so
+> deferring this worker does not block anything else.
 
 After Steps 1 and 2, all schemas have data. The pipeline is fully queryable with SEC coverage
 from 2026 onward. Proceed to Step 3 while queries run against current data.
@@ -218,7 +235,10 @@ cd scripts/parallel
 cd scripts/parallel
 
 # Non-SEC full re-runs (idempotent; tracker skips already-complete rows)
-./run-pool.sh 18-22,40-41,60
+./run-pool.sh 18-22,41,60
+
+# Stock prices: run alone — Stooq rate limits make it unproductive to share pool slots
+./run-pool.sh 40
 
 # Cyber: CWE, OSV, MITRE ATT&CK techniques, GitHub advisories, ATT&CK→NIST mappings
 ./run-pool.sh 64
@@ -240,7 +260,9 @@ CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 1,23,61 && ./run-pool.sh 63
 
 # Weekly — non-SEC refresh + cyber ATT&CK/standards refresh
-0 2 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 18-22,40-41,60,64
+0 2 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 18-22,41,60,64
+# Stock prices: run alone on a separate schedule (Stooq rate limits; takes 1-3 days)
+0 3 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 40
 
 # Hourly — cyber live IOC feeds
 0 */2 * * * cd /path/to/govdata/scripts/parallel && CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
@@ -254,7 +276,7 @@ CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 |---|---|---|---|
 | SEC primary filings | 1 | Daily | Re-runs 2026–present window; skips already-materialized accessions |
 | SEC secondary filings | 23 | Daily | Same as above for 8-K/proxy/insider/13F |
-| SEC stock prices | 40 | Weekly | Full 2010–2026 re-run via Stooq; tracker deduplicates |
+| SEC stock prices | 40 | Weekly (run alone) | Full 2010–2026 re-run via Stooq; rate-limited per ticker; tracker deduplicates |
 | Economic (BLS/FRED/BEA) | 18 | Weekly | Full 2010–2026 re-run; incremental by series/period |
 | Census ACS | 19 | Weekly | Full re-run; ACS releases annually |
 | Geographic (TIGER/HUD) | 20 | Annual | TIGER year is pinned; re-run when Census publishes a new vintage |
