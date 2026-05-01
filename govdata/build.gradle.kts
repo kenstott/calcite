@@ -84,8 +84,17 @@ tasks.register<Delete>("cleanTestLogs") {
     delete(layout.buildDirectory.dir("test-logs"))
 }
 
+// Remove macOS resource fork (._*) files from build/test-* dirs before Gradle's own cleanup
+// runs — these files block Java's File.delete() on external HFS+ / APFS volumes.
+tasks.register<Exec>("cleanMacResourceForks") {
+    commandLine("sh", "-c",
+        "find '${layout.buildDirectory.get()}/test-results' " +
+        "'${layout.buildDirectory.get()}/test-logs' " +
+        "-name '._*' -delete 2>/dev/null; true")
+}
+
 tasks.test {
-    dependsOn("cleanTestLogs")
+    dependsOn("cleanMacResourceForks", "cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
     // Run tests serially to avoid DuckDB file lock conflicts

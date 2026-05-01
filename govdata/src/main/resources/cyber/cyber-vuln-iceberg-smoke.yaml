@@ -6,7 +6,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
-materializeDirectory: "${CYBER_PARQUET_DIR}"
+materializeDirectory: "${CYBER_PARQUET_DIR:${GOVDATA_PARQUET_DIR}}"
 
 comment: >
   Minimal cyber_vuln schema for Iceberg smoke testing (kev_catalog + cwe_catalog).

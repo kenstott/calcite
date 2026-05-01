@@ -80,7 +80,7 @@ public class HttpSourceConfig {
    * Response format types.
    */
   public enum ResponseFormat {
-    JSON, CSV, XML, TSV
+    JSON, CSV, XML, TSV, TEXT
   }
 
   /**

@@ -1121,7 +1121,8 @@ public class HttpSource implements DataSource {
       return parseDelimitedResponse(response, resolveDelimiter(respConfig));
     }
 
-    if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON) {
+    if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON
+        && respConfig.getFormat() != HttpSourceConfig.ResponseFormat.TEXT) {
       throw new IOException("Unsupported response format: " + respConfig.getFormat());
     }
 

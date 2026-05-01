@@ -62,9 +62,9 @@ public class CisControlsResponseTransformer implements ResponseTransformer {
   private static final int TIMEOUT_MS = 30_000;
   private static final long RATE_DELAY_MS = 200L;
 
-  // Matches toctree entries like "   control-1.1" or "   control-1.10"
+  // Matches toctree entries like "   Description text <control-1.1>"
   private static final Pattern TOCTREE_ENTRY =
-      Pattern.compile("^\\s+(control-\\d+\\.\\d+)\\s*$", Pattern.MULTILINE);
+      Pattern.compile("^\\s+.*?<(control-\\d+\\.\\d+)>\\s*$", Pattern.MULTILINE);
 
   // RST title: "N.M: Safeguard Name" followed by === underline
   private static final Pattern TITLE_PATTERN =
