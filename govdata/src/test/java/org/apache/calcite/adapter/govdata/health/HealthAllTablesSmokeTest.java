@@ -160,10 +160,7 @@ class HealthAllTablesSmokeTest {
   @Test void adverseEventsHaveData() throws Exception {
     LOG.info("=== health: fda_adverse_events ===");
     try (Connection conn = healthConn()) {
-      long count = scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"fda_adverse_events\"");
-      LOG.info("health.fda_adverse_events: {} rows", count);
-      assumeTrue(count > 0, "FAERS endpoint returned 0 rows — API may be unreachable or API key not resolved");
-      assertTrue(count >= 100, "health.fda_adverse_events: expected >=100 rows, got " + count);
+      assertRowCount(conn, SCHEMA, "fda_adverse_events", 100);
       assertPkNonNull(conn, SCHEMA, "fda_adverse_events", "safety_report_id");
       assertNoDuplicatePk(conn, SCHEMA, "fda_adverse_events", "safety_report_id");
     }
@@ -172,8 +169,6 @@ class HealthAllTablesSmokeTest {
   @Test void adverseEventsSampleRow() throws Exception {
     LOG.info("=== health: fda_adverse_events sample row ===");
     try (Connection conn = healthConn()) {
-      long count = scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"fda_adverse_events\"");
-      assumeTrue(count > 0, "FAERS endpoint returned 0 rows — API may be unreachable or API key not resolved");
       sampleRow(conn, SCHEMA, "fda_adverse_events");
     }
   }

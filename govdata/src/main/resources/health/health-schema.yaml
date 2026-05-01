@@ -423,11 +423,10 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/drug/event.json"
+      url: "https://api.fda.gov/drug/event.json?search=receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+20251231]"
       method: GET
       parameters:
         api_key: "${HEALTH_FDA_API_KEY:}"
-        search: "receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+*]"
         limit: "1000"
       response:
         format: json
