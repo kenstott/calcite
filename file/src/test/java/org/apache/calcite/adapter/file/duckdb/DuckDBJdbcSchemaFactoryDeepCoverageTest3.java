@@ -564,15 +564,27 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
 
   // ===== registerSqlViewsInDuckDB tests (via reflection) =====
 
+  private static Method getRegisterSqlViewsMethod() throws Exception {
+    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
+        "registerSqlViewsInDuckDB", String.class, String.class, Map.class);
+    m.setAccessible(true);
+    return m;
+  }
+
+  private static void registerAndFlush(Method method, Connection conn, String schema,
+      Map<String, Object> operand) throws Exception {
+    String dbPath = "test3-db-" + System.nanoTime();
+    method.invoke(null, dbPath, schema, operand);
+    DuckDBPendingViews.flush(dbPath, conn);
+  }
+
   @Test void testRegisterSqlViewsNullOperand() throws Exception {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
       // Should not throw - just returns early
-      method.invoke(null, conn, "main", null);
+      method.invoke(null, "test3-null-" + System.nanoTime(), "main", null);
     } finally {
       conn.close();
     }
@@ -582,12 +594,10 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", Collections.emptyList());
-      method.invoke(null, conn, "main", operand);
+      registerAndFlush(method, conn, "main", operand);
     } finally {
       conn.close();
     }
@@ -597,9 +607,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -612,7 +620,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      method.invoke(null, conn, "main", operand);
+      registerAndFlush(method, conn, "main", operand);
 
       // Verify view was created
       try (ResultSet rs = conn.createStatement().executeQuery(
@@ -629,9 +637,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> tableTable = new HashMap<String, Object>();
       tableTable.put("type", "table");
@@ -643,7 +649,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      method.invoke(null, conn, "main", operand);
+      registerAndFlush(method, conn, "main", operand);
       // No exception - table types are simply skipped
     } finally {
       conn.close();
@@ -654,9 +660,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -668,7 +672,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      method.invoke(null, conn, "main", operand);
+      registerAndFlush(method, conn, "main", operand);
       // No exception - just skipped
     } finally {
       conn.close();
@@ -679,9 +683,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -694,7 +696,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      method.invoke(null, conn, "main", operand);
+      registerAndFlush(method, conn, "main", operand);
 
       try (ResultSet rs = conn.createStatement().executeQuery(
           "SELECT * FROM main.view_def_test")) {
@@ -715,9 +717,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       conn.createStatement().execute(
           "CREATE TABLE actual_schema.base_data AS SELECT 1 AS id, 100 AS amount");
 
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -731,7 +731,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       operand.put("tables", tables);
       operand.put("declaredSchemaName", "declared");
 
-      method.invoke(null, conn, "actual_schema", operand);
+      registerAndFlush(method, conn, "actual_schema", operand);
 
       // Verify view was created with rewritten schema
       try (ResultSet rs = conn.createStatement().executeQuery(
@@ -752,9 +752,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       // Pre-create the view
       conn.createStatement().execute("CREATE VIEW dup_view AS SELECT 1 AS id");
 
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -767,8 +765,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      method.invoke(null, conn, "main", operand);
-      // No exception - just skipped since view already exists
+      // CREATE VIEW IF NOT EXISTS preserves the original
+      registerAndFlush(method, conn, "main", operand);
+      // No exception - IF NOT EXISTS means original view is kept
     } finally {
       conn.close();
     }
@@ -778,9 +777,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
-      method.setAccessible(true);
+      Method method = getRegisterSqlViewsMethod();
 
       Map<String, Object> viewTable = new HashMap<String, Object>();
       viewTable.put("type", "view");
@@ -793,8 +790,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand = new HashMap<String, Object>();
       operand.put("tables", tables);
 
-      // Should not throw - handles error gracefully
-      method.invoke(null, conn, "main", operand);
+      // Should not throw - flush handles errors gracefully
+      registerAndFlush(method, conn, "main", operand);
     } finally {
       conn.close();
     }

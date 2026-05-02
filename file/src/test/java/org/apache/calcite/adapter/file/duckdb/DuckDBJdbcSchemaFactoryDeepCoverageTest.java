@@ -1186,12 +1186,17 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
     return (Boolean) method.invoke(null, c, schema, tableName);
   }
 
+  // Enqueue views for the given dbPath key and then flush them into the connection.
+  // Tests use a unique dbPath string so the static pending view store can coordinate.
   private void invokeRegisterSqlViewsInDuckDB(Connection c, String schema,
       Map<String, Object> operand) throws Exception {
+    String dbPath = "test-db-" + System.nanoTime();
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViewsInDuckDB", Connection.class, String.class, Map.class);
+        "registerSqlViewsInDuckDB", String.class, String.class, Map.class);
     method.setAccessible(true);
-    method.invoke(null, c, schema, operand);
+    method.invoke(null, dbPath, schema, operand);
+    // Flush deferred views into the in-memory connection
+    DuckDBPendingViews.flush(dbPath, c);
   }
 
   private void invokeRegisterSimilarityFunctions(Connection c) throws Exception {

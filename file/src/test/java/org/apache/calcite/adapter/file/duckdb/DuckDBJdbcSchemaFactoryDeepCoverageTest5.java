@@ -409,8 +409,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     javax.sql.DataSource ds = mock(javax.sql.DataSource.class);
     Connection conn = mock(Connection.class);
     String url = "jdbc:duckdb:/path/to/db";
+    String catalogPath = "/path/to/db";
 
-    Object instance = ctor.newInstance(ds, conn, url);
+    Object instance = ctor.newInstance(ds, conn, url, catalogPath);
     assertNotNull(instance);
 
     // Access fields
@@ -425,5 +426,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     java.lang.reflect.Field urlField = sdiClass.getDeclaredField("jdbcUrl");
     urlField.setAccessible(true);
     assertEquals(url, urlField.get(instance));
+
+    java.lang.reflect.Field cpField = sdiClass.getDeclaredField("catalogPath");
+    cpField.setAccessible(true);
+    assertEquals(catalogPath, cpField.get(instance));
   }
 }
