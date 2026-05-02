@@ -148,35 +148,58 @@ public class SecFilingCache implements AutoCloseable {
   public void preloadFileInventory(int startYear, int endYear) {
     long start = System.currentTimeMillis();
     String secDir = parquetBaseDir;
+    LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{}", secDir, startYear, endYear);
     java.util.Set<String> cache = new java.util.HashSet<String>();
     java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
     int totalCount = 0;
     for (int year = startYear; year <= endYear; year++) {
       String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
-      try {
-        List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
-        int yearCount = 0;
-        for (StorageProvider.FileEntry entry : entries) {
-          if (!entry.isDirectory()) {
-            String path = entry.getPath();
-            cache.add(path);
-            int slash = path.lastIndexOf('/');
-            String name = (slash >= 0) ? path.substring(slash + 1) : path;
-            byName.put(name, path);
-            yearCount++;
-          }
-        }
-        LOGGER.debug("preloadFileInventory: year={} loaded {} files", year, yearCount);
-        totalCount += yearCount;
-      } catch (IOException e) {
-        LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
+      totalCount += scanYearIntoCache(yearDir, year, cache, byName);
+    }
+
+    // Legacy fallback: previous builds wrote staging to source=sec/source=sec/ due to a
+    // double-append bug. Scan that subtree too so self-healing can find those files.
+    String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    if (!legacySecDir.equals(secDir)) {
+      int legacyCount = 0;
+      for (int year = startYear; year <= endYear; year++) {
+        String legacyYearDir = storageProvider.resolvePath(legacySecDir, "year=" + year);
+        legacyCount += scanYearIntoCache(legacyYearDir, year, cache, byName);
+      }
+      if (legacyCount > 0) {
+        LOGGER.info("preloadFileInventory: found {} files at legacy double-path {}", legacyCount, legacySecDir);
+        totalCount += legacyCount;
       }
     }
+
     this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
     this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("preloadFileInventory: cached {} sec parquet paths (years {}-{}) in {}ms",
         totalCount, startYear, endYear, elapsed);
+  }
+
+  private int scanYearIntoCache(String yearDir, int year,
+      java.util.Set<String> cache, java.util.Map<String, String> byName) {
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
+      int yearCount = 0;
+      for (StorageProvider.FileEntry entry : entries) {
+        if (!entry.isDirectory()) {
+          String path = entry.getPath();
+          cache.add(path);
+          int slash = path.lastIndexOf('/');
+          String name = (slash >= 0) ? path.substring(slash + 1) : path;
+          byName.put(name, path);
+          yearCount++;
+        }
+      }
+      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} files", yearDir, yearCount);
+      return yearCount;
+    } catch (IOException e) {
+      LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
+      return 0;
+    }
   }
 
   /**
@@ -473,17 +496,21 @@ public class SecFilingCache implements AutoCloseable {
     // Fast path: check in-memory cache populated by preloadFileInventory() — zero Class A ops.
     java.util.Set<String> cache = this.s3FileCache;
     if (cache != null) {
+      // Try the canonical exact path first (O(1)).
       String year = yearFromFilingDate(filingDate);
       if (year != null) {
         String exactPath = storageProvider.resolvePath(secDir, "year=" + year + "/" + fileName);
-        return cache.contains(exactPath);
+        if (cache.contains(exactPath)) {
+          return true;
+        }
       }
-      // No year available; use filename-keyed map for O(1) lookup instead of O(N) scan.
+      // Fall through to byName — handles files at legacy paths (e.g. after a path-bug fix
+      // where existing files live at a different directory than the current secDir).
       java.util.Map<String, String> byName = this.s3FileCacheByName;
       if (byName != null) {
         return byName.containsKey(fileName);
       }
-      // byName not populated (e.g. populated by old callers); fall back to linear scan.
+      // byName not populated; fall back to linear scan.
       for (String path : cache) {
         if (path.endsWith("/" + fileName)) {
           return true;
