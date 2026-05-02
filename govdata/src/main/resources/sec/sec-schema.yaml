@@ -511,7 +511,7 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       rowBatchSize: 50000
-      fileChunkSize: 20
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
@@ -775,7 +775,7 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       rowBatchSize: 50000
-      fileChunkSize: 20
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
