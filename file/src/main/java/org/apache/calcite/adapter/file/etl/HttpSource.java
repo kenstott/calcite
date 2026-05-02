@@ -340,8 +340,6 @@ public class HttpSource implements DataSource {
       }
     }
 
-    // Fetch data with pagination support
-    List<Map<String, Object>> allData = new ArrayList<Map<String, Object>>();
     HttpSourceConfig.PaginationConfig pagination = config.getResponse().getPagination();
 
     if (pagination.getType() == HttpSourceConfig.PaginationType.NONE) {
@@ -359,15 +357,84 @@ public class HttpSource implements DataSource {
       // For JSON, read from cache, transform, and parse
       String content = readFromCache(cachePath);
       content = transformResponse(content, url, params, variables);
-      allData.addAll(parseResponse(content));
-    } else {
-      // Paginated requests
-      int offset = 0;
-      int pageSize = pagination.getPageSize();
-      boolean hasMore = true;
+      List<Map<String, Object>> data = parseResponse(content);
+      data = normalizeRecords(data, variables);
 
-      while (hasMore) {
-        Map<String, String> pageParams = new LinkedHashMap<String, String>(params);
+      if (cache != null) {
+        long ttlMs = config.getCache().getTtlSeconds() * 1000;
+        cache.put(cacheKey, new CacheEntry(data, System.currentTimeMillis() + ttlMs));
+        LOGGER.debug("Cached {} records for {}", data.size(), cacheKey);
+      }
+
+      LOGGER.info("Fetched {} records from {}", data.size(), url);
+      return data.iterator();
+    } else {
+      // Paginated requests - use streaming iterator to avoid buffering all pages in memory
+      return new PaginatedIterator(url, params, variables, pagination, cacheKey, rawCacheFilePath);
+    }
+  }
+
+  private class PaginatedIterator implements Iterator<Map<String, Object>> {
+    private final String url;
+    private final Map<String, String> baseParams;
+    private final Map<String, String> variables;
+    private final HttpSourceConfig.PaginationConfig pagination;
+    private final String cacheKey;
+    private final String rawCacheFilePath;
+
+    private int offset = 0;
+    private int pageSize;
+    private String cursor = null;
+    private boolean hasMore = true;
+
+    private Iterator<Map<String, Object>> currentPageIterator = null;
+    private long totalYielded = 0;
+
+    PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
+        HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath) {
+      this.url = url;
+      this.baseParams = baseParams;
+      this.variables = variables;
+      this.pagination = pagination;
+      this.pageSize = pagination.getPageSize();
+      this.cacheKey = cacheKey;
+      this.rawCacheFilePath = rawCacheFilePath;
+    }
+
+    @Override
+    public boolean hasNext() {
+      // If current page has more records, we have next
+      if (currentPageIterator != null && currentPageIterator.hasNext()) {
+        return true;
+      }
+
+      // If no more pages to fetch, we're done
+      if (!hasMore) {
+        return false;
+      }
+
+      // Try to fetch next page
+      return fetchNextPage();
+    }
+
+    @Override
+    public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new java.util.NoSuchElementException();
+      }
+
+      Map<String, Object> record = currentPageIterator.next();
+      totalYielded++;
+      return record;
+    }
+
+    private boolean fetchNextPage() {
+      if (!hasMore) {
+        return false;
+      }
+
+      try {
+        Map<String, String> pageParams = new LinkedHashMap<String, String>(baseParams);
 
         switch (pagination.getType()) {
           case OFFSET:
@@ -381,56 +448,80 @@ public class HttpSource implements DataSource {
               pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
             }
             break;
+          case CURSOR:
+            if (cursor != null) {
+              pageParams.put(pagination.getCursorParam(), cursor);
+            }
+            if (pagination.getLimitParam() != null) {
+              pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
+            }
+            break;
           default:
             hasMore = false;
-            continue;
+            return false;
         }
 
         String response;
         try {
           response = executeRequest(url, pageParams, variables, null);
         } catch (IOException e) {
-          // HTTP 400 during pagination means the API's skip/offset limit has been exceeded.
-          // Stop pagination and return whatever data we have collected so far.
-          // Other 4xx/5xx codes (403 rate-limit, 429 throttle, 500 server error) are real
-          // errors and should propagate so the caller can retry or fail properly.
+          // HTTP 400 during pagination means skip/offset limit exceeded
           if (e.getMessage() != null && e.getMessage().startsWith("HTTP 400")) {
-            LOGGER.info("Pagination stopped at offset={}: results window limit reached ({})",
-                offset, e.getMessage().split("\n")[0]);
+            LOGGER.info("Pagination stopped at offset={}: results window limit reached",
+                offset);
             hasMore = false;
-            continue;
+            return false;
           }
           throw e;
         }
+
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
         if (pageData.isEmpty()) {
           hasMore = false;
-        } else {
-          allData.addAll(pageData);
-          offset += pageSize;
+          return false;
+        }
 
+        pageData = normalizeRecords(pageData, variables);
+        currentPageIterator = pageData.iterator();
+
+        // Handle pagination state for next fetch
+        if (pagination.getType() == HttpSourceConfig.PaginationType.CURSOR) {
+          try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(response);
+            String cursorPath = pagination.getCursorPath();
+            if (cursorPath != null && !cursorPath.isEmpty()) {
+              JsonNode cursorNode = root.path(cursorPath);
+              String nextCursor = cursorNode.asText(null);
+              if (nextCursor == null || nextCursor.isEmpty()) {
+                hasMore = false;
+              } else {
+                cursor = nextCursor;
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Failed to extract cursor from response: {}", e.getMessage());
+            hasMore = false;
+          }
+        } else {
+          offset += pageSize;
           // Check if we got less than a full page
           if (pageData.size() < pageSize) {
             hasMore = false;
           }
         }
+
+        LOGGER.debug("Fetched page with {} records (total yielded: {})", pageData.size(), totalYielded);
+        return true;
+
+      } catch (IOException e) {
+        LOGGER.error("Error fetching paginated data: {}", e.getMessage());
+        hasMore = false;
+        return false;
       }
     }
-
-    // Normalize field names for schema evolution
-    allData = normalizeRecords(allData, variables);
-
-    // Store in cache if enabled
-    if (cache != null) {
-      long ttlMs = config.getCache().getTtlSeconds() * 1000;
-      cache.put(cacheKey, new CacheEntry(allData, System.currentTimeMillis() + ttlMs));
-      LOGGER.debug("Cached {} records for {}", allData.size(), cacheKey);
-    }
-
-    LOGGER.info("Fetched {} records from {}", allData.size(), url);
-    return allData.iterator();
   }
 
   @Override public String getType() {
