@@ -99,18 +99,22 @@ done
 echo ""
 
 # -----------------------------------------------
-# Step 2: Write "cleared" tracker markers via DuckDB CLI
-# Mirrors S3HivePipelineTracker.invalidateAll() and invalidateTableCompletion().
-# Writes append-only parquet markers so the tracker treats these tables as unprocessed.
+# Step 2: Write table_completion "cleared" markers via DuckDB CLI
+# Mirrors S3HivePipelineTracker.invalidateTableCompletion().
+# This breaks the watermark fast-path so the next run re-materializes.
+#
+# Incremental partition markers are NOT cleared here. The materialization
+# code treats a missing Iceberg table as "no committed accessions" and
+# ignores the tracker entirely, so stale incremental entries are harmless.
 # -----------------------------------------------
-echo "Step 2: Writing tracker cleared markers..."
+echo "Step 2: Writing table_completion cleared markers..."
 
 # Strip protocol from endpoint for DuckDB s3_endpoint setting
 DUCKDB_ENDPOINT="${S3_ENDPOINT:-}"
 DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#https://}"
 DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#http://}"
 
-# Build DuckDB S3 config lines
+# Build DuckDB S3 config block
 S3_CONFIG="INSTALL httpfs; LOAD httpfs;"
 S3_CONFIG="$S3_CONFIG SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';"
 S3_CONFIG="$S3_CONFIG SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';"
@@ -122,8 +126,7 @@ if [[ -n "${AWS_DEFAULT_REGION:-}" ]]; then
 fi
 
 if $DRY_RUN; then
-    echo "  [DRY RUN] Would write cleared markers for all 7 tables (partition_status + table_completion)"
-    echo "  Tables: ${SEC_TABLES[*]}"
+    echo "  [DRY RUN] Would write table_completion cleared markers for: ${SEC_TABLES[*]}"
 else
     ERRORS=0
     AS_OF=$(date +%s%3N)   # epoch millis
@@ -133,7 +136,6 @@ else
                    || cat /proc/sys/kernel/random/uuid 2>/dev/null \
                    || uuidgen | tr '[:upper:]' '[:lower:]')
 
-        # --- table_completion cleared marker (year=0, source_key=_table_complete) ---
         COMPLETION_PATH="${TRACKER_BUCKET}/year=0/source_key=_table_complete/${UUID_VAL}.parquet"
         duckdb -c "${S3_CONFIG}
             COPY (
@@ -148,62 +150,8 @@ else
                     NULL::VARCHAR               AS error_message,
                     ${AS_OF}::BIGINT            AS as_of
             ) TO '${COMPLETION_PATH}' (FORMAT PARQUET);" \
-            && echo "  ${table}: wrote table_completion cleared marker" \
-            || { echo "  ERROR: failed table_completion cleared for ${table}"; ERRORS=$((ERRORS+1)); }
-
-        # --- incremental cleared markers: scan existing state, write cleared for each complete key ---
-        TRACKER_GLOB="${TRACKER_BUCKET}/year=*/source_key=*/*.parquet"
-        # Read completed source_keys and emit one cleared marker per key using DuckDB
-        duckdb -c "${S3_CONFIG}
-            CREATE OR REPLACE TABLE _keys AS
-            SELECT source_key,
-                   regexp_extract(source_key, '(?:^|year=)([0-9]{4})', 1) AS yr
-            FROM (
-                SELECT source_key, state,
-                    ROW_NUMBER() OVER (PARTITION BY source_key ORDER BY as_of DESC) AS rn
-                FROM read_parquet('${TRACKER_GLOB}', hive_partitioning=false, union_by_name=true)
-                WHERE table_name = '${table}' AND phase = 'incremental'
-            ) WHERE rn = 1 AND state = 'complete';
-
-            SELECT count(*) AS n FROM _keys;" \
-            2>/dev/null | grep -E '^[0-9]+$' | while read -r COUNT; do
-            echo "  ${table}: found ${COUNT} completed incremental partitions to clear"
-        done
-
-        # Export one cleared marker per source_key using a single COPY with lateral join trick
-        UUID2=$(python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null \
-                || cat /proc/sys/kernel/random/uuid 2>/dev/null \
-                || uuidgen | tr '[:upper:]' '[:lower:]')
-        INCREMENTAL_PATH="${TRACKER_BUCKET}/year=__multi__/source_key=__cleared__/${UUID2}.parquet"
-
-        duckdb -c "${S3_CONFIG}
-            CREATE OR REPLACE TABLE _keys AS
-            SELECT source_key,
-                   CASE WHEN regexp_extract(source_key, '(?:^|year=)([0-9]{4})', 1) != ''
-                        THEN regexp_extract(source_key, '(?:^|year=)([0-9]{4})', 1)
-                        ELSE '9999' END AS yr
-            FROM (
-                SELECT source_key, state,
-                    ROW_NUMBER() OVER (PARTITION BY source_key ORDER BY as_of DESC) AS rn
-                FROM read_parquet('${TRACKER_GLOB}', hive_partitioning=false, union_by_name=true)
-                WHERE table_name = '${table}' AND phase = 'incremental'
-            ) WHERE rn = 1 AND state = 'complete';
-
-            COPY (
-                SELECT
-                    source_key                  AS source_key,
-                    '${table}'::VARCHAR         AS table_name,
-                    'incremental'::VARCHAR      AS phase,
-                    'cleared'::VARCHAR          AS state,
-                    0::BIGINT                   AS row_count,
-                    NULL::VARCHAR               AS config_hash,
-                    NULL::VARCHAR               AS signature,
-                    NULL::VARCHAR               AS error_message,
-                    ${AS_OF}::BIGINT            AS as_of
-                FROM _keys
-            ) TO '${INCREMENTAL_PATH}' (FORMAT PARQUET);" \
-            && echo "  ${table}: wrote incremental cleared markers" \
-            || { echo "  WARN: incremental cleared markers failed for ${table} (table_completion marker still written)"; }
+            && echo "  ${table}: OK" \
+            || { echo "  ERROR: failed for ${table}"; ERRORS=$((ERRORS+1)); }
     done
 
     if [[ $ERRORS -gt 0 ]]; then

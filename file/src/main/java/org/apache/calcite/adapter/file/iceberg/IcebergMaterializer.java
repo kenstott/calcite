@@ -2330,8 +2330,12 @@ public class IcebergMaterializer {
       }
     }
 
-    // No table object available — tracker only.
-    excludeAccessions.addAll(getTrackedAccessions(config.getTargetTableId(), yearValue));
+    // No Iceberg table exists yet — no committed accessions to exclude.
+    // The tracker may hold stale entries from a previous run; ignore them here so that
+    // a deleted-and-reset Iceberg table is rebuilt from scratch rather than skipping
+    // accessions that were "complete" in the old table.
+    LOGGER.info("No Iceberg table at {} — starting fresh (0 excluded accessions)",
+        icebergLocation);
     return excludeAccessions;
   }
 
