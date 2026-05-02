@@ -202,6 +202,14 @@ public class SecFilingCache implements AutoCloseable {
     final List<EdgarFullIndexCache.IndexEntry> toSelfHeal =
         new ArrayList<EdgarFullIndexCache.IndexEntry>();
 
+    int cntNoXbrl = 0;
+    int cntTrackerComplete = 0;
+    int cntTrackerBaseComplete = 0;
+    int cntTrackerIncomplete = 0;
+    int cntS3Complete = 0;
+    int cntS3Partial = 0;
+    int cntNoFiles = 0;
+
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
       if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
         // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
@@ -214,6 +222,7 @@ public class SecFilingCache implements AutoCloseable {
           clearNoXbrl(ie.accession);
           toProcess.add(ie);
         }
+        cntNoXbrl++;
         continue;
       }
       Set<String> completed = tracker.getCompletedTables(ie.accession, PHASE_STAGING);
@@ -221,13 +230,16 @@ public class SecFilingCache implements AutoCloseable {
         FormType form = FormType.fromString(ie.formType);
         FileInventory inv = inventoryFromCompletedTables(completed);
         if (inv.isComplete(form, vectorizationEnabled)) {
+          cntTrackerComplete++;
           continue;
         }
         // Base staging parquet exists; only chunks are missing. Skip — re-downloading from SEC
         // just to add chunks would regenerate all staging parquet unnecessarily.
         if (inv.isComplete(form, false)) {
+          cntTrackerBaseComplete++;
           continue;
         }
+        cntTrackerIncomplete++;
         toProcess.add(ie);
         continue;
       }
@@ -237,12 +249,22 @@ public class SecFilingCache implements AutoCloseable {
         FormType form = FormType.fromString(ie.formType);
         // Only process if base staging files are also incomplete, not just chunks.
         if (!s3Inv.isComplete(form, false)) {
+          cntS3Partial++;
           toProcess.add(ie);
+        } else {
+          cntS3Complete++;
         }
       } else {
+        cntNoFiles++;
         toProcess.add(ie);
       }
     }
+
+    LOGGER.info(
+        "filterAndSelfHeal: candidates={} noXbrl={} trackerFull={} trackerBaseOnly={} "
+            + "trackerIncomplete={} s3Complete={} s3Partial={} noFiles={} toProcess={}",
+        candidates.size(), cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
+        cntTrackerIncomplete, cntS3Complete, cntS3Partial, cntNoFiles, toProcess.size());
 
     if (!toSelfHeal.isEmpty()) {
       int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
