@@ -736,7 +736,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Year range: {} to {}", startYear, endYear);
 
       String govdataParquetDir = GovDataUtils.getParquetDir(operand);
-      String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+      // govdataParquetDir already resolves to the sec-specific path (e.g. ".../source=sec")
+      // because sec-schema.yaml sets materializeDirectory to "${GOVDATA_PARQUET_DIR}/source=sec"
+      // which overrides the operand's "directory" key in FileSchemaBuilder.
+      String secParquetDir = govdataParquetDir;
 
       DocumentETLProcessor.DocumentETLResult result;
 
@@ -2958,7 +2961,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // addToManifest will mark as PROCESSED_WITH_VECTORS when vectorization is enabled
             String govdataParquetDir = getGovDataParquetDir();
             if (govdataParquetDir != null) {
-              String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+              String secParquetDirPath = govdataParquetDir;
               addToManifest(xbrlPath, secParquetDirPath, new ArrayList<>());
 
               // Update unified cache - check existing files since this is an upgrade
@@ -3026,7 +3029,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
           // Get parquet directory
           String govdataParquetDir = getGovDataParquetDir();
-          String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
+          String secParquetDirPath = govdataParquetDir;
 
           if (secParquetDirPath != null) {
             // Check if vectorization is enabled via YAML config
@@ -3477,7 +3480,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // baseDirPath is the cache directory (sec-cache)
       // We need to create files in govdata-parquet/source=sec/stock_prices
       String govdataParquetDir = getGovDataParquetDir();
-      String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "source=sec/stock_prices");
+      String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "stock_prices");
       LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir);
 
       // For each CIK, create mock price data
@@ -3575,7 +3578,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("GOVDATA_PARQUET_DIR not set and no baseDirPath provided, skipping stock price download");
         return;
       }
-      String basePath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+      String basePath = govdataParquetDir;
 
       // Check if stock prices are already cached and up-to-date (daily refresh)
       if (areStockPricesCached(basePath, ciks, startYear, endYear)) {

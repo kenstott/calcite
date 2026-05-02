@@ -147,7 +147,7 @@ public class SecFilingCache implements AutoCloseable {
    */
   public void preloadFileInventory(int startYear, int endYear) {
     long start = System.currentTimeMillis();
-    String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    String secDir = parquetBaseDir;
     java.util.Set<String> cache = new java.util.HashSet<String>();
     java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
     int totalCount = 0;
@@ -431,7 +431,7 @@ public class SecFilingCache implements AutoCloseable {
    *                   10 Class A LIST ops per call). Pass null to fall back to the year=* glob.
    */
   public FileInventory checkS3Files(String cik, String accession, String filingDate) {
-    String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    String secDir = parquetBaseDir;
 
     FileInventory.Builder builder = FileInventory.builder();
 
