@@ -669,6 +669,9 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
+        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialsResponseTransformer"
@@ -739,6 +742,9 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
+        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialConditionsResponseTransformer"
@@ -817,6 +823,9 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
+        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialInterventionsResponseTransformer"
@@ -908,6 +917,10 @@ partitionedTables:
         retryOn: [429, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceDate: "${HEALTH_CDC_COVID_SINCE_DATE:}"
+        filterParam: "$where"
+        dateField: "date"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcCovidVaccinationsResponseTransformer"
@@ -1144,6 +1157,12 @@ partitionedTables:
         retryOn: [429, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceYear: "${MEDICAID_SINCE_YEAR:}"
+        sinceQuarter: "${MEDICAID_SINCE_QUARTER:}"
+        filterParam: "$where"
+        yearField: "year"
+        quarterField: "quarter"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.MedicaidDrugUtilizationResponseTransformer"
@@ -1307,6 +1326,10 @@ partitionedTables:
         retryOn: [429, 503]
       rawCache:
         enabled: true
+      incremental:
+        sinceYear: "${HEALTH_BRFSS_SINCE_YEAR:}"
+        filterParam: "$where"
+        yearField: "year"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcBrfssResponseTransformer"
@@ -1492,8 +1515,6 @@ partitionedTables:
 
 views:
 
-  # ── Intra-health ───────────────────────────────────────────────────────────
-
   - name: drug_profile
     comment: >
       Complete drug profile: NDC product joined to FDA approval record and RxNorm concept.
@@ -1614,8 +1635,6 @@ views:
         COUNT(CASE WHEN birthing_friendly = 'Yes'  THEN 1 END)         AS birthing_friendly_count
       FROM cms_hospital_quality
       GROUP BY state
-
-  # ── Health × Geo ───────────────────────────────────────────────────────────
 
   - name: hospital_with_geography
     comment: >

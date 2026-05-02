@@ -149,6 +149,9 @@ public class HttpSourceConfig {
   // URL rules for year-dependent URL selection (e.g., TIGER ZCTA vintage changes)
   private final List<UrlRule> urlRules;
 
+  // Incremental fetch configuration (sinceDate / sinceYear+sinceQuarter)
+  private final IncrementalConfig incremental;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -179,6 +182,7 @@ public class HttpSourceConfig {
         ? Collections.unmodifiableList(new ArrayList<UrlRule>(builder.urlRules))
         : Collections.<UrlRule>emptyList();
     this.parallel = builder.parallel > 0 ? builder.parallel : 1;
+    this.incremental = builder.incremental;
   }
 
   private static String determineSourceType(Builder builder) {
@@ -243,6 +247,10 @@ public class HttpSourceConfig {
    */
   public List<UrlRule> getUrlRules() {
     return urlRules;
+  }
+
+  public IncrementalConfig getIncremental() {
+    return incremental;
   }
 
   public HttpMethod getMethod() {
@@ -588,6 +596,16 @@ public class HttpSourceConfig {
     Object parallelObj = map.get("parallel");
     if (parallelObj instanceof Number) {
       builder.parallel(((Number) parallelObj).intValue());
+    }
+
+    // Parse incremental fetch configuration
+    Object incrementalObj = map.get("incremental");
+    if (incrementalObj instanceof Map) {
+      @SuppressWarnings("unchecked")
+      IncrementalConfig incr = IncrementalConfig.fromMap((Map<String, Object>) incrementalObj);
+      if (incr != null) {
+        builder.incremental(incr);
+      }
     }
 
     // Parse source type
@@ -1104,6 +1122,97 @@ public class HttpSourceConfig {
           (String) map.get("cursorPath"),
           (String) map.get("pageParam"),
           pageSize);
+    }
+  }
+
+  /**
+   * Incremental fetch configuration.
+   *
+   * <p>Supports two filter styles:
+   * <ul>
+   *   <li><b>WHERE-style</b> (when {@code dateField} or {@code yearField} is set): generates a
+   *       Socrata {@code $where} expression such as {@code date >= '2024-01-01'}.</li>
+   *   <li><b>Direct-param style</b> (no {@code dateField}/{@code yearField}): sets
+   *       {@code filterParam} to the resolved date value directly (e.g.
+   *       {@code lastUpdatePostDate.gte=2024-01-01} for the ClinicalTrials API).</li>
+   * </ul>
+   *
+   * <p>Field values may use {@code ${ENV_VAR:default}} substitution. An empty resolved value
+   * disables the filter, enabling full-refresh when no incremental bound is configured.
+   */
+  public static class IncrementalConfig {
+    private final String sinceDate;
+    private final String sinceYear;
+    private final String sinceQuarter;
+    private final String filterParam;
+    private final String dateField;
+    private final String yearField;
+    private final String quarterField;
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String filterParam, String dateField, String yearField, String quarterField) {
+      this.sinceDate = sinceDate;
+      this.sinceYear = sinceYear;
+      this.sinceQuarter = sinceQuarter;
+      this.filterParam = filterParam;
+      this.dateField = dateField;
+      this.yearField = yearField;
+      this.quarterField = quarterField;
+    }
+
+    public String getSinceDate() { return sinceDate; }
+    public String getSinceYear() { return sinceYear; }
+    public String getSinceQuarter() { return sinceQuarter; }
+    public String getFilterParam() { return filterParam; }
+    public String getDateField() { return dateField; }
+    public String getYearField() { return yearField; }
+    public String getQuarterField() { return quarterField; }
+
+    /**
+     * Builds the filter value to inject into {@code filterParam}.
+     * Returns {@code null} when no incremental bound is active (all resolved values empty).
+     *
+     * @param resolvedDate    resolved sinceDate value (may be null/empty)
+     * @param resolvedYear    resolved sinceYear value (may be null/empty)
+     * @param resolvedQuarter resolved sinceQuarter value (may be null/empty)
+     * @return filter value string, or {@code null} if no constraint is active
+     */
+    public String buildFilterValue(String resolvedDate, String resolvedYear,
+        String resolvedQuarter) {
+      boolean hasDate = resolvedDate != null && !resolvedDate.isEmpty();
+      boolean hasYear = resolvedYear != null && !resolvedYear.isEmpty();
+      boolean hasQuarter = resolvedQuarter != null && !resolvedQuarter.isEmpty();
+
+      if (dateField != null && hasDate) {
+        return dateField + " >= '" + resolvedDate + "'";
+      }
+      if (yearField != null && hasYear) {
+        if (quarterField != null && hasQuarter) {
+          return "(" + yearField + " > '" + resolvedYear + "') OR ("
+              + yearField + " = '" + resolvedYear + "' AND "
+              + quarterField + " >= '" + resolvedQuarter + "')";
+        }
+        return yearField + " >= '" + resolvedYear + "'";
+      }
+      // Direct-param style: pass resolved date straight to the filterParam
+      if (hasDate) {
+        return resolvedDate;
+      }
+      return null;
+    }
+
+    public static IncrementalConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      return new IncrementalConfig(
+          (String) map.get("sinceDate"),
+          (String) map.get("sinceYear"),
+          (String) map.get("sinceQuarter"),
+          (String) map.get("filterParam"),
+          (String) map.get("dateField"),
+          (String) map.get("yearField"),
+          (String) map.get("quarterField"));
     }
   }
 
@@ -2051,6 +2160,7 @@ public class HttpSourceConfig {
     private String sourceType;
     private List<UrlRule> urlRules;
     private int parallel = 1;
+    private IncrementalConfig incremental;
 
     public Builder url(String url) {
       this.url = url;
@@ -2154,6 +2264,11 @@ public class HttpSourceConfig {
 
     public Builder parallel(int parallel) {
       this.parallel = parallel;
+      return this;
+    }
+
+    public Builder incremental(IncrementalConfig incremental) {
+      this.incremental = incremental;
       return this;
     }
 

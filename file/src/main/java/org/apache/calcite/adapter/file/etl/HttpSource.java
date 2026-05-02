@@ -298,6 +298,10 @@ public class HttpSource implements DataSource {
       return fetchWithBatching(variables);
     }
 
+    // Make a mutable copy of variables so incremental bounds can be injected for transformers
+    variables = new LinkedHashMap<String, String>(
+        variables != null ? variables : Collections.<String, String>emptyMap());
+
     // Build the URL with variables substituted (check urlRules for year-dependent URLs)
     String url = substituteVariables(config.getEffectiveUrl(variables), variables);
 
@@ -305,6 +309,26 @@ public class HttpSource implements DataSource {
     Map<String, String> params = new LinkedHashMap<String, String>();
     for (Map.Entry<String, String> e : config.getParameters().entrySet()) {
       params.put(e.getKey(), substituteVariables(e.getValue(), variables));
+    }
+
+    // Apply incremental filter when configured and a bound is active
+    HttpSourceConfig.IncrementalConfig incr = config.getIncremental();
+    if (incr != null && incr.getFilterParam() != null) {
+      String resolvedDate    = substituteVariables(
+          incr.getSinceDate()    != null ? incr.getSinceDate()    : "", variables);
+      String resolvedYear    = substituteVariables(
+          incr.getSinceYear()    != null ? incr.getSinceYear()    : "", variables);
+      String resolvedQuarter = substituteVariables(
+          incr.getSinceQuarter() != null ? incr.getSinceQuarter() : "", variables);
+      String filterValue = incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter);
+      if (filterValue != null) {
+        params.put(incr.getFilterParam(), filterValue);
+        // Expose bounds to transformers via RequestContext.dimensionValues
+        if (!resolvedDate.isEmpty())    { variables.put("sinceDate", resolvedDate); }
+        if (!resolvedYear.isEmpty())    { variables.put("sinceYear", resolvedYear); }
+        if (!resolvedQuarter.isEmpty()) { variables.put("sinceQuarter", resolvedQuarter); }
+        LOGGER.info("Incremental filter active: {}={}", incr.getFilterParam(), filterValue);
+      }
     }
 
     // Check raw cache first (persistent storage-based)
@@ -2052,15 +2076,19 @@ public class HttpSource implements DataSource {
     char separator = baseUrl.contains("?") ? '&' : '?';
 
     for (Map.Entry<String, String> e : params.entrySet()) {
+      String value = e.getValue();
+      if (value == null || value.isEmpty()) {
+        continue; // skip unresolved optional parameters (e.g. incremental bounds not yet set)
+      }
       try {
         url.append(separator)
             .append(URLEncoder.encode(e.getKey(), "UTF-8"))
             .append('=')
-            .append(URLEncoder.encode(e.getValue(), "UTF-8"));
+            .append(URLEncoder.encode(value, "UTF-8"));
         separator = '&';
       } catch (Exception ex) {
         // Fallback without encoding
-        url.append(separator).append(e.getKey()).append('=').append(e.getValue());
+        url.append(separator).append(e.getKey()).append('=').append(value);
         separator = '&';
       }
     }
