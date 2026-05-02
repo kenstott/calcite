@@ -809,11 +809,41 @@ public class S3HivePipelineTrackerDeepCoverageTest {
   // ===== isComplete / getCompletedTables via cache miss (triggers getCompletedTables) =====
 
   @Test
+  @Tag("integration")
   void testIsCompleteCacheMiss() throws Exception {
-    // When cache is empty, isComplete delegates to getCompletedTables
-    // which will try to query S3 and fail - returns false
-    boolean result = tracker.isComplete("unknown_source", "unknown_table", "unknown_phase");
-    assertFalse(result);
+    checkMinioAvailable();
+    Map<String, String> config = new HashMap<String, String>();
+    config.put("accessKeyId", "minioadmin");
+    config.put("secretAccessKey", "minioadmin");
+    config.put("region", "us-east-1");
+    S3HivePipelineTracker minioTracker =
+        new S3HivePipelineTracker("s3://test-bucket/tracker", "http://localhost:9000", config);
+    try {
+      // When cache is empty, isComplete delegates to getCompletedTables
+      // which will try to query S3 — returns false for unknown tables
+      boolean result = minioTracker.isComplete("unknown_source", "unknown_table", "unknown_phase");
+      assertFalse(result);
+    } finally {
+      minioTracker.close();
+    }
+  }
+
+  private static void checkMinioAvailable() {
+    try {
+      java.net.HttpURLConnection conn =
+          (java.net.HttpURLConnection) java.net.URI.create(
+              "http://localhost:9000/minio/health/live").toURL().openConnection();
+      conn.setConnectTimeout(2000);
+      conn.setReadTimeout(2000);
+      conn.setRequestMethod("GET");
+      int code = conn.getResponseCode();
+      org.junit.jupiter.api.Assumptions.assumeTrue(code == 200,
+          "MinIO not available at http://localhost:9000 (HTTP " + code + ")");
+      conn.disconnect();
+    } catch (Exception e) {
+      org.junit.jupiter.api.Assumptions.assumeTrue(false,
+          "MinIO not available at http://localhost:9000: " + e.getMessage());
+    }
   }
 
   // ===== readLatestState tests =====

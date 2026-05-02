@@ -1158,7 +1158,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     Set<String> tables = new LinkedHashSet<String>();
     String year = extractYear(sourceKey, System.currentTimeMillis());
     String prefix = "year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey) + "/";
-    List<String> files = listTrackerFiles(prefix);
+    List<String> files;
+    try {
+      files = listTrackerFiles(prefix);
+    } catch (Exception e) {
+      LOGGER.warn("Error listing tracker files for {}/{}: {}", sourceKey, phase, e.getMessage());
+      stageCache.put(cacheKey, tables);
+      return tables;
+    }
 
     if (!files.isEmpty()) {
       java.io.File tempDir = null;

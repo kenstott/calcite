@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -75,6 +76,10 @@ public class IcebergMaterializerCoverageTest {
   void setUp() {
     mockStorageProvider = mock(StorageProvider.class);
     mockTracker = mock(IncrementalTracker.class);
+    // getProcessedKeyValues(String, String) is a default method — Mockito doesn't
+    // call real default methods unless told to. Delegate to the real implementation
+    // so it correctly filters the 1-arg stub result by year.
+    doCallRealMethod().when(mockTracker).getProcessedKeyValues(anyString(), any());
   }
 
   // ===== Constructor Tests =====
@@ -1884,7 +1889,9 @@ public class IcebergMaterializerCoverageTest {
     @SuppressWarnings("unchecked")
     Set<String> result = (Set<String>) method.invoke(materializer, config,
         null, batch);
-    assertTrue(result.contains("tracked-acc"));
+    // When table == null (no Iceberg table yet), production code returns empty to force a fresh
+    // rebuild rather than trusting potentially-stale tracker entries from a previous run.
+    assertTrue(result.isEmpty());
   }
 
   // ===== selfHealTracker Tests =====

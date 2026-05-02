@@ -4307,6 +4307,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
   }
 
+  private void collectFilesAtDepth(StorageProvider storageProvider, String path, int depth,
+      List<StorageProvider.FileEntry> result) {
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(path, false);
+      if (depth == 0) {
+        result.addAll(entries);
+      } else {
+        for (StorageProvider.FileEntry entry : entries) {
+          if (entry.isDirectory()) {
+            collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, result);
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("findMatchingFiles: error listing {}: {}", path, e.getMessage());
+    }
+  }
+
   /**
    * Find all files matching a glob pattern relative to baseDirectory.
    * Uses ConversionMetadata as primary source (fast) and falls back to
@@ -4373,17 +4391,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       boolean hasSlash = pattern.contains("/");
       List<StorageProvider.FileEntry> allFiles;
       if (!hasDoubleWildcard && hasSlash) {
-        List<StorageProvider.FileEntry> topLevel = storageProvider.listFiles(searchPath, false);
+        // Count directory levels implied by the pattern (number of "/" separators)
+        // e.g. "year=*/data.parquet" → 1 dir level; "year=*/month=*/data.parquet" → 2 dir levels
+        String[] patternParts = pattern.split("/");
+        int dirDepth = patternParts.length - 1;
         allFiles = new ArrayList<>();
-        for (StorageProvider.FileEntry entry : topLevel) {
-          if (entry.isDirectory()) {
-            try {
-              allFiles.addAll(storageProvider.listFiles(entry.getPath(), false));
-            } catch (Exception e) {
-              LOGGER.warn("findMatchingFiles: error listing subdir {}: {}", entry.getPath(), e.getMessage());
-            }
-          }
-        }
+        collectFilesAtDepth(storageProvider, searchPath, dirDepth, allFiles);
       } else {
         allFiles = storageProvider.listFiles(searchPath, hasDoubleWildcard);
       }

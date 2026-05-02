@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +73,7 @@ public class IcebergMaterializerDeepCoverageTest {
   void setUp() {
     mockStorageProvider = mock(StorageProvider.class);
     mockTracker = mock(IncrementalTracker.class);
+    doCallRealMethod().when(mockTracker).getProcessedKeyValues(anyString(), any());
     when(mockStorageProvider.getS3Config()).thenReturn(null);
     materializer = new IcebergMaterializer(
         tempDir.toString(), mockStorageProvider, mockTracker, 2, 100L);

@@ -1968,16 +1968,38 @@ public class S3HivePipelineTrackerCoverageTest {
   }
 
   @Test
+  @Tag("integration")
   void testIsCompleteCallsGetCompletedTablesOnCacheMiss() throws Exception {
+    checkMinioAvailable();
+    Map<String, String> config = new HashMap<String, String>();
+    config.put("accessKeyId", "minioadmin");
+    config.put("secretAccessKey", "minioadmin");
+    config.put("region", "us-east-1");
     S3HivePipelineTracker tracker =
-        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000");
+        new S3HivePipelineTracker("s3://bucket/tracker", "http://localhost:9000", config);
     try {
-      // isComplete on a missing cache key should attempt getCompletedTables
-      // This will fail gracefully (no S3 files) and return false
       boolean result = tracker.isComplete("unknown_src", "unknown_table", "unknown_phase");
       assertFalse(result);
     } finally {
       tracker.close();
+    }
+  }
+
+  private static void checkMinioAvailable() {
+    try {
+      java.net.HttpURLConnection conn =
+          (java.net.HttpURLConnection) java.net.URI.create(
+              "http://localhost:9000/minio/health/live").toURL().openConnection();
+      conn.setConnectTimeout(2000);
+      conn.setReadTimeout(2000);
+      conn.setRequestMethod("GET");
+      int code = conn.getResponseCode();
+      org.junit.jupiter.api.Assumptions.assumeTrue(code == 200,
+          "MinIO not available at http://localhost:9000 (HTTP " + code + ")");
+      conn.disconnect();
+    } catch (Exception e) {
+      org.junit.jupiter.api.Assumptions.assumeTrue(false,
+          "MinIO not available at http://localhost:9000: " + e.getMessage());
     }
   }
 

@@ -402,9 +402,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     method.setAccessible(true);
     Object result = method.invoke(writer, "2020-01-01", Types.DateType.get());
     assertNotNull(result);
-    assertTrue(result instanceof Integer);
-    int epochDay = (Integer) result;
-    assertEquals(java.time.LocalDate.of(2020, 1, 1).toEpochDay(), epochDay);
+    assertTrue(result instanceof java.time.LocalDate);
+    assertEquals(java.time.LocalDate.of(2020, 1, 1), result);
   }
 
   @Test void testCoerceValueDateFromLocalDate() throws Exception {
@@ -416,7 +415,7 @@ public class IcebergTableWriterDeepCoverageTest2 {
     method.setAccessible(true);
     Object result = method.invoke(writer, java.time.LocalDate.of(2021, 6, 15), Types.DateType.get());
     assertNotNull(result);
-    assertEquals((int) java.time.LocalDate.of(2021, 6, 15).toEpochDay(), result);
+    assertEquals(java.time.LocalDate.of(2021, 6, 15), result);
   }
 
   @Test void testCoerceValueDateFromSqlDate() throws Exception {

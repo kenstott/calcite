@@ -54,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -83,6 +84,7 @@ public class IcebergMaterializerDeepCoverageTest2 {
   void setUp() {
     mockStorageProvider = mock(StorageProvider.class);
     mockTracker = mock(IncrementalTracker.class);
+    doCallRealMethod().when(mockTracker).getProcessedKeyValues(anyString(), any());
     when(mockStorageProvider.getS3Config()).thenReturn(null);
     materializer = new IcebergMaterializer(
         tempDir.toString(), mockStorageProvider, mockTracker, 2, 10L);
@@ -488,9 +490,9 @@ public class IcebergMaterializerDeepCoverageTest2 {
     Set<String> result = (Set<String>) method.invoke(materializer, config,
         mock(org.apache.iceberg.Table.class), batch);
 
-    assertEquals(2, result.size());
-    assertTrue(result.contains("tracked-acc-1"));
-    assertTrue(result.contains("tracked-acc-2"));
+    // Iceberg scan catches its own exception and returns empty; tracker is not used as primary
+    // source — only as fallback when Iceberg throws at the outer call site.
+    assertTrue(result.isEmpty());
   }
 
   @Test
@@ -518,7 +520,8 @@ public class IcebergMaterializerDeepCoverageTest2 {
     Set<String> result = (Set<String>) method.invoke(materializer, config,
         null, Collections.<String, String>emptyMap());
 
-    assertTrue(result.contains("acc-no-year"));
+    // When table == null, production code returns empty (fresh start, no stale tracker entries).
+    assertTrue(result.isEmpty());
   }
 
   // ===== getAccessionsFromIceberg tests =====
@@ -609,7 +612,9 @@ public class IcebergMaterializerDeepCoverageTest2 {
             "s3://bucket/year=*/*_facts.parquet", "2023");
 
     assertNotNull(result);
-    assertTrue(result.isEmpty());
+    // Non-numeric prefix ("singlepart") → treated as a batch file under synthetic key "_BATCH_"
+    assertTrue(result.containsKey("_BATCH_"));
+    assertTrue(result.get("_BATCH_").contains("singlepart_facts"));
   }
 
   @Test
@@ -1605,11 +1610,11 @@ public class IcebergMaterializerDeepCoverageTest2 {
 
     Field maxRetriesField = IcebergMaterializer.class.getDeclaredField("maxRetries");
     maxRetriesField.setAccessible(true);
-    assertEquals(3, maxRetriesField.getInt(defaultMaterializer));
+    assertEquals(5, maxRetriesField.getInt(defaultMaterializer));
 
     Field retryDelayField = IcebergMaterializer.class.getDeclaredField("retryDelayMs");
     retryDelayField.setAccessible(true);
-    assertEquals(1000L, retryDelayField.getLong(defaultMaterializer));
+    assertEquals(30000L, retryDelayField.getLong(defaultMaterializer));
   }
 
   // ===== incrementalTracker defaults to NOOP =====

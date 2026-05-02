@@ -223,6 +223,11 @@ public class SecFilingCache implements AutoCloseable {
         if (inv.isComplete(form, vectorizationEnabled)) {
           continue;
         }
+        // Base staging parquet exists; only chunks are missing. Skip — re-downloading from SEC
+        // just to add chunks would regenerate all staging parquet unnecessarily.
+        if (inv.isComplete(form, false)) {
+          continue;
+        }
         toProcess.add(ie);
         continue;
       }
@@ -230,7 +235,8 @@ public class SecFilingCache implements AutoCloseable {
       if (s3Inv.hasAnyFiles()) {
         toSelfHeal.add(ie);
         FormType form = FormType.fromString(ie.formType);
-        if (!s3Inv.isComplete(form, vectorizationEnabled)) {
+        // Only process if base staging files are also incomplete, not just chunks.
+        if (!s3Inv.isComplete(form, false)) {
           toProcess.add(ie);
         }
       } else {
