@@ -3881,14 +3881,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             LOGGER.info("Table '{}' found in conversion metadata cache - skipping file enumeration", config.getName());
             matchingFiles = java.util.Collections.emptyList();
           } else {
-            matchingFiles = findMatchingFiles(config.getPattern());
+            // Iceberg tables don't use the staging pattern for reads — skip file enumeration
+            // and let discoverExistingIcebergTable locate the catalog instead
+            Map<String, Object> mat = config.getMaterialize();
+            boolean isIcebergFormat = mat != null && "iceberg".equals(mat.get("format"));
 
-            if (matchingFiles.isEmpty()) {
-              LOGGER.debug("No files found matching pattern: {}", config.getPattern());
-              continue;
+            if (isIcebergFormat) {
+              LOGGER.info("Table '{}' uses format=iceberg — skipping staging pattern enumeration", config.getName());
+              matchingFiles = java.util.Collections.emptyList();
+            } else {
+              matchingFiles = findMatchingFiles(config.getPattern());
+
+              if (matchingFiles.isEmpty()) {
+                LOGGER.debug("No files found matching pattern: {}", config.getPattern());
+                continue;
+              }
+
+              LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
             }
-
-            LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
           }
         }
 
@@ -4212,12 +4222,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET");
         LOGGER.info("Updated conversion record for '{}' to ICEBERG_PARQUET", tableName);
       } else {
-        LOGGER.warn("Iceberg table '{}' not found at warehouse '{}' — table '{}' will use parquet_scan glob fallback (slow). "
-            + "Run ETL with autoDownload=true to materialize.", icebergTableName, warehousePath, tableName);
+        throw new RuntimeException("Iceberg table '" + icebergTableName + "' not found at warehouse '"
+            + warehousePath + "'. Run ETL to materialize table '" + tableName + "'.");
       }
+    } catch (RuntimeException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.warn("Failed to check Iceberg table '{}' at warehouse '{}': {} — table '{}' will use parquet_scan glob fallback.",
-          icebergTableName, warehousePath, e.getMessage(), tableName);
+      throw new RuntimeException("Failed to verify Iceberg table '" + icebergTableName
+          + "' at warehouse '" + warehousePath + "': " + e.getMessage(), e);
     }
   }
 
