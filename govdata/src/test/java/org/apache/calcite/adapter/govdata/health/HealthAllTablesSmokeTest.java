@@ -191,7 +191,165 @@ class HealthAllTablesSmokeTest {
     }
   }
 
+  // ── clinical_trials ─────────────────────────────────────────────────────────
+
+  @Test void clinicalTrialsHaveData() throws Exception {
+    LOG.info("=== health: clinical_trials ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "clinical_trials", 1000);
+      assertPkNonNull(conn, SCHEMA, "clinical_trials", "nct_id");
+      assertNoDuplicatePk(conn, SCHEMA, "clinical_trials", "nct_id");
+    }
+  }
+
+  @Test void clinicalTrialsSampleRow() throws Exception {
+    LOG.info("=== health: clinical_trials sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "clinical_trials");
+    }
+  }
+
+  // ── clinical_trial_conditions ───────────────────────────────────────────────
+
+  @Test void clinicalTrialConditionsHaveData() throws Exception {
+    LOG.info("=== health: clinical_trial_conditions ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "clinical_trial_conditions", 1000);
+      warnNullPk(conn, SCHEMA, "clinical_trial_conditions", "nct_id");
+      warnNullPk(conn, SCHEMA, "clinical_trial_conditions", "condition_name");
+      warnDuplicateCompositePk(conn, SCHEMA, "clinical_trial_conditions",
+          "nct_id", "condition_name");
+    }
+  }
+
+  @Test void clinicalTrialConditionsSampleRow() throws Exception {
+    LOG.info("=== health: clinical_trial_conditions sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "clinical_trial_conditions");
+    }
+  }
+
+  // ── clinical_trial_interventions ────────────────────────────────────────────
+
+  @Test void clinicalTrialInterventionsHaveData() throws Exception {
+    LOG.info("=== health: clinical_trial_interventions ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "clinical_trial_interventions", 500);
+      warnNullPk(conn, SCHEMA, "clinical_trial_interventions", "nct_id");
+      warnNullPk(conn, SCHEMA, "clinical_trial_interventions", "intervention_name");
+      warnDuplicateCompositePk(conn, SCHEMA, "clinical_trial_interventions",
+          "nct_id", "intervention_name");
+    }
+  }
+
+  @Test void clinicalTrialInterventionsSampleRow() throws Exception {
+    LOG.info("=== health: clinical_trial_interventions sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "clinical_trial_interventions");
+    }
+  }
+
+  // ── cdc_covid_vaccinations ──────────────────────────────────────────────────
+
+  @Test void cdcCovidVaccinationsHaveData() throws Exception {
+    LOG.info("=== health: cdc_covid_vaccinations ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "cdc_covid_vaccinations", 10);
+      warnNullPk(conn, SCHEMA, "cdc_covid_vaccinations", "date");
+      warnDuplicatePk(conn, SCHEMA, "cdc_covid_vaccinations", "date");
+    }
+  }
+
+  @Test void cdcCovidVaccinationsSampleRow() throws Exception {
+    LOG.info("=== health: cdc_covid_vaccinations sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "cdc_covid_vaccinations");
+    }
+  }
+
+  // ── cms_hospital_quality ────────────────────────────────────────────────────
+
+  @Test void cmsHospitalQualityHaveData() throws Exception {
+    LOG.info("=== health: cms_hospital_quality ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "cms_hospital_quality", 100);
+      assertPkNonNull(conn, SCHEMA, "cms_hospital_quality", "facility_id");
+      warnDuplicatePk(conn, SCHEMA, "cms_hospital_quality", "facility_id");
+    }
+  }
+
+  @Test void cmsHospitalQualitySampleRow() throws Exception {
+    LOG.info("=== health: cms_hospital_quality sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "cms_hospital_quality");
+    }
+  }
+
+  // ── medicaid_drug_utilization ───────────────────────────────────────────────
+
+  @Test void medicaidDrugUtilizationHaveData() throws Exception {
+    LOG.info("=== health: medicaid_drug_utilization ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "medicaid_drug_utilization", 1000);
+      warnNullPk(conn, SCHEMA, "medicaid_drug_utilization", "ndc");
+      long compositeRowCount = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"medicaid_drug_utilization\""
+          + " WHERE state IS NOT NULL AND ndc IS NOT NULL"
+          + " AND \"year\" IS NOT NULL AND \"quarter\" IS NOT NULL");
+      LOG.info("{}.{}: {} rows with complete composite key",
+          SCHEMA, "medicaid_drug_utilization", compositeRowCount);
+      assertTrue(compositeRowCount >= 100,
+          "Expected at least 100 rows with complete (state, ndc, year, quarter) composite key");
+    }
+  }
+
+  @Test void medicaidDrugUtilizationSampleRow() throws Exception {
+    LOG.info("=== health: medicaid_drug_utilization sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "medicaid_drug_utilization");
+    }
+  }
+
   // ── FK joins ────────────────────────────────────────────────────────────────
+
+  @Test void nctIdJoinsConditionsToTrials() throws Exception {
+    LOG.info("=== FK: clinical_trial_conditions.nct_id → clinical_trials.nct_id ===");
+    try (Connection conn = healthConn()) {
+      // Pre-warm both tables
+      scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trials\"");
+      scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trial_conditions\"");
+      long total = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trial_conditions\""
+          + " WHERE nct_id IS NOT NULL");
+      long matched = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trial_conditions\" c"
+          + " INNER JOIN \"" + SCHEMA + "\".\"clinical_trials\" t"
+          + " ON c.nct_id = t.nct_id");
+      double matchRate = total > 0 ? (double) matched / total : 0.0;
+      LOG.info("conditions→trials: {}/{} condition records matched to trials ({:.1f}%)",
+          matched, total, matchRate * 100);
+      assertEquals(total, matched,
+          "All clinical_trial_conditions should join to clinical_trials on nct_id");
+    }
+  }
+
+  @Test void nctIdJoinsInterventionsToTrials() throws Exception {
+    LOG.info("=== FK: clinical_trial_interventions.nct_id → clinical_trials.nct_id ===");
+    try (Connection conn = healthConn()) {
+      long total = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trial_interventions\""
+          + " WHERE nct_id IS NOT NULL");
+      long matched = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"clinical_trial_interventions\" i"
+          + " INNER JOIN \"" + SCHEMA + "\".\"clinical_trials\" t"
+          + " ON i.nct_id = t.nct_id");
+      double matchRate = total > 0 ? (double) matched / total : 0.0;
+      LOG.info("interventions→trials: {}/{} intervention records matched to trials ({:.1f}%)",
+          matched, total, matchRate * 100);
+      assertEquals(total, matched,
+          "All clinical_trial_interventions should join to clinical_trials on nct_id");
+    }
+  }
 
   @Test void approvalNumberJoinsToNdc() throws Exception {
     LOG.info("=== FK: fda_drug_approvals.application_number → fda_ndc_products.application_number ===");
@@ -338,6 +496,37 @@ class HealthAllTablesSmokeTest {
     assertEquals(0L, dups,
         schema + "." + table + "." + pkColumn + ": found " + dups + " duplicate PK values");
     LOG.info("{}.{}.{}: no duplicates", schema, table, pkColumn);
+  }
+
+  private void assertNoDuplicateCompositePk(Connection conn, String schema, String table,
+      String col1, String col2) throws Exception {
+    long dups = scalar(conn,
+        "SELECT COUNT(*) FROM ("
+        + "SELECT \"" + col1 + "\", \"" + col2 + "\", COUNT(*) AS cnt"
+        + " FROM \"" + schema + "\".\"" + table + "\""
+        + " WHERE \"" + col1 + "\" IS NOT NULL AND \"" + col2 + "\" IS NOT NULL"
+        + " GROUP BY \"" + col1 + "\", \"" + col2 + "\""
+        + " HAVING COUNT(*) > 1) t");
+    assertEquals(0L, dups,
+        schema + "." + table + ".(" + col1 + "," + col2 + "): found " + dups + " duplicate composite PK values");
+    LOG.info("{}.{}.({},{}): no duplicates", schema, table, col1, col2);
+  }
+
+  private void warnDuplicateCompositePk(Connection conn, String schema, String table,
+      String col1, String col2) throws Exception {
+    long dups = scalar(conn,
+        "SELECT COUNT(*) FROM ("
+        + "SELECT \"" + col1 + "\", \"" + col2 + "\", COUNT(*) AS cnt"
+        + " FROM \"" + schema + "\".\"" + table + "\""
+        + " WHERE \"" + col1 + "\" IS NOT NULL AND \"" + col2 + "\" IS NOT NULL"
+        + " GROUP BY \"" + col1 + "\", \"" + col2 + "\""
+        + " HAVING COUNT(*) > 1) t");
+    if (dups > 0) {
+      LOG.warn("{}.{}.({},{}): {} duplicate composite PK groups (same intervention in multiple arms/studies)",
+          schema, table, col1, col2, dups);
+    } else {
+      LOG.info("{}.{}.({},{}): no duplicates", schema, table, col1, col2);
+    }
   }
 
   private void sampleRow(Connection conn, String schema, String table) {

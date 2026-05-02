@@ -1004,26 +1004,33 @@ public class HttpSourceConfig {
     private final String limitParam;
     private final String offsetParam;
     private final String cursorParam;
+    private final String cursorPath;
     private final String pageParam;
     private final int pageSize;
 
     private PaginationConfig(PaginationType type, String limitParam, String offsetParam,
-        String cursorParam, String pageParam, int pageSize) {
+        String cursorParam, String cursorPath, String pageParam, int pageSize) {
       this.type = type;
       this.limitParam = limitParam;
       this.offsetParam = offsetParam;
       this.cursorParam = cursorParam;
+      this.cursorPath = cursorPath;
       this.pageParam = pageParam;
       this.pageSize = pageSize;
     }
 
     public static PaginationConfig none() {
-      return new PaginationConfig(PaginationType.NONE, null, null, null, null, 0);
+      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0);
     }
 
     public static PaginationConfig offset(String limitParam, String offsetParam, int pageSize) {
       return new PaginationConfig(PaginationType.OFFSET, limitParam, offsetParam,
-          null, null, pageSize);
+          null, null, null, pageSize);
+    }
+
+    public static PaginationConfig cursor(String cursorParam, String cursorPath, int pageSize) {
+      return new PaginationConfig(PaginationType.CURSOR, null, null,
+          cursorParam, cursorPath, null, pageSize);
     }
 
     public PaginationType getType() {
@@ -1040,6 +1047,10 @@ public class HttpSourceConfig {
 
     public String getCursorParam() {
       return cursorParam;
+    }
+
+    public String getCursorPath() {
+      return cursorPath;
     }
 
     public String getPageParam() {
@@ -1071,6 +1082,7 @@ public class HttpSourceConfig {
           (String) map.get("limitParam"),
           (String) map.get("offsetParam"),
           (String) map.get("cursorParam"),
+          (String) map.get("cursorPath"),
           (String) map.get("pageParam"),
           pageSize);
     }

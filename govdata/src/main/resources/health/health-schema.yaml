@@ -35,7 +35,7 @@ partitionedTables:
       - name: product_ndc
         type: string
         nullable: false
-        comment: NDC product code (e.g. "24909-042") — PK
+        comment: 'NDC product code (e.g. "24909-042") — PK'
       - name: generic_name
         type: string
         nullable: true
@@ -565,6 +565,592 @@ partitionedTables:
     dimensions:
       type:
         - fda_device_recalls
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CLINICAL TRIALS (clinicaltrials.gov) — ~500k studies, token-based pagination
+  # ==========================================================================
+  - name: clinical_trials
+    pattern: "type=clinical_trials"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Clinical trial studies from clinicaltrials.gov. Primary key: nct_id.
+      Joins to clinical_trial_conditions (nct_id) and clinical_trial_interventions (nct_id).
+
+    columns:
+      - name: nct_id
+        type: string
+        nullable: false
+        comment: NCT identifier — PK
+      - name: brief_title
+        type: string
+        nullable: true
+      - name: overall_status
+        type: string
+        nullable: true
+        comment: ACTIVE_NOT_RECRUITING, ENROLLING_BY_INVITATION, etc.
+      - name: study_type
+        type: string
+        nullable: true
+        comment: INTERVENTIONAL, OBSERVATIONAL, EXPANDED_ACCESS
+      - name: phase
+        type: string
+        nullable: true
+        comment: Phase 1, Phase 2, Phase 3, Phase 4, N/A
+      - name: enrollment_count
+        type: int
+        nullable: true
+      - name: lead_sponsor
+        type: string
+        nullable: true
+      - name: funder_type
+        type: string
+        nullable: true
+        comment: INDUSTRY, NIH, OTHER_GOV, FED, INDIV, NETWORK, RRCF, STATE, UNKNOWN
+      - name: start_date
+        type: string
+        nullable: true
+        comment: YYYY-MM-DD
+      - name: primary_completion_date
+        type: string
+        nullable: true
+        comment: YYYY-MM-DD
+      - name: completion_date
+        type: string
+        nullable: true
+        comment: YYYY-MM-DD
+      - name: first_submit_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD
+      - name: last_update_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD
+      - name: brief_summary
+        type: string
+        nullable: true
+        comment: Truncated to 2000 chars
+
+    source:
+      type: http
+      url: "https://clinicaltrials.gov/api/v2/studies?countTotal=true"
+      method: GET
+      parameters:
+        pageSize: "1000"
+      response:
+        format: json
+        pagination:
+          type: CURSOR
+          pageSize: 1000
+          cursorParam: "pageToken"
+          cursorPath: "nextPageToken"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialsResponseTransformer"
+
+    dimensions:
+      type:
+        - clinical_trials
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CLINICAL TRIAL CONDITIONS — derived from clinical_trials, one row per condition
+  # ==========================================================================
+  - name: clinical_trial_conditions
+    pattern: "type=clinical_trial_conditions"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      One row per condition per clinical trial. Composite PK: (nct_id, condition_name).
+      FK: nct_id → clinical_trials.nct_id.
+
+    columns:
+      - name: nct_id
+        type: string
+        nullable: false
+        comment: NCT identifier — FK to clinical_trials.nct_id
+      - name: condition_name
+        type: string
+        nullable: false
+        comment: Condition/disease name — composite PK
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "clinical_trial_conditions"'
+
+    source:
+      type: http
+      url: "https://clinicaltrials.gov/api/v2/studies?countTotal=true"
+      method: GET
+      parameters:
+        pageSize: "1000"
+      response:
+        format: json
+        pagination:
+          type: CURSOR
+          pageSize: 1000
+          cursorParam: "pageToken"
+          cursorPath: "nextPageToken"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialConditionsResponseTransformer"
+
+    dimensions:
+      type:
+        - clinical_trial_conditions
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CLINICAL TRIAL INTERVENTIONS — derived from clinical_trials, one row per intervention
+  # ==========================================================================
+  - name: clinical_trial_interventions
+    pattern: "type=clinical_trial_interventions"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      One row per intervention per clinical trial. Composite PK: (nct_id, intervention_name).
+      FK: nct_id → clinical_trials.nct_id.
+
+    columns:
+      - name: nct_id
+        type: string
+        nullable: false
+        comment: NCT identifier — FK to clinical_trials.nct_id
+      - name: intervention_type
+        type: string
+        nullable: true
+        comment: BEHAVIORAL, BIOLOGICAL, DEVICE, DIETARY_SUPPLEMENT, DRUG, GENETIC, PROCEDURE, RADIATION, OTHER
+      - name: intervention_name
+        type: string
+        nullable: false
+        comment: Intervention name — composite PK
+      - name: description
+        type: string
+        nullable: true
+        comment: Truncated to 2000 chars
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "clinical_trial_interventions"'
+
+    source:
+      type: http
+      url: "https://clinicaltrials.gov/api/v2/studies?countTotal=true"
+      method: GET
+      parameters:
+        pageSize: "1000"
+      response:
+        format: json
+        pagination:
+          type: CURSOR
+          pageSize: 1000
+          cursorParam: "pageToken"
+          cursorPath: "nextPageToken"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialInterventionsResponseTransformer"
+
+    dimensions:
+      type:
+        - clinical_trial_interventions
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CDC COVID-19 VACCINATIONS — Socrata SODA API, ~ongoing updates
+  # ==========================================================================
+  - name: cdc_covid_vaccinations
+    pattern: "type=cdc_covid_vaccinations"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      COVID-19 vaccination rates and counts by demographic group.
+      Warning: data frozen at 2023-05-12; no recent updates.
+
+    columns:
+      - name: date
+        type: string
+        nullable: true
+        comment: Report date (YYYY-MM-DD)
+      - name: demographic_category
+        type: string
+        nullable: true
+        comment: Age group, race/ethnicity, or overall
+      - name: dose1_administered
+        type: string
+        nullable: true
+      - name: dose1_pct_us
+        type: string
+        nullable: true
+        comment: Percentage of US population
+      - name: series_complete_count
+        type: string
+        nullable: true
+      - name: series_complete_pct
+        type: string
+        nullable: true
+      - name: booster_count
+        type: string
+        nullable: true
+      - name: booster_pct
+        type: string
+        nullable: true
+      - name: bivalent_booster_count
+        type: string
+        nullable: true
+      - name: bivalent_booster_pct
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/km4m-vcsb.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcCovidVaccinationsResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_covid_vaccinations
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CMS HOSPITAL QUALITY METRICS — Socrata SODA API, ~5,426 facilities
+  # ==========================================================================
+  - name: cms_hospital_quality
+    pattern: "type=cms_hospital_quality"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Medicare/Medicaid hospital quality ratings and metrics. One row per facility.
+      Primary key: facility_id.
+
+    columns:
+      - name: facility_id
+        type: string
+        nullable: false
+        comment: CMS facility ID — PK
+      - name: facility_name
+        type: string
+        nullable: true
+      - name: address
+        type: string
+        nullable: true
+      - name: city
+        type: string
+        nullable: true
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.states.state_abbr
+      - name: zip_code
+        type: string
+        nullable: true
+      - name: county
+        type: string
+        nullable: true
+      - name: hospital_type
+        type: string
+        nullable: true
+        comment: Critical Access, Acute Care, Children's, Psychiatric, etc.
+      - name: hospital_ownership
+        type: string
+        nullable: true
+        comment: Government, Private non-profit, Physician-owned, etc.
+      - name: emergency_services
+        type: string
+        nullable: true
+      - name: overall_rating
+        type: string
+        nullable: true
+        comment: 1-5 star rating
+      - name: mort_measures_better
+        type: string
+        nullable: true
+        comment: Count of mortality measures where hospital is better than national
+      - name: mort_measures_worse
+        type: string
+        nullable: true
+        comment: Count of mortality measures where hospital is worse than national
+      - name: safety_measures_better
+        type: string
+        nullable: true
+      - name: safety_measures_worse
+        type: string
+        nullable: true
+      - name: readm_measures_better
+        type: string
+        nullable: true
+        comment: Readmission measures better than national
+      - name: readm_measures_worse
+        type: string
+        nullable: true
+        comment: Readmission measures worse than national
+      - name: patient_exp_rating
+        type: string
+        nullable: true
+        comment: Patient experience group measure count
+      - name: birthing_friendly
+        type: string
+        nullable: true
+        comment: Meets criteria for birthing-friendly designation
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "cms_hospital_quality"'
+
+    source:
+      type: http
+      url: "https://data.cms.gov/provider-data/api/1/datastore/query/xubh-q36u/0"
+      method: GET
+      parameters:
+        "$limit": "1500"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1500
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsHospitalQualityResponseTransformer"
+
+    dimensions:
+      type:
+        - cms_hospital_quality
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # MEDICAID DRUG UTILIZATION — Socrata SODA API, ~2.5M records/year
+  # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
+  # ==========================================================================
+  - name: medicaid_drug_utilization
+    pattern: "type=medicaid_drug_utilization"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Medicaid drug utilization and reimbursement by state, drug (NDC), year/quarter.
+      Composite PK: (state, ndc, year, quarter). Default dataset is 2023 data.
+
+    columns:
+      - name: state
+        type: string
+        nullable: false
+        comment: State abbreviation — composite PK
+      - name: ndc
+        type: string
+        nullable: false
+        comment: National Drug Code — composite PK, FK to fda_ndc_products.product_ndc
+      - name: year
+        type: string
+        nullable: false
+        comment: Calendar year — composite PK
+      - name: quarter
+        type: string
+        nullable: false
+        comment: Q1, Q2, Q3, Q4 — composite PK
+      - name: utilization_type
+        type: string
+        nullable: true
+      - name: product_name
+        type: string
+        nullable: true
+      - name: labeler_code
+        type: string
+        nullable: true
+      - name: units_reimbursed
+        type: string
+        nullable: true
+      - name: number_of_prescriptions
+        type: string
+        nullable: true
+      - name: total_amount_reimbursed
+        type: string
+        nullable: true
+        comment: Total reimbursement in dollars
+      - name: medicaid_amount_reimbursed
+        type: string
+        nullable: true
+        comment: Medicaid portion of reimbursement
+      - name: non_medicaid_amount_reimbursed
+        type: string
+        nullable: true
+        comment: Non-Medicaid portion (other payers)
+      - name: suppression_used
+        type: string
+        nullable: true
+        comment: 'true if data suppressed due to low counts'
+
+    source:
+      type: http
+      url: "https://data.medicaid.gov/api/1/datastore/query/${MEDICAID_DRUG_UTIL_DATASET_ID:d890d3a9-6b00-43fd-8b31-fcba4c8e2909}/0"
+      method: GET
+      parameters:
+        "$limit": "8000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 8000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.MedicaidDrugUtilizationResponseTransformer"
+
+    dimensions:
+      type:
+        - medicaid_drug_utilization
 
     materialize:
       enabled: true
