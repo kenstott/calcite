@@ -391,6 +391,89 @@ class HealthAllTablesSmokeTest {
     }
   }
 
+  // ── Phase 3 tests ───────────────────────────────────────────────────────────
+
+  @Test void cdcMortalityHaveData() throws Exception {
+    LOG.info("=== health: cdc_mortality row count ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "cdc_mortality", 100);
+      warnNullPk(conn, SCHEMA, "cdc_mortality", "cause_name");
+    }
+  }
+
+  @Test void cdcMortalitySampleRow() throws Exception {
+    LOG.info("=== health: cdc_mortality sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "cdc_mortality");
+    }
+  }
+
+  @Test void cdcBrfssHaveData() throws Exception {
+    LOG.info("=== health: cdc_brfss row count ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "cdc_brfss", 100);
+      warnNullPk(conn, SCHEMA, "cdc_brfss", "question");
+    }
+  }
+
+  @Test void cdcBrfssSampleRow() throws Exception {
+    LOG.info("=== health: cdc_brfss sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "cdc_brfss");
+    }
+  }
+
+  @Test void cmsOpenPaymentsHaveData() throws Exception {
+    LOG.info("=== health: cms_open_payments row count ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "cms_open_payments", 100);
+      warnNullPk(conn, SCHEMA, "cms_open_payments", "physician_profile_id");
+    }
+  }
+
+  @Test void cmsOpenPaymentsSampleRow() throws Exception {
+    LOG.info("=== health: cms_open_payments sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "cms_open_payments");
+    }
+  }
+
+  @Test void rxNormDrugsHaveData() throws Exception {
+    LOG.info("=== health: rxnorm_drugs row count ===");
+    try (Connection conn = healthConn()) {
+      assertRowCount(conn, SCHEMA, "rxnorm_drugs", 1000);
+      assertPkNonNull(conn, SCHEMA, "rxnorm_drugs", "rxcui");
+      assertNoDuplicatePk(conn, SCHEMA, "rxnorm_drugs", "rxcui");
+    }
+  }
+
+  @Test void rxNormDrugsSampleRow() throws Exception {
+    LOG.info("=== health: rxnorm_drugs sample row ===");
+    try (Connection conn = healthConn()) {
+      sampleRow(conn, SCHEMA, "rxnorm_drugs");
+    }
+  }
+
+  @Test void rxcuiJoinsRxNormToNdcProducts() throws Exception {
+    LOG.info("=== FK: rxnorm_drugs.rxcui → fda_ndc_products.rxcui ===");
+    try (Connection conn = healthConn()) {
+      scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"rxnorm_drugs\"");
+      scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"fda_ndc_products\"");
+      long total = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"fda_ndc_products\""
+          + " WHERE rxcui IS NOT NULL");
+      long matched = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"fda_ndc_products\" n"
+          + " INNER JOIN \"" + SCHEMA + "\".\"rxnorm_drugs\" r"
+          + " ON n.rxcui = r.rxcui");
+      double matchRate = total > 0 ? (double) matched / total : 0.0;
+      LOG.info("ndc→rxnorm: {}/{} NDC products with rxcui matched to RxNorm ({:.1f}%)",
+          matched, total, matchRate * 100);
+      assertTrue(matchRate >= 0.10,
+          String.format("ndc→rxnorm match rate %.1f%% below 10%% threshold", matchRate * 100));
+    }
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────────
 
   private Connection healthConn() throws Exception {

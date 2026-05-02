@@ -1165,3 +1165,323 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: false
         runCompaction: false
+
+# ============================================================================
+# Health Schema — Phase 3: CDC Mortality, CDC BRFSS, CMS Open Payments, RxNorm
+# ============================================================================
+
+  - name: cdc_mortality
+    comment: >
+      CDC/NCHS mortality statistics. Unions annual (bi63-dtpu) and weekly provisional
+      (muzy-jte6) data. source_type dimension distinguishes the two.
+    columns:
+      - name: year
+        type: VARCHAR
+        nullable: true
+      - name: week_ending_date
+        type: VARCHAR
+        nullable: true
+      - name: state
+        type: VARCHAR
+        nullable: true
+      - name: cause_name
+        type: VARCHAR
+        nullable: true
+      - name: full_cause_name
+        type: VARCHAR
+        nullable: true
+      - name: deaths
+        type: VARCHAR
+        nullable: true
+      - name: age_adjusted_rate
+        type: VARCHAR
+        nullable: true
+      - name: source_type
+        type: VARCHAR
+        nullable: false
+        comment: 'annual or weekly'
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/bi63-dtpu.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      urlRules:
+        - url: "https://data.cdc.gov/resource/muzy-jte6.json"
+          variableMatch:
+            source_type: weekly
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcMortalityResponseTransformer"
+
+    dimensions:
+      source_type:
+        - annual
+        - weekly
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [source_type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  - name: cdc_brfss
+    comment: >
+      CDC Behavioral Risk Factor Surveillance System prevalence data (Socrata dttw-5yxu).
+      State-level health behavior estimates by year, question, and demographic breakout.
+    columns:
+      - name: year
+        type: VARCHAR
+        nullable: true
+      - name: state
+        type: VARCHAR
+        nullable: true
+        comment: 'state abbreviation from locationabbr'
+      - name: question
+        type: VARCHAR
+        nullable: true
+      - name: category
+        type: VARCHAR
+        nullable: true
+      - name: topic
+        type: VARCHAR
+        nullable: true
+      - name: response
+        type: VARCHAR
+        nullable: true
+      - name: pct
+        type: VARCHAR
+        nullable: true
+        comment: 'prevalence percentage (data_value)'
+      - name: sample_size
+        type: VARCHAR
+        nullable: true
+      - name: break_out
+        type: VARCHAR
+        nullable: true
+      - name: break_out_category
+        type: VARCHAR
+        nullable: true
+      - name: type
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/dttw-5yxu.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcBrfssResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_brfss
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  - name: cms_open_payments
+    comment: >
+      CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
+      to physicians. Streams CSV from Socrata. payment_type dimension selects
+      general vs research vs ownership payments.
+    columns:
+      - name: program_year
+        type: VARCHAR
+        nullable: true
+      - name: change_type
+        type: VARCHAR
+        nullable: true
+      - name: physician_profile_id
+        type: VARCHAR
+        nullable: true
+      - name: physician_first_name
+        type: VARCHAR
+        nullable: true
+      - name: physician_last_name
+        type: VARCHAR
+        nullable: true
+      - name: physician_specialty
+        type: VARCHAR
+        nullable: true
+      - name: physician_state
+        type: VARCHAR
+        nullable: true
+      - name: physician_country
+        type: VARCHAR
+        nullable: true
+      - name: paying_entity_name
+        type: VARCHAR
+        nullable: true
+      - name: total_amount
+        type: VARCHAR
+        nullable: true
+      - name: payment_date
+        type: VARCHAR
+        nullable: true
+      - name: number_of_payments
+        type: VARCHAR
+        nullable: true
+      - name: nature_of_payment
+        type: VARCHAR
+        nullable: true
+      - name: product_name
+        type: VARCHAR
+        nullable: true
+      - name: product_category
+        type: VARCHAR
+        nullable: true
+      - name: payment_type
+        type: VARCHAR
+        nullable: false
+        comment: 'general, research, or ownership'
+
+    source:
+      type: http
+      url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_GENERAL_ID:xv45-c34k}.csv"
+      method: GET
+      response:
+        format: json
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
+      urlRules:
+        - url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_RESEARCH_ID:e635-ppb7}.csv"
+          variableMatch:
+            payment_type: research
+        - url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_OWNERSHIP_ID:hp93-kiya}.csv"
+          variableMatch:
+            payment_type: ownership
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsOpenPaymentsResponseTransformer"
+
+    dimensions:
+      payment_type:
+        - general
+        - research
+        - ownership
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [payment_type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  - name: rxnorm_drugs
+    comment: >
+      RxNorm drug concepts from the NLM bulk allconcepts endpoint.
+      Covers ingredient (IN), brand name (BN), and clinical drug (SCD) term types.
+      Single-page call (~37k concepts). rxcui joins to fda_ndc_products.rxcui.
+    columns:
+      - name: rxcui
+        type: VARCHAR
+        nullable: true
+        comment: 'RxNorm concept unique identifier'
+      - name: name
+        type: VARCHAR
+        nullable: true
+      - name: tty
+        type: VARCHAR
+        nullable: true
+        comment: 'term type: IN, BN, SCD'
+      - name: type
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://rxnav.nlm.nih.gov/REST/allconcepts.json?tty=IN+BN+SCD"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.RxNormDrugsResponseTransformer"
+
+    dimensions:
+      type:
+        - rxnorm_drugs
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false

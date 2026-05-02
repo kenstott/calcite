@@ -390,6 +390,10 @@ public class HttpSource implements DataSource {
     private Iterator<Map<String, Object>> currentPageIterator = null;
     private long totalYielded = 0;
 
+    // CSV_STREAM state
+    private BufferedReader csvReader = null;
+    private String csvHeaderLine = null;
+
     PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
         HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath) {
       this.url = url;
@@ -456,6 +460,8 @@ public class HttpSource implements DataSource {
               pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
             }
             break;
+          case CSV_STREAM:
+            return fetchNextCsvBatch();
           default:
             hasMore = false;
             return false;
@@ -519,6 +525,86 @@ public class HttpSource implements DataSource {
       } catch (IOException e) {
         LOGGER.error("Error fetching paginated data: {}", e.getMessage());
         hasMore = false;
+        return false;
+      }
+    }
+
+    private boolean fetchNextCsvBatch() {
+      try {
+        if (csvReader == null) {
+          // Open the streaming connection on first call
+          enforceRateLimit();
+          String fullUrl = buildUrlWithParams(url, baseParams);
+          URL connUrl = java.net.URI.create(fullUrl).toURL();
+          HttpURLConnection conn = (HttpURLConnection) connUrl.openConnection();
+          conn.setRequestMethod("GET");
+          conn.setConnectTimeout(30000);
+          conn.setReadTimeout(300000); // 5 min for large CSV files
+          conn.setRequestProperty("User-Agent",
+              "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
+          for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+            conn.setRequestProperty(e.getKey(), e.getValue());
+          }
+          applyAuth(conn, variables);
+          int status = conn.getResponseCode();
+          if (status >= 400) {
+            throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
+          }
+          InputStream is = conn.getInputStream();
+          csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+          csvHeaderLine = csvReader.readLine();
+          if (csvHeaderLine == null) {
+            hasMore = false;
+            return false;
+          }
+          LOGGER.info("CSV_STREAM opened: {}", fullUrl);
+        }
+
+        int batchSize = pageSize > 0 ? pageSize : 1000;
+        StringBuilder batchSb = new StringBuilder();
+        batchSb.append(csvHeaderLine).append("\n");
+        int linesRead = 0;
+        String line;
+        while (linesRead < batchSize && (line = csvReader.readLine()) != null) {
+          batchSb.append(line).append("\n");
+          linesRead++;
+        }
+
+        if (linesRead == 0) {
+          hasMore = false;
+          csvReader.close();
+          csvReader = null;
+          return false;
+        }
+
+        String csvBatch = batchSb.toString();
+        String jsonResponse = transformResponse(csvBatch, url, baseParams, variables);
+        List<Map<String, Object>> pageData = parseResponse(jsonResponse);
+
+        if (pageData.isEmpty()) {
+          hasMore = false;
+          return false;
+        }
+
+        pageData = normalizeRecords(pageData, variables);
+        currentPageIterator = pageData.iterator();
+
+        if (linesRead < batchSize) {
+          hasMore = false;
+          csvReader.close();
+          csvReader = null;
+        }
+
+        LOGGER.debug("CSV_STREAM batch: {} records (total yielded: {})", pageData.size(), totalYielded);
+        return true;
+
+      } catch (IOException e) {
+        LOGGER.error("Error in CSV_STREAM batch: {}", e.getMessage());
+        hasMore = false;
+        if (csvReader != null) {
+          try { csvReader.close(); } catch (IOException ignored) { }
+          csvReader = null;
+        }
         return false;
       }
     }

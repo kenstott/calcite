@@ -101,7 +101,7 @@ public class HttpSourceConfig {
    * Pagination types.
    */
   public enum PaginationType {
-    NONE, OFFSET, CURSOR, PAGE
+    NONE, OFFSET, CURSOR, PAGE, CSV_STREAM
   }
 
   /**
@@ -202,21 +202,40 @@ public class HttpSourceConfig {
    */
   public String getEffectiveUrl(Map<String, String> variables) {
     if (urlRules != null && !urlRules.isEmpty() && variables != null) {
-      String yearStr = variables.get("year");
-      if (yearStr != null) {
-        try {
-          int year = Integer.parseInt(yearStr);
-          for (UrlRule rule : urlRules) {
-            if (year >= rule.getYearMin() && year <= rule.getYearMax()) {
-              return rule.getUrl();
-            }
-          }
-        } catch (NumberFormatException e) {
-          // Not a numeric year, fall through to default
+      for (UrlRule rule : urlRules) {
+        if (ruleMatches(rule, variables)) {
+          return rule.getUrl();
         }
       }
     }
     return url;
+  }
+
+  private boolean ruleMatches(UrlRule rule, Map<String, String> variables) {
+    // Check variableMatch conditions first
+    Map<String, String> varMatch = rule.getVariableMatch();
+    if (varMatch != null && !varMatch.isEmpty()) {
+      for (Map.Entry<String, String> entry : varMatch.entrySet()) {
+        String actual = variables.get(entry.getKey());
+        if (!entry.getValue().equals(actual)) {
+          return false;
+        }
+      }
+    }
+    // Check year range if set
+    if (rule.getYearMin() != Integer.MIN_VALUE || rule.getYearMax() != Integer.MAX_VALUE) {
+      String yearStr = variables.get("year");
+      if (yearStr == null) {
+        return false;
+      }
+      try {
+        int year = Integer.parseInt(yearStr);
+        return year >= rule.getYearMin() && year <= rule.getYearMax();
+      } catch (NumberFormatException e) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -1942,11 +1961,19 @@ public class HttpSourceConfig {
     private final int yearMin;
     private final int yearMax;
     private final String url;
+    private final Map<String, String> variableMatch;
 
     public UrlRule(int yearMin, int yearMax, String url) {
+      this(yearMin, yearMax, url, null);
+    }
+
+    public UrlRule(int yearMin, int yearMax, String url, Map<String, String> variableMatch) {
       this.yearMin = yearMin;
       this.yearMax = yearMax;
       this.url = url;
+      this.variableMatch = variableMatch != null
+          ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(variableMatch))
+          : Collections.<String, String>emptyMap();
     }
 
     public int getYearMin() {
@@ -1961,17 +1988,39 @@ public class HttpSourceConfig {
       return url;
     }
 
+    public Map<String, String> getVariableMatch() {
+      return variableMatch;
+    }
+
     @SuppressWarnings("unchecked")
     public static UrlRule fromMap(Map<String, Object> map) {
-      Object rangeObj = map.get("yearRange");
       String ruleUrl = (String) map.get("url");
-      if (rangeObj instanceof List && ruleUrl != null) {
+      if (ruleUrl == null) {
+        return null;
+      }
+      Map<String, String> varMatch = null;
+      Object vmObj = map.get("variableMatch");
+      if (vmObj instanceof Map) {
+        Map<?, ?> raw = (Map<?, ?>) vmObj;
+        varMatch = new LinkedHashMap<String, String>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+          if (entry.getKey() != null && entry.getValue() != null) {
+            varMatch.put(entry.getKey().toString(), entry.getValue().toString());
+          }
+        }
+      }
+      Object rangeObj = map.get("yearRange");
+      if (rangeObj instanceof List) {
         List<?> range = (List<?>) rangeObj;
         if (range.size() == 2) {
           int min = ((Number) range.get(0)).intValue();
           int max = ((Number) range.get(1)).intValue();
-          return new UrlRule(min, max, ruleUrl);
+          return new UrlRule(min, max, ruleUrl, varMatch);
         }
+      }
+      // variableMatch-only rule (no yearRange required)
+      if (varMatch != null && !varMatch.isEmpty()) {
+        return new UrlRule(Integer.MIN_VALUE, Integer.MAX_VALUE, ruleUrl, varMatch);
       }
       return null;
     }
