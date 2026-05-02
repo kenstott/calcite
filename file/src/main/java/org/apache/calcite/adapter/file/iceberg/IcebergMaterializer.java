@@ -92,6 +92,23 @@ public class IcebergMaterializer {
       System.getenv("DUCKDB_MEMORY_LIMIT") != null
           ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
+  /** DuckDB spill directory - DUCKDB_TEMP_DIR env var, else TMP/TEMP/java.io.tmpdir + "/duckdb". */
+  private static final String DUCKDB_TEMP_DIR = resolveDuckDbTempDir();
+
+  private static String resolveDuckDbTempDir() {
+    String override = System.getenv("DUCKDB_TEMP_DIR");
+    if (override != null && !override.isEmpty()) {
+      return override;
+    }
+    for (String var : new String[]{"TMP", "TEMP"}) {
+      String val = System.getenv(var);
+      if (val != null && !val.isEmpty()) {
+        return val + "/duckdb";
+      }
+    }
+    return System.getProperty("java.io.tmpdir") + "/duckdb";
+  }
+
   private final String warehousePath;
   private final Map<String, Object> catalogConfig;
   private final StorageProvider storageProvider;
@@ -2657,9 +2674,7 @@ public class IcebergMaterializer {
       stmt.execute("SET preserve_insertion_order=false");
       // Limit memory to avoid OOM on memory-constrained systems
       stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
-      if (warehousePath != null) {
-        stmt.execute("SET temp_directory='" + warehousePath + "/.duckdb_tmp'");
-      }
+      stmt.execute("SET temp_directory='" + DUCKDB_TEMP_DIR + "'");
 
       // Load extensions
       try {
