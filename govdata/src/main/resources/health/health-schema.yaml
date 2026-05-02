@@ -1485,3 +1485,220 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: false
         runCompaction: false
+
+# ============================================================================
+# Views
+# ============================================================================
+
+views:
+
+  # ── Intra-health ───────────────────────────────────────────────────────────
+
+  - name: drug_profile
+    comment: >
+      Complete drug profile: NDC product joined to FDA approval record and RxNorm concept.
+      Left joins preserve NDC products that lack an approval record or rxcui mapping.
+    sql: >
+      SELECT
+        n.product_ndc,
+        n.generic_name,
+        n.brand_name,
+        n.labeler_name,
+        n.dosage_form,
+        n.route,
+        n.product_type,
+        n.application_number,
+        n.rxcui,
+        r.name      AS rxnorm_name,
+        r.tty       AS rxnorm_tty,
+        a.sponsor_name,
+        a.marketing_status,
+        a.latest_submission_date
+      FROM fda_ndc_products n
+      LEFT JOIN fda_drug_approvals a ON n.application_number = a.application_number
+      LEFT JOIN rxnorm_drugs r       ON n.rxcui = r.rxcui
+
+  - name: trial_full
+    comment: >
+      Denormalised clinical trial view: one row per trial with conditions and
+      interventions aggregated into semicolon-delimited strings.
+    sql: >
+      SELECT
+        t.nct_id,
+        t.brief_title,
+        t.overall_status,
+        t.study_type,
+        t.phase,
+        t.enrollment_count,
+        t.lead_sponsor,
+        t.funder_type,
+        t.start_date,
+        t.primary_completion_date,
+        t.completion_date,
+        t.first_submit_date,
+        t.last_update_date,
+        t.brief_summary,
+        STRING_AGG(DISTINCT c.condition_name,  '; ') AS conditions,
+        STRING_AGG(DISTINCT i.intervention_name, '; ') AS interventions
+      FROM clinical_trials t
+      LEFT JOIN clinical_trial_conditions   c ON t.nct_id = c.nct_id
+      LEFT JOIN clinical_trial_interventions i ON t.nct_id = i.nct_id
+      GROUP BY
+        t.nct_id, t.brief_title, t.overall_status, t.study_type, t.phase,
+        t.enrollment_count, t.lead_sponsor, t.funder_type, t.start_date,
+        t.primary_completion_date, t.completion_date, t.first_submit_date,
+        t.last_update_date, t.brief_summary
+
+  - name: medicaid_drug_spend
+    comment: >
+      Medicaid drug utilization enriched with NDC product details and RxNorm name.
+      Enables spend analysis by brand, generic, labeler, and rxcui.
+    sql: >
+      SELECT
+        m.state,
+        m.year,
+        m.quarter,
+        m.ndc,
+        m.utilization_type,
+        m.product_name             AS medicaid_product_name,
+        n.brand_name,
+        n.generic_name,
+        n.labeler_name,
+        n.dosage_form,
+        r.name                     AS rxnorm_name,
+        r.tty                      AS rxnorm_tty,
+        m.units_reimbursed,
+        m.number_of_prescriptions,
+        m.total_amount_reimbursed,
+        m.medicaid_amount_reimbursed,
+        m.non_medicaid_amount_reimbursed,
+        m.suppression_used
+      FROM medicaid_drug_utilization m
+      LEFT JOIN fda_ndc_products n ON m.ndc = n.product_ndc
+      LEFT JOIN rxnorm_drugs r     ON n.rxcui = r.rxcui
+
+  - name: public_health_indicators
+    comment: >
+      State-year summary combining CDC mortality totals with BRFSS risk-factor averages.
+      Rows where BRFSS has data but mortality does not appear with NULL death columns and vice versa.
+    sql: >
+      SELECT
+        COALESCE(m.year,  b.year)  AS year,
+        COALESCE(m.state, b.state) AS state,
+        SUM(TRY_CAST(m.deaths AS BIGINT))       AS total_deaths,
+        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE)) AS avg_age_adjusted_rate,
+        COUNT(DISTINCT m.cause_name)             AS distinct_causes,
+        COUNT(DISTINCT b.question)               AS brfss_question_count,
+        AVG(TRY_CAST(b.pct AS DOUBLE))           AS avg_risk_factor_pct
+      FROM cdc_mortality m
+      FULL OUTER JOIN cdc_brfss b
+        ON m.state = b.state AND m.year = b.year
+      WHERE (m.source_type = 'annual' OR m.source_type IS NULL)
+      GROUP BY COALESCE(m.year, b.year), COALESCE(m.state, b.state)
+
+  - name: hospital_quality_by_state
+    comment: >
+      State-level hospital quality summary: counts, average ratings, and quality tier breakdown.
+    sql: >
+      SELECT
+        state,
+        COUNT(*)                                                       AS hospital_count,
+        COUNT(CASE WHEN overall_rating NOT IN ('Not Available', '')
+                   THEN 1 END)                                         AS rated_count,
+        AVG(TRY_CAST(overall_rating AS DOUBLE))                        AS avg_overall_rating,
+        COUNT(CASE WHEN TRY_CAST(overall_rating AS INTEGER) >= 4
+                   THEN 1 END)                                         AS high_quality_count,
+        COUNT(CASE WHEN hospital_type = 'Acute Care Hospitals'
+                   THEN 1 END)                                         AS acute_care_count,
+        COUNT(CASE WHEN emergency_services = 'Yes' THEN 1 END)         AS with_emergency_services,
+        COUNT(CASE WHEN birthing_friendly = 'Yes'  THEN 1 END)         AS birthing_friendly_count
+      FROM cms_hospital_quality
+      GROUP BY state
+
+  # ── Health × Geo ───────────────────────────────────────────────────────────
+
+  - name: hospital_with_geography
+    comment: >
+      Hospital quality records enriched with county FIPS, county name, and
+      rural-urban classification via the dominant-county ZIP crosswalk.
+    sql: >
+      SELECT
+        h.facility_id,
+        h.facility_name,
+        h.address,
+        h.city,
+        h.state,
+        h.zip_code,
+        h.county,
+        h.hospital_type,
+        h.hospital_ownership,
+        h.emergency_services,
+        h.overall_rating,
+        h.mort_measures_better,
+        h.mort_measures_worse,
+        h.safety_measures_better,
+        h.safety_measures_worse,
+        h.readm_measures_better,
+        h.readm_measures_worse,
+        h.patient_exp_rating,
+        h.birthing_friendly,
+        xw.county_fips,
+        c.county_name  AS geo_county_name,
+        ruc.rucc_code,
+        ruc.rucc_description,
+        ruc.metro_nonmetro
+      FROM cms_hospital_quality h
+      LEFT JOIN (
+        SELECT zip, county_fips,
+               ROW_NUMBER() OVER (PARTITION BY zip ORDER BY res_ratio DESC) AS rn
+        FROM "geo"."zip_county_crosswalk"
+      ) xw ON h.zip_code = xw.zip AND xw.rn = 1
+      LEFT JOIN "geo"."counties"               c   ON xw.county_fips = c.county_fips
+      LEFT JOIN "geo"."rural_urban_continuum"  ruc ON xw.county_fips = ruc.county_fips
+
+  - name: medicaid_spend_by_state_geo
+    comment: >
+      Medicaid spend aggregated by state and year, enriched with state name and FIPS
+      for choropleth-ready geographic analysis.
+    sql: >
+      SELECT
+        s.state_fips,
+        s.state_name,
+        m.state,
+        m.year,
+        SUM(TRY_CAST(m.total_amount_reimbursed    AS DOUBLE)) AS total_spend,
+        SUM(TRY_CAST(m.medicaid_amount_reimbursed AS DOUBLE)) AS medicaid_spend,
+        SUM(TRY_CAST(m.number_of_prescriptions    AS BIGINT)) AS total_prescriptions,
+        COUNT(DISTINCT m.ndc)                                  AS distinct_drugs
+      FROM medicaid_drug_utilization m
+      LEFT JOIN "geo"."states" s ON m.state = s.state_abbr
+      GROUP BY s.state_fips, s.state_name, m.state, m.year
+
+  - name: mortality_brfss_by_state
+    comment: >
+      CDC annual mortality joined to BRFSS risk factors, both enriched with state
+      geography. One row per state/year/cause/question combination — filter on
+      cause_name and question to avoid cross-product explosion.
+    sql: >
+      SELECT
+        gs.state_fips,
+        gs.state_name,
+        m.state,
+        m.year,
+        m.cause_name,
+        m.full_cause_name,
+        m.deaths,
+        m.age_adjusted_rate,
+        b.question,
+        b.category,
+        b.topic,
+        b.response,
+        b.pct          AS risk_factor_pct,
+        b.sample_size,
+        b.break_out,
+        b.break_out_category
+      FROM cdc_mortality m
+      LEFT JOIN cdc_brfss b
+        ON m.state = b.state AND m.year = b.year
+      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
+      WHERE m.source_type = 'annual'

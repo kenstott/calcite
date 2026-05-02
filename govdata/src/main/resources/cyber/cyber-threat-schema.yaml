@@ -1183,3 +1183,41 @@ constraints:
 
   threat_pulses:
     primaryKey: [type, pulse_id, first_seen]
+
+# ============================================================================
+# Views
+# ============================================================================
+
+views:
+
+  - name: active_threat_intel
+    comment: >
+      Unified indicator-of-compromise view across IP, URL, and hash IOC tables.
+      Normalises all three sources to a common schema for cross-indicator analysis.
+    sql: >
+      SELECT
+        'ip'        AS ioc_type,
+        ip_address  AS ioc_value,
+        first_seen,
+        country,
+        malware_family AS threat,
+        as_name        AS context
+      FROM ioc_ips
+      UNION ALL
+      SELECT
+        'url'   AS ioc_type,
+        url     AS ioc_value,
+        first_seen,
+        NULL    AS country,
+        threat,
+        tags    AS context
+      FROM ioc_urls
+      UNION ALL
+      SELECT
+        'hash'     AS ioc_type,
+        sha256     AS ioc_value,
+        first_seen,
+        NULL       AS country,
+        signature  AS threat,
+        file_type  AS context
+      FROM ioc_hashes

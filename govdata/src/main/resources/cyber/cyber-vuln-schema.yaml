@@ -699,6 +699,35 @@ views:
       FROM kev_cwes kc
       LEFT JOIN cwe_catalog c ON kc.cwe_id = c.cwe_id
 
+  - name: vuln_threat_chain
+    comment: >
+      Cross-domain vulnerability chain: CVE → KEV status → CWE → OWASP Top 10 category.
+      Bridges cyber_vuln and cyber_threat schemas. Filter on cve_id or owasp_rank
+      to navigate the chain. CVE→ATT&CK linkage requires the entity resolution layer
+      (no structural mapping exists in the current data).
+    sql: >
+      SELECT
+        v.cve_id,
+        v.published,
+        v.cvss_v31_score,
+        v.cvss_v31_severity,
+        CASE WHEN k.cve_id IS NOT NULL THEN 'yes' ELSE 'no' END AS is_known_exploited,
+        k.date_added  AS kev_date_added,
+        k.due_date    AS kev_due_date,
+        k.known_ransomware_use,
+        k.vendor_project,
+        vc.cwe_id,
+        cw.name       AS cwe_name,
+        cw.abstraction AS cwe_abstraction,
+        o.rank        AS owasp_rank,
+        o.name        AS owasp_category
+      FROM vulnerabilities v
+      LEFT JOIN kev_catalog       k  ON v.cve_id  = k.cve_id
+      LEFT JOIN vulnerability_cwes vc ON v.cve_id  = vc.cve_id
+      LEFT JOIN cwe_catalog       cw ON vc.cwe_id  = cw.cwe_id
+      LEFT JOIN "cyber_threat"."owasp_top10" o
+        ON ('|' || o.cwe_ids || '|') LIKE ('%|' || vc.cwe_id || '|%')
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
