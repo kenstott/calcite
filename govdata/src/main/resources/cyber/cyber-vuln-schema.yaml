@@ -728,6 +728,33 @@ views:
       LEFT JOIN "cyber_threat"."owasp_top10" o
         ON ('|' || o.cwe_ids || '|') LIKE ('%|' || vc.cwe_id || '|%')
 
+  - name: kev_cross_threat
+    comment: >
+      Enriches the CISA Known Exploited Vulnerabilities catalog with NVD CVSS scores
+      and CWE taxonomy names. Aggregates multiple CWE assignments per CVE into
+      comma-delimited strings. One row per CVE in KEV.
+    sql: >
+      SELECT
+        k.cve_id,
+        k.vendor_project,
+        k.product,
+        k.vulnerability_name,
+        k.date_added,
+        k.due_date,
+        k.known_ransomware_use,
+        v.cvss_v31_score,
+        v.cvss_v31_severity,
+        v.cvss_v2_score,
+        STRING_AGG(DISTINCT vc.cwe_id, ', ') AS cwe_ids,
+        STRING_AGG(DISTINCT cw.name,   '; ') AS cwe_names
+      FROM kev_catalog k
+      LEFT JOIN vulnerabilities  v  ON k.cve_id  = v.cve_id
+      LEFT JOIN vulnerability_cwes vc ON k.cve_id = vc.cve_id
+      LEFT JOIN cwe_catalog      cw ON vc.cwe_id  = cw.cwe_id
+      GROUP BY k.cve_id, k.vendor_project, k.product, k.vulnerability_name,
+               k.date_added, k.due_date, k.known_ransomware_use,
+               v.cvss_v31_score, v.cvss_v31_severity, v.cvss_v2_score
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -760,6 +787,34 @@ constraints:
         targetTable: vulnerabilities
         targetColumns: [cve_id]
         comment: Cross-refs link back to NVD canonical CVE records
+
+  vulnerability_cwes:
+    primaryKey: [type, cve_id, cwe_id]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: vulnerabilities
+        targetColumns: [cve_id]
+        comment: Links CWE classification back to NVD canonical CVE record
+      - columns: [cwe_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: cwe_catalog
+        targetColumns: [cwe_id]
+        comment: Links CVE-CWE pair to CWE taxonomy entry
+
+  kev_cwes:
+    primaryKey: [type, cve_id, cwe_id]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: kev_catalog
+        targetColumns: [cve_id]
+        comment: Links KEV CWE entry back to CISA KEV catalog record
+      - columns: [cwe_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: cwe_catalog
+        targetColumns: [cwe_id]
+        comment: Links KEV-CWE pair to CWE taxonomy entry
 
   advisories:
     primaryKey: [type, advisory_id]

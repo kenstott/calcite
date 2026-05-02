@@ -1129,6 +1129,9 @@ public class IcebergMaterializer {
     long processedRows = 0;
     long totalStartTime = System.currentTimeMillis();
     String accessionCol = config.getAccessionColumn();
+    // Track accessions committed in this run to prevent cross-chunk duplicates when
+    // staging files have been regenerated and the same accession spans multiple files.
+    Set<String> committedInThisRun = new HashSet<String>();
 
     for (int i = 0; i < totalFiles; i += fileChunkSize) {
       chunkNum++;
@@ -1149,10 +1152,33 @@ public class IcebergMaterializer {
         continue;
       }
 
+      // Remove rows for accessions already committed in an earlier chunk of this run.
+      if (!committedInThisRun.isEmpty() && accessionCol != null) {
+        java.util.Iterator<Map<String, Object>> it = rows.iterator();
+        int before = rows.size();
+        while (it.hasNext()) {
+          Object val = it.next().get(accessionCol);
+          if (val != null && committedInThisRun.contains(val.toString())) {
+            it.remove();
+          }
+        }
+        int removed = before - rows.size();
+        if (removed > 0) {
+          LOGGER.info("File chunk {}/{}: removed {} duplicate rows (accessions already committed this run)",
+              chunkNum, totalChunks, removed);
+        }
+        if (rows.isEmpty()) {
+          LOGGER.debug("File chunk {}: all rows duplicates, skipping", chunkNum);
+          continue;
+        }
+      }
+
       for (Map<String, Object> row : rows) {
         Object val = row.get(accessionCol);
         if (val != null) {
-          newAccessions.add(val.toString());
+          String acc = val.toString();
+          newAccessions.add(acc);
+          committedInThisRun.add(acc);
         }
       }
 
@@ -1305,6 +1331,14 @@ public class IcebergMaterializer {
 
     if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
       sql.append(" WHERE ").append(config.getRowFilter());
+    }
+
+    // Deduplicate by accession within this chunk — staging files may contain duplicate
+    // copies of the same filing if the source fetch was retried or regenerated.
+    String accessionCol = config.getAccessionColumn();
+    if (accessionCol != null && !accessionCol.isEmpty()) {
+      sql.append(" QUALIFY ROW_NUMBER() OVER (PARTITION BY ")
+          .append(accessionCol).append(") = 1");
     }
 
     return sql.toString();
@@ -2267,60 +2301,37 @@ public class IcebergMaterializer {
     String accessionCol = config.getAccessionColumn();
     String yearValue = batch.get("year");
 
-    // Step 1: Get accessions from tracker (cheap, local DuckDB)
-    Set<String> trackedAccessions = getTrackedAccessions(config.getTargetTableId(), yearValue);
-    if (!trackedAccessions.isEmpty()) {
-      // Stale-tracker guard: if tracker has entries but Iceberg is genuinely empty (not a scan
-      // failure or partial partition), the tracker was populated from a pre-Iceberg run.
-      // Only invalidate when the Iceberg scan succeeds AND returns empty — never on exception.
-      if (table != null) {
-        Set<String> icebergAccessions;
-        boolean scanSucceeded;
-        try {
-          icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
-          scanSucceeded = true;
-        } catch (Exception e) {
-          LOGGER.warn("Could not scan Iceberg for stale-tracker check on {}/year={}: {} — "
-              + "keeping {} tracker entries as-is to avoid re-processing committed data",
-              config.getTargetTableId(), yearValue, e.getMessage(), trackedAccessions.size());
-          excludeAccessions.addAll(trackedAccessions);
-          return excludeAccessions;
+    // Iceberg is the source of truth. Scan it directly whenever the table is reachable.
+    // The tracker is a fallback for when Iceberg is unavailable — never an authority.
+    if (table != null) {
+      try {
+        Set<String> icebergAccessions =
+            getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
+        // Sync tracker from Iceberg so retries use the cheap path without a second S3 scan.
+        for (String accession : icebergAccessions) {
+          Map<String, String> accessionKey = new LinkedHashMap<String, String>();
+          if (yearValue != null) {
+            accessionKey.put("year", yearValue);
+          }
+          accessionKey.put(accessionCol, accession);
+          incrementalTracker.markProcessed(config.getTargetTableId(),
+              config.getSourceTableName(), accessionKey, config.getTargetTableId());
         }
-        if (scanSucceeded && icebergAccessions.isEmpty()) {
-          LOGGER.warn("Stale tracker detected for {}/year={}: {} entries but Iceberg is empty — "
-              + "invalidating tracker to force re-materialization",
-              config.getTargetTableId(), yearValue, trackedAccessions.size());
-          incrementalTracker.invalidateAll(config.getTargetTableId());
-          return excludeAccessions; // empty — allow full re-processing
-        }
-      }
-      excludeAccessions.addAll(trackedAccessions);
-      LOGGER.info("Found {} tracked accessions for {}/year={}, skipping S3 scan",
-          trackedAccessions.size(), config.getTargetTableId(), yearValue);
-    }
-
-    // Step 2: Self-healing - only scan Iceberg/S3 when tracker has no data for this partition
-    if (trackedAccessions.isEmpty() && table != null) {
-      Set<String> icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
-
-      // Add to tracker so we never scan S3 again for these accessions
-      for (String accession : icebergAccessions) {
-        Map<String, String> accessionKey = new LinkedHashMap<String, String>();
-        if (yearValue != null) {
-          accessionKey.put("year", yearValue);
-        }
-        accessionKey.put(accessionCol, accession);
-        incrementalTracker.markProcessed(config.getTargetTableId(),
-            config.getSourceTableName(), accessionKey, config.getTargetTableId());
-      }
-      excludeAccessions.addAll(icebergAccessions);
-
-      if (!icebergAccessions.isEmpty()) {
-        LOGGER.info("Self-healing: found {} accessions in Iceberg for {}/year={}, added to tracker",
+        LOGGER.info("Iceberg scan: {} committed accessions for {}/year={}",
             icebergAccessions.size(), config.getTargetTableId(), yearValue);
+        return icebergAccessions;
+      } catch (Exception e) {
+        // Iceberg unreachable — fall back to tracker to avoid re-processing known-committed data.
+        Set<String> trackedAccessions =
+            getTrackedAccessions(config.getTargetTableId(), yearValue);
+        LOGGER.warn("Iceberg scan failed for {}/year={}: {} — using {} tracker entries as fallback",
+            config.getTargetTableId(), yearValue, e.getMessage(), trackedAccessions.size());
+        return trackedAccessions;
       }
     }
 
+    // No table object available — tracker only.
+    excludeAccessions.addAll(getTrackedAccessions(config.getTargetTableId(), yearValue));
     return excludeAccessions;
   }
 

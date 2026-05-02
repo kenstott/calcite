@@ -4675,3 +4675,31 @@ tables:
 #   - Rate limit documentation (BLS: 500 daily, 1.1s between requests)
 #   - Bulk download file size annotations (80MB annual, 323MB quarterly)
 # ============================================================================
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: state_economic_snapshot
+    comment: >
+      State-level economic snapshot joining BLS state wages and JOLTS state labor
+      market data, enriched with geographic identifiers. One row per state+year+
+      wage_series+jolts_series — filter on series codes to select specific indicators.
+      Use state_fips to join with geo.states, census, or health schemas.
+    sql: >
+      SELECT
+        w.state_fips,
+        gs.state_name,
+        gs.state_abbr,
+        w.year,
+        w.series          AS wage_series,
+        TRY_CAST(w.value AS DOUBLE) AS wage_value,
+        w.periodName      AS period,
+        j.series          AS jolts_series,
+        TRY_CAST(j.value AS DOUBLE) AS jolts_value
+      FROM state_wages w
+      LEFT JOIN jolts_state j
+        ON w.state_fips = j.state_fips AND w.year = j.year
+      LEFT JOIN "geo"."states" gs ON w.state_fips = gs.state_fips

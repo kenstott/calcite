@@ -1920,3 +1920,38 @@ constraints:
       - estimate_domain_2
       - time_series_start_year
 
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: crime_enforcement_equity
+    comment: >
+      Correlates annual FBI CDE offense rates with police employment by state and year.
+      Monthly offense rows are averaged to produce annual rates. One row per
+      state+year+offense_code — enables enforcement resource allocation analysis.
+    sql: >
+      SELECT
+        o.state_abbr,
+        gs.state_name,
+        gs.state_fips,
+        o.year,
+        o.offense_code,
+        AVG(o.offense_rate)                                  AS avg_monthly_offense_rate,
+        AVG(o.clearance_rate)                                AS avg_monthly_clearance_rate,
+        pe.officers_per_1000,
+        pe.male_officers + pe.female_officers                AS total_officers,
+        CASE
+          WHEN pe.officers_per_1000 IS NOT NULL
+            AND pe.officers_per_1000 > 0
+          THEN AVG(o.offense_rate) / pe.officers_per_1000
+          ELSE NULL
+        END                                                  AS offense_rate_per_officer
+      FROM cde_offenses o
+      LEFT JOIN cde_police_employment pe
+        ON o.state_abbr = pe.state_abbr AND o.year = pe.year
+      LEFT JOIN "geo"."states" gs ON o.state_abbr = gs.state_abbr
+      GROUP BY o.state_abbr, gs.state_name, gs.state_fips, o.year, o.offense_code,
+               pe.officers_per_1000, pe.male_officers, pe.female_officers
+

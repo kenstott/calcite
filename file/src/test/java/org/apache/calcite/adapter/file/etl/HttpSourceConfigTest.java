@@ -227,11 +227,12 @@ class HttpSourceConfigTest {
 
   @Test void testResponseFormatEnum() {
     HttpSourceConfig.ResponseFormat[] values = HttpSourceConfig.ResponseFormat.values();
-    assertEquals(4, values.length);
+    assertEquals(5, values.length);
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("JSON"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("CSV"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("XML"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("TSV"));
+    assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("TEXT"));
   }
 
   @Test void testAuthTypeEnum() {
@@ -246,7 +247,8 @@ class HttpSourceConfigTest {
 
   @Test void testPaginationTypeEnum() {
     HttpSourceConfig.PaginationType[] values = HttpSourceConfig.PaginationType.values();
-    assertEquals(4, values.length);
+    assertEquals(5, values.length);
+    assertNotNull(HttpSourceConfig.PaginationType.valueOf("CSV_STREAM"));
   }
 
   @Test void testBodyFormatEnum() {

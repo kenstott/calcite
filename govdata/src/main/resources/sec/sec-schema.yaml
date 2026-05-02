@@ -595,6 +595,7 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       rowBatchSize: 50000
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
@@ -1576,6 +1577,11 @@ constraints:
       - columns: [cik]
         targetTable: filing_metadata
         targetColumns: [cik]
+      - columns: [ticker]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: figi_instruments
+        targetColumns: [ticker]
+        comment: Links stock price series to OpenFIGI instrument identifier
 
   vectorized_chunks:
     primaryKey: [cik, accession_number, chunk_id]
@@ -1632,3 +1638,31 @@ views:
       JOIN filing_metadata fm ON it.cik = fm.cik
       WHERE it.transaction_code IN ('P', 'S')
       GROUP BY fm.company_name, fm.ticker, it.transaction_code
+
+  - name: company_financial_profile
+    comment: >
+      Denormalised company identity: SEC filing metadata joined to GLEIF CIK-LEI
+      bridge and GLEIF entity registry. One row per company — enables CIK-to-LEI
+      resolution and cross-border corporate entity analysis.
+    sql: >
+      SELECT
+        fm.cik,
+        fm.company_name,
+        fm.ticker,
+        fm.sic_code,
+        fm.state_of_incorporation,
+        fm.irs_number,
+        gcm.lei,
+        ge.legal_name,
+        ge.jurisdiction,
+        ge.headquarters_country,
+        ge.headquarters_city,
+        COUNT(DISTINCT fm.accession_number) AS total_filings,
+        MAX(fm.filing_date)                 AS latest_filing_date
+      FROM filing_metadata fm
+      LEFT JOIN "ref"."gleif_cik_mapping" gcm ON fm.cik = gcm.cik
+      LEFT JOIN "ref"."gleif_entities"    ge  ON gcm.lei = ge.lei
+      GROUP BY fm.cik, fm.company_name, fm.ticker, fm.sic_code,
+               fm.state_of_incorporation, fm.irs_number,
+               gcm.lei, ge.legal_name, ge.jurisdiction,
+               ge.headquarters_country, ge.headquarters_city

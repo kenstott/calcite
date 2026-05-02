@@ -1330,6 +1330,7 @@ partitionedTables:
         sinceYear: "${HEALTH_BRFSS_SINCE_YEAR:}"
         filterParam: "$where"
         yearField: "year"
+        quoteValues: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcBrfssResponseTransformer"
@@ -1721,3 +1722,237 @@ views:
         ON m.state = b.state AND m.year = b.year
       LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
       WHERE m.source_type = 'annual'
+
+  - name: drug_manufacturer_span
+    comment: >
+      Connects drug manufacturers across FDA approval, NDC catalog, and Medicaid spend.
+      One row per labeler+application. Enables manufacturer market-size and reach analysis.
+    sql: >
+      SELECT
+        n.labeler_name,
+        n.application_number,
+        a.sponsor_name,
+        COUNT(DISTINCT n.product_ndc)                              AS distinct_products,
+        COUNT(DISTINCT m.state)                                    AS states_dispensed,
+        SUM(TRY_CAST(m.total_amount_reimbursed AS DOUBLE))         AS total_medicaid_spend,
+        SUM(TRY_CAST(m.number_of_prescriptions AS BIGINT))         AS total_prescriptions
+      FROM fda_ndc_products n
+      LEFT JOIN fda_drug_approvals        a ON n.application_number = a.application_number
+      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc = m.ndc
+      GROUP BY n.labeler_name, n.application_number, a.sponsor_name
+
+  - name: rxnorm_medicaid_bridge
+    comment: >
+      Connects RxNorm clinical concepts to Medicaid spending via NDC codes.
+      One row per rxcui — enables clinical terminology to spending analysis.
+    sql: >
+      SELECT
+        r.rxcui,
+        r.name                                                     AS rxnorm_name,
+        r.tty                                                      AS rxnorm_tty,
+        COUNT(DISTINCT n.product_ndc)                              AS distinct_ndcs,
+        COUNT(DISTINCT m.state)                                    AS states_with_spending,
+        SUM(TRY_CAST(m.total_amount_reimbursed AS DOUBLE))         AS total_medicaid_spend,
+        SUM(TRY_CAST(m.number_of_prescriptions AS BIGINT))         AS total_prescriptions
+      FROM rxnorm_drugs r
+      LEFT JOIN fda_ndc_products          n ON r.rxcui = n.rxcui
+      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc = m.ndc
+      GROUP BY r.rxcui, r.name, r.tty
+
+  - name: hospital_county_summary
+    comment: >
+      Aggregates CMS hospital quality metrics to county level via ZIP-county crosswalk.
+      One row per county — enables county-level healthcare access and quality analysis.
+    sql: >
+      SELECT
+        c.county_fips,
+        c.county_name,
+        c.state_fips,
+        gs.state_abbr,
+        COUNT(h.facility_id)                                                       AS facility_count,
+        AVG(TRY_CAST(h.overall_rating AS DOUBLE))                                  AS avg_rating,
+        COUNT(CASE WHEN TRY_CAST(h.overall_rating AS INTEGER) >= 4 THEN 1 END)     AS high_quality_count,
+        COUNT(CASE WHEN h.emergency_services = 'Yes' THEN 1 END)                   AS with_emergency,
+        AVG(TRY_CAST(h.mort_measures_better AS DOUBLE))                            AS avg_mortality_better,
+        AVG(TRY_CAST(h.readm_measures_better AS DOUBLE))                           AS avg_readmission_better
+      FROM cms_hospital_quality h
+      LEFT JOIN "geo"."zip_county_crosswalk" zc ON h.zip_code = zc.zip
+      LEFT JOIN "geo"."counties"              c  ON zc.county_fips = c.county_fips
+      LEFT JOIN "geo"."states"               gs  ON c.state_fips = gs.state_fips
+      GROUP BY c.county_fips, c.county_name, c.state_fips, gs.state_abbr
+
+  - name: drug_spend_trends
+    comment: >
+      Annual Medicaid drug spend aggregated from quarterly utilization data, enriched
+      with NDC product details. One row per state+year+ndc — enables year-over-year
+      spend trend analysis by brand, generic, and labeler.
+    sql: >
+      SELECT
+        m.state,
+        m.year,
+        m.ndc,
+        n.brand_name,
+        n.generic_name,
+        n.labeler_name,
+        SUM(TRY_CAST(m.total_amount_reimbursed    AS DOUBLE)) AS annual_spend,
+        SUM(TRY_CAST(m.medicaid_amount_reimbursed AS DOUBLE)) AS medicaid_spend,
+        SUM(TRY_CAST(m.number_of_prescriptions    AS BIGINT)) AS annual_prescriptions,
+        COUNT(DISTINCT m.quarter)                              AS quarters_reported
+      FROM medicaid_drug_utilization m
+      LEFT JOIN fda_ndc_products n ON m.ndc = n.product_ndc
+      GROUP BY m.state, m.year, m.ndc, n.brand_name, n.generic_name, n.labeler_name
+
+  - name: health_social_equity
+    comment: >
+      State-year health equity view: CDC mortality layered with BRFSS behavioral risk
+      factors, enriched with geographic identifiers. One row per state+year — filter
+      on cause_name to focus on a specific cause of death.
+    sql: >
+      SELECT
+        m.state                                          AS state_abbr,
+        m.year,
+        gs.state_name,
+        gs.state_fips,
+        SUM(TRY_CAST(m.deaths AS BIGINT))                AS total_deaths,
+        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE))     AS avg_mortality_rate,
+        COUNT(DISTINCT b.question)                       AS brfss_questions_tracked,
+        AVG(TRY_CAST(b.pct AS DOUBLE))                   AS avg_risk_factor_pct
+      FROM cdc_mortality m
+      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
+      LEFT JOIN cdc_brfss b       ON m.state = b.state AND m.year = b.year
+      WHERE m.source_type = 'annual'
+      GROUP BY m.state, m.year, gs.state_name, gs.state_fips
+
+  - name: weather_health_correlation
+    comment: >
+      Links annual CDC mortality to NOAA CDO monthly climate summaries by state and year.
+      Temperature and precipitation are pivoted from long to wide via conditional aggregation.
+      One row per state+year — enables climate-health correlation analysis.
+    sql: >
+      SELECT
+        m.state                                                                          AS state_abbr,
+        m.year,
+        gs.state_name,
+        gs.state_fips,
+        SUM(TRY_CAST(m.deaths AS BIGINT))                                                AS total_deaths,
+        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE))                                     AS avg_mortality_rate,
+        AVG(CASE WHEN w.datatype = 'TAVG' THEN TRY_CAST(w.value AS DOUBLE) END)          AS avg_temp_c,
+        MIN(CASE WHEN w.datatype = 'TMIN' THEN TRY_CAST(w.value AS DOUBLE) END)          AS min_monthly_temp_c,
+        MAX(CASE WHEN w.datatype = 'TMAX' THEN TRY_CAST(w.value AS DOUBLE) END)          AS max_monthly_temp_c,
+        SUM(CASE WHEN w.datatype = 'PRCP' THEN TRY_CAST(w.value AS DOUBLE) END)          AS total_precip_mm
+      FROM cdc_mortality m
+      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
+      LEFT JOIN "weather"."cdo_monthly_summaries" w
+        ON gs.state_fips = w.state_fips AND m.year = w.year
+      WHERE m.source_type = 'annual'
+      GROUP BY m.state, m.year, gs.state_name, gs.state_fips
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  fda_ndc_products:
+    primaryKey: [type, product_ndc]
+    foreignKeys:
+      - columns: [application_number]
+        targetTable: fda_drug_approvals
+        targetColumns: [application_number]
+        comment: Links NDC product to its FDA approval application
+      - columns: [rxcui]
+        targetTable: rxnorm_drugs
+        targetColumns: [rxcui]
+        comment: Links NDC product to RxNorm concept for clinical terminology
+
+  fda_drug_approvals:
+    primaryKey: [type, application_number]
+
+  fda_drug_recalls:
+    primaryKey: [type, event_id]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links recall voluntary firm state to geographic data
+
+  fda_adverse_events:
+    primaryKey: [type, safety_report_id]
+
+  fda_device_recalls:
+    primaryKey: [type, cfres_id]
+
+  clinical_trials:
+    primaryKey: [type, nct_id]
+
+  clinical_trial_conditions:
+    primaryKey: [type, nct_id, condition_name]
+    foreignKeys:
+      - columns: [nct_id]
+        targetTable: clinical_trials
+        targetColumns: [nct_id]
+        comment: Links condition row to parent trial record
+
+  clinical_trial_interventions:
+    primaryKey: [type, nct_id, intervention_name]
+    foreignKeys:
+      - columns: [nct_id]
+        targetTable: clinical_trials
+        targetColumns: [nct_id]
+        comment: Links intervention row to parent trial record
+
+  cdc_covid_vaccinations:
+    primaryKey: [type, date, demographic_category]
+
+  cms_hospital_quality:
+    primaryKey: [type, facility_id]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links hospital state to geographic data for regional quality analysis
+
+  cdc_mortality:
+    primaryKey: [source_type, year, state, cause_name]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links mortality data to geographic state for spatial health analysis
+
+  cdc_brfss:
+    primaryKey: [type, year, state, question, break_out_category, response]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links BRFSS survey data to geographic state for behavioral health mapping
+
+  medicaid_drug_utilization:
+    primaryKey: [type, state, ndc, year, quarter]
+    foreignKeys:
+      - columns: [ndc]
+        targetTable: fda_ndc_products
+        targetColumns: [product_ndc]
+        comment: Links Medicaid drug spend to FDA NDC product catalog for drug detail enrichment
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links state drug utilization to geographic data for Medicaid spending maps
+
+  cms_open_payments:
+    primaryKey: [payment_type, program_year, physician_profile_id, paying_entity_name, nature_of_payment]
+    foreignKeys:
+      - columns: [physician_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links physician practice state to geographic data
+
+  rxnorm_drugs:
+    primaryKey: [type, rxcui]

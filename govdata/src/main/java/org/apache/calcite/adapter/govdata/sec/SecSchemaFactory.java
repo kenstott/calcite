@@ -3584,7 +3584,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Build list of ticker-CIK pairs
-      List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
+      List<StooqDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
       Set<String> processedTickers = new HashSet<>();
 
       for (String cik : ciks) {
@@ -3604,7 +3604,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // This was actually a ticker, use it
             String ticker = cik.toUpperCase();
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new StooqDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           } else {
@@ -3614,15 +3614,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Add all tickers for this CIK
           for (String ticker : tickers) {
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new StooqDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           }
         }
       }
 
-      LOGGER.debug("DEBUG downloadStockPrices: govdataParquetDir={}, basePath={}", govdataParquetDir, basePath);
-      LOGGER.info("STOCK DOWNLOAD STARTING NOW WITH basePath={}", basePath);
+      LOGGER.info("Starting stock price download with basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
         // Determine which stock price source to use
@@ -3654,21 +3653,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           }
           downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
 
-        } else if ("alphavantage".equals(stockPriceSource)) {
-          // Use Alpha Vantage downloader (requires API key)
-          String apiKey = getEnvOrOperand("ALPHA_VANTAGE_KEY", "alphaVantageKey");
-
-          if (apiKey == null || apiKey.isEmpty()) {
-            LOGGER.warn("ALPHA_VANTAGE_KEY not found in environment, skipping stock price download");
-            return;
-          }
-
-          LOGGER.info("Downloading stock prices for {} tickers using Alpha Vantage", tickerCikPairs.size());
-          AlphaVantageDownloader downloader = new AlphaVantageDownloader(apiKey, storageProvider);
-          downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
-
         } else {
-          LOGGER.warn("Unknown stock price source: {}. Supported values: stooq, alphavantage", stockPriceSource);
+          LOGGER.warn("Unknown stock price source: {}. Supported value: stooq", stockPriceSource);
         }
       } else {
         LOGGER.info("No tickers found for stock price download");

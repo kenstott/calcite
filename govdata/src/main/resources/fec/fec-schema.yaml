@@ -2217,3 +2217,36 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns: [state_abbreviation]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: candidate_district_profile
+    comment: >
+      Enriches FEC candidates with geographic state and congressional district data.
+      House candidates (office=H) are matched to their TIGER district boundary via
+      state_fips + zero-padded district number. Senate/presidential rows get state
+      geography only (no CD match).
+    sql: >
+      SELECT
+        c.candidate_id,
+        c.candidate_name,
+        c.office,
+        c.state,
+        c.district,
+        c.party,
+        c.incumbent_challenger,
+        c.year,
+        gs.state_name,
+        gs.state_fips,
+        cd.cd_fips,
+        cd.cd_name
+      FROM candidates c
+      LEFT JOIN "geo"."states" gs ON c.state = gs.state_abbr
+      LEFT JOIN "geo"."congressional_districts" cd
+        ON c.office = 'H'
+        AND gs.state_fips = cd.state_fips
+        AND cd.cd_fips = CONCAT(gs.state_fips, LPAD(c.district, 2, '0'))

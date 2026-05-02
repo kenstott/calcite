@@ -1148,9 +1148,18 @@ public class HttpSourceConfig {
     private final String dateField;
     private final String yearField;
     private final String quarterField;
+    /** When false, field values are compared without single-quote wrapping (numeric Socrata fields). */
+    private final boolean quoteValues;
 
     public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
         String filterParam, String dateField, String yearField, String quarterField) {
+      this(sinceDate, sinceYear, sinceQuarter, filterParam, dateField, yearField, quarterField,
+          true);
+    }
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String filterParam, String dateField, String yearField, String quarterField,
+        boolean quoteValues) {
       this.sinceDate = sinceDate;
       this.sinceYear = sinceYear;
       this.sinceQuarter = sinceQuarter;
@@ -1158,6 +1167,7 @@ public class HttpSourceConfig {
       this.dateField = dateField;
       this.yearField = yearField;
       this.quarterField = quarterField;
+      this.quoteValues = quoteValues;
     }
 
     public String getSinceDate() { return sinceDate; }
@@ -1167,10 +1177,18 @@ public class HttpSourceConfig {
     public String getDateField() { return dateField; }
     public String getYearField() { return yearField; }
     public String getQuarterField() { return quarterField; }
+    public boolean isQuoteValues() { return quoteValues; }
+
+    private String q(String value) {
+      return quoteValues ? "'" + value + "'" : value;
+    }
 
     /**
      * Builds the filter value to inject into {@code filterParam}.
      * Returns {@code null} when no incremental bound is active (all resolved values empty).
+     *
+     * <p>When {@code quoteValues} is {@code false}, field values are compared without
+     * single-quote wrapping — required for numeric Socrata field types (e.g. {@code year}).
      *
      * @param resolvedDate    resolved sinceDate value (may be null/empty)
      * @param resolvedYear    resolved sinceYear value (may be null/empty)
@@ -1184,15 +1202,15 @@ public class HttpSourceConfig {
       boolean hasQuarter = resolvedQuarter != null && !resolvedQuarter.isEmpty();
 
       if (dateField != null && hasDate) {
-        return dateField + " >= '" + resolvedDate + "'";
+        return dateField + " >= " + q(resolvedDate);
       }
       if (yearField != null && hasYear) {
         if (quarterField != null && hasQuarter) {
-          return "(" + yearField + " > '" + resolvedYear + "') OR ("
-              + yearField + " = '" + resolvedYear + "' AND "
-              + quarterField + " >= '" + resolvedQuarter + "')";
+          return "(" + yearField + " > " + q(resolvedYear) + ") OR ("
+              + yearField + " = " + q(resolvedYear) + " AND "
+              + quarterField + " >= " + q(resolvedQuarter) + ")";
         }
-        return yearField + " >= '" + resolvedYear + "'";
+        return yearField + " >= " + q(resolvedYear);
       }
       // Direct-param style: pass resolved date straight to the filterParam
       if (hasDate) {
@@ -1205,6 +1223,9 @@ public class HttpSourceConfig {
       if (map == null) {
         return null;
       }
+      Object quoteObj = map.get("quoteValues");
+      boolean quoteValues = quoteObj == null || Boolean.TRUE.equals(quoteObj)
+          || "true".equalsIgnoreCase(String.valueOf(quoteObj));
       return new IncrementalConfig(
           (String) map.get("sinceDate"),
           (String) map.get("sinceYear"),
@@ -1212,7 +1233,8 @@ public class HttpSourceConfig {
           (String) map.get("filterParam"),
           (String) map.get("dateField"),
           (String) map.get("yearField"),
-          (String) map.get("quarterField"));
+          (String) map.get("quarterField"),
+          quoteValues);
     }
   }
 

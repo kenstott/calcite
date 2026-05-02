@@ -156,6 +156,55 @@ class IncrementalConfigTest {
     assertNull(cfg.buildFilterValue(null, "", "3"));
   }
 
+  // ── buildFilterValue: unquoted numeric style ──────────────────────────────
+
+  @Test void buildFilterValueNumericYearUnquoted() {
+    HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
+        null, null, null, "$where", null, "year", null, false);
+
+    String filter = cfg.buildFilterValue(null, "2023", null);
+    assertEquals("year >= 2023", filter);
+  }
+
+  @Test void buildFilterValueNumericYearAndQuarterUnquoted() {
+    HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
+        null, null, null, "$where", null, "year", "quarter", false);
+
+    String filter = cfg.buildFilterValue(null, "2023", "3");
+    assertEquals("(year > 2023) OR (year = 2023 AND quarter >= 3)", filter);
+  }
+
+  @Test void buildFilterValueNumericDateUnquoted() {
+    HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
+        null, null, null, "$where", "year", null, null, false);
+
+    String filter = cfg.buildFilterValue("2024", null, null);
+    assertEquals("year >= 2024", filter);
+  }
+
+  @Test void fromMapQuoteValuesFalse() {
+    Map<String, Object> map = new LinkedHashMap<String, Object>();
+    map.put("sinceYear", "2023");
+    map.put("filterParam", "$where");
+    map.put("yearField", "year");
+    map.put("quoteValues", false);
+
+    HttpSourceConfig.IncrementalConfig cfg = HttpSourceConfig.IncrementalConfig.fromMap(map);
+
+    assertEquals("year >= 2023", cfg.buildFilterValue(null, "2023", null));
+  }
+
+  @Test void fromMapQuoteValuesTrueByDefault() {
+    Map<String, Object> map = new LinkedHashMap<String, Object>();
+    map.put("sinceYear", "2023");
+    map.put("filterParam", "$where");
+    map.put("yearField", "year");
+
+    HttpSourceConfig.IncrementalConfig cfg = HttpSourceConfig.IncrementalConfig.fromMap(map);
+
+    assertEquals("year >= '2023'", cfg.buildFilterValue(null, "2023", null));
+  }
+
   // ── HttpSourceConfig round-trip via fromMap ────────────────────────────────
 
   @Test void httpSourceConfigParsesIncrementalBlock() {

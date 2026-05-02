@@ -183,7 +183,7 @@ public class StooqDownloader {
    * @param endYear End year for data range
    */
   public void downloadStockPrices(String basePath,
-                                  List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs,
+                                  List<TickerCikPair> tickerCikPairs,
                                   int startYear, int endYear) {
     LOGGER.info("Starting Stooq stock price downloads for {} tickers from {} to {} "
             + "(batch timeout: {} minutes)",
@@ -193,8 +193,14 @@ public class StooqDownloader {
     failedTickers.clear();
     final long batchDeadline = System.currentTimeMillis() + batchTimeoutMs;
     List<CompletableFuture<Void>> futures = new ArrayList<CompletableFuture<Void>>();
+    int skippedCount = 0;
 
-    for (final AlphaVantageDownloader.TickerCikPair pair : tickerCikPairs) {
+    for (final TickerCikPair pair : tickerCikPairs) {
+      if (cacheManifest != null && cacheManifest.isTickerProcessed(pair.ticker)) {
+        LOGGER.debug("Skipping ticker {} - already processed in current round", pair.ticker);
+        skippedCount++;
+        continue;
+      }
       CompletableFuture<Void> future = CompletableFuture.runAsync(new Runnable() {
         @Override public void run() {
           if (System.currentTimeMillis() >= batchDeadline) {
@@ -215,6 +221,13 @@ public class StooqDownloader {
         }
       }, downloadExecutor);
       futures.add(future);
+    }
+
+    // If every ticker was already processed, the round is complete — reset for the next cycle
+    if (cacheManifest != null && skippedCount == tickerCikPairs.size()) {
+      LOGGER.info("All {} tickers already processed — full round complete, resetting checkpoint",
+          tickerCikPairs.size());
+      cacheManifest.clearTickerProcessedFlags();
     }
 
     // Wait for all downloads to complete
@@ -248,7 +261,7 @@ public class StooqDownloader {
    * Downloads data for a single ticker using a single HTTP request for the full date range.
    * Records are grouped by year and only written to parquet for years that need updating.
    */
-  private void downloadTickerData(String basePath, AlphaVantageDownloader.TickerCikPair pair,
+  private void downloadTickerData(String basePath, TickerCikPair pair,
                                   int startYear, int endYear) {
     LOGGER.debug("downloadTickerData called for ticker {} with basePath: {}", pair.ticker, basePath);
 
@@ -329,6 +342,10 @@ public class StooqDownloader {
           LOGGER.info("Downloaded {} price records for {} year {}",
               yearPrices.size(), pair.ticker, year);
         }
+      }
+
+      if (cacheManifest != null) {
+        cacheManifest.markTickerProcessed(pair.ticker);
       }
 
     } catch (IOException e) {
@@ -768,6 +785,19 @@ public class StooqDownloader {
    */
   public void setCacheManifest(SecCacheManifest cacheManifest) {
     this.cacheManifest = cacheManifest;
+  }
+
+  /**
+   * Ticker and CIK pair for stock price downloads.
+   */
+  public static class TickerCikPair {
+    public final String ticker;
+    public final String cik;
+
+    public TickerCikPair(String ticker, String cik) {
+      this.ticker = ticker;
+      this.cik = cik;
+    }
   }
 
   /**

@@ -318,6 +318,45 @@ public class SecCacheManifest extends AbstractCacheManifest {
     LOGGER.info("Marked ticker {} as unavailable: {}", ticker, reason);
   }
 
+  // ===== Stock ticker round-robin tracking =====
+
+  /**
+   * Check if a stock ticker has been processed in the current round.
+   * Persists across days — resets only when the full ticker list is exhausted.
+   *
+   * @param ticker The stock ticker symbol
+   * @return true if already processed in the current round
+   */
+  public boolean isTickerProcessed(String ticker) {
+    String key = "ticker_processed:" + ticker.toUpperCase();
+    return store.isCached(key);
+  }
+
+  /**
+   * Mark a stock ticker as processed.
+   * Stored permanently until {@link #clearTickerProcessedFlags()} is called at round completion.
+   *
+   * @param ticker The stock ticker symbol
+   */
+  public void markTickerProcessed(String ticker) {
+    String key = "ticker_processed:" + ticker.toUpperCase();
+    store.upsertEntry(key, "ticker_processed", ticker.toUpperCase(),
+        null, 1, Long.MAX_VALUE, "round_robin");
+    LOGGER.debug("Marked ticker {} as processed", ticker);
+  }
+
+  /**
+   * Clear all ticker-processed flags to begin a new round.
+   * Called automatically when the full ticker list has been exhausted.
+   *
+   * @return number of flags cleared
+   */
+  public int clearTickerProcessedFlags() {
+    int cleared = store.deleteEntriesWithPrefix("ticker_processed:");
+    LOGGER.info("Cleared {} ticker-processed flags — starting new round", cleared);
+    return cleared;
+  }
+
   // ===== Filing tracking methods =====
 
   /**

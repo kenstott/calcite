@@ -282,6 +282,29 @@ class CyberAllTablesSmokeTest {
     }
   }
 
+  @Test void kevCrossTheatReturnsRows() throws Exception {
+    LOG.info("=== cyber_vuln view: kev_cross_threat ===");
+    try (Connection conn = vulnConn()) {
+      long count = scalar(conn,
+          "SELECT COUNT(*) FROM \"cyber_vuln\".\"kev_cross_threat\"");
+      assertTrue(count > 0, "kev_cross_threat must return rows — KEV catalog is non-empty");
+      LOG.info("kev_cross_threat: {} KEV entries with CVSS+CWE enrichment", count);
+
+      // Verify CVSS scores joined correctly
+      long withCvss = scalar(conn,
+          "SELECT COUNT(*) FROM \"cyber_vuln\".\"kev_cross_threat\""
+          + " WHERE cvss_v31_score IS NOT NULL");
+      LOG.info("kev_cross_threat: {}/{} entries have CVSS v3.1 scores", withCvss, count);
+      assertTrue(withCvss > 0, "At least some KEV entries should have CVSS v3.1 scores");
+
+      // Verify CWE names aggregated correctly
+      long withCweNames = scalar(conn,
+          "SELECT COUNT(*) FROM \"cyber_vuln\".\"kev_cross_threat\""
+          + " WHERE cwe_names IS NOT NULL");
+      LOG.info("kev_cross_threat: {}/{} entries have CWE names", withCweNames, count);
+    }
+  }
+
   // ── cyber_vuln: sample rows ───────────────────────────────────────────────
 
   @Test void vulnSampleRows() throws Exception {

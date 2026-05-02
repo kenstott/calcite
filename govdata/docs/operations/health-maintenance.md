@@ -1,0 +1,247 @@
+# Health Data Maintenance Runbook
+
+## Quick Reference
+
+Health workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
+`worker-health.sh` is the shared implementation; the numbered scripts are the pool entry points.
+
+| Worker | Mode | Command | Schedule |
+|---|---|---|---|
+| worker-67 | initial | `./run-pool.sh 67` | Once, before any recurring runs |
+| worker-68 | daily | `./run-pool.sh 68` | Every 24 hours |
+| worker-69 | weekly | `./run-pool.sh 69` | Weekly (e.g., Monday 03:00 UTC) |
+| worker-70 | monthly | `./run-pool.sh 70` | Monthly (e.g., 1st of month 02:00 UTC) |
+
+`./run-pool.sh all` includes worker-67 (initial) alongside all other historical-load workers.
+Workers 68–70 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+
+```bash
+# First-time setup (integrated with full historical pipeline)
+cd scripts/parallel
+./run-pool.sh all            # includes worker-67 (health initial)
+# — or health only —
+./run-pool.sh 67
+
+# Recurring cadence via run-pool (or use cron directly)
+./run-pool.sh 68             # daily clinical trials delta
+./run-pool.sh 69             # weekly CDC COVID + mortality
+./run-pool.sh 70             # monthly BRFSS, Medicaid, CMS, FDA, RxNorm
+```
+
+---
+
+## Prerequisites
+
+### Environment Variables
+
+Set these in `.env.prod` (or the environment used by your cron/scheduler):
+
+```bash
+# Required
+export HEALTH_PARQUET_DIR=/data/health          # or s3://your-bucket/govdata/source=health
+export HEALTH_CACHE_DIR=/data/health-cache      # or s3://your-bucket/health-cache
+
+# Optional incremental cutoffs (blank = full fetch for that source)
+export HEALTH_TRIALS_SINCE_DATE=2024-01-01      # ISO date for clinical trials delta
+export HEALTH_CDC_COVID_SINCE_DATE=2024-01-01   # ISO date for CDC COVID vaccinations delta
+export HEALTH_BRFSS_SINCE_YEAR=2020             # 4-digit year for BRFSS incremental load
+export MEDICAID_SINCE_YEAR=2022                 # 4-digit year for Medicaid drug utilization
+export MEDICAID_SINCE_QUARTER=1                 # Quarter (1-4) for Medicaid delta start
+
+# Optional API keys
+export HEALTH_FDA_API_KEY=your-fda-key          # register at open.fda.gov/apis/authentication
+export MEDICAID_DRUG_UTIL_DATASET_ID=d890d3a9-6b00-43fd-8b31-fcba4c8e2909  # 2023 default
+```
+
+If incremental env vars are unset or empty (the `${VAR:}` default-empty pattern), the
+corresponding source fetches all available data — the same behavior as the `initial` mode.
+
+### JAR
+
+The worker script requires the govdata shadow JAR. Build it with:
+
+```bash
+./gradlew :govdata:shadowJar
+```
+
+---
+
+## Modes in Detail
+
+### `initial` — Run once on first setup
+
+Downloads all 15 health tables without incremental filters. Tables are grouped into separate
+model runs to isolate failures and keep each JVM invocation to a manageable scope:
+
+1. **FDA catalogs**: `fda_ndc_products`, `fda_drug_approvals`, `fda_drug_recalls`,
+   `fda_adverse_events`, `fda_device_recalls` — paginated openFDA API; rate-limited without key
+2. **Clinical trials**: `clinical_trials`, `clinical_trial_conditions`, `clinical_trial_interventions`
+   — cursor-paginated clinicaltrials.gov API (~500k studies); takes 30–90 min
+3. **CDC sources**: `cdc_covid_vaccinations`, `cdc_mortality`, `cdc_brfss`
+   — Socrata SODA API; BRFSS uses unquoted numeric year filter (`quoteValues: false`)
+4. **CMS + Medicaid**: `cms_hospital_quality`, `cms_open_payments`, `medicaid_drug_utilization`
+   — Socrata SODA API; Medicaid can be multi-million rows depending on dataset year
+5. **RxNorm**: `rxnorm_drugs` — NCBI/NLM RxNorm REST API
+
+After initial completes, switch to the recurring cadence workers. Do not re-run `initial`
+routinely — it fetches the full dataset for every source.
+
+```bash
+./scripts/parallel/worker-health.sh initial
+```
+
+---
+
+### `daily` — Incremental clinical trials delta
+
+Downloads only studies updated since `HEALTH_TRIALS_SINCE_DATE` using the
+`lastUpdatePostDate.gte` filter on the clinicaltrials.gov API. Covers three tables:
+`clinical_trials`, `clinical_trial_conditions`, `clinical_trial_interventions`.
+
+**When to run:** Once per day. A common schedule is 06:30 UTC (after SEC and cyber daily jobs).
+
+**Setting the cutoff:** On first run after initial, set `HEALTH_TRIALS_SINCE_DATE` to the
+initial load date. Thereafter advance it after each successful run, or leave it fixed at a
+rolling window (e.g., 30 days back) for overlap safety.
+
+```bash
+export HEALTH_TRIALS_SINCE_DATE=2024-01-01
+./scripts/parallel/worker-health.sh daily
+```
+
+Cron example:
+```
+30 6 * * * HEALTH_TRIALS_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh daily
+```
+
+---
+
+### `weekly` — CDC COVID vaccinations delta + CDC mortality refresh
+
+- **`cdc_covid_vaccinations`**: Fetches records with `date >= HEALTH_CDC_COVID_SINCE_DATE` via
+  Socrata `$where` filter (if set). CDC publishes weekly updates.
+- **`cdc_mortality`**: Full refresh — the CDC mortality dataset is relatively small and refreshed
+  weekly; no incremental filter is applied.
+
+**When to run:** Weekly. A common schedule is Monday 03:00 UTC.
+
+```bash
+export HEALTH_CDC_COVID_SINCE_DATE=2024-01-01
+./scripts/parallel/worker-health.sh weekly
+```
+
+Cron example:
+```
+0 3 * * 1 HEALTH_CDC_COVID_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh weekly
+```
+
+---
+
+### `monthly` — Stable reference tables
+
+Refreshes sources that change on a monthly or slower cadence:
+
+| Table | Source | Incremental mechanism |
+|---|---|---|
+| `cdc_brfss` | CDC Socrata (BRFSS surveys) | `year >= HEALTH_BRFSS_SINCE_YEAR` (unquoted; numeric field) |
+| `medicaid_drug_utilization` | data.medicaid.gov (DLTSS) | `year`/`quarter` compound `$where` filter |
+| `cms_hospital_quality` | data.cms.gov | Full refresh (~5,400 hospitals) |
+| `cms_open_payments` | data.cms.gov | Full refresh |
+| `fda_ndc_products` | openFDA | Full refresh; NDC catalog changes slowly |
+| `fda_drug_approvals` | openFDA | Full refresh |
+| `fda_drug_recalls` | openFDA | Full refresh |
+| `fda_adverse_events` | openFDA | Full refresh |
+| `fda_device_recalls` | openFDA | Full refresh |
+| `rxnorm_drugs` | NCBI/NLM RxNorm | Full refresh |
+
+**When to run:** Monthly. A common schedule is the 1st of each month at 02:00 UTC.
+
+```bash
+export HEALTH_BRFSS_SINCE_YEAR=2020
+export MEDICAID_SINCE_YEAR=2022
+export MEDICAID_SINCE_QUARTER=1
+./scripts/parallel/worker-health.sh monthly
+```
+
+Cron example:
+```
+0 2 1 * * /path/to/govdata/scripts/parallel/worker-health.sh monthly
+```
+
+---
+
+## Recommended Cron Schedule
+
+```cron
+# Health data maintenance
+# Initial setup: run worker-health.sh initial manually once before enabling these
+
+# Daily: clinical trials delta
+30 6 * * *   HEALTH_TRIALS_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh daily
+
+# Weekly: CDC COVID vaccinations + mortality
+0 3 * * 1    HEALTH_CDC_COVID_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh weekly
+
+# Monthly: stable reference tables
+0 2 1 * *    /path/to/govdata/scripts/parallel/worker-health.sh monthly
+```
+
+---
+
+## Troubleshooting
+
+### CDC Socrata rate limiting (HTTP 500)
+
+CDC SODA endpoints return HTTP 500 (not 429) when rate-limited. If multiple health workers
+run concurrently or back-to-back, add a delay between them:
+
+```bash
+# Run CDC sources after a brief gap following the daily clinical trials run
+./run-pool.sh 68 && sleep 120 && ./run-pool.sh 69
+```
+
+The `unquotedNumericYearFilter` integration test also uses `Thread.sleep(2000)` and
+`assumeTrue` guards for this reason.
+
+### BRFSS `year` filter: must be unquoted
+
+The BRFSS `year` field in Socrata is a **numeric** type. The `$where` filter must not quote
+the value (e.g., `year >= 2020`, not `year >= '2020'`). This is handled by `quoteValues: false`
+in the `health-schema.yaml` BRFSS `incremental:` block. Do not change it.
+
+### Clinical trials cursor pagination
+
+The clinicaltrials.gov v2 API uses `nextPageToken` for cursor-based pagination. The
+`HttpSource` CURSOR pagination case extracts this token from each response body and passes
+it as `pageToken` in the next request. If an initial load hangs, check the log for the last
+`pageToken` emitted — the API occasionally returns an empty token mid-page on timeout.
+
+### Medicaid dataset ID
+
+Medicaid publishes separate datasets per year. The default dataset ID
+(`d890d3a9-6b00-43fd-8b31-fcba4c8e2909`) is the 2023 annual file. To load a different year,
+set `MEDICAID_DRUG_UTIL_DATASET_ID` in `.env.prod` before running:
+
+```bash
+export MEDICAID_DRUG_UTIL_DATASET_ID=<dataset-id-for-target-year>
+./scripts/parallel/worker-health.sh monthly
+```
+
+Dataset IDs can be found at [data.medicaid.gov](https://data.medicaid.gov) by searching
+"State Drug Utilization Data".
+
+### openFDA rate limits
+
+Without an API key, openFDA allows ~240 requests/minute. For a full initial load of adverse
+events (millions of records), this is the primary bottleneck. Register for a free key at
+[open.fda.gov/apis/authentication](https://open.fda.gov/apis/authentication) and set
+`HEALTH_FDA_API_KEY` in `.env.prod`.
+
+### Log location
+
+Logs are written to `scripts/parallel/runs/worker-health-<mode>/etl_<timestamp>.log`.
+
+```bash
+tail -f scripts/parallel/runs/worker-health-initial/etl_*.log
+tail -f scripts/parallel/runs/worker-health-daily/etl_*.log
+```
