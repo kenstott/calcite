@@ -522,6 +522,14 @@ get_heap_config() {
     # Health recurring (68=daily, 69=weekly, 70=monthly): incremental/delta loads
     _HEAP_MIN="2g"
     _HEAP_MAX="3g"
+  elif [ "$num" -eq 71 ]; then
+    # EDU initial (71): full historical K-12 + IPEDS + College Scorecard across all years
+    _HEAP_MIN="4g"
+    _HEAP_MAX="6g"
+  elif [ "$num" -ge 72 ] && [ "$num" -le 73 ]; then
+    # EDU recurring (72=annual, 73=biennial): incremental since-year loads
+    _HEAP_MIN="2g"
+    _HEAP_MAX="3g"
   elif [ "$num" -eq 21 ]; then
     # Crime (21): large dimension expansion (type × year × state × offense × ori), long-running
     _HEAP_MIN="3g"

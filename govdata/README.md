@@ -92,14 +92,16 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 | **ECON** | Economic Data | `reference_fred_series` (841K+ series), `fred_indicators`, employment/wages tables | BLS, FRED, Treasury, BEA, World Bank |
 | **GEO** | Geographic Boundaries | `states`, `counties`, `places`, `zctas`, `census_tracts`, `cbsa`, `congressional_districts` | Census TIGER/Line, HUD |
 | **CENSUS** | Demographics & Population | `acs_population`, `acs_demographics`, `acs_income`, `acs_education`, `acs_housing` | Census Bureau ACS, Decennial Census |
+| **EDU** | Education Institutions | `ccd_districts`, `ccd_schools`, `naep_scores`, `crdc_schools`, `ipeds_institutions`, `ipeds_completions`, `ipeds_financials`, `ipeds_tuition`, `college_scorecard`, `college_scorecard_programs` | NCES (CCD, IPEDS, NAEP), Dept of Ed (CRDC), College Scorecard API |
+| **CYBER** | Cybersecurity Intelligence | `vulnerabilities`, `cwe_catalog`, `kev_catalog`, `attack_techniques`, `nist_controls`, `cis_controls`, `owasp_top10`, `ioc_urls`, `ioc_hashes`, `threat_pulses` | NVD, MITRE ATT&CK, CISA KEV, OTX, ThreatFox |
+| **HEALTH** | Public Health | `clinical_trials`, `fda_drug_approvals`, `fda_adverse_events`, `cdc_mortality`, `cdc_brfss`, `cms_hospital_quality`, `medicaid_drug_utilization`, `rxnorm_drugs` | FDA, ClinicalTrials.gov, CDC, CMS, NIH RxNorm |
+| **FEC** | Campaign Finance | `individual_contributions`, `pac_contributions`, `candidate_summaries`, `committee_summaries` | FEC bulk data |
+| **REF** | Reference Identifiers | `lei_entities`, `lei_relationships` | GLEIF golden copy |
 
 ### Future Planned
 - **LEG**: Congressional bills, votes, committees, nominations, hearings
 - **POL**: Political offices (Presidents, Governors, Cabinet, SCOTUS), campaigns, executive orders
-- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters
-- **PUB**: NIH grants, NASA projects, NSF research, PTO patents
-- **HEALTH**: FDA approvals/recalls, CDC health statistics
-- **WEATHER**: NOAA weather data, climate indicators
+- **SAFETY**: NHTSA crashes, FEMA disasters
 
 ## 🔧 Installation
 
