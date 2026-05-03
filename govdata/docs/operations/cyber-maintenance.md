@@ -24,12 +24,17 @@ cd scripts/parallel
 ./run-pool.sh 62
 
 # Recurring cadence via run-pool (or use cron directly)
+# Workers 63–65 use release-window checks: sub-runs outside their window skip instantly.
 ./run-pool.sh 63             # daily NVD delta + KEV
-./run-pool.sh 64             # weekly ATT&CK, CWE, OSV, advisories
+./run-pool.sh 64             # weekly ATT&CK, CWE, OSV, advisories (Sunday only)
 ./run-pool.sh 65             # hourly IOC feeds + OTX delta
 
 # On-demand: re-run static standards after a framework update
 ./run-pool.sh 66
+
+# Force all sub-runs regardless of window (backfill / manual refresh)
+./worker-cyber.sh weekly --force
+./worker-cyber.sh daily --force
 ```
 
 ---
@@ -181,6 +186,22 @@ Not needed in routine schedules.
 # Hourly: live IOC feeds + OTX delta
 0 */2 * * * CYBER_OTX_DELTA_DAYS=1 /path/to/govdata/scripts/parallel/worker-cyber.sh hourly
 ```
+
+---
+
+## Release-Window Checks
+
+Workers 63–64 gate their sub-runs to avoid running when no new data is expected.
+Each check exits in milliseconds — no network I/O, no model file written.
+
+| Mode | Window | Mechanism | Notes |
+|---|---|---|---|
+| `daily` | Every day | No gate — NVD updates continuously | Always runs |
+| `weekly` | Sunday only (DOW 0) | `within_release_dow` | CWE/ATT&CK/OSV update weekly or less |
+| `hourly` | Every run | No gate — live IOC feeds | Always runs |
+| `static` | On-demand | No gate — manual trigger | Run after framework version releases |
+
+To bypass: `./worker-cyber.sh weekly --force`
 
 ---
 

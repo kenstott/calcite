@@ -1,0 +1,2321 @@
+# ============================================================================
+# Education Schema — K-12 and Higher Education institutional data
+# K-12 sources: Urban Institute Education Data Portal (educationdata.urban.org)
+#   No API key required; covers CCD, CRDC, NAEP
+# Higher ed: Urban Institute API (IPEDS) + College Scorecard API (key required)
+#   COLLEGE_SCORECARD_API_KEY — free at api.data.gov/signup
+# ============================================================================
+
+schemaName: "${EDU_SCHEMA_NAME:edu}"
+materializeDirectory: "${EDU_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=edu}"
+
+comment: >
+  Institutional education data for K-12 districts, schools, and higher education.
+  K-12 tables cover NCES Common Core of Data (CCD), Civil Rights Data Collection
+  (CRDC), and NAEP assessments. Higher-ed tables cover IPEDS directory, completions,
+  financials, and College Scorecard outcomes. All sourced via the Urban Institute
+  Education Data Portal API (free, unauthenticated) except College Scorecard
+  (free API key required). Complements census.acs_education (population attainment)
+  — this schema describes the institutions themselves.
+
+partitionedTables:
+
+  # ==========================================================================
+  # CCD DISTRICTS — NCES Local Education Agency directory, annual
+  # Urban Institute API: school-districts/ccd/directory/{year}/
+  # ~18,000 LEAs per year; 1986–present
+  # ==========================================================================
+  - name: ccd_districts
+    releaseWindow:
+      months: [7, 8]        # NCES posts CCD preliminary July, revised August
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NCES Common Core of Data — Local Education Agency (district) directory.
+      One row per LEA per school year (year = end year; 2022 = 2021-22).
+      Primary join target for ccd_schools (leaid) and geo.school_districts (sd_lea = leaid).
+      Staff FTE fields (teachers, counselors, psychologists) enable resource equity analysis.
+
+    columns:
+      - name: leaid
+        type: string
+        nullable: false
+        comment: NCES LEA ID (7-digit string) — PK component
+      - name: year
+        type: int
+        nullable: false
+        comment: School year end year (e.g. 2022 = 2021-22) — PK component
+      - name: lea_name
+        type: string
+        nullable: true
+        comment: District name
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS code (integer 1-56) — FK to geo.states.state_fips
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state abbreviation from state_location field
+      - name: county_code
+        type: string
+        nullable: true
+        comment: 4-digit county code from API; pad to 5 digits for geo.counties.county_fips join
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: urban_centric_locale
+        type: int
+        nullable: true
+        comment: NCES locale code (11=city large, 12=city mid, 13=city small, 21=suburb large, 31=town fringe, 41=rural fringe)
+      - name: cbsa
+        type: int
+        nullable: true
+        comment: Core-Based Statistical Area code
+      - name: latitude
+        type: double
+        nullable: true
+        comment: LEA mailing address latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: LEA mailing address longitude
+      - name: agency_type
+        type: int
+        nullable: true
+        comment: 1=local, 2=supervisory union component, 3=state agency, 4=federal, 7=independent charter
+      - name: agency_level
+        type: int
+        nullable: true
+        comment: 1=elementary, 2=secondary, 3=K-12, 4=other
+      - name: agency_charter_indicator
+        type: int
+        nullable: true
+        comment: 1=charter LEA, 0=not charter
+      - name: lowest_grade_offered
+        type: int
+        nullable: true
+        comment: Lowest grade offered (-1=PK, 0=K, 1-12)
+      - name: highest_grade_offered
+        type: int
+        nullable: true
+        comment: Highest grade offered
+      - name: number_of_schools
+        type: int
+        nullable: true
+        comment: Number of operational schools in LEA
+      - name: enrollment
+        type: int
+        nullable: true
+        comment: Total student enrollment (may be null for some administrative LEAs)
+      - name: spec_ed_students
+        type: int
+        nullable: true
+        comment: Students receiving special education services
+      - name: english_language_learners
+        type: int
+        nullable: true
+        comment: English language learner students
+      - name: migrant_students
+        type: int
+        nullable: true
+        comment: Migrant program students
+      - name: teachers_total_fte
+        type: double
+        nullable: true
+        comment: Total FTE classroom teachers across all grade levels
+      - name: guidance_counselors_total_fte
+        type: double
+        nullable: true
+        comment: Total FTE guidance counselors
+      - name: school_counselors_fte
+        type: double
+        nullable: true
+        comment: FTE school counselors
+      - name: school_psychologists_fte
+        type: double
+        nullable: true
+        comment: FTE school psychologists
+      - name: librarian_specialists_fte
+        type: double
+        nullable: true
+        comment: FTE librarian/media specialists
+      - name: staff_total_fte
+        type: double
+        nullable: true
+        comment: Total FTE all staff categories
+      - name: state_leg_district_lower
+        type: string
+        nullable: true
+        comment: State lower legislative district
+      - name: state_leg_district_upper
+        type: string
+        nullable: true
+        comment: State upper legislative district
+      - name: congress_district_id
+        type: int
+        nullable: true
+        comment: Congressional district ID
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/school-districts/ccd/directory/{year}/"
+      method: GET
+      parameters:
+        limit: "2000"
+        year: "${EDU_CCD_YEAR:2022}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_CCD_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_CCD_START_YEAR:2015}"
+          end: "${EDU_CCD_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdDistrictsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CCD SCHOOLS — NCES individual school directory, annual
+  # Urban Institute API: schools/ccd/directory/{year}/
+  # ~100,000 schools per year; 1986–present
+  # ==========================================================================
+  - name: ccd_schools
+    releaseWindow:
+      months: [7, 8]        # NCES posts CCD preliminary July, revised August
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NCES Common Core of Data — individual school directory.
+      One row per school per year. Joins to ccd_districts via leaid.
+      free_or_reduced_price_lunch enables poverty proxy at the school level.
+      Biennial CRDC data joins via ncessch = crdc_schools.ncessch.
+
+    columns:
+      - name: ncessch
+        type: string
+        nullable: false
+        comment: NCES school ID (12-digit string) — PK component
+      - name: leaid
+        type: string
+        nullable: false
+        comment: Parent LEA ID (7-digit) — FK to ccd_districts.leaid
+      - name: year
+        type: int
+        nullable: false
+        comment: School year end year — PK component
+      - name: school_name
+        type: string
+        nullable: true
+        comment: School name
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS (integer) — FK to geo.states.state_fips
+      - name: county_code
+        type: string
+        nullable: true
+        comment: 4-digit county code; pad to 5 digits for geo.counties.county_fips join
+      - name: latitude
+        type: double
+        nullable: true
+        comment: School latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: School longitude
+      - name: urban_centric_locale
+        type: int
+        nullable: true
+        comment: NCES locale code
+      - name: cbsa
+        type: string
+        nullable: true
+        comment: CBSA code (string in API)
+      - name: school_level
+        type: int
+        nullable: true
+        comment: 1=elementary, 2=middle, 3=high, 4=other combined
+      - name: school_type
+        type: int
+        nullable: true
+        comment: 1=regular, 2=special ed, 3=vocational, 4=alternative
+      - name: school_status
+        type: int
+        nullable: true
+        comment: 1=open, 2=closed, 3=new, 4=added, 5=changed agency, 6=reopened, 8=future
+      - name: lowest_grade_offered
+        type: int
+        nullable: true
+        comment: Lowest grade (-1=PK, 0=K, 1-12)
+      - name: highest_grade_offered
+        type: int
+        nullable: true
+        comment: Highest grade offered
+      - name: charter
+        type: int
+        nullable: true
+        comment: Charter school indicator (1=yes, 0=no)
+      - name: magnet
+        type: int
+        nullable: true
+        comment: Magnet school indicator (1=yes, 0=no)
+      - name: virtual
+        type: int
+        nullable: true
+        comment: Virtual school indicator (1=yes, 0=no, 2=supplemental)
+      - name: shared_time
+        type: int
+        nullable: true
+        comment: Shared-time school (students also attend another school)
+      - name: title_i_status
+        type: int
+        nullable: true
+        comment: Title I status code (5=schoolwide, 6=targeted assistance, 7=eligible not participating)
+      - name: title_i_eligible
+        type: int
+        nullable: true
+        comment: Title I eligible (1=yes, 0=no)
+      - name: title_i_schoolwide
+        type: int
+        nullable: true
+        comment: Schoolwide Title I program (1=yes, 0=no)
+      - name: teachers_fte
+        type: double
+        nullable: true
+        comment: FTE classroom teachers
+      - name: enrollment
+        type: int
+        nullable: true
+        comment: Total student enrollment
+      - name: free_lunch
+        type: int
+        nullable: true
+        comment: Students approved for free lunch (NSLP)
+      - name: reduced_price_lunch
+        type: int
+        nullable: true
+        comment: Students approved for reduced-price lunch
+      - name: free_or_reduced_price_lunch
+        type: int
+        nullable: true
+        comment: Combined free+reduced lunch count; divide by enrollment for poverty proxy
+      - name: direct_certification
+        type: int
+        nullable: true
+        comment: Students directly certified for free meals (SNAP/TANF households)
+      - name: lunch_program
+        type: int
+        nullable: true
+        comment: Lunch program type code
+      - name: bureau_indian_education
+        type: int
+        nullable: true
+        comment: Bureau of Indian Education school indicator
+      - name: congress_district_id
+        type: int
+        nullable: true
+        comment: Congressional district
+      - name: state_leg_district_lower
+        type: string
+        nullable: true
+        comment: State lower legislative district
+      - name: state_leg_district_upper
+        type: string
+        nullable: true
+        comment: State upper legislative district
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/schools/ccd/directory/{year}/"
+      method: GET
+      parameters:
+        limit: "5000"
+        year: "${EDU_CCD_YEAR:2022}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_CCD_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_CCD_START_YEAR:2015}"
+          end: "${EDU_CCD_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # NAEP SCORES — Nation's Report Card state-level assessment results
+  # Source: api.nationsreportcard.gov — unauthenticated; biennial
+  # Note: hostname may not resolve from all networks; ETL should handle gracefully
+  # ==========================================================================
+  - name: naep_scores
+    releaseWindow:
+      months: [1, 2, 3]     # NAEP results published January–March
+      yearParity: odd        # Biennial odd-year cycles (2019, 2021, 2023…)
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NAEP (National Assessment of Educational Progress) state-level results.
+      One row per state × year × subject × grade × subgroup.
+      jurisdiction=0 is the national aggregate. Joins to ccd_districts via fips=state_fips.
+      Available biennially (even years for grade 4/8 main NAEP).
+
+    columns:
+      - name: jurisdiction
+        type: int
+        nullable: false
+        comment: State FIPS code (0 = national aggregate) — PK component
+      - name: jurisdiction_name
+        type: string
+        nullable: true
+        comment: State name or "National"
+      - name: year
+        type: int
+        nullable: false
+        comment: Assessment year — PK component
+      - name: subject
+        type: string
+        nullable: false
+        comment: MAT=mathematics, RED=reading — PK component
+      - name: grade
+        type: int
+        nullable: false
+        comment: 4 or 8 — PK component
+      - name: variable_type
+        type: string
+        nullable: false
+        comment: Disaggregation type (TOTAL, Race/Ethnicity, Gender, NAEP Eligibility) — PK component
+      - name: subgroup_name
+        type: string
+        nullable: false
+        comment: Subgroup label (All students, Male, White, Black, etc.) — PK component
+      - name: avg_score
+        type: double
+        nullable: true
+        comment: Average NAEP scale score
+      - name: std_error
+        type: double
+        nullable: true
+        comment: Standard error of the mean score
+      - name: pct_below_basic
+        type: double
+        nullable: true
+        comment: Percentage of students below Basic proficiency
+      - name: pct_basic
+        type: double
+        nullable: true
+        comment: Percentage at Basic proficiency
+      - name: pct_proficient
+        type: double
+        nullable: true
+        comment: Percentage at Proficient
+      - name: pct_advanced
+        type: double
+        nullable: true
+        comment: Percentage at Advanced
+      - name: sample_size
+        type: int
+        nullable: true
+        comment: Number of students assessed
+      - name: is_displayable
+        type: int
+        nullable: true
+        comment: 1 if statistically displayable (sufficient sample size)
+
+    source:
+      type: http
+      url: "https://api.nationsreportcard.gov/api/naep/{year}/G{grade}/{subject}?fips=0&subscriberid="
+      method: GET
+      response:
+        format: json
+        dataPath: "result"
+        pagination:
+          type: NONE
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_NAEP_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_NAEP_START_YEAR:2013}"
+          end: "${EDU_NAEP_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.NaepScoresResponseTransformer"
+
+    dimensions:
+      year:
+        - 2013
+        - 2015
+        - 2017
+        - 2019
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # CRDC SCHOOLS — Civil Rights Data Collection, biennial equity metrics
+  # Urban Institute API: schools/crdc/{topic}/{year}/
+  # Available years: 2011, 2013, 2015, 2017 (biennial, even school years)
+  # Sub-endpoints: directory, chronic-absenteeism, offenses, teachers-staff
+  # ==========================================================================
+  - name: crdc_schools
+    releaseWindow:
+      months: [10, 11, 12]  # CRDC even-year surveys published ~18 months later (Oct–Dec)
+      yearParity: odd        # Publication year is odd (e.g., 2020-21 survey → released late 2022/2023)
+    pattern: "year={year}/crdc_topic={crdc_topic}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+        - name: crdc_topic
+          type: VARCHAR
+
+    comment: >
+      CRDC school-level equity data consolidated from four Urban Institute sub-endpoints.
+      crdc_topic dimension selects the sub-endpoint: directory, chronic-absenteeism,
+      offenses, teachers-staff. Join to ccd_schools via ncessch. crdc_id = ncessch for
+      most schools. Available biennially (2011, 2013, 2015, 2017).
+
+    columns:
+      - name: crdc_id
+        type: string
+        nullable: false
+        comment: CRDC school identifier (equals ncessch for most records) — PK component
+      - name: ncessch
+        type: string
+        nullable: true
+        comment: NCES school ID — FK to ccd_schools.ncessch
+      - name: leaid
+        type: string
+        nullable: true
+        comment: LEA ID — FK to ccd_districts.leaid
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS
+      - name: year
+        type: int
+        nullable: false
+        comment: Survey year (2011, 2013, 2015, 2017) — PK component
+      - name: crdc_topic
+        type: string
+        nullable: false
+        comment: "Sub-endpoint dimension: directory, chronic-absenteeism, offenses, teachers-staff — PK component"
+      # --- directory sub-endpoint ---
+      - name: charter_crdc
+        type: int
+        nullable: true
+        comment: Charter school per CRDC report (may differ from CCD value)
+      - name: magnet_crdc
+        type: int
+        nullable: true
+        comment: Magnet school per CRDC
+      - name: alt_school
+        type: int
+        nullable: true
+        comment: Alternative school indicator
+      - name: primarily_serve_students_w_dis
+        type: int
+        nullable: true
+        comment: School primarily serves students with disabilities
+      # --- chronic-absenteeism sub-endpoint ---
+      - name: race
+        type: string
+        nullable: true
+        comment: Race/ethnicity disaggregation (HI=Hispanic, BL=Black, WH=White, etc.; MF=all)
+      - name: sex
+        type: string
+        nullable: true
+        comment: Sex disaggregation (M=male, F=female, MF=both)
+      - name: disability
+        type: string
+        nullable: true
+        comment: Disability status disaggregation (WD=with disability, WOD=without, TOT=total)
+      - name: lep
+        type: string
+        nullable: true
+        comment: Limited English proficiency disaggregation
+      - name: students_chronically_absent
+        type: int
+        nullable: true
+        comment: Count of chronically absent students (>10% days missed) for this subgroup
+      # --- offenses sub-endpoint ---
+      - name: firearm_incident_ind
+        type: int
+        nullable: true
+        comment: Any firearm incident reported (0/1)
+      - name: homicide_ind
+        type: double
+        nullable: true
+        comment: Homicide incident indicator
+      - name: rape_incidents
+        type: double
+        nullable: true
+        comment: Number of rape allegations
+      - name: sexual_battery_incidents
+        type: double
+        nullable: true
+        comment: Number of sexual battery incidents
+      - name: attack_w_weapon_incidents
+        type: double
+        nullable: true
+        comment: Attacks with a weapon (non-firearm)
+      - name: attack_no_weapon_incidents
+        type: double
+        nullable: true
+        comment: Attacks without a weapon
+      - name: possession_firearm_incidents
+        type: double
+        nullable: true
+        comment: Firearm possession incidents
+      # --- teachers-staff sub-endpoint ---
+      - name: teachers_fte_crdc
+        type: double
+        nullable: true
+        comment: Total FTE teachers per CRDC report
+      - name: teachers_certified_fte
+        type: double
+        nullable: true
+        comment: FTE certified teachers
+      - name: teachers_uncertified_fte
+        type: double
+        nullable: true
+        comment: FTE uncertified/emergency-certified teachers
+      - name: teachers_first_year_fte
+        type: double
+        nullable: true
+        comment: FTE first-year teachers
+      - name: teachers_absent_fte
+        type: double
+        nullable: true
+        comment: FTE teachers chronically absent
+      - name: counselors_fte
+        type: double
+        nullable: true
+        comment: FTE school counselors
+      - name: psychologists_fte
+        type: double
+        nullable: true
+        comment: FTE school psychologists
+      - name: social_workers_fte
+        type: double
+        nullable: true
+        comment: FTE school social workers
+      - name: nurses_fte
+        type: double
+        nullable: true
+        comment: FTE nurses
+      - name: security_guard_fte
+        type: double
+        nullable: true
+        comment: FTE security guards
+      - name: law_enforcement_fte
+        type: double
+        nullable: true
+        comment: FTE sworn law enforcement officers
+      - name: law_enforcement_ind
+        type: int
+        nullable: true
+        comment: Any sworn law enforcement present (0/1)
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/schools/crdc/directory/{year}/"
+      method: GET
+      parameters:
+        limit: "5000"
+        year: "${EDU_CRDC_YEAR:2017}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "limit"
+          offsetParam: "offset"
+      urlRules:
+        - url: "https://educationdata.urban.org/api/v1/schools/crdc/chronic-absenteeism/{year}/"
+          variableMatch:
+            crdc_topic: chronic-absenteeism
+        - url: "https://educationdata.urban.org/api/v1/schools/crdc/offenses/{year}/"
+          variableMatch:
+            crdc_topic: offenses
+        - url: "https://educationdata.urban.org/api/v1/schools/crdc/teachers-staff/{year}/"
+          variableMatch:
+            crdc_topic: teachers-staff
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_CRDC_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_CRDC_START_YEAR:2013}"
+          end: "${EDU_CRDC_END_YEAR:2017}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2013
+        - 2015
+        - 2017
+      crdc_topic:
+        - directory
+        - chronic-absenteeism
+        - offenses
+        - teachers-staff
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year, crdc_topic]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # IPEDS INSTITUTIONS — NCES HD survey, annual
+  # Urban Institute API: college-university/ipeds/directory/{year}/
+  # ~6,700 active institutions per year; 1986–present
+  # Confirmed working: 6,440 records for year=2020
+  # Tuition/fees are in a SEPARATE endpoint: academic-year-tuition/{year}/
+  # ==========================================================================
+  - name: ipeds_institutions
+    releaseWindow:
+      months: [11]          # IPEDS Fall Data Collection releases November
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NCES IPEDS Institutional Characteristics (HD survey) directory.
+      One row per institution per year. Joins to geo.counties via county_fips
+      (pad integer to 5-char string). Enrollment is NOT here (IPEDS EF survey).
+      Tuition/fees are NOT here — see ipeds_tuition table (academic-year-tuition endpoint).
+      college_scorecard joins via unitid = college_scorecard.id.
+      ipeds_completions and ipeds_financials join via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID (integer) — PK component
+      - name: opeid
+        type: string
+        nullable: true
+        comment: OPE ID 8-digit — FK to college_scorecard.ope8_id
+      - name: year
+        type: int
+        nullable: false
+        comment: Survey year — PK component
+      - name: inst_name
+        type: string
+        nullable: true
+        comment: Institution name (INSTNM in bulk CSV)
+      - name: inst_alias
+        type: string
+        nullable: true
+        comment: Institution alias or common name
+      - name: address
+        type: string
+        nullable: true
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: State abbreviation — FK to geo.states.state_abbr
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS (integer) — FK to geo.states.state_fips
+      - name: county_fips
+        type: int
+        nullable: true
+        comment: County FIPS integer (COUNTYCD in bulk); source for county_fips_str
+      - name: county_fips_str
+        type: string
+        nullable: true
+        comment: County FIPS zero-padded to 5 chars (e.g. '06037') — FK to geo.counties.county_fips
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Longitude (LONGITUD in bulk CSV)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Latitude
+      - name: sector
+        type: int
+        nullable: true
+        comment: 0=admin, 1=public 4yr, 2=private nonprofit 4yr, 3=private for-profit 4yr, 4=public 2yr, 5=private nonprofit 2yr, 6=private for-profit 2yr, 7=public <2yr, 8=private nonprofit <2yr, 9=private for-profit <2yr
+      - name: inst_control
+        type: int
+        nullable: true
+        comment: 1=public, 2=private nonprofit, 3=private for-profit
+      - name: institution_level
+        type: int
+        nullable: true
+        comment: 1=4yr or higher, 2=2-4yr, 3=<2yr
+      - name: hbcu
+        type: int
+        nullable: true
+        comment: Historically Black College or University (1=yes, 0=no)
+      - name: hospital
+        type: int
+        nullable: true
+        comment: Institution has hospital (1=yes, 0=no)
+      - name: medical_degree
+        type: int
+        nullable: true
+        comment: Medical degree offered (1=yes, 0=no)
+      - name: tribal_college
+        type: int
+        nullable: true
+        comment: Tribal college or university (1=yes, 0=no)
+      - name: land_grant
+        type: int
+        nullable: true
+        comment: Land-grant institution (1=yes, 0=no)
+      - name: inst_size
+        type: int
+        nullable: true
+        comment: 1=<1000 students, 2=1000-4999, 3=5000-9999, 4=10000-19999, 5=20000+
+      - name: degree_granting
+        type: int
+        nullable: true
+        comment: Degree-granting institution (1=yes, 0=no)
+      - name: title_iv_indicator
+        type: int
+        nullable: true
+        comment: Title IV federal financial aid eligible
+      - name: offering_undergrad
+        type: int
+        nullable: true
+        comment: Undergraduate programs offered (1=yes)
+      - name: offering_grad
+        type: int
+        nullable: true
+        comment: Graduate programs offered (1=yes)
+      - name: cc_basic_2021
+        type: int
+        nullable: true
+        comment: Carnegie Classification basic 2021 (integer code; see carnegie.edu for legend)
+      - name: cbsa
+        type: int
+        nullable: true
+        comment: CBSA code
+      - name: cbsa_type
+        type: int
+        nullable: true
+        comment: 1=metropolitan, 2=micropolitan
+      - name: url_school
+        type: string
+        nullable: true
+        comment: Institution website URL
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/college-university/ipeds/directory/{year}/"
+      method: GET
+      parameters:
+        limit: "2000"
+        year: "${EDU_IPEDS_YEAR:2022}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_IPEDS_START_YEAR:2015}"
+          end: "${EDU_IPEDS_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # IPEDS COMPLETIONS — NCES C survey, degrees awarded by field of study
+  # Urban Institute API: college-university/ipeds/completions-cip-2/{year}/
+  # ~4.2M rows/year (fully disaggregated: institution × CIP × award level × major × race × sex)
+  # Confirmed working: 4,159,980 records for year=2022
+  # ==========================================================================
+  - name: ipeds_completions
+    releaseWindow:
+      months: [11]          # IPEDS Fall Data Collection releases November
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NCES IPEDS Completions survey via Urban Institute completions-cip-2 endpoint.
+      Fully disaggregated: one row per (unitid, year, fips, cipcode, award_level,
+      majornum, race, sex). Race codes: 1=nonresident alien, 2=unknown, 3=two or more,
+      4=AIAN, 5=Asian, 6=Black, 7=Hispanic, 8=NHPI, 9=White, 99=total all races.
+      Sex codes: 1=men, 2=women, 99=total. cipcode is an INTEGER (e.g. 10000 = CIP 01.0000).
+      Filter to race=99 AND sex=99 for institution-level totals only.
+      Note: cip_title is NOT in this endpoint; cipcode is integer not dotted string.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Award year — PK component
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS (denormalized from institution record)
+      - name: cipcode
+        type: int
+        nullable: false
+        comment: CIP field of study code as integer (e.g. 10000 = CIP 01.0000, 520101 = CIP 52.0101) — PK component
+      - name: award_level
+        type: int
+        nullable: false
+        comment: Award level code — PK component; 1=<1yr cert, 2=1-2yr cert, 3=Associate, 5=Bachelor's, 7=Master's, 17=Doctoral research, 18=Doctoral professional, 19=Doctoral other
+      - name: majornum
+        type: int
+        nullable: false
+        comment: 1=first major, 2=second major program — PK component
+      - name: race
+        type: int
+        nullable: false
+        comment: Race/ethnicity code — PK component; 1=nonresident alien, 2=unknown, 3=two or more, 4=AIAN, 5=Asian, 6=Black, 7=Hispanic, 8=NHPI, 9=White, 99=total
+      - name: sex
+        type: int
+        nullable: false
+        comment: Sex code — PK component; 1=men, 2=women, 99=total both sexes
+      - name: awards
+        type: int
+        nullable: true
+        comment: Count of completions for this institution/CIP/level/major/race/sex cell
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/college-university/ipeds/completions-cip-2/{year}/"
+      method: GET
+      parameters:
+        limit: "5000"
+        year: "${EDU_IPEDS_YEAR:2022}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_IPEDS_START_YEAR:2015}"
+          end: "${EDU_IPEDS_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # IPEDS FINANCIALS — NCES F survey, revenues and expenditures
+  # Source: NCES bulk CSV ZIPs — nces.ed.gov/ipeds/datacenter/data/
+  # Three form types per fiscal year (combined in one table via form_type column):
+  #   F1A = GASB (public institutions)           ~3,900 rows/year
+  #   F2  = FASB larger (private non-profit)     ~3,600 rows/year
+  #   F3  = FASB smaller (private non-profit)    ~4,200 rows/year
+  # URL pattern: F{YY1}{YY2}_F{FORM}.zip  e.g. F2122_F1A.zip = FY2021-22 GASB
+  # Available: FY1987-88 through FY2021-22 (final); FY2022-23 provisional (~half coverage)
+  # NOTE: Urban Institute API stops at 2017 — use NCES bulk ZIP for all years.
+  # Column names use NCES coded names (F1B01, F1C011 etc.); transformer maps to canonical.
+  # ==========================================================================
+  - name: ipeds_financials
+    releaseWindow:
+      months: [1]           # IPEDS Finance survey lags other surveys; releases January
+    pattern: "year={year}/form_type={form_type}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+        - name: form_type
+          type: VARCHAR
+
+    comment: >
+      NCES IPEDS Finance survey (F survey). Revenues, expenditures, endowment, and
+      net position per institution per fiscal year. Sourced from NCES bulk ZIP downloads
+      (nces.ed.gov/ipeds/datacenter/data/). Three form_type variants cover all institutions:
+      F1A=GASB public, F2=FASB larger private, F3=FASB smaller private non-profit.
+      All monetary values in dollars. Transformer maps NCES coded column names to canonical
+      names. FY2022-23 is provisional (flag with is_provisional=true); FY2021-22 is the
+      most recent final release. Joins to ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Fiscal year end (end year of academic year, e.g. 2022 = FY2021-22) — PK component
+      - name: form_type
+        type: string
+        nullable: false
+        comment: NCES form variant — PK component; F1A=GASB public, F2=FASB larger private, F3=FASB smaller private
+      - name: is_provisional
+        type: int
+        nullable: false
+        comment: 1 if this is a provisional release (FY2022-23 and later); 0 if final
+      - name: rev_tuition_fees_gross
+        type: double
+        nullable: true
+        comment: Gross tuition and fees revenue before allowances
+      - name: rev_tuition_fees_net
+        type: double
+        nullable: true
+        comment: Net tuition and fees revenue after discounts/allowances
+      - name: rev_appropriations_state
+        type: double
+        nullable: true
+        comment: State appropriations revenue
+      - name: rev_appropriations_fed
+        type: double
+        nullable: true
+        comment: Federal appropriations revenue
+      - name: rev_grants_contracts_federal
+        type: double
+        nullable: true
+        comment: Federal grants and contracts revenue
+      - name: rev_grants_contracts_state
+        type: double
+        nullable: true
+        comment: State grants and contracts revenue
+      - name: rev_fed_approps_grants
+        type: double
+        nullable: true
+        comment: Combined federal appropriations + grants revenue
+      - name: rev_state_local_approps_grants
+        type: double
+        nullable: true
+        comment: Combined state/local appropriations + grants revenue
+      - name: rev_gifts_grants_contracts
+        type: double
+        nullable: true
+        comment: Private gifts, grants, and contracts revenue
+      - name: rev_investment_return
+        type: double
+        nullable: true
+        comment: Return on investments and endowment
+      - name: rev_auxiliary_enterprises_net
+        type: double
+        nullable: true
+        comment: Auxiliary enterprises net revenue (housing, dining, bookstore)
+      - name: rev_operating
+        type: double
+        nullable: true
+        comment: Total operating revenues
+      - name: rev_nonoperating
+        type: double
+        nullable: true
+        comment: Total nonoperating revenues
+      - name: rev_total_current
+        type: double
+        nullable: true
+        comment: Total all revenues and additions
+      - name: sch_pell_grant
+        type: double
+        nullable: true
+        comment: Pell grant scholarships/fellowships
+      - name: sch_grants_institutional
+        type: double
+        nullable: true
+        comment: Unrestricted institutional grants awarded
+      - name: sch_total_student_aid
+        type: double
+        nullable: true
+        comment: Total student aid awarded
+      - name: sch_allowances_tuition_fees
+        type: double
+        nullable: true
+        comment: Discount/allowance applied to tuition and fees
+      - name: exp_instruc_total
+        type: double
+        nullable: true
+        comment: Instruction expenditures total
+      - name: exp_research_total
+        type: double
+        nullable: true
+        comment: Research expenditures total
+      - name: exp_pub_serv_total
+        type: double
+        nullable: true
+        comment: Public service expenditures total
+      - name: exp_acad_supp_total
+        type: double
+        nullable: true
+        comment: Academic support expenditures (libraries, computing, curriculum)
+      - name: exp_student_serv_total
+        type: double
+        nullable: true
+        comment: Student services expenditures (admissions, registrar, athletics)
+      - name: exp_inst_supp_total
+        type: double
+        nullable: true
+        comment: Institutional support expenditures (executive management, finance, HR)
+      - name: exp_aux_ent_total
+        type: double
+        nullable: true
+        comment: Auxiliary enterprises expenditures
+      - name: exp_net_grant_aid_total
+        type: double
+        nullable: true
+        comment: Net grant aid and fellowships expenditures
+      - name: exp_total_current
+        type: double
+        nullable: true
+        comment: Total expenses and deductions
+      - name: exp_total_salaries
+        type: double
+        nullable: true
+        comment: Total salary expenditures across all functions
+      - name: endowment_beg
+        type: double
+        nullable: true
+        comment: Endowment assets beginning of year
+      - name: endowment_end
+        type: double
+        nullable: true
+        comment: Endowment assets end of year
+      - name: assets
+        type: double
+        nullable: true
+        comment: Total assets
+      - name: liabilities
+        type: double
+        nullable: true
+        comment: Total liabilities
+      - name: net_position_end
+        type: double
+        nullable: true
+        comment: Net position / net assets at end of year
+      - name: longterm_debt
+        type: double
+        nullable: true
+        comment: Long-term debt outstanding
+      - name: est_fte
+        type: int
+        nullable: true
+        comment: Estimated FTE enrollment (used for per-student ratio calculations)
+
+    source:
+      type: http
+      url: "https://nces.ed.gov/ipeds/datacenter/data/F{fiscal_yy1}{fiscal_yy2}_{form_type}.zip"
+      method: GET
+      response:
+        format: csv
+        encoding: ZIP
+        # ZIP contains base file and _rv (revised) file with same row count but corrected values.
+        # Prefer _rv when present; fall back to base. Both have identical schema.
+        filePattern: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}_rv.csv"
+        filePatternFallback: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}.csv"
+        # X-prefixed columns are imputation flags — transformer must skip them.
+        # Column coding differs per form_type; transformer maps all three to canonical names:
+        #   F1A: F1B01=tuition_net, F1C011=instruction, F1H01/02=endowment_beg/end
+        #   F2:  F2B01=tuition_net, F2C01=instruction, F2H01/02=endowment_beg/end
+        #   F3:  F3B01=tuition_net, F3C01=instruction, F3G01/02=endowment_beg/end
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 3
+        retryOn: [500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_IPEDS_FINANCE_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_IPEDS_FINANCE_START_YEAR:2015}"
+          end: "${EDU_IPEDS_FINANCE_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+      form_type:
+        - F1A
+        - F2
+        - F3
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year, form_type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # IPEDS TUITION — NCES IC_AY survey, annual published tuition and fees
+  # Urban Institute API: college-university/ipeds/academic-year-tuition/{year}/
+  # ~17,000 rows/year (institution × level_of_study × tuition_type)
+  # Confirmed working: 17,296 records for year=2019
+  # ==========================================================================
+  - name: ipeds_tuition
+    releaseWindow:
+      months: [11]          # IPEDS Fall Data Collection releases November
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NCES IPEDS IC_AY (Institutional Characteristics — Academic Year) survey.
+      Published tuition and fees by institution, level of study, and tuition type.
+      One row per (unitid, year, level_of_study, tuition_type).
+      level_of_study: 1=undergraduate, 2=graduate.
+      tuition_type: 1=in-district, 2=in-state, 3=out-of-state, 4=out-of-district.
+      Use tuition_type=2 for in-state and tuition_type=3 for out-of-state comparisons.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Academic year — PK component
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS (denormalized)
+      - name: level_of_study
+        type: int
+        nullable: false
+        comment: 1=undergraduate, 2=graduate — PK component
+      - name: tuition_type
+        type: int
+        nullable: false
+        comment: 1=in-district, 2=in-state, 3=out-of-state, 4=out-of-district — PK component
+      - name: tuition_fees_ft
+        type: int
+        nullable: true
+        comment: Full-time tuition and fees (combined)
+      - name: tuition_ft
+        type: int
+        nullable: true
+        comment: Full-time tuition only
+      - name: fees_ft
+        type: int
+        nullable: true
+        comment: Full-time required fees only
+      - name: credit_hour_charge_pt
+        type: int
+        nullable: true
+        comment: Per-credit-hour charge for part-time students
+      - name: tuition_published
+        type: int
+        nullable: true
+        comment: Published (sticker) tuition
+      - name: fees_published
+        type: int
+        nullable: true
+        comment: Published required fees
+      - name: tuition_fees_published
+        type: int
+        nullable: true
+        comment: Published total tuition and fees
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/college-university/ipeds/academic-year-tuition/{year}/"
+      method: GET
+      parameters:
+        limit: "5000"
+        year: "${EDU_IPEDS_YEAR:2022}"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_IPEDS_START_YEAR:2015}"
+          end: "${EDU_IPEDS_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer"
+
+    dimensions:
+      year:
+        - 2015
+        - 2016
+        - 2017
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # COLLEGE SCORECARD — Institution-level post-enrollment outcomes
+  # API: https://api.data.gov/ed/collegescorecard/v1/schools.json
+  # NOTE: api.collegescorecard.ed.gov is NXDOMAIN — use api.data.gov proxy.
+  # Requires free API key: COLLEGE_SCORECARD_API_KEY (api.data.gov/signup)
+  # Confirmed working: 6,322 institutions via api.data.gov proxy
+  # ==========================================================================
+  - name: college_scorecard
+    releaseWindow:
+      months: [10]          # College Scorecard annual cohort data releases October
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      Dept of Ed College Scorecard institution-level outcomes. Earnings, debt,
+      completion rates, and enrollment demographics. One row per institution per
+      vintage year. Joins to ipeds_institutions via id=unitid or ope8_id=opeid.
+      API key required (COLLEGE_SCORECARD_API_KEY); PrivacySuppressed values are null.
+      Earnings field is mean (not median) at 10yr — median available at 8yr.
+
+    columns:
+      - name: id
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: ope8_id
+        type: string
+        nullable: true
+        comment: OPE ID 8-digit — FK to ipeds_institutions.opeid
+      - name: ope6_id
+        type: string
+        nullable: true
+        comment: OPE ID 6-digit
+      - name: year
+        type: int
+        nullable: false
+        comment: Data vintage year — PK component
+      - name: name
+        type: string
+        nullable: true
+        comment: Institution name (school.name)
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - name: state
+        type: string
+        nullable: true
+        comment: State abbreviation — FK to geo.states.state_abbr
+      - name: ownership
+        type: int
+        nullable: true
+        comment: 1=public, 2=private nonprofit, 3=private for-profit
+      - name: carnegie_basic
+        type: int
+        nullable: true
+        comment: Carnegie basic classification (integer code)
+      - name: hbcu
+        type: int
+        nullable: true
+        comment: HBCU flag (1=yes)
+      - name: tribal
+        type: int
+        nullable: true
+        comment: Tribal college flag (1=yes)
+      - name: hispanic_serving
+        type: int
+        nullable: true
+        comment: Hispanic-serving institution (1=yes)
+      - name: online_only
+        type: int
+        nullable: true
+        comment: Online-only institution (1=yes)
+      - name: locale
+        type: int
+        nullable: true
+        comment: NCES locale code
+      - name: size
+        type: int
+        nullable: true
+        comment: Total enrollment (latest.student.size)
+      - name: pell_grant_rate
+        type: double
+        nullable: true
+        comment: Share of students receiving Pell grants (latest.student.aid.pell_grant_rate)
+      - name: completion_rate_4yr
+        type: double
+        nullable: true
+        comment: 6-year completion rate at 150% time for 4yr institutions
+      - name: completion_rate_2yr
+        type: double
+        nullable: true
+        comment: Completion rate for <4yr institutions
+      - name: retention_rate_fulltime
+        type: double
+        nullable: true
+        comment: First-time full-time student retention rate (4yr)
+      - name: median_debt_completers
+        type: double
+        nullable: true
+        comment: Median federal loan debt at completion (aid.median_debt.completers.overall)
+      - name: median_debt_noncompleters
+        type: double
+        nullable: true
+        comment: Median federal loan debt for non-completers (aid.median_debt.noncompleters)
+      - name: mean_earnings_10yr
+        type: int
+        nullable: true
+        comment: "Mean earnings 10yr after entry for working non-enrolled students (note: mean, not median)"
+      - name: median_earnings_8yr
+        type: double
+        nullable: true
+        comment: Median earnings 8yr after entry (earnings.8_yrs_after_entry.median_earnings)
+      - name: median_family_income
+        type: int
+        nullable: true
+        comment: Median family income of entering students
+      - name: default_rate_3yr
+        type: double
+        nullable: true
+        comment: 3-year student loan cohort default rate
+      - name: avg_net_price_public
+        type: int
+        nullable: true
+        comment: Average net price for public institutions after aid
+      - name: avg_net_price_private
+        type: int
+        nullable: true
+        comment: Average net price for private institutions after aid
+      - name: tuition_in_state
+        type: int
+        nullable: true
+        comment: In-state tuition (cost.tuition.in_state)
+      - name: tuition_out_state
+        type: int
+        nullable: true
+        comment: Out-of-state tuition (cost.tuition.out_of_state)
+
+    source:
+      type: http
+      url: "https://api.data.gov/ed/collegescorecard/v1/schools.json"
+      method: GET
+      parameters:
+        api_key: "${COLLEGE_SCORECARD_API_KEY}"
+        per_page: "100"
+        fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,school.online_only,school.locale,latest.student.size,latest.student.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 100
+          limitParam: "per_page"
+          offsetParam: "page"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_SCORECARD_START_YEAR:2018}"
+          end: "${EDU_SCORECARD_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer"
+
+    dimensions:
+      year:
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # COLLEGE SCORECARD PROGRAMS — program-level earnings by CIP code
+  # API: api.data.gov/ed/collegescorecard/v1/schools.json
+  # Programs nested under latest.programs.cip_4_digit; ~150,000 program rows per year
+  # ==========================================================================
+  - name: college_scorecard_programs
+    releaseWindow:
+      months: [10]          # College Scorecard annual cohort data releases October
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      Dept of Ed College Scorecard program-level outcomes by CIP 4-digit code.
+      One row per institution × program × credential level per year.
+      Earnings by field of study — the most granular post-graduation outcome data.
+      Joins to ipeds_completions via (unitid=unit_id, cipcode LIKE cip_code+'%').
+      PrivacySuppressed values are null.
+
+    columns:
+      - name: unit_id
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: ope6_id
+        type: string
+        nullable: true
+        comment: OPE ID 6-digit
+      - name: year
+        type: int
+        nullable: false
+        comment: Data vintage year — PK component
+      - name: cip_code
+        type: string
+        nullable: false
+        comment: 4-digit CIP code (e.g. "0199") — PK component
+      - name: cip_title
+        type: string
+        nullable: true
+        comment: CIP field of study title
+      - name: credential_level
+        type: int
+        nullable: false
+        comment: Credential level code — PK component; 1=certificate <1yr, 2=certificate 1-2yr, 3=associate, 5=bachelor's, 7=master's, 17=doctoral
+      - name: credential_title
+        type: string
+        nullable: true
+        comment: Credential level description
+      - name: ipeds_awards
+        type: int
+        nullable: true
+        comment: IPEDS completions count for this program (counts.ipeds_awards1)
+      - name: median_earnings_1yr
+        type: int
+        nullable: true
+        comment: Median earnings 1yr after completion (earnings.1_yr.overall_median_earnings)
+      - name: median_earnings_4yr
+        type: int
+        nullable: true
+        comment: Median earnings 4yr after completion
+      - name: median_earnings_5yr
+        type: int
+        nullable: true
+        comment: Median earnings 5yr after completion
+      - name: pell_median_earnings_1yr
+        type: int
+        nullable: true
+        comment: Pell grant recipient median earnings 1yr after completion
+      - name: nonpell_median_earnings_1yr
+        type: int
+        nullable: true
+        comment: Non-Pell recipient median earnings 1yr after completion
+
+    source:
+      type: http
+      url: "https://api.data.gov/ed/collegescorecard/v1/schools.json"
+      method: GET
+      parameters:
+        api_key: "${COLLEGE_SCORECARD_API_KEY}"
+        per_page: "100"
+        fields: "latest.programs.cip_4_digit.unit_id,latest.programs.cip_4_digit.ope6_id,latest.programs.cip_4_digit.code,latest.programs.cip_4_digit.title,latest.programs.cip_4_digit.credential.level,latest.programs.cip_4_digit.credential.title,latest.programs.cip_4_digit.counts.ipeds_awards1,latest.programs.cip_4_digit.earnings.1_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.4_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.5_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.pell_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 100
+          limitParam: "per_page"
+          offsetParam: "page"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
+        yearParam: "year"
+        yearRange:
+          start: "${EDU_SCORECARD_START_YEAR:2018}"
+          end: "${EDU_SCORECARD_END_YEAR:2022}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer"
+
+    dimensions:
+      year:
+        - 2018
+        - 2019
+        - 2020
+        - 2021
+        - 2022
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+# ============================================================================
+# Views
+# ============================================================================
+
+views:
+
+  - name: district_resources
+    comment: >
+      District enrollment and staffing resource ratios. Joins CCD district
+      directory to school-level lunch program aggregates for a poverty proxy.
+      One row per district per year.
+    sql: >
+      SELECT
+        d.leaid,
+        d.year,
+        d.lea_name,
+        d.fips,
+        d.state_abbr,
+        d.county_code,
+        d.urban_centric_locale,
+        d.enrollment,
+        d.number_of_schools,
+        d.teachers_total_fte,
+        d.guidance_counselors_total_fte,
+        d.school_psychologists_fte,
+        d.enrollment / NULLIF(d.teachers_total_fte, 0)                    AS pupil_teacher_ratio,
+        s.free_or_reduced_price_lunch                                      AS district_frpl_count,
+        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)     AS frpl_rate
+      FROM ccd_districts d
+      LEFT JOIN (
+        SELECT leaid, year,
+               SUM(free_or_reduced_price_lunch) AS free_or_reduced_price_lunch,
+               SUM(enrollment)                  AS enrollment
+        FROM ccd_schools
+        GROUP BY leaid, year
+      ) s ON d.leaid = s.leaid AND d.year = s.year
+
+  - name: naep_state_trends
+    comment: >
+      NAEP aggregate trends for all-student subgroup by state, subject, and grade.
+      Filters to variable_type=TOTAL to avoid double-counting disaggregations.
+      One row per state × year × subject × grade.
+    sql: >
+      SELECT
+        n.jurisdiction,
+        n.jurisdiction_name,
+        n.year,
+        n.subject,
+        n.grade,
+        n.avg_score,
+        n.std_error,
+        n.pct_below_basic,
+        n.pct_proficient,
+        n.pct_advanced,
+        n.sample_size
+      FROM naep_scores n
+      WHERE n.variable_type = 'TOTAL'
+        AND n.subgroup_name = 'All students'
+
+  - name: school_equity_profile
+    comment: >
+      School-level equity view joining CCD enrollment data with CRDC safety and
+      staffing metrics. Uses CRDC teachers-staff topic for staffing, offenses topic
+      for safety incidents. Filters CRDC to total subgroup (race=MF) to avoid
+      row multiplication from disaggregated chronic absenteeism rows.
+    sql: >
+      SELECT
+        s.ncessch,
+        s.school_name,
+        s.leaid,
+        s.year,
+        s.enrollment,
+        s.free_or_reduced_price_lunch,
+        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)  AS frpl_rate,
+        s.charter,
+        s.school_level,
+        ts.counselors_fte,
+        ts.psychologists_fte,
+        ts.teachers_certified_fte,
+        ts.teachers_uncertified_fte,
+        ts.teachers_absent_fte,
+        ts.law_enforcement_ind,
+        o.firearm_incident_ind,
+        o.rape_incidents,
+        o.possession_firearm_incidents
+      FROM ccd_schools s
+      LEFT JOIN crdc_schools ts
+        ON s.ncessch = ts.ncessch
+        AND ts.crdc_topic = 'teachers-staff'
+        AND ts.year = (
+          CASE WHEN s.year >= 2017 THEN 2017
+               WHEN s.year >= 2015 THEN 2015
+               WHEN s.year >= 2013 THEN 2013
+               ELSE 2013 END
+        )
+      LEFT JOIN crdc_schools o
+        ON s.ncessch = o.ncessch
+        AND o.crdc_topic = 'offenses'
+        AND o.year = ts.year
+
+  - name: institution_outcomes
+    comment: >
+      Higher education institution outcomes: IPEDS directory joined to College
+      Scorecard earnings and debt, plus in-state undergraduate tuition from ipeds_tuition.
+      One row per institution per year. Covers both 2yr and 4yr institutions.
+    sql: >
+      SELECT
+        i.unitid,
+        i.inst_name,
+        i.city,
+        i.state_abbr,
+        i.county_fips,
+        i.year,
+        i.sector,
+        i.inst_control,
+        i.institution_level,
+        i.hbcu,
+        i.tribal_college,
+        i.inst_size,
+        t.tuition_fees_ft AS tuition_in_state,
+        t_out.tuition_fees_ft AS tuition_out_state,
+        sc.pell_grant_rate,
+        sc.completion_rate_4yr,
+        sc.completion_rate_2yr,
+        sc.median_debt_completers,
+        sc.median_debt_noncompleters,
+        sc.mean_earnings_10yr,
+        sc.median_earnings_8yr,
+        sc.median_family_income,
+        sc.default_rate_3yr,
+        sc.avg_net_price_public,
+        sc.avg_net_price_private
+      FROM ipeds_institutions i
+      LEFT JOIN ipeds_tuition t
+        ON i.unitid = t.unitid AND i.year = t.year
+        AND t.level_of_study = 1 AND t.tuition_type = 2
+      LEFT JOIN ipeds_tuition t_out
+        ON i.unitid = t_out.unitid AND i.year = t_out.year
+        AND t_out.level_of_study = 1 AND t_out.tuition_type = 3
+      LEFT JOIN college_scorecard sc
+        ON i.unitid = sc.id AND i.year = sc.year
+
+  - name: field_of_study_roi
+    comment: >
+      Program-level return on investment: College Scorecard earnings by CIP code
+      and credential joined to IPEDS completions counts. Enables ranking fields
+      of study by earnings at 1yr, 4yr, and 5yr after completion.
+    sql: >
+      SELECT
+        p.unit_id,
+        p.year,
+        p.cip_code,
+        p.cip_title,
+        p.credential_level,
+        p.credential_title,
+        p.ipeds_awards,
+        p.median_earnings_1yr,
+        p.median_earnings_4yr,
+        p.median_earnings_5yr,
+        p.pell_median_earnings_1yr,
+        p.nonpell_median_earnings_1yr,
+        i.inst_name,
+        i.state_abbr,
+        i.sector
+      FROM college_scorecard_programs p
+      LEFT JOIN ipeds_institutions i
+        ON p.unit_id = i.unitid AND p.year = i.year
+
+  - name: district_charter_profile
+    comment: >
+      District-level summary of school types: charter, magnet, Title I, and virtual
+      school counts derived from ccd_schools. Joins to ccd_districts for district
+      name and enrollment context. One row per district per year.
+    sql: >
+      SELECT
+        d.leaid,
+        d.year,
+        d.lea_name,
+        d.fips,
+        d.state_abbr,
+        d.enrollment                                                        AS district_enrollment,
+        d.number_of_schools,
+        d.teachers_total_fte,
+        SUM(CASE WHEN s.charter = 1 THEN 1 ELSE 0 END)                     AS charter_school_count,
+        SUM(CASE WHEN s.magnet = 1 THEN 1 ELSE 0 END)                      AS magnet_school_count,
+        SUM(CASE WHEN s.virtual = 1 THEN 1 ELSE 0 END)                     AS virtual_school_count,
+        SUM(CASE WHEN s.title_i_schoolwide = 1 THEN 1 ELSE 0 END)          AS title_i_schoolwide_count,
+        SUM(CASE WHEN s.title_i_eligible = 1 THEN 1 ELSE 0 END)            AS title_i_eligible_count,
+        SUM(CASE WHEN s.school_status = 1 THEN 1 ELSE 0 END)               AS open_school_count,
+        SUM(s.enrollment)                                                   AS school_enrollment_sum,
+        SUM(s.free_or_reduced_price_lunch) * 1.0
+          / NULLIF(SUM(s.enrollment), 0)                                    AS district_frpl_rate,
+        SUM(CASE WHEN s.charter = 1 THEN 1 ELSE 0 END) * 1.0
+          / NULLIF(COUNT(*), 0)                                             AS charter_share
+      FROM ccd_districts d
+      JOIN ccd_schools s
+        ON d.leaid = s.leaid AND d.year = s.year
+      GROUP BY
+        d.leaid, d.year, d.lea_name, d.fips, d.state_abbr,
+        d.enrollment, d.number_of_schools, d.teachers_total_fte
+
+  - name: institution_completions_summary
+    comment: >
+      Institution-level completions totals by award level per year.
+      Collapses ipeds_completions to one row per institution per year by summing
+      awards for all race=99 (total), sex=99 (total), majornum=1 (first-major)
+      rows. Joins to ipeds_institutions for institutional context.
+      award_level codes: 3=Associate, 5=Bachelor, 7=Master, 17/18/19=Doctoral.
+    sql: >
+      SELECT
+        i.unitid,
+        i.inst_name,
+        i.year,
+        i.state_abbr,
+        i.sector,
+        i.inst_control,
+        i.hbcu,
+        i.tribal_college,
+        SUM(CASE WHEN c.award_level = 3
+            THEN c.awards ELSE 0 END)                                       AS associate_total,
+        SUM(CASE WHEN c.award_level = 5
+            THEN c.awards ELSE 0 END)                                       AS bachelor_total,
+        SUM(CASE WHEN c.award_level = 7
+            THEN c.awards ELSE 0 END)                                       AS masters_total,
+        SUM(CASE WHEN c.award_level IN (17, 18, 19)
+            THEN c.awards ELSE 0 END)                                       AS doctoral_total,
+        SUM(CASE WHEN c.award_level IN (1, 2)
+            THEN c.awards ELSE 0 END)                                       AS certificate_total,
+        SUM(c.awards)                                                       AS completions_total
+      FROM ipeds_institutions i
+      LEFT JOIN ipeds_completions c
+        ON i.unitid = c.unitid AND i.year = c.year
+        AND c.race = 99 AND c.sex = 99 AND c.majornum = 1
+      GROUP BY
+        i.unitid, i.inst_name, i.year, i.state_abbr, i.sector,
+        i.inst_control, i.hbcu, i.tribal_college
+
+  - name: ipeds_financial_efficiency
+    comment: >
+      Institution-level financial efficiency ratios from IPEDS Finance survey.
+      All monetary ratios are per-FTE student (est_fte from finance form).
+      tuition_dependency = net_tuition / total_revenue; a ratio > 0.70 signals
+      heavy reliance on tuition. Form type is preserved so GASB/FASB institutions
+      can be filtered or compared. One row per institution per fiscal year.
+    sql: >
+      SELECT
+        f.unitid,
+        f.year,
+        f.form_type,
+        f.is_provisional,
+        i.inst_name,
+        i.state_abbr,
+        i.sector,
+        i.inst_control,
+        i.hbcu,
+        f.est_fte,
+        f.rev_tuition_fees_net,
+        f.rev_total_current,
+        f.exp_instruc_total,
+        f.endowment_end,
+        f.net_position_end,
+        f.rev_tuition_fees_net / NULLIF(f.rev_total_current, 0)            AS tuition_dependency_ratio,
+        f.exp_instruc_total / NULLIF(f.est_fte, 0)                         AS instruction_exp_per_fte,
+        f.rev_total_current / NULLIF(f.est_fte, 0)                         AS total_revenue_per_fte,
+        f.rev_tuition_fees_net / NULLIF(f.est_fte, 0)                      AS net_tuition_per_fte,
+        f.endowment_end / NULLIF(f.est_fte, 0)                             AS endowment_per_fte,
+        f.exp_total_salaries / NULLIF(f.exp_total_current, 0)              AS salary_share_of_expenses,
+        f.sch_total_student_aid / NULLIF(f.rev_tuition_fees_gross, 0)      AS institutional_discount_rate
+      FROM ipeds_financials f
+      LEFT JOIN ipeds_institutions i
+        ON f.unitid = i.unitid AND f.year = i.year
+
+  - name: district_naep_spending
+    comment: >
+      Achievement gap analysis: NAEP state scores joined to district resource
+      levels. Aggregates district data to state level for NAEP join. Enables
+      correlation of per-pupil resources with assessment outcomes.
+    sql: >
+      SELECT
+        n.jurisdiction,
+        n.jurisdiction_name,
+        n.year,
+        n.subject,
+        n.grade,
+        n.avg_score,
+        n.pct_proficient,
+        n.pct_advanced,
+        n.sample_size,
+        d.total_enrollment,
+        d.avg_pupil_teacher_ratio,
+        d.avg_frpl_rate,
+        d.district_count
+      FROM naep_scores n
+      LEFT JOIN (
+        SELECT
+          fips,
+          year,
+          SUM(enrollment)                                               AS total_enrollment,
+          AVG(enrollment / NULLIF(teachers_total_fte, 0))              AS avg_pupil_teacher_ratio,
+          COUNT(*)                                                      AS district_count,
+          SUM(school_frpl.frpl_count) * 1.0 / NULLIF(SUM(enrollment), 0) AS avg_frpl_rate
+        FROM ccd_districts d2
+        LEFT JOIN (
+          SELECT leaid, year, SUM(free_or_reduced_price_lunch) AS frpl_count
+          FROM ccd_schools GROUP BY leaid, year
+        ) school_frpl ON d2.leaid = school_frpl.leaid AND d2.year = school_frpl.year
+        GROUP BY fips, year
+      ) d ON n.jurisdiction = d.fips AND n.year = d.year
+      WHERE n.variable_type = 'TOTAL' AND n.subgroup_name = 'All students'
+
+  # --------------------------------------------------------------------------
+  # Inter-domain views (require geo schema)
+  # --------------------------------------------------------------------------
+
+  - name: institution_county_context
+    comment: >
+      IPEDS institutions enriched with county name from geo.counties.
+      Joins via county_fips_str (zero-padded 5-digit FIPS computed by transformer).
+      geo.counties is partitioned by year; this view uses the latest available geo year.
+      Requires geo schema present in the same Calcite model.
+      One row per institution per year (geo join may expand slightly if multi-year geo present).
+    sql: >
+      SELECT
+        i.unitid,
+        i.inst_name,
+        i.year,
+        i.state_abbr,
+        i.fips,
+        i.county_fips,
+        i.county_fips_str,
+        i.county_name                                                       AS ipeds_county_name,
+        c.county_name                                                       AS geo_county_name,
+        c.state_fips                                                        AS geo_state_fips,
+        i.city,
+        i.latitude,
+        i.longitude,
+        i.sector,
+        i.inst_control,
+        i.inst_size,
+        i.hbcu,
+        i.tribal_college,
+        i.degree_granting
+      FROM ipeds_institutions i
+      LEFT JOIN geo.counties c
+        ON i.county_fips_str = c.county_fips
+
+  - name: state_naep_geography
+    comment: >
+      NAEP state-level assessment scores joined to geo.states for state name
+      and geographic context. Filters to all-student total rows to avoid
+      double-counting disaggregations. jurisdiction=0 (national aggregate)
+      will not join to geo.states and is retained with null geo fields.
+      Requires geo schema present in the same Calcite model.
+    sql: >
+      SELECT
+        n.jurisdiction,
+        n.jurisdiction_name,
+        s.state_name                                                        AS geo_state_name,
+        s.state_abbr                                                        AS geo_state_abbr,
+        n.year,
+        n.subject,
+        n.grade,
+        n.avg_score,
+        n.std_error,
+        n.pct_below_basic,
+        n.pct_basic,
+        n.pct_proficient,
+        n.pct_advanced,
+        n.sample_size,
+        n.is_displayable
+      FROM naep_scores n
+      LEFT JOIN geo.states s
+        ON n.jurisdiction = s.state_fips
+      WHERE n.variable_type = 'TOTAL'
+        AND n.subgroup_name = 'All students'
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  ccd_districts:
+    primaryKey: [year, leaid]
+    foreignKeys:
+      - columns: [fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links district state to geographic state record
+
+  ccd_schools:
+    primaryKey: [year, ncessch]
+    foreignKeys:
+      - columns: [leaid, year]
+        targetTable: ccd_districts
+        targetColumns: [leaid, year]
+        comment: Links school to parent LEA district record
+      - columns: [fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links school state to geographic state record
+
+  naep_scores:
+    primaryKey: [year, jurisdiction, subject, grade, variable_type, subgroup_name]
+    foreignKeys:
+      - columns: [jurisdiction]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links NAEP state to geo.states; jurisdiction=0 (national aggregate) will not match
+
+  crdc_schools:
+    primaryKey: [year, crdc_topic, crdc_id]
+    foreignKeys:
+      - columns: [ncessch, year]
+        targetTable: ccd_schools
+        targetColumns: [ncessch, year]
+        comment: Links CRDC school record to CCD school directory (crdc_id = ncessch for most schools)
+      - columns: [leaid, year]
+        targetTable: ccd_districts
+        targetColumns: [leaid, year]
+        comment: Links CRDC school to parent district; populated for directory sub-endpoint only
+
+  ipeds_institutions:
+    primaryKey: [year, unitid]
+    foreignKeys:
+      - columns: [fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links institution state to geographic state record
+      - columns: [county_fips_str]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links institution county to geo.counties; county_fips_str is zero-padded by transformer
+
+  ipeds_completions:
+    primaryKey: [year, unitid, cipcode, award_level, majornum, race, sex]
+    foreignKeys:
+      - columns: [unitid, year]
+        targetTable: ipeds_institutions
+        targetColumns: [unitid, year]
+        comment: Links completion record to institution directory
+
+  ipeds_tuition:
+    primaryKey: [year, unitid, level_of_study, tuition_type]
+    foreignKeys:
+      - columns: [unitid, year]
+        targetTable: ipeds_institutions
+        targetColumns: [unitid, year]
+        comment: Links tuition record to institution directory
+
+  ipeds_financials:
+    primaryKey: [year, form_type, unitid]
+    foreignKeys:
+      - columns: [unitid, year]
+        targetTable: ipeds_institutions
+        targetColumns: [unitid, year]
+        comment: Links financial record to institution directory
+
+  college_scorecard:
+    primaryKey: [year, id]
+    foreignKeys:
+      - columns: [id, year]
+        targetTable: ipeds_institutions
+        targetColumns: [unitid, year]
+        comment: Links Scorecard institution to IPEDS directory via unitid
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links institution state to geographic state record
+
+  college_scorecard_programs:
+    primaryKey: [year, unit_id, cip_code, credential_level]
+    foreignKeys:
+      - columns: [unit_id, year]
+        targetTable: college_scorecard
+        targetColumns: [id, year]
+        comment: Links program-level record to institution-level Scorecard record
+      - columns: [unit_id, year]
+        targetTable: ipeds_institutions
+        targetColumns: [unitid, year]
+        comment: Direct link to IPEDS directory; bypasses college_scorecard for joins against ipeds tables

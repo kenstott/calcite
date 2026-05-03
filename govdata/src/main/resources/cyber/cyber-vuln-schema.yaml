@@ -31,6 +31,8 @@ partitionedTables:
   # CWE CATALOG — Canonical CWE dimension shared by cyber_vuln and cyber_threat
   # ==========================================================================
   - name: cwe_catalog
+    releaseWindow:
+      dow: [0]              # Weekly refresh; Sunday run catches MITRE quarterly updates
     pattern: "type=cwe_catalog.parquet"
     partitions:
       style: hive
@@ -416,6 +418,8 @@ partitionedTables:
   # OSV VULNERABILITIES — Open Source Vulnerabilities per-ecosystem records
   # ==========================================================================
   - name: osv_vulnerabilities
+    releaseWindow:
+      dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
     pattern: "type=osv_vulnerabilities.parquet"
     partitions:
       style: hive
@@ -518,6 +522,8 @@ partitionedTables:
   # VULN CROSS REFS — CVE to external identifier mappings
   # ==========================================================================
   - name: vuln_cross_refs
+    releaseWindow:
+      dow: [0]              # Weekly refresh; cross-reference data changes infrequently
     pattern: "type=vuln_cross_refs.parquet"
     partitions:
       style: hive
@@ -583,6 +589,8 @@ partitionedTables:
   # ADVISORIES — CISA cybersecurity advisories
   # ==========================================================================
   - name: advisories
+    releaseWindow:
+      dow: [0]              # Weekly refresh; CISA/GitHub advisories aggregated weekly
     pattern: "type=advisories.parquet"
     partitions:
       style: hive

@@ -1376,8 +1376,12 @@ public class HttpSource implements DataSource {
       }
     }
 
-    // Navigate to data path if specified
-    if (respConfig.getDataPath() != null && !respConfig.getDataPath().isEmpty()) {
+    // Navigate to data path if specified — but skip when a responseTransformer was applied.
+    // Transformers are responsible for their own data extraction (e.g. via extractDataArray()).
+    // Applying dataPath to the transformer's already-extracted array returns empty results.
+    if (responseTransformer == null
+        && respConfig.getDataPath() != null
+        && !respConfig.getDataPath().isEmpty()) {
       root = navigateToPath(root, respConfig.getDataPath());
     }
 

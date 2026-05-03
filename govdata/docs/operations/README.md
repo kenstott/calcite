@@ -13,8 +13,9 @@ SEC Primary (10-K/10-Q)         workers  1 – 17    (worker-01 = 2026+, workers
 SEC Secondary (8-K/Proxy/etc.)  workers 23 – 39    (worker-23 = 2026+, workers 24–39 = 2025–2010)
 SEC Stock Prices                worker  40
 Non-SEC schemas                 workers 18 – 22, 41, 60, 61
-Cyber                           workers 62 – 66
+Cyber                           workers 62 – 66    (worker-62 = initial, 63-66 = recurring cadence)
 Health                          workers 67 – 70    (worker-67 = initial, 68-70 = recurring cadence)
+Education                       workers 71 – 73    (worker-71 = initial, 72-73 = recurring cadence)
 ```
 
 ---
@@ -87,6 +88,7 @@ Approximate per-worker runtimes (order of magnitude, varies significantly with n
 | 61 | Federal Register 2010+ | 3g | 3–6 h |
 | 62 | Cyber initial (NVD full + standards + OTX) | 6g | 2–5 h |
 | 67 | Health initial (all 15 tables, full fetch) | 6g | 3–8 h |
+| 71 | Education initial (CCD, IPEDS, NAEP, CRDC, Scorecard) | 6g | 2–6 h |
 | 2–17 | SEC primary per year (×16) | 3g | 2–8 h each |
 | 24–39 | SEC secondary per year (×16) | 3g | 1–4 h each |
 
@@ -127,7 +129,7 @@ they are not year-sharded. Ordered so fast workers fill early slots and heavy-he
 (20, 60, 62, 67) land last.
 
 ```bash
-./run-pool.sh 19,22,61,18,21,62,67,60,20
+./run-pool.sh 19,22,61,18,21,62,67,71,60,20
 ```
 
 | Worker | Schema | Est. runtime | Note |
@@ -139,6 +141,7 @@ they are not year-sharded. Ordered so fast workers fill early slots and heavy-he
 | 21 | Crime | 4–10 h | Large dimension expansion (4g heap) |
 | 62 | Cyber initial | 2–5 h | Full NVD catalog; faster with `CYBER_NVD_API_KEY` |
 | 67 | Health initial | 3–8 h | All 15 health tables; clinical trials cursor pagination |
+| 71 | Education initial | 2–6 h | CCD, IPEDS, NAEP, CRDC, College Scorecard; set `COLLEGE_SCORECARD_API_KEY` for scorecard tables |
 | 60 | FEC | 4–8 h | 3M+ rows/year (5g heap) |
 | 20 | Geographic | 3–8 h | TIGER shapefiles (6g heap); placed last as it's the heaviest |
 
@@ -311,6 +314,21 @@ cd scripts/parallel
 ./run-pool.sh 70
 ```
 
+### Annually (recommended: November 02:00 UTC; re-run January for IPEDS financials)
+
+```bash
+cd scripts/parallel
+
+# Education annual: CCD districts/schools + IPEDS institutions/completions/tuition + College Scorecard
+# Set EDU_CCD_SINCE_YEAR, EDU_IPEDS_SINCE_YEAR, EDU_SCORECARD_SINCE_YEAR in .env.prod
+./run-pool.sh 72
+
+# Education biennial: NAEP assessments + CRDC civil rights data
+# Safe to run annually — returns unchanged data in off-cycle years
+# Set EDU_NAEP_SINCE_YEAR, EDU_CRDC_SINCE_YEAR in .env.prod
+./run-pool.sh 73
+```
+
 ### Hourly (recommended: every 2 hours)
 
 ```bash
@@ -338,6 +356,13 @@ CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 
 # Monthly — health stable reference tables (BRFSS, Medicaid, CMS, FDA, RxNorm)
 0 2 1 * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 70
+
+# Annually — education annual refresh (CCD + IPEDS + College Scorecard); November after IPEDS release
+0 2 1 11 * cd /path/to/govdata/scripts/parallel && ./run-pool.sh 72
+# Annually — IPEDS financials lag to January; re-run 72 to pick up financials
+0 2 1 1 *  cd /path/to/govdata/scripts/parallel && ./run-pool.sh 72
+# Annually — education biennial (NAEP + CRDC); safe to run every year
+0 3 1 10 * cd /path/to/govdata/scripts/parallel && ./run-pool.sh 73
 
 # Hourly — cyber live IOC feeds
 0 */2 * * * cd /path/to/govdata/scripts/parallel && CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
@@ -367,6 +392,8 @@ CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
 | Health clinical trials | 68 | Daily | `lastUpdatePostDate.gte` filter via `HEALTH_TRIALS_SINCE_DATE` |
 | Health CDC COVID/mortality | 69 | Weekly | CDC COVID vaccinations delta + CDC mortality full refresh |
 | Health BRFSS/Medicaid/CMS/FDA | 70 | Monthly | Stable reference tables; incremental via BRFSS/Medicaid env vars |
+| Education CCD/IPEDS/Scorecard | 72 | Annual (Nov + Jan) | CCD and IPEDS bulk releases; incremental via `EDU_*_SINCE_YEAR` vars |
+| Education NAEP/CRDC | 73 | Annual (Oct, safe off-cycle) | Biennial sources; returns unchanged data between release years |
 
 ---
 
@@ -410,3 +437,4 @@ By default the pool fills to the available memory budget (total RAM minus 1.5GB 
 
 See [cyber-maintenance.md](cyber-maintenance.md) for cyber-specific operational details.
 See [health-maintenance.md](health-maintenance.md) for health-specific operational details.
+See [edu-maintenance.md](edu-maintenance.md) for education-specific operational details.

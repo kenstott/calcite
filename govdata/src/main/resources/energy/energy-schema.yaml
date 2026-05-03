@@ -1,0 +1,1925 @@
+# ============================================================================
+# U.S. Energy Data Schema (ENERGY)
+# ============================================================================
+# Data Sources:
+#   - EIA API v2 (Energy Information Administration)
+#       - Electricity generation, retail sales, state energy consumption
+#       - Natural gas storage, petroleum stocks, refinery operations
+#       - Fossil fuel (crude oil) production
+#   - EIA Bulk Downloads (ZIP/XLSX)
+#       - EIA-861 Annual Electric Power Industry Report (utility survey)
+#       - EIA-860 Annual Electric Generator Report (power plants)
+#       - EIA-860M Monthly Generator Inventory (capacity changes)
+#   - EIA Petroleum Imports (EIA-814 monthly XLSX)
+#   - MSHA Bulk Pipeline (pipe-delimited CSV ZIP)
+#       - Coal mine production and demographics (MinesProdYearly)
+#
+# Features:
+#   - Cross-references with geo.states via state_fips
+#   - Hive-style partitioning for efficient querying
+#   - Rate-limited EIA API integration (10 req/sec)
+#   - OFFSET pagination for EIA API v2 endpoints
+#   - TEXT format for bulk XLSX/ZIP sources; transformers handle extraction
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:energy}"
+materializeDirectory: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=energy}"
+
+comment: >
+  Comprehensive U.S. energy data from the Energy Information Administration (EIA) and
+  Mine Safety and Health Administration (MSHA). Covers electricity generation and retail
+  prices, utility operations, power plant inventory, generator capacity changes, fossil
+  fuel production, state energy consumption, natural gas storage, petroleum stocks, crude
+  oil imports, refinery operations, and coal mine production. All state-level tables join
+  with geo.states via state_fips. EIA API tables use OFFSET pagination against v2 endpoints.
+  Bulk tables (EIA-860, EIA-861, EIA-860M, EIA-814) use TEXT format with transformers that
+  download, extract, and parse XLSX/ZIP archives.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_abbr_column: &state_abbr_column
+    name: state_abbr
+    type: string
+    nullable: true
+    comment: 2-letter state abbreviation (e.g., 'CA')
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code (e.g., '06')
+
+  state_description_column: &state_description_column
+    name: state_description
+    type: string
+    nullable: true
+    comment: Full state name
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  eia_rate_limit: &eia_rate_limit
+    requestsPerSecond: 10.0
+    retryOn: [429, 503]
+    maxRetries: 3
+
+  raw_cache_enabled: &raw_cache_enabled
+    enabled: true
+
+  iceberg_common: &iceberg_common
+    warehousePath: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=energy}/ENERGY"
+    catalogType: hadoop
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Default EIA electricity generation year range (monthly data)
+  eia_elec_gen_years: &eia_elec_gen_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1990}"
+    end: current
+    dataLag: 2
+
+  # EIA retail sales year range
+  eia_elec_price_years: &eia_elec_price_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1990}"
+    end: current
+    dataLag: 2
+
+  # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs)
+  eia_utility_years: &eia_utility_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2008}"
+    end: current
+    dataLag: 1
+
+  # EIA-860 power plant annual year range
+  eia_plant_years: &eia_plant_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2008}"
+    end: current
+    dataLag: 1
+
+  # EIA-860M capacity changes year range (monthly snapshot files available from 2015)
+  eia_capacity_years: &eia_capacity_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2015}"
+    end: current
+    dataLag: 1
+
+  # EIA fossil fuel production (crude API) year range
+  eia_fossil_years: &eia_fossil_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1990}"
+    end: current
+    dataLag: 2
+
+  # EIA SEDS state energy consumption year range
+  eia_seds_years: &eia_seds_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1990}"
+    end: current
+    dataLag: 2
+
+  # EIA natural gas storage year range (weekly data available from 2000)
+  eia_gas_storage_years: &eia_gas_storage_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2000}"
+    end: current
+    dataLag: 1
+
+  # EIA petroleum stocks year range (weekly data)
+  eia_pet_stocks_years: &eia_pet_stocks_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2000}"
+    end: current
+    dataLag: 1
+
+  # EIA crude oil imports year range (EIA-814 monthly XLSX)
+  eia_crude_imp_years: &eia_crude_imp_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:2000}"
+    end: current
+    dataLag: 2
+
+  # EIA refinery operations year range
+  eia_refinery_years: &eia_refinery_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1990}"
+    end: current
+    dataLag: 2
+
+  # MSHA coal mines year range (MinesProdYearly contains all history; transformer filters by year)
+  msha_coal_years: &msha_coal_years
+    type: yearRange
+    start: "${ENERGY_SINCE_YEAR:1983}"
+    end: current
+    dataLag: 1
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # EIA ELECTRICITY GENERATION - Monthly generation and fuel consumption by state
+  # ---------------------------------------------------------------------------
+  - name: eia_electricity_generation
+    pattern: "type=eia_elec_gen/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 electric power operational data. Monthly electricity generation
+      (thousand MWh), total fuel consumption (MMBtu), fuel consumption for electricity
+      generation (MMBtu), cost per MMBtu, sulfur content, and ash content. Broken down
+      by state, energy source, and sector. One row per state + energy source + sector +
+      year-month. Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - eia_elec_gen
+      year: *eia_elec_gen_years
+
+    columns:
+      - name: generation_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the generation period
+      - name: generation_month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12) of the generation period
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - <<: *state_description_column
+      - name: energy_source_code
+        type: string
+        nullable: true
+        comment: EIA energy source code (e.g., 'COL', 'NG', 'NUC', 'SUN')
+      - name: energy_source
+        type: string
+        nullable: true
+        comment: Full energy source description
+      - name: sector_code
+        type: string
+        nullable: true
+        comment: EIA sector code (e.g., '1', '2', '98', '99')
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector description (e.g., 'Electric Utility', 'IPP Non-CHP')
+      - name: generation_thousand_mwh
+        type: double
+        nullable: true
+        comment: Net electricity generation in thousand MWh
+      - name: fuel_consumed_total_mmbtu
+        type: double
+        nullable: true
+        comment: Total fuel consumed in MMBtu (all purposes)
+      - name: fuel_consumed_for_eg_mmbtu
+        type: double
+        nullable: true
+        comment: Fuel consumed for electricity generation in MMBtu
+      - name: fuel_cost_per_mmbtu
+        type: double
+        nullable: true
+        comment: Fuel cost per MMBtu in dollars
+      - name: sulfur_content
+        type: double
+        nullable: true
+        comment: Sulfur content percentage of fuel
+      - name: ash_content
+        type: double
+        nullable: true
+        comment: Ash content percentage of fuel
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={year}-01&end={year}-12&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaElectricityGenerationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_elec_gen/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_electricity_generation
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA ELECTRICITY PRICES - Annual retail electricity sales and prices by state
+  # ---------------------------------------------------------------------------
+  - name: eia_electricity_prices
+    pattern: "type=eia_elec_price/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 retail electricity sales data. Annual (and optionally monthly) average
+      price (cents/kWh), revenue (million dollars), sales (million kWh), and customer
+      counts by state and sector. One row per state + sector + year (+ month if available).
+      Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - eia_elec_price
+      year: *eia_elec_price_years
+
+    columns:
+      - name: price_year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: price_month
+        type: integer
+        nullable: true
+        comment: Calendar month (1-12), null for annual aggregates
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - <<: *state_description_column
+      - name: sector_code
+        type: string
+        nullable: true
+        comment: EIA customer sector code (e.g., 'RES', 'COM', 'IND', 'TRA', 'ALL')
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector description (e.g., 'Residential', 'Commercial', 'Industrial')
+      - name: avg_price_cents_kwh
+        type: double
+        nullable: true
+        comment: Average retail electricity price in cents per kWh
+      - name: revenue_million_dollars
+        type: double
+        nullable: true
+        comment: Total revenue in million dollars
+      - name: sales_million_kwh
+        type: double
+        nullable: true
+        comment: Total electricity sales in million kWh
+      - name: customers
+        type: integer
+        nullable: true
+        comment: Number of customer accounts
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=annual&start={year}&end={year}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaRetailSalesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_elec_price/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_electricity_prices
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA UTILITY ANNUAL - EIA-861 Annual Electric Power Industry Report
+  # ---------------------------------------------------------------------------
+  - name: eia_utility_annual
+    pattern: "type=eia_utility/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA Form 861 annual electric utility survey. Covers all electric utilities, retail
+      power marketers, and energy service providers. Fields include entity type, NERC region,
+      service type, customer counts and sales by sector (residential, commercial, industrial,
+      transportation), revenue, peak demand, and net generation. One row per utility + year.
+      The transformer downloads and parses the annual ZIP archive of XLSX files from EIA.
+      Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - eia_utility
+      year: *eia_utility_years
+
+    columns:
+      - name: utility_id
+        type: integer
+        nullable: false
+        comment: EIA utility identifier
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Report year
+      - name: utility_name
+        type: string
+        nullable: true
+        comment: Utility company name
+      - name: entity_type
+        type: string
+        nullable: true
+        comment: Entity type code (e.g., 'C', 'I', 'M', 'S', 'F', 'G', 'P', 'Q', 'W')
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: ba_code
+        type: string
+        nullable: true
+        comment: Balancing authority code
+      - name: nerc_region
+        type: string
+        nullable: true
+        comment: NERC reliability region code
+      - name: service_type
+        type: string
+        nullable: true
+        comment: Service type (Bundled, Energy, Delivery)
+      - name: data_type
+        type: string
+        nullable: true
+        comment: Data type indicator
+      - name: activity_generation
+        type: boolean
+        nullable: true
+        comment: Whether utility engages in generation
+      - name: activity_transmission
+        type: boolean
+        nullable: true
+        comment: Whether utility engages in transmission
+      - name: activity_distribution
+        type: boolean
+        nullable: true
+        comment: Whether utility engages in distribution
+      - name: customers_residential
+        type: integer
+        nullable: true
+        comment: Number of residential customer accounts
+      - name: customers_commercial
+        type: integer
+        nullable: true
+        comment: Number of commercial customer accounts
+      - name: customers_industrial
+        type: integer
+        nullable: true
+        comment: Number of industrial customer accounts
+      - name: customers_transportation
+        type: integer
+        nullable: true
+        comment: Number of transportation customer accounts
+      - name: customers_total
+        type: integer
+        nullable: true
+        comment: Total number of customer accounts
+      - name: sales_residential_mwh
+        type: double
+        nullable: true
+        comment: Electricity sales to residential customers in MWh
+      - name: sales_commercial_mwh
+        type: double
+        nullable: true
+        comment: Electricity sales to commercial customers in MWh
+      - name: sales_industrial_mwh
+        type: double
+        nullable: true
+        comment: Electricity sales to industrial customers in MWh
+      - name: sales_transportation_mwh
+        type: double
+        nullable: true
+        comment: Electricity sales to transportation customers in MWh
+      - name: sales_total_mwh
+        type: double
+        nullable: true
+        comment: Total electricity sales in MWh
+      - name: revenue_residential_thousand
+        type: double
+        nullable: true
+        comment: Revenue from residential customers in thousands of dollars
+      - name: revenue_commercial_thousand
+        type: double
+        nullable: true
+        comment: Revenue from commercial customers in thousands of dollars
+      - name: revenue_industrial_thousand
+        type: double
+        nullable: true
+        comment: Revenue from industrial customers in thousands of dollars
+      - name: revenue_total_thousand
+        type: double
+        nullable: true
+        comment: Total revenue in thousands of dollars
+      - name: summer_peak_demand_mw
+        type: double
+        nullable: true
+        comment: Summer peak demand in MW
+      - name: winter_peak_demand_mw
+        type: double
+        nullable: true
+        comment: Winter peak demand in MW
+      - name: net_generation_mwh
+        type: double
+        nullable: true
+        comment: Net electricity generation in MWh
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{year}.zip"
+      method: GET
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861UtilityTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_utility/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_utility_annual
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA POWER PLANTS - EIA-860 Annual Electric Generator Report
+  # ---------------------------------------------------------------------------
+  - name: eia_power_plants
+    pattern: "type=eia_plant/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA Form 860 annual electric generator inventory. One row per generator (plant +
+      generator ID + year). Includes plant and utility identifiers, geographic location
+      (state, county, city, lat/lon), NERC region, balancing authority, technology,
+      prime mover, energy sources, capacity (nameplate, summer, winter, minimum load),
+      ownership type, operating status, operating and retirement dates, and energy storage
+      flag. Transformer downloads and parses the annual ZIP archive from EIA.
+      Cross-references geo.states via state_fips; joins eia_utility_annual via utility_id.
+
+    dimensions:
+      type:
+        - eia_plant
+      year: *eia_plant_years
+
+    columns:
+      - name: plant_id
+        type: integer
+        nullable: false
+        comment: EIA plant identifier
+      - name: generator_id
+        type: string
+        nullable: false
+        comment: Generator identifier within the plant
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Report year
+      - name: plant_name
+        type: string
+        nullable: true
+        comment: Plant name
+      - name: utility_id
+        type: integer
+        nullable: true
+        comment: EIA utility identifier (links to eia_utility_annual)
+      - name: utility_name
+        type: string
+        nullable: true
+        comment: Utility company name
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS code
+      - name: city
+        type: string
+        nullable: true
+        comment: City or town name
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Plant latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Plant longitude
+      - name: nerc_region
+        type: string
+        nullable: true
+        comment: NERC reliability region
+      - name: balancing_authority_code
+        type: string
+        nullable: true
+        comment: Balancing authority code
+      - name: balancing_authority_name
+        type: string
+        nullable: true
+        comment: Balancing authority name
+      - name: primary_purpose_naics
+        type: integer
+        nullable: true
+        comment: Primary purpose NAICS code
+      - name: regulatory_status
+        type: string
+        nullable: true
+        comment: Regulatory status (e.g., Regulated, Nonutility)
+      - name: sector_code
+        type: integer
+        nullable: true
+        comment: EIA sector code
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector description
+      - name: technology
+        type: string
+        nullable: true
+        comment: Generation technology (e.g., 'Conventional Steam Coal', 'Onshore Wind Turbine')
+      - name: prime_mover
+        type: string
+        nullable: true
+        comment: Prime mover code (e.g., 'ST', 'GT', 'IC', 'WT', 'PV')
+      - name: energy_source_1
+        type: string
+        nullable: true
+        comment: Primary energy source code
+      - name: energy_source_2
+        type: string
+        nullable: true
+        comment: Secondary energy source code
+      - name: energy_source_3
+        type: string
+        nullable: true
+        comment: Tertiary energy source code
+      - name: nameplate_capacity_mw
+        type: double
+        nullable: true
+        comment: Nameplate (installed) capacity in MW
+      - name: net_summer_capacity_mw
+        type: double
+        nullable: true
+        comment: Net summer capacity in MW
+      - name: net_winter_capacity_mw
+        type: double
+        nullable: true
+        comment: Net winter capacity in MW
+      - name: minimum_load_mw
+        type: double
+        nullable: true
+        comment: Minimum load in MW
+      - name: ownership_code
+        type: string
+        nullable: true
+        comment: Ownership type code
+      - name: operating_status
+        type: string
+        nullable: true
+        comment: Operating status code
+      - name: operating_month
+        type: integer
+        nullable: true
+        comment: Month generator began commercial operation
+      - name: operating_year
+        type: integer
+        nullable: true
+        comment: Year generator began commercial operation
+      - name: planned_retirement_month
+        type: integer
+        nullable: true
+        comment: Planned retirement month
+      - name: planned_retirement_year
+        type: integer
+        nullable: true
+        comment: Planned retirement year
+      - name: energy_storage_flag
+        type: boolean
+        nullable: true
+        comment: Whether generator includes energy storage capability
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia860/archive/xls/eia860{year}.zip"
+      method: GET
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia860PowerPlantsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_plant/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_power_plants
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA CAPACITY CHANGES - EIA-860M Monthly Generator Capacity Changes
+  # ---------------------------------------------------------------------------
+  - name: eia_capacity_changes
+    pattern: "type=eia_capacity/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA Form 860M monthly generator inventory snapshot for December of each year.
+      Captures planned additions and planned retirements with capacity (nameplate, summer,
+      winter, energy storage). One row per generator change record per snapshot. The
+      December file provides the most complete annual picture; prior months may be fetched
+      for intra-year pipeline analysis. Transformer parses the XLSX directly.
+      Cross-references geo.states via state_fips; joins eia_power_plants via plant_id.
+
+    dimensions:
+      type:
+        - eia_capacity
+      year: *eia_capacity_years
+
+    columns:
+      - name: plant_id
+        type: integer
+        nullable: false
+        comment: EIA plant identifier
+      - name: generator_id
+        type: string
+        nullable: false
+        comment: Generator identifier within the plant
+      - name: snapshot_year
+        type: integer
+        nullable: false
+        comment: Year of the monthly snapshot file
+      - name: snapshot_month
+        type: integer
+        nullable: false
+        comment: Month of the monthly snapshot file (12 for December)
+      - name: change_type
+        type: string
+        nullable: false
+        comment: Type of capacity change (e.g., 'Planned Addition', 'Planned Retirement', 'New Unit')
+      - name: change_year
+        type: integer
+        nullable: true
+        comment: Year the change is expected to take effect
+      - name: change_month
+        type: integer
+        nullable: true
+        comment: Month the change is expected to take effect
+      - name: plant_name
+        type: string
+        nullable: true
+        comment: Plant name
+      - name: entity_id
+        type: integer
+        nullable: true
+        comment: EIA entity (utility/owner) identifier
+      - name: entity_name
+        type: string
+        nullable: true
+        comment: Entity name
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: balancing_authority_code
+        type: string
+        nullable: true
+        comment: Balancing authority code
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector description
+      - name: technology
+        type: string
+        nullable: true
+        comment: Generation technology
+      - name: energy_source_code
+        type: string
+        nullable: true
+        comment: Primary energy source code
+      - name: prime_mover_code
+        type: string
+        nullable: true
+        comment: Prime mover code
+      - name: nameplate_capacity_mw
+        type: double
+        nullable: true
+        comment: Nameplate capacity in MW
+      - name: net_summer_capacity_mw
+        type: double
+        nullable: true
+        comment: Net summer capacity in MW
+      - name: net_winter_capacity_mw
+        type: double
+        nullable: true
+        comment: Net winter capacity in MW
+      - name: nameplate_energy_capacity_mwh
+        type: double
+        nullable: true
+        comment: Nameplate energy capacity in MWh (for storage units)
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia860m/archive/xls/december_generator{year}.xlsx"
+      method: GET
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia860MCapacityChangesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_capacity/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_capacity_changes
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA FOSSIL FUEL PRODUCTION - Crude oil and natural gas production
+  # ---------------------------------------------------------------------------
+  - name: eia_fossil_fuel_production
+    pattern: "type=eia_fossil/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 petroleum crude oil production by state and month. The transformer
+      also fetches the EIA natural gas production summary endpoint internally and unions
+      both series into the output, so each partition contains both crude oil and natural
+      gas rows distinguished by the fuel_type column. One row per EIA area + fuel type +
+      process + year-month. Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - eia_fossil
+      year: *eia_fossil_years
+
+    columns:
+      - name: production_year
+        type: integer
+        nullable: false
+        comment: Calendar year of production
+      - name: production_month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12) of production
+      - name: eia_area_code
+        type: string
+        nullable: true
+        comment: EIA area/region code (may be state abbreviation or PADD code)
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: fuel_type
+        type: string
+        nullable: false
+        comment: Fuel type ('crude_oil' or 'natural_gas')
+      - name: process_code
+        type: string
+        nullable: true
+        comment: EIA process code identifying the production activity
+      - name: process_name
+        type: string
+        nullable: true
+        comment: Process description
+      - name: production_volume
+        type: double
+        nullable: true
+        comment: Production volume in units specified by production_unit
+      - name: production_unit
+        type: string
+        nullable: true
+        comment: Unit of measure (e.g., 'Thousand Barrels', 'Million Cubic Feet')
+      - name: series_id
+        type: string
+        nullable: true
+        comment: EIA time series identifier
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full series description
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={year}-01&end={year}-12&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaFossilFuelTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_fossil/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_fossil_fuel_production
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA STATE ENERGY CONSUMPTION - SEDS State Energy Data System
+  # ---------------------------------------------------------------------------
+  - name: eia_state_energy_consumption
+    pattern: "type=eia_seds/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 State Energy Data System (SEDS). Annual energy consumption, expenditure,
+      and price by state, sector, fuel type, and MSN (energy series code). The MSN code
+      encodes fuel, sector, and metric in a compact 5-character string. The transformer
+      decodes MSN values and maps them to human-readable sector, fuel_type, units,
+      consumption_bbtu, expenditure_million, and price_per_mmbtu columns where applicable.
+      One row per state + MSN + year. Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - eia_seds
+      year: *eia_seds_years
+
+    columns:
+      - name: consumption_year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: Full state name
+      - name: msn
+        type: string
+        nullable: false
+        comment: EIA Mnemonic Series Name (5-char code, e.g., 'TETCB', 'NGRCB')
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector decoded from MSN (e.g., 'Residential', 'Commercial', 'Transportation', 'Total')
+      - name: fuel_type
+        type: string
+        nullable: true
+        comment: Fuel type decoded from MSN (e.g., 'Natural Gas', 'Coal', 'Petroleum')
+      - name: value
+        type: double
+        nullable: true
+        comment: Raw numeric value from the API response
+      - name: units
+        type: string
+        nullable: true
+        comment: Units for the value field
+      - name: consumption_bbtu
+        type: double
+        nullable: true
+        comment: Energy consumption in billion BTU (null if MSN is not a consumption series)
+      - name: expenditure_million
+        type: double
+        nullable: true
+        comment: Expenditure in million dollars (null if MSN is not an expenditure series)
+      - name: price_per_mmbtu
+        type: double
+        nullable: true
+        comment: Price per million BTU (null if MSN is not a price series)
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full human-readable description of the SEDS series
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/seds/data?frequency=annual&start={year}&end={year}&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaSEDSTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_seds/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_state_energy_consumption
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA NATURAL GAS STORAGE - Weekly underground storage by region
+  # ---------------------------------------------------------------------------
+  - name: eia_natural_gas_storage
+    pattern: "type=eia_gas_storage/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 weekly natural gas underground storage data. Covers working gas,
+      base gas, total gas, injections, and withdrawals by EIA storage region (East,
+      West, Midwest, Mountain, Pacific, South Central, Salt, Non-Salt, National).
+      One row per region + storage type + report date. Useful for gas market signal
+      analysis and year-over-year storage comparison.
+
+    dimensions:
+      type:
+        - eia_gas_storage
+      year: *eia_gas_storage_years
+
+    columns:
+      - name: report_date
+        type: string
+        nullable: false
+        comment: Report date in ISO format (YYYY-MM-DD)
+      - name: storage_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the report date
+      - name: storage_week
+        type: integer
+        nullable: false
+        comment: Week number within the year (ISO week)
+      - name: eia_region_code
+        type: string
+        nullable: true
+        comment: EIA storage region code (e.g., 'R10', 'R20', 'R30', 'NAT')
+      - name: region
+        type: string
+        nullable: true
+        comment: Region description (e.g., 'East', 'West', 'National')
+      - name: storage_type_code
+        type: string
+        nullable: true
+        comment: Storage type code (e.g., 'SAW' = total working gas, 'SAS' = salt, 'SAN' = non-salt)
+      - name: storage_type
+        type: string
+        nullable: true
+        comment: Storage type description
+      - name: volume_bcf
+        type: double
+        nullable: true
+        comment: Volume in billion cubic feet
+      - name: units
+        type: string
+        nullable: true
+        comment: Units for volume (typically 'Bcf')
+      - name: series_id
+        type: string
+        nullable: true
+        comment: EIA time series identifier
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/natural-gas/stor/wkly/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaStorageTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_gas_storage/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_natural_gas_storage
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA PETROLEUM STOCKS - Weekly petroleum product stocks by PADD
+  # ---------------------------------------------------------------------------
+  - name: eia_petroleum_stocks
+    pattern: "type=eia_pet_stocks/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 weekly petroleum product stocks. Covers crude oil and refined products
+      (gasoline, distillate, jet fuel, residual fuel, etc.) by PADD district and national
+      totals. One row per area + product + process + report date. Supports supply
+      disruption analysis, seasonal inventory tracking, and refinery margin signals.
+
+    dimensions:
+      type:
+        - eia_pet_stocks
+      year: *eia_pet_stocks_years
+
+    columns:
+      - name: report_date
+        type: string
+        nullable: false
+        comment: Report date in ISO format (YYYY-MM-DD)
+      - name: stock_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the report date
+      - name: stock_week
+        type: integer
+        nullable: false
+        comment: Week number within the year (ISO week)
+      - name: eia_area_code
+        type: string
+        nullable: true
+        comment: EIA area code (e.g., 'SAE', 'USA', 'PAD1', 'PAD2')
+      - name: padd
+        type: string
+        nullable: true
+        comment: PADD district description or 'National'
+      - name: product_code
+        type: string
+        nullable: true
+        comment: EIA petroleum product code (e.g., 'EPC0', 'EPM0', 'EPD0')
+      - name: product
+        type: string
+        nullable: true
+        comment: Product description (e.g., 'Crude Oil', 'Finished Motor Gasoline')
+      - name: process_code
+        type: string
+        nullable: true
+        comment: EIA process code identifying the stock measurement
+      - name: process_name
+        type: string
+        nullable: true
+        comment: Process description
+      - name: stocks_kbbl
+        type: double
+        nullable: true
+        comment: Stocks in thousand barrels
+      - name: series_id
+        type: string
+        nullable: true
+        comment: EIA time series identifier
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full series description
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/petroleum/stoc/wstk/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaPetroleumStocksTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_pet_stocks/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_petroleum_stocks
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA CRUDE OIL IMPORTS - EIA-814 Monthly Import Survey
+  # ---------------------------------------------------------------------------
+  - name: eia_crude_oil_imports
+    pattern: "type=eia_crude_imp/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA Form 814 monthly crude oil import survey. The transformer iterates all 12
+      monthly XLSX files for the given year (URL pattern impa{yy}{m}.xlsx where yy is
+      2-digit year and m is 1-based month digit) and unions them into a single partition.
+      One row per import transaction per month (importer + origin country + entry port +
+      receiving refinery). Includes API gravity, sulfur content, and volume in thousand
+      barrels. Cross-references geo.states via state_fips (refinery state).
+
+    dimensions:
+      type:
+        - eia_crude_imp
+      year: *eia_crude_imp_years
+
+    columns:
+      - name: rpt_period
+        type: string
+        nullable: false
+        comment: Reporting period in YYYYMM format
+      - name: import_year
+        type: integer
+        nullable: false
+        comment: Import year
+      - name: import_month
+        type: integer
+        nullable: false
+        comment: Import month (1-12)
+      - name: importer_name
+        type: string
+        nullable: false
+        comment: Name of the importing company
+      - name: origin_country
+        type: string
+        nullable: true
+        comment: Country of origin name
+      - name: origin_country_code
+        type: integer
+        nullable: false
+        comment: EIA country code for the origin country
+      - name: entry_port_code
+        type: string
+        nullable: true
+        comment: PADD district code for the entry port
+      - name: entry_port_city
+        type: string
+        nullable: true
+        comment: Entry port city name
+      - name: entry_padd
+        type: integer
+        nullable: true
+        comment: PADD district number of the entry port
+      - name: dest_padd
+        type: integer
+        nullable: true
+        comment: PADD district number of the destination refinery
+      - name: receiving_company
+        type: string
+        nullable: true
+        comment: Company receiving the crude at the destination
+      - name: refinery_site_id
+        type: integer
+        nullable: false
+        comment: EIA refinery site identifier
+      - name: refinery_site_name
+        type: string
+        nullable: true
+        comment: Refinery site name
+      - name: refinery_state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state abbreviation of the receiving refinery
+      - name: refinery_state_fips
+        type: string
+        nullable: true
+        comment: State FIPS code of the receiving refinery
+      - name: api_gravity
+        type: double
+        nullable: true
+        comment: API gravity of the imported crude
+      - name: sulfur_content_pct
+        type: double
+        nullable: true
+        comment: Sulfur content as a percentage by weight
+      - name: volume_kbbl
+        type: integer
+        nullable: true
+        comment: Volume imported in thousand barrels
+
+    source:
+      type: http
+      url: "https://www.eia.gov/petroleum/imports/companylevel/"
+      method: GET
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia814CrudeImportsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_crude_imp/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_crude_oil_imports
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA REFINERY OPERATIONS - Monthly refinery input and capacity data
+  # ---------------------------------------------------------------------------
+  - name: eia_refinery_operations
+    pattern: "type=eia_refinery/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA API v2 petroleum refinery process data in tall format. One row per EIA area +
+      series (process_code) + year-month. Key series include crude inputs to distillation
+      (CRDISS), operable distillation capacity (CAPACITY), and utilization rate (UTIL).
+      Additional series cover catalytic cracking, coking, reforming, and other secondary
+      processes. Pivoting into wide format is done via the refinery_utilization_summary view.
+      One row per area + series_id + report year-month.
+
+    dimensions:
+      type:
+        - eia_refinery
+      year: *eia_refinery_years
+
+    columns:
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: report_month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12)
+      - name: eia_area_code
+        type: string
+        nullable: true
+        comment: EIA area code (e.g., PADD code or 'USA')
+      - name: padd
+        type: string
+        nullable: true
+        comment: PADD district description or 'National'
+      - name: series_id
+        type: string
+        nullable: true
+        comment: EIA time series identifier
+      - name: process_code
+        type: string
+        nullable: true
+        comment: EIA refinery process code
+      - name: metric_name
+        type: string
+        nullable: true
+        comment: Metric description (e.g., 'Crude Oil Input to Atmospheric Crude Oil Distillation Units')
+      - name: units
+        type: string
+        nullable: true
+        comment: Units of measure (e.g., 'Thousand Barrels per Day')
+      - name: value
+        type: double
+        nullable: true
+        comment: Metric value
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={year}-01&end={year}-12&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaRefineryOperationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_refinery/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_refinery_operations
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # MSHA COAL MINES - MSHA MinesProdYearly coal production data
+  # ---------------------------------------------------------------------------
+  - name: eia_coal_mines
+    pattern: "type=msha_coal/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      MSHA MinesProdYearly coal mine production data (pipe-delimited CSV ZIP). The
+      transformer downloads MinesProdYearly.zip and Mines.zip, performs an inner join on
+      mine_id, filters to coal mines (COAL_METAL_IND = 'C'), and returns one row per
+      mine + subunit + year. Includes mine demographics, operator/controller identity,
+      geographic location (lat/lon, county, state), mine type and status, production
+      volume in short tons, employee count, annual hours, labor productivity, and
+      average seam height (underground mines). The transformer filters by the requested
+      year dimension. Cross-references geo.states via state_fips.
+
+    dimensions:
+      type:
+        - msha_coal
+      year: *msha_coal_years
+
+    columns:
+      - name: mine_id
+        type: string
+        nullable: false
+        comment: MSHA mine identifier
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Production report year
+      - name: mine_name
+        type: string
+        nullable: true
+        comment: Mine name
+      - name: controller_name
+        type: string
+        nullable: true
+        comment: Mine controller company name
+      - name: operator_name
+        type: string
+        nullable: true
+        comment: Mine operator company name
+      - <<: *state_abbr_column
+      - <<: *state_fips_column
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS code
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Mine latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Mine longitude
+      - name: mine_type
+        type: string
+        nullable: true
+        comment: Mine type (e.g., 'Surface', 'Underground')
+      - name: subunit_code
+        type: string
+        nullable: false
+        comment: MSHA subunit code (e.g., '01' = Underground, '02' = Surface, '03' = Auger)
+      - name: subunit
+        type: string
+        nullable: true
+        comment: Subunit description
+      - name: mine_status
+        type: string
+        nullable: true
+        comment: Mine status (e.g., 'Active', 'Temporarily Idled', 'Abandoned')
+      - name: coal_type
+        type: string
+        nullable: true
+        comment: Coal type (Bituminous, Anthracite, Lignite, Subbituminous)
+      - name: production_short_tons
+        type: double
+        nullable: true
+        comment: Coal production in short tons
+      - name: avg_employee_count
+        type: double
+        nullable: true
+        comment: Average number of employees
+      - name: annual_hours
+        type: double
+        nullable: true
+        comment: Total employee hours worked
+      - name: labor_productivity
+        type: double
+        nullable: true
+        comment: Labor productivity in short tons per employee hour
+      - name: avg_mine_height_inches
+        type: double
+        nullable: true
+        comment: Average mine height in inches (underground mines only)
+
+    source:
+      type: http
+      url: "https://arlweb.msha.gov/OpenGovernmentData/DataSets/MinesProdYearly.zip"
+      method: GET
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.MshaCoalMinesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=msha_coal/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_coal_mines
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  eia_electricity_generation:
+    primaryKey: [state_abbr, energy_source_code, sector_code, generation_year, generation_month]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_electricity_prices:
+    primaryKey: [state_abbr, sector_code, price_year, price_month]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_utility_annual:
+    primaryKey: [utility_id, report_year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_power_plants:
+    primaryKey: [plant_id, generator_id, report_year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [utility_id]
+        targetTable: eia_utility_annual
+        targetColumns: [utility_id]
+
+  eia_capacity_changes:
+    primaryKey: [plant_id, generator_id, snapshot_year, snapshot_month, change_type]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [plant_id]
+        targetTable: eia_power_plants
+        targetColumns: [plant_id]
+
+  eia_fossil_fuel_production:
+    primaryKey: [eia_area_code, fuel_type, process_code, production_year, production_month]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_state_energy_consumption:
+    primaryKey: [state_abbr, msn, consumption_year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_natural_gas_storage:
+    primaryKey: [eia_region_code, storage_type_code, report_date]
+
+  eia_petroleum_stocks:
+    primaryKey: [eia_area_code, product_code, process_code, report_date]
+
+  eia_crude_oil_imports:
+    primaryKey: [importer_name, origin_country_code, refinery_site_id, rpt_period]
+    foreignKeys:
+      - columns: [refinery_state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  eia_refinery_operations:
+    primaryKey: [eia_area_code, series_id, report_year, report_month]
+
+  eia_coal_mines:
+    primaryKey: [mine_id, subunit_code, report_year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: state_energy_mix
+    comment: >
+      Annual renewable and fossil fuel generation mix by state. Aggregates
+      eia_electricity_generation by state and year, computing total generation
+      and generation by broad fuel category (renewables, nuclear, fossil, other).
+      Calculates renewable percentage and fossil percentage for trend analysis.
+      One row per state + year. Joins geo.states for full state name and FIPS.
+    sql: >
+      SELECT
+        g.state_abbr,
+        g.state_fips,
+        MAX(g.state_description)                                           AS state_name,
+        g.generation_year,
+        SUM(g.generation_thousand_mwh)                                     AS total_gen_thousand_mwh,
+        SUM(CASE
+              WHEN g.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB')
+              THEN g.generation_thousand_mwh ELSE 0 END)                   AS renewable_gen_thousand_mwh,
+        SUM(CASE
+              WHEN g.energy_source_code IN ('NUC')
+              THEN g.generation_thousand_mwh ELSE 0 END)                   AS nuclear_gen_thousand_mwh,
+        SUM(CASE
+              WHEN g.energy_source_code IN ('COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
+              THEN g.generation_thousand_mwh ELSE 0 END)                   AS fossil_gen_thousand_mwh,
+        SUM(CASE
+              WHEN g.energy_source_code NOT IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB','NUC','COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
+              THEN g.generation_thousand_mwh ELSE 0 END)                   AS other_gen_thousand_mwh,
+        CASE
+          WHEN SUM(g.generation_thousand_mwh) > 0
+          THEN 100.0 * SUM(CASE
+                WHEN g.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB')
+                THEN g.generation_thousand_mwh ELSE 0 END)
+               / SUM(g.generation_thousand_mwh)
+          ELSE NULL
+        END                                                                AS renewable_pct,
+        CASE
+          WHEN SUM(g.generation_thousand_mwh) > 0
+          THEN 100.0 * SUM(CASE
+                WHEN g.energy_source_code IN ('COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
+                THEN g.generation_thousand_mwh ELSE 0 END)
+               / SUM(g.generation_thousand_mwh)
+          ELSE NULL
+        END                                                                AS fossil_pct
+      FROM eia_electricity_generation g
+      GROUP BY g.state_abbr, g.state_fips, g.generation_year
+
+  - name: utility_scorecard
+    comment: >
+      Utility-level performance scorecard joining EIA-861 annual survey data with
+      aggregated operating capacity from EIA-860 power plants. One row per utility +
+      report year. Shows entity type, state, customer counts, total sales, total revenue,
+      and sum of net summer capacity across all operating generators owned by the utility.
+    sql: >
+      SELECT
+        u.utility_id,
+        u.report_year,
+        u.utility_name,
+        u.entity_type,
+        u.state_abbr,
+        u.state_fips,
+        u.nerc_region,
+        u.customers_total,
+        u.sales_total_mwh,
+        u.revenue_total_thousand,
+        u.summer_peak_demand_mw,
+        u.winter_peak_demand_mw,
+        COALESCE(p.operating_capacity_mw, 0.0)                            AS operating_capacity_mw,
+        COALESCE(p.generator_count, 0)                                     AS generator_count
+      FROM eia_utility_annual u
+      LEFT JOIN (
+        SELECT
+          utility_id,
+          report_year,
+          SUM(net_summer_capacity_mw)                                      AS operating_capacity_mw,
+          COUNT(*)                                                          AS generator_count
+        FROM eia_power_plants
+        WHERE operating_status IN ('OP','SB','OS','RE')
+        GROUP BY utility_id, report_year
+      ) p ON u.utility_id = p.utility_id AND u.report_year = p.report_year
+
+  - name: capacity_pipeline
+    comment: >
+      Planned capacity additions and retirements from EIA-860M monthly snapshots.
+      Aggregates eia_capacity_changes by state, expected change year, technology, fuel
+      category, and change type. Provides a forward-looking pipeline of new capacity
+      entering service and old capacity retiring. One row per state + change_year +
+      technology + fuel_category + change_type.
+    sql: >
+      SELECT
+        c.state_abbr,
+        c.state_fips,
+        c.change_year,
+        c.change_month,
+        c.technology,
+        c.energy_source_code,
+        CASE
+          WHEN c.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG')
+            THEN 'Renewable'
+          WHEN c.energy_source_code IN ('NUC')
+            THEN 'Nuclear'
+          WHEN c.energy_source_code IN ('COL','BIT','SUB','LIG','WC','SC')
+            THEN 'Coal'
+          WHEN c.energy_source_code IN ('NG','LFG','OG','BFG','SNG')
+            THEN 'Natural Gas'
+          WHEN c.energy_source_code IN ('DFO','RFO','KER','JF','PG')
+            THEN 'Petroleum'
+          WHEN c.energy_source_code IN ('MWH','CEP')
+            THEN 'Storage'
+          ELSE 'Other'
+        END                                                                AS fuel_category,
+        c.change_type,
+        COUNT(*)                                                           AS unit_count,
+        SUM(c.nameplate_capacity_mw)                                       AS total_nameplate_mw,
+        SUM(c.net_summer_capacity_mw)                                      AS total_summer_mw
+      FROM eia_capacity_changes c
+      WHERE c.change_type IN ('Planned Addition', 'Planned Retirement', 'New Unit', 'Retirement')
+      GROUP BY
+        c.state_abbr, c.state_fips, c.change_year, c.change_month,
+        c.technology, c.energy_source_code,
+        CASE
+          WHEN c.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG')
+            THEN 'Renewable'
+          WHEN c.energy_source_code IN ('NUC')
+            THEN 'Nuclear'
+          WHEN c.energy_source_code IN ('COL','BIT','SUB','LIG','WC','SC')
+            THEN 'Coal'
+          WHEN c.energy_source_code IN ('NG','LFG','OG','BFG','SNG')
+            THEN 'Natural Gas'
+          WHEN c.energy_source_code IN ('DFO','RFO','KER','JF','PG')
+            THEN 'Petroleum'
+          WHEN c.energy_source_code IN ('MWH','CEP')
+            THEN 'Storage'
+          ELSE 'Other'
+        END,
+        c.change_type
+
+  - name: weekly_gas_storage_signal
+    comment: >
+      Weekly natural gas working gas storage levels (SAW series) with year-over-year
+      comparison. Uses LAG window function to compute the prior year same-week volume
+      for YoY delta and percent change calculation. One row per region + report date.
+      Useful as a market signal for gas price forecasting.
+    sql: >
+      SELECT
+        s.report_date,
+        s.storage_year,
+        s.storage_week,
+        s.eia_region_code,
+        s.region,
+        s.volume_bcf                                                       AS working_gas_bcf,
+        LAG(s.volume_bcf, 52) OVER (
+          PARTITION BY s.eia_region_code
+          ORDER BY s.report_date
+        )                                                                  AS prior_year_bcf,
+        s.volume_bcf - LAG(s.volume_bcf, 52) OVER (
+          PARTITION BY s.eia_region_code
+          ORDER BY s.report_date
+        )                                                                  AS yoy_change_bcf,
+        CASE
+          WHEN LAG(s.volume_bcf, 52) OVER (
+            PARTITION BY s.eia_region_code
+            ORDER BY s.report_date
+          ) > 0
+          THEN 100.0 * (s.volume_bcf - LAG(s.volume_bcf, 52) OVER (
+            PARTITION BY s.eia_region_code
+            ORDER BY s.report_date
+          )) / LAG(s.volume_bcf, 52) OVER (
+            PARTITION BY s.eia_region_code
+            ORDER BY s.report_date
+          )
+          ELSE NULL
+        END                                                                AS yoy_change_pct
+      FROM eia_natural_gas_storage s
+      WHERE s.storage_type_code = 'SWO'
+
+  - name: state_energy_burden
+    comment: >
+      State-level energy burden estimate joining annual residential electricity prices
+      with state energy consumption. Computes an implied annual residential electricity
+      bill estimate from average price and total residential electricity sales divided
+      by customer count. One row per state + year. Joins geo.states for full state name.
+    sql: >
+      SELECT
+        p.state_abbr,
+        p.state_fips,
+        MAX(p.state_description)                                           AS state_name,
+        p.price_year                                                       AS report_year,
+        p.avg_price_cents_kwh                                              AS residential_price_cents_kwh,
+        p.sales_million_kwh                                                AS residential_sales_million_kwh,
+        p.customers                                                        AS residential_customers,
+        CASE
+          WHEN p.customers > 0
+          THEN (p.sales_million_kwh * 1000000.0 / p.customers) * (p.avg_price_cents_kwh / 100.0)
+          ELSE NULL
+        END                                                                AS implied_annual_bill_dollars,
+        c.consumption_bbtu                                                 AS total_energy_consumption_bbtu,
+        c.expenditure_million                                              AS total_energy_expenditure_million
+      FROM eia_electricity_prices p
+      LEFT JOIN eia_state_energy_consumption c
+        ON p.state_abbr = c.state_abbr
+        AND p.price_year = c.consumption_year
+        AND c.msn = 'TETCB'
+      WHERE p.sector_code = 'RES'
+        AND p.price_month IS NULL
+      GROUP BY p.state_abbr, p.state_fips, p.price_year, p.avg_price_cents_kwh,
+               p.sales_million_kwh, p.customers, c.consumption_bbtu, c.expenditure_million
+
+  - name: refinery_utilization_summary
+    comment: >
+      Refinery utilization summary pivoted from tall eia_refinery_operations data.
+      Uses CASE expressions on process_code to pivot key series into named columns:
+      crude_input_kbd (crude distillation input), operable_capacity_kbd (operable
+      distillation capacity), and utilization_rate (crude input / operable capacity).
+      One row per EIA area + PADD + report year + report month.
+    sql: >
+      SELECT
+        r.eia_area_code,
+        r.padd,
+        r.report_year,
+        r.report_month,
+        MAX(CASE
+          WHEN r.process_code = 'CRDISS' OR r.series_id LIKE '%CRDISS%'
+          THEN r.value ELSE NULL
+        END)                                                               AS crude_input_kbd,
+        MAX(CASE
+          WHEN r.process_code = 'CAPACITY' OR r.series_id LIKE '%OPEFWRD%'
+          THEN r.value ELSE NULL
+        END)                                                               AS operable_capacity_kbd,
+        MAX(CASE
+          WHEN r.process_code = 'UTILIZATION' OR r.series_id LIKE '%UTILP%'
+          THEN r.value ELSE NULL
+        END)                                                               AS utilization_rate_pct,
+        MAX(CASE
+          WHEN r.process_code = 'CATCRACK' OR r.series_id LIKE '%CATCRD%'
+          THEN r.value ELSE NULL
+        END)                                                               AS catalytic_cracking_kbd,
+        MAX(CASE
+          WHEN r.process_code = 'COKING' OR r.series_id LIKE '%COKCRD%'
+          THEN r.value ELSE NULL
+        END)                                                               AS coking_kbd,
+        MAX(CASE
+          WHEN r.process_code = 'REFORMING' OR r.series_id LIKE '%REFCRD%'
+          THEN r.value ELSE NULL
+        END)                                                               AS reforming_kbd,
+        CASE
+          WHEN MAX(CASE
+            WHEN r.process_code = 'CAPACITY' OR r.series_id LIKE '%OPEFWRD%'
+            THEN r.value ELSE NULL END) > 0
+          THEN 100.0 * MAX(CASE
+            WHEN r.process_code = 'CRDISS' OR r.series_id LIKE '%CRDISS%'
+            THEN r.value ELSE NULL END)
+            / MAX(CASE
+            WHEN r.process_code = 'CAPACITY' OR r.series_id LIKE '%OPEFWRD%'
+            THEN r.value ELSE NULL END)
+          ELSE NULL
+        END                                                                AS computed_utilization_pct
+      FROM eia_refinery_operations r
+      GROUP BY r.eia_area_code, r.padd, r.report_year, r.report_month

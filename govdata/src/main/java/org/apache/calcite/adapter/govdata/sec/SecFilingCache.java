@@ -146,6 +146,54 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
+   * Backfills no_xbrl sentinel parquet files to S3 for filings already marked
+   * {@code _no_xbrl} in the tracker but lacking a sentinel file in S3.
+   *
+   * <p>The original {@link #writeNoXbrlSentinel} had a bug where it returned early when
+   * {@code filingDate} was empty, so historical no_xbrl filings were never written to S3.
+   * This one-time backfill corrects that gap so the self-heal path can skip no_xbrl
+   * filings without needing a tracker.
+   *
+   * <p>Requires that {@link #preloadFileInventory} has already been called so the
+   * in-memory byName cache can be used to skip sentinels that already exist.
+   *
+   * @param candidates index entries to inspect (typically all EDGAR year candidates)
+   * @return number of sentinels newly written to S3
+   */
+  public int backfillNoXbrlSentinels(List<EdgarFullIndexCache.IndexEntry> candidates) {
+    if (candidates.isEmpty()) {
+      return 0;
+    }
+    List<String> accessions = new ArrayList<String>(candidates.size());
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      accessions.add(ie.accession);
+    }
+    Map<String, Set<String>> bulk = tracker.bulkGetCompletedTables(accessions, PHASE_STAGING);
+    int written = 0;
+    int alreadyExists = 0;
+    int notNoXbrl = 0;
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      Set<String> tables = bulk.get(ie.accession);
+      if (tables == null || !tables.contains(TABLE_NO_XBRL)) {
+        notNoXbrl++;
+        continue;
+      }
+      String fileName = ie.cik + "_" + ie.accession + "_no_xbrl.parquet";
+      java.util.Map<String, String> byName = this.s3FileCacheByName;
+      if (byName != null && byName.containsKey(fileName)) {
+        alreadyExists++;
+        continue;
+      }
+      writeNoXbrlSentinel(ie.cik, ie.accession, ie.filingDate);
+      written++;
+    }
+    LOGGER.info(
+        "backfillNoXbrlSentinels: {} sentinels written, {} already existed, {} not no_xbrl",
+        written, alreadyExists, notNoXbrl);
+    return written;
+  }
+
+  /**
    * Scans only the {@code source=sec/year=YYYY/} partitions for {@code startYear..endYear}
    * and caches all known file paths in memory.
    *
@@ -457,6 +505,10 @@ public class SecFilingCache implements AutoCloseable {
         // Only process if base staging files are also incomplete, not just chunks.
         if (!s3Inv.isComplete(form, false)) {
           cntS3Partial++;
+          if (cntS3Partial <= 5) {
+            LOGGER.info("s3Partial sample: accession={} formType={} inventory={}",
+                ie.accession, ie.formType, s3Inv);
+          }
           toProcess.add(ie);
         } else {
           cntS3Complete++;

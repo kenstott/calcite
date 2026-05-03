@@ -852,6 +852,8 @@ partitionedTables:
   # CDC COVID-19 VACCINATIONS — Socrata SODA API, ~ongoing updates
   # ==========================================================================
   - name: cdc_covid_vaccinations
+    releaseWindow:
+      dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     pattern: "type=cdc_covid_vaccinations"
     partitions:
       style: hive
@@ -947,6 +949,8 @@ partitionedTables:
   # CMS HOSPITAL QUALITY METRICS — Socrata SODA API, ~5,426 facilities
   # ==========================================================================
   - name: cms_hospital_quality
+    releaseWindow:
+      months: [7, 8, 9, 10] # CMS hospital quality annual release July–October
     pattern: "type=cms_hospital_quality"
     partitions:
       style: hive
@@ -1078,6 +1082,8 @@ partitionedTables:
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
   - name: medicaid_drug_utilization
+    releaseWindow:
+      months: [3, 6, 9, 12] # Quarterly data published ~3 months after quarter end
     pattern: "type=medicaid_drug_utilization"
     partitions:
       style: hive
@@ -1190,6 +1196,8 @@ partitionedTables:
 # ============================================================================
 
   - name: cdc_mortality
+    releaseWindow:
+      dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     comment: >
       CDC/NCHS mortality statistics. Unions annual (bi63-dtpu) and weekly provisional
       (muzy-jte6) data. source_type dimension distinguishes the two.
@@ -1267,6 +1275,8 @@ partitionedTables:
         runCompaction: false
 
   - name: cdc_brfss
+    releaseWindow:
+      months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
     comment: >
       CDC Behavioral Risk Factor Surveillance System prevalence data (Socrata dttw-5yxu).
       State-level health behavior estimates by year, question, and demographic breakout.
@@ -1354,6 +1364,8 @@ partitionedTables:
         runCompaction: false
 
   - name: cms_open_payments
+    releaseWindow:
+      months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
     comment: >
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
       to physicians. Streams CSV from Socrata. payment_type dimension selects

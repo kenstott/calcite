@@ -41,13 +41,21 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|daily|weekly|hourly|static>" >&2
+  echo "Usage: $0 <initial|daily|weekly|hourly|static> [--force]" >&2
   exit 1
 fi
+
+FORCE=false
+for arg in "${@:2}"; do
+  [ "$arg" = "--force" ] && FORCE=true
+done
 
 WORKER_ID="worker-cyber-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
+
+CYBER_VULN_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-vuln-schema.yaml"
+CYBER_THREAT_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-threat-schema.yaml"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -114,12 +122,17 @@ case "$MODE" in
     ;;
 
   weekly)
-    # CWE catalog, OSV, advisories, GitHub advisories, ATT&CK techniques
-    run_cyber_model "cyber_vuln" "vuln-weekly" \
-      '"cwe_catalog", "osv_vulnerabilities", "vuln_cross_refs", "advisories"'
+    # Windows read from each table's releaseWindow in the schema YAML (dow: Sunday).
+    # cwe_catalog is representative for the vuln group; attack_techniques for the threat group.
+    if table_in_window "$CYBER_VULN_SCHEMA_YAML" "cwe_catalog"; then
+      run_cyber_model "cyber_vuln" "vuln-weekly" \
+        '"cwe_catalog", "osv_vulnerabilities", "vuln_cross_refs", "advisories"'
+    fi
 
-    run_cyber_model "cyber_threat" "threat-weekly" \
-      '"attack_techniques", "attack_to_nist_mappings"'
+    if table_in_window "$CYBER_THREAT_SCHEMA_YAML" "attack_techniques"; then
+      run_cyber_model "cyber_threat" "threat-weekly" \
+        '"attack_techniques", "attack_to_nist_mappings"'
+    fi
     ;;
 
   hourly)

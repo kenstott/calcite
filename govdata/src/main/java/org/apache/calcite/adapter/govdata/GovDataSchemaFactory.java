@@ -25,6 +25,7 @@ import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
 import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
@@ -64,6 +65,7 @@ import java.util.Map;
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
  *   <li>cyber_vuln - Cybersecurity vulnerability data (NVD CVEs, CISA KEV, OSV, GitHub SA)</li>
  *   <li>cyber_threat - Cyber threat intelligence (ATT&CK, IOC feeds, exploits, standards)</li>
+ *   <li>energy - U.S. energy data (EIA electricity, fossil fuel production, storage, prices)</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -269,11 +271,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "pharma":
         return new HealthSchemaFactory();
 
+      case "energy":
+      case "eia":
+        return new EnergySchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy");
     }
   }
 

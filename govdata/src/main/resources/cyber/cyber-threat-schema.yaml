@@ -31,6 +31,8 @@ partitionedTables:
   # ATT&CK TECHNIQUES
   # ==========================================================================
   - name: attack_techniques
+    releaseWindow:
+      dow: [0]              # MITRE ATT&CK major releases April/October; Sunday catches all updates
     pattern: "type=attack_techniques.parquet"
     partitions:
       style: hive
@@ -944,6 +946,8 @@ partitionedTables:
   # ATT&CK → NIST 800-53 Mappings
   # ==========================================================================
   - name: attack_to_nist_mappings
+    releaseWindow:
+      dow: [0]              # Updated with each ATT&CK release (April/October); Sunday refresh
     pattern: "type=attack_to_nist_mappings.parquet"
     partitions:
       style: hive

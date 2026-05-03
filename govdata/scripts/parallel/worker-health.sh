@@ -41,13 +41,20 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|daily|weekly|monthly>" >&2
+  echo "Usage: $0 <initial|daily|weekly|monthly> [--force]" >&2
   exit 1
 fi
+
+FORCE=false
+for arg in "${@:2}"; do
+  [ "$arg" = "--force" ] && FORCE=true
+done
 
 WORKER_ID="worker-health-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
+
+HEALTH_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/health/health-schema.yaml"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -117,19 +124,38 @@ case "$MODE" in
     ;;
 
   weekly)
-    # CDC COVID vaccinations delta + CDC mortality full refresh
-    run_health_model "health-weekly-cdc" \
-      '"cdc_covid_vaccinations", "cdc_mortality"'
+    # Window read from cdc_covid_vaccinations.releaseWindow (dow: Monday)
+    if table_in_window "$HEALTH_SCHEMA_YAML" "cdc_covid_vaccinations"; then
+      run_health_model "health-weekly-cdc" \
+        '"cdc_covid_vaccinations", "cdc_mortality"'
+    fi
     ;;
 
   monthly)
-    # Stable reference tables: BRFSS, Medicaid, CMS, FDA catalogs, RxNorm
-    run_health_model "health-monthly-brfss-medicaid" \
-      '"cdc_brfss", "medicaid_drug_utilization"'
+    # Each sub-run is gated to its source's known release window.
+    # FDA catalogs and RxNorm update continuously and always run.
 
-    run_health_model "health-monthly-cms" \
-      '"cms_hospital_quality", "cms_open_payments"'
+    # BRFSS — window read from cdc_brfss.releaseWindow
+    if table_in_window "$HEALTH_SCHEMA_YAML" "cdc_brfss"; then
+      run_health_model "health-monthly-brfss" '"cdc_brfss"'
+    fi
 
+    # Medicaid drug utilization — window read from medicaid_drug_utilization.releaseWindow
+    if table_in_window "$HEALTH_SCHEMA_YAML" "medicaid_drug_utilization"; then
+      run_health_model "health-monthly-medicaid" '"medicaid_drug_utilization"'
+    fi
+
+    # CMS open payments — window read from cms_open_payments.releaseWindow
+    if table_in_window "$HEALTH_SCHEMA_YAML" "cms_open_payments"; then
+      run_health_model "health-monthly-cms-payments" '"cms_open_payments"'
+    fi
+
+    # CMS hospital quality — window read from cms_hospital_quality.releaseWindow
+    if table_in_window "$HEALTH_SCHEMA_YAML" "cms_hospital_quality"; then
+      run_health_model "health-monthly-cms-quality" '"cms_hospital_quality"'
+    fi
+
+    # FDA catalogs + RxNorm — no releaseWindow in schema (continuous/monthly); always runs
     run_health_model "health-monthly-fda-rxnorm" \
       '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls", "rxnorm_drugs"'
     ;;

@@ -55,6 +55,10 @@ dependencies {
     // PDF text extraction for security advisories (cyber_vuln)
     implementation("org.apache.pdfbox:pdfbox:2.0.31")
 
+    // Excel/XLSX parsing for EIA bulk downloads (EIA-860, EIA-861, EIA-814)
+    implementation("org.apache.poi:poi:5.3.0")
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
+
     // Geometry processing with JTS (lightweight)
     implementation("org.locationtech.jts:jts-core:1.19.0")
 

@@ -18,6 +18,7 @@ import java.util.Set;
  * Tracks which output files exist for a filing.
  */
 public class FileInventory {
+  private final boolean hasNoXbrl;
   private final boolean hasMetadata;
   private final boolean hasFacts;
   private final boolean hasContexts;
@@ -28,6 +29,7 @@ public class FileInventory {
   private final boolean hasChunks;
 
   private FileInventory(Builder builder) {
+    this.hasNoXbrl = builder.hasNoXbrl;
     this.hasMetadata = builder.hasMetadata;
     this.hasFacts = builder.hasFacts;
     this.hasContexts = builder.hasContexts;
@@ -36,6 +38,10 @@ public class FileInventory {
     this.hasInsider = builder.hasInsider;
     this.hasEarnings = builder.hasEarnings;
     this.hasChunks = builder.hasChunks;
+  }
+
+  public boolean hasNoXbrl() {
+    return hasNoXbrl;
   }
 
   public boolean hasMetadata() {
@@ -150,6 +156,9 @@ public class FileInventory {
   public String toString() {
     StringBuilder sb = new StringBuilder("FileInventory{");
     List<String> present = new ArrayList<>();
+    if (hasNoXbrl) {
+      present.add("no_xbrl");
+    }
     if (hasMetadata) {
       present.add("metadata");
     }
@@ -183,6 +192,7 @@ public class FileInventory {
    * Builder for FileInventory.
    */
   public static class Builder {
+    private boolean hasNoXbrl;
     private boolean hasMetadata;
     private boolean hasFacts;
     private boolean hasContexts;
@@ -191,6 +201,11 @@ public class FileInventory {
     private boolean hasInsider;
     private boolean hasEarnings;
     private boolean hasChunks;
+
+    public Builder hasNoXbrl(boolean hasNoXbrl) {
+      this.hasNoXbrl = hasNoXbrl;
+      return this;
+    }
 
     public Builder hasMetadata(boolean hasMetadata) {
       this.hasMetadata = hasMetadata;

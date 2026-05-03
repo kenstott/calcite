@@ -23,9 +23,14 @@ cd scripts/parallel
 ./run-pool.sh 67
 
 # Recurring cadence via run-pool (or use cron directly)
-./run-pool.sh 68             # daily clinical trials delta
-./run-pool.sh 69             # weekly CDC COVID + mortality
-./run-pool.sh 70             # monthly BRFSS, Medicaid, CMS, FDA, RxNorm
+# Workers 69–70 use release-window checks: sub-runs outside their window skip instantly.
+./run-pool.sh 68             # daily clinical trials delta (no window — always runs)
+./run-pool.sh 69             # weekly CDC COVID + mortality (Monday only)
+./run-pool.sh 70             # monthly — each source gated to its release window
+
+# Force all sub-runs regardless of window (backfill / manual refresh)
+./worker-health.sh weekly --force
+./worker-health.sh monthly --force
 ```
 
 ---
@@ -185,6 +190,25 @@ Cron example:
 # Monthly: stable reference tables
 0 2 1 * *    /path/to/govdata/scripts/parallel/worker-health.sh monthly
 ```
+
+---
+
+## Release-Window Checks
+
+Workers 69–70 gate sub-runs to known release windows. Each check exits in milliseconds —
+no network I/O, no model file written, pool slot released immediately for historical workers.
+
+| Mode | Sub-run | Window | Mechanism | Notes |
+|---|---|---|---|---|
+| `daily` | clinical trials | Every day | No gate — ClinicalTrials.gov updates continuously | Always runs |
+| `weekly` | CDC COVID + mortality | Monday only (DOW 1) | `within_release_dow` | CDC publishes Friday; Monday catches it |
+| `monthly` | BRFSS | May–Aug (months 5–8) | `within_release_window` | Annual survey data release |
+| `monthly` | Medicaid drug utilization | Mar/Jun/Sep/Dec (months 3,6,9,12) | `within_release_window` | Quarterly, ~3-month lag |
+| `monthly` | CMS open payments | Jun–Jul (months 6–7) | `within_release_window` | Annual release |
+| `monthly` | CMS hospital quality | Jul–Oct (months 7–10) | `within_release_window` | Annual release |
+| `monthly` | FDA catalogs + RxNorm | Every month | No gate — continuous/monthly | Always runs |
+
+To bypass: `./worker-health.sh monthly --force`
 
 ---
 

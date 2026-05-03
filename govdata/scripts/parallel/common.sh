@@ -464,6 +464,98 @@ generate_fec_model() {
 ENDJSON
 }
 
+# ── Release-window helpers ────────────────────────────────────────────────────
+#
+# These functions let recurring workers fast-exit when their source is known to
+# have no new data today. A skipped sub-run emits one log line and returns
+# immediately — no network I/O, no model file written, no pool slot held.
+#
+# Set FORCE=true in the calling script (or pass --force) to bypass all checks.
+#
+# Usage:
+#   within_release_window <label> <months> [<year_parity>]
+#     months       Comma-separated month numbers (1=Jan … 12=Dec)
+#     year_parity  Optional: "odd" or "even" — further constrains to odd/even calendar years
+#
+#   within_release_dow <label> <days>
+#     days         Comma-separated day-of-week numbers (0=Sun, 1=Mon … 6=Sat)
+#
+# Both return 0 (proceed) or 1 (skip with a log message).
+
+within_release_window() {
+  local label=$1 months=$2 year_parity="${3:-any}"
+
+  if [ "${FORCE:-false}" = true ]; then
+    log_info "$(basename "$0"): --force — bypassing release window for $label"
+    return 0
+  fi
+
+  local current_month current_year
+  current_month=$(date +%-m)
+  current_year=$(date +%Y)
+
+  if [ "$year_parity" = "odd" ] && [ $(( current_year % 2 )) -eq 0 ]; then
+    log_info "$(basename "$0"): skipping $label — odd-year source, current year $current_year is even"
+    return 1
+  fi
+  if [ "$year_parity" = "even" ] && [ $(( current_year % 2 )) -ne 0 ]; then
+    log_info "$(basename "$0"): skipping $label — even-year source, current year $current_year is odd"
+    return 1
+  fi
+
+  IFS=',' read -ra month_list <<< "$months"
+  for m in "${month_list[@]}"; do
+    if [ "$current_month" -eq "$m" ]; then
+      return 0
+    fi
+  done
+
+  log_info "$(basename "$0"): skipping $label — outside release window (months: $months, today: month $current_month)"
+  return 1
+}
+
+within_release_dow() {
+  local label=$1 days=$2
+
+  if [ "${FORCE:-false}" = true ]; then
+    log_info "$(basename "$0"): --force — bypassing day-of-week check for $label"
+    return 0
+  fi
+
+  local current_dow
+  current_dow=$(date +%w)   # 0=Sunday … 6=Saturday
+
+  IFS=',' read -ra dow_list <<< "$days"
+  for d in "${dow_list[@]}"; do
+    if [ "$current_dow" -eq "$d" ]; then
+      return 0
+    fi
+  done
+
+  log_info "$(basename "$0"): skipping $label — outside run day (days: $days, today: DOW $current_dow)"
+  return 1
+}
+
+# Schema-YAML-driven window check. Reads releaseWindow: from the named table in
+# the schema YAML and delegates to check-release-window.py.
+# Falls back to proceed (0) if Python or the checker script is unavailable.
+# Usage: table_in_window <schema_yaml_path> <table_name>
+table_in_window() {
+  local schema_yaml=$1 table_name=$2
+  local checker="$SCRIPT_DIR/check-release-window.py"
+
+  if [ ! -f "$checker" ]; then
+    log_info "WARNING: check-release-window.py not found — proceeding for $table_name"
+    return 0
+  fi
+
+  if python3 "$checker" "$schema_yaml" "$table_name" ${FORCE:+--force}; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 # Determine heap sizes for a worker based on its type.
 # Crime worker (worker-21) needs more memory for large dimension expansion;
 # SEC workers (worker-23+) are lighter and can run with less.
