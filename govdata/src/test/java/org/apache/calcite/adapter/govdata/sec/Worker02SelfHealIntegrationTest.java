@@ -275,6 +275,9 @@ public class Worker02SelfHealIntegrationTest {
     return pairs;
   }
 
+  // Query at most this many batch files per DuckDB call to avoid R2 SSL connection drops.
+  private static final int MAX_BATCH_FILES_PER_QUERY = 5;
+
   private static List<String[]> readCikAccessionPairsFromDir(StorageProvider storage,
       String yearDir, int limit) throws Exception {
     List<StorageProvider.FileEntry> entries;
@@ -292,6 +295,9 @@ public class Worker02SelfHealIntegrationTest {
         String name = slash >= 0 ? path.substring(slash + 1) : path;
         if (BATCH_FILE_PATTERN.matcher(name).matches()) {
           batchPaths.add(path);
+          if (batchPaths.size() >= MAX_BATCH_FILES_PER_QUERY) {
+            break;
+          }
         }
       }
     }
@@ -320,7 +326,8 @@ public class Worker02SelfHealIntegrationTest {
 
   /**
    * Builds {@link EdgarFullIndexCache.IndexEntry} candidates by reading real (cik, accession)
-   * pairs from batch parquet files in S3 via DuckDB.
+   * pairs from a small sample of batch parquet files in S3 via DuckDB.
+   * Limits queries to {@link #MAX_BATCH_FILES_PER_QUERY} files to avoid R2 SSL drops.
    */
   private static List<EdgarFullIndexCache.IndexEntry> buildCandidatesFromS3(
       StorageProvider storage, String govdataParquetDir) throws Exception {
@@ -330,7 +337,7 @@ public class Worker02SelfHealIntegrationTest {
     try {
       pairs = readCikAccessionPairsFromDir(storage, yearDir, 200);
     } catch (Exception e) {
-      // Fall back to legacy path
+      LOGGER.warn("buildCandidatesFromS3: primary path failed, trying legacy — {}", e.getMessage());
       String legacyYearDir = storage.resolvePath(
           storage.resolvePath(govdataParquetDir, "source=sec"), "year=" + YEAR);
       pairs = readCikAccessionPairsFromDir(storage, legacyYearDir, 200);

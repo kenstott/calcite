@@ -237,22 +237,40 @@ public class SecFilingCache implements AutoCloseable {
     }
   }
 
+  private static final int DUCKDB_BATCH_CHUNK_SIZE = 20;
+
   private int populateCacheFromBatchFiles(String tableType, List<String> batchPaths,
       String yearDir, int year, java.util.Set<String> cache,
       java.util.Map<String, String> byName) {
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      LOGGER.warn("populateCacheFromBatchFiles: no DuckDB connection, skipping batch type={}",
+          tableType);
+      return 0;
+    }
+    int total = 0;
+    int chunkStart = 0;
+    while (chunkStart < batchPaths.size()) {
+      int chunkEnd = Math.min(chunkStart + DUCKDB_BATCH_CHUNK_SIZE, batchPaths.size());
+      List<String> chunk = batchPaths.subList(chunkStart, chunkEnd);
+      total += populateCacheFromChunk(conn, tableType, chunk, yearDir, year, cache, byName);
+      chunkStart = chunkEnd;
+    }
+    LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
+        tableType, batchPaths.size(), total);
+    return total;
+  }
+
+  private int populateCacheFromChunk(Connection conn, String tableType, List<String> chunk,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
     try {
-      Connection conn = getOrCreateDuckdbConn();
-      if (conn == null) {
-        LOGGER.warn("populateCacheFromBatchFiles: no DuckDB connection, skipping batch type={}",
-            tableType);
-        return 0;
-      }
       StringBuilder pathList = new StringBuilder();
-      for (int i = 0; i < batchPaths.size(); i++) {
+      for (int i = 0; i < chunk.size(); i++) {
         if (i > 0) {
           pathList.append(", ");
         }
-        pathList.append("'").append(batchPaths.get(i)).append("'");
+        pathList.append("'").append(chunk.get(i)).append("'");
       }
       String sql = "SELECT DISTINCT cik, accession_number FROM read_parquet(["
           + pathList + "])";
@@ -274,12 +292,10 @@ public class SecFilingCache implements AutoCloseable {
           }
         }
       }
-      LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
-          tableType, batchPaths.size(), count);
       return count;
     } catch (Exception e) {
-      LOGGER.warn("populateCacheFromBatchFiles: type={} year={} failed — {}",
-          tableType, year, e.getMessage());
+      LOGGER.warn("populateCacheFromChunk: type={} year={} chunk-size={} failed — {}",
+          tableType, year, chunk.size(), e.getMessage());
       return 0;
     }
   }
