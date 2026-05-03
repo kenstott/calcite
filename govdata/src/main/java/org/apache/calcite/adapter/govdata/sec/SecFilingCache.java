@@ -169,41 +169,67 @@ public class SecFilingCache implements AutoCloseable {
     LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{}", secDir, startYear, endYear);
     java.util.Set<String> cache = new java.util.HashSet<String>();
     java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
-    int totalCount = 0;
+    int totalVirtual = 0;
+    int totalBatchFiles = 0;
     for (int year = startYear; year <= endYear; year++) {
       String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
-      totalCount += scanYearIntoCache(yearDir, year, cache, byName);
+      int[] result = scanYearIntoCache(yearDir, year, cache, byName);
+      totalVirtual += result[0];
+      totalBatchFiles += result[1];
     }
 
     // Legacy fallback: previous builds wrote staging to source=sec/source=sec/ due to a
     // double-append bug. Scan that subtree too so self-healing can find those files.
     String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
     if (!legacySecDir.equals(secDir)) {
-      int legacyCount = 0;
+      int legacyVirtual = 0;
+      int legacyBatchFiles = 0;
       for (int year = startYear; year <= endYear; year++) {
         String legacyYearDir = storageProvider.resolvePath(legacySecDir, "year=" + year);
-        legacyCount += scanYearIntoCache(legacyYearDir, year, cache, byName);
+        int[] result = scanYearIntoCache(legacyYearDir, year, cache, byName);
+        legacyVirtual += result[0];
+        legacyBatchFiles += result[1];
       }
-      if (legacyCount > 0) {
-        LOGGER.info("preloadFileInventory: found {} files at legacy double-path {}", legacyCount, legacySecDir);
-        totalCount += legacyCount;
+      if (legacyVirtual > 0) {
+        LOGGER.info("preloadFileInventory: found {} virtual entries at legacy double-path {}",
+            legacyVirtual, legacySecDir);
       }
+      totalVirtual += legacyVirtual;
+      totalBatchFiles += legacyBatchFiles;
+    }
+
+    if (totalBatchFiles > 0 && totalVirtual == 0) {
+      // Batch files exist but DuckDB failed to extract any (cik, accession) pairs.
+      // Committing an empty byName would cause fileExists() to return false for every
+      // accession, re-queuing the entire year. Leave s3FileCache = null so the slow
+      // path (DuckDB batch lookup) can still answer queries correctly.
+      LOGGER.error("preloadFileInventory: found {} batch files but DuckDB extracted 0 virtual "
+          + "entries — DuckDB population failed. Leaving cache null for slow-path fallback.",
+          totalBatchFiles);
+      return;
     }
 
     this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
     this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
     long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("preloadFileInventory: cached {} sec parquet paths (years {}-{}) in {}ms",
-        totalCount, startYear, endYear, elapsed);
+    LOGGER.info("preloadFileInventory: cached {} virtual entries from {} batch files "
+        + "(years {}-{}) in {}ms",
+        totalVirtual, totalBatchFiles, startYear, endYear, elapsed);
   }
 
-  private int scanYearIntoCache(String yearDir, int year,
+  /**
+   * Scans one year partition into the in-memory cache.
+   *
+   * @return int[]{virtualEntriesAdded, batchFilesFound}
+   */
+  private int[] scanYearIntoCache(String yearDir, int year,
       java.util.Set<String> cache, java.util.Map<String, String> byName) {
     try {
       List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
       java.util.Map<String, List<String>> batchByType =
           new java.util.LinkedHashMap<String, List<String>>();
       int yearCount = 0;
+      int batchCount = 0;
       for (StorageProvider.FileEntry entry : entries) {
         if (!entry.isDirectory()) {
           String path = entry.getPath();
@@ -218,6 +244,7 @@ public class SecFilingCache implements AutoCloseable {
               batchByType.put(tableType, paths);
             }
             paths.add(path);
+            batchCount++;
           } else {
             cache.add(path);
             byName.put(name, path);
@@ -229,31 +256,27 @@ public class SecFilingCache implements AutoCloseable {
         yearCount += populateCacheFromBatchFiles(
             batchEntry.getKey(), batchEntry.getValue(), yearDir, year, cache, byName);
       }
-      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} virtual entries", yearDir, yearCount);
-      return yearCount;
+      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} virtual entries from {} batch files",
+          yearDir, yearCount, batchCount);
+      return new int[]{yearCount, batchCount};
     } catch (IOException e) {
       LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
-      return 0;
+      return new int[]{0, 0};
     }
   }
 
-  private static final int DUCKDB_BATCH_CHUNK_SIZE = 20;
+  /** Chunk size for DuckDB batch-parquet reads. Small to avoid R2/SSL connection drops. */
+  private static final int DUCKDB_BATCH_CHUNK_SIZE = 5;
 
   private int populateCacheFromBatchFiles(String tableType, List<String> batchPaths,
       String yearDir, int year, java.util.Set<String> cache,
       java.util.Map<String, String> byName) {
-    Connection conn = getOrCreateDuckdbConn();
-    if (conn == null) {
-      LOGGER.warn("populateCacheFromBatchFiles: no DuckDB connection, skipping batch type={}",
-          tableType);
-      return 0;
-    }
     int total = 0;
     int chunkStart = 0;
     while (chunkStart < batchPaths.size()) {
       int chunkEnd = Math.min(chunkStart + DUCKDB_BATCH_CHUNK_SIZE, batchPaths.size());
       List<String> chunk = batchPaths.subList(chunkStart, chunkEnd);
-      total += populateCacheFromChunk(conn, tableType, chunk, yearDir, year, cache, byName);
+      total += populateCacheFromChunk(tableType, chunk, yearDir, year, cache, byName);
       chunkStart = chunkEnd;
     }
     LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
@@ -261,9 +284,30 @@ public class SecFilingCache implements AutoCloseable {
     return total;
   }
 
-  private int populateCacheFromChunk(Connection conn, String tableType, List<String> chunk,
+  private int populateCacheFromChunk(String tableType, List<String> chunk,
       String yearDir, int year, java.util.Set<String> cache,
       java.util.Map<String, String> byName) {
+    int result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
+    if (result == 0 && !chunk.isEmpty()) {
+      // Retry once with a fresh DuckDB connection in case the old one was broken by an SSL drop.
+      resetDuckdbConn();
+      result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
+      if (result > 0) {
+        LOGGER.info("populateCacheFromChunk: retry succeeded for type={} year={} chunk-size={}",
+            tableType, year, chunk.size());
+      }
+    }
+    return result;
+  }
+
+  private int tryPopulateChunk(String tableType, List<String> chunk,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      LOGGER.warn("tryPopulateChunk: no DuckDB connection, skipping type={}", tableType);
+      return 0;
+    }
     try {
       StringBuilder pathList = new StringBuilder();
       for (int i = 0; i < chunk.size(); i++) {
@@ -294,8 +338,9 @@ public class SecFilingCache implements AutoCloseable {
       }
       return count;
     } catch (Exception e) {
-      LOGGER.warn("populateCacheFromChunk: type={} year={} chunk-size={} failed — {}",
+      LOGGER.warn("tryPopulateChunk: type={} year={} chunk-size={} failed — {}",
           tableType, year, chunk.size(), e.getMessage());
+      resetDuckdbConn();
       return 0;
     }
   }
@@ -317,6 +362,17 @@ public class SecFilingCache implements AutoCloseable {
       }
     }
     return duckdbConn;
+  }
+
+  private void resetDuckdbConn() {
+    if (duckdbConn != null) {
+      try {
+        duckdbConn.close();
+      } catch (Exception ignored) {
+        // best-effort close
+      }
+      duckdbConn = null;
+    }
   }
 
   /**
@@ -636,9 +692,18 @@ public class SecFilingCache implements AutoCloseable {
       return false;
     }
 
-    // Slow path: live S3 query.  Use exact year partition when available to avoid the
-    // 11-iteration year=* glob that generates 11 Class A LIST ops per call.
+    // Slow path: live S3 query.
+    // First try the DuckDB batch-file lookup since production uses batch-only organization
+    // (per-accession files never exist; only {type}_batch_NNNN.parquet files are in S3).
     String year = yearFromFilingDate(filingDate);
+    if (year != null) {
+      Boolean batchResult = existsInBatchFiles(secDir, cik, accession, suffix, year);
+      if (batchResult != null) {
+        return batchResult;
+      }
+    }
+
+    // Final fallback: check for a per-accession file (legacy / non-batch S3 layout).
     String yearSegment = (year != null) ? "year=" + year : "year=*";
     String pattern = storageProvider.resolvePath(secDir, yearSegment + "/" + fileName);
     try {
@@ -646,6 +711,72 @@ public class SecFilingCache implements AutoCloseable {
     } catch (IOException e) {
       LOGGER.debug("Error checking file existence: {}", e.getMessage());
       return false;
+    }
+  }
+
+  /**
+   * Checks whether {@code accession} appears in any {@code {suffix}_batch_*.parquet} file
+   * in {@code secDir/year={year}/}.
+   *
+   * <p>Used as the primary slow-path for production S3 which stores batch-merged parquet
+   * (not individual per-accession files). Only the first few batch files are queried to
+   * keep latency reasonable; if the accession isn't found, returns {@code false}.
+   *
+   * @return {@code true} / {@code false} if batch files exist and DuckDB answered,
+   *         {@code null} if no batch files found (caller should try legacy path)
+   */
+  private Boolean existsInBatchFiles(String secDir, String cik, String accession,
+      String suffix, String year) {
+    String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
+    List<String> batchPaths;
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, false);
+      batchPaths = new ArrayList<String>();
+      String prefix = suffix.toLowerCase() + "_batch_";
+      for (StorageProvider.FileEntry e : entries) {
+        if (!e.isDirectory()) {
+          String path = e.getPath();
+          int slash = path.lastIndexOf('/');
+          String name = (slash >= 0) ? path.substring(slash + 1) : path;
+          if (name.startsWith(prefix) && name.endsWith(".parquet")) {
+            batchPaths.add(path);
+            if (batchPaths.size() >= DUCKDB_BATCH_CHUNK_SIZE) {
+              break;
+            }
+          }
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("existsInBatchFiles: list failed for {} — {}", yearDir, e.getMessage());
+      return null;
+    }
+    if (batchPaths.isEmpty()) {
+      return null;
+    }
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      return null;
+    }
+    try {
+      StringBuilder pathList = new StringBuilder();
+      for (int i = 0; i < batchPaths.size(); i++) {
+        if (i > 0) {
+          pathList.append(", ");
+        }
+        pathList.append("'").append(batchPaths.get(i)).append("'");
+      }
+      String safe = accession.replace("'", "''");
+      String sql = "SELECT 1 FROM read_parquet([" + pathList
+          + "]) WHERE accession_number = '" + safe + "' LIMIT 1";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        return rs.next();
+      }
+    } catch (Exception e) {
+      LOGGER.debug("existsInBatchFiles: DuckDB query failed for {}/{} — {}", cik, accession,
+          e.getMessage());
+      resetDuckdbConn();
+      return null;
     }
   }
 
