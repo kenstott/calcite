@@ -72,10 +72,10 @@ public class SecFilingCacheFileInventoryTest {
 
     cache.preloadFileInventory(2024, 2024);
 
-    // listFiles should have been called once (one year partition = one listFiles call)
-    // 2 calls per year: primary path scan + legacy path scan (migration fallback)
-    assertEquals(2, provider.listFilesCallCount(),
-        "preloadFileInventory must call listFiles twice per year (primary + legacy path)");
+    // preloadFileInventory(2024, 2024) internally scans year=2023 (fiscal buffer) + year=2024.
+    // Each year gets 2 listFiles calls: primary path + legacy path (migration fallback).
+    assertEquals(4, provider.listFilesCallCount(),
+        "preloadFileInventory must call listFiles 4 times: 2 years x (primary + legacy)");
     // exists() must NOT have been called — everything from the cache
     assertEquals(0, provider.existsCallCount(),
         "preloadFileInventory must not call exists()");
@@ -249,6 +249,57 @@ public class SecFilingCacheFileInventoryTest {
         "Self-healing with cache: all files present → SKIP");
     assertEquals(0, provider.existsCallCount(),
         "With preloaded cache, checkFiling must not issue any exists() calls");
+  }
+
+  // -------------------------------------------------------------------------
+  // 8. no_xbrl sentinel detected via preload
+  // -------------------------------------------------------------------------
+
+  @Test
+  void preloadedCache_detectsNoXbrlSentinel() throws IOException {
+    String cik = "0001234567";
+    String accession = "0001234567-25-000042";
+    String sentinelPath = PARQUET_BASE + "/year=2025/" + cik + "_" + accession + "_no_xbrl.parquet";
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(
+        Collections.singletonList(sentinelPath));
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+    cache.preloadFileInventory(2025, 2025);
+    provider.resetCounters();
+
+    FileInventory inventory = cache.checkS3Files(cik, accession, "2025-03-10");
+    assertTrue(inventory.hasNoXbrl(), "no_xbrl sentinel must be detected after preload");
+    assertFalse(inventory.hasAnyFiles(), "sentinel must not count as a regular data file");
+    assertEquals(0, provider.existsCallCount(), "no S3 calls when cache is populated");
+  }
+
+  // -------------------------------------------------------------------------
+  // 9. Fiscal-year buffer: Jan-Apr filing output at year-1 found via byName
+  // -------------------------------------------------------------------------
+
+  @Test
+  void preloadedCache_findsFiscalYearShiftedFilingViaPriorYearScan() throws IOException {
+    String cik = "0000320193";
+    // accession with 25 = filed in 2025 (Jan-Apr), output written to year=2024 by getPartitionYear
+    String accession = "0000320193-25-000010";
+    List<String> knownPaths = buildExpectedPaths(cik, accession, "2024");
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(knownPaths);
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+    // preloadFileInventory(2025, 2025) also scans year=2024 (fiscal buffer) internally
+    cache.preloadFileInventory(2025, 2025);
+    provider.resetCounters();
+
+    // filingDate "2025-02-15" → exact path check uses year=2025 (not in cache),
+    // but byName fallback finds the year=2024 entry populated from the fiscal buffer scan
+    FileInventory inventory = cache.checkS3Files(cik, accession, "2025-02-15");
+    assertTrue(inventory.hasMetadata(),
+        "Jan-Apr filing with output at year=2024 must be found via byName fiscal buffer");
+    assertTrue(inventory.hasFacts(),
+        "Jan-Apr filing with output at year=2024 must be found via byName fiscal buffer");
+    assertEquals(0, provider.existsCallCount(), "no S3 calls when cache is populated");
   }
 
   // -------------------------------------------------------------------------

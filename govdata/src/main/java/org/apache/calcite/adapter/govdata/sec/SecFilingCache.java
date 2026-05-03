@@ -18,7 +18,10 @@ import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -166,12 +169,16 @@ public class SecFilingCache implements AutoCloseable {
   public void preloadFileInventory(int startYear, int endYear) {
     long start = System.currentTimeMillis();
     String secDir = parquetBaseDir;
-    LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{}", secDir, startYear, endYear);
+    // Scan one year before startYear to catch Jan–Apr 10-K/Q filings whose output was written
+    // to year=(startYear-1) by getPartitionYear's fiscal-year heuristic.
+    int scanStart = startYear - 1;
+    LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{} (fiscal buffer from {})",
+        secDir, startYear, endYear, scanStart);
     java.util.Set<String> cache = new java.util.HashSet<String>();
     java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
     int totalVirtual = 0;
     int totalBatchFiles = 0;
-    for (int year = startYear; year <= endYear; year++) {
+    for (int year = scanStart; year <= endYear; year++) {
       String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
       int[] result = scanYearIntoCache(yearDir, year, cache, byName);
       totalVirtual += result[0];
@@ -184,7 +191,7 @@ public class SecFilingCache implements AutoCloseable {
     if (!legacySecDir.equals(secDir)) {
       int legacyVirtual = 0;
       int legacyBatchFiles = 0;
-      for (int year = startYear; year <= endYear; year++) {
+      for (int year = scanStart; year <= endYear; year++) {
         String legacyYearDir = storageProvider.resolvePath(legacySecDir, "year=" + year);
         int[] result = scanYearIntoCache(legacyYearDir, year, cache, byName);
         legacyVirtual += result[0];
@@ -317,7 +324,7 @@ public class SecFilingCache implements AutoCloseable {
         pathList.append("'").append(chunk.get(i)).append("'");
       }
       String sql = "SELECT DISTINCT cik, accession_number FROM read_parquet(["
-          + pathList + "])";
+          + pathList + "], union_by_name=true)";
       int count = 0;
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(sql)) {
@@ -440,7 +447,11 @@ public class SecFilingCache implements AutoCloseable {
         continue;
       }
       FileInventory s3Inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
-      if (s3Inv.hasAnyFiles()) {
+      if (s3Inv.hasNoXbrl()) {
+        // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data.
+        // Skip without adding to self-heal queue (no parquet to record).
+        cntNoXbrl++;
+      } else if (s3Inv.hasAnyFiles()) {
         toSelfHeal.add(ie);
         FormType form = FormType.fromString(ie.formType);
         // Only process if base staging files are also incomplete, not just chunks.
@@ -631,6 +642,7 @@ public class SecFilingCache implements AutoCloseable {
 
     FileInventory.Builder builder = FileInventory.builder();
 
+    builder.hasNoXbrl(fileExists(secDir, cik, accession, "no_xbrl", filingDate));
     builder.hasMetadata(fileExists(secDir, cik, accession, "metadata", filingDate));
     builder.hasFacts(fileExists(secDir, cik, accession, "facts", filingDate));
     builder.hasContexts(fileExists(secDir, cik, accession, "contexts", filingDate));
@@ -658,6 +670,29 @@ public class SecFilingCache implements AutoCloseable {
       } catch (NumberFormatException ignored) {
         // fall through to null
       }
+    }
+    return null;
+  }
+
+  /** Extracts 4-digit year from accession number format {@code XXXXXXXXXX-YY-NNNNNN}. */
+  private static String yearFromAccession(String accession) {
+    if (accession == null) {
+      return null;
+    }
+    int first = accession.indexOf('-');
+    int second = first >= 0 ? accession.indexOf('-', first + 1) : -1;
+    if (first < 0 || second < 0 || second <= first + 1) {
+      return null;
+    }
+    String twoDigit = accession.substring(first + 1, second);
+    try {
+      int y = Integer.parseInt(twoDigit);
+      if (y >= 0 && y <= 99) {
+        int fullYear = y + 2000;
+        return String.valueOf(fullYear);
+      }
+    } catch (NumberFormatException ignored) {
+      // fall through
     }
     return null;
   }
@@ -795,10 +830,54 @@ public class SecFilingCache implements AutoCloseable {
 
   /**
    * Mark filing as having no XBRL data.
+   *
+   * <p>Also writes a minimal sentinel parquet file to S3 ({@code {cik}_{accession}_no_xbrl.parquet})
+   * so that the self-heal path can detect and skip this filing even without a tracker.
    */
   public void markNoXbrl(String cik, String accession, String formType, String filingDate) {
     tracker.markComplete(accession, TABLE_NO_XBRL, PHASE_STAGING, 0);
+    writeNoXbrlSentinel(cik, accession, filingDate);
     LOGGER.debug("Marked no_xbrl: {}:{}", cik, accession);
+  }
+
+  private void writeNoXbrlSentinel(String cik, String accession, String filingDate) {
+    String year = yearFromFilingDate(filingDate);
+    if (year == null) {
+      year = yearFromAccession(accession);
+    }
+    if (year == null) {
+      LOGGER.warn("writeNoXbrlSentinel: cannot determine year for accession={}, skipping", accession);
+      return;
+    }
+    String yearDir = storageProvider.resolvePath(parquetBaseDir, "year=" + year);
+    String fileName = cik + "_" + accession + "_no_xbrl.parquet";
+    String destPath = storageProvider.resolvePath(yearDir, fileName);
+    File tmp = null;
+    try {
+      tmp = File.createTempFile("no_xbrl_sentinel_", ".parquet");
+      Connection conn = getOrCreateDuckdbConn();
+      if (conn == null) {
+        LOGGER.warn("writeNoXbrlSentinel: no DuckDB connection, skipping sentinel for {}", accession);
+        return;
+      }
+      String safeCik = cik.replace("'", "''");
+      String safeAccession = accession.replace("'", "''");
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("COPY (SELECT '" + safeCik + "' AS cik, '"
+            + safeAccession + "' AS accession_number) TO '"
+            + tmp.getAbsolutePath().replace("\\", "/") + "' (FORMAT PARQUET)");
+      }
+      try (InputStream in = new FileInputStream(tmp)) {
+        storageProvider.writeFile(destPath, in);
+      }
+      LOGGER.debug("Wrote no_xbrl sentinel: {}", destPath);
+    } catch (Exception e) {
+      LOGGER.warn("writeNoXbrlSentinel: failed for accession={} — {}", accession, e.getMessage());
+    } finally {
+      if (tmp != null) {
+        tmp.delete();
+      }
+    }
   }
 
   /**
