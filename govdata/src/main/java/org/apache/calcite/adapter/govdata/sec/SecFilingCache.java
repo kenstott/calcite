@@ -13,17 +13,24 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SEC-specific facade for filing processing state.
@@ -51,6 +58,14 @@ public class SecFilingCache implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecFilingCache.class);
 
   private static final int MAX_ERROR_RETRIES = 3;
+
+  /** Matches batch-merged parquet files written by LocalStagingStorageProvider. */
+  private static final Pattern BATCH_FILE_PATTERN =
+      Pattern.compile("^([a-z_]+)_batch_(\\d+)\\.parquet$", Pattern.CASE_INSENSITIVE);
+
+  /** Base table types always expected for a complete 10-K/10-Q filing. */
+  private static final String[] BASE_FILE_TYPES =
+      {"metadata", "facts", "contexts", "relationships", "mda"};
 
   /** Phase name for SEC staging (initial file creation). */
   private static final String PHASE_STAGING = "staging";
@@ -81,6 +96,9 @@ public class SecFilingCache implements AutoCloseable {
    * filing date (and therefore year partition) is unknown.
    */
   private volatile java.util.Map<String, String> s3FileCacheByName = null;
+
+  /** Lazily-initialized DuckDB connection used to read batch parquet files during preload. */
+  private Connection duckdbConn = null;
 
   /**
    * Create a new filing cache backed by a PipelineTracker.
@@ -183,23 +201,106 @@ public class SecFilingCache implements AutoCloseable {
       java.util.Set<String> cache, java.util.Map<String, String> byName) {
     try {
       List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
+      java.util.Map<String, List<String>> batchByType =
+          new java.util.LinkedHashMap<String, List<String>>();
       int yearCount = 0;
       for (StorageProvider.FileEntry entry : entries) {
         if (!entry.isDirectory()) {
           String path = entry.getPath();
-          cache.add(path);
           int slash = path.lastIndexOf('/');
           String name = (slash >= 0) ? path.substring(slash + 1) : path;
-          byName.put(name, path);
-          yearCount++;
+          Matcher m = BATCH_FILE_PATTERN.matcher(name);
+          if (m.matches()) {
+            String tableType = m.group(1).toLowerCase();
+            List<String> paths = batchByType.get(tableType);
+            if (paths == null) {
+              paths = new ArrayList<String>();
+              batchByType.put(tableType, paths);
+            }
+            paths.add(path);
+          } else {
+            cache.add(path);
+            byName.put(name, path);
+            yearCount++;
+          }
         }
       }
-      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} files", yearDir, yearCount);
+      for (Map.Entry<String, List<String>> batchEntry : batchByType.entrySet()) {
+        yearCount += populateCacheFromBatchFiles(
+            batchEntry.getKey(), batchEntry.getValue(), yearDir, year, cache, byName);
+      }
+      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} virtual entries", yearDir, yearCount);
       return yearCount;
     } catch (IOException e) {
       LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
       return 0;
     }
+  }
+
+  private int populateCacheFromBatchFiles(String tableType, List<String> batchPaths,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
+    try {
+      Connection conn = getOrCreateDuckdbConn();
+      if (conn == null) {
+        LOGGER.warn("populateCacheFromBatchFiles: no DuckDB connection, skipping batch type={}",
+            tableType);
+        return 0;
+      }
+      StringBuilder pathList = new StringBuilder();
+      for (int i = 0; i < batchPaths.size(); i++) {
+        if (i > 0) {
+          pathList.append(", ");
+        }
+        pathList.append("'").append(batchPaths.get(i)).append("'");
+      }
+      String sql = "SELECT DISTINCT cik, accession_number FROM read_parquet(["
+          + pathList + "])";
+      int count = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          String cik = rs.getString("cik");
+          String accession = rs.getString("accession_number");
+          if (cik == null || accession == null) {
+            continue;
+          }
+          addVirtualEntry(yearDir, cik, accession, tableType, cache, byName);
+          count++;
+          if ("chunks".equalsIgnoreCase(tableType)) {
+            for (String baseType : BASE_FILE_TYPES) {
+              addVirtualEntry(yearDir, cik, accession, baseType, cache, byName);
+            }
+          }
+        }
+      }
+      LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
+          tableType, batchPaths.size(), count);
+      return count;
+    } catch (Exception e) {
+      LOGGER.warn("populateCacheFromBatchFiles: type={} year={} failed — {}",
+          tableType, year, e.getMessage());
+      return 0;
+    }
+  }
+
+  private void addVirtualEntry(String yearDir, String cik, String accession,
+      String tableType, java.util.Set<String> cache, java.util.Map<String, String> byName) {
+    String name = cik + "_" + accession + "_" + tableType + ".parquet";
+    String path = storageProvider.resolvePath(yearDir, name);
+    cache.add(path);
+    byName.put(name, path);
+  }
+
+  private Connection getOrCreateDuckdbConn() {
+    if (duckdbConn == null) {
+      try {
+        duckdbConn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
+      } catch (Exception e) {
+        LOGGER.warn("getOrCreateDuckdbConn: failed to initialize DuckDB — {}", e.getMessage());
+      }
+    }
+    return duckdbConn;
   }
 
   /**
@@ -767,6 +868,14 @@ public class SecFilingCache implements AutoCloseable {
       } catch (Exception e) {
         LOGGER.error("Error closing tracker: {}", e.getMessage());
       }
+    }
+    if (duckdbConn != null) {
+      try {
+        duckdbConn.close();
+      } catch (SQLException e) {
+        LOGGER.error("Error closing DuckDB connection: {}", e.getMessage());
+      }
+      duckdbConn = null;
     }
   }
 

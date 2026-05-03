@@ -50,8 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class SecFilingCacheFileInventoryTest {
 
-  private static final String PARQUET_BASE = "s3://govdata-parquet-v1";
-  private static final String SEC_DIR = PARQUET_BASE + "/source=sec";
+  // Production: govdataParquetDir already includes /source=sec (set by materializeDirectory in
+  // sec-schema.yaml). SecFilingCache receives this value directly as parquetBaseDir.
+  private static final String PARQUET_BASE = "s3://govdata-parquet-v1/source=sec";
 
   // -------------------------------------------------------------------------
   // 1. preloadFileInventory populates the cache
@@ -72,8 +73,9 @@ public class SecFilingCacheFileInventoryTest {
     cache.preloadFileInventory(2024, 2024);
 
     // listFiles should have been called once (one year partition = one listFiles call)
-    assertEquals(1, provider.listFilesCallCount(),
-        "preloadFileInventory must call listFiles once per year (one year here)");
+    // 2 calls per year: primary path scan + legacy path scan (migration fallback)
+    assertEquals(2, provider.listFilesCallCount(),
+        "preloadFileInventory must call listFiles twice per year (primary + legacy path)");
     // exists() must NOT have been called — everything from the cache
     assertEquals(0, provider.existsCallCount(),
         "preloadFileInventory must not call exists()");
@@ -261,7 +263,7 @@ public class SecFilingCacheFileInventoryTest {
         "mda", "insider", "earnings", "chunks"};
     List<String> paths = new ArrayList<String>(tableTypes.length);
     for (String tableType : tableTypes) {
-      paths.add(SEC_DIR + "/year=" + year + "/" + cik + "_" + accession + "_" + tableType + ".parquet");
+      paths.add(PARQUET_BASE + "/year=" + year + "/" + cik + "_" + accession + "_" + tableType + ".parquet");
     }
     return paths;
   }

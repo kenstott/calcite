@@ -38,8 +38,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class SecFilingCacheYearScopedPreloadTest {
 
-  private static final String PARQUET_BASE = "s3://govdata-parquet-v1";
-  private static final String SEC_DIR = PARQUET_BASE + "/source=sec";
+  // Production: govdataParquetDir already includes /source=sec (set by materializeDirectory in
+  // sec-schema.yaml). SecFilingCache receives this value directly as parquetBaseDir.
+  private static final String PARQUET_BASE = "s3://govdata-parquet-v1/source=sec";
+  private static final String SEC_DIR = PARQUET_BASE;
 
   // ---------------------------------------------------------------------------
   // 1. Only the requested year partitions are listed — not the sec/ root
@@ -61,7 +63,8 @@ public class SecFilingCacheYearScopedPreloadTest {
     cache.preloadFileInventory(2024, 2025);
 
     List<String> listed = provider.listFilesPathsQueried();
-    assertEquals(2, listed.size(), "listFiles must be called exactly once per year in range");
+    // 2 calls per year: primary path + legacy path (migration fallback). 2 years = 4 total.
+    assertEquals(4, listed.size(), "listFiles must be called twice per year in range (primary + legacy)");
     assertTrue(listed.contains(SEC_DIR + "/year=2024"), "must list year=2024 partition");
     assertTrue(listed.contains(SEC_DIR + "/year=2025"), "must list year=2025 partition");
     assertFalse(listed.contains(SEC_DIR),
