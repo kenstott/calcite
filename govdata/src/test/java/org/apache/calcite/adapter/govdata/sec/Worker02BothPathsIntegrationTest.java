@@ -37,11 +37,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p>Path 1 (self-heal): Uses {@code PipelineTracker.NOOP_PIPELINE} so no tracker state
  * exists. {@link SecFilingCache#preloadFileInventory} must populate the cache from live S3
- * batch files, and {@link SecFilingCache#filterAndSelfHeal} must skip >=50% of the 2025
- * 10-K/10-Q candidates found in the real EDGAR quarterly index.
+ * batch files. Once worker-02 has fully processed all 2025 10-K/10-Q/10-K/A/10-Q/A candidates
+ * (including FY2024 filings submitted in early 2025), all must be skipped (100%).
  *
- * <p>Path 2 (tracker-based): Uses a real S3-backed tracker. Tracker state accumulated by
- * actual worker runs should cause skipRatio to be >=50%.
+ * <p>Path 2 (tracker-based): Uses a real S3-backed tracker. After full processing, tracker
+ * state must cause all candidates to be skipped (100%).
  *
  * <p>Candidates are sourced from the locally cached EDGAR full-index files at
  * {@code govdata/test-run/cache/sec/full-index/}, NOT from the same batch parquet files
@@ -68,8 +68,8 @@ public class Worker02BothPathsIntegrationTest {
   // Minimum EDGAR index candidates to make the test meaningful
   private static final int MIN_CANDIDATES = 100;
 
-  // Minimum skip ratio to pass (50% of candidates must be skipped)
-  private static final double MIN_SKIP_RATIO = 0.5;
+  // All candidates must be skipped after worker-02 has fully processed all 2025 filings
+  private static final double MIN_SKIP_RATIO = 1.0;
 
   // Limit tracker path test to a sample to avoid per-accession S3 calls for all 7000+ entries
   private static final int TRACKER_TEST_SAMPLE = 200;
