@@ -1144,6 +1144,8 @@ public class HttpSourceConfig {
     private final String sinceDate;
     private final String sinceYear;
     private final String sinceQuarter;
+    private final String untilDate;
+    private final String untilYear;
     private final String filterParam;
     private final String dateField;
     private final String yearField;
@@ -1153,16 +1155,26 @@ public class HttpSourceConfig {
 
     public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
         String filterParam, String dateField, String yearField, String quarterField) {
-      this(sinceDate, sinceYear, sinceQuarter, filterParam, dateField, yearField, quarterField,
-          true);
+      this(sinceDate, sinceYear, sinceQuarter, null, null, filterParam, dateField, yearField,
+          quarterField, true);
     }
 
     public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
         String filterParam, String dateField, String yearField, String quarterField,
         boolean quoteValues) {
+      this(sinceDate, sinceYear, sinceQuarter, null, null, filterParam, dateField, yearField,
+          quarterField, quoteValues);
+    }
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String untilDate, String untilYear,
+        String filterParam, String dateField, String yearField, String quarterField,
+        boolean quoteValues) {
       this.sinceDate = sinceDate;
       this.sinceYear = sinceYear;
       this.sinceQuarter = sinceQuarter;
+      this.untilDate = untilDate;
+      this.untilYear = untilYear;
       this.filterParam = filterParam;
       this.dateField = dateField;
       this.yearField = yearField;
@@ -1173,6 +1185,8 @@ public class HttpSourceConfig {
     public String getSinceDate() { return sinceDate; }
     public String getSinceYear() { return sinceYear; }
     public String getSinceQuarter() { return sinceQuarter; }
+    public String getUntilDate() { return untilDate; }
+    public String getUntilYear() { return untilYear; }
     public String getFilterParam() { return filterParam; }
     public String getDateField() { return dateField; }
     public String getYearField() { return yearField; }
@@ -1190,27 +1204,41 @@ public class HttpSourceConfig {
      * <p>When {@code quoteValues} is {@code false}, field values are compared without
      * single-quote wrapping — required for numeric Socrata field types (e.g. {@code year}).
      *
-     * @param resolvedDate    resolved sinceDate value (may be null/empty)
-     * @param resolvedYear    resolved sinceYear value (may be null/empty)
-     * @param resolvedQuarter resolved sinceQuarter value (may be null/empty)
+     * @param resolvedDate      resolved sinceDate value (may be null/empty)
+     * @param resolvedYear      resolved sinceYear value (may be null/empty)
+     * @param resolvedQuarter   resolved sinceQuarter value (may be null/empty)
+     * @param resolvedUntilDate resolved untilDate value (may be null/empty)
+     * @param resolvedUntilYear resolved untilYear value (may be null/empty)
      * @return filter value string, or {@code null} if no constraint is active
      */
     public String buildFilterValue(String resolvedDate, String resolvedYear,
-        String resolvedQuarter) {
+        String resolvedQuarter, String resolvedUntilDate, String resolvedUntilYear) {
       boolean hasDate = resolvedDate != null && !resolvedDate.isEmpty();
       boolean hasYear = resolvedYear != null && !resolvedYear.isEmpty();
       boolean hasQuarter = resolvedQuarter != null && !resolvedQuarter.isEmpty();
+      boolean hasUntilDate = resolvedUntilDate != null && !resolvedUntilDate.isEmpty();
+      boolean hasUntilYear = resolvedUntilYear != null && !resolvedUntilYear.isEmpty();
 
       if (dateField != null && hasDate) {
-        return dateField + " >= " + q(resolvedDate);
+        String filter = dateField + " >= " + q(resolvedDate);
+        if (hasUntilDate) {
+          filter += " AND " + dateField + " <= " + q(resolvedUntilDate);
+        }
+        return filter;
       }
       if (yearField != null && hasYear) {
+        String filter;
         if (quarterField != null && hasQuarter) {
-          return "(" + yearField + " > " + q(resolvedYear) + ") OR ("
+          filter = "(" + yearField + " > " + q(resolvedYear) + ") OR ("
               + yearField + " = " + q(resolvedYear) + " AND "
               + quarterField + " >= " + q(resolvedQuarter) + ")";
+        } else {
+          filter = yearField + " >= " + q(resolvedYear);
         }
-        return yearField + " >= " + q(resolvedYear);
+        if (hasUntilYear) {
+          filter = "(" + filter + ") AND " + yearField + " <= " + q(resolvedUntilYear);
+        }
+        return filter;
       }
       // Direct-param style: pass resolved date straight to the filterParam
       if (hasDate) {
@@ -1230,6 +1258,8 @@ public class HttpSourceConfig {
           (String) map.get("sinceDate"),
           (String) map.get("sinceYear"),
           (String) map.get("sinceQuarter"),
+          (String) map.get("untilDate"),
+          (String) map.get("untilYear"),
           (String) map.get("filterParam"),
           (String) map.get("dateField"),
           (String) map.get("yearField"),

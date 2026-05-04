@@ -314,19 +314,26 @@ public class HttpSource implements DataSource {
     // Apply incremental filter when configured and a bound is active
     HttpSourceConfig.IncrementalConfig incr = config.getIncremental();
     if (incr != null && incr.getFilterParam() != null) {
-      String resolvedDate    = substituteVariables(
+      String resolvedDate      = substituteVariables(
           incr.getSinceDate()    != null ? incr.getSinceDate()    : "", variables);
-      String resolvedYear    = substituteVariables(
+      String resolvedYear      = substituteVariables(
           incr.getSinceYear()    != null ? incr.getSinceYear()    : "", variables);
-      String resolvedQuarter = substituteVariables(
+      String resolvedQuarter   = substituteVariables(
           incr.getSinceQuarter() != null ? incr.getSinceQuarter() : "", variables);
-      String filterValue = incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter);
+      String resolvedUntilDate = substituteVariables(
+          incr.getUntilDate()    != null ? incr.getUntilDate()    : "", variables);
+      String resolvedUntilYear = substituteVariables(
+          incr.getUntilYear()    != null ? incr.getUntilYear()    : "", variables);
+      String filterValue = incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter,
+          resolvedUntilDate, resolvedUntilYear);
       if (filterValue != null) {
         params.put(incr.getFilterParam(), filterValue);
         // Expose bounds to transformers via RequestContext.dimensionValues
-        if (!resolvedDate.isEmpty())    { variables.put("sinceDate", resolvedDate); }
-        if (!resolvedYear.isEmpty())    { variables.put("sinceYear", resolvedYear); }
-        if (!resolvedQuarter.isEmpty()) { variables.put("sinceQuarter", resolvedQuarter); }
+        if (!resolvedDate.isEmpty())      { variables.put("sinceDate", resolvedDate); }
+        if (!resolvedYear.isEmpty())      { variables.put("sinceYear", resolvedYear); }
+        if (!resolvedQuarter.isEmpty())   { variables.put("sinceQuarter", resolvedQuarter); }
+        if (!resolvedUntilDate.isEmpty()) { variables.put("untilDate", resolvedUntilDate); }
+        if (!resolvedUntilYear.isEmpty()) { variables.put("untilYear", resolvedUntilYear); }
         LOGGER.info("Incremental filter active: {}={}", incr.getFilterParam(), filterValue);
       }
     }

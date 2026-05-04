@@ -109,7 +109,13 @@ INCREMENTAL_DATE="${INCREMENTAL_YEAR}-01-01"
 case "$MODE" in
 
   initial)
-    # Full fetch of all 15 health tables — no incremental filters
+    UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
+    UNTIL_YEAR=$((INCREMENTAL_YEAR - 1))
+    export HEALTH_TRIALS_UNTIL_DATE="${UNTIL_DATE}"
+    export HEALTH_CDC_COVID_UNTIL_DATE="${UNTIL_DATE}"
+    export HEALTH_BRFSS_UNTIL_YEAR="${UNTIL_YEAR}"
+    export MEDICAID_UNTIL_YEAR="${UNTIL_YEAR}"
+    # Full fetch of all 15 health tables — capped at GOVDATA_INCREMENTAL_START_YEAR - 1
     run_health_model "health-initial-fda" \
       '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
 
