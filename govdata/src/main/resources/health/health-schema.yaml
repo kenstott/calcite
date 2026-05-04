@@ -670,8 +670,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
-        untilDate: "${HEALTH_TRIALS_UNTIL_DATE:}"
+        sinceDate: "${GOVDATA_SINCE_DATE:}"
+        untilDate: "${GOVDATA_UNTIL_DATE:}"
         filterParam: "lastUpdatePostDate.gte"
 
     hooks:
@@ -744,8 +744,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
-        untilDate: "${HEALTH_TRIALS_UNTIL_DATE:}"
+        sinceDate: "${GOVDATA_SINCE_DATE:}"
+        untilDate: "${GOVDATA_UNTIL_DATE:}"
         filterParam: "lastUpdatePostDate.gte"
 
     hooks:
@@ -826,8 +826,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceDate: "${HEALTH_TRIALS_SINCE_DATE:}"
-        untilDate: "${HEALTH_TRIALS_UNTIL_DATE:}"
+        sinceDate: "${GOVDATA_SINCE_DATE:}"
+        untilDate: "${GOVDATA_UNTIL_DATE:}"
         filterParam: "lastUpdatePostDate.gte"
 
     hooks:
@@ -923,8 +923,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceDate: "${HEALTH_CDC_COVID_SINCE_DATE:}"
-        untilDate: "${HEALTH_CDC_COVID_UNTIL_DATE:}"
+        sinceDate: "${GOVDATA_SINCE_DATE:}"
+        untilDate: "${GOVDATA_UNTIL_DATE:}"
         filterParam: "$where"
         dateField: "date"
 
@@ -1168,9 +1168,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${MEDICAID_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         sinceQuarter: "${MEDICAID_SINCE_QUARTER:}"
-        untilYear: "${MEDICAID_UNTIL_YEAR:}"
+        untilYear: "${GOVDATA_UNTIL_YEAR:}"
         filterParam: "$where"
         yearField: "year"
         quarterField: "quarter"
@@ -1342,8 +1342,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${HEALTH_BRFSS_SINCE_YEAR:}"
-        untilYear: "${HEALTH_BRFSS_UNTIL_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
+        untilYear: "${GOVDATA_UNTIL_YEAR:}"
         filterParam: "$where"
         yearField: "year"
         quoteValues: false

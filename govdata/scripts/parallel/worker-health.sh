@@ -5,32 +5,28 @@
 #   worker-health.sh <mode>
 #
 # Modes:
-#   initial   One-time setup: all 15 health tables without incremental filters.
+#   initial   One-time setup: all 15 health tables, capped at GOVDATA_INCREMENTAL_START_YEAR-1.
 #             Run once before any recurring cadence workers.
 #
-#   daily     Incremental clinical trials delta.
-#             Requires: HEALTH_TRIALS_SINCE_DATE (e.g. "2024-01-01"; leave blank for full fetch)
+#   daily     Incremental clinical trials delta from GOVDATA_INCREMENTAL_START_YEAR onward.
 #             Schedule: every 24 hours.
 #
 #   weekly    CDC COVID vaccinations delta + CDC mortality full refresh.
-#             Optional: HEALTH_CDC_COVID_SINCE_DATE (blank = full fetch)
 #             Schedule: weekly (e.g., Monday 03:00 UTC).
 #
 #   monthly   Stable reference tables: BRFSS, Medicaid drug utilization, CMS, FDA, RxNorm.
-#             Optional: HEALTH_BRFSS_SINCE_YEAR, MEDICAID_SINCE_YEAR, MEDICAID_SINCE_QUARTER
 #             Schedule: monthly (e.g., 1st of month 02:00 UTC).
 #
 # Required env vars (set in .env.prod or equivalent):
-#   HEALTH_PARQUET_DIR      Local/S3 path for Parquet output (overrides GOVDATA_PARQUET_DIR/source=health)
-#   HEALTH_CACHE_DIR        Local/S3 path for raw download cache
+#   GOVDATA_PARQUET_DIR           Root parquet directory
+#   GOVDATA_CACHE_DIR             Root cache directory
+#   GOVDATA_INCREMENTAL_START_YEAR  Boundary year between historical and daily (default: 2026)
 #
 # Optional env vars:
-#   HEALTH_TRIALS_SINCE_DATE      ISO date for clinical trials delta (e.g. "2024-01-01")
-#   HEALTH_CDC_COVID_SINCE_DATE   ISO date for CDC COVID vaccinations delta
-#   HEALTH_BRFSS_SINCE_YEAR       4-digit year for BRFSS incremental load
-#   MEDICAID_SINCE_YEAR           4-digit year for Medicaid drug utilization incremental load
-#   MEDICAID_SINCE_QUARTER        Quarter number (1-4) for Medicaid incremental load
-#   HEALTH_FDA_API_KEY            openFDA API key (optional; improves rate limits)
+#   HEALTH_PARQUET_DIR            Overrides GOVDATA_PARQUET_DIR/source=health
+#   HEALTH_CACHE_DIR              Overrides GOVDATA_CACHE_DIR/health
+#   HEALTH_FDA_API_KEY            openFDA API key (improves rate limits)
+#   MEDICAID_SINCE_QUARTER        Quarter number (1-4) for Medicaid incremental start
 #   MEDICAID_DRUG_UTIL_DATASET_ID Medicaid dataset UUID (default: d890d3a9-...; 2023 data)
 #
 set -euo pipefail
@@ -109,12 +105,8 @@ INCREMENTAL_DATE="${INCREMENTAL_YEAR}-01-01"
 case "$MODE" in
 
   initial)
-    UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
-    UNTIL_YEAR=$((INCREMENTAL_YEAR - 1))
-    export HEALTH_TRIALS_UNTIL_DATE="${UNTIL_DATE}"
-    export HEALTH_CDC_COVID_UNTIL_DATE="${UNTIL_DATE}"
-    export HEALTH_BRFSS_UNTIL_YEAR="${UNTIL_YEAR}"
-    export MEDICAID_UNTIL_YEAR="${UNTIL_YEAR}"
+    export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
+    export GOVDATA_UNTIL_YEAR=$((INCREMENTAL_YEAR - 1))
     # Full fetch of all 15 health tables — capped at GOVDATA_INCREMENTAL_START_YEAR - 1
     run_health_model "health-initial-fda" \
       '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
@@ -133,13 +125,13 @@ case "$MODE" in
     ;;
 
   daily)
-    export HEALTH_TRIALS_SINCE_DATE="${HEALTH_TRIALS_SINCE_DATE:-${INCREMENTAL_DATE}}"
+    export GOVDATA_SINCE_DATE="${INCREMENTAL_DATE}"
     run_health_model "health-daily-trials" \
       '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
     ;;
 
   weekly)
-    export HEALTH_CDC_COVID_SINCE_DATE="${HEALTH_CDC_COVID_SINCE_DATE:-${INCREMENTAL_DATE}}"
+    export GOVDATA_SINCE_DATE="${INCREMENTAL_DATE}"
     if $FORCE || table_in_window "$HEALTH_SCHEMA_YAML" "cdc_covid_vaccinations"; then
       run_health_model "health-weekly-cdc" \
         '"cdc_covid_vaccinations", "cdc_mortality"'
@@ -147,8 +139,7 @@ case "$MODE" in
     ;;
 
   monthly)
-    export HEALTH_BRFSS_SINCE_YEAR="${HEALTH_BRFSS_SINCE_YEAR:-${INCREMENTAL_YEAR}}"
-    export MEDICAID_SINCE_YEAR="${MEDICAID_SINCE_YEAR:-${INCREMENTAL_YEAR}}"
+    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
     # Each sub-run is gated to its source's known release window.
     # FDA catalogs and RxNorm update continuously and always run.
 
