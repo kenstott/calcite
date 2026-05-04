@@ -50,10 +50,6 @@ export GOVDATA_CACHE_DIR=/data/govdata-cache    # or s3://your-bucket/govdata-ca
 export ENERGY_EIA_API_KEY=your-eia-api-key      # register free at eia.gov/opendata
 
 # Optional — limits year range for recurring workers (default varies per series)
-export ENERGY_SINCE_YEAR=2020
-
-# Optional — sets historical backfill depth for worker-74 (initial)
-# Defaults to GOVDATA_START_YEAR (2010) if not set
 export GOVDATA_START_YEAR=2010
 ```
 

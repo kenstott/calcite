@@ -64,8 +64,7 @@ The schema is served by `EnergySchemaFactory` via `GovDataSchemaFactory` and is 
 
 | Variable | Description |
 |---|---|
-| `ENERGY_SINCE_YEAR` | 4-digit year; recurring workers load data from this year onward (default varies per series: 1990 for electricity/fossil, 2000 for storage/stocks, 2008 for utility/plant surveys, 2015 for capacity changes) |
-| `GOVDATA_START_YEAR` | Global historical backfill start year used by `worker-74.sh` (initial mode). Default `2010`. |
+| `GOVDATA_START_YEAR` | Historical start year for all modes (initial, weekly, monthly, annual). Default `2010`. |
 
 ---
 

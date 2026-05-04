@@ -882,7 +882,7 @@ eia_petroleum_stocks (eia_area_code, report_date)
 | `ENERGY_PARQUET_DIR` | Recommended | Output path (falls back to `${GOVDATA_PARQUET_DIR}/source=energy`) |
 | `ENERGY_CACHE_DIR` | Recommended | Raw download cache |
 | `ENERGY_EIA_API_KEY` | **Required** | EIA API key — free at eia.gov/opendata; all v2 endpoints reject requests without key |
-| `ENERGY_SINCE_YEAR` | Optional | Incremental start year (default: 1990) |
+| `GOVDATA_START_YEAR` | Optional | Historical start year for all modes (default: 2010) |
 | `ENERGY_WEEKLY_LOOKBACK_WEEKS` | Optional | Weeks back to refresh on weekly runs (default: 4) |
 
 ---

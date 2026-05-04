@@ -97,84 +97,84 @@ dimension_values:
   # Default EIA electricity generation year range (monthly data)
   eia_elec_gen_years: &eia_elec_gen_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1990}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # EIA retail sales year range
   eia_elec_price_years: &eia_elec_price_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1990}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs)
   eia_utility_years: &eia_utility_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2008}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   # EIA-860 power plant annual year range
   eia_plant_years: &eia_plant_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2008}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   # EIA-860M capacity changes year range (monthly snapshot files available from 2015)
   eia_capacity_years: &eia_capacity_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   # EIA fossil fuel production (crude API) year range
   eia_fossil_years: &eia_fossil_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1990}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # EIA SEDS state energy consumption year range
   eia_seds_years: &eia_seds_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1990}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # EIA natural gas storage year range (weekly data available from 2000)
   eia_gas_storage_years: &eia_gas_storage_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   # EIA petroleum stocks year range (weekly data)
   eia_pet_stocks_years: &eia_pet_stocks_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   # EIA crude oil imports year range (EIA-814 monthly XLSX)
   eia_crude_imp_years: &eia_crude_imp_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # EIA refinery operations year range
   eia_refinery_years: &eia_refinery_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1990}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 2
 
   # MSHA coal mines year range (MinesProdYearly contains all history; transformer filters by year)
   msha_coal_years: &msha_coal_years
     type: yearRange
-    start: "${ENERGY_SINCE_YEAR:1983}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 

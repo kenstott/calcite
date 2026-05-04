@@ -12,24 +12,20 @@
 #   weekly    Weekly cadence: natural gas storage + petroleum stocks.
 #             Both series are published weekly by EIA. Window checks are applied;
 #             pass --force to bypass.
-#             Optional: ENERGY_SINCE_YEAR to limit year range (default 2000)
 #
 #   monthly   Monthly cadence: electricity generation, electricity prices,
 #             capacity changes, fossil fuel production, refinery operations,
 #             crude oil imports.
-#             Optional: ENERGY_SINCE_YEAR to limit year range.
 #
 #   annual    Annual cadence: utility survey (EIA-861), power plant inventory (EIA-860),
 #             state energy consumption (SEDS), coal mines (MSHA).
-#             Optional: ENERGY_SINCE_YEAR to limit year range.
 #
 # Required env vars (set in .env.prod or equivalent):
 #   GOVDATA_PARQUET_DIR     Root Parquet directory (energy data lands in source=energy subdir)
 #   GOVDATA_CACHE_DIR       Root cache directory
+#   GOVDATA_START_YEAR      Historical start year for all modes (default 2010)
 #
 # Optional env vars:
-#   ENERGY_SINCE_YEAR       4-digit year — recurring workers start from this year
-#                           (default varies per series; see energy-schema.yaml dimension_values)
 #   ENERGY_EIA_API_KEY      EIA API key for higher rate limits (recommended; free at eia.gov/opendata)
 #   ENERGY_BULK_TESTS       Set to "true" to enable the utility_scorecard view run after annual load
 #
@@ -106,9 +102,6 @@ case "$MODE" in
 
   initial)
     # Full historical backfill — no release-window checks.
-    # Uses GOVDATA_START_YEAR (default 2010) via the schema's ENERGY_SINCE_YEAR substitution.
-    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
-
     # EIA API monthly series — electricity generation and retail prices
     run_energy_model "energy-initial-electricity" \
       '"eia_electricity_generation", "eia_electricity_prices"'
@@ -139,7 +132,6 @@ case "$MODE" in
     ;;
 
   weekly)
-    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA weekly series: gas storage (Thursdays) and petroleum stocks (Wednesdays)
     if $FORCE || table_in_window "$ENERGY_SCHEMA_YAML" "eia_natural_gas_storage"; then
       run_energy_model "energy-weekly-gas-storage" \
@@ -153,7 +145,6 @@ case "$MODE" in
     ;;
 
   monthly)
-    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA API monthly series
     run_energy_model "energy-monthly-electricity" \
       '"eia_electricity_generation", "eia_electricity_prices"'
@@ -171,7 +162,6 @@ case "$MODE" in
     ;;
 
   annual)
-    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA bulk annual surveys (typically released May-Oct for prior calendar year)
     run_energy_model "energy-annual-surveys" \
       '"eia_utility_annual", "eia_power_plants"'
