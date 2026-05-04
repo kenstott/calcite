@@ -1,0 +1,126 @@
+[agents]
+architect        = ".codex/agents/architect.toml"
+code-reviewer    = ".codex/agents/code-reviewer.toml"
+data-engine-dev  = ".codex/agents/data-engine-dev.toml"
+debugger         = ".codex/agents/debugger.toml"
+doc-writer       = ".codex/agents/doc-writer.toml"
+marketer         = ".codex/agents/marketer.toml"
+refactorer       = ".codex/agents/refactorer.toml"
+sql-analyst      = ".codex/agents/sql-analyst.toml"
+test-strategist  = ".codex/agents/test-strategist.toml"
+
+# ── Calcite-specific skills ──────────────────────────────────────────────────
+
+[[skills.config]]
+path = ".claude/skills/calcite/conventions/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/debug/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/extensions/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/metadata/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/relbuilder/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/rex/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/rules/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/schema/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/sql-parser/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/calcite/types/SKILL.md"
+enabled = true
+
+# ── Java / build skills ──────────────────────────────────────────────────────
+
+[[skills.config]]
+path = ".claude/skills/java-build/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-heap-debug/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-imports/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-logging/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-resources/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-style/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/java-testing/SKILL.md"
+enabled = true
+
+# ── Project / testing skills ─────────────────────────────────────────────────
+
+[[skills.config]]
+path = ".claude/skills/project-modules/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/query-testing/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/reconstitute-commits/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/regression/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/sql-patterns/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/test-generator/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/test/adapter/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/test/all/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = ".claude/skills/test/quick/SKILL.md"
+enabled = true
+
+# ── Cross-cutting skills ─────────────────────────────────────────────────────
+
+[[skills.config]]
+path = ".claude/skills/file-issue/SKILL.md"
+enabled = true

@@ -1,0 +1,3 @@
+description = "Product marketing analyst for GTM strategy, competitive positioning, and commercial viability. Use when evaluating market potential, pricing decisions, buyer personas, or positioning strategy. Thinks like a pragmatic enterprise product marketer—no fluff, just clear-eyed analysis."
+model = "gpt-4o-mini"
+instructions_file = "../../.claude/agents/marketer.md"

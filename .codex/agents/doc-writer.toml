@@ -1,0 +1,3 @@
+description = "Technical documentation specialist that translates implementation into clear explanation. Invoke when features are complete and need documentation, when existing docs are stale, or when onboarding materials are needed. Writes READMEs, API docs, ADRs, and runbooks."
+model = "gpt-4o-mini"
+instructions_file = "../../.claude/agents/doc-writer.md"
