@@ -74,7 +74,18 @@ if [ $# -eq 0 ]; then
   echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
+  echo ""
+  echo "  Named cadence aliases:"
   echo "  $0 all                    — all historical/initial workers (1-41, 60-62, 67, 71, 74)"
+  echo "  $0 historical             — alias for 'all'"
+  echo "  $0 hourly                 — cyber IOC feeds (65)"
+  echo "  $0 daily                  — SEC current year + federal register + cyber CVE delta + health trials (1,23,61,63,68)"
+  echo "  $0 weekly                 — non-SEC refresh + cyber standards + health CDC + energy storage/stocks (18-22,41,60,64,69,75)"
+  echo "  $0 monthly                — health stable reference tables + energy monthly series (70,76)"
+  echo "  $0 annual                 — education + energy annual surveys (72,73,77)"
+  echo "  $0 stock-quotes           — stock prices alone (40; run separately — Stooq rate limits)"
+  echo ""
+  echo "  Per-domain aliases:"
   echo "  $0 62                     — cyber initial load only"
   echo "  $0 63-65                  — cyber recurring (daily/weekly/hourly)"
   echo "  $0 67                     — health initial load only"
@@ -92,13 +103,32 @@ for arg in "$@"; do
   # Split on commas to support discontinuous ranges like "1-10,15-20"
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
-    if [ "$part" = "all" ]; then
+    if [ "$part" = "all" ] || [ "$part" = "historical" ]; then
       # Historical/initial-load workers only — excludes recurring cadence workers 63-66
       # (cyber daily/weekly/hourly/static), 68-70 (health daily/weekly/monthly),
       # 72-73 (edu annual/biennial), and 75-77 (energy weekly/monthly/annual).
       # Run those explicitly or via cron.
       for i in $(seq 1 41); do queue+=("$i"); done
       for i in 60 61 62 67 71 74; do queue+=("$i"); done
+    elif [ "$part" = "hourly" ]; then
+      # Cyber live IOC feeds (URLhaus, MalwareBazaar, Feodo, ThreatFox, OTX delta)
+      queue+=(65)
+    elif [ "$part" = "daily" ]; then
+      # SEC current year + federal register + cyber CVE delta + health trials
+      for i in 1 23 61 63 68; do queue+=("$i"); done
+    elif [ "$part" = "weekly" ]; then
+      # Non-SEC refresh + cyber standards + health CDC + energy weekly storage/stocks
+      for i in $(seq 18 22); do queue+=("$i"); done
+      for i in 41 60 64 69 75; do queue+=("$i"); done
+    elif [ "$part" = "monthly" ]; then
+      # Health stable reference tables + energy monthly series
+      for i in 70 76; do queue+=("$i"); done
+    elif [ "$part" = "annual" ]; then
+      # Education annual/biennial + energy annual surveys
+      for i in 72 73 77; do queue+=("$i"); done
+    elif [ "$part" = "stock-quotes" ]; then
+      # Stock prices — run alone; Stooq rate limits make pool-sharing unproductive
+      queue+=(40)
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
     elif [[ "$part" =~ ^[0-9]+$ ]]; then
