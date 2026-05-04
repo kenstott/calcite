@@ -103,6 +103,9 @@ ENDJSON
 
 # ── modes ─────────────────────────────────────────────────────────────────────
 
+INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+INCREMENTAL_DATE="${INCREMENTAL_YEAR}-01-01"
+
 case "$MODE" in
 
   initial)
@@ -124,20 +127,22 @@ case "$MODE" in
     ;;
 
   daily)
-    # Clinical trials delta — only studies updated since HEALTH_TRIALS_SINCE_DATE
+    export HEALTH_TRIALS_SINCE_DATE="${HEALTH_TRIALS_SINCE_DATE:-${INCREMENTAL_DATE}}"
     run_health_model "health-daily-trials" \
       '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
     ;;
 
   weekly)
-    # Window read from cdc_covid_vaccinations.releaseWindow (dow: Monday)
-    if table_in_window "$HEALTH_SCHEMA_YAML" "cdc_covid_vaccinations"; then
+    export HEALTH_CDC_COVID_SINCE_DATE="${HEALTH_CDC_COVID_SINCE_DATE:-${INCREMENTAL_DATE}}"
+    if $FORCE || table_in_window "$HEALTH_SCHEMA_YAML" "cdc_covid_vaccinations"; then
       run_health_model "health-weekly-cdc" \
         '"cdc_covid_vaccinations", "cdc_mortality"'
     fi
     ;;
 
   monthly)
+    export HEALTH_BRFSS_SINCE_YEAR="${HEALTH_BRFSS_SINCE_YEAR:-${INCREMENTAL_YEAR}}"
+    export MEDICAID_SINCE_YEAR="${MEDICAID_SINCE_YEAR:-${INCREMENTAL_YEAR}}"
     # Each sub-run is gated to its source's known release window.
     # FDA catalogs and RxNorm update continuously and always run.
 
