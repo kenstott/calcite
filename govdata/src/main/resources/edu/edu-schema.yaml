@@ -188,22 +188,15 @@ partitionedTables:
         sinceYear: "${EDU_CCD_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_CCD_START_YEAR:2015}"
-          end: "${EDU_CCD_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdDistrictsResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -399,22 +392,15 @@ partitionedTables:
         sinceYear: "${EDU_CCD_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_CCD_START_YEAR:2015}"
-          end: "${EDU_CCD_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -533,8 +519,7 @@ partitionedTables:
         sinceYear: "${EDU_NAEP_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_NAEP_START_YEAR:2013}"
-          end: "${EDU_NAEP_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2013}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.NaepScoresResponseTransformer"
@@ -546,6 +531,7 @@ partitionedTables:
         - 2017
         - 2019
         - 2022
+        - 2024
 
     materialize:
       enabled: true
@@ -763,8 +749,7 @@ partitionedTables:
         sinceYear: "${EDU_CRDC_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_CRDC_START_YEAR:2013}"
-          end: "${EDU_CRDC_END_YEAR:2017}"
+          start: "${GOVDATA_START_YEAR:2013}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer"
@@ -774,6 +759,8 @@ partitionedTables:
         - 2013
         - 2015
         - 2017
+        - 2019
+        - 2021
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -974,22 +961,15 @@ partitionedTables:
         sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_IPEDS_START_YEAR:2015}"
-          end: "${EDU_IPEDS_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1093,22 +1073,15 @@ partitionedTables:
         sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_IPEDS_START_YEAR:2015}"
-          end: "${EDU_IPEDS_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1341,22 +1314,15 @@ partitionedTables:
         sinceYear: "${EDU_IPEDS_FINANCE_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_IPEDS_FINANCE_START_YEAR:2015}"
-          end: "${EDU_IPEDS_FINANCE_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
       form_type:
         - F1A
         - F2
@@ -1475,22 +1441,15 @@ partitionedTables:
         sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_IPEDS_START_YEAR:2015}"
-          end: "${EDU_IPEDS_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer"
 
     dimensions:
       year:
-        - 2015
-        - 2016
-        - 2017
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1674,19 +1633,15 @@ partitionedTables:
         sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_SCORECARD_START_YEAR:2018}"
-          end: "${EDU_SCORECARD_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2018}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer"
 
     dimensions:
       year:
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2018
 
     materialize:
       enabled: true
@@ -1804,19 +1759,15 @@ partitionedTables:
         sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${EDU_SCORECARD_START_YEAR:2018}"
-          end: "${EDU_SCORECARD_END_YEAR:2022}"
+          start: "${GOVDATA_START_YEAR:2018}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer"
 
     dimensions:
       year:
-        - 2018
-        - 2019
-        - 2020
-        - 2021
-        - 2022
+        type: yearRange
+        minYear: 2018
 
     materialize:
       enabled: true

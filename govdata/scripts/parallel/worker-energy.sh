@@ -55,17 +55,14 @@ ENERGY_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/energy/energy-schema.yaml"
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 run_energy_model() {
-  local model_name=$1 enabled_tables=$2
-  shift 2
-  local extra_operands="${1:-}"
+  local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-  local extra_json=""
-  [ -n "$extra_operands" ] && extra_json=",
-      ${extra_operands}"
-
   local parquet_dir="${GOVDATA_PARQUET_DIR}/source=energy"
   local cache_dir="${GOVDATA_CACHE_DIR}/energy"
+  local end_year_json=""
+  [ -n "$end_year" ] && end_year_json=",
+      \"endYear\": ${end_year}"
 
   cat > "$model_file" <<ENDJSON
 {
@@ -80,7 +77,8 @@ run_energy_model() {
       "directory": "${parquet_dir}",
       "cacheDirectory": "${cache_dir}",
       "autoDownload": true,
-      "enabledTables": [${enabled_tables}]${extra_json},
+      "startYear": ${start_year}${end_year_json},
+      "enabledTables": [${enabled_tables}],
       "s3Config": {
         "accessKeyId": "${AWS_ACCESS_KEY_ID:-}",
         "secretAccessKey": "${AWS_SECRET_ACCESS_KEY:-}",
@@ -98,81 +96,74 @@ ENDJSON
 
 # ── modes ─────────────────────────────────────────────────────────────────────
 
+INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+
 case "$MODE" in
 
   initial)
+    START=${GOVDATA_START_YEAR:-2010}
+    END=$((INCREMENTAL_YEAR - 1))
     # Full historical backfill — no release-window checks.
-    # EIA API monthly series — electricity generation and retail prices
     run_energy_model "energy-initial-electricity" \
-      '"eia_electricity_generation", "eia_electricity_prices"'
+      '"eia_electricity_generation", "eia_electricity_prices"' "$START" "$END"
 
-    # EIA bulk annual surveys — utility (EIA-861) and power plant inventory (EIA-860)
     run_energy_model "energy-initial-annual-surveys" \
-      '"eia_utility_annual", "eia_power_plants"'
+      '"eia_utility_annual", "eia_power_plants"' "$START" "$END"
 
-    # EIA-860M monthly generator capacity snapshot (available from 2015)
     run_energy_model "energy-initial-capacity" \
-      '"eia_capacity_changes"'
+      '"eia_capacity_changes"' "$START" "$END"
 
-    # EIA API: fossil fuel production, SEDS state consumption, refinery operations
     run_energy_model "energy-initial-supply" \
-      '"eia_fossil_fuel_production", "eia_state_energy_consumption", "eia_refinery_operations"'
+      '"eia_fossil_fuel_production", "eia_state_energy_consumption", "eia_refinery_operations"' "$START" "$END"
 
-    # EIA API weekly series — natural gas storage and petroleum stocks
     run_energy_model "energy-initial-weekly" \
-      '"eia_natural_gas_storage", "eia_petroleum_stocks"'
+      '"eia_natural_gas_storage", "eia_petroleum_stocks"' "$START" "$END"
 
-    # EIA-814 crude oil imports (XLSX archive per month per year)
     run_energy_model "energy-initial-imports" \
-      '"eia_crude_oil_imports"'
+      '"eia_crude_oil_imports"' "$START" "$END"
 
-    # MSHA coal mine production (annual)
     run_energy_model "energy-initial-coal" \
-      '"eia_coal_mines"'
+      '"eia_coal_mines"' "$START" "$END"
     ;;
 
   weekly)
-    # EIA weekly series: gas storage (Thursdays) and petroleum stocks (Wednesdays)
+    START=$INCREMENTAL_YEAR
     if $FORCE || table_in_window "$ENERGY_SCHEMA_YAML" "eia_natural_gas_storage"; then
       run_energy_model "energy-weekly-gas-storage" \
-        '"eia_natural_gas_storage"'
+        '"eia_natural_gas_storage"' "$START"
     fi
 
     if $FORCE || table_in_window "$ENERGY_SCHEMA_YAML" "eia_petroleum_stocks"; then
       run_energy_model "energy-weekly-petroleum-stocks" \
-        '"eia_petroleum_stocks"'
+        '"eia_petroleum_stocks"' "$START"
     fi
     ;;
 
   monthly)
-    # EIA API monthly series
+    START=$INCREMENTAL_YEAR
     run_energy_model "energy-monthly-electricity" \
-      '"eia_electricity_generation", "eia_electricity_prices"'
+      '"eia_electricity_generation", "eia_electricity_prices"' "$START"
 
     run_energy_model "energy-monthly-supply" \
-      '"eia_fossil_fuel_production", "eia_refinery_operations"'
+      '"eia_fossil_fuel_production", "eia_refinery_operations"' "$START"
 
-    # EIA-860M monthly capacity snapshot
     run_energy_model "energy-monthly-capacity" \
-      '"eia_capacity_changes"'
+      '"eia_capacity_changes"' "$START"
 
-    # EIA-814 crude imports (monthly XLSX archives; ~2-month data lag)
     run_energy_model "energy-monthly-imports" \
-      '"eia_crude_oil_imports"'
+      '"eia_crude_oil_imports"' "$START"
     ;;
 
   annual)
-    # EIA bulk annual surveys (typically released May-Oct for prior calendar year)
+    START=$INCREMENTAL_YEAR
     run_energy_model "energy-annual-surveys" \
-      '"eia_utility_annual", "eia_power_plants"'
+      '"eia_utility_annual", "eia_power_plants"' "$START"
 
-    # EIA SEDS state energy consumption (1-2 year lag; released annually)
     run_energy_model "energy-annual-consumption" \
-      '"eia_state_energy_consumption"'
+      '"eia_state_energy_consumption"' "$START"
 
-    # MSHA coal mine production (annual release, ~1 year lag)
     run_energy_model "energy-annual-coal" \
-      '"eia_coal_mines"'
+      '"eia_coal_mines"' "$START"
     ;;
 
   *)

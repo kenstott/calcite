@@ -72,12 +72,14 @@ EDU_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/edu/edu-schema.yaml"
 # table_in_window reads releaseWindow: from edu-schema.yaml via check-release-window.py
 
 run_edu_model() {
-  local model_name=$1 enabled_tables=$2
+  local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-
   local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/source=edu}"
   local cache_dir="${EDU_CACHE_DIR:-${GOVDATA_CACHE_DIR}/edu}"
+  local end_year_json=""
+  [ -n "$end_year" ] && end_year_json=",
+      \"endYear\": ${end_year}"
 
   cat > "$model_file" <<ENDJSON
 {
@@ -92,6 +94,7 @@ run_edu_model() {
       "directory": "${parquet_dir}",
       "cacheDirectory": "${cache_dir}",
       "autoDownload": true,
+      "startYear": ${start_year}${end_year_json},
       "enabledTables": [${enabled_tables}],
       "s3Config": {
         "accessKeyId": "${AWS_ACCESS_KEY_ID:-}",
@@ -110,75 +113,71 @@ ENDJSON
 
 # ── modes ─────────────────────────────────────────────────────────────────────
 
+INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+
 case "$MODE" in
 
   initial)
+    START=${GOVDATA_START_YEAR:-2010}
+    END=$((INCREMENTAL_YEAR - 1))
     # No release-window checks — initial always runs the full historical load.
 
-    # K-12 directory — largest historical load (~18k LEAs × many years)
     run_edu_model "edu-initial-k12" \
-      '"ccd_districts", "ccd_schools"'
+      '"ccd_districts", "ccd_schools"' "$START" "$END"
 
-    # NAEP assessments + civil rights data
     run_edu_model "edu-initial-assessments" \
-      '"naep_scores", "crdc_schools"'
+      '"naep_scores", "crdc_schools"' "$START" "$END"
 
-    # IPEDS higher-ed institutional data (four surveys)
     run_edu_model "edu-initial-ipeds" \
-      '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"'
+      '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
 
-    # College Scorecard (requires COLLEGE_SCORECARD_API_KEY)
     if [ -n "${COLLEGE_SCORECARD_API_KEY:-}" ]; then
       run_edu_model "edu-initial-scorecard" \
-        '"college_scorecard", "college_scorecard_programs"'
+        '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
     else
       log_info "$WORKER_ID: COLLEGE_SCORECARD_API_KEY not set — skipping college_scorecard tables"
     fi
     ;;
 
   annual)
+    START=$INCREMENTAL_YEAR
     # Each sub-run is gated independently — unrelated sources don't block each other.
 
-    # CCD districts/schools — window read from ccd_districts.releaseWindow in edu-schema.yaml
-    if table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
       run_edu_model "edu-annual-k12" \
-        '"ccd_districts", "ccd_schools"'
+        '"ccd_districts", "ccd_schools"' "$START"
     fi
 
-    # College Scorecard — window read from college_scorecard.releaseWindow
-    if table_in_window "$EDU_SCHEMA_YAML" "college_scorecard"; then
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "college_scorecard"; then
       if [ -n "${COLLEGE_SCORECARD_API_KEY:-}" ]; then
         run_edu_model "edu-annual-scorecard" \
-          '"college_scorecard", "college_scorecard_programs"'
+          '"college_scorecard", "college_scorecard_programs"' "$START"
       else
         log_info "$WORKER_ID: COLLEGE_SCORECARD_API_KEY not set — skipping college_scorecard tables"
       fi
     fi
 
-    # IPEDS core — window read from ipeds_institutions.releaseWindow
-    if table_in_window "$EDU_SCHEMA_YAML" "ipeds_institutions"; then
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_institutions"; then
       run_edu_model "edu-annual-ipeds-core" \
-        '"ipeds_institutions", "ipeds_completions", "ipeds_tuition"'
+        '"ipeds_institutions", "ipeds_completions", "ipeds_tuition"' "$START"
     fi
 
-    # IPEDS financials — window read from ipeds_financials.releaseWindow
-    if table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
       run_edu_model "edu-annual-ipeds-finance" \
-        '"ipeds_financials"'
+        '"ipeds_financials"' "$START"
     fi
     ;;
 
   biennial)
-    # NAEP — window read from naep_scores.releaseWindow (odd years, Jan–Mar)
-    if table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
+    START=$INCREMENTAL_YEAR
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
       run_edu_model "edu-biennial-naep" \
-        '"naep_scores"'
+        '"naep_scores"' "$START"
     fi
 
-    # CRDC — window read from crdc_schools.releaseWindow (odd publication years, Oct–Dec)
-    if table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then
+    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then
       run_edu_model "edu-biennial-crdc" \
-        '"crdc_schools"'
+        '"crdc_schools"' "$START"
     fi
     ;;
 
