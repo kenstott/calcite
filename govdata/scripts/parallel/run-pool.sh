@@ -54,9 +54,42 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -p requires a numeric argument (parallel entity threads)" >&2; exit 1
       fi
       PARALLEL_THREADS=$2; shift 2 ;;
+    --schema)
+      if [ -z "${2:-}" ]; then
+        echo "ERROR: --schema requires a schema name" >&2; exit 1
+      fi
+      SCHEMA_FILTER=$2; shift 2 ;;
     *) break ;;
   esac
 done
+
+SCHEMA_FILTER="${SCHEMA_FILTER:-}"
+
+# Map schema name → worker numbers (for use with --schema filter)
+schema_workers() {
+  local s
+  s=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+  case "$s" in
+    sec|sec_primary)         echo "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17" ;;
+    sec_secondary|secondary) echo "23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39" ;;
+    stock|stock_prices|stocks|stooq) echo "40" ;;
+    econ|economic)           echo "18" ;;
+    census|acs)              echo "19" ;;
+    geo|geographic)          echo "20" ;;
+    crime|fbi)               echo "21" ;;
+    weather|climate)         echo "22" ;;
+    ref|reference|gleif|figi) echo "41" ;;
+    fec|campaign_finance)    echo "60" ;;
+    fedregister|federal_register|fr) echo "61" ;;
+    cyber|cyber_vuln|cyber_threat)   echo "62 63 64 65 66" ;;
+    health)                  echo "67 68 69 70" ;;
+    edu|education)           echo "71 72 73" ;;
+    energy|eia)              echo "74 75 76 77" ;;
+    *)
+      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy" >&2
+      exit 1 ;;
+  esac
+}
 
 TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
@@ -66,7 +99,7 @@ if [ "$PARALLEL_THREADS" -gt 0 ]; then
 fi
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [-c] <worker-numbers...>"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [--schema name] <worker-numbers|alias...>"
   echo "  $0 18-26                  — auto-fit workers to available memory"
   echo "  $0 -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)"
   echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
@@ -79,6 +112,12 @@ if [ $# -eq 0 ]; then
   echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77)"
   echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74)"
   echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
+  echo ""
+  echo "  Schema filter (combine with any alias or range):"
+  echo "  $0 --schema energy daily  — run only the energy workers from the daily set"
+  echo "  $0 --schema sec historical — run only the SEC workers from the historical set"
+  echo "  Known schemas: sec, sec_secondary, stock, econ, census, geo, crime, weather,"
+  echo "                 ref, fec, fedregister, cyber, health, edu, energy"
   exit 1
 fi
 
@@ -110,6 +149,22 @@ for arg in "$@"; do
     fi
   done
 done
+
+# Apply --schema filter: keep only workers that belong to the requested schema
+if [ -n "$SCHEMA_FILTER" ]; then
+  allowed=$(schema_workers "$SCHEMA_FILTER")
+  filtered=()
+  for w in "${queue[@]}"; do
+    for a in $allowed; do
+      if [ "$w" -eq "$a" ]; then
+        filtered+=("$w")
+        break
+      fi
+    done
+  done
+  log_info "Schema filter '$SCHEMA_FILTER': ${#queue[@]} → ${#filtered[@]} workers (${filtered[*]:-none})"
+  queue=("${filtered[@]+"${filtered[@]}"}")
+fi
 
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
