@@ -98,8 +98,6 @@ public class XbrlToParquetConverter implements FileConverter {
   // HTML tag removal pattern
   private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
-  private static final Pattern HTML_NAMED_ENTITY_PATTERN =
-      Pattern.compile("&([a-zA-Z][a-zA-Z0-9]*);");
   private static final java.util.Map<String, String> HTML_ENTITY_MAP = buildHtmlEntityMap();
 
   private static java.util.Map<String, String> buildHtmlEntityMap() {
@@ -3859,48 +3857,181 @@ public class XbrlToParquetConverter implements FileConverter {
    * <p>Valid entity references ({@code &amp;}, {@code &lt;}, {@code &gt;},
    * {@code &quot;}, {@code &apos;}, {@code &#NNN;}, {@code &#xHHH;}) are preserved.
    */
-  private InputStream sanitizeXmlStream(InputStream is) throws IOException {
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    byte[] buf = new byte[8192];
-    int n;
-    while ((n = is.read(buf)) != -1) {
-      baos.write(buf, 0, n);
+  private InputStream sanitizeXmlStream(InputStream is) {
+    return new HtmlEntityFilterStream(is);
+  }
+
+  /**
+   * Streaming filter that replaces HTML named entities (e.g. {@code &nbsp;}) with their numeric
+   * XML equivalents on the fly. Processes the stream with O(1) memory — no full-file buffering.
+   *
+   * <p>The five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;}) pass through
+   * unchanged. Unknown HTML entities have their {@code &} escaped to {@code &amp;}.
+   * Bare {@code &} characters (not followed by a valid entity name and {@code ;}) are also
+   * escaped to {@code &amp;}.
+   */
+  private static final class HtmlEntityFilterStream extends InputStream {
+    private static final int MAX_ENTITY_NAME = 20;
+    private static final int BUF_SIZE = 8192;
+
+    // BufferedInputStream ensures large reads from source; PushbackInputStream
+    // is only used to push back single bytes (entity name chars on mismatch).
+    private final java.io.PushbackInputStream in;
+
+    // Pending output bytes: replacement text waiting to be consumed by read()
+    private final byte[] pending = new byte[MAX_ENTITY_NAME + 8];
+    private int pendingStart = 0;
+    private int pendingEnd = 0;
+
+    // Overflow: tail of a bulk-read chunk saved here instead of pushed back to
+    // the inner stream. The pushback buffer (22 bytes) is too small for a full
+    // SAX read chunk (typically 4-8 KB), so we keep excess bytes here.
+    private byte[] overflow = null;
+    private int overflowPos = 0;
+
+    private final byte[] nameBuf = new byte[MAX_ENTITY_NAME];
+
+    HtmlEntityFilterStream(InputStream source) {
+      this.in = new java.io.PushbackInputStream(
+          new java.io.BufferedInputStream(source, BUF_SIZE),
+          MAX_ENTITY_NAME + 2);
     }
-    is.close();
 
-    String content = baos.toString(StandardCharsets.UTF_8.name());
+    @Override public int read() throws IOException {
+      if (pendingStart < pendingEnd) return pending[pendingStart++] & 0xFF;
+      pendingStart = pendingEnd = 0;
 
-    // Replace HTML named entities (e.g. &nbsp;) that are valid in HTML but undefined in XML
-    // with numeric character references. The five predefined XML entities are left untouched.
-    // Any unknown HTML entity has its '&' escaped to &amp; so the XML parser doesn't choke.
-    java.util.regex.Matcher entityMatcher = HTML_NAMED_ENTITY_PATTERN.matcher(content);
-    StringBuffer entitySb = new StringBuffer();
-    while (entityMatcher.find()) {
-      String name = entityMatcher.group(1);
-      if ("amp".equals(name) || "lt".equals(name) || "gt".equals(name)
-          || "quot".equals(name) || "apos".equals(name)) {
-        entityMatcher.appendReplacement(entitySb,
-            java.util.regex.Matcher.quoteReplacement("&" + name + ";"));
+      int b = nextByte();
+      if (b == -1 || b != '&') return b;
+
+      int nameLen = 0;
+      boolean foundSemi = false;
+      while (nameLen < MAX_ENTITY_NAME) {
+        int c = nextByte();
+        if (c == -1) break;
+        if (c == ';') { foundSemi = true; break; }
+        boolean valid = nameLen == 0
+            ? ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+            : ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
+        if (!valid) { pushOneByte((byte) c); break; }
+        nameBuf[nameLen++] = (byte) c;
+      }
+
+      if (nameLen > 0 && foundSemi) {
+        byte[] repl = resolveEntity(new String(nameBuf, 0, nameLen, StandardCharsets.US_ASCII))
+            .getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(repl, 1, pending, 0, repl.length - 1);
+        pendingEnd = repl.length - 1;
+        return repl[0] & 0xFF;
+      }
+
+      // Not a complete/known entity — push name bytes back and emit &amp;
+      for (int i = nameLen - 1; i >= 0; i--) pushOneByte(nameBuf[i]);
+      pending[0] = 'a'; pending[1] = 'm'; pending[2] = 'p'; pending[3] = ';';
+      pendingEnd = 4;
+      return '&';
+    }
+
+    @Override public int read(byte[] buf, int off, int len) throws IOException {
+      if (len == 0) return 0;
+
+      // Drain pending replacement bytes first
+      if (pendingStart < pendingEnd) {
+        int n = Math.min(pendingEnd - pendingStart, len);
+        System.arraycopy(pending, pendingStart, buf, off, n);
+        pendingStart += n;
+        return n;
+      }
+      pendingStart = pendingEnd = 0;
+
+      // Drain overflow from a previous bulk read
+      if (overflow != null) {
+        int avail = overflow.length - overflowPos;
+        // Scan for '&' in the available slice (up to len bytes)
+        int scan = Math.min(avail, len);
+        for (int i = 0; i < scan; i++) {
+          if (overflow[overflowPos + i] == '&') {
+            if (i > 0) {
+              System.arraycopy(overflow, overflowPos, buf, off, i);
+              overflowPos += i;
+              return i;
+            }
+            // '&' at start of overflow — fall through to single-byte path below
+            break;
+          }
+        }
+        if (overflow[overflowPos] != '&') {
+          // No '&' in window — copy and advance
+          System.arraycopy(overflow, overflowPos, buf, off, scan);
+          overflowPos += scan;
+          if (overflowPos >= overflow.length) overflow = null;
+          return scan;
+        }
+        // '&' is at overflow[overflowPos] — handle via single-byte read()
+        int b = read();
+        if (b == -1) return -1;
+        buf[off] = (byte) b;
+        return 1;
+      }
+
+      // Fast path: read a chunk from the buffered inner stream
+      int n = in.read(buf, off, len);
+      if (n <= 0) return n;
+
+      for (int i = 0; i < n; i++) {
+        if (buf[off + i] == '&') {
+          if (i > 0) {
+            // Save tail starting at '&' as overflow; return clean prefix
+            overflow = java.util.Arrays.copyOfRange(buf, off + i, off + n);
+            overflowPos = 0;
+            return i;
+          }
+          // '&' at position 0: save everything after it as overflow, process '&'
+          if (n > 1) {
+            overflow = java.util.Arrays.copyOfRange(buf, off + 1, off + n);
+            overflowPos = 0;
+          }
+          int b = read();
+          if (b == -1) return -1;
+          buf[off] = (byte) b;
+          return 1;
+        }
+      }
+      return n;
+    }
+
+    /** Returns next byte from overflow (if any) then from the pushback stream. */
+    private int nextByte() throws IOException {
+      if (overflow != null && overflowPos < overflow.length) {
+        int b = overflow[overflowPos++] & 0xFF;
+        if (overflowPos >= overflow.length) overflow = null;
+        return b;
+      }
+      return in.read();
+    }
+
+    /** Pushes a single byte so it is returned by the next nextByte() call. */
+    private void pushOneByte(byte b) throws IOException {
+      if (overflow != null) {
+        // Prepend to overflow rather than using the small pushback buffer
+        byte[] ext = new byte[overflow.length - overflowPos + 1];
+        ext[0] = b;
+        System.arraycopy(overflow, overflowPos, ext, 1, overflow.length - overflowPos);
+        overflow = ext;
+        overflowPos = 0;
       } else {
-        String numeric = HTML_ENTITY_MAP.get(name);
-        entityMatcher.appendReplacement(entitySb,
-            numeric != null ? numeric
-                : java.util.regex.Matcher.quoteReplacement("&amp;" + name + ";"));
+        in.unread(b); // single byte — always fits in pushback buffer
       }
     }
-    entityMatcher.appendTail(entitySb);
 
-    // Replace bare '&' not followed by a valid entity reference or numeric ref
-    String sanitized = entitySb.toString()
-        .replaceAll("&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)", "&amp;");
-
-    if (!sanitized.equals(content)) {
-      int fixes = sanitized.length() - content.length();
-      // Each bare '&' becomes '&amp;' — 4 extra chars per fix
-      LOGGER.info("Sanitized {} bare '&' characters in XML input", fixes / 4);
+    private static String resolveEntity(String name) {
+      if ("amp".equals(name) || "lt".equals(name) || "gt".equals(name)
+          || "quot".equals(name) || "apos".equals(name)) {
+        return "&" + name + ";";
+      }
+      String numeric = HTML_ENTITY_MAP.get(name);
+      return numeric != null ? numeric : "&amp;" + name + ";";
     }
-
-    return new ByteArrayInputStream(sanitized.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
