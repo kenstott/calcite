@@ -75,25 +75,10 @@ if [ $# -eq 0 ]; then
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
   echo ""
-  echo "  Named cadence aliases:"
-  echo "  $0 all                    — all historical/initial workers (1-41, 60-62, 67, 71, 74)"
-  echo "  $0 historical             — alias for 'all'"
-  echo "  $0 hourly                 — cyber IOC feeds (65)"
-  echo "  $0 daily                  — SEC current year + federal register + cyber CVE delta + health trials (1,23,61,63,68)"
-  echo "  $0 weekly                 — non-SEC refresh + cyber standards + health CDC + energy storage/stocks (18-22,41,60,64,69,75)"
-  echo "  $0 monthly                — health stable reference tables + energy monthly series (70,76)"
-  echo "  $0 annual                 — education + energy annual surveys (72,73,77)"
-  echo "  $0 stock-quotes           — stock prices alone (40; run separately — Stooq rate limits)"
-  echo ""
-  echo "  Per-domain aliases:"
-  echo "  $0 62                     — cyber initial load only"
-  echo "  $0 63-65                  — cyber recurring (daily/weekly/hourly)"
-  echo "  $0 67                     — health initial load only"
-  echo "  $0 68-70                  — health recurring (daily/weekly/monthly)"
-  echo "  $0 71                     — edu initial load only"
-  echo "  $0 72-73                  — edu recurring (annual/biennial)"
-  echo "  $0 74                     — energy initial load only"
-  echo "  $0 75-77                  — energy recurring (weekly/monthly/annual)"
+  echo "  Named aliases:"
+  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77)"
+  echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74)"
+  echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
   exit 1
 fi
 
@@ -104,30 +89,16 @@ for arg in "$@"; do
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ] || [ "$part" = "historical" ]; then
-      # Historical/initial-load workers only — excludes recurring cadence workers 63-66
-      # (cyber daily/weekly/hourly/static), 68-70 (health daily/weekly/monthly),
-      # 72-73 (edu annual/biennial), and 75-77 (energy weekly/monthly/annual).
-      # Run those explicitly or via cron.
+      # All initial/backfill workers — run once on the ingest device.
+      # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77); use 'daily' for those.
       for i in $(seq 1 41); do queue+=("$i"); done
       for i in 60 61 62 67 71 74; do queue+=("$i"); done
-    elif [ "$part" = "hourly" ]; then
-      # Cyber live IOC feeds (URLhaus, MalwareBazaar, Feodo, ThreatFox, OTX delta)
-      queue+=(65)
     elif [ "$part" = "daily" ]; then
-      # SEC current year + federal register + cyber CVE delta + health trials
-      for i in 1 23 61 63 68; do queue+=("$i"); done
-    elif [ "$part" = "weekly" ]; then
-      # Non-SEC refresh + cyber standards + health CDC + energy weekly storage/stocks
-      for i in $(seq 18 22); do queue+=("$i"); done
-      for i in 41 60 64 69 75; do queue+=("$i"); done
-    elif [ "$part" = "monthly" ]; then
-      # Health stable reference tables + energy monthly series
-      for i in 70 76; do queue+=("$i"); done
-    elif [ "$part" = "annual" ]; then
-      # Education annual/biennial + energy annual surveys
-      for i in 72 73 77; do queue+=("$i"); done
+      # All recurring workers — run this every day on the production server.
+      # Workers skip rows already materialized; each handles its own data-lag / release window.
+      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77; do queue+=("$i"); done
     elif [ "$part" = "stock-quotes" ]; then
-      # Stock prices — run alone; Stooq rate limits make pool-sharing unproductive
+      # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
       queue+=(40)
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
