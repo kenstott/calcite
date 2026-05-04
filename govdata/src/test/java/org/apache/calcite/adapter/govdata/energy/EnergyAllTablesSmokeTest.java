@@ -418,6 +418,17 @@ class EnergyAllTablesSmokeTest {
     }
   }
 
+  @Test void stateEnergyBurdenViewReturnsRows() throws Exception {
+    LOG.info("=== view: state_energy_burden ===");
+    try (Connection conn = energyConn()) {
+      scalar(conn, "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"eia_electricity_prices\"");
+      long count = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"state_energy_burden\"");
+      LOG.info("state_energy_burden: {} rows", count);
+      assertTrue(count >= 1, "state_energy_burden view should return at least 1 row");
+    }
+  }
+
   // ── Views (bulk-gated) ──────────────────────────────────────────────────────
 
   @Test void utilityScorecardViewReturnsRows() throws Exception {

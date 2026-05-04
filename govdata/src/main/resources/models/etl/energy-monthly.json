@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "defaultSchema": "energy",
+  "schemas": [{
+    "name": "energy",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "energy",
+      "directory": "${GOVDATA_PARQUET_DIR}/source=energy",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/energy",
+      "autoDownload": true,
+      "enabledTables": [
+        "eia_electricity_generation",
+        "eia_electricity_prices",
+        "eia_capacity_changes",
+        "eia_fossil_fuel_production",
+        "eia_crude_oil_imports",
+        "eia_refinery_operations"
+      ]
+    }
+  }]
+}
