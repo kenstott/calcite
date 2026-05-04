@@ -2,33 +2,25 @@
 
 ## Quick Reference
 
-Health workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
-`worker-health.sh` is the shared implementation; the numbered scripts are the pool entry points.
-
-| Worker | Mode | Command | Schedule |
-|---|---|---|---|
-| worker-67 | initial | `./run-pool.sh 67` | Once, before any recurring runs |
-| worker-68 | daily | `./run-pool.sh 68` | Every 24 hours |
-| worker-69 | weekly | `./run-pool.sh 69` | Weekly (e.g., Monday 03:00 UTC) |
-| worker-70 | monthly | `./run-pool.sh 70` | Monthly (e.g., 1st of month 02:00 UTC) |
-
-`./run-pool.sh all` includes worker-67 (initial) alongside all other historical-load workers.
-Workers 68–70 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+| Worker | Mode | Workers |
+|---|---|---|
+| worker-67 | initial/backfill | included in `./run-pool.sh historical` |
+| worker-68–70 | recurring | included in `./run-pool.sh daily` |
 
 ```bash
-# First-time setup (integrated with full historical pipeline)
 cd scripts/parallel
-./run-pool.sh all            # includes worker-67 (health initial)
+
+# First-time setup — health runs as part of the full historical load
+./run-pool.sh historical
+# — or health initial only —
+./run-pool.sh --schema health historical
+
+# Recurring — health workers run automatically as part of the daily pool
+./run-pool.sh daily
 # — or health only —
-./run-pool.sh 67
+./run-pool.sh --schema health daily
 
-# Recurring cadence via run-pool (or use cron directly)
-# Workers 69–70 use release-window checks: sub-runs outside their window skip instantly.
-./run-pool.sh 68             # daily clinical trials delta (no window — always runs)
-./run-pool.sh 69             # weekly CDC COVID + mortality (Monday only)
-./run-pool.sh 70             # monthly — each source gated to its release window
-
-# Force all sub-runs regardless of window (backfill / manual refresh)
+# Force all sub-runs regardless of release window (backfill / manual refresh)
 ./worker-health.sh weekly --force
 ./worker-health.sh monthly --force
 ```
@@ -175,20 +167,19 @@ Cron example:
 
 ---
 
-## Recommended Cron Schedule
+## Cron Schedule
+
+Health workers run as part of `./run-pool.sh daily` — no separate cron entry needed.
 
 ```cron
-# Health data maintenance
-# Initial setup: run worker-health.sh initial manually once before enabling these
+# All recurring workers including health — run once per day
+0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
+```
 
-# Daily: clinical trials delta
-30 6 * * *   HEALTH_TRIALS_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh daily
+To run health workers in isolation (e.g. after a manual backfill):
 
-# Weekly: CDC COVID vaccinations + mortality
-0 3 * * 1    HEALTH_CDC_COVID_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh weekly
-
-# Monthly: stable reference tables
-0 2 1 * *    /path/to/govdata/scripts/parallel/worker-health.sh monthly
+```bash
+./run-pool.sh --schema health daily
 ```
 
 ---

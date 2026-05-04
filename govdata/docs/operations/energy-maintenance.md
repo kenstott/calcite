@@ -2,30 +2,23 @@
 
 ## Quick Reference
 
-Energy workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
-`worker-energy.sh` is the shared implementation; the numbered scripts are the pool entry points.
-
-| Worker | Mode | Command | Schedule |
-|---|---|---|---|
-| worker-74 | initial | `./run-pool.sh 74` | Once, before any recurring runs |
-| worker-75 | weekly | `./run-pool.sh 75` | Weekly (e.g., Friday 06:00 UTC) |
-| worker-76 | monthly | `./run-pool.sh 76` | Monthly (e.g., 15th 03:00 UTC) |
-| worker-77 | annual | `./run-pool.sh 77` | Annually (e.g., October 01:00 UTC) |
-
-`./run-pool.sh all` includes worker-74 (initial) alongside all other historical-load workers.
-Workers 75–77 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+| Worker | Mode | Workers |
+|---|---|---|
+| worker-74 | initial/backfill | included in `./run-pool.sh historical` |
+| worker-75–77 | recurring | included in `./run-pool.sh daily` |
 
 ```bash
-# First-time setup (integrated with the full historical pipeline)
 cd scripts/parallel
-./run-pool.sh all            # includes worker-74 (energy initial)
-# — or energy only —
-./run-pool.sh 74
 
-# Recurring cadence via run-pool (or use cron directly)
-./run-pool.sh 75             # weekly: gas storage + petroleum stocks
-./run-pool.sh 76             # monthly: electricity, capacity, imports, refinery
-./run-pool.sh 77             # annual: utility survey, power plants, SEDS, coal mines
+# First-time setup — energy runs as part of the full historical load
+./run-pool.sh historical
+# — or energy initial only —
+./run-pool.sh --schema energy historical
+
+# Recurring — energy workers run automatically as part of the daily pool
+./run-pool.sh daily
+# — or energy only —
+./run-pool.sh --schema energy daily
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
 ./worker-energy.sh weekly --force

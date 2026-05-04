@@ -2,34 +2,27 @@
 
 ## Quick Reference
 
-Education workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
-`worker-edu.sh` is the shared implementation; the numbered scripts are the pool entry points.
-
-| Worker | Mode | Command | Schedule |
-|---|---|---|---|
-| worker-71 | initial | `./run-pool.sh 71` | Once, before any recurring runs |
-| worker-72 | annual | `./run-pool.sh 72` | Annually (November for IPEDS/Scorecard, January for IPEDS financials) |
-| worker-73 | biennial | `./run-pool.sh 73` | Annually — safe off-cycle; sources return unchanged data between releases |
-
-`./run-pool.sh all` includes worker-71 (initial) alongside all other historical-load workers.
-Workers 72–73 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+| Worker | Mode | Workers |
+|---|---|---|
+| worker-71 | initial/backfill | included in `./run-pool.sh historical` |
+| worker-72–73 | recurring | included in `./run-pool.sh daily` |
 
 ```bash
-# First-time setup (integrated with full historical pipeline)
 cd scripts/parallel
-./run-pool.sh all            # includes worker-71 (edu initial)
-# — or education only —
-./run-pool.sh 71
 
-# Recurring cadence via run-pool (or use cron directly)
-# Workers 72 and 73 use release-window checks: each sub-run skips instantly
+# First-time setup — edu runs as part of the full historical load
+./run-pool.sh historical
+# — or education initial only —
+./run-pool.sh --schema edu historical
+
+# Recurring — edu workers run automatically as part of the daily pool
+# Workers 72–73 use release-window checks: each sub-run skips instantly
 # if today's date is outside that source's known release window.
-./run-pool.sh 72             # annual: CCD + IPEDS + College Scorecard
-./run-pool.sh 73             # biennial: NAEP assessments + CRDC civil rights data
+./run-pool.sh daily
+# — or edu only —
+./run-pool.sh --schema edu daily
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
-EDU_FORCE=true ./run-pool.sh 72
-# — or pass --force directly to the worker:
 ./worker-edu.sh annual --force
 ./worker-edu.sh biennial --force
 ```
