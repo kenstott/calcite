@@ -139,6 +139,7 @@ case "$MODE" in
     ;;
 
   weekly)
+    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA weekly series: gas storage (Thursdays) and petroleum stocks (Wednesdays)
     if $FORCE || table_in_window "$ENERGY_SCHEMA_YAML" "eia_natural_gas_storage"; then
       run_energy_model "energy-weekly-gas-storage" \
@@ -152,6 +153,7 @@ case "$MODE" in
     ;;
 
   monthly)
+    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA API monthly series
     run_energy_model "energy-monthly-electricity" \
       '"eia_electricity_generation", "eia_electricity_prices"'
@@ -169,6 +171,7 @@ case "$MODE" in
     ;;
 
   annual)
+    export ENERGY_SINCE_YEAR="${GOVDATA_START_YEAR:-2010}"
     # EIA bulk annual surveys (typically released May-Oct for prior calendar year)
     run_energy_model "energy-annual-surveys" \
       '"eia_utility_annual", "eia_power_plants"'
