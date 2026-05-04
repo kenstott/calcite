@@ -43,13 +43,10 @@ export EDU_CACHE_DIR=/data/edu-cache
 # Required for College Scorecard tables (free key at api.data.gov/signup)
 export COLLEGE_SCORECARD_API_KEY=your_key_here
 
-# Optional incremental cutoffs (blank = full fetch for that source)
-export EDU_CCD_SINCE_YEAR=2022             # CCD districts and schools incremental start year
-export EDU_NAEP_SINCE_YEAR=2019            # NAEP assessments incremental start year
-export EDU_CRDC_SINCE_YEAR=2017            # CRDC civil rights data incremental start year
-export EDU_IPEDS_SINCE_YEAR=2021           # IPEDS institutions/completions/tuition start year
-export EDU_IPEDS_FINANCE_SINCE_YEAR=2021   # IPEDS financials start year (releases later than other IPEDS surveys)
-export EDU_SCORECARD_SINCE_YEAR=2018       # College Scorecard main and programs start year
+# Global incremental boundary (all edu tables use this; set by run-pool.sh from GOVDATA_INCREMENTAL_START_YEAR)
+# Daily workers export GOVDATA_SINCE_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026} automatically.
+# Override only if you need a manual one-off run starting from a specific year:
+# export GOVDATA_SINCE_YEAR=2023
 ```
 
 ### API Access
@@ -64,7 +61,7 @@ export EDU_SCORECARD_SINCE_YEAR=2018       # College Scorecard main and programs
 
 ## Data Release Calendar
 
-Understanding release windows helps set `since_year` values and schedule annual cron jobs.
+Understanding release windows helps schedule annual cron jobs. The recurring workers automatically use `GOVDATA_SINCE_YEAR` (set from `GOVDATA_INCREMENTAL_START_YEAR`) as the incremental start.
 
 | Source | Typical Release Window | Tables | Notes |
 |---|---|---|---|
@@ -89,21 +86,21 @@ Understanding release windows helps set `since_year` values and schedule annual 
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
-| `ccd_districts` | NCES CCD | Annual | `EDU_CCD_SINCE_YEAR` | 1987–present |
-| `ccd_schools` | NCES CCD | Annual | `EDU_CCD_SINCE_YEAR` | 1987–present |
-| `naep_scores` | NCES NAEP | Biennial | `EDU_NAEP_SINCE_YEAR` | 1990–present |
-| `crdc_schools` | Dept of Ed CRDC | Biennial | `EDU_CRDC_SINCE_YEAR` | 2009–present |
+| `ccd_districts` | NCES CCD | Annual | `GOVDATA_SINCE_YEAR` | 1987–present |
+| `ccd_schools` | NCES CCD | Annual | `GOVDATA_SINCE_YEAR` | 1987–present |
+| `naep_scores` | NCES NAEP | Biennial | `GOVDATA_SINCE_YEAR` | 1990–present |
+| `crdc_schools` | Dept of Ed CRDC | Biennial | `GOVDATA_SINCE_YEAR` | 2009–present |
 
 ### Higher Education Tables (worker-72 annual)
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
-| `ipeds_institutions` | NCES IPEDS HD | Annual | `EDU_IPEDS_SINCE_YEAR` | 1986–present |
-| `ipeds_completions` | NCES IPEDS C | Annual | `EDU_IPEDS_SINCE_YEAR` | 1984–present |
-| `ipeds_financials` | NCES IPEDS F | Annual (Jan release) | `EDU_IPEDS_FINANCE_SINCE_YEAR` | 1986–present |
-| `ipeds_tuition` | NCES IPEDS IC_AY | Annual | `EDU_IPEDS_SINCE_YEAR` | 2000–present |
-| `college_scorecard` | Dept of Ed Scorecard | Annual | `EDU_SCORECARD_SINCE_YEAR` | 1996–present |
-| `college_scorecard_programs` | Dept of Ed Scorecard | Annual | `EDU_SCORECARD_SINCE_YEAR` | 2014–present |
+| `ipeds_institutions` | NCES IPEDS HD | Annual | `GOVDATA_SINCE_YEAR` | 1986–present |
+| `ipeds_completions` | NCES IPEDS C | Annual | `GOVDATA_SINCE_YEAR` | 1984–present |
+| `ipeds_financials` | NCES IPEDS F | Annual (Jan release) | `GOVDATA_SINCE_YEAR` | 1986–present |
+| `ipeds_tuition` | NCES IPEDS IC_AY | Annual | `GOVDATA_SINCE_YEAR` | 2000–present |
+| `college_scorecard` | Dept of Ed Scorecard | Annual | `GOVDATA_SINCE_YEAR` | 1996–present |
+| `college_scorecard_programs` | Dept of Ed Scorecard | Annual | `GOVDATA_SINCE_YEAR` | 2014–present |
 
 ---
 

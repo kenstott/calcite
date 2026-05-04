@@ -6,6 +6,32 @@ execution of numbered worker scripts on a single machine.
 
 ---
 
+## ETL Orchestrator
+
+`scripts/parallel/run-pool.sh` is the single entry point for all ETL operations.
+It manages memory-aware concurrent worker execution and accepts named aliases:
+
+```bash
+cd scripts/parallel
+
+./run-pool.sh daily               # Run all recurring workers + embeddings refresh (production server)
+./run-pool.sh historical          # Run all initial/backfill workers (ingest device, run once)
+./run-pool.sh stock-quotes        # Stock prices alone (Stooq rate limits; may take 1–3 days)
+
+# Flags (combinable with any alias or range)
+./run-pool.sh -j 4 daily          # Hard cap at 4 concurrent workers
+./run-pool.sh -t 120 historical   # Extend inactivity timeout to 120 min
+./run-pool.sh -r 4000 daily       # Reserve 4GB for OS (useful when other processes run)
+./run-pool.sh -p 4 daily          # 4 entity-level parallel threads per worker
+
+# Schema filter — run one domain from the daily or historical set
+./run-pool.sh --schema energy daily
+./run-pool.sh --schema sec historical
+./run-pool.sh --schema health daily
+# Known schemas: sec, sec_secondary, stock, econ, census, geo, crime,
+#                weather, ref, fec, fedregister, cyber, health, edu, energy
+```
+
 ## Worker Map
 
 ```
@@ -13,10 +39,14 @@ SEC Primary (10-K/10-Q)         workers  1 – 17    (worker-01 = 2026+, workers
 SEC Secondary (8-K/Proxy/etc.)  workers 23 – 39    (worker-23 = 2026+, workers 24–39 = 2025–2010)
 SEC Stock Prices                worker  40
 Non-SEC schemas                 workers 18 – 22, 41, 60, 61
-Cyber                           workers 62 – 66    (worker-62 = initial, 63-66 = recurring cadence)
-Health                          workers 67 – 70    (worker-67 = initial, 68-70 = recurring cadence)
-Education                       workers 71 – 73    (worker-71 = initial, 72-73 = recurring cadence)
+Cyber                           workers 62 – 66    (worker-62 = initial, 63-66 = recurring)
+Health                          workers 67 – 70    (worker-67 = initial, 68-70 = recurring)
+Education                       workers 71 – 73    (worker-71 = initial, 72-73 = recurring)
+Energy                          workers 74 – 77    (worker-74 = initial, 75-77 = recurring)
 ```
+
+The `daily` alias covers workers: 1, 18–23, 40, 41, 60–61, 63–65, 68–70, 72–73, 75–77
+The `historical` alias covers workers: 1–41, 60–62, 67, 71, 74
 
 ---
 
@@ -193,15 +223,16 @@ to function.
 ### Summary timeline (32GB machine, 4 concurrent workers)
 
 ```
-Day 0   Launch Steps 1 + 2 in parallel
-        ├── Step 1 (41,1,23) completes in ~6h → 2026 SEC is queryable
-        └── Step 2 (19,22,61,18,21,62,67,60,20) running in background
-Day 1   Step 2 finishes → all schemas queryable; launch Step 3 (primary historical)
-        └── Also: run GPU embeddings for 2026, rebuild VSS cache, upload (see below)
-Day 4   Step 3 finishes → full primary SEC 2010–2026 complete; launch Step 4 (secondary)
-        └── Also: run full GPU embedding backfill + full VSS rebuild, upload
-Day 8   Step 4 finishes → full secondary SEC 2010–2026 complete; launch Step 5 (stock prices)
-Day 10  Step 5 finishes → complete corpus; start recurring update schedule
+Day 0   ./run-pool.sh historical
+        ├── Workers 41,1,23 complete in ~6h → 2026 SEC is queryable
+        └── All other historical workers running in background via memory-aware pool
+Day 1   Non-SEC schemas complete → all schemas queryable
+        └── Run GPU embeddings for 2026: vss-gpu-runner.sh && vss.sh refresh 2026 && vss.sh upload
+Day 4   SEC primary historical (2–17) finishes → full primary SEC 2010–2026 complete
+        └── Run full embedding backfill: vss-gpu-runner.sh && vss-rebuild-full.sh && vss.sh upload
+Day 8   SEC secondary historical (24–39) finishes → full secondary SEC 2010–2026 complete
+Day 8   ./run-pool.sh stock-quotes      (runs alone; takes 1–3 more days)
+Day 10  Complete corpus → switch to: ./run-pool.sh daily  (run every day going forward)
 ```
 
 ---
@@ -239,161 +270,106 @@ cd scripts
 
 | After step | What to run | Why |
 |---|---|---|
-| Step 1 complete | `vss-gpu-runner.sh && ./vss.sh refresh 2026 && ./vss.sh upload` | Makes 2026 semantic search available immediately |
-| Step 3 complete | `vss-gpu-runner.sh && ./vss-rebuild-full.sh && ./vss.sh upload` | Full embedding backfill for all primary-filing years |
+| Day 1 — non-SEC schemas done | `vss-gpu-runner.sh && ./vss.sh refresh 2026 && ./vss.sh upload` | Makes 2026 semantic search available immediately |
+| Day 4 — SEC primary historical done | `vss-gpu-runner.sh && ./vss-rebuild-full.sh && ./vss.sh upload` | Full embedding backfill for all primary-filing years |
 
-Secondary filing years (Step 4) do not produce `vectorized_chunks`, so no additional
-embedding run is needed after Step 4.
+Secondary filing years do not produce `vectorized_chunks`, so no additional embedding run
+is needed after the secondary historical backfill.
 
-### Recurring schedule
+### Recurring embeddings
 
-Add the embedding refresh to the same daily cron that runs SEC workers — but in a separate
-job so it does not block or delay the ETL run:
+The daily `run-pool.sh daily` command automatically runs the embeddings pipeline after the
+ETL pool completes — no separate cron entry needed. To control which years are embedded:
 
-```cron
-# Daily — rebuild current-year embeddings after SEC ETL completes (~30 min after worker 1)
-30 6 * * *  cd /path/to/govdata/scripts && ./vss-gpu-runner.sh && ./vss.sh refresh 2026 && ./vss.sh upload
+```bash
+# Default: embeds current year only
+./run-pool.sh daily
 
-# Weekly — full VSS rebuild (picks up any backfilled years from Steps 3/4)
-0 4 * * 0   cd /path/to/govdata/scripts && ./vss-rebuild-full.sh && ./vss.sh upload
+# Embed a specific year
+VSS_YEARS=2025 ./run-pool.sh daily
+
+# Skip embeddings (ETL only)
+./run-pool.sh daily  # embeddings are skipped if vss-gpu-runner.sh is not found
 ```
 
-> **Note:** `vss-gpu-runner.sh` spins up a Vultr GPU instance for the embedding pass and
-> terminates it on completion. Daily cost is proportional to the number of new filings since
-> the last run — typically a few minutes of GPU time for incremental daily ingestion.
+> **Note:** `vss-gpu-runner.sh` spins up a Vultr GPU instance and terminates it on completion.
+> Daily cost is proportional to new filing volume — typically a few minutes of GPU time for
+> an incremental run.
 
 ---
 
 ## Recurring Updates
 
-Once the initial load is complete, set up the following recurring jobs. Re-running a worker
-never duplicates data — the tracker marks completed rows and skips them on subsequent runs.
-
-### Daily (recommended: 06:00 UTC)
+Once the initial load is complete, run this every day on the production server:
 
 ```bash
 cd scripts/parallel
-
-# SEC current year: picks up new filings since last run
-./run-pool.sh 1,23
-
-# Cyber: delta NVD CVEs (last 1 day) + CISA KEV refresh
-./run-pool.sh 63
-
-# Federal Register: auto-discovers current year; append-only
-./run-pool.sh 61
-
-# Health: incremental clinical trials delta (set HEALTH_TRIALS_SINCE_DATE in .env.prod)
-./run-pool.sh 68
+./run-pool.sh daily
 ```
 
-### Weekly (recommended: Sunday 02:00 UTC)
+That's it. All recurring workers run in a single memory-aware pool. Workers skip already-
+materialized rows; each schema handles its own data-lag window internally. The embeddings
+pipeline runs automatically after the pool completes.
+
+### Stock prices
+
+Stock prices are excluded from `daily` because Stooq rate limits make sharing pool slots
+with other workers wasteful. Run it separately (it can overlap with `daily` on another terminal
+or cron slot):
 
 ```bash
-cd scripts/parallel
-
-# Non-SEC full re-runs (idempotent; tracker skips already-complete rows)
-./run-pool.sh 18-22,41,60
-
-# Stock prices: run alone — Stooq rate limits make it unproductive to share pool slots
-./run-pool.sh 40
-
-# Cyber: CWE, OSV, MITRE ATT&CK techniques, GitHub advisories, ATT&CK→NIST mappings
-./run-pool.sh 64
-
-# Health: CDC COVID vaccinations delta + CDC mortality refresh
-./run-pool.sh 69
+./run-pool.sh stock-quotes
 ```
 
-### Monthly (recommended: 1st of month 02:00 UTC)
+### Re-running a single schema
 
 ```bash
-cd scripts/parallel
-
-# Health: BRFSS, Medicaid drug utilization, CMS, FDA catalogs, RxNorm
-./run-pool.sh 70
-```
-
-### Annually (recommended: November 02:00 UTC; re-run January for IPEDS financials)
-
-```bash
-cd scripts/parallel
-
-# Education annual: CCD districts/schools + IPEDS institutions/completions/tuition + College Scorecard
-# Set EDU_CCD_SINCE_YEAR, EDU_IPEDS_SINCE_YEAR, EDU_SCORECARD_SINCE_YEAR in .env.prod
-./run-pool.sh 72
-
-# Education biennial: NAEP assessments + CRDC civil rights data
-# Safe to run annually — returns unchanged data in off-cycle years
-# Set EDU_NAEP_SINCE_YEAR, EDU_CRDC_SINCE_YEAR in .env.prod
-./run-pool.sh 73
-```
-
-### Hourly (recommended: every 2 hours)
-
-```bash
-cd scripts/parallel
-
-# Cyber live IOC feeds + OTX delta (1-day window)
-CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
+./run-pool.sh --schema energy daily       # energy workers only
+./run-pool.sh --schema sec daily          # SEC current-year workers only
+./run-pool.sh --schema health daily       # health recurring workers only
 ```
 
 ### Cron reference
 
 ```cron
-# Daily — SEC current year + federal register + cyber CVE delta + health trials
-0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 1,23,61 && ./run-pool.sh 63,68
+# Daily — all recurring workers + embeddings
+0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
 
-# Daily — rebuild current-year embeddings after SEC ETL completes
-30 6 * * *  cd /path/to/govdata/scripts && ./vss-gpu-runner.sh && ./vss.sh refresh 2026 && ./vss.sh upload
-
-# Weekly — non-SEC refresh + cyber ATT&CK/standards + health CDC feeds
-0 2 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 18-22,41,60,64,69
-# Stock prices: run alone on a separate schedule (Stooq rate limits; takes 1-3 days)
-0 3 * * 0   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 40
-# Weekly — full VSS rebuild to pick up any newly backfilled years
-0 4 * * 0   cd /path/to/govdata/scripts && ./vss-rebuild-full.sh && ./vss.sh upload
-
-# Monthly — health stable reference tables (BRFSS, Medicaid, CMS, FDA, RxNorm)
-0 2 1 * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh 70
-
-# Annually — education annual refresh (CCD + IPEDS + College Scorecard); November after IPEDS release
-0 2 1 11 * cd /path/to/govdata/scripts/parallel && ./run-pool.sh 72
-# Annually — IPEDS financials lag to January; re-run 72 to pick up financials
-0 2 1 1 *  cd /path/to/govdata/scripts/parallel && ./run-pool.sh 72
-# Annually — education biennial (NAEP + CRDC); safe to run every year
-0 3 1 10 * cd /path/to/govdata/scripts/parallel && ./run-pool.sh 73
-
-# Hourly — cyber live IOC feeds
-0 */2 * * * cd /path/to/govdata/scripts/parallel && CYBER_OTX_DELTA_DAYS=1 ./run-pool.sh 65
+# Stock prices — run alone; may take 1–3 days; safe to overlap with daily
+0 7 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh stock-quotes
 ```
 
 ---
 
 ## Schema-by-schema Update Cadence
 
-| Schema | Worker | Update cadence | Mechanism |
+All schemas in the table below run as part of `./run-pool.sh daily`. Each worker skips
+already-complete rows, so running daily is always safe regardless of the source's release
+cadence. Stock prices (40) are the only exception — run via `./run-pool.sh stock-quotes`.
+
+| Schema | Worker | Source cadence | Mechanism |
 |---|---|---|---|
 | SEC primary filings | 1 | Daily | Re-runs 2026–present window; skips already-materialized accessions |
 | SEC secondary filings | 23 | Daily | Same as above for 8-K/proxy/insider/13F |
-| SEC stock prices | 40 | Weekly (run alone) | Full 2010–2026 re-run via Stooq; rate-limited per ticker; tracker deduplicates |
-| Economic (BLS/FRED/BEA) | 18 | Weekly | Full 2010–2026 re-run; incremental by series/period |
-| Census ACS | 19 | Weekly | Full re-run; ACS releases annually |
-| Geographic (TIGER/HUD) | 20 | Annual | TIGER year is pinned; re-run when Census publishes a new vintage |
-| Crime (FBI/BJS) | 21 | Weekly | Full re-run; FBI releases lag ~12 months |
-| Weather (NWS/NOAA/EPA) | 22 | Weekly | Full re-run; picks up new observation periods |
-| Reference (GLEIF/CIK/FIGI) | 41 | Weekly | GLEIF discovers current golden copy URL daily |
-| FEC campaign finance | 60 | Weekly | Bulk file re-download; FEC updates files in-place |
+| SEC stock prices | 40 | Daily (run alone) | Full 2010–2026 re-run via Stooq; rate-limited per ticker; tracker deduplicates |
+| Economic (BLS/FRED/BEA) | 18 | Daily (data lags weekly) | Full re-run; incremental by series/period |
+| Census ACS | 19 | Daily (data lags annually) | Full re-run; ACS releases annually |
+| Geographic (TIGER/HUD) | 20 | Daily (data lags annually) | TIGER year is pinned; picks up new vintage when published |
+| Crime (FBI/BJS) | 21 | Daily (data lags ~12 months) | Full re-run; FBI releases lag ~12 months |
+| Weather (NWS/NOAA/EPA) | 22 | Daily | Full re-run; picks up new observation periods |
+| Reference (GLEIF/CIK/FIGI) | 41 | Daily | GLEIF discovers current golden copy URL on each run |
+| FEC campaign finance | 60 | Daily | Bulk file re-download; FEC updates files in-place |
 | Federal Register | 61 | Daily | Auto-discovers current year; append-only |
 | Cyber CVE (NVD/KEV) | 63 | Daily | 1-day delta window via NVD API `lastModStartDate` |
-| Cyber standards/ATT&CK | 64 | Weekly | Full re-fetch; sources publish infrequently |
-| Cyber IOC feeds | 65 | Hourly | URLhaus/MalwareBazaar/Feodo/ThreatFox/OTX fresh each run |
-| Cyber static standards | 66 | On-demand | Re-run after NIST/CIS/OWASP publish new versions |
-| Health clinical trials | 68 | Daily | `lastUpdatePostDate.gte` filter via `HEALTH_TRIALS_SINCE_DATE` |
-| Health CDC COVID/mortality | 69 | Weekly | CDC COVID vaccinations delta + CDC mortality full refresh |
-| Health BRFSS/Medicaid/CMS/FDA | 70 | Monthly | Stable reference tables; incremental via BRFSS/Medicaid env vars |
-| Education CCD/IPEDS/Scorecard | 72 | Annual (Nov + Jan) | CCD and IPEDS bulk releases; incremental via `EDU_*_SINCE_YEAR` vars |
-| Education NAEP/CRDC | 73 | Annual (Oct, safe off-cycle) | Biennial sources; returns unchanged data between release years |
+| Cyber standards/ATT&CK | 64 | Daily (data lags weekly) | Full re-fetch; sources publish infrequently; skips if unchanged |
+| Cyber IOC feeds | 65 | Daily | URLhaus/MalwareBazaar/Feodo/ThreatFox/OTX fresh each run |
+| Health clinical trials | 68 | Daily | `lastUpdatePostDate.gte` filter via `GOVDATA_SINCE_DATE` |
+| Health CDC COVID/mortality | 69 | Daily (data lags weekly) | CDC vaccinations delta + mortality full refresh |
+| Health BRFSS/Medicaid/CMS/FDA | 70 | Daily (data lags monthly) | Stable reference tables; incremental via `GOVDATA_SINCE_DATE`/`GOVDATA_SINCE_YEAR` |
+| Education CCD/IPEDS/Scorecard | 72 | Daily (data lags annually) | Bulk releases; incremental via `GOVDATA_SINCE_YEAR` |
+| Education NAEP/CRDC | 73 | Daily (data lags biennially) | Returns unchanged data in off-cycle years; safe to run daily |
+| Energy electricity/refinery | 75,76 | Daily (data lags weekly/monthly) | EIA API; skips years with no new data |
+| Energy surveys/coal | 77 | Daily (data lags annually) | EIA-861/EIA-860/MSHA; skips if no new release |
 
 ---
 
@@ -438,3 +414,4 @@ By default the pool fills to the available memory budget (total RAM minus 1.5GB 
 See [cyber-maintenance.md](cyber-maintenance.md) for cyber-specific operational details.
 See [health-maintenance.md](health-maintenance.md) for health-specific operational details.
 See [edu-maintenance.md](edu-maintenance.md) for education-specific operational details.
+See [energy-maintenance.md](energy-maintenance.md) for energy-specific operational details.

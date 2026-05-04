@@ -38,12 +38,11 @@ Set these in `.env.prod` (or the environment used by your cron/scheduler):
 export HEALTH_PARQUET_DIR=/data/health          # or s3://your-bucket/govdata/source=health
 export HEALTH_CACHE_DIR=/data/health-cache      # or s3://your-bucket/health-cache
 
-# Optional incremental cutoffs (blank = full fetch for that source)
-export HEALTH_TRIALS_SINCE_DATE=2024-01-01      # ISO date for clinical trials delta
-export HEALTH_CDC_COVID_SINCE_DATE=2024-01-01   # ISO date for CDC COVID vaccinations delta
-export HEALTH_BRFSS_SINCE_YEAR=2020             # 4-digit year for BRFSS incremental load
-export MEDICAID_SINCE_YEAR=2022                 # 4-digit year for Medicaid drug utilization
-export MEDICAID_SINCE_QUARTER=1                 # Quarter (1-4) for Medicaid delta start
+# Global incremental cutoffs — set by run-pool.sh from GOVDATA_INCREMENTAL_START_YEAR automatically.
+# Override only for manual one-off runs:
+# export GOVDATA_SINCE_DATE=2024-01-01          # ISO date for daily/weekly date-filtered tables
+# export GOVDATA_SINCE_YEAR=2024                # 4-digit year for year-filtered tables
+export MEDICAID_SINCE_QUARTER=1                 # Quarter (1-4) for Medicaid delta start (no global equivalent)
 
 # Optional API keys
 export HEALTH_FDA_API_KEY=your-fda-key          # register at open.fda.gov/apis/authentication
@@ -91,45 +90,42 @@ routinely — it fetches the full dataset for every source.
 
 ### `daily` — Incremental clinical trials delta
 
-Downloads only studies updated since `HEALTH_TRIALS_SINCE_DATE` using the
+Downloads only studies updated since `GOVDATA_SINCE_DATE` using the
 `lastUpdatePostDate.gte` filter on the clinicaltrials.gov API. Covers three tables:
 `clinical_trials`, `clinical_trial_conditions`, `clinical_trial_interventions`.
 
-**When to run:** Once per day. A common schedule is 06:30 UTC (after SEC and cyber daily jobs).
-
-**Setting the cutoff:** On first run after initial, set `HEALTH_TRIALS_SINCE_DATE` to the
-initial load date. Thereafter advance it after each successful run, or leave it fixed at a
-rolling window (e.g., 30 days back) for overlap safety.
+`GOVDATA_SINCE_DATE` is automatically set to `${GOVDATA_INCREMENTAL_START_YEAR:-2026}-01-01` by
+the worker when run via `run-pool.sh daily`. Override only for manual runs:
 
 ```bash
-export HEALTH_TRIALS_SINCE_DATE=2024-01-01
+export GOVDATA_SINCE_DATE=2024-01-01
 ./scripts/parallel/worker-health.sh daily
 ```
 
-Cron example:
+Cron example (run via pool — no manual env var needed):
 ```
-30 6 * * * HEALTH_TRIALS_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh daily
+30 6 * * * cd /path/to/govdata/scripts/parallel && ./run-pool.sh --schema health daily
 ```
 
 ---
 
 ### `weekly` — CDC COVID vaccinations delta + CDC mortality refresh
 
-- **`cdc_covid_vaccinations`**: Fetches records with `date >= HEALTH_CDC_COVID_SINCE_DATE` via
+- **`cdc_covid_vaccinations`**: Fetches records with `date >= GOVDATA_SINCE_DATE` via
   Socrata `$where` filter (if set). CDC publishes weekly updates.
 - **`cdc_mortality`**: Full refresh — the CDC mortality dataset is relatively small and refreshed
   weekly; no incremental filter is applied.
 
-**When to run:** Weekly. A common schedule is Monday 03:00 UTC.
+`GOVDATA_SINCE_DATE` is automatically set by the worker. Override only for manual runs:
 
 ```bash
-export HEALTH_CDC_COVID_SINCE_DATE=2024-01-01
+export GOVDATA_SINCE_DATE=2024-01-01
 ./scripts/parallel/worker-health.sh weekly
 ```
 
-Cron example:
+Cron example (run via pool — no manual env var needed):
 ```
-0 3 * * 1 HEALTH_CDC_COVID_SINCE_DATE=2024-01-01 /path/to/govdata/scripts/parallel/worker-health.sh weekly
+0 3 * * 1 cd /path/to/govdata/scripts/parallel && ./run-pool.sh --schema health daily
 ```
 
 ---
@@ -140,8 +136,8 @@ Refreshes sources that change on a monthly or slower cadence:
 
 | Table | Source | Incremental mechanism |
 |---|---|---|
-| `cdc_brfss` | CDC Socrata (BRFSS surveys) | `year >= HEALTH_BRFSS_SINCE_YEAR` (unquoted; numeric field) |
-| `medicaid_drug_utilization` | data.medicaid.gov (DLTSS) | `year`/`quarter` compound `$where` filter |
+| `cdc_brfss` | CDC Socrata (BRFSS surveys) | `year >= GOVDATA_SINCE_YEAR` (unquoted; numeric field) |
+| `medicaid_drug_utilization` | data.medicaid.gov (DLTSS) | `year`/`quarter` compound `$where` filter via `GOVDATA_SINCE_YEAR` + `MEDICAID_SINCE_QUARTER` |
 | `cms_hospital_quality` | data.cms.gov | Full refresh (~5,400 hospitals) |
 | `cms_open_payments` | data.cms.gov | Full refresh |
 | `fda_ndc_products` | openFDA | Full refresh; NDC catalog changes slowly |
@@ -154,8 +150,8 @@ Refreshes sources that change on a monthly or slower cadence:
 **When to run:** Monthly. A common schedule is the 1st of each month at 02:00 UTC.
 
 ```bash
-export HEALTH_BRFSS_SINCE_YEAR=2020
-export MEDICAID_SINCE_YEAR=2022
+# GOVDATA_SINCE_YEAR is set automatically by run-pool.sh; override only for manual runs
+export GOVDATA_SINCE_YEAR=2022
 export MEDICAID_SINCE_QUARTER=1
 ./scripts/parallel/worker-health.sh monthly
 ```
