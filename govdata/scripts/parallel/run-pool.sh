@@ -131,11 +131,13 @@ for arg in "$@"; do
     if [ "$part" = "all" ] || [ "$part" = "historical" ]; then
       # All initial/backfill workers — run once on the ingest device.
       # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77); use 'daily' for those.
+      export GOVDATA_RUN_MODE="historical"
       for i in $(seq 1 41); do queue+=("$i"); done
       for i in 60 61 62 67 71 74; do queue+=("$i"); done
     elif [ "$part" = "daily" ]; then
       # All recurring workers — run this every day on the production server.
       # Workers skip rows already materialized; each handles its own data-lag / release window.
+      export GOVDATA_RUN_MODE="daily"
       for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77; do queue+=("$i"); done
       RUN_EMBEDDINGS=true
     elif [ "$part" = "stock-quotes" ]; then

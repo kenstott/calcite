@@ -141,6 +141,7 @@ case "$MODE" in
 
   annual)
     START=$INCREMENTAL_YEAR
+    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
     # Each sub-run is gated independently — unrelated sources don't block each other.
 
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
@@ -170,6 +171,7 @@ case "$MODE" in
 
   biennial)
     START=$INCREMENTAL_YEAR
+    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
       run_edu_model "edu-biennial-naep" \
         '"naep_scores"' "$START"

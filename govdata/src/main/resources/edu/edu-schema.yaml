@@ -185,7 +185,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_CCD_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -389,7 +389,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_CCD_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -516,7 +516,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_NAEP_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2013}"
@@ -746,7 +746,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_CRDC_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2013}"
@@ -958,7 +958,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -1070,7 +1070,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -1311,7 +1311,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_IPEDS_FINANCE_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -1438,7 +1438,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_IPEDS_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2015}"
@@ -1630,7 +1630,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2018}"
@@ -1756,7 +1756,7 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${EDU_SCORECARD_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
           start: "${GOVDATA_START_YEAR:2018}"

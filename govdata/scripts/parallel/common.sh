@@ -310,23 +310,35 @@ generate_sec_secondary_model() {
 ENDJSON
 }
 
-# Generate a single-schema model JSON for one non-SEC data source
+# Generate a single-schema model JSON for one non-SEC data source.
+# Respects GOVDATA_RUN_MODE (historical | daily), GOVDATA_START_YEAR, and
+# GOVDATA_INCREMENTAL_START_YEAR to set the correct year bounds.
 # Usage: generate_single_schema_model <schema_name> <output_file>
 generate_single_schema_model() {
   local schema_name=$1 output_file=$2
   local operand_body
 
+  local _INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+  local _START_YEAR=${GOVDATA_START_YEAR:-2010}
+
+  # historical mode: cap at INCREMENTAL_YEAR-1; daily mode: start from INCREMENTAL_YEAR
+  local _YEAR_RANGE
+  if [ "${GOVDATA_RUN_MODE:-daily}" = "historical" ]; then
+    _YEAR_RANGE="\"startYear\": ${_START_YEAR},
+      \"endYear\": $((_INCREMENTAL_YEAR - 1))"
+  else
+    _YEAR_RANGE="\"startYear\": ${_INCREMENTAL_YEAR}"
+  fi
+
   case "$schema_name" in
     econ)
       operand_body="\"dataSource\": \"econ\",
-      \"startYear\": 2010,
-      \"endYear\": 2026"
+      ${_YEAR_RANGE}"
       ;;
     census)
       operand_body="\"dataSource\": \"census\",
       \"enabledSources\": [\"acs\"],
-      \"startYear\": 2010,
-      \"endYear\": 2026"
+      ${_YEAR_RANGE}"
       ;;
     geo)
       operand_body="\"dataSource\": \"geo\",
@@ -335,21 +347,18 @@ generate_single_schema_model() {
       ;;
     crime)
       operand_body="\"dataSource\": \"crime\",
-      \"startYear\": 2010,
-      \"endYear\": 2026"
+      ${_YEAR_RANGE}"
       ;;
     weather)
       operand_body="\"dataSource\": \"weather\",
-      \"startYear\": 2010,
-      \"endYear\": 2026"
+      ${_YEAR_RANGE}"
       ;;
     fec)
       operand_body="\"dataSource\": \"fec\""
       ;;
     fedregister)
       operand_body="\"dataSource\": \"fedregister\",
-      \"startYear\": 2010,
-      \"endYear\": $(date +%Y)"
+      ${_YEAR_RANGE}"
       ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
