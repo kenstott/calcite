@@ -85,7 +85,13 @@ run_health_model() {
       "directory": "${parquet_dir}",
       "cacheDirectory": "${cache_dir}",
       "autoDownload": true,
-      "enabledTables": [${enabled_tables}]${extra_json}
+      "enabledTables": [${enabled_tables}]${extra_json},
+      "s3Config": {
+        "accessKeyId": "${AWS_ACCESS_KEY_ID:-}",
+        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY:-}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}",
+        "region": "${AWS_REGION:-us-east-1}"
+      }
     }
   }]
 }
