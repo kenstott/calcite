@@ -64,6 +64,7 @@ while [ $# -gt 0 ]; do
 done
 
 SCHEMA_FILTER="${SCHEMA_FILTER:-}"
+RUN_EMBEDDINGS=false
 
 # Map schema name → worker numbers (for use with --schema filter)
 schema_workers() {
@@ -136,6 +137,7 @@ for arg in "$@"; do
       # All recurring workers — run this every day on the production server.
       # Workers skip rows already materialized; each handles its own data-lag / release window.
       for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77; do queue+=("$i"); done
+      RUN_EMBEDDINGS=true
     elif [ "$part" = "stock-quotes" ]; then
       # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
       queue+=(40)
@@ -510,4 +512,21 @@ if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
   exit 1
 fi
+
+# ── Embeddings (daily only) ───────────────────────────────────────────────────
+if $RUN_EMBEDDINGS; then
+  VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+  CURRENT_YEAR=$(date +%Y)
+  export VSS_YEARS="${VSS_YEARS:-$CURRENT_YEAR}"
+  log_info "Embeddings: refreshing year(s) $VSS_YEARS"
+  if [ -f "$VSS_DIR/vss-gpu-runner.sh" ]; then
+    bash "$VSS_DIR/vss-gpu-runner.sh"
+  fi
+  if [ -f "$VSS_DIR/vss.sh" ]; then
+    bash "$VSS_DIR/vss.sh" refresh "$VSS_YEARS"
+    bash "$VSS_DIR/vss.sh" upload
+  fi
+  log_info "Embeddings: complete"
+fi
+
 exit 0
