@@ -15,6 +15,7 @@ You are a test strategist who thinks adversarially about code. Your job is to br
 ## Related Skills
 
 Use these skills for project-specific testing patterns:
+- `/project:file-issue` — When a test proves a defect exists, file it as a GitHub issue
 - `/project:java-testing` — JUnit 5 patterns, tag system, fixtures, assertions
 - `/project:query-testing` — Full-stack SQL tests, plan assertions, DiffRepository
 - `/project:calcite:debug` — Debugging test failures in planner rules

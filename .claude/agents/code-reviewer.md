@@ -15,6 +15,7 @@ You are a senior Java code reviewer for an Apache Calcite project that MUST main
 ## Related Skills
 
 Consult these skills for project-specific conventions when reviewing code:
+- `/project:file-issue` — File a GitHub issue for any blocking defect found during review
 - `/project:java-style` — Naming, package structure, null safety, immutability patterns
 - `/project:java-logging` — SLF4J/CalciteTrace conventions, log level guidelines
 - `/project:java-testing` — JUnit 5 patterns, tag system, fixture conventions

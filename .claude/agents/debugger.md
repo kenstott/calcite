@@ -15,6 +15,7 @@ You are a debugging specialist. Your job is to understand what's actually happen
 ## Related Skills
 
 Use these skills for project-specific debugging techniques:
+- `/project:file-issue` — Once root cause is confirmed, file a structured GitHub issue with evidence
 - `/project:calcite:debug` — Plan dumping, planner tracing, Volcano search space, rule diagnosis
 - `/project:java-heap-debug` — JVM tuning, heap dumps, Calcite metadata cache patterns
 - `/project:calcite:rules` — Rule matching, operand patterns, infinite loop diagnosis
