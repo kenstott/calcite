@@ -2,37 +2,29 @@
 
 ## Quick Reference
 
-Cyber workers are integrated into `run-pool.sh` via numbered wrappers. The parameterized
-`worker-cyber.sh` is the shared implementation; the numbered scripts are the pool entry points.
-
-| Worker | Mode | Command | Schedule |
-|---|---|---|---|
-| worker-62 | initial | `./run-pool.sh 62` | Once, before any recurring runs |
-| worker-63 | daily | `./run-pool.sh 63` | Every 24 hours |
-| worker-64 | weekly | `./run-pool.sh 64` | Weekly (e.g., Sunday 02:00) |
-| worker-65 | hourly | `./run-pool.sh 65` | Every 1–4 hours |
-| worker-66 | static | `./run-pool.sh 66` | On-demand after framework updates |
-
-`./run-pool.sh all` includes worker-62 (initial) alongside all other historical-load workers.
-Workers 63–66 (recurring cadence) are excluded from `all` — run them explicitly or via cron.
+| Worker | Mode | Workers |
+|---|---|---|
+| worker-62 | initial/backfill | included in `./run-pool.sh historical` |
+| worker-63–65 | recurring | included in `./run-pool.sh daily` |
+| worker-66 | static standards refresh | `./run-pool.sh 66` (on-demand only) |
 
 ```bash
-# First-time setup (integrated with full historical pipeline)
 cd scripts/parallel
-./run-pool.sh all            # includes worker-62 (cyber initial)
+
+# First-time setup — cyber runs as part of the full historical load
+./run-pool.sh historical
+# — or cyber initial only —
+./run-pool.sh --schema cyber historical
+
+# Recurring — cyber workers run automatically as part of the daily pool
+./run-pool.sh daily
 # — or cyber only —
-./run-pool.sh 62
+./run-pool.sh --schema cyber daily
 
-# Recurring cadence via run-pool (or use cron directly)
-# Workers 63–65 use release-window checks: sub-runs outside their window skip instantly.
-./run-pool.sh 63             # daily NVD delta + KEV
-./run-pool.sh 64             # weekly ATT&CK, CWE, OSV, advisories (Sunday only)
-./run-pool.sh 65             # hourly IOC feeds + OTX delta
-
-# On-demand: re-run static standards after a framework update
+# On-demand: re-run static standards after a NIST/CIS/OWASP update
 ./run-pool.sh 66
 
-# Force all sub-runs regardless of window (backfill / manual refresh)
+# Force all sub-runs regardless of release window (backfill / manual refresh)
 ./worker-cyber.sh weekly --force
 ./worker-cyber.sh daily --force
 ```
@@ -171,20 +163,19 @@ Not needed in routine schedules.
 
 ---
 
-## Recommended Cron Schedule
+## Cron Schedule
+
+Cyber workers run as part of `./run-pool.sh daily` — no separate cron entry needed.
 
 ```cron
-# Cyber data maintenance
-# Initial setup: run worker-cyber.sh initial manually once before enabling these
+# All recurring workers including cyber — run once per day
+0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
+```
 
-# Daily: NVD delta + KEV
-0 6 * * *   CYBER_OTX_DELTA_DAYS=1 /path/to/govdata/scripts/parallel/worker-cyber.sh daily
+To run cyber workers in isolation (e.g. after a manual NVD backfill):
 
-# Weekly: CWE, OSV, ATT&CK, mappings
-0 2 * * 0   /path/to/govdata/scripts/parallel/worker-cyber.sh weekly
-
-# Hourly: live IOC feeds + OTX delta
-0 */2 * * * CYBER_OTX_DELTA_DAYS=1 /path/to/govdata/scripts/parallel/worker-cyber.sh hourly
+```bash
+./run-pool.sh --schema cyber daily
 ```
 
 ---
