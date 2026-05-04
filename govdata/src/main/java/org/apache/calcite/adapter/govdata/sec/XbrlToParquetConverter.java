@@ -98,6 +98,103 @@ public class XbrlToParquetConverter implements FileConverter {
   // HTML tag removal pattern
   private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+  private static final Pattern HTML_NAMED_ENTITY_PATTERN =
+      Pattern.compile("&([a-zA-Z][a-zA-Z0-9]*);");
+  private static final java.util.Map<String, String> HTML_ENTITY_MAP = buildHtmlEntityMap();
+
+  private static java.util.Map<String, String> buildHtmlEntityMap() {
+    java.util.Map<String, String> m = new java.util.HashMap<>();
+    // Latin-1 supplement
+    m.put("nbsp", "&#160;"); m.put("iexcl", "&#161;"); m.put("cent", "&#162;");
+    m.put("pound", "&#163;"); m.put("curren", "&#164;"); m.put("yen", "&#165;");
+    m.put("brvbar", "&#166;"); m.put("sect", "&#167;"); m.put("uml", "&#168;");
+    m.put("copy", "&#169;"); m.put("ordf", "&#170;"); m.put("laquo", "&#171;");
+    m.put("not", "&#172;"); m.put("shy", "&#173;"); m.put("reg", "&#174;");
+    m.put("macr", "&#175;"); m.put("deg", "&#176;"); m.put("plusmn", "&#177;");
+    m.put("sup2", "&#178;"); m.put("sup3", "&#179;"); m.put("acute", "&#180;");
+    m.put("micro", "&#181;"); m.put("para", "&#182;"); m.put("middot", "&#183;");
+    m.put("cedil", "&#184;"); m.put("sup1", "&#185;"); m.put("ordm", "&#186;");
+    m.put("raquo", "&#187;"); m.put("frac14", "&#188;"); m.put("frac12", "&#189;");
+    m.put("frac34", "&#190;"); m.put("iquest", "&#191;");
+    // Accented uppercase
+    m.put("Agrave", "&#192;"); m.put("Aacute", "&#193;"); m.put("Acirc", "&#194;");
+    m.put("Atilde", "&#195;"); m.put("Auml", "&#196;"); m.put("Aring", "&#197;");
+    m.put("AElig", "&#198;"); m.put("Ccedil", "&#199;");
+    m.put("Egrave", "&#200;"); m.put("Eacute", "&#201;"); m.put("Ecirc", "&#202;"); m.put("Euml", "&#203;");
+    m.put("Igrave", "&#204;"); m.put("Iacute", "&#205;"); m.put("Icirc", "&#206;"); m.put("Iuml", "&#207;");
+    m.put("ETH", "&#208;"); m.put("Ntilde", "&#209;");
+    m.put("Ograve", "&#210;"); m.put("Oacute", "&#211;"); m.put("Ocirc", "&#212;");
+    m.put("Otilde", "&#213;"); m.put("Ouml", "&#214;"); m.put("times", "&#215;");
+    m.put("Oslash", "&#216;"); m.put("Ugrave", "&#217;"); m.put("Uacute", "&#218;");
+    m.put("Ucirc", "&#219;"); m.put("Uuml", "&#220;"); m.put("Yacute", "&#221;");
+    m.put("THORN", "&#222;"); m.put("szlig", "&#223;");
+    // Accented lowercase
+    m.put("agrave", "&#224;"); m.put("aacute", "&#225;"); m.put("acirc", "&#226;");
+    m.put("atilde", "&#227;"); m.put("auml", "&#228;"); m.put("aring", "&#229;");
+    m.put("aelig", "&#230;"); m.put("ccedil", "&#231;");
+    m.put("egrave", "&#232;"); m.put("eacute", "&#233;"); m.put("ecirc", "&#234;"); m.put("euml", "&#235;");
+    m.put("igrave", "&#236;"); m.put("iacute", "&#237;"); m.put("icirc", "&#238;"); m.put("iuml", "&#239;");
+    m.put("eth", "&#240;"); m.put("ntilde", "&#241;");
+    m.put("ograve", "&#242;"); m.put("oacute", "&#243;"); m.put("ocirc", "&#244;");
+    m.put("otilde", "&#245;"); m.put("ouml", "&#246;"); m.put("divide", "&#247;");
+    m.put("oslash", "&#248;"); m.put("ugrave", "&#249;"); m.put("uacute", "&#250;");
+    m.put("ucirc", "&#251;"); m.put("uuml", "&#252;"); m.put("yacute", "&#253;");
+    m.put("thorn", "&#254;"); m.put("yuml", "&#255;");
+    // Common typographic and symbol entities
+    m.put("trade", "&#8482;"); m.put("mdash", "&#8212;"); m.put("ndash", "&#8211;");
+    m.put("lsquo", "&#8216;"); m.put("rsquo", "&#8217;"); m.put("sbquo", "&#8218;");
+    m.put("ldquo", "&#8220;"); m.put("rdquo", "&#8221;"); m.put("bdquo", "&#8222;");
+    m.put("bull", "&#8226;"); m.put("hellip", "&#8230;"); m.put("euro", "&#8364;");
+    m.put("dagger", "&#8224;"); m.put("Dagger", "&#8225;"); m.put("permil", "&#8240;");
+    m.put("lsaquo", "&#8249;"); m.put("rsaquo", "&#8250;"); m.put("fnof", "&#402;");
+    m.put("OElig", "&#338;"); m.put("oelig", "&#339;"); m.put("Scaron", "&#352;");
+    m.put("scaron", "&#353;"); m.put("Yuml", "&#376;"); m.put("circ", "&#710;");
+    m.put("tilde", "&#732;"); m.put("ensp", "&#8194;"); m.put("emsp", "&#8195;");
+    m.put("thinsp", "&#8201;"); m.put("zwnj", "&#8204;"); m.put("zwj", "&#8205;");
+    m.put("lrm", "&#8206;"); m.put("rlm", "&#8207;"); m.put("minus", "&#8722;");
+    m.put("prime", "&#8242;"); m.put("Prime", "&#8243;"); m.put("oline", "&#8254;");
+    m.put("frasl", "&#8260;");
+    // Greek letters
+    m.put("Alpha", "&#913;"); m.put("Beta", "&#914;"); m.put("Gamma", "&#915;");
+    m.put("Delta", "&#916;"); m.put("Epsilon", "&#917;"); m.put("Zeta", "&#918;");
+    m.put("Eta", "&#919;"); m.put("Theta", "&#920;"); m.put("Iota", "&#921;");
+    m.put("Kappa", "&#922;"); m.put("Lambda", "&#923;"); m.put("Mu", "&#924;");
+    m.put("Nu", "&#925;"); m.put("Xi", "&#926;"); m.put("Omicron", "&#927;");
+    m.put("Pi", "&#928;"); m.put("Rho", "&#929;"); m.put("Sigma", "&#931;");
+    m.put("Tau", "&#932;"); m.put("Upsilon", "&#933;"); m.put("Phi", "&#934;");
+    m.put("Chi", "&#935;"); m.put("Psi", "&#936;"); m.put("Omega", "&#937;");
+    m.put("alpha", "&#945;"); m.put("beta", "&#946;"); m.put("gamma", "&#947;");
+    m.put("delta", "&#948;"); m.put("epsilon", "&#949;"); m.put("zeta", "&#950;");
+    m.put("eta", "&#951;"); m.put("theta", "&#952;"); m.put("iota", "&#953;");
+    m.put("kappa", "&#954;"); m.put("lambda", "&#955;"); m.put("mu", "&#956;");
+    m.put("nu", "&#957;"); m.put("xi", "&#958;"); m.put("omicron", "&#959;");
+    m.put("pi", "&#960;"); m.put("rho", "&#961;"); m.put("sigmaf", "&#962;");
+    m.put("sigma", "&#963;"); m.put("tau", "&#964;"); m.put("upsilon", "&#965;");
+    m.put("phi", "&#966;"); m.put("chi", "&#967;"); m.put("psi", "&#968;");
+    m.put("omega", "&#969;"); m.put("thetasym", "&#977;"); m.put("upsih", "&#978;");
+    m.put("piv", "&#982;");
+    // Math and arrows
+    m.put("forall", "&#8704;"); m.put("part", "&#8706;"); m.put("exist", "&#8707;");
+    m.put("empty", "&#8709;"); m.put("nabla", "&#8711;"); m.put("isin", "&#8712;");
+    m.put("notin", "&#8713;"); m.put("ni", "&#8715;"); m.put("prod", "&#8719;");
+    m.put("sum", "&#8721;"); m.put("lowast", "&#8727;"); m.put("radic", "&#8730;");
+    m.put("prop", "&#8733;"); m.put("infin", "&#8734;"); m.put("ang", "&#8736;");
+    m.put("and", "&#8743;"); m.put("or", "&#8744;"); m.put("cap", "&#8745;");
+    m.put("cup", "&#8746;"); m.put("int", "&#8747;"); m.put("there4", "&#8756;");
+    m.put("sim", "&#8764;"); m.put("cong", "&#8773;"); m.put("asymp", "&#8776;");
+    m.put("ne", "&#8800;"); m.put("equiv", "&#8801;"); m.put("le", "&#8804;");
+    m.put("ge", "&#8805;"); m.put("sub", "&#8834;"); m.put("sup", "&#8835;");
+    m.put("nsub", "&#8836;"); m.put("sube", "&#8838;"); m.put("supe", "&#8839;");
+    m.put("oplus", "&#8853;"); m.put("otimes", "&#8855;"); m.put("perp", "&#8869;");
+    m.put("sdot", "&#8901;"); m.put("lceil", "&#8968;"); m.put("rceil", "&#8969;");
+    m.put("lfloor", "&#8970;"); m.put("rfloor", "&#8971;"); m.put("lang", "&#9001;");
+    m.put("rang", "&#9002;"); m.put("loz", "&#9674;");
+    m.put("larr", "&#8592;"); m.put("uarr", "&#8593;"); m.put("rarr", "&#8594;");
+    m.put("darr", "&#8595;"); m.put("harr", "&#8596;"); m.put("crarr", "&#8629;");
+    m.put("spades", "&#9824;"); m.put("clubs", "&#9827;"); m.put("hearts", "&#9829;");
+    m.put("diams", "&#9830;");
+    return java.util.Collections.unmodifiableMap(m);
+  }
 
   @Override public boolean canConvert(String sourceFormat, String targetFormat) {
     return ("xbrl".equalsIgnoreCase(sourceFormat) || "xml".equalsIgnoreCase(sourceFormat)
@@ -3116,10 +3213,14 @@ public class XbrlToParquetConverter implements FileConverter {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
-        try (InputStream is = storageProvider.openInputStream(sourcePath)) {
+        try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourcePath))) {
           originalHtmlDoc = builder.parse(is);
         }
         LOGGER.debug("Successfully parsed original HTML file for relationship extraction");
+      } catch (org.xml.sax.SAXParseException e) {
+        LOGGER.info("Strict XML parse failed for {} relationships: {} — falling back to JSoup",
+            filename, e.getMessage());
+        originalHtmlDoc = parseWithJsoupFallback(sourcePath);
       } catch (Exception e) {
         LOGGER.warn("Failed to parse original HTML file for relationships: " + e.getMessage());
       }
@@ -3769,10 +3870,29 @@ public class XbrlToParquetConverter implements FileConverter {
 
     String content = baos.toString(StandardCharsets.UTF_8.name());
 
-    // Replace bare '&' that are NOT followed by a valid entity reference:
-    //   &amp; &lt; &gt; &quot; &apos; &#digits; &#xhex;
-    // The negative lookahead matches '&' not followed by word-chars+semicolon or #
-    String sanitized = content.replaceAll("&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)", "&amp;");
+    // Replace HTML named entities (e.g. &nbsp;) that are valid in HTML but undefined in XML
+    // with numeric character references. The five predefined XML entities are left untouched.
+    // Any unknown HTML entity has its '&' escaped to &amp; so the XML parser doesn't choke.
+    java.util.regex.Matcher entityMatcher = HTML_NAMED_ENTITY_PATTERN.matcher(content);
+    StringBuffer entitySb = new StringBuffer();
+    while (entityMatcher.find()) {
+      String name = entityMatcher.group(1);
+      if ("amp".equals(name) || "lt".equals(name) || "gt".equals(name)
+          || "quot".equals(name) || "apos".equals(name)) {
+        entityMatcher.appendReplacement(entitySb,
+            java.util.regex.Matcher.quoteReplacement("&" + name + ";"));
+      } else {
+        String numeric = HTML_ENTITY_MAP.get(name);
+        entityMatcher.appendReplacement(entitySb,
+            numeric != null ? numeric
+                : java.util.regex.Matcher.quoteReplacement("&amp;" + name + ";"));
+      }
+    }
+    entityMatcher.appendTail(entitySb);
+
+    // Replace bare '&' not followed by a valid entity reference or numeric ref
+    String sanitized = entitySb.toString()
+        .replaceAll("&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)", "&amp;");
 
     if (!sanitized.equals(content)) {
       int fixes = sanitized.length() - content.length();
