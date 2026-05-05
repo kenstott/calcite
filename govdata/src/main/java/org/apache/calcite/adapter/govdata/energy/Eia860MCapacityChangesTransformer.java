@@ -54,6 +54,12 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
 
   @Override
   protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
+    Map<String, String> dims = context.getDimensionValues();
+    String yearStr = dims != null ? dims.get("year") : null;
+    String monthStr = dims != null ? dims.get("month") : null;
+    Integer snapshotYear = parseIntOrNull(yearStr);
+    Integer snapshotMonth = parseIntOrNull(monthStr);
+
     ArrayNode result = MAPPER.createArrayNode();
 
     for (Map.Entry<String, String> entry : SHEET_CHANGE_TYPES.entrySet()) {
@@ -64,14 +70,26 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
         LOGGER.debug("EIA-860M: sheet '{}' not found, skipping", sheetName);
         continue;
       }
-      parseSheet(sheet, changeType, result);
+      parseSheet(sheet, changeType, snapshotYear, snapshotMonth, result);
     }
 
     LOGGER.debug("EIA-860M: parsed {} capacity change records total", result.size());
     return result.toString();
   }
 
-  private void parseSheet(Sheet sheet, String changeType, ArrayNode result) {
+  private Integer parseIntOrNull(String s) {
+    if (s == null || s.trim().isEmpty()) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(s.trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private void parseSheet(Sheet sheet, String changeType, Integer snapshotYear,
+      Integer snapshotMonth, ArrayNode result) {
     Row headerRow = findHeaderRow(sheet);
     if (headerRow == null) {
       LOGGER.warn("EIA-860M: no header row found in sheet for change_type={}", changeType);
@@ -97,9 +115,23 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
       ObjectNode out = MAPPER.createObjectNode();
       out.put("change_type", changeType);
 
+      // Snapshot period from dimension values (which monthly report this row came from)
+      if (snapshotYear != null) {
+        out.put("snapshot_year", snapshotYear);
+      } else {
+        out.putNull("snapshot_year");
+      }
+      if (snapshotMonth != null) {
+        out.put("snapshot_month", snapshotMonth);
+      } else {
+        out.putNull("snapshot_month");
+      }
+
       putStringField(out, "plant_id", row, colIndex, "Plant ID");
       putStringField(out, "plant_name", row, colIndex, "Plant Name");
-      putStringField(out, "state_abbr", row, colIndex, "State");
+      // EIA-860M uses "Plant State" in newer files; "State" in older files
+      String stateCol = colIndex.containsKey("Plant State") ? "Plant State" : "State";
+      putStringField(out, "state_abbr", row, colIndex, stateCol);
       putStringField(out, "county_name", row, colIndex, "County");
       putStringField(out, "generator_id", row, colIndex, "Generator ID");
       putStringField(out, "unit_code", row, colIndex, "Unit Code");
@@ -111,6 +143,10 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
       putDoubleField(out, "nameplate_capacity_mw", row, colIndex, "Nameplate Capacity (MW)");
       putDoubleField(out, "net_summer_capacity_mw", row, colIndex, "Summer Capacity (MW)");
       putDoubleField(out, "net_winter_capacity_mw", row, colIndex, "Winter Capacity (MW)");
+      out.putNull("nameplate_energy_capacity_mwh"); // not available in EIA-860M
+      // change_year/change_month: the effective date of the capacity change
+      putIntField(out, "change_year", row, colIndex, "Operating Year");
+      putIntField(out, "change_month", row, colIndex, "Operating Month");
       putIntField(out, "operating_month", row, colIndex, "Operating Month");
       putIntField(out, "operating_year", row, colIndex, "Operating Year");
       putIntField(out, "planned_retirement_month", row, colIndex, "Planned Retirement Month");

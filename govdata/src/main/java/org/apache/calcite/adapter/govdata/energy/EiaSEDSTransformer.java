@@ -36,7 +36,7 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
 
         out.put("consumption_year", parseYear(period));
 
-        String stateAbbr = getString(row, "stateid", "location");
+        String stateAbbr = getString(row, "stateId", "location");
         if (stateAbbr != null) {
           out.put("state_abbr", stateAbbr);
         } else {
@@ -52,7 +52,7 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
           out.putNull("state_name");
         }
 
-        String msn = getString(row, "msn");
+        String msn = getString(row, "seriesId");
         if (msn != null) {
           out.put("msn", msn);
         } else {
@@ -69,7 +69,7 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
           out.putNull("value");
         }
 
-        String units = getString(row, "units");
+        String units = getString(row, "unit");
         if (units != null) {
           out.put("units", units);
         } else {
@@ -102,7 +102,7 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
           out.putNull("price_per_mmbtu");
         }
 
-        String seriesDesc = getString(row, "series-description");
+        String seriesDesc = getString(row, "seriesDescription");
         if (seriesDesc != null) {
           out.put("series_description", seriesDesc);
         } else {

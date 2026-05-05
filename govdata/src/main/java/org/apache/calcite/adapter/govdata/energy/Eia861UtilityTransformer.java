@@ -135,7 +135,23 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       return result;
     }
 
-    Row headerRow = sheet.getRow(0);
+    // Utility_Data sheet uses a 2-row header: row 0 has category labels, row 1 has column names.
+    // Scan the first 5 rows to find the one containing "Utility Number".
+    Row headerRow = null;
+    int headerRowIdx = 0;
+    for (int r = 0; r <= Math.min(4, sheet.getLastRowNum()); r++) {
+      Row candidate = sheet.getRow(r);
+      if (candidate == null) continue;
+      for (int c = 0; c <= candidate.getLastCellNum(); c++) {
+        String v = cellString(candidate.getCell(c));
+        if ("Utility Number".equals(v)) {
+          headerRow = candidate;
+          headerRowIdx = r;
+          break;
+        }
+      }
+      if (headerRow != null) break;
+    }
     if (headerRow == null) {
       return result;
     }
@@ -148,7 +164,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       }
     }
 
-    for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+    for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
       Row row = sheet.getRow(r);
       if (row == null) {
         continue;
@@ -246,11 +262,16 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
         if (!out.has("nerc_region") || out.get("nerc_region").isNull()) {
           String nerc = utilData.get("NERC Region");
           if (nerc == null) nerc = utilData.get("Nerc Region");
+          if (nerc == null) nerc = utilData.get("NERC");
+          if (nerc == null) nerc = utilData.get("nerc_region");
           if (nerc != null && !nerc.isEmpty()) out.put("nerc_region", nerc);
         }
         if (!out.has("ba_code") || out.get("ba_code").isNull()) {
           String ba = utilData.get("Balancing Authority Code");
           if (ba == null) ba = utilData.get("BA Code");
+          if (ba == null) ba = utilData.get("Balancing Authority");
+          if (ba == null) ba = utilData.get("BA");
+          if (ba == null) ba = utilData.get("ba_code");
           if (ba != null && !ba.isEmpty()) out.put("ba_code", ba);
         }
         // Activity flags: EIA-861 Utility_Data sheet has Y/N columns for each activity
@@ -309,7 +330,8 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
     if (h.contains("utility name")) {
       return "utility_name";
     }
-    if ((h.equals("state") || h.contains("state abbr") || h.contains("state abbreviation"))
+    if ((h.equals("state") || h.endsWith("_state") || h.endsWith(" state")
+        || h.contains("state abbr") || h.contains("state abbreviation"))
         && !h.contains("fips")) {
       return "state_abbr";
     }
@@ -319,7 +341,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
     if (h.contains("ownership") || h.contains("entity type") || h.contains("ownership type")) {
       return "entity_type";
     }
-    if (h.contains("balancing authority code") || h.equals("ba code") || h.equals("ba_code")
+    if (h.contains("balancing authority code") || h.contains("ba code") || h.equals("ba_code")
         || (h.contains("balancing") && h.contains("code"))) {
       return "ba_code";
     }

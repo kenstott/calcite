@@ -162,7 +162,11 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
 
         ObjectNode out = MAPPER.createObjectNode();
         if (year != null && !year.isEmpty()) {
-          out.put("data_year", year);
+          try {
+            out.put("report_year", Integer.parseInt(year));
+          } catch (NumberFormatException e) {
+            out.putNull("report_year");
+          }
         }
 
         // Plant attributes (denormalized from plant lookup)
