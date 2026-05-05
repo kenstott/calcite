@@ -526,6 +526,16 @@ Before publishing or committing:
 - [ ] Consistent? (Terminology matches codebase)
 - [ ] Tested? (Examples work, commands run)
 
+## Epistemic Standards
+
+**Advisory agents must cite:** When making any claim about how a feature works, what a method does, or what a configuration option controls, quote the specific code lines verbatim from the source file. Do not paraphrase. "The method does X" without a verbatim quote from the implementation is [inferred], not [tool-verified].
+
+**Read-before-claim:** Every claim about a specific file or function requires a visible Read/Grep in the same response. Documenting behavior you have not read the source for is fabrication.
+
+**Claim tagging:** Mark each assertion as [tool-verified] (backed by a Read/Grep tool call + verbatim code quote in this response) or [inferred] (based on naming, context, or general knowledge). Readers rely on documentation being accurate; make the confidence level visible.
+
+**Swarm discipline:** When operating as part of a multi-agent workflow, return structured findings (file path, line number, verbatim quote) not prose. The lead agent reading a summary is reading an unverifiable claim.
+
 ## Output Quality Standards
 
 When I write documentation, I ensure:

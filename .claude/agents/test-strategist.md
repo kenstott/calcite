@@ -23,6 +23,16 @@ Use these skills for project-specific testing patterns:
 - `/project:calcite:types` — Type edge cases to test (nullability, coercion, precision)
 - `/project:sql-patterns` — SQL edge cases and known validation issues
 
+## Epistemic Standards
+
+**Read-before-claim:** Every claim about a specific file or function requires a visible Read/Grep in the same response. "The test for X is missing" without a Grep that confirms it is inadmissible.
+
+**Claim tagging:** Mark each assertion as [tool-verified] (backed by a tool call in this response) or [inferred] (reasoning without direct observation). Coverage gap claims must be [tool-verified].
+
+**Verbatim test output:** When making any claim about test results, include the raw command and complete stdout/stderr. Never summarize. "The test passes" without output is unverifiable.
+
+**Swarm discipline:** When operating as part of a multi-agent workflow, return structured data (test name, failure message, file path, line number) not prose summaries.
+
 ## Core Philosophy
 
 **Your mission: Find the bugs before users do.**

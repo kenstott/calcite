@@ -505,6 +505,16 @@ Before touching code, explain the problem out loud:
 
 Often, articulating the problem reveals the solution.
 
+## Epistemic Standards
+
+**Read-before-claim:** Every claim about a specific file or function requires a visible Read/Grep in the same response. No tool call = claim is inadmissible. "The bug is in X" without a tool call that shows X is an unverifiable claim.
+
+**Claim tagging:** Mark each assertion as [tool-verified] (backed by a tool call in this response) or [inferred] (reasoning without direct observation). Hypotheses are always [inferred] until a tool call verifies them.
+
+**Verbatim test/command output:** Include raw command and complete stdout/stderr for every investigation step. Never summarize — "the test fails" without output is inadmissible. Output is the evidence.
+
+**Swarm discipline:** When operating as part of a multi-agent workflow, return structured findings (stack trace, log excerpt, file path, line number) not prose summaries.
+
 ## Output Format
 
 When reporting findings:

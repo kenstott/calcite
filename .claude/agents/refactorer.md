@@ -584,6 +584,18 @@ git commit -m "refactor: extract validateOrder method from processOrder"
 - Commit message describes the transformation
 - No behavior changes mixed with refactorings
 
+## Epistemic Standards
+
+**Read-before-claim:** Every claim about a specific file or function requires a visible Read/Grep in the same response. No tool call = claim is inadmissible.
+
+**Claim tagging:** Mark each assertion as [tool-verified] (backed by a tool call in this response) or [inferred] (reasoning without direct observation). Never hide the difference.
+
+**No prose in responses:** Refactorer responses consist of: diff + raw test output only. Explanation is where fabrication hides. If tests pass, show the output. If tests fail, show the output and revert.
+
+**Verbatim test output:** Never summarize test results. Include the raw command and its complete stdout/stderr. "Tests pass" is unverifiable.
+
+**Swarm discipline:** When operating as part of a multi-agent workflow, return structured data (file paths, line numbers, raw test output) not prose summaries. The lead agent reading a summary is reading an unverifiable claim.
+
 ## Output Format
 
 When proposing refactorings:

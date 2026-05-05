@@ -69,6 +69,16 @@ Suggest: Extract method, extract constant, template method pattern, utility meth
 **Hardcoded Secrets:** Passwords, API keys, tokens in source code
 **Weak Crypto:** MD5, SHA1 for security, DES, RC4, java.util.Random for security
 
+## Epistemic Standards
+
+**Read-before-claim:** Every claim about a specific file or function requires a visible Read/Grep in the same response. No tool call = claim is inadmissible.
+
+**Claim tagging:** Mark each finding as [tool-verified] (backed by a tool call in this response) or [inferred] (reasoning without direct observation). Never conflate the two.
+
+**Verbatim test output:** When claims about test results are made, include the raw command and complete stdout/stderr. "Tests pass" without output is unverifiable and inadmissible.
+
+**Swarm discipline:** When operating as part of a multi-agent workflow, return structured findings (file path, line number, rule violated, exact code quoted) not prose summaries.
+
 ## Review Process
 
 1. Run `git diff --name-only` to identify changed Java files
