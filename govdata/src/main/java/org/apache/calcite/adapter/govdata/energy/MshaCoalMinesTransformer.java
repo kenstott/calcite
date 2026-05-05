@@ -97,15 +97,15 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       ArrayNode result = MAPPER.createArrayNode();
 
       for (Map<String, String> row : prodRows) {
-        // Filter to coal only
-        String coalMetal = row.get("COAL_METAL_IND");
+        // Filter to coal only — production file uses C_M_IND, reference file uses COAL_METAL_IND
+        String coalMetal = row.get("C_M_IND");
         if (!"C".equals(coalMetal)) {
           continue;
         }
 
         // Filter by year if specified
         if (filterYear > 0) {
-          String calYr = row.get("CAL_YR");
+          String calYr = row.get("CALENDAR_YR");
           if (calYr == null || !yearStr.equals(calYr.trim())) {
             continue;
           }
@@ -115,42 +115,48 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
 
         String mineId = row.get("MINE_ID");
         putStringVal(out, "mine_id", mineId);
-        putStringVal(out, "mine_name", row.get("MINE_NAME"));
-        putStringVal(out, "state_abbr", row.get("FIPS_STATE_CD"));
-        putStringVal(out, "county_fips", row.get("FIPS_CNTY_CD"));
-        putStringVal(out, "coal_metal_ind", coalMetal);
-        putIntVal(out, "production_year", row.get("CAL_YR"));
-        putDoubleVal(out, "annual_coal_production", row.get("ANNUAL_COAL_PRODUCTION"));
-        putDoubleVal(out, "annual_hours", row.get("ANNUAL_HOURS"));
-        putDoubleVal(out, "avg_employees", row.get("AVG_EMPLOYEE_CNT"));
-        putStringVal(out, "mine_type", row.get("MINE_TYPE"));
-        putStringVal(out, "mine_status", row.get("CURRENT_MINE_STATUS"));
-        putStringVal(out, "primary_sic_cd", row.get("PRIMARY_SIC_CD"));
+        putStringVal(out, "mine_name", row.get("CURR_MINE_NM"));
+        putStringVal(out, "state_abbr", row.get("STATE_ABBR"));
+        putIntVal(out, "report_year", row.get("CALENDAR_YR"));
+        putStringVal(out, "subunit_code", row.get("SUBUNIT_CD"));
+        putStringVal(out, "subunit", row.get("SUBUNIT_DESC"));
+        putDoubleVal(out, "production_short_tons", row.get("ANNUAL_COAL_PROD"));
+        putDoubleVal(out, "annual_hours", row.get("ANNUAL_HRS"));
+        putDoubleVal(out, "avg_employee_count", row.get("AVG_ANNUAL_EMPL"));
 
-        // Compute labor productivity (tons per hour)
-        Double prod = parseDouble(row.get("ANNUAL_COAL_PRODUCTION"));
-        Double hours = parseDouble(row.get("ANNUAL_HOURS"));
+        // Compute labor productivity (short tons per employee hour)
+        Double prod = parseDouble(row.get("ANNUAL_COAL_PROD"));
+        Double hours = parseDouble(row.get("ANNUAL_HRS"));
         if (prod != null && hours != null && hours > 0.0) {
           out.put("labor_productivity", prod / hours);
         } else {
           out.putNull("labor_productivity");
         }
 
-        // Enrich from mine reference data
+        // Enrich from mine reference data (Mines.txt columns)
         if (mineId != null && mineRef.containsKey(mineId.trim())) {
           Map<String, String> ref = mineRef.get(mineId.trim());
-          putStringVal(out, "latitude", ref.get("LATITUDE"));
-          putStringVal(out, "longitude", ref.get("LONGITUDE"));
-          putStringVal(out, "controller_name", ref.get("CONTROLLER_NAME"));
-          putStringVal(out, "operator_name", ref.get("OPERATOR_NAME"));
-          putStringVal(out, "status_date", ref.get("STATUS_DT"));
+          putDoubleVal(out, "latitude", ref.get("LATITUDE"));
+          putDoubleVal(out, "longitude", ref.get("LONGITUDE"));
+          putStringVal(out, "controller_name", ref.get("CURRENT_CONTROLLER_NAME"));
+          putStringVal(out, "operator_name", ref.get("CURRENT_OPERATOR_NAME"));
+          putStringVal(out, "county_fips", ref.get("FIPS_CNTY_CD"));
+          putStringVal(out, "county_name", ref.get("FIPS_CNTY_NM"));
+          putStringVal(out, "mine_type", ref.get("CURRENT_MINE_TYPE"));
+          putStringVal(out, "mine_status", ref.get("CURRENT_MINE_STATUS"));
+          putDoubleVal(out, "avg_mine_height_inches", ref.get("AVG_MINE_HEIGHT"));
         } else {
           out.putNull("latitude");
           out.putNull("longitude");
           out.putNull("controller_name");
           out.putNull("operator_name");
-          out.putNull("status_date");
+          out.putNull("county_fips");
+          out.putNull("county_name");
+          out.putNull("mine_type");
+          out.putNull("mine_status");
+          out.putNull("avg_mine_height_inches");
         }
+        out.putNull("coal_type"); // not directly available in MSHA files
 
         result.add(out);
       }

@@ -15,8 +15,10 @@ import org.apache.calcite.adapter.file.etl.RequestContext;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
@@ -25,8 +27,10 @@ import java.util.Map;
 
 public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
 
+  // EIA-814 switched from .xls to .xlsx in 2017.
+  private static final int XLSX_START_YEAR = 2017;
   private static final String URL_PATTERN =
-      "https://www.eia.gov/petroleum/imports/companylevel/archive/%d/%d_%s/data/import.xlsx";
+      "https://www.eia.gov/petroleum/imports/companylevel/archive/%d/%d_%s/data/import.%s";
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -45,14 +49,18 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
       return "[]";
     }
 
+    boolean isXlsx = year >= XLSX_START_YEAR;
+    String ext = isXlsx ? "xlsx" : "xls";
     ArrayNode result = MAPPER.createArrayNode();
 
     for (int month = 1; month <= 12; month++) {
       String monthStr = String.format("%02d", month);
-      String url = String.format(URL_PATTERN, year, year, monthStr);
+      String url = String.format(URL_PATTERN, year, year, monthStr, ext);
       try {
-        byte[] xlsxBytes = downloadBytes(url);
-        XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsxBytes));
+        byte[] bytes = downloadBytes(url);
+        Workbook wb = isXlsx
+            ? new XSSFWorkbook(new ByteArrayInputStream(bytes))
+            : new HSSFWorkbook(new ByteArrayInputStream(bytes));
         try {
           parseMonthlySheet(wb, year, month, result);
         } finally {
@@ -68,7 +76,7 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
     return result.toString();
   }
 
-  private void parseMonthlySheet(XSSFWorkbook wb, int year, int month, ArrayNode result) {
+  private void parseMonthlySheet(Workbook wb, int year, int month, ArrayNode result) {
     Sheet sheet = wb.getSheet("Sheet1");
     if (sheet == null) {
       sheet = wb.getSheetAt(0);
@@ -193,7 +201,7 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
   }
 
   @Override
-  protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
+  protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception { // NOSONAR - required by base class
     // Not used — transform() is overridden to handle multi-month downloads
     return "[]";
   }
