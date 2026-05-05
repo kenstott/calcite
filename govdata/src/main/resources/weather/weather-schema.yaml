@@ -86,6 +86,38 @@ column_templates:
       - *partition_type
       - *partition_year
 
+  ghcnd_station_partitions: &ghcnd_station_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  ghcnd_daily_partitions: &ghcnd_daily_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state_fips
+
+  drought_partitions: &drought_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state_abbr
+
+  hms_partitions: &hms_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state_fips
+
+  normals_partitions: &normals_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_state_fips
+
 # ============================================================================
 # DIMENSION VALUES
 # ============================================================================
@@ -214,6 +246,20 @@ dimension_values:
     - '42401'  # SO2
     - '42602'  # NO2
     - '42101'  # CO
+
+  # GHCND daily year range (from 2000 for drought monitor compatibility)
+  ghcnd_year_range: &ghcnd_year_range
+    type: yearRange
+    start: "${GHCND_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    end: current
+    dataLag: 1
+
+  # Drought Monitor year range (data available from 2000)
+  drought_year_range: &drought_year_range
+    type: yearRange
+    start: "${DROUGHT_START_YEAR:2000}"
+    end: current
+    dataLag: 0
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -745,6 +791,527 @@ partitionedTables:
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
+  # ---------------------------------------------------------------------------
+  # GHCND STATIONS WITH COUNTY - NOAA station inventory + county FIPS (no auth)
+  # ---------------------------------------------------------------------------
+  - name: ghcnd_stations_with_county
+    pattern: "type=ghcnd_station/*.parquet"
+    partitions: *ghcnd_station_partitions
+    comment: >
+      NOAA GHCN-Daily station inventory enriched with county_fips via nearest Census
+      county centroid assignment. One row per US station. Prerequisite for all
+      cross-schema joins using ghcnd_daily and weather_daily_by_county. No auth needed.
+      county_fips is assigned by nearest Euclidean distance to Census TIGER county
+      centroids. state_fips is derived from the 2-letter state code in the station file.
+      data_start_year and data_end_year come from ghcnd-inventory.txt.
+
+    dimensions:
+      type:
+        - ghcnd_station
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "GHCND station ID (e.g., 'USW00094846')"
+      - name: station_name
+        type: string
+        nullable: true
+        comment: Station name
+      - <<: *state_fips_column
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: "5-digit county FIPS (nearest Census county centroid)"
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Station latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Station longitude
+      - name: elevation_m
+        type: double
+        nullable: true
+        comment: Elevation in meters
+      - name: data_start_year
+        type: integer
+        nullable: true
+        comment: First year of observations (from ghcnd-inventory.txt)
+      - name: data_end_year
+        type: integer
+        nullable: true
+        comment: Most recent year of observations (from ghcnd-inventory.txt)
+      - name: distance_to_county_centroid_km
+        type: double
+        nullable: true
+        comment: Distance used for nearest-county centroid assignment
+
+    source:
+      type: http
+      url: "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.GhcndStationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ghcnd_station/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: ghcnd_stations_with_county
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # GHCND DAILY - NOAA GHCN-Daily station observations (requires NOAA_CDO_TOKEN)
+  # ---------------------------------------------------------------------------
+  - name: ghcnd_daily
+    pattern: "type=ghcnd_daily/year=*/state_fips=*/*.parquet"
+    partitions: *ghcnd_daily_partitions
+    comment: >
+      NOAA GHCN-Daily station observations via CDO API. Daily temperature, precipitation,
+      and snow measurements at station level. Wide-format: one row per station per day.
+      Values are in metric units (°C, mm, m/s). Requires NOAA_CDO_TOKEN. Cross-references
+      ghcnd_stations_with_county via station_id for county_fips joins. Primary source for
+      weather_daily_by_county aggregations.
+
+    dimensions:
+      type:
+        - ghcnd_daily
+      year: *ghcnd_year_range
+      state_fips: *all_state_fips
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "GHCND station ID (e.g., 'GHCND:USW00094846')"
+      - <<: *state_fips_column
+      - name: date
+        type: string
+        nullable: false
+        comment: Observation date (ISO format YYYY-MM-DD)
+      - <<: *year_column
+      - name: tmax_c
+        type: double
+        nullable: true
+        comment: Maximum temperature in °C (CDO TMAX element)
+      - name: tmin_c
+        type: double
+        nullable: true
+        comment: Minimum temperature in °C (CDO TMIN element)
+      - name: tavg_c
+        type: double
+        nullable: true
+        comment: Average temperature in °C (CDO TAVG element)
+      - name: prcp_mm
+        type: double
+        nullable: true
+        comment: Precipitation in mm (CDO PRCP element)
+      - name: snow_mm
+        type: double
+        nullable: true
+        comment: Snowfall in mm (CDO SNOW element)
+      - name: snwd_mm
+        type: double
+        nullable: true
+        comment: Snow depth in mm (CDO SNWD element)
+      - name: awnd_ms
+        type: double
+        nullable: true
+        comment: Average wind speed in m/s (CDO AWND element)
+      - name: tmax_flag
+        type: string
+        nullable: true
+        comment: Quality flag for tmax (blank = passed all checks)
+      - name: tmin_flag
+        type: string
+        nullable: true
+        comment: Quality flag for tmin
+      - name: prcp_flag
+        type: string
+        nullable: true
+        comment: Quality flag for prcp
+
+    source:
+      type: http
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-01-01&enddate={year}-12-31&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+      method: GET
+      response:
+        format: json
+      headers:
+        token: "{env:NOAA_CDO_TOKEN}"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      pagination:
+        enabled: true
+        offsetParam: offset
+        limitParam: limit
+        maxPerRequest: 1000
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.GhcndDailyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ghcnd_daily/year=*/state_fips=*/"
+      partition:
+        columns: [type, year, state_fips]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: ghcnd_daily
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # DROUGHT MONITOR WEEKLY - USDM county-level drought severity (no auth)
+  # ---------------------------------------------------------------------------
+  - name: drought_monitor_weekly
+    pattern: "type=drought_weekly/year=*/state_abbr=*/*.parquet"
+    partitions: *drought_partitions
+    comment: >
+      National Drought Monitor weekly county-level drought severity from the USDM API
+      at droughtmonitor.unl.edu. Covers all US counties since 2000. Includes D0-D4
+      drought category percentages (exclusive area fractions) and the Drought Severity
+      and Coverage Index (DSCI, range 0-500). week_date is the Tuesday release date.
+      Cross-references geo.counties via county_fips and geo.states via state_abbr.
+      No authentication required.
+
+    dimensions:
+      type:
+        - drought_weekly
+      year: *drought_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: "5-digit county FIPS code"
+      - <<: *state_fips_column
+      - <<: *state_abbr_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - <<: *year_column
+      - name: week_date
+        type: string
+        nullable: false
+        comment: "Tuesday release date of the drought report (YYYY-MM-DD)"
+      - name: valid_start
+        type: string
+        nullable: true
+        comment: "Start date of the drought week period (YYYY-MM-DD)"
+      - name: valid_end
+        type: string
+        nullable: true
+        comment: "End date of the drought week period (YYYY-MM-DD)"
+      - name: none_pct
+        type: double
+        nullable: true
+        comment: "% of county area with no drought"
+      - name: d0_pct
+        type: double
+        nullable: true
+        comment: "% Abnormally Dry (exclusive D0 only)"
+      - name: d1_pct
+        type: double
+        nullable: true
+        comment: "% Moderate Drought (exclusive D1 only)"
+      - name: d2_pct
+        type: double
+        nullable: true
+        comment: "% Severe Drought (exclusive D2 only)"
+      - name: d3_pct
+        type: double
+        nullable: true
+        comment: "% Extreme Drought (exclusive D3 only)"
+      - name: d4_pct
+        type: double
+        nullable: true
+        comment: "% Exceptional Drought (exclusive D4)"
+      - name: dsci
+        type: double
+        nullable: true
+        comment: "Drought Severity and Coverage Index (0-500, sum of cumulative D0+D1+D2+D3+D4)"
+
+    source:
+      type: http
+      url: "https://usdmdataservices.unl.edu/api/CountyStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi={state_abbr}&startdate=1/1/{year}&enddate=12/31/{year}&statisticsType=1"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.DroughtMonitorTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=drought_weekly/year=*/state_abbr=*/"
+      partition:
+        columns: [type, year, state_abbr]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: drought_monitor_weekly
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # HMS SMOKE DAILY - NOAA satellite smoke coverage by county (offline ETL)
+  # ---------------------------------------------------------------------------
+  - name: hms_smoke_daily
+    pattern: "type=hms_smoke/year=*/state_fips=*/*.parquet"
+    partitions: *hms_partitions
+    comment: >
+      NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
+      level. Daily smoke coverage by density category (light/medium/heavy). Available
+      2005-present. Source shapefiles require offline spatial join via geopandas before
+      ingestion: compute county fraction coverage from HMS polygon shapefiles
+      (https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/)
+      and store as pre-processed CSV in ${GOVDATA_PARQUET_DIR}/hms-smoke-prepped/.
+      The source transformer reads this pre-processed CSV directory.
+
+    dimensions:
+      type:
+        - hms_smoke
+      year: *ghcnd_year_range
+      state_fips: *all_state_fips
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: "5-digit county FIPS code"
+      - <<: *state_fips_column
+      - name: date
+        type: string
+        nullable: false
+        comment: Observation date (YYYY-MM-DD)
+      - <<: *year_column
+      - name: smoke_coverage_pct
+        type: double
+        nullable: true
+        comment: "% of county covered by any smoke"
+      - name: heavy_smoke_pct
+        type: double
+        nullable: true
+        comment: "% of county covered by heavy smoke"
+      - name: medium_smoke_pct
+        type: double
+        nullable: true
+        comment: "% of county covered by medium smoke"
+      - name: light_smoke_pct
+        type: double
+        nullable: true
+        comment: "% of county covered by light smoke"
+
+    source:
+      type: http
+      url: "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/{year}/{year_month_pad}/hms_smoke{date_compact}.zip"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.HmsSmokeDailyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hms_smoke/year=*/state_fips=*/"
+      partition:
+        columns: [type, year, state_fips]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: hms_smoke_daily
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # CLIMATE NORMALS MONTHLY - NOAA 1981-2010 normals (requires NOAA_CDO_TOKEN)
+  # ---------------------------------------------------------------------------
+  - name: climate_normals_monthly
+    pattern: "type=climate_normals/state_fips=*/*.parquet"
+    partitions: *normals_partitions
+    comment: >
+      NOAA CDO Monthly Climate Normals (NORMAL_MLY dataset, 1981-2010 period).
+      One row per station per month. Values are in metric units (°C, mm).
+      CDO returns temperature in tenths of °C and precipitation in tenths of mm;
+      the transformer divides by 10 to produce standard units. county_fips is joined
+      from ghcnd_stations_with_county. Requires NOAA_CDO_TOKEN. Static dataset —
+      update logic is not needed until NOAA releases a new 30-year period.
+      Cross-references ghcnd_stations_with_county via station_id.
+
+    dimensions:
+      type:
+        - climate_normals
+      state_fips: *all_state_fips
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "GHCND station ID"
+      - <<: *state_fips_column
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: "5-digit county FIPS (from ghcnd_stations_with_county join)"
+      - name: month
+        type: integer
+        nullable: false
+        comment: Month (1-12)
+      - name: normal_tmax_c
+        type: double
+        nullable: true
+        comment: "30-year normal daily max temperature (°C)"
+      - name: normal_tmin_c
+        type: double
+        nullable: true
+        comment: "30-year normal daily min temperature (°C)"
+      - name: normal_tavg_c
+        type: double
+        nullable: true
+        comment: "30-year normal daily mean temperature (°C)"
+      - name: normal_prcp_mm
+        type: double
+        nullable: true
+        comment: "30-year normal daily precipitation (mm)"
+      - name: normal_snow_mm
+        type: double
+        nullable: true
+        comment: "30-year normal daily snowfall (mm)"
+      - name: tmax_stddev
+        type: double
+        nullable: true
+        comment: "Standard deviation of daily tmax (°C)"
+      - name: tmin_stddev
+        type: double
+        nullable: true
+        comment: "Standard deviation of daily tmin (°C)"
+      - name: prcp_stddev
+        type: double
+        nullable: true
+        comment: "Standard deviation of daily prcp (mm); NULL if not available from CDO"
+
+    source:
+      type: http
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY&locationid=FIPS:{state_fips}&startdate=2010-01-01&enddate=2010-12-01&limit=1000&offset=1"
+      method: GET
+      response:
+        format: json
+      headers:
+        token: "{env:NOAA_CDO_TOKEN}"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      pagination:
+        enabled: true
+        offsetParam: offset
+        limitParam: limit
+        maxPerRequest: 1000
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.ClimateNormalsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=climate_normals/state_fips=*/"
+      partition:
+        columns: [type, state_fips]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: climate_normals_monthly
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+tables:
+
+  # ---------------------------------------------------------------------------
+  # WEATHER DAILY BY COUNTY - Pre-aggregated county-level daily weather
+  # ---------------------------------------------------------------------------
+  - name: weather_daily_by_county
+    type: view
+    sql: >
+      SELECT
+        s.county_fips,
+        d.date,
+        CAST(SUBSTRING(d.date, 1, 4) AS INTEGER) AS year,
+        AVG(d.tmax_c) AS tmax_c,
+        AVG(d.tmin_c) AS tmin_c,
+        AVG(d.tavg_c) AS tavg_c,
+        AVG(d.prcp_mm) AS prcp_mm,
+        AVG(d.snow_mm) AS snow_mm,
+        COUNT(DISTINCT d.station_id) AS station_count
+      FROM weather.ghcnd_daily d
+      JOIN weather.ghcnd_stations_with_county s
+        ON d.station_id = s.station_id
+      WHERE s.county_fips IS NOT NULL
+      GROUP BY s.county_fips, d.date
+    comment: >
+      Pre-aggregated county-level daily weather derived from ghcnd_daily joined to
+      ghcnd_stations_with_county. One row per county per day. Simple mean of all
+      reporting stations in the county. Primary join anchor for cross-schema research:
+      join on county_fips + date to correlate with SEC filings, BLS wages, FEC
+      contributions, census demographics, and health data.
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -807,3 +1374,61 @@ constraints:
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+
+  ghcnd_stations_with_county:
+    primaryKey: [station_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  ghcnd_daily:
+    primaryKey: [station_id, date]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [station_id]
+        targetTable: ghcnd_stations_with_county
+        targetColumns: [station_id]
+
+  drought_monitor_weekly:
+    primaryKey: [county_fips, week_date]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_abbr]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  hms_smoke_daily:
+    primaryKey: [county_fips, date]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  climate_normals_monthly:
+    primaryKey: [station_id, month]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [station_id]
+        targetTable: ghcnd_stations_with_county
+        targetColumns: [station_id]
