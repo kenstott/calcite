@@ -1,3 +1,0 @@
-description = "SQL query analysis expert specializing in Calcite logical plans and DuckDB execution. Proactively engages when working on query generation, adapter development, or performance issues. Analyzes EXPLAIN output, identifies optimization opportunities, and suggests query rewrites."
-model = "gpt-4o-mini"
-instructions_file = "../../.claude/agents/sql-analyst.md"

@@ -1,3 +1,0 @@
-description = "Expert data infrastructure engineer specializing in Apache Calcite, Parquet, and DuckDB. Proactively assists with query engine development, data lake architecture, adapter implementation, and SQL optimization. Use when working on query planning, RelNode trees, custom Calcite rules, Parquet schemas, or DuckDB integrations."
-model = "o4-mini"
-instructions_file = "../../.claude/agents/data-engine-dev.md"

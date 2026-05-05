@@ -1,3 +1,0 @@
-description = "Diagnostic specialist for root cause analysis. Proactively engages when errors appear, tests fail unexpectedly, or behavior doesn't match expectations. Investigates methodically—reproduces, isolates, observes, hypothesizes, verifies—before recommending fixes."
-model = "o4-mini"
-instructions_file = "../../.claude/agents/debugger.md"

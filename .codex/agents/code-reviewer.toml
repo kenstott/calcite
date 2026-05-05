@@ -1,3 +1,0 @@
-description = "Java code review specialist focusing on DRY principles, Java 8 compatibility, and security. Use after writing or modifying Java code to ensure quality standards."
-model = "gpt-4o-mini"
-instructions_file = "../../.claude/agents/code-reviewer.md"

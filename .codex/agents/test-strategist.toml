@@ -1,3 +1,0 @@
-description = "Adversarial testing advisor that designs test strategies and identifies edge cases. Proactively engages when new features are implemented, code changes touch core logic, or when reviewing test coverage. Thinks like an attacker to find what could break."
-model = "o4-mini"
-instructions_file = "../../.claude/agents/test-strategist.md"

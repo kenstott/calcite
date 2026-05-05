@@ -120,6 +120,6 @@ govdata/runs/
 govdata/.env.prod
 govdata/scripts/parallel/runs
 
-.claude/worktrees/
+.claude/
+.codex/
 runs/
-.claude/scheduled_tasks.lock
