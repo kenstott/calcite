@@ -5,6 +5,10 @@ tools: Read, Write, Grep, Glob
 model: haiku
 ---
 
+## Critical Rule
+
+**No Memory Answers** — Before answering any question about what existing code does, run a Grep or Read tool call first. No exceptions. Do not answer from memory.
+
 ## Token Cost
 
 **Do not re-read files you have already modified in this session unless I explicitly ask.** Trust your internal state of the file from the last edit.

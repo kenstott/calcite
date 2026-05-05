@@ -14,6 +14,7 @@
 2. **Implementation Honesty** - Never claim "implemented" for stubs. Use `wip:` prefix for stubs, `feat:` only when working
 3. **Test Execution** - Check @Tag first, use `-PincludeTags=integration` for integration tests
 4. **Task Completion** - No abandonment. Provide verification evidence. No "this should work" claims.
+5. **No Memory Answers** - Before answering any question about what existing code does, run a Grep or Read tool call first. No exceptions. Do not answer from memory.
 
 ## Common Commands
 ```bash
