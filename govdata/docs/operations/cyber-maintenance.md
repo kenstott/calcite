@@ -25,6 +25,9 @@ cd scripts/parallel
 ./run-pool.sh 66
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
+# Via run-pool (preferred — memory management, logging, pool coordination)
+./run-pool.sh --force --schema cyber daily
+# Direct worker invocation (bypasses pool; useful for isolated testing)
 ./worker-cyber.sh weekly --force
 ./worker-cyber.sh daily --force
 ```
@@ -192,7 +195,8 @@ Each check exits in milliseconds — no network I/O, no model file written.
 | `hourly` | Every run | No gate — live IOC feeds | Always runs |
 | `static` | On-demand | No gate — manual trigger | Run after framework version releases |
 
-To bypass: `./worker-cyber.sh weekly --force`
+To bypass: `./run-pool.sh --force --schema cyber daily` (preferred) or `./worker-cyber.sh weekly --force` (direct).
+`--force` skips window checks only — year bounds are unchanged.
 
 ---
 

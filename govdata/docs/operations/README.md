@@ -19,10 +19,17 @@ cd scripts/parallel
 ./run-pool.sh stock-quotes        # Stock prices alone (Stooq rate limits; may take 1–3 days)
 
 # Flags (combinable with any alias or range)
-./run-pool.sh -j 4 daily          # Hard cap at 4 concurrent workers
+./run-pool.sh -j 4 daily          # Hard cap at 4 concurrent workers regardless of memory budget
+                                  # Use when memory isn't the constraint: API rate limits, CPU
+                                  # contention, shared machines, or cleaner sequential logs.
+                                  # Prefer -r when the goal is tighter OOM protection.
 ./run-pool.sh -t 120 historical   # Extend inactivity timeout to 120 min
-./run-pool.sh -r 4000 daily       # Reserve 4GB for OS (useful when other processes run)
+./run-pool.sh -r 4000 daily       # Reserve 4GB for OS so the budget is more conservative
+                                  # Use when heap estimates understate real RSS (off-heap buffers,
+                                  # native libs) or when other processes compete for memory.
+                                  # Prefer -j when concurrency itself is the concern, not memory.
 ./run-pool.sh -p 4 daily          # 4 entity-level parallel threads per worker
+./run-pool.sh --force daily       # Bypass all release-window checks (backfill / manual refresh)
 
 # Schema filter — run one domain from the daily or historical set
 ./run-pool.sh --schema energy daily
@@ -30,6 +37,10 @@ cd scripts/parallel
 ./run-pool.sh --schema health daily
 # Known schemas: sec, sec_secondary, stock, econ, census, geo, crime,
 #                weather, ref, fec, fedregister, cyber, health, edu, energy
+
+# Combine flags freely
+./run-pool.sh --force --schema edu daily     # edu workers only, skip release-window checks
+./run-pool.sh --force --schema energy daily  # energy workers only, skip release-window checks
 ```
 
 ## Worker Map
@@ -328,6 +339,24 @@ or cron slot):
 ./run-pool.sh --schema sec daily          # SEC current-year workers only
 ./run-pool.sh --schema health daily       # health recurring workers only
 ```
+
+### Bypassing release-window checks
+
+Recurring workers (edu, energy, health, cyber) gate sub-runs to their source's known release
+window — a sub-run outside its window exits in milliseconds with no network I/O. Pass
+`--force` to bypass all window checks and run every sub-run regardless of today's date.
+Year bounds (`GOVDATA_SINCE_YEAR`, `startYear`, `endYear`) are unaffected by `--force`.
+
+```bash
+./run-pool.sh --force daily                  # all recurring workers, no window checks
+./run-pool.sh --force --schema edu daily     # edu only, no window checks
+./run-pool.sh --force --schema energy daily  # energy only, no window checks
+./run-pool.sh --force --schema health daily  # health only, no window checks
+./run-pool.sh --force --schema cyber daily   # cyber only, no window checks
+```
+
+`--force` propagates automatically to all worker scripts via the environment — no changes
+to individual worker invocations are needed.
 
 ### Cron reference
 

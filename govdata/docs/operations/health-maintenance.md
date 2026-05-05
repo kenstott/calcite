@@ -21,6 +21,9 @@ cd scripts/parallel
 ./run-pool.sh --schema health daily
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
+# Via run-pool (preferred — memory management, logging, pool coordination)
+./run-pool.sh --force --schema health daily
+# Direct worker invocation (bypasses pool; useful for isolated testing)
 ./worker-health.sh weekly --force
 ./worker-health.sh monthly --force
 ```
@@ -195,7 +198,8 @@ no network I/O, no model file written, pool slot released immediately for histor
 | `monthly` | CMS hospital quality | Jul–Oct (months 7–10) | `within_release_window` | Annual release |
 | `monthly` | FDA catalogs + RxNorm | Every month | No gate — continuous/monthly | Always runs |
 
-To bypass: `./worker-health.sh monthly --force`
+To bypass: `./run-pool.sh --force --schema health daily` (preferred) or `./worker-health.sh monthly --force` (direct).
+`--force` skips window checks only — year bounds are unchanged.
 
 ---
 

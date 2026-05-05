@@ -41,10 +41,11 @@ if [ -z "$MODE" ]; then
   exit 1
 fi
 
-FORCE=false
+FORCE=${FORCE:-false}
 for arg in "${@:2}"; do
   [ "$arg" = "--force" ] && FORCE=true
 done
+export FORCE
 
 WORKER_ID="worker-energy-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"

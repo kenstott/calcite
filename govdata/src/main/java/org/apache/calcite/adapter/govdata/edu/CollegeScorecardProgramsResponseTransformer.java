@@ -83,14 +83,43 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
             }
           }
 
-          row.set("unit_id",           nullSafe(prog.path("unit_id")));
-          row.set("ope6_id",           nullSafe(prog.path("ope6_id")));
-          row.put("cip_code",          textOrNull(prog, "code"));
-          row.put("cip_title",         textOrNull(prog, "title"));
+          // DQ-012: log when PK components are missing; write null so outer joins work
+          JsonNode unitIdNode = prog.path("unit_id");
+          if (unitIdNode.isMissingNode() || unitIdNode.isNull()) {
+            LOGGER.warn("Scorecard Programs: unit_id missing in program record, year={}", year);
+          }
+          row.set("unit_id", nullSafe(unitIdNode));
+          row.set("ope6_id", nullSafe(prog.path("ope6_id")));
 
+          String cipCode = textOrNull(prog, "code");
+          if (cipCode == null) {
+            LOGGER.warn("Scorecard Programs: cip_code missing for unit_id={}, year={}",
+                unitIdNode.asText("?"), year);
+          }
+          row.put("cip_code",  cipCode);
+          row.put("cip_title", textOrNull(prog, "title"));
+
+          // DQ-013: explicitly convert credential.level to integer
           JsonNode credential = prog.path("credential");
-          row.set("credential_level",  nullSafe(credential.path("level")));
-          row.put("credential_title",  textOrNull(credential, "title"));
+          JsonNode levelNode = credential.path("level");
+          if (!levelNode.isMissingNode() && !levelNode.isNull()) {
+            if (levelNode.isInt() || levelNode.isLong()) {
+              row.put("credential_level", levelNode.asInt());
+            } else if (levelNode.isTextual()) {
+              try {
+                row.put("credential_level", Integer.parseInt(levelNode.asText()));
+              } catch (NumberFormatException e) {
+                LOGGER.warn("Scorecard Programs: non-integer credential_level '{}', storing null",
+                    levelNode.asText());
+                row.putNull("credential_level");
+              }
+            } else {
+              row.putNull("credential_level");
+            }
+          } else {
+            row.putNull("credential_level");
+          }
+          row.put("credential_title", textOrNull(credential, "title"));
 
           JsonNode counts = prog.path("counts");
           row.set("ipeds_awards",      nullSafe(counts.path("ipeds_awards1")));

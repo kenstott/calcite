@@ -218,10 +218,19 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
         String[] values = rows.get(r);
         ObjectNode row = MAPPER.createObjectNode();
 
-        row.put("form_type", formType != null ? formType : "");
+        if (formType != null) {
+          row.put("form_type", formType);
+        } else {
+          LOGGER.warn("IPEDS Financials: form_type dimension missing for {}", context.getUrl());
+          row.putNull("form_type");
+        }
         row.put("is_provisional", isProvisional);
         if (yearStr != null) {
-          row.put("year", Integer.parseInt(yearStr));
+          try {
+            row.put("year", Integer.parseInt(yearStr));
+          } catch (NumberFormatException e) {
+            LOGGER.warn("IPEDS Financials: non-integer year '{}' for {}", yearStr, context.getUrl());
+          }
         }
 
         for (int c = 0; c < header.length && c < values.length; c++) {

@@ -74,13 +74,21 @@ public class NaepScoresResponseTransformer implements ResponseTransformer {
 
         // Inject dimension values if not already present
         if (year != null && !row.has("year")) {
-          row.put("year", Integer.parseInt(year));
+          try {
+            row.put("year", Integer.parseInt(year));
+          } catch (NumberFormatException e) {
+            LOGGER.warn("NAEP: non-integer year dimension '{}', row will have no year", year);
+          }
         }
         if (subject != null && !row.has("subject")) {
           row.put("subject", subject);
         }
         if (grade != null && !row.has("grade")) {
-          row.put("grade", Integer.parseInt(grade));
+          try {
+            row.put("grade", Integer.parseInt(grade));
+          } catch (NumberFormatException e) {
+            LOGGER.warn("NAEP: non-integer grade dimension '{}', row will have no grade", grade);
+          }
         }
 
         // Normalise jurisdiction field — NAEP uses "statecode" or "fips"
@@ -89,6 +97,10 @@ public class NaepScoresResponseTransformer implements ResponseTransformer {
         }
         if (!row.has("jurisdiction_name") && row.has("statename")) {
           row.set("jurisdiction_name", row.get("statename"));
+        }
+        if (!row.has("jurisdiction") || row.path("jurisdiction").isNull()) {
+          LOGGER.warn("NAEP: jurisdiction is null for year={} subject={} grade={}",
+              year, subject, grade);
         }
 
         out.add(row);

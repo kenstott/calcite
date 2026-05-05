@@ -23,6 +23,9 @@ cd scripts/parallel
 ./run-pool.sh --schema edu daily
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
+# Via run-pool (preferred — memory management, logging, pool coordination)
+./run-pool.sh --force --schema edu daily
+# Direct worker invocation (bypasses pool; useful for isolated testing)
 ./worker-edu.sh annual --force
 ./worker-edu.sh biennial --force
 ```
@@ -135,7 +138,13 @@ freeing its pool slot for historical workers immediately.
 | NAEP assessments | January–March (months 1–3) | Odd years only | 73 |
 | CRDC civil rights data | October–December (months 10–12) | Odd years only (publication year) | 73 |
 
-To bypass all checks for a manual run: `./worker-edu.sh annual --force`
+To bypass all checks for a manual run:
+```bash
+./run-pool.sh --force --schema edu daily   # preferred; uses pool memory management
+./worker-edu.sh annual --force             # direct; bypasses pool
+./worker-edu.sh biennial --force
+```
+`--force` skips window checks only — year bounds (`GOVDATA_SINCE_YEAR`) are unchanged.
 
 ### Common Issues
 

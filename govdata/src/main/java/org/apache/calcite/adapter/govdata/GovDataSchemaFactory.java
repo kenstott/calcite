@@ -25,6 +25,7 @@ import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
 import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
@@ -275,11 +276,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "eia":
         return new EnergySchemaFactory();
 
+      case "edu":
+      case "education":
+        return new EduSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu");
     }
   }
 

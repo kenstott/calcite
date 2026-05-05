@@ -54,6 +54,8 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -p requires a numeric argument (parallel entity threads)" >&2; exit 1
       fi
       PARALLEL_THREADS=$2; shift 2 ;;
+    --force)
+      export FORCE=true; shift ;;
     --schema)
       if [ -z "${2:-}" ]; then
         echo "ERROR: --schema requires a schema name" >&2; exit 1
@@ -108,6 +110,7 @@ if [ $# -eq 0 ]; then
   echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
+  echo "  $0 --force daily          — bypass all release-window checks (backfill/testing)"
   echo ""
   echo "  Named aliases:"
   echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77)"

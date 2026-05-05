@@ -21,6 +21,9 @@ cd scripts/parallel
 ./run-pool.sh --schema energy daily
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
+# Via run-pool (preferred — memory management, logging, pool coordination)
+./run-pool.sh --force --schema energy daily
+# Direct worker invocation (bypasses pool; useful for isolated testing)
 ./worker-energy.sh weekly --force
 ./worker-energy.sh monthly --force
 ./worker-energy.sh annual --force
