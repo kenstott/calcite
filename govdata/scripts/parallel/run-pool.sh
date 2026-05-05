@@ -142,7 +142,7 @@ for arg in "$@"; do
       # Workers skip rows already materialized; each handles its own data-lag / release window.
       export GOVDATA_RUN_MODE="daily"
       for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77; do queue+=("$i"); done
-      [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
+      RUN_EMBEDDINGS=true
     elif [ "$part" = "stock-quotes" ]; then
       # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
       queue+=(40)
