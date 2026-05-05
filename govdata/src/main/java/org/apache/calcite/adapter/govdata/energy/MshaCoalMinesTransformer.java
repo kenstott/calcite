@@ -66,8 +66,30 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
     }
 
     try {
-      // Parse the pipe-delimited production CSV from the response
-      List<Map<String, String>> prodRows = parsePipeDelimited(response);
+      // The HTTP pipeline delivers a binary ZIP as a string (corrupted by TEXT mode).
+      // Download the ZIP directly and extract the pipe-delimited production file.
+      String url = context.getUrl();
+      String prodText;
+      try {
+        byte[] zipBytes = downloadBytes(url);
+        // Try exact names first, then fall back to any .txt/.csv with "prod" in the name.
+        prodText = extractCsvFromZip(zipBytes, "MinesProdYearly.txt");
+        if (prodText == null) {
+          prodText = extractCsvFromZip(zipBytes, "MinesProdYearly.csv");
+        }
+        if (prodText == null) {
+          prodText = extractCsvFromZipByPattern(zipBytes, "prod");
+        }
+        if (prodText == null) {
+          logZipContents(zipBytes, url);
+          return "[]";
+        }
+      } catch (Exception zipEx) {
+        LOGGER.warn("MSHA Coal Mines: failed to download/extract ZIP from {}: {}", url, zipEx.getMessage());
+        return "[]";
+      }
+      // Parse the pipe-delimited production CSV
+      List<Map<String, String>> prodRows = parsePipeDelimited(prodText);
 
       // Load mine reference data (lat/lon/controller_name) from cached Mines.csv
       Map<String, Map<String, String>> mineRef = loadMinesReference();
@@ -239,6 +261,51 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
         String name = entry.getName();
         if (name.equalsIgnoreCase(targetName) || name.toLowerCase().endsWith(
             targetName.toLowerCase())) {
+          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+          byte[] buf = new byte[8192];
+          int len;
+          while ((len = zis.read(buf)) > 0) {
+            baos.write(buf, 0, len);
+          }
+          return baos.toString("UTF-8");
+        }
+        zis.closeEntry();
+      }
+    } finally {
+      zis.close();
+    }
+    return null;
+  }
+
+  private void logZipContents(byte[] zipBytes, String url) {
+    LOGGER.warn("MSHA Coal Mines: no production data file found in ZIP from {}. ZIP entries:", url);
+    try {
+      ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+      try {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          LOGGER.warn("  - {}", entry.getName());
+          zis.closeEntry();
+        }
+      } finally {
+        zis.close();
+      }
+    } catch (Exception e) {
+      LOGGER.warn("  (failed to list ZIP entries: {})", e.getMessage());
+    }
+  }
+
+  /** Extract the first text/csv file whose name (lowercased) contains {@code pattern}. */
+  private String extractCsvFromZipByPattern(byte[] zipBytes, String pattern) throws Exception {
+    ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+    try {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName().toLowerCase();
+        LOGGER.debug("MSHA ZIP entry: {}", entry.getName());
+        if ((name.endsWith(".txt") || name.endsWith(".csv")) && name.contains(pattern)) {
+          LOGGER.info("MSHA Coal Mines: matched ZIP entry '{}' for pattern '{}'",
+              entry.getName(), pattern);
           ByteArrayOutputStream baos = new ByteArrayOutputStream();
           byte[] buf = new byte[8192];
           int len;
