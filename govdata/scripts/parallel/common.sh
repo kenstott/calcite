@@ -27,6 +27,11 @@ load_env() {
     source "$env_override"
   fi
 
+  # In daily mode, override GOVDATA_START_YEAR with the incremental boundary
+  if [ "${GOVDATA_RUN_MODE:-}" = "daily" ]; then
+    export GOVDATA_START_YEAR="${GOVDATA_INCREMENTAL_START_YEAR:-2026}"
+  fi
+
   # Default tracker to s3 for parallel operation
   export CALCITE_TRACKER_BACKEND="${CALCITE_TRACKER_BACKEND:-s3}"
   export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"

@@ -452,7 +452,7 @@ public class DimensionIterator {
       case RANGE:
         return resolveRange(config);
       case LIST:
-        return config.getValues();
+        return resolveList(config);
       case QUERY:
         return resolveQuery(config);
       case YEAR_RANGE:
@@ -466,6 +466,38 @@ public class DimensionIterator {
             config.getType(), config.getName());
         return Collections.emptyList();
     }
+  }
+
+  /**
+   * Resolves a LIST type dimension, applying minYear/maxYear bounds if set.
+   */
+  private List<String> resolveList(DimensionConfig config) {
+    List<String> values = config.getValues();
+    Integer minYear = config.getMinYear();
+    Integer maxYear = config.getMaxYear();
+    if (minYear == null && maxYear == null) {
+      return values;
+    }
+    List<String> filtered = new ArrayList<String>();
+    for (String value : values) {
+      try {
+        int year = Integer.parseInt(value.trim());
+        if (minYear != null && year < minYear) {
+          LOGGER.warn("List dimension '{}': value {} predates data floor {} — skipping",
+              config.getName(), year, minYear);
+          continue;
+        }
+        if (maxYear != null && year > maxYear) {
+          LOGGER.warn("List dimension '{}': value {} exceeds data ceiling {} — skipping",
+              config.getName(), year, maxYear);
+          continue;
+        }
+        filtered.add(value);
+      } catch (NumberFormatException e) {
+        filtered.add(value);
+      }
+    }
+    return filtered;
   }
 
   /**
@@ -551,6 +583,26 @@ public class DimensionIterator {
 
     if (step == null || step == 0) {
       step = 1;
+    }
+
+    // Enforce hard data-availability bounds
+    Integer minYear = config.getMinYear();
+    if (minYear != null && start < minYear) {
+      LOGGER.warn("Year range dimension '{}': requested start {} predates data floor {} — clamping to {}",
+          config.getName(), start, minYear, minYear);
+      start = minYear;
+    }
+    Integer maxYear = config.getMaxYear();
+    if (maxYear != null && effectiveEnd > maxYear) {
+      LOGGER.warn("Year range dimension '{}': requested end {} exceeds data ceiling {} — clamping to {}",
+          config.getName(), effectiveEnd, maxYear, maxYear);
+      effectiveEnd = maxYear;
+    }
+
+    if (start > effectiveEnd) {
+      LOGGER.warn("Year range dimension '{}': no years in range [{}, {}] — skipping",
+          config.getName(), start, effectiveEnd);
+      return Collections.emptyList();
     }
 
     List<Integer> excludeYears = config.getExcludeYears();
