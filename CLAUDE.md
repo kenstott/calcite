@@ -15,6 +15,7 @@
 3. **Test Execution** - Check @Tag first, use `-PincludeTags=integration` for integration tests
 4. **Task Completion** - No abandonment. Provide verification evidence. No "this should work" claims.
 5. **No Memory Answers** - Before answering any question about what existing code does, run a Grep or Read tool call first. No exceptions. Do not answer from memory.
+6. **No Fallback Values / Silent Error Handling** - Never add fallback values or silent error handling. Caused repeated production issues. When a value might be missing, find the design guarantee or fix the upstream source — never patch around it.
 
 ## Common Commands
 ```bash

@@ -262,7 +262,7 @@ public class AlternatePartitionMaterializer {
         if (sourceIsIceberg) {
           // Read from Iceberg table using iceberg_scan
           String icebergTablePath = baseDirectory + "/" + sourceTableName;
-          sourceClause = String.format("iceberg_scan('%s')", icebergTablePath);
+          sourceClause = String.format("iceberg_scan('%s', allow_moved_paths=true)", icebergTablePath);
           LOGGER.info("Reading from Iceberg table: {}", icebergTablePath);
         } else {
           // Read from hive-partitioned Parquet files

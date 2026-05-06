@@ -2369,7 +2369,7 @@ public class IcebergMaterializer {
 
     try (Connection conn = getDuckDBConnection(1)) {
       // Query Iceberg table for existing accessions
-      String sql = "SELECT DISTINCT " + accessionCol + " FROM iceberg_scan('" + icebergLocation + "')";
+      String sql = "SELECT DISTINCT " + accessionCol + " FROM iceberg_scan('" + icebergLocation + "', allow_moved_paths=true)";
       if (yearValue != null) {
         sql += " WHERE year = " + yearValue;
       }

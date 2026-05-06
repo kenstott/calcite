@@ -794,7 +794,7 @@ public class ParquetReorganizer {
 
     String icebergPath = config.getIcebergWarehousePath() + "/" + config.getSourceTable();
     String sql = "SELECT DISTINCT \"" + columnName + "\" FROM iceberg_scan("
-        + quoteLiteral(icebergPath) + ") WHERE \"" + columnName + "\" IS NOT NULL ORDER BY \""
+        + quoteLiteral(icebergPath) + ", allow_moved_paths=true) WHERE \"" + columnName + "\" IS NOT NULL ORDER BY \""
         + columnName + "\"";
 
     LOGGER.debug("Getting distinct {} values from Iceberg: {}", columnName, sql);
@@ -886,7 +886,7 @@ public class ParquetReorganizer {
         sql.append("  SELECT * FROM (\n  ");
       }
 
-      sql.append(selectClause).append(" FROM iceberg_scan(").append(quoteLiteral(fullIcebergPath)).append(")");
+      sql.append(selectClause).append(" FROM iceberg_scan(").append(quoteLiteral(fullIcebergPath)).append(", allow_moved_paths=true)");
 
       // Add WHERE clause for filters (replaces glob pattern filtering)
       if (filters != null && !filters.isEmpty()) {

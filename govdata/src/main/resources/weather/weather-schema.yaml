@@ -68,6 +68,10 @@ column_templates:
     name: state_fips
     type: VARCHAR
 
+  partition_month: &partition_month
+    name: month
+    type: VARCHAR
+
   nws_partitions: &nws_partitions
     style: hive
     columnDefinitions:
@@ -97,6 +101,7 @@ column_templates:
       - *partition_type
       - *partition_year
       - *partition_state_fips
+      - *partition_month
 
   drought_partitions: &drought_partitions
     style: hive
@@ -110,7 +115,7 @@ column_templates:
     columnDefinitions:
       - *partition_type
       - *partition_year
-      - *partition_state_fips
+      - *partition_month
 
   normals_partitions: &normals_partitions
     style: hive
@@ -235,9 +240,8 @@ dimension_values:
   # Year range for weather/climate data
   weather_year_range: &weather_year_range
     type: yearRange
-    start: "${WEATHER_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2015}"
     end: current
-    dataLag: 1
 
   # EPA AQS pollutant parameter codes
   aqi_pollutants: &aqi_pollutants
@@ -250,9 +254,8 @@ dimension_values:
   # GHCND daily year range (from 2000 for drought monitor compatibility)
   ghcnd_year_range: &ghcnd_year_range
     type: yearRange
-    start: "${GHCND_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GOVDATA_START_YEAR:2000}"
     end: current
-    dataLag: 1
 
   # Drought Monitor year range (data available from 2000)
   drought_year_range: &drought_year_range
@@ -325,7 +328,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        User-Agent: "(calcite-govdata, contact@example.com)"
+        User-Agent: "(calcite-govdata, kennethstott@gmail.com)"
         Accept: "application/geo+json"
       rateLimit:
         requestsPerSecond: 2.0
@@ -339,6 +342,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=nws_station/state_abbr=*/"
       partition:
@@ -421,7 +426,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        User-Agent: "(calcite-govdata, contact@example.com)"
+        User-Agent: "(calcite-govdata, kennethstott@gmail.com)"
         Accept: "application/geo+json"
       rateLimit:
         requestsPerSecond: 2.0
@@ -435,6 +440,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=nws_alert/state_abbr=*/"
       partition:
@@ -524,6 +531,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=cdo_station/state_fips=*/"
       partition:
@@ -532,6 +541,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: cdo_stations
         catalogType: hadoop
+        overwritePartitions: true
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -608,6 +618,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=cdo_monthly/year=*/"
       partition:
@@ -689,6 +701,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=cdo_annual/year=*/"
       partition:
@@ -777,6 +791,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=epa_aqi/year=*/"
       partition:
@@ -866,6 +882,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=ghcnd_station/"
       partition:
@@ -882,7 +900,7 @@ partitionedTables:
   # GHCND DAILY - NOAA GHCN-Daily station observations (requires NOAA_CDO_TOKEN)
   # ---------------------------------------------------------------------------
   - name: ghcnd_daily
-    pattern: "type=ghcnd_daily/year=*/state_fips=*/*.parquet"
+    pattern: "type=ghcnd_daily/year=*/state_fips=*/month=*/*.parquet"
     partitions: *ghcnd_daily_partitions
     comment: >
       NOAA GHCN-Daily station observations via CDO API. Daily temperature, precipitation,
@@ -896,6 +914,7 @@ partitionedTables:
         - ghcnd_daily
       year: *ghcnd_year_range
       state_fips: *all_state_fips
+      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
 
     columns:
       - name: station_id
@@ -951,7 +970,39 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-01-01&enddate={year}-12-31&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-{month}-01&enddate={year}-{month}-31&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+      urlRules:
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "02"
+          yearRange: [2012, 2012]
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "02"
+          yearRange: [2016, 2016]
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "02"
+          yearRange: [2020, 2020]
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "02"
+          yearRange: [2024, 2024]
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-28&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "02"
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-04-01&enddate={year}-04-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "04"
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-06-01&enddate={year}-06-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "06"
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-09-01&enddate={year}-09-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "09"
+        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-11-01&enddate={year}-11-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
+          variableMatch:
+            month: "11"
       method: GET
       response:
         format: json
@@ -974,10 +1025,12 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
-        pattern: "type=ghcnd_daily/year=*/state_fips=*/"
+        pattern: "type=ghcnd_daily/year=*/state_fips=*/month=*/"
       partition:
-        columns: [type, year, state_fips]
+        columns: [type, year, state_fips, month]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: ghcnd_daily
@@ -985,8 +1038,9 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
-        batchPartitionColumns: [year]
+        batchPartitionColumns: [year, state_fips, month]
         incrementalKeys: [year]
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # DROUGHT MONITOR WEEKLY - USDM county-level drought severity (no auth)
@@ -1079,6 +1133,8 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
         pattern: "type=drought_weekly/year=*/state_abbr=*/"
       partition:
@@ -1097,22 +1153,22 @@ partitionedTables:
   # HMS SMOKE DAILY - NOAA satellite smoke coverage by county (offline ETL)
   # ---------------------------------------------------------------------------
   - name: hms_smoke_daily
-    pattern: "type=hms_smoke/year=*/state_fips=*/*.parquet"
+    pattern: "type=hms_smoke/year=*/month=*/*.parquet"
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
       level. Daily smoke coverage by density category (light/medium/heavy). Available
-      2005-present. Source shapefiles require offline spatial join via geopandas before
-      ingestion: compute county fraction coverage from HMS polygon shapefiles
-      (https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/)
-      and store as pre-processed CSV in ${GOVDATA_PARQUET_DIR}/hms-smoke-prepped/.
-      The source transformer reads this pre-processed CSV directory.
+      2005-present. Downloads daily smoke polygon shapefiles from NESDIS
+      (https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/),
+      performs a JTS spatial intersection against TIGER/Line county boundaries, and
+      emits per-county coverage percentages. One batch per year+month; each batch
+      processes all days in that month. Uses HmsSmokeSpatialJoinProvider.
 
     dimensions:
       type:
         - hms_smoke
       year: *ghcnd_year_range
-      state_fips: *all_state_fips
+      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
 
     columns:
       - name: county_fips
@@ -1125,6 +1181,10 @@ partitionedTables:
         nullable: false
         comment: Observation date (YYYY-MM-DD)
       - <<: *year_column
+      - name: month
+        type: string
+        nullable: false
+        comment: "2-digit month (01-12)"
       - name: smoke_coverage_pct
         type: double
         nullable: true
@@ -1144,29 +1204,91 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/{year}/{year_month_pad}/hms_smoke{date_compact}.zip"
+      url: "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/{year}/{month}/hms_smoke{year}{month}{day}.zip"
       method: GET
       response:
         format: json
-      rateLimit:
-        requestsPerSecond: 1.0
-        retryOn: [429, 503]
-        maxRetries: 3
-      rawCache:
-        enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.HmsSmokeDailyTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.weather.HmsSmokeSpatialJoinProvider"
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
-        pattern: "type=hms_smoke/year=*/state_fips=*/"
+        pattern: "type=hms_smoke/year=*/month=*/"
       partition:
-        columns: [type, year, state_fips]
+        columns: [type, year, month]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: hms_smoke_daily
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # HMS SMOKE POLYGONS - raw smoke plume polygon geometries (WKT)
+  # ---------------------------------------------------------------------------
+  - name: hms_smoke_polygons
+    pattern: "type=hms_smoke_polygon/year=*/month=*/*.parquet"
+    comment: >
+      Raw NOAA HMS smoke plume polygon geometries retained for spatial re-analysis.
+      One row per smoke polygon per day. Geometry stored as WKT for direct use with
+      DuckDB ST_GeomFromText() or re-joining against any boundary table (tracts,
+      zip codes, watersheds, etc.) without re-downloading from NESDIS. Produced in
+      the same pass as hms_smoke_daily — the HmsSmokeSpatialJoinProvider caches
+      polygon rows during the hms_smoke_daily batch and emits them here.
+
+    dimensions:
+      type:
+        - hms_smoke_polygon
+      year: *ghcnd_year_range
+      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+
+    columns:
+      - name: date
+        type: string
+        nullable: false
+        comment: Observation date (YYYY-MM-DD)
+      - <<: *year_column
+      - name: month
+        type: string
+        nullable: false
+        comment: "2-digit month (01-12)"
+      - name: density
+        type: string
+        nullable: false
+        comment: "Smoke density classification: Light, Medium, or Heavy"
+      - name: geometry
+        type: string
+        nullable: true
+        comment: WKT polygon geometry of the smoke plume in WGS84 (EPSG:4326)
+
+    source:
+      type: http
+      url: "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/{year}/{year}{month}/"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.weather.HmsSmokeSpatialJoinProvider"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=hms_smoke_polygon/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: hms_smoke_polygons
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1193,6 +1315,7 @@ partitionedTables:
       type:
         - climate_normals
       state_fips: *all_state_fips
+      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
 
     columns:
       - name: station_id
@@ -1243,7 +1366,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY&locationid=FIPS:{state_fips}&startdate=2010-01-01&enddate=2010-12-01&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY&locationid=FIPS:{state_fips}&datatypeid=MLY-TMAX-NORMAL,MLY-TMIN-NORMAL,MLY-TAVG-NORMAL,MLY-PRCP-NORMAL,MLY-SNOW-NORMAL,MLY-TMAX-STDDEV,MLY-TMIN-STDDEV&startdate=2010-{month}-01&enddate=2010-{month}-01&limit=1000&offset=1"
       method: GET
       response:
         format: json
@@ -1266,10 +1389,12 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      options:
+        stagingMode: local
       output:
-        pattern: "type=climate_normals/state_fips=*/"
+        pattern: "type=climate_normals/state_fips=*/month=*/"
       partition:
-        columns: [type, state_fips]
+        columns: [type, state_fips, month]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
         tableName: climate_normals_monthly

@@ -1115,7 +1115,7 @@ public class DuckDBJdbcSchemaFactory {
             // View doesn't exist - create it (this will access S3)
             {
               String sql =
-                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, icebergTablePath);
+                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)", duckdbSchema, tableName, icebergTablePath);
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
                          duckdbSchema, tableName, icebergTablePath);
 

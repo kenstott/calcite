@@ -63,7 +63,7 @@ public class DuckDBDialect implements JdbcDialect {
 
   @Override public String readIcebergSql(String tablePath, List<String> columns) {
     String cols = formatColumns(columns);
-    return String.format("SELECT %s FROM iceberg_scan('%s')", cols, tablePath);
+    return String.format("SELECT %s FROM iceberg_scan('%s', allow_moved_paths=true)", cols, tablePath);
   }
 
   @Override public boolean supportsDirectGlob() {
@@ -90,7 +90,7 @@ public class DuckDBDialect implements JdbcDialect {
   @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format(
-        "CREATE VIEW IF NOT EXISTS %s AS SELECT * FROM iceberg_scan('%s')",
+        "CREATE VIEW IF NOT EXISTS %s AS SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)",
         qualifiedName, tablePath);
   }
 

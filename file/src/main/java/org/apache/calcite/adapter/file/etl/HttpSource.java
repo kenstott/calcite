@@ -425,6 +425,12 @@ public class HttpSource implements DataSource {
     private BufferedReader csvReader = null;
     private String csvHeaderLine = null;
 
+    // Raw-cache accumulation: collect result nodes from each page so we can write a
+    // merged response file once all pages are fetched.
+    private final List<com.fasterxml.jackson.databind.JsonNode> rawPageResults =
+        new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+    private boolean mergedCacheWritten = false;
+
     PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
         HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath) {
       this.url = url;
@@ -507,16 +513,19 @@ public class HttpSource implements DataSource {
             LOGGER.info("Pagination stopped at offset={}: results window limit reached",
                 offset);
             hasMore = false;
+            writeMergedCache();
             return false;
           }
           throw e;
         }
 
+        accumulateRawPage(response);
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
         if (pageData.isEmpty()) {
           hasMore = false;
+          writeMergedCache();
           return false;
         }
 
@@ -534,6 +543,7 @@ public class HttpSource implements DataSource {
               String nextCursor = cursorNode.asText(null);
               if (nextCursor == null || nextCursor.isEmpty()) {
                 hasMore = false;
+                writeMergedCache();
               } else {
                 cursor = nextCursor;
               }
@@ -547,6 +557,7 @@ public class HttpSource implements DataSource {
           // Check if we got less than a full page
           if (pageData.size() < pageSize) {
             hasMore = false;
+            writeMergedCache();
           }
         }
 
@@ -637,6 +648,47 @@ public class HttpSource implements DataSource {
           csvReader = null;
         }
         return false;
+      }
+    }
+
+    private void accumulateRawPage(String rawResponse) {
+      if (rawCacheFilePath == null) {
+        return;
+      }
+      try {
+        com.fasterxml.jackson.databind.JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
+        com.fasterxml.jackson.databind.JsonNode resultsNode = root.has("results")
+            ? root.get("results") : root;
+        if (resultsNode != null && resultsNode.isArray()) {
+          for (com.fasterxml.jackson.databind.JsonNode record : resultsNode) {
+            rawPageResults.add(record);
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to accumulate raw page for cache: {}", e.getMessage());
+      }
+    }
+
+    private void writeMergedCache() {
+      if (rawCacheFilePath == null || mergedCacheWritten || rawPageResults.isEmpty()) {
+        return;
+      }
+      try {
+        com.fasterxml.jackson.databind.node.ObjectNode merged =
+            OBJECT_MAPPER.createObjectNode();
+        com.fasterxml.jackson.databind.node.ArrayNode results =
+            OBJECT_MAPPER.createArrayNode();
+        for (com.fasterxml.jackson.databind.JsonNode r : rawPageResults) {
+          results.add(r);
+        }
+        merged.set("results", results);
+        String mergedJson = OBJECT_MAPPER.writeValueAsString(merged);
+        cacheResponseString(mergedJson, rawCacheFilePath);
+        mergedCacheWritten = true;
+        LOGGER.info("Wrote merged paginated cache: {} ({} records)",
+            rawCacheFilePath, rawPageResults.size());
+      } catch (Exception e) {
+        LOGGER.warn("Failed to write merged paginated cache: {}", e.getMessage());
       }
     }
   }

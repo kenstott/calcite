@@ -162,7 +162,7 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     try {
       // Use CREATE OR REPLACE to handle schema changes atomically
       String viewSql =
-          String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')",
+          String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)",
           schemaName, tableName, tableLocation);
 
       LOGGER.info("Recreating DuckDB Iceberg view after ETL: \"{}.{}\" -> {}",

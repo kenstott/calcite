@@ -142,6 +142,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private long totalCommittedFiles = 0;
   /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
   private java.util.Set<String> icebergPartitionColumns = java.util.Collections.emptySet();
+  private boolean overwritePartitions = false;
 
   /**
    * Represents a staged batch ready for commit.
@@ -193,6 +194,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (icebergConfig != null) {
       this.maxRetries = icebergConfig.getMaxRetries();
       this.retryDelayMs = icebergConfig.getRetryDelayMs();
+      this.overwritePartitions = icebergConfig.isOverwritePartitions();
     }
 
     // Apply options config (batch size, staging mode)
@@ -485,9 +487,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
 
       // Also detect extra columns (schema drift) — existing table has more columns than expected
-      int expectedColumnCount = columnConfigs != null ? columnConfigs.size() : 0;
-      boolean hasExtraColumns = existingColumnNames.size() != expectedColumnCount
-          + actualPartitionColumnNames.size();
+      // Use expectedColumns.size() which is the merged set (data columns + synthetic partition
+      // columns not already in source data), avoiding double-counting shared columns like state_abbr
+      boolean hasExtraColumns = existingColumnNames.size() != expectedColumns.size();
 
       if (!missingDataColumns.isEmpty() || hasExtraColumns) {
         if (!missingDataColumns.isEmpty()) {
@@ -497,8 +499,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         } else {
           LOGGER.warn("Existing Iceberg table '{}' has schema drift "
               + "(existing={} columns, expected={}). Dropping and recreating table.",
-              targetTableId, existingColumnNames.size(),
-              expectedColumnCount + actualPartitionColumnNames.size());
+              targetTableId, existingColumnNames.size(), expectedColumns.size());
         }
         IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
       } else {
@@ -821,6 +822,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private void commitInChunks(List<org.apache.iceberg.DataFile> files) throws IOException {
     int total = files.size();
+    if (overwritePartitions) {
+      long commitStart = System.currentTimeMillis();
+      tableWriter.replacePartitionsDataFiles(files);
+      totalCommittedFiles += total;
+      long elapsed = System.currentTimeMillis() - commitStart;
+      LOGGER.info("Replace-partitions committed {} files in {}ms ({} total committed)",
+          total, elapsed, totalCommittedFiles);
+      return;
+    }
     int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
     for (int i = 0; i < total; i += chunkSize) {
       int end = Math.min(i + chunkSize, total);

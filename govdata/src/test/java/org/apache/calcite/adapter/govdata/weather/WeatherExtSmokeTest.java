@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.weather;
 
+import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.HooksConfig;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 
@@ -32,6 +34,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -41,8 +45,12 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -219,6 +227,111 @@ class WeatherExtSmokeTest {
     // Simulate binary shapefile content (non-JSON)
     String binary = "PK     ";
     assertEquals("[]", new HmsSmokeDailyTransformer().transform(binary, ctx));
+  }
+
+  // =========================================================================
+  // HmsSmokeSpatialJoinProvider — unit tests (no network calls)
+  // =========================================================================
+
+  @Tag("unit")
+  @Test void testHmsSmokeTableNameConstants() {
+    assertEquals("hms_smoke_daily",    HmsSmokeSpatialJoinProvider.TABLE_DAILY);
+    assertEquals("hms_smoke_polygons", HmsSmokeSpatialJoinProvider.TABLE_POLYGONS);
+  }
+
+  /**
+   * Verifies parseDensity() correctly maps string labels and legacy numeric codes.
+   * Uses reflection because the method is private.
+   */
+  @Tag("unit")
+  @Test void testHmsSmokeParseDensity() throws Exception {
+    HmsSmokeSpatialJoinProvider provider = new HmsSmokeSpatialJoinProvider();
+    Method parseDensity = HmsSmokeSpatialJoinProvider.class
+        .getDeclaredMethod("parseDensity", String.class);
+    parseDensity.setAccessible(true);
+
+    // String label matching (case-insensitive prefix)
+    assertEquals("HEAVY",  parseDensity.invoke(provider, "heavy").toString());
+    assertEquals("HEAVY",  parseDensity.invoke(provider, "Heavy").toString());
+    assertEquals("MEDIUM", parseDensity.invoke(provider, "medium").toString());
+    assertEquals("MEDIUM", parseDensity.invoke(provider, "Medium").toString());
+    assertEquals("LIGHT",  parseDensity.invoke(provider, "light").toString());
+    assertEquals("LIGHT",  parseDensity.invoke(provider, "Light").toString());
+
+    // Numeric legacy codes
+    assertEquals("HEAVY",  parseDensity.invoke(provider, "3").toString());
+    assertEquals("MEDIUM", parseDensity.invoke(provider, "2").toString());
+    assertEquals("LIGHT",  parseDensity.invoke(provider, "1").toString());
+
+    // Null and empty default to LIGHT
+    assertEquals("LIGHT",  parseDensity.invoke(provider, "").toString());
+    assertEquals("LIGHT",  parseDensity.invoke(provider, (Object) null).toString());
+  }
+
+  /**
+   * Injects polygon rows into POLYGON_CACHE and verifies fetch() for TABLE_POLYGONS
+   * returns the cached rows and removes the cache entry (consume semantics).
+   */
+  @SuppressWarnings("unchecked")
+  @Tag("unit")
+  @Test void testHmsSmokePolygonCacheHitAndConsume() throws Exception {
+    // Build test data
+    List<Map<String, Object>> testRows = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("date", "2025-03-15");
+    row1.put("year", 2025);
+    row1.put("month", "03");
+    row1.put("density", "Heavy");
+    row1.put("geometry", "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))");
+    testRows.add(row1);
+
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("date", "2025-03-16");
+    row2.put("year", 2025);
+    row2.put("month", "03");
+    row2.put("density", "Light");
+    row2.put("geometry", "POLYGON ((2 2, 3 2, 3 3, 2 3, 2 2))");
+    testRows.add(row2);
+
+    // Inject into static POLYGON_CACHE via reflection
+    Field cacheField = HmsSmokeSpatialJoinProvider.class
+        .getDeclaredField("POLYGON_CACHE");
+    cacheField.setAccessible(true);
+    Map<String, List<Map<String, Object>>> cache =
+        (Map<String, List<Map<String, Object>>>) cacheField.get(null);
+    cache.put("2025-03", testRows);
+
+    // Build a config with hooks enabled (so EtlPipelineConfig.build() won't require source)
+    HooksConfig hooks = HooksConfig.builder()
+        .enabled(true)
+        .dataProviderClass(HmsSmokeSpatialJoinProvider.class.getName())
+        .build();
+    EtlPipelineConfig config = EtlPipelineConfig.builder()
+        .name(HmsSmokeSpatialJoinProvider.TABLE_POLYGONS)
+        .hooks(hooks)
+        .build();
+
+    Map<String, String> vars = new HashMap<String, String>();
+    vars.put("year", "2025");
+    vars.put("month", "03");
+
+    HmsSmokeSpatialJoinProvider provider = new HmsSmokeSpatialJoinProvider();
+    Iterator<Map<String, Object>> it = provider.fetch(config, vars);
+
+    // Verify rows returned match injected data
+    List<Map<String, Object>> returned = new ArrayList<Map<String, Object>>();
+    while (it.hasNext()) {
+      returned.add(it.next());
+    }
+    assertEquals(2, returned.size(), "Should return exactly the 2 cached rows");
+    assertEquals("2025-03-15", returned.get(0).get("date"));
+    assertEquals("Heavy",      returned.get(0).get("density"));
+    assertEquals("2025-03-16", returned.get(1).get("date"));
+    assertEquals("Light",      returned.get(1).get("density"));
+
+    // Verify cache entry was consumed (removed)
+    assertFalse(cache.containsKey("2025-03"),
+        "POLYGON_CACHE entry should be removed after consumption");
   }
 
   // =========================================================================
@@ -451,6 +564,124 @@ class WeatherExtSmokeTest {
         first.get("distance_to_county_centroid_km").asText());
 
     LOGGER.info("  ghcnd_stations_with_county PASSED");
+  }
+
+  /**
+   * Live integration test: fetches HMS smoke data for January 2025 via
+   * HmsSmokeSpatialJoinProvider and verifies county-level coverage rows are produced.
+   * January is used because HMS smoke archive is available from 2005 onwards.
+   */
+  @Tag("integration")
+  @Test void testHmsSmokeSpatialJoinProviderLive() throws Exception {
+    LOGGER.info("=== Live: hms_smoke_daily (2025-01, TABLE_DAILY) ===");
+
+    HooksConfig hooks = HooksConfig.builder()
+        .enabled(true)
+        .dataProviderClass(HmsSmokeSpatialJoinProvider.class.getName())
+        .build();
+    EtlPipelineConfig config = EtlPipelineConfig.builder()
+        .name(HmsSmokeSpatialJoinProvider.TABLE_DAILY)
+        .hooks(hooks)
+        .build();
+
+    Map<String, String> vars = new HashMap<String, String>();
+    vars.put("year", "2025");
+    vars.put("month", "01");
+
+    HmsSmokeSpatialJoinProvider provider = new HmsSmokeSpatialJoinProvider();
+    Iterator<Map<String, Object>> it = provider.fetch(config, vars);
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    while (it.hasNext()) {
+      rows.add(it.next());
+    }
+
+    LOGGER.info("  hms_smoke_daily 2025-01: {} county-day rows", rows.size());
+    assertTrue(rows.size() > 0, "Should produce county coverage rows for 2025-01");
+
+    // Spot-check first row has required columns and sensible values
+    Map<String, Object> first = rows.get(0);
+    assertTrue(first.containsKey("county_fips"),        "Row must have county_fips");
+    assertTrue(first.containsKey("state_fips"),         "Row must have state_fips");
+    assertTrue(first.containsKey("date"),               "Row must have date");
+    assertTrue(first.containsKey("year"),               "Row must have year");
+    assertTrue(first.containsKey("smoke_coverage_pct"), "Row must have smoke_coverage_pct");
+    assertTrue(first.containsKey("heavy_smoke_pct"),    "Row must have heavy_smoke_pct");
+    assertTrue(first.containsKey("medium_smoke_pct"),   "Row must have medium_smoke_pct");
+    assertTrue(first.containsKey("light_smoke_pct"),    "Row must have light_smoke_pct");
+
+    String countyFips = (String) first.get("county_fips");
+    assertEquals(5, countyFips.length(), "county_fips should be 5 digits");
+
+    double coverage = ((Number) first.get("smoke_coverage_pct")).doubleValue();
+    assertTrue(coverage > 0 && coverage <= 100, "smoke_coverage_pct should be (0, 100]");
+
+    // Verify the polygon cache was populated for the polygons table
+    Field cacheField = HmsSmokeSpatialJoinProvider.class.getDeclaredField("POLYGON_CACHE");
+    cacheField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<String, List<Map<String, Object>>> polygonCache =
+        (Map<String, List<Map<String, Object>>>) cacheField.get(null);
+    assertTrue(polygonCache.containsKey("2025-01"),
+        "POLYGON_CACHE should be populated for 2025-01 after TABLE_DAILY fetch");
+
+    LOGGER.info("  POLYGON_CACHE has {} polygon rows for 2025-01",
+        polygonCache.get("2025-01").size());
+    LOGGER.info("  hms_smoke_daily (2025-01) PASSED — {} county-day rows", rows.size());
+  }
+
+  /**
+   * Live integration test: after TABLE_DAILY populates POLYGON_CACHE, fetching
+   * TABLE_POLYGONS should return the polygon geometry rows and clear the cache.
+   * Depends on testHmsSmokeSpatialJoinProviderLive pre-populating the cache, OR
+   * does a fresh re-download if the cache is already consumed.
+   */
+  @Tag("integration")
+  @Test void testHmsSmokeSpatialJoinPolygonsLive() throws Exception {
+    LOGGER.info("=== Live: hms_smoke_polygons (2025-01, TABLE_POLYGONS) ===");
+
+    HooksConfig hooks = HooksConfig.builder()
+        .enabled(true)
+        .dataProviderClass(HmsSmokeSpatialJoinProvider.class.getName())
+        .build();
+    EtlPipelineConfig config = EtlPipelineConfig.builder()
+        .name(HmsSmokeSpatialJoinProvider.TABLE_POLYGONS)
+        .hooks(hooks)
+        .build();
+
+    Map<String, String> vars = new HashMap<String, String>();
+    vars.put("year", "2025");
+    vars.put("month", "01");
+
+    HmsSmokeSpatialJoinProvider provider = new HmsSmokeSpatialJoinProvider();
+    Iterator<Map<String, Object>> it = provider.fetch(config, vars);
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    while (it.hasNext()) {
+      rows.add(it.next());
+    }
+
+    LOGGER.info("  hms_smoke_polygons 2025-01: {} polygon rows", rows.size());
+    assertTrue(rows.size() > 0, "Should return polygon geometry rows for 2025-01");
+
+    // Verify polygon row structure
+    Map<String, Object> first = rows.get(0);
+    assertTrue(first.containsKey("date"),     "Polygon row must have date");
+    assertTrue(first.containsKey("year"),     "Polygon row must have year");
+    assertTrue(first.containsKey("month"),    "Polygon row must have month");
+    assertTrue(first.containsKey("density"),  "Polygon row must have density");
+    assertTrue(first.containsKey("geometry"), "Polygon row must have geometry");
+
+    String density = (String) first.get("density");
+    assertTrue(
+        "Light".equals(density) || "Medium".equals(density) || "Heavy".equals(density),
+        "density must be 'Light', 'Medium', or 'Heavy' — got: " + density);
+
+    String geometry = (String) first.get("geometry");
+    assertTrue(geometry != null && geometry.startsWith("POLYGON"),
+        "geometry must be WKT POLYGON — got: " + geometry);
+
+    LOGGER.info("  hms_smoke_polygons (2025-01) PASSED — {} polygon rows", rows.size());
   }
 
   // =========================================================================
