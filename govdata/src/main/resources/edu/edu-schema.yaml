@@ -196,7 +196,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -400,7 +401,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -526,12 +528,10 @@ partitionedTables:
 
     dimensions:
       year:
-        - 2013
-        - 2015
-        - 2017
-        - 2019
-        - 2022
-        - 2024
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2013}"
+        minYear: 2013
+        dataLag: 1
       grade:
         - "4"
         - "8"
@@ -556,7 +556,7 @@ partitionedTables:
   # ==========================================================================
   # CRDC SCHOOLS — Civil Rights Data Collection, biennial equity metrics
   # Urban Institute API: schools/crdc/{topic}/{year}/
-  # Available years: 2011, 2013, 2015, 2017 (biennial, even school years)
+  # Available years: 2013, 2015, 2017, 2019, 2021 (biennial; 2021 is latest as of 2026)
   # Sub-endpoints: directory, chronic-absenteeism, offenses, teachers-staff
   # ==========================================================================
   - name: crdc_schools
@@ -576,7 +576,7 @@ partitionedTables:
       CRDC school-level equity data consolidated from four Urban Institute sub-endpoints.
       crdc_topic dimension selects the sub-endpoint: directory, chronic-absenteeism,
       offenses, teachers-staff. Join to ccd_schools via ncessch. crdc_id = ncessch for
-      most schools. Available biennially (2011, 2013, 2015, 2017).
+      most schools. Available biennially (2013, 2015, 2017, 2019, 2021); 2021 is latest.
 
     columns:
       - name: crdc_id
@@ -762,11 +762,15 @@ partitionedTables:
 
     dimensions:
       year:
-        - 2013
-        - 2015
-        - 2017
-        - 2019
-        - 2021
+        type: list
+        values:
+          - 2013
+          - 2015
+          - 2017
+          - 2019
+          - 2021
+        minYear: "${GOVDATA_START_YEAR:2013}"
+        maxYear: 2021
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -975,7 +979,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1087,7 +1092,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1329,7 +1335,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
       fiscal_yy1:
         type: custom
       fiscal_yy2:
@@ -1460,7 +1467,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
 
     materialize:
       enabled: true
@@ -1652,7 +1660,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2018
+        start: "${GOVDATA_START_YEAR:2018}"
+        minYear: 2018
 
     materialize:
       enabled: true
@@ -1778,7 +1787,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2018
+        start: "${GOVDATA_START_YEAR:2018}"
+        minYear: 2018
 
     materialize:
       enabled: true

@@ -63,14 +63,15 @@ public class SecFilingCacheYearScopedPreloadTest {
     cache.preloadFileInventory(2024, 2025);
 
     List<String> listed = provider.listFilesPathsQueried();
-    // 2 calls per year: primary path + legacy path (migration fallback). 2 years = 4 total.
-    assertEquals(4, listed.size(), "listFiles must be called twice per year in range (primary + legacy)");
+    // preloadFileInventory scans startYear-1 as a fiscal-year buffer (Jan-Apr 10-K/Q filings
+    // are attributed to the prior year by getPartitionYear). So requesting 2024-2025 scans
+    // years 2023, 2024, 2025. 2 dirs each (primary + legacy migration fallback) = 6 total.
+    assertEquals(6, listed.size(), "listFiles must be called twice per year: (startYear-1, startYear, endYear) × (primary + legacy)");
+    assertTrue(listed.contains(SEC_DIR + "/year=2023"), "must list year=2023 partition (fiscal-year buffer)");
     assertTrue(listed.contains(SEC_DIR + "/year=2024"), "must list year=2024 partition");
     assertTrue(listed.contains(SEC_DIR + "/year=2025"), "must list year=2025 partition");
     assertFalse(listed.contains(SEC_DIR),
         "must NOT list the sec/ root — that scans millions of files across all years");
-    assertFalse(listed.stream().anyMatch(p -> p.contains("year=2023")),
-        "must NOT list out-of-range year=2023");
     assertFalse(listed.stream().anyMatch(p -> p.contains("year=2026")),
         "must NOT list out-of-range year=2026");
   }

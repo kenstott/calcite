@@ -26,6 +26,7 @@ import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.ReplacePartitions;
 import org.apache.iceberg.RewriteFiles;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.StructLike;
@@ -219,6 +220,28 @@ public class IcebergTableWriter {
 
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
+  }
+
+  /**
+   * Replaces all data in the affected partitions with the given files.
+   * Use for reference tables that should be fully overwritten each run.
+   */
+  public void replacePartitionsDataFiles(List<DataFile> allDataFiles) {
+    if (allDataFiles.isEmpty()) {
+      LOGGER.debug("No data files to replace partitions");
+      return;
+    }
+    LOGGER.info("Replace-partitions committing {} data files to Iceberg table {}",
+        allDataFiles.size(), table.name());
+    long startTime = System.currentTimeMillis();
+    ReplacePartitions replace = table.newReplacePartitions();
+    for (DataFile dataFile : allDataFiles) {
+      replace.addFile(dataFile);
+    }
+    replace.commit();
+    ensureVersionHint();
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.info("Replace-partitions commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
   }
 
   /**
@@ -950,39 +973,51 @@ public class IcebergTableWriter {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
 
-    // First pass: count total records and bytes to plan output files
     long totalRecords = 0;
     long totalBytes = 0;
     Set<DataFile> filesToDelete = new HashSet<>();
+    List<String> s3Paths = new ArrayList<>();
 
     for (FileScanTask task : smallFiles) {
       DataFile dataFile = task.file();
       filesToDelete.add(dataFile);
       totalRecords += dataFile.recordCount();
       totalBytes += dataFile.fileSizeInBytes();
+      String path = dataFile.path().toString();
+      if (path.startsWith("s3a://")) {
+        path = "s3://" + path.substring(6);
+      }
+      s3Paths.add(path);
     }
 
     if (totalRecords == 0) {
       return;
     }
 
-    // Estimate records per output file based on compression ratio
-    // Assume compacted files have similar compression to originals
-    double avgBytesPerRecord = (double) totalBytes / totalRecords;
-    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
+    // For S3-based files, use DuckDB for parallel reads (much faster than sequential HTTPS)
+    if (!s3Paths.isEmpty() && s3Paths.get(0).startsWith("s3://")) {
+      try {
+        compactPartitionWithDuckDB(filesToDelete, s3Paths, totalRecords, schema, spec);
+        return;
+      } catch (Exception e) {
+        LOGGER.warn("DuckDB compaction failed ({}), falling back to Java reader", e.getMessage());
+      }
+    }
 
-    LOGGER.info("Streaming compaction: {} records from {} files, ~{} records per output file",
-        totalRecords, smallFiles.size(), recordsPerFile);
-
-    // Get partition values from first file (all files in partition have same values)
+    // Fallback: sequential Java reader (slow for many S3 files but always works)
     StructLike partitionData = smallFiles.get(0).file().partition();
     PartitionKey partitionKey = new PartitionKey(spec, schema);
     copyPartitionValues(partitionKey, partitionData, spec);
 
+    double avgBytesPerRecord = (double) totalBytes / totalRecords;
+    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
+
+    LOGGER.info("Java compaction: {} records from {} files, ~{} records per output file",
+        totalRecords, smallFiles.size(), recordsPerFile);
+
     String dataLocation = table.location() + "/data";
     String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
 
-    // Streaming compaction: read from input files and write directly to output
     List<DataFile> newFiles = new ArrayList<>();
     DataWriter<Record> currentWriter = null;
     int currentRecordCount = 0;
@@ -1002,14 +1037,12 @@ public class IcebergTableWriter {
             .build()) {
 
           for (Record record : records) {
-            // Open new writer if needed
             if (currentWriter == null) {
               String outputPath = dataLocation + "/" + partitionPath + "/compacted_"
                   + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
               if (outputPath.startsWith("s3://")) {
                 outputPath = "s3a://" + outputPath.substring(5);
               }
-
               OutputFile outputFile = table.io().newOutputFile(outputPath);
               currentWriter = Parquet.writeData(outputFile)
                   .schema(schema)
@@ -1020,19 +1053,13 @@ public class IcebergTableWriter {
                   .build();
               currentRecordCount = 0;
             }
-
-            // Write record
             currentWriter.write(record);
             currentRecordCount++;
             totalWritten++;
-
-            // Rotate file when target size reached
             if (currentRecordCount >= recordsPerFile) {
               currentWriter.close();
               newFiles.add(currentWriter.toDataFile());
               currentWriter = null;
-              LOGGER.debug("Compaction progress: {} records written to {} files",
-                  totalWritten, newFiles.size());
             }
           }
         } catch (Exception e) {
@@ -1040,14 +1067,12 @@ public class IcebergTableWriter {
         }
       }
 
-      // Close final writer if still open
       if (currentWriter != null) {
         currentWriter.close();
         newFiles.add(currentWriter.toDataFile());
         currentWriter = null;
       }
     } finally {
-      // Ensure writer is closed on any exception
       if (currentWriter != null) {
         try {
           currentWriter.close();
@@ -1062,7 +1087,7 @@ public class IcebergTableWriter {
       return;
     }
 
-    LOGGER.info("Streaming compaction wrote {} records to {} files", totalWritten, newFiles.size());
+    LOGGER.info("Java compaction wrote {} records to {} files", totalWritten, newFiles.size());
 
     // Commit the rewrite: delete old files, add new files
     RewriteFiles rewrite = table.newRewrite();
@@ -1080,6 +1105,103 @@ public class IcebergTableWriter {
     rewrite.commit();
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
+  }
+
+  /**
+   * DuckDB-based compaction: reads all S3 files in parallel, writes one merged output,
+   * then commits a rewrite. Much faster than sequential Java reads for many small S3 files.
+   */
+  private void compactPartitionWithDuckDB(
+      Set<DataFile> filesToDelete, List<String> s3Paths, long totalRecords,
+      Schema schema, PartitionSpec spec) throws IOException {
+
+    // Build partition key and output path from first file
+    StructLike partitionData = filesToDelete.iterator().next().partition();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    copyPartitionValues(partitionKey, partitionData, spec);
+    String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
+
+    String dataLocation = table.location() + "/data";
+    String outputS3 = (dataLocation + "/" + partitionPath + "/compacted_"
+        + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8) + ".parquet")
+        .replace("s3a://", "s3://");
+
+    LOGGER.info("DuckDB compaction: {} files ({} records) → {}",
+        s3Paths.size(), totalRecords, outputS3);
+
+    // Build bracketed path list for DuckDB read_parquet([...])
+    StringBuilder pathList = new StringBuilder("[");
+    for (int i = 0; i < s3Paths.size(); i++) {
+      if (i > 0) {
+        pathList.append(", ");
+      }
+      pathList.append("'").append(s3Paths.get(i).replace("'", "''")).append("'");
+    }
+    pathList.append("]");
+
+    String accessKey = hadoopConf.get("fs.s3a.access.key", "");
+    String secretKey = hadoopConf.get("fs.s3a.secret.key", "");
+    String endpoint  = hadoopConf.get("fs.s3a.endpoint", "");
+    String region    = hadoopConf.get("fs.s3a.endpoint.region", "auto");
+
+    try {
+      Class.forName("org.duckdb.DuckDBDriver");
+    } catch (ClassNotFoundException e) {
+      throw new IOException("DuckDB driver not available for compaction", e);
+    }
+
+    long writtenRecords;
+    try (java.sql.Connection conn =
+            java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      try (java.sql.Statement stmt = conn.createStatement()) {
+        stmt.execute("INSTALL httpfs; LOAD httpfs;");
+        stmt.execute("SET s3_access_key_id='" + accessKey.replace("'", "''") + "';");
+        stmt.execute("SET s3_secret_access_key='" + secretKey.replace("'", "''") + "';");
+        if (!endpoint.isEmpty()) {
+          String host = endpoint.replace("https://", "").replace("http://", "");
+          stmt.execute("SET s3_endpoint='" + host + "';");
+          stmt.execute("SET s3_url_style='path';");
+        }
+        stmt.execute("SET s3_region='" + region + "';");
+        stmt.execute("SET threads=1;");
+
+        stmt.execute("COPY (SELECT * FROM read_parquet(" + pathList + ")) TO '"
+            + outputS3 + "' (FORMAT PARQUET, COMPRESSION 'snappy');");
+
+        try (java.sql.ResultSet rs = stmt.executeQuery(
+                "SELECT count(*) FROM read_parquet('" + outputS3 + "')")) {
+          writtenRecords = rs.next() ? rs.getLong(1) : totalRecords;
+        }
+      }
+    } catch (java.sql.SQLException e) {
+      throw new IOException("DuckDB compaction failed: " + e.getMessage(), e);
+    }
+
+    // Get output file size via Hadoop FS
+    String outputS3a = outputS3.replace("s3://", "s3a://");
+    org.apache.hadoop.fs.Path hPath = new org.apache.hadoop.fs.Path(outputS3a);
+    long writtenSize = hPath.getFileSystem(hadoopConf).getFileStatus(hPath).getLen();
+
+    DataFile newFile = DataFiles.builder(spec)
+        .withPath(outputS3a)
+        .withFileSizeInBytes(writtenSize)
+        .withFormat(org.apache.iceberg.FileFormat.PARQUET)
+        .withPartition(partitionKey)
+        .withRecordCount(writtenRecords)
+        .build();
+
+    RewriteFiles rewrite = table.newRewrite();
+    if (table.currentSnapshot() != null) {
+      rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+    }
+    for (DataFile oldFile : filesToDelete) {
+      rewrite.deleteFile(oldFile);
+    }
+    rewrite.addFile(newFile);
+    rewrite.commit();
+
+    LOGGER.info("DuckDB compacted {} files into 1 ({} records, {} bytes)",
+        filesToDelete.size(), writtenRecords, writtenSize);
   }
 
   /**

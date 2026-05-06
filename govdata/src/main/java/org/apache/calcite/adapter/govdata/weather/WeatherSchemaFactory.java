@@ -58,12 +58,29 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
       new HashSet<>(Arrays.asList(
           "cdo_stations",
           "cdo_monthly_summaries",
-          "cdo_annual_summaries"));
+          "cdo_annual_summaries",
+          "ghcnd_daily",
+          "climate_normals_monthly"));
 
   // EPA AQS tables (require EPA_AQS_EMAIL + EPA_AQS_KEY)
   private static final Set<String> EPA_TABLES =
       new HashSet<>(Collections.singletonList(
           "epa_annual_aqi"));
+
+  // GHCND station inventory (no auth required, single global file)
+  private static final Set<String> GHCND_STATION_TABLES =
+      new HashSet<>(Collections.singletonList(
+          "ghcnd_stations_with_county"));
+
+  // Drought Monitor tables (no auth required)
+  private static final Set<String> DROUGHT_TABLES =
+      new HashSet<>(Collections.singletonList(
+          "drought_monitor_weekly"));
+
+  // HMS Smoke tables (no auth; requires offline geopandas ETL for pre-processed CSV)
+  private static final Set<String> HMS_TABLES =
+      new HashSet<>(Collections.singletonList(
+          "hms_smoke_daily"));
 
   @Override public String getSchemaResourceName() {
     return "/weather/weather-schema.yaml";
@@ -88,7 +105,8 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
 
     if (!hasCdoToken) {
       LOGGER.info("NOAA_CDO_TOKEN not set — CDO tables (cdo_stations, "
-          + "cdo_monthly_summaries, cdo_annual_summaries) will be disabled");
+          + "cdo_monthly_summaries, cdo_annual_summaries, ghcnd_daily, "
+          + "climate_normals_monthly) will be disabled");
     }
     if (!hasEpaCredentials) {
       LOGGER.info("EPA_AQS_EMAIL/EPA_AQS_KEY not set — EPA tables "
@@ -113,10 +131,29 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
           hasEpaCredentials && isTableEnabled(tableName, "epa", enabledSources));
     }
 
+    // GHCND station inventory: always enabled (no auth required)
+    for (String tableName : GHCND_STATION_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "ghcnd", enabledSources));
+    }
+
+    // Drought Monitor: always enabled (no auth required)
+    for (String tableName : DROUGHT_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "drought", enabledSources));
+    }
+
+    // HMS Smoke: always enabled (no auth; data must be pre-processed via offline ETL)
+    for (String tableName : HMS_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "hms", enabledSources));
+    }
+
     LOGGER.debug("Configured hooks for WEATHER schema: {} NWS, {} CDO (token={}), "
-            + "{} EPA (credentials={})",
+            + "{} EPA (credentials={}), {} GHCND, {} drought, {} HMS",
         NWS_TABLES.size(), CDO_TABLES.size(), hasCdoToken,
-        EPA_TABLES.size(), hasEpaCredentials);
+        EPA_TABLES.size(), hasEpaCredentials,
+        GHCND_STATION_TABLES.size(), DROUGHT_TABLES.size(), HMS_TABLES.size());
   }
 
   private boolean isTableEnabled(String tableName, String dataSource,

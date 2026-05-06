@@ -27,6 +27,13 @@ load_env() {
     source "$env_override"
   fi
 
+  # In daily mode, use GOVDATA_INCREMENTAL_START_YEAR as the effective start boundary.
+  # yearRange returns empty list when start > end, so tables with no data in the
+  # incremental window are skipped cleanly rather than processing all historical years.
+  if [ "${GOVDATA_RUN_MODE:-}" = "daily" ]; then
+    export GOVDATA_START_YEAR="${GOVDATA_INCREMENTAL_START_YEAR:-2026}"
+  fi
+
   # Default tracker to s3 for parallel operation
   export CALCITE_TRACKER_BACKEND="${CALCITE_TRACKER_BACKEND:-s3}"
   export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
