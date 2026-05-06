@@ -820,6 +820,20 @@ public class EtlPipeline {
               Map<String, String> variables = partCombos.get(idx);
               processedCount++;
 
+              // Self-heal: if data files already exist on storage for this partition,
+              // re-register them in Iceberg and skip re-fetching from source.
+              long healedRows = trySelfHealFromStoredFiles(writer, variables);
+              if (healedRows > 0) {
+                LOGGER.info("Self-heal: skipping source fetch for partition {}/{} {} — "
+                    + "re-registered {} orphaned files (~{} rows)",
+                    pi + 1, partCount, variables, healedRows, healedRows);
+                incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
+                    variables, null, healedRows);
+                skippedBatches++;
+                totalRows += healedRows;
+                continue;
+              }
+
               if (progressListener != null) {
                 progressListener.onBatchStart(processedCount, neededCount, variables);
               }
@@ -1018,6 +1032,20 @@ public class EtlPipeline {
 
             Map<String, String> variables = combinations.get(idx);
             processedCount++;
+
+            // Self-heal: if data files already exist on storage for this partition,
+            // re-register them in Iceberg and skip re-fetching from source.
+            long healedRows = trySelfHealFromStoredFiles(writer, variables);
+            if (healedRows > 0) {
+              LOGGER.info("Self-heal: skipping source fetch for batch {}/{} {} — "
+                  + "re-registered orphaned files (~{} rows)",
+                  processedCount, neededCount, variables, healedRows);
+              incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
+                  variables, null, healedRows);
+              skippedBatches++;
+              totalRows += healedRows;
+              continue;
+            }
 
             if (progressListener != null) {
               progressListener.onBatchStart(processedCount, neededCount, variables);
@@ -2159,6 +2187,29 @@ public class EtlPipeline {
       return Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
     } catch (NumberFormatException e) {
       return 1;
+    }
+  }
+
+  /**
+   * Attempts to self-heal a partition by detecting parquet files that exist on storage
+   * but are not registered in the Iceberg catalog. If found, re-registers them and marks
+   * the tracker complete — no source re-fetch needed.
+   *
+   * <p>Processing output is immutable: given the same inputs the same files are produced,
+   * so existing files on storage are always safe to re-register.
+   *
+   * @return estimated row count of re-registered files, or 0 if self-heal was not possible
+   */
+  private long trySelfHealFromStoredFiles(MaterializationWriter writer,
+      Map<String, String> variables) {
+    if (!(writer instanceof IcebergMaterializationWriter)) {
+      return 0;
+    }
+    try {
+      return ((IcebergMaterializationWriter) writer).selfHealPartition(variables);
+    } catch (IOException e) {
+      LOGGER.debug("Self-heal attempt failed for {}: {}", variables, e.getMessage());
+      return 0;
     }
   }
 }

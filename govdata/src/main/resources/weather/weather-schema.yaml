@@ -255,7 +255,7 @@ dimension_values:
   ghcnd_year_range: &ghcnd_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2000}"
-    end: current
+    end: "${GOVDATA_END_YEAR:current}"
 
   # Drought Monitor year range (data available from 2000)
   drought_year_range: &drought_year_range

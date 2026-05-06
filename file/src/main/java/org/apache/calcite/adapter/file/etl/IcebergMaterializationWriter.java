@@ -1817,6 +1817,38 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         totalRowsWritten, totalFilesWritten);
   }
 
+  /**
+   * Self-heals the tracker for a partition by detecting parquet files that exist on storage
+   * but are not registered in the Iceberg catalog. If found, commits them to the catalog so
+   * the tracker can be marked complete without re-fetching from source.
+   *
+   * <p>Processing results are immutable — the same source inputs always produce the same
+   * output — so existing staged files are always safe to re-register.
+   *
+   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
+   * @return estimated row count of re-registered files, or 0 if no orphaned files were found
+   */
+  public long selfHealPartition(Map<String, String> partitionVariables) throws IOException {
+    if (!initialized) {
+      return 0;
+    }
+    List<org.apache.iceberg.DataFile> orphaned = tableWriter.findOrphanedDataFiles(partitionVariables);
+    if (orphaned.isEmpty()) {
+      return 0;
+    }
+    LOGGER.info("Self-heal: found {} orphaned data files for partition {} — re-registering in catalog",
+        orphaned.size(), partitionVariables);
+    tableWriter.bulkCommitDataFiles(orphaned);
+    long estimated = 0;
+    for (org.apache.iceberg.DataFile f : orphaned) {
+      estimated += f.recordCount();
+    }
+    LOGGER.info("Self-heal complete for partition {}: {} files re-registered (~{} rows)",
+        partitionVariables, orphaned.size(), estimated);
+    return estimated;
+  }
+
+
   @Override public long getTotalRowsWritten() {
     return totalRowsWritten;
   }

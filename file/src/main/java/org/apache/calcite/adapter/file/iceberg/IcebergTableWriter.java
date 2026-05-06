@@ -421,6 +421,83 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Finds parquet files that exist on storage for the given partition but are not registered
+   * in the current Iceberg snapshot. Used for tracker self-healing: if a partition's data
+   * files exist on S3 but the catalog was cleared, we can re-register them without re-fetching
+   * from the source.
+   *
+   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
+   * @return DataFile list of orphaned files ready to commit; empty if none found
+   */
+  public List<DataFile> findOrphanedDataFiles(Map<String, String> partitionVariables)
+      throws IOException {
+    String hivePath = buildHivePartitionPath(partitionVariables);
+    String dataDir = table.location() + "/data"
+        + (hivePath.isEmpty() ? "" : "/" + hivePath);
+
+    List<StorageProvider.FileEntry> entries;
+    try {
+      entries = storageProvider.listFiles(dataDir, true);
+    } catch (IOException e) {
+      LOGGER.debug("Self-heal: no files at {}: {}", dataDir, e.getMessage());
+      return java.util.Collections.emptyList();
+    }
+    if (entries == null || entries.isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+
+    // Build set of paths already tracked by the current snapshot so we don't double-register.
+    Set<String> catalogPaths = new HashSet<String>();
+    if (table.currentSnapshot() != null) {
+      try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+        for (FileScanTask task : tasks) {
+          String p = task.file().path().toString();
+          int sl = p.lastIndexOf('/');
+          catalogPaths.add(sl >= 0 ? p.substring(sl + 1) : p);
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Self-heal: could not scan catalog for {}: {}", dataDir, e.getMessage());
+      }
+    }
+
+    List<DataFile> orphaned = new ArrayList<DataFile>();
+    for (StorageProvider.FileEntry entry : entries) {
+      String path = entry.getPath();
+      if (!path.endsWith(".parquet")) {
+        continue;
+      }
+      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      if (!catalogPaths.contains(fileName)) {
+        orphaned.add(buildDataFile(path, entry.getSize()));
+      }
+    }
+    return orphaned;
+  }
+
+  /**
+   * Builds a Hive-style partition path (e.g. {@code year=2025/month=4}) from partition
+   * variables, using the table's partition spec field order.
+   */
+  private String buildHivePartitionPath(Map<String, String> partitionVariables) {
+    if (partitionVariables == null || partitionVariables.isEmpty()) {
+      return "";
+    }
+    PartitionSpec spec = table.spec();
+    StringBuilder sb = new StringBuilder();
+    for (org.apache.iceberg.PartitionField field : spec.fields()) {
+      String name = field.name();
+      String val = partitionVariables.get(name);
+      if (val != null) {
+        if (sb.length() > 0) {
+          sb.append("/");
+        }
+        sb.append(name).append("=").append(val);
+      }
+    }
+    return sb.toString();
+  }
+
+  /**
    * Deletes files from a partition before overwriting.
    * Uses Iceberg's delete API for atomic operations.
    *
@@ -1111,97 +1188,14 @@ public class IcebergTableWriter {
    * DuckDB-based compaction: reads all S3 files in parallel, writes one merged output,
    * then commits a rewrite. Much faster than sequential Java reads for many small S3 files.
    */
+  // CRITICAL: Do NOT use DuckDB for compaction. DuckDB's COPY TO PARQUET omits Iceberg field IDs,
+  // causing iceberg_scan to return NULLs for every column. This has already been tried and broken
+  // production data. The Java fallback (Parquet.writeData + GenericParquetWriter::buildWriter)
+  // is the only correct compaction path — it embeds field IDs as required by the Iceberg spec.
   private void compactPartitionWithDuckDB(
       Set<DataFile> filesToDelete, List<String> s3Paths, long totalRecords,
       Schema schema, PartitionSpec spec) throws IOException {
-
-    // Build partition key and output path from first file
-    StructLike partitionData = filesToDelete.iterator().next().partition();
-    PartitionKey partitionKey = new PartitionKey(spec, schema);
-    copyPartitionValues(partitionKey, partitionData, spec);
-    String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
-
-    String dataLocation = table.location() + "/data";
-    String outputS3 = (dataLocation + "/" + partitionPath + "/compacted_"
-        + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8) + ".parquet")
-        .replace("s3a://", "s3://");
-
-    LOGGER.info("DuckDB compaction: {} files ({} records) → {}",
-        s3Paths.size(), totalRecords, outputS3);
-
-    // Build bracketed path list for DuckDB read_parquet([...])
-    StringBuilder pathList = new StringBuilder("[");
-    for (int i = 0; i < s3Paths.size(); i++) {
-      if (i > 0) {
-        pathList.append(", ");
-      }
-      pathList.append("'").append(s3Paths.get(i).replace("'", "''")).append("'");
-    }
-    pathList.append("]");
-
-    String accessKey = hadoopConf.get("fs.s3a.access.key", "");
-    String secretKey = hadoopConf.get("fs.s3a.secret.key", "");
-    String endpoint  = hadoopConf.get("fs.s3a.endpoint", "");
-    String region    = hadoopConf.get("fs.s3a.endpoint.region", "auto");
-
-    try {
-      Class.forName("org.duckdb.DuckDBDriver");
-    } catch (ClassNotFoundException e) {
-      throw new IOException("DuckDB driver not available for compaction", e);
-    }
-
-    long writtenRecords;
-    try (java.sql.Connection conn =
-            java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
-      try (java.sql.Statement stmt = conn.createStatement()) {
-        stmt.execute("INSTALL httpfs; LOAD httpfs;");
-        stmt.execute("SET s3_access_key_id='" + accessKey.replace("'", "''") + "';");
-        stmt.execute("SET s3_secret_access_key='" + secretKey.replace("'", "''") + "';");
-        if (!endpoint.isEmpty()) {
-          String host = endpoint.replace("https://", "").replace("http://", "");
-          stmt.execute("SET s3_endpoint='" + host + "';");
-          stmt.execute("SET s3_url_style='path';");
-        }
-        stmt.execute("SET s3_region='" + region + "';");
-        stmt.execute("SET threads=1;");
-
-        stmt.execute("COPY (SELECT * FROM read_parquet(" + pathList + ")) TO '"
-            + outputS3 + "' (FORMAT PARQUET, COMPRESSION 'snappy');");
-
-        try (java.sql.ResultSet rs = stmt.executeQuery(
-                "SELECT count(*) FROM read_parquet('" + outputS3 + "')")) {
-          writtenRecords = rs.next() ? rs.getLong(1) : totalRecords;
-        }
-      }
-    } catch (java.sql.SQLException e) {
-      throw new IOException("DuckDB compaction failed: " + e.getMessage(), e);
-    }
-
-    // Get output file size via Hadoop FS
-    String outputS3a = outputS3.replace("s3://", "s3a://");
-    org.apache.hadoop.fs.Path hPath = new org.apache.hadoop.fs.Path(outputS3a);
-    long writtenSize = hPath.getFileSystem(hadoopConf).getFileStatus(hPath).getLen();
-
-    DataFile newFile = DataFiles.builder(spec)
-        .withPath(outputS3a)
-        .withFileSizeInBytes(writtenSize)
-        .withFormat(org.apache.iceberg.FileFormat.PARQUET)
-        .withPartition(partitionKey)
-        .withRecordCount(writtenRecords)
-        .build();
-
-    RewriteFiles rewrite = table.newRewrite();
-    if (table.currentSnapshot() != null) {
-      rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-    }
-    for (DataFile oldFile : filesToDelete) {
-      rewrite.deleteFile(oldFile);
-    }
-    rewrite.addFile(newFile);
-    rewrite.commit();
-
-    LOGGER.info("DuckDB compacted {} files into 1 ({} records, {} bytes)",
-        filesToDelete.size(), writtenRecords, writtenSize);
+    throw new IOException("DuckDB compaction disabled: does not embed Iceberg field IDs");
   }
 
   /**
