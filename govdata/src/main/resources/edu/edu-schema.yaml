@@ -3,11 +3,11 @@
 # K-12 sources: Urban Institute Education Data Portal (educationdata.urban.org)
 #   No API key required; covers CCD, CRDC, NAEP
 # Higher ed: Urban Institute API (IPEDS) + College Scorecard API (key required)
-#   COLLEGE_SCORECARD_API_KEY — free at api.data.gov/signup
+#   API_DATA_GOV — free at api.data.gov/signup
 # ============================================================================
 
 schemaName: "${EDU_SCHEMA_NAME:edu}"
-materializeDirectory: "${EDU_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/edu}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Institutional education data for K-12 districts, schools, and higher education.
@@ -504,8 +504,15 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.nationsreportcard.gov/api/naep/{year}/G{grade}/{subject}?fips=0&subscriberid="
+      url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
       method: GET
+      urlRules:
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
+          variableMatch:
+            subscale: MRPCM
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
+          variableMatch:
+            subscale: RRPCM
       response:
         format: json
         dataPath: "result"
@@ -528,16 +535,16 @@ partitionedTables:
 
     dimensions:
       year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2013}"
-        minYear: 2013
-        dataLag: 1
+        type: list
+        values: [2013, 2015, 2017, 2019, 2022, 2024]
+        minYear: "${GOVDATA_START_YEAR:2013}"
+        maxYear: 2024
       grade:
         - "4"
         - "8"
-      subject:
-        - MAT
-        - RED
+      subscale:
+        - MRPCM
+        - RRPCM
 
     materialize:
       enabled: true
@@ -1488,7 +1495,7 @@ partitionedTables:
   # COLLEGE SCORECARD — Institution-level post-enrollment outcomes
   # API: https://api.data.gov/ed/collegescorecard/v1/schools.json
   # NOTE: api.collegescorecard.ed.gov is NXDOMAIN — use api.data.gov proxy.
-  # Requires free API key: COLLEGE_SCORECARD_API_KEY (api.data.gov/signup)
+  # Requires free API key: API_DATA_GOV (api.data.gov/signup)
   # Confirmed working: 6,322 institutions via api.data.gov proxy
   # ==========================================================================
   - name: college_scorecard
@@ -1505,7 +1512,7 @@ partitionedTables:
       Dept of Ed College Scorecard institution-level outcomes. Earnings, debt,
       completion rates, and enrollment demographics. One row per institution per
       vintage year. Joins to ipeds_institutions via id=unitid or ope8_id=opeid.
-      API key required (COLLEGE_SCORECARD_API_KEY); PrivacySuppressed values are null.
+      API key required (API_DATA_GOV); PrivacySuppressed values are null.
       Earnings field is mean (not median) at 10yr — median available at 8yr.
 
     columns:
@@ -1631,7 +1638,7 @@ partitionedTables:
       url: "https://api.data.gov/ed/collegescorecard/v1/schools.json"
       method: GET
       parameters:
-        api_key: "${COLLEGE_SCORECARD_API_KEY}"
+        api_key: "${API_DATA_GOV}"
         per_page: "100"
         fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,school.online_only,school.locale,latest.student.size,latest.student.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
       response:
@@ -1758,7 +1765,7 @@ partitionedTables:
       url: "https://api.data.gov/ed/collegescorecard/v1/schools.json"
       method: GET
       parameters:
-        api_key: "${COLLEGE_SCORECARD_API_KEY}"
+        api_key: "${API_DATA_GOV}"
         per_page: "100"
         fields: "latest.programs.cip_4_digit.unit_id,latest.programs.cip_4_digit.ope6_id,latest.programs.cip_4_digit.code,latest.programs.cip_4_digit.title,latest.programs.cip_4_digit.credential.level,latest.programs.cip_4_digit.credential.title,latest.programs.cip_4_digit.counts.ipeds_awards1,latest.programs.cip_4_digit.earnings.1_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.4_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.5_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.pell_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings"
       response:

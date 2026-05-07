@@ -43,7 +43,7 @@
 #   EDU_IPEDS_SINCE_YEAR         4-digit year — load IPEDS directory/completions/tuition from this year
 #   EDU_IPEDS_FINANCE_SINCE_YEAR 4-digit year — load IPEDS financials from this year
 #   EDU_SCORECARD_SINCE_YEAR     4-digit year — load College Scorecard tables from this year
-#   COLLEGE_SCORECARD_API_KEY    Free API key from api.data.gov/signup (enables College Scorecard tables)
+#   API_DATA_GOV                 api.data.gov key (required for College Scorecard tables)
 #
 set -euo pipefail
 
@@ -76,7 +76,7 @@ run_edu_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-  local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/edu}"
+  local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}}"
   local cache_dir="${EDU_CACHE_DIR:-${GOVDATA_CACHE_DIR}/edu}"
   local end_year_json=""
   [ -n "$end_year" ] && end_year_json=",
@@ -132,11 +132,11 @@ case "$MODE" in
     run_edu_model "edu-initial-ipeds" \
       '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
 
-    if [ -n "${COLLEGE_SCORECARD_API_KEY:-}" ]; then
+    if [ -n "${API_DATA_GOV:-}" ]; then
       run_edu_model "edu-initial-scorecard" \
         '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
     else
-      log_info "$WORKER_ID: COLLEGE_SCORECARD_API_KEY not set — skipping college_scorecard tables"
+      log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
     fi
     ;;
 
@@ -151,11 +151,11 @@ case "$MODE" in
     fi
 
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "college_scorecard"; then
-      if [ -n "${COLLEGE_SCORECARD_API_KEY:-}" ]; then
+      if [ -n "${API_DATA_GOV:-}" ]; then
         run_edu_model "edu-annual-scorecard" \
           '"college_scorecard", "college_scorecard_programs"' "$START"
       else
-        log_info "$WORKER_ID: COLLEGE_SCORECARD_API_KEY not set — skipping college_scorecard tables"
+        log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
       fi
     fi
 

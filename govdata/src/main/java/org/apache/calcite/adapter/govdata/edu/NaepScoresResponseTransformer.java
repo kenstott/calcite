@@ -21,22 +21,40 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.Map;
-
 /**
  * Transforms Nation's Report Card (NAEP) API responses.
  *
- * <p>The NAEP API returns {@code {"result": [...], "jurisdiction": {...}}}
- * where each element in {@code result} is a flat record with jurisdiction,
- * subject, grade, variable_type, subgroup_name, avg_score, etc.
- * The {@code year} and {@code subject} dimensions from the URL path are injected
- * into every row since the response does not always include them.
+ * <p>The NAEP GetAdhocData endpoint returns {@code {"result": [...]}} where each
+ * element has: year, subject, grade, scale, jurisdiction (e.g. "NP"), jurisLabel,
+ * variable, varValueLabel, value (mean score), isStatDisplayable.
+ * This transformer remaps those fields to the naep_scores schema columns.
  */
 public class NaepScoresResponseTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NaepScoresResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  /** Maps subscale code to subject code for the naep_scores schema. */
+  private static String subscaleToSubject(String subscale) {
+    if ("MRPCM".equals(subscale)) {
+      return "MAT";
+    } else if ("RRPCM".equals(subscale)) {
+      return "RED";
+    }
+    return subscale;
+  }
+
+  /** Maps NAEP jurisdiction code to integer FIPS (NP = 0 = national public). */
+  private static int jurisdictionToFips(String jurisdiction) {
+    if (jurisdiction == null || "NP".equals(jurisdiction)) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(jurisdiction);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -47,16 +65,21 @@ public class NaepScoresResponseTransformer implements ResponseTransformer {
     try {
       JsonNode root = MAPPER.readTree(response);
 
-      // NAEP API uses "result" (singular) as data key
+      // Surface API errors as warnings rather than silent empty results
+      if (root.has("statusCode") && root.path("statusCode").asInt(200) != 200) {
+        LOGGER.warn("NAEP: API error for {}: {}", context.getUrl(), root.path("result").asText());
+        return "[]";
+      }
+
       JsonNode result = root.isArray() ? root : root.path("result");
       if (!result.isArray()) {
         LOGGER.debug("NAEP: no result array in response for {}", context.getUrl());
         return "[]";
       }
 
-      String year = context.getDimensionValues().get("year");
-      String subject = context.getDimensionValues().get("subject");
-      String grade = context.getDimensionValues().get("grade");
+      String subscale = context.getDimensionValues().get("subscale");
+      String subject = subscaleToSubject(subscale);
+      String gradeStr = context.getDimensionValues().get("grade");
 
       ArrayNode out = MAPPER.createArrayNode();
       for (JsonNode record : result) {
@@ -65,49 +88,73 @@ public class NaepScoresResponseTransformer implements ResponseTransformer {
         }
         ObjectNode row = MAPPER.createObjectNode();
 
-        // Copy all fields from the record
-        Iterator<Map.Entry<String, JsonNode>> fields = record.fields();
-        while (fields.hasNext()) {
-          Map.Entry<String, JsonNode> entry = fields.next();
-          row.set(entry.getKey(), entry.getValue());
+        // jurisdiction (int FIPS, 0 = national)
+        String jurCode = record.path("jurisdiction").asText("NP");
+        row.put("jurisdiction", jurisdictionToFips(jurCode));
+
+        // jurisdiction_name
+        if (record.has("jurisLabel")) {
+          row.put("jurisdiction_name", record.path("jurisLabel").asText());
         }
 
-        // Inject dimension values if not already present
-        if (year != null && !row.has("year")) {
-          try {
-            row.put("year", Integer.parseInt(year));
-          } catch (NumberFormatException e) {
-            LOGGER.warn("NAEP: non-integer year dimension '{}', row will have no year", year);
-          }
-        }
-        if (subject != null && !row.has("subject")) {
-          row.put("subject", subject);
-        }
-        if (grade != null && !row.has("grade")) {
-          try {
-            row.put("grade", Integer.parseInt(grade));
-          } catch (NumberFormatException e) {
-            LOGGER.warn("NAEP: non-integer grade dimension '{}', row will have no grade", grade);
+        // year — prefer from response, fall back to dimension
+        if (record.has("year") && !record.path("year").isNull()) {
+          row.put("year", record.path("year").asInt());
+        } else {
+          String yearDim = context.getDimensionValues().get("year");
+          if (yearDim != null) {
+            try {
+              row.put("year", Integer.parseInt(yearDim));
+            } catch (NumberFormatException e) {
+              LOGGER.warn("NAEP: non-integer year dimension '{}'", yearDim);
+            }
           }
         }
 
-        // Normalise jurisdiction field — NAEP uses "statecode" or "fips"
-        if (!row.has("jurisdiction") && row.has("statecode")) {
-          row.set("jurisdiction", row.get("statecode"));
+        // subject derived from subscale dimension
+        row.put("subject", subject);
+
+        // grade — prefer from response, fall back to dimension
+        if (record.has("grade") && !record.path("grade").isNull()) {
+          row.put("grade", record.path("grade").asInt());
+        } else if (gradeStr != null) {
+          try {
+            row.put("grade", Integer.parseInt(gradeStr));
+          } catch (NumberFormatException e) {
+            LOGGER.warn("NAEP: non-integer grade dimension '{}'", gradeStr);
+          }
         }
-        if (!row.has("jurisdiction_name") && row.has("statename")) {
-          row.set("jurisdiction_name", row.get("statename"));
+
+        // variable_type and subgroup_name
+        row.put("variable_type", record.path("variable").asText("TOTAL"));
+        row.put("subgroup_name", record.path("varValueLabel").asText("All students"));
+
+        // avg_score (the mean scale score)
+        if (record.has("value") && !record.path("value").isNull()) {
+          row.put("avg_score", record.path("value").asDouble());
+        } else {
+          row.putNull("avg_score");
         }
-        if (!row.has("jurisdiction") || row.path("jurisdiction").isNull()) {
-          LOGGER.warn("NAEP: jurisdiction is null for year={} subject={} grade={}",
-              year, subject, grade);
+
+        // std_error, pct_* fields not provided by this endpoint
+        row.putNull("std_error");
+        row.putNull("pct_below_basic");
+        row.putNull("pct_basic");
+        row.putNull("pct_proficient");
+        row.putNull("pct_advanced");
+        row.putNull("sample_size");
+
+        // is_displayable
+        if (record.has("isStatDisplayable")) {
+          row.put("is_displayable", record.path("isStatDisplayable").asInt());
+        } else {
+          row.putNull("is_displayable");
         }
 
         out.add(row);
       }
 
-      LOGGER.debug("NAEP: extracted {} records for year={}, subject={}, grade={}",
-          out.size(), year, subject, grade);
+      LOGGER.debug("NAEP: extracted {} records for subscale={}, grade={}", out.size(), subscale, gradeStr);
       return out.toString();
 
     } catch (Exception e) {

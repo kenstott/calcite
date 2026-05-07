@@ -8,7 +8,6 @@ SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
 SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
 SET s3_endpoint='21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com';
 SET s3_region='auto';
-SET s3_url_style='path';
 
 -- ============================================================
 -- 1. READABILITY — SELECT 1 ROW FROM EACH TABLE

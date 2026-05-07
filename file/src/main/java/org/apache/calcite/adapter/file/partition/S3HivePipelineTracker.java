@@ -1483,15 +1483,21 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     long queryStart = System.currentTimeMillis();
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
-    String sql = "SELECT config_hash, signature, row_count, as_of "
+    String sql = "SELECT config_hash, signature, row_count, as_of, state "
         + "FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
-        + "WHERE table_name = ? AND phase = 'table_completion' AND state = 'complete' "
+        + "WHERE table_name = ? AND phase = 'table_completion' "
         + "ORDER BY as_of DESC LIMIT 1";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, pipelineName);
       try (ResultSet rs = stmt.executeQuery()) {
         long queryElapsed = System.currentTimeMillis() - queryStart;
         if (rs.next()) {
+          String state = rs.getString("state");
+          if (!"complete".equals(state)) {
+            LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — latest state is '{}', not complete",
+                pipelineName, queryElapsed, state);
+            return null;
+          }
           String configHash = rs.getString("config_hash");
           String signature = rs.getString("signature");
           long rowCount = rs.getLong("row_count");
@@ -1534,11 +1540,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "/source_key=_table_complete/*.parquet";
     String sql = "SELECT table_name, config_hash, signature, row_count, as_of "
         + "FROM ("
-        + "  SELECT table_name, config_hash, signature, row_count, as_of, "
+        + "  SELECT table_name, config_hash, signature, row_count, as_of, state,"
         + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
         + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true)"
-        + "  WHERE phase = 'table_completion' AND state = 'complete'"
-        + ") WHERE rn = 1";
+        + "  WHERE phase = 'table_completion'"
+        + ") WHERE rn = 1 AND state = 'complete'";
     int count = 0;
     try (Statement stmt = getConnection().createStatement();
          ResultSet rs = stmt.executeQuery(sql)) {

@@ -98,6 +98,17 @@ govdata/
     └── cik=*/filing_type=*/year=*/
 ```
 
+### Building for ETL Deployment
+
+**ALWAYS use `:govdata:shadowJar` when rebuilding after resource changes** (YAML, JSON, properties files).
+`:govdata:jar` only rebuilds the plain JAR — the ETL workers use the shadowJar (`-all.jar`).
+Resource changes (e.g. schema YAML edits) will not take effect in ETL runs until the shadowJar is rebuilt.
+
+```bash
+./gradlew :govdata:shadowJar   # required after any resource file change
+./gradlew :govdata:jar         # only rebuilds plain JAR — NOT sufficient for ETL
+```
+
 ### Test Commands by Data Source
 ```bash
 # Test economic data integration
