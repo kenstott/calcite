@@ -222,6 +222,10 @@ public class EtlPipeline {
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
 
+    // Memory tracking
+    List<MemorySnapshot> memSnapshots = new ArrayList<MemorySnapshot>();
+    long peakUsedBytes = 0;
+
     // Track execution statistics
     long totalRows = 0;
     int successfulBatches = 0;
@@ -233,6 +237,11 @@ public class EtlPipeline {
             System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") != null
                 ? System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") : "10"));
     List<String> errors = new ArrayList<String>();
+
+    MemorySnapshot startSnap = MemorySnapshot.capture("pipeline_start");
+    memSnapshots.add(startSnap);
+    peakUsedBytes = startSnap.getUsedBytes();
+    LOGGER.debug("Memory at pipeline_start: {}", startSnap);
 
     MaterializationWriter writer = null;
 
@@ -389,6 +398,13 @@ public class EtlPipeline {
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
       }
 
+      MemorySnapshot dimSnap = MemorySnapshot.capture("after_dim_expansion");
+      memSnapshots.add(dimSnap);
+      if (dimSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = dimSnap.getUsedBytes();
+      }
+      LOGGER.debug("Memory after_dim_expansion: {}", dimSnap);
+
       // Fast-path: Check if entire pipeline was already completed with same dimensions
       if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
         // Verify data actually exists - completion marker may be stale if bucket was cleared
@@ -512,6 +528,13 @@ public class EtlPipeline {
         LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
             neededCount, totalBatches, filterElapsedMs,
             totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+
+        MemorySnapshot filterSnap = MemorySnapshot.capture("after_bulk_filter");
+        memSnapshots.add(filterSnap);
+        if (filterSnap.getUsedBytes() > peakUsedBytes) {
+          peakUsedBytes = filterSnap.getUsedBytes();
+        }
+        LOGGER.debug("Memory after_bulk_filter: {}", filterSnap);
       }
 
       // If all combinations are already processed, mark complete and return
@@ -853,6 +876,13 @@ public class EtlPipeline {
 
                 if (processedCount % 10 == 0) {
                   System.gc();
+                  MemorySnapshot batchSnap =
+                      MemorySnapshot.capture("batch_" + processedCount);
+                  memSnapshots.add(batchSnap);
+                  if (batchSnap.getUsedBytes() > peakUsedBytes) {
+                    peakUsedBytes = batchSnap.getUsedBytes();
+                  }
+                  LOGGER.debug("Memory {}: {}", batchSnap.getPhase(), batchSnap);
                 }
 
               } catch (IOException e) {
@@ -1065,6 +1095,13 @@ public class EtlPipeline {
 
               if (processedCount % 10 == 0) {
                 System.gc();
+                MemorySnapshot batchSnap =
+                    MemorySnapshot.capture("batch_" + processedCount);
+                memSnapshots.add(batchSnap);
+                if (batchSnap.getUsedBytes() > peakUsedBytes) {
+                  peakUsedBytes = batchSnap.getUsedBytes();
+                }
+                LOGGER.debug("Memory {}: {}", batchSnap.getPhase(), batchSnap);
               }
 
             } catch (IOException e) {
@@ -1147,8 +1184,15 @@ public class EtlPipeline {
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
-      LOGGER.info("ETL pipeline '{}' complete: {} rows, {} successful, {} failed, {} skipped in {}ms",
-          pipelineName, totalRows, successfulBatches, failedBatches, skippedBatches, elapsed);
+
+      MemorySnapshot endSnap = MemorySnapshot.capture("pipeline_end");
+      memSnapshots.add(endSnap);
+      if (endSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = endSnap.getUsedBytes();
+      }
+      LOGGER.info("ETL pipeline '{}' complete: {} rows, {} successful, {} failed, {} skipped in {}ms, peakHeap={}MB",
+          pipelineName, totalRows, successfulBatches, failedBatches, skippedBatches, elapsed,
+          peakUsedBytes / (1024 * 1024));
 
       return EtlResult.builder()
           .pipelineName(pipelineName)
@@ -1160,6 +1204,8 @@ public class EtlPipeline {
           .errors(errors)
           .tableLocation(tableLocation)
           .materializeFormat(writerFormat)
+          .peakUsedBytes(peakUsedBytes)
+          .memorySnapshots(memSnapshots)
           .build();
 
     } catch (Exception e) {
@@ -1167,6 +1213,12 @@ public class EtlPipeline {
       String errorMsg =
           String.format("ETL pipeline '%s' failed after %dms: %s", pipelineName, elapsed, e.getMessage());
       LOGGER.error(errorMsg, e);
+
+      MemorySnapshot failSnap = MemorySnapshot.capture("pipeline_failure");
+      memSnapshots.add(failSnap);
+      if (failSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = failSnap.getUsedBytes();
+      }
 
       // Invalidate table completion on failure
       incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -1181,6 +1233,8 @@ public class EtlPipeline {
           .errors(errors)
           .failed(true)
           .failureMessage(e.getMessage())
+          .peakUsedBytes(peakUsedBytes)
+          .memorySnapshots(memSnapshots)
           .build();
     } finally {
       // Ensure writer is closed

@@ -56,6 +56,8 @@ public class EtlResult {
   private final boolean skippedEntirePipeline;
   private final String tableLocation;
   private final MaterializeConfig.Format materializeFormat;
+  private final long peakUsedBytes;
+  private final List<MemorySnapshot> memorySnapshots;
 
   private EtlResult(Builder builder) {
     this.pipelineName = builder.pipelineName;
@@ -72,6 +74,10 @@ public class EtlResult {
     this.skippedEntirePipeline = builder.skippedEntirePipeline;
     this.tableLocation = builder.tableLocation;
     this.materializeFormat = builder.materializeFormat;
+    this.peakUsedBytes = builder.peakUsedBytes;
+    this.memorySnapshots = builder.memorySnapshots != null
+        ? Collections.unmodifiableList(new ArrayList<MemorySnapshot>(builder.memorySnapshots))
+        : Collections.<MemorySnapshot>emptyList();
   }
 
   /**
@@ -196,6 +202,22 @@ public class EtlResult {
   }
 
   /**
+   * Returns the peak JVM heap used (in bytes) observed during this pipeline run.
+   * Use this to size {@code -Xmx}: add a 25-50% GC headroom margin.
+   */
+  public long getPeakUsedBytes() {
+    return peakUsedBytes;
+  }
+
+  /**
+   * Returns ordered heap snapshots captured at key pipeline phase boundaries.
+   * Useful for identifying which phase drives peak memory.
+   */
+  public List<MemorySnapshot> getMemorySnapshots() {
+    return memorySnapshots;
+  }
+
+  /**
    * Returns the throughput in rows per second.
    */
   public double getRowsPerSecond() {
@@ -224,6 +246,9 @@ public class EtlResult {
       }
       sb.append(", elapsed=").append(elapsedMs).append("ms");
       sb.append(", throughput=").append(String.format("%.1f", getRowsPerSecond())).append(" rows/sec");
+      if (peakUsedBytes > 0) {
+        sb.append(", peakHeap=").append(peakUsedBytes / (1024 * 1024)).append("MB");
+      }
     }
     sb.append("}");
     return sb.toString();
@@ -287,6 +312,8 @@ public class EtlResult {
     private boolean skippedEntirePipeline;
     private String tableLocation;
     private MaterializeConfig.Format materializeFormat;
+    private long peakUsedBytes;
+    private List<MemorySnapshot> memorySnapshots;
 
     public Builder pipelineName(String pipelineName) {
       this.pipelineName = pipelineName;
@@ -345,6 +372,16 @@ public class EtlResult {
 
     public Builder materializeFormat(MaterializeConfig.Format materializeFormat) {
       this.materializeFormat = materializeFormat;
+      return this;
+    }
+
+    public Builder peakUsedBytes(long peakUsedBytes) {
+      this.peakUsedBytes = peakUsedBytes;
+      return this;
+    }
+
+    public Builder memorySnapshots(List<MemorySnapshot> memorySnapshots) {
+      this.memorySnapshots = memorySnapshots;
       return this;
     }
 
