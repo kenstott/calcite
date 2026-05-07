@@ -1639,6 +1639,73 @@ views:
       WHERE it.transaction_code IN ('P', 'S')
       GROUP BY fm.company_name, fm.ticker, it.transaction_code
 
+  - name: financial_facts
+    comment: >
+      Normalized financial line items with canonical metric names and scaled dollar values.
+      Joins financial_line_items against an inline concept_aliases mapping to resolve XBRL
+      concept variants (e.g. both us-gaap:Revenues and
+      us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax map to canonical_name=revenue).
+      value_dollars applies the scale factor so callers never need to handle
+      value_numeric * POWER(10, scale) themselves.
+    sql: >
+      SELECT
+        li.cik,
+        li.accession_number,
+        li.filing_date,
+        li.year,
+        li.concept,
+        ca.canonical_name,
+        ca.metric_category,
+        li.context_ref,
+        li.unit_ref_normalized,
+        li.period_start,
+        li.period_end,
+        li.is_instant,
+        li.decimals,
+        li.scale,
+        li.value_numeric,
+        li.value_numeric * POWER(10, COALESCE(li.scale, 0)) AS value_dollars
+      FROM financial_line_items li
+      JOIN (VALUES
+        ('us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'revenue', 'income_statement'),
+        ('us-gaap:Revenues', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueNet', 'revenue', 'income_statement'),
+        ('us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueGoodsNet', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueServicesNet', 'revenue', 'income_statement'),
+        ('us-gaap:GrossProfit', 'gross_profit', 'income_statement'),
+        ('us-gaap:OperatingIncomeLoss', 'operating_income', 'income_statement'),
+        ('us-gaap:NetIncomeLoss', 'net_income', 'income_statement'),
+        ('us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic', 'net_income', 'income_statement'),
+        ('us-gaap:IncomeLossFromContinuingOperations', 'net_income', 'income_statement'),
+        ('us-gaap:CostOfRevenue', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:CostOfGoodsAndServicesSold', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:CostOfGoodsSold', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:ResearchAndDevelopmentExpense', 'rd_expense', 'income_statement'),
+        ('us-gaap:SellingGeneralAndAdministrativeExpense', 'sga_expense', 'income_statement'),
+        ('us-gaap:OperatingExpenses', 'operating_expenses', 'income_statement'),
+        ('us-gaap:EarningsPerShareBasic', 'eps_basic', 'income_statement'),
+        ('us-gaap:EarningsPerShareDiluted', 'eps_diluted', 'income_statement'),
+        ('us-gaap:Assets', 'total_assets', 'balance_sheet'),
+        ('us-gaap:AssetsCurrent', 'current_assets', 'balance_sheet'),
+        ('us-gaap:Liabilities', 'total_liabilities', 'balance_sheet'),
+        ('us-gaap:LiabilitiesCurrent', 'current_liabilities', 'balance_sheet'),
+        ('us-gaap:StockholdersEquity', 'shareholders_equity', 'balance_sheet'),
+        ('us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'shareholders_equity', 'balance_sheet'),
+        ('us-gaap:CashAndCashEquivalentsAtCarryingValue', 'cash', 'balance_sheet'),
+        ('us-gaap:CashCashEquivalentsAndShortTermInvestments', 'cash', 'balance_sheet'),
+        ('us-gaap:LongTermDebt', 'long_term_debt', 'balance_sheet'),
+        ('us-gaap:LongTermDebtNoncurrent', 'long_term_debt', 'balance_sheet'),
+        ('us-gaap:NetCashProvidedByUsedInOperatingActivities', 'operating_cash_flow', 'cash_flow'),
+        ('us-gaap:NetCashProvidedByUsedInInvestingActivities', 'investing_cash_flow', 'cash_flow'),
+        ('us-gaap:NetCashProvidedByUsedInFinancingActivities', 'financing_cash_flow', 'cash_flow'),
+        ('us-gaap:PaymentsToAcquirePropertyPlantAndEquipment', 'capex', 'cash_flow'),
+        ('us-gaap:CapitalExpendituresIncurredButNotYetPaid', 'capex', 'cash_flow'),
+        ('us-gaap:DepreciationDepletionAndAmortization', 'depreciation_amortization', 'cash_flow'),
+        ('us-gaap:ShareBasedCompensation', 'stock_based_compensation', 'cash_flow')
+      ) AS ca(xbrl_concept, canonical_name, metric_category)
+        ON li.concept = ca.xbrl_concept
+
   - name: company_financial_profile
     comment: >
       Denormalised company identity: SEC filing metadata joined to GLEIF CIK-LEI

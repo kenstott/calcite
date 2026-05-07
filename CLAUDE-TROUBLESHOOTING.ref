@@ -207,8 +207,11 @@ Test not running as expected?
 
 ## 🔧 GOVDATA SHADOWJAR DEBUG LOOP
 
-When recompiling the govdata shadowJar and running workers in a debug loop, always use a
-pid-suffixed jar to avoid colliding with other processes using the standard jar.
+When recompiling the govdata shadowJar during a debug/refactor loop, always use a pid-suffixed
+jar. This isolates your debug build from concurrent test or production runs: those processes
+resolve the jar via `find ... | head -1` in common.sh and will keep using the standard jar.
+Without isolation, rebuilding the standard jar mid-run causes any worker that hasn't launched
+yet to pick up your in-progress (possibly broken) build.
 
 ```bash
 # 1. Build
