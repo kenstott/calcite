@@ -4024,6 +4024,10 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    @Override public void close() throws IOException {
+      in.close();
+    }
+
     private static String resolveEntity(String name) {
       if ("amp".equals(name) || "lt".equals(name) || "gt".equals(name)
           || "quot".equals(name) || "apos".equals(name)) {

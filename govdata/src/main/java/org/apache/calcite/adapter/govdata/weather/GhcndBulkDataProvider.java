@@ -35,10 +35,12 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,9 +63,9 @@ import java.util.zip.GZIPInputStream;
  * <p>Units: TMAX/TMIN/TAVG in tenths of °C, PRCP in tenths of mm,
  * AWND in tenths of m/s. SNOW/SNWD are in mm (no conversion needed).
  *
- * <p>The NCEI file is sorted by station ID then date. The iterator accumulates
- * records for one station at a time (max 366 rows in memory) and emits wide rows
- * when the station changes — O(1) steady-state memory.
+ * <p>The NCEI file is sorted by (date, station_id), not by station_id first.
+ * To enable the single-pass station accumulator, all relevant filtered lines are
+ * loaded into memory, sorted by station_id, then streamed into the iterator.
  */
 public class GhcndBulkDataProvider implements DataProvider {
 
@@ -116,8 +118,8 @@ public class GhcndBulkDataProvider implements DataProvider {
     File gzFile = new File(cacheDir, "ghcnd_bulk_" + year + ".csv.gz");
     downloadIfAbsent(gzFile, BULK_URL_TEMPLATE.replace("{year}", year));
 
-    LOGGER.info("GHCND Bulk: streaming year={} from {}", year, gzFile.getAbsolutePath());
-    return new BulkIterator(gzFile, year);
+    List<String> sortedLines = loadAndSortFilteredLines(gzFile, year);
+    return new BulkIterator(sortedLines, year);
   }
 
   // ---------------------------------------------------------------------------
@@ -222,12 +224,57 @@ public class GhcndBulkDataProvider implements DataProvider {
   }
 
   // ---------------------------------------------------------------------------
+  // Sort-before-stream
+  // ---------------------------------------------------------------------------
+
+  private List<String> loadAndSortFilteredLines(File gzFile, String year) throws IOException {
+    List<String> lines = new ArrayList<String>();
+    try (InputStream fis = new FileInputStream(gzFile);
+         InputStream gzis = new GZIPInputStream(new BufferedInputStream(fis, 65536));
+         BufferedReader reader = new BufferedReader(
+             new InputStreamReader(gzis, StandardCharsets.UTF_8), 65536)) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        if (isRelevantLine(line)) {
+          lines.add(line);
+        }
+      }
+    }
+    LOGGER.info("GHCND Bulk year={}: loaded {} relevant lines, sorting by station_id...",
+        year, lines.size());
+    // US GHCND station IDs are all 11 chars — lexicographic sort gives (station_id, date, element)
+    Collections.sort(lines);
+    LOGGER.info("GHCND Bulk year={}: sort complete", year);
+    return lines;
+  }
+
+  private static boolean isRelevantLine(String line) {
+    String[] f = line.split(",", 8);
+    if (f.length < 6) {
+      return false;
+    }
+    if (f[0].length() < 2 || !f[0].startsWith("US")) {
+      return false;
+    }
+    if (!BulkIterator.isRelevantElement(f[2])) {
+      return false;
+    }
+    if (!f[5].isEmpty()) {
+      return false; // non-empty q_flag = failed quality check
+    }
+    if (f[3].isEmpty() || "-9999".equals(f[3])) {
+      return false;
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Streaming iterator
   // ---------------------------------------------------------------------------
 
   private static final class BulkIterator implements Iterator<Map<String, Object>> {
 
-    private final BufferedReader reader;
+    private final Iterator<String> lineIterator;
     private final String year;
 
     private String currentStation = null;
@@ -238,13 +285,10 @@ public class GhcndBulkDataProvider implements DataProvider {
     private boolean eof = false;
     private long linesRead = 0;
     private long rowsEmitted = 0;
-    private IOException pendingError = null;
 
-    BulkIterator(File gzFile, String year) throws IOException {
+    BulkIterator(List<String> sortedLines, String year) {
       this.year = year;
-      InputStream fis = new FileInputStream(gzFile);
-      InputStream gzis = new GZIPInputStream(new BufferedInputStream(fis, 65536));
-      this.reader = new BufferedReader(new InputStreamReader(gzis, StandardCharsets.UTF_8), 65536);
+      this.lineIterator = sortedLines.iterator();
     }
 
     @Override public boolean hasNext() {
@@ -263,34 +307,21 @@ public class GhcndBulkDataProvider implements DataProvider {
     }
 
     private void fillQueue() {
-      try {
-        String line;
-        // Read until we emit at least one record into the queue (station boundary)
-        while ((line = reader.readLine()) != null) {
-          linesRead++;
-          processLine(line);
-          if (!outputQueue.isEmpty()) {
-            return;
-          }
+      // Read until we emit at least one record into the queue (station boundary)
+      while (lineIterator.hasNext()) {
+        linesRead++;
+        processLine(lineIterator.next());
+        if (!outputQueue.isEmpty()) {
+          return;
         }
-        // EOF: emit final station's records
-        eof = true;
-        if (currentStation != null) {
-          emitCurrentStation();
-        }
-        LOGGER.info("GHCND Bulk year={}: read {} lines, emitted {} wide rows",
-            year, linesRead, rowsEmitted);
-        try {
-          reader.close();
-        } catch (IOException ignored) {
-          // best effort
-        }
-      } catch (IOException e) {
-        eof = true;
-        pendingError = e;
-        LOGGER.error("GHCND Bulk year={}: read error after {} lines: {}", year, linesRead,
-            e.getMessage());
       }
+      // EOF: emit final station's records
+      eof = true;
+      if (currentStation != null) {
+        emitCurrentStation();
+      }
+      LOGGER.info("GHCND Bulk year={}: read {} lines, emitted {} wide rows",
+          year, linesRead, rowsEmitted);
     }
 
     private void processLine(String line) {
@@ -396,7 +427,7 @@ public class GhcndBulkDataProvider implements DataProvider {
       currentDays = new LinkedHashMap<String, StationDayRecord>();
     }
 
-    private static boolean isRelevantElement(String element) {
+    static boolean isRelevantElement(String element) {
       return "TMAX".equals(element) || "TMIN".equals(element) || "TAVG".equals(element)
           || "PRCP".equals(element) || "SNOW".equals(element) || "SNWD".equals(element)
           || "AWND".equals(element);

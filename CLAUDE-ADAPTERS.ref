@@ -34,12 +34,6 @@ Always uses 1 catalog: "memory"
 4. **Do NOT set `s3_url_style='path'` when using `iceberg_scan`** — it causes DuckDB to URL-encode
    `=` in data file paths (`source%3Dweather`), breaking S3 requests even with `allow_moved_paths=true`.
 
-5. **DuckDB CLI v1.5.2 vs JDBC v1.4.3.0 behave differently**: CLI v1.5.2 still URL-encodes `=` in
-   parquet data file paths during full scans (COUNT(*) works because it reads only metadata).
-   `allow_moved_paths=true` does not fix this in the CLI. Use local cached files for DQ analysis
-   when the Iceberg table has `=` in its S3 path. The JDBC driver (used by Calcite engine) handles
-   this correctly.
-
 ### Common DuckDB Error Patterns
 ```
 Error: "catalog 'X' does not exist"

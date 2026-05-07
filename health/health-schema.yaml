@@ -1,0 +1,582 @@
+# ============================================================================
+# Health Schema — Phase 1: openFDA (NDC products, drug approvals, drug recalls,
+# adverse events, device recalls)
+# All sources: api.fda.gov — no mandatory auth, optional HEALTH_FDA_API_KEY
+# ============================================================================
+
+schemaName: "${HEALTH_SCHEMA_NAME:health}"
+materializeDirectory: "${HEALTH_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=health}"
+
+comment: >
+  Pharmaceutical safety and public health data. Phase 1 covers five openFDA
+  tables: NDC product catalog, drug approvals, drug recalls, adverse events
+  (FAERS), and device recalls. All sourced from api.fda.gov.
+
+partitionedTables:
+
+  # ==========================================================================
+  # FDA NDC PRODUCTS — master drug reference (~134k records)
+  # ==========================================================================
+  - name: fda_ndc_products
+    pattern: "type=fda_ndc_products"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA National Drug Code directory. Primary drug reference table; join hub
+      for fda_drug_approvals (application_number), rxnorm_drugs (rxcui), and
+      medicaid_drug_utilization (ndc = product_ndc). Covers all finished and
+      unfinished drug products listed with FDA.
+
+    columns:
+      - name: product_ndc
+        type: string
+        nullable: false
+        comment: NDC product code (e.g. "24909-042") — PK
+      - name: generic_name
+        type: string
+        nullable: true
+        comment: INN/generic drug name
+      - name: brand_name
+        type: string
+        nullable: true
+        comment: Proprietary/brand name
+      - name: brand_name_base
+        type: string
+        nullable: true
+        comment: Brand name without suffix
+      - name: labeler_name
+        type: string
+        nullable: true
+        comment: Manufacturer or distributor name
+      - name: dosage_form
+        type: string
+        nullable: true
+        comment: e.g. TABLET, INJECTION, OINTMENT
+      - name: route
+        type: string
+        nullable: true
+        comment: e.g. ORAL, TOPICAL, INTRAVENOUS
+      - name: product_type
+        type: string
+        nullable: true
+        comment: HUMAN OTC DRUG or HUMAN PRESCRIPTION DRUG
+      - name: marketing_category
+        type: string
+        nullable: true
+        comment: NDA, ANDA, OTC MONOGRAPH DRUG, etc.
+      - name: marketing_start_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD
+      - name: application_number
+        type: string
+        nullable: true
+        comment: FK to fda_drug_approvals.application_number
+      - name: rxcui
+        type: string
+        nullable: true
+        comment: RxNorm concept ID — FK to rxnorm_drugs.rxcui (Phase 3)
+      - name: finished
+        type: boolean
+        nullable: true
+        comment: True if finished drug product (vs. bulk ingredient)
+
+    source:
+      type: http
+      url: "https://api.fda.gov/drug/ndc.json"
+      method: GET
+      parameters:
+        api_key: "${HEALTH_FDA_API_KEY:}"
+        limit: "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "limit"
+          offsetParam: "skip"
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 5
+        retryOn: [403, 429]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaNdcResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_ndc_products
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # FDA DRUG APPROVALS — NDA/BLA/ANDA application records (~29k)
+  # ==========================================================================
+  - name: fda_drug_approvals
+    pattern: "type=fda_drug_approvals"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA drug approval applications (NDA, BLA, ANDA). One row per application.
+      FK target for fda_ndc_products.application_number. sponsor_name joins
+      (text) to sec schema company facts and ref.gleif_entities.legal_name.
+
+    columns:
+      - name: application_number
+        type: string
+        nullable: false
+        comment: Application number e.g. NDA022369 — PK
+      - name: sponsor_name
+        type: string
+        nullable: true
+        comment: Applicant/manufacturer — text FK to sec and ref.gleif_entities
+      - name: brand_name
+        type: string
+        nullable: true
+      - name: generic_name
+        type: string
+        nullable: true
+      - name: product_type
+        type: string
+        nullable: true
+      - name: dosage_form
+        type: string
+        nullable: true
+      - name: route
+        type: string
+        nullable: true
+      - name: marketing_status
+        type: string
+        nullable: true
+        comment: Prescription, OTC, Discontinued, etc.
+      - name: te_code
+        type: string
+        nullable: true
+        comment: Therapeutic equivalence code
+      - name: latest_submission_type
+        type: string
+        nullable: true
+        comment: ORIG (original) or SUPPL (supplement)
+      - name: latest_submission_status
+        type: string
+        nullable: true
+        comment: AP = approved, TA = tentatively approved
+      - name: latest_submission_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD of most recent submission action
+      - name: review_priority
+        type: string
+        nullable: true
+        comment: STANDARD or PRIORITY
+
+    source:
+      type: http
+      url: "https://api.fda.gov/drug/drugsfda.json"
+      method: GET
+      parameters:
+        api_key: "${HEALTH_FDA_API_KEY:}"
+        limit: "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "limit"
+          offsetParam: "skip"
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 5
+        retryOn: [403, 429]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugApprovalsResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_drug_approvals
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # FDA DRUG RECALLS — Class I/II/III enforcement actions
+  # ==========================================================================
+  - name: fda_drug_recalls
+    pattern: "type=fda_drug_recalls"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA drug enforcement (recall) actions. Joins to fda_ndc_products via
+      labeler_name (text) or openfda.product_ndc (structural, ~70% populated).
+
+    columns:
+      - name: recall_number
+        type: string
+        nullable: false
+        comment: Recall identifier e.g. D-321-2016 — PK
+      - name: event_id
+        type: string
+        nullable: true
+      - name: status
+        type: string
+        nullable: true
+        comment: Terminated, Ongoing, Pending
+      - name: classification
+        type: string
+        nullable: true
+        comment: Class I (most severe), Class II, Class III
+      - name: voluntary_mandated
+        type: string
+        nullable: true
+      - name: recalling_firm
+        type: string
+        nullable: true
+        comment: Text FK to fda_ndc_products.labeler_name
+      - name: city
+        type: string
+        nullable: true
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.states.state_abbr
+      - name: country
+        type: string
+        nullable: true
+      - name: product_description
+        type: string
+        nullable: true
+      - name: reason_for_recall
+        type: string
+        nullable: true
+      - name: product_quantity
+        type: string
+        nullable: true
+      - name: distribution_pattern
+        type: string
+        nullable: true
+      - name: code_info
+        type: string
+        nullable: true
+        comment: Lot numbers, expiration dates
+      - name: recall_initiation_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD
+      - name: report_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD
+      - name: termination_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD; null if recall is ongoing
+
+    source:
+      type: http
+      url: "https://api.fda.gov/drug/enforcement.json"
+      method: GET
+      parameters:
+        api_key: "${HEALTH_FDA_API_KEY:}"
+        limit: "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "limit"
+          offsetParam: "skip"
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 5
+        retryOn: [403, 429]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugRecallsResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_drug_recalls
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # FDA ADVERSE EVENTS — FAERS reports, windowed to recent years
+  # Default window: HEALTH_FAERS_START_DATE (default 2023-01-01) to present
+  # ==========================================================================
+  - name: fda_adverse_events
+    pattern: "type=fda_adverse_events"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA Adverse Event Reporting System (FAERS). One row per report; reactions
+      are comma-joined from the MedDRA reaction list. Windowed by receivedate
+      to keep volume manageable (default: 2023-01-01 to present, ~20M total).
+      Joins to fda_ndc_products on primary_drug name (text).
+
+    columns:
+      - name: safety_report_id
+        type: string
+        nullable: false
+        comment: FAERS safety report ID — PK
+      - name: receive_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD date report was received
+      - name: receive_year
+        type: string
+        nullable: true
+        comment: 4-digit year derived from receive_date
+      - name: serious
+        type: string
+        nullable: true
+        comment: 1 = serious adverse event
+      - name: serious_death
+        type: string
+        nullable: true
+        comment: 1 = outcome was death
+      - name: patient_age
+        type: string
+        nullable: true
+      - name: patient_age_unit
+        type: string
+        nullable: true
+        comment: 801 = years
+      - name: patient_sex
+        type: string
+        nullable: true
+        comment: 1 = male, 2 = female
+      - name: primary_drug
+        type: string
+        nullable: true
+        comment: First suspect drug name — text FK to fda_ndc_products.generic_name
+      - name: drug_indication
+        type: string
+        nullable: true
+      - name: drug_route
+        type: string
+        nullable: true
+      - name: reactions
+        type: string
+        nullable: true
+        comment: Comma-joined MedDRA reaction preferred terms
+      - name: reporter_country
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      url: "https://api.fda.gov/drug/event.json"
+      method: GET
+      parameters:
+        api_key: "${HEALTH_FDA_API_KEY:}"
+        search: "receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+*]"
+        limit: "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "limit"
+          offsetParam: "skip"
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 5
+        retryOn: [403, 429]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaAdverseEventsResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_adverse_events
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # FDA DEVICE RECALLS — medical device enforcement actions
+  # ==========================================================================
+  - name: fda_device_recalls
+    pattern: "type=fda_device_recalls"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA medical device recall (enforcement) actions. Complementary to
+      fda_drug_recalls; same classification scheme (Class I/II/III).
+
+    columns:
+      - name: cfres_id
+        type: string
+        nullable: false
+        comment: CFRES recall identifier — PK
+      - name: product_res_number
+        type: string
+        nullable: true
+        comment: e.g. Z-0001-04
+      - name: recall_status
+        type: string
+        nullable: true
+        comment: Terminated, Ongoing
+      - name: product_code
+        type: string
+        nullable: true
+        comment: FDA device product classification code
+      - name: k_numbers
+        type: string
+        nullable: true
+        comment: 510(k) premarket notification number
+      - name: recalling_firm
+        type: string
+        nullable: true
+      - name: city
+        type: string
+        nullable: true
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.states.state_abbr
+      - name: product_description
+        type: string
+        nullable: true
+      - name: reason_for_recall
+        type: string
+        nullable: true
+      - name: root_cause_description
+        type: string
+        nullable: true
+        comment: Design, Manufacturing, Labeling, Other, etc.
+      - name: action
+        type: string
+        nullable: true
+        comment: Corrective action taken
+      - name: product_quantity
+        type: string
+        nullable: true
+      - name: distribution_pattern
+        type: string
+        nullable: true
+      - name: event_date_initiated
+        type: string
+        nullable: true
+        comment: YYYY-MM-DD
+      - name: event_date_terminated
+        type: string
+        nullable: true
+        comment: YYYY-MM-DD; null if ongoing
+
+    source:
+      type: http
+      url: "https://api.fda.gov/device/recall.json"
+      method: GET
+      parameters:
+        api_key: "${HEALTH_FDA_API_KEY:}"
+        limit: "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "limit"
+          offsetParam: "skip"
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 5
+        retryOn: [403, 429]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDeviceRecallsResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_device_recalls
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false

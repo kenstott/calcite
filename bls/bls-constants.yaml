@@ -1,0 +1,268 @@
+# BLS (Bureau of Labor Statistics) data downloader constants
+# All configuration values for series IDs, area codes, rate limits, and metadata mappings
+
+# Rate limiting configuration - BLS API enforces strict rate limits
+rateLimits:
+  minRequestIntervalMs: 1100  # 1.1 second interval provides safe margin above BLS 1-second minimum
+  maxRetries: 3
+  retryDelayMs: 2000
+
+# API batching limits - BLS API constraints on request size
+batching:
+  maxSeriesPerRequest: 50  # BLS API limit: 50 series per call
+  maxYearsPerRequest: 20   # BLS API limit: 20 years per call
+
+# State FIPS codes mapping (2-digit codes)
+stateFipsCodes:
+  AL: "01"
+  AK: "02"
+  AZ: "04"
+  AR: "05"
+  CA: "06"
+  CO: "08"
+  CT: "09"
+  DE: "10"
+  DC: "11"
+  FL: "12"
+  GA: "13"
+  HI: "15"
+  ID: "16"
+  IL: "17"
+  IN: "18"
+  IA: "19"
+  KS: "20"
+  KY: "21"
+  LA: "22"
+  ME: "23"
+  MD: "24"
+  MA: "25"
+  MI: "26"
+  MN: "27"
+  MS: "28"
+  MO: "29"
+  MT: "30"
+  NE: "31"
+  NV: "32"
+  NH: "33"
+  NJ: "34"
+  NM: "35"
+  NY: "36"
+  NC: "37"
+  ND: "38"
+  OH: "39"
+  OK: "40"
+  OR: "41"
+  PA: "42"
+  RI: "44"
+  SC: "45"
+  SD: "46"
+  TN: "47"
+  TX: "48"
+  UT: "49"
+  VT: "50"
+  VA: "51"
+  WA: "53"
+  WV: "54"
+  WI: "55"
+  WY: "56"
+
+# Census region codes (4-digit codes)
+censusRegions:
+  "0100": Northeast
+  "0200": Midwest
+  "0300": South
+  "0400": West
+
+# BLS 2-letter region codes used in JOLTS and other regional series
+blsRegionCodes:
+  NE: Northeast
+  MW: Midwest
+  SO: South
+  WE: West
+
+# Metro CPI area codes mapping: Publication Code → CPI Area Code
+# Format for CPI series: CUUR{area_code}SA0
+metroCpiCodes:
+  A100:
+    cpiCode: S35D
+    name: New York-Newark-Jersey City, NY-NJ-PA
+  A400:
+    cpiCode: S49G
+    name: Los Angeles-Long Beach-Anaheim, CA
+  A207:
+    cpiCode: S12A
+    name: Chicago-Naperville-Elgin, IL-IN-WI
+  A425:
+    cpiCode: S37B
+    name: Houston-The Woodlands-Sugar Land, TX
+  A423:
+    cpiCode: S49B
+    name: Phoenix-Mesa-Scottsdale, AZ
+  A102:
+    cpiCode: S12B
+    name: Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
+  A426:
+    cpiCode: null
+    name: San Antonio-New Braunfels, TX
+    comment: No CPI data available
+  A421:
+    cpiCode: S49E
+    name: San Diego-Carlsbad, CA
+  A127:
+    cpiCode: S23A
+    name: Dallas-Fort Worth-Arlington, TX
+  A429:
+    cpiCode: S49A
+    name: San Jose-Sunnyvale-Santa Clara, CA
+  A438:
+    cpiCode: null
+    name: Austin-Round Rock, TX
+    comment: No CPI data available
+  A420:
+    cpiCode: S35C
+    name: Jacksonville, FL
+  A103:
+    cpiCode: S35E
+    name: Boston-Cambridge-Newton, MA-NH
+  A428:
+    cpiCode: S48B
+    name: Seattle-Tacoma-Bellevue, WA
+  A427:
+    cpiCode: S48A
+    name: Denver-Aurora-Lakewood, CO
+  A101:
+    cpiCode: S35B
+    name: Washington-Arlington-Alexandria, DC-VA-MD-WV
+  A211:
+    cpiCode: S23B
+    name: Detroit-Warren-Dearborn, MI
+  A104:
+    cpiCode: null
+    name: Cleveland-Elyria, OH
+    comment: No CPI data available
+  A212:
+    cpiCode: S24A
+    name: Minneapolis-St. Paul-Bloomington, MN-WI
+  A422:
+    cpiCode: S35C
+    name: Miami-Fort Lauderdale-West Palm Beach, FL
+  A419:
+    cpiCode: S35A
+    name: Atlanta-Sandy Springs-Roswell, GA
+  A437:
+    cpiCode: S49C
+    name: Portland-Vancouver-Hillsboro, OR-WA
+  A424:
+    cpiCode: S49D
+    name: Riverside-San Bernardino-Ontario, CA
+  A320:
+    cpiCode: S24B
+    name: St. Louis, MO-IL
+  A319:
+    cpiCode: null
+    name: Baltimore-Columbia-Towson, MD
+    comment: No CPI data available
+  A433:
+    cpiCode: S35D
+    name: Tampa-St. Petersburg-Clearwater, FL
+    comment: Shares NYC code
+  A440:
+    cpiCode: null
+    name: Anchorage, AK
+    comment: No CPI data available
+
+# BLS area codes mapping: Publication Code → State(2) + BLS Area Code(5)
+# Format for SMU/ENU series: State Code (2 digits) + Area Code (5 digits)
+metroBlsAreaCodes:
+  A100: "3693561"
+  A400: "0631080"
+  A207: "1716980"
+  A425: "4826420"
+  A423: "0438060"
+  A102: "4237980"
+  A426: "4841700"
+  A421: "0641740"
+  A127: "4819100"
+  A429: "0641940"
+  A438: "4812420"
+  A420: "1227260"
+  A103: "2514460"
+  A428: "5342660"
+  A427: "0819740"
+  A101: "1147900"
+  A211: "2619820"
+  A104: "3917460"
+  A212: "2733460"
+  A422: "1233100"
+  A419: "1312060"
+  A437: "4138900"
+  A424: "0640140"
+  A320: "2941180"
+  A319: "2412580"
+  A433: "1245300"
+  A440: "0211260"
+
+# BLS measure codes (last digit of series ID) to human-readable measure names
+measureCodes:
+  "3": unemployment_rate
+  "4": unemployment
+  "5": employment
+  "6": labor_force
+
+# NAICS supersector codes for industry employment
+naicsSupersectors:
+  "00000000": Total Nonfarm
+  "05000000": Total Private
+  "06000000": Goods Producing
+  "07000000": Service Providing
+  "08000000": Private Service Providing
+  "10000000": Mining and Logging
+  "20000000": Construction
+  "30000000": Manufacturing
+  "31000000": Durable Goods
+  "32000000": Nondurable Goods
+  "40000000": Trade, Transportation, and Utilities
+  "41000000": Wholesale Trade
+  "42000000": Retail Trade
+  "43000000": Transportation and Warehousing
+  "44000000": Utilities
+  "50000000": Information
+  "55000000": Financial Activities
+  "60000000": Professional and Business Services
+  "65000000": Education and Health Services
+  "70000000": Leisure and Hospitality
+  "80000000": Other Services
+  "90000000": Government
+
+# Common BLS series IDs for economic indicators
+seriesIds:
+  employment:
+    unemploymentRate: LNS14000000
+    employmentLevel: CES0000000001
+    laborForceParticipation: LNS11300000
+  inflation:
+    cpiAllUrban: CUUR0000SA0
+    cpiCore: CUUR0000SA0L1E
+    ppiFinalDemand: WPUFD4
+  wages:
+    avgHourlyEarnings: CES0500000003
+    employmentCostIndex: CIU1010000000000A
+
+# BLS table names
+tableNames:
+  employmentStatistics: employment_statistics
+  inflationMetrics: inflation_metrics
+  regionalCpi: regional_cpi
+  metroCpi: metro_cpi
+  stateIndustry: state_industry
+  stateWages: state_wages
+  countyWages: county_wages
+  countyQcew: county_qcew
+  metroIndustry: metro_industry
+  metroWages: metro_wages
+  joltsRegional: jolts_regional
+  joltsState: jolts_state
+  wageGrowth: wage_growth
+  regionalEmployment: regional_employment
+  referenceJoltsIndustries: reference_jolts_industries
+  referenceJoltsDataelements: reference_jolts_dataelements
