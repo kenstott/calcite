@@ -205,6 +205,34 @@ Test not running as expected?
     └─ Verify network connectivity for integration tests
 ```
 
+## 🔧 GOVDATA SHADOWJAR DEBUG LOOP
+
+When recompiling the govdata shadowJar and running workers in a debug loop, always use a
+pid-suffixed jar to avoid colliding with other processes using the standard jar.
+
+```bash
+# 1. Build
+./gradlew :govdata:shadowJar
+
+# 2. Copy to pid-named jar in the same directory
+JAR_DIR=govdata/build/libs
+PID_JAR="$JAR_DIR/calcite-govdata-$$-all.jar"
+cp "$JAR_DIR"/calcite-govdata-*-SNAPSHOT-all.jar "$PID_JAR"
+
+# 3. Run worker explicitly against the pid-named jar (bypasses the glob in common.sh)
+java -cp "$PID_JAR" <worker-main-class> <args>
+
+# 4. Iterate: rebuild, re-copy, re-run as needed
+
+# 5. ALWAYS clean up when done — never leave temp jars in build/libs
+rm -f "$PID_JAR"
+```
+
+**Rules:**
+- Never leave a pid-named jar in `build/libs` after debugging — it will be picked up by the
+  `find ... | head -1` glob in `common.sh` and may shadow the production jar for other workers.
+- Always remove the temp jar before committing or handing off to another process.
+
 ## 🧹 CLEANUP PROTOCOLS
 
 ### Debug Code Cleanup Checklist
