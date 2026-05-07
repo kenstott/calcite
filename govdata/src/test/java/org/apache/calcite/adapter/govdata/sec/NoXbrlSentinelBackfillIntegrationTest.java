@@ -156,9 +156,9 @@ public class NoXbrlSentinelBackfillIntegrationTest {
     String raw = System.getenv("GOVDATA_PARQUET_DIR");
     if (raw != null && !raw.isEmpty()) {
       String base = raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
-      return base + "/source=sec";
+      return base + "/sec";
     }
-    return "s3://govdata-parquet-v1/source=sec";
+    return "s3://govdata-parquet-v1/sec";
   }
 
   private static StorageProvider buildStorageProvider() {

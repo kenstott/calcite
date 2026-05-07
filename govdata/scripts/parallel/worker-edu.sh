@@ -32,7 +32,7 @@
 #
 # Required env vars (set in .env.prod or equivalent):
 #   EDU_PARQUET_DIR         Local/S3 path for Parquet output
-#                           (falls back to ${GOVDATA_PARQUET_DIR}/source=edu)
+#                           (falls back to ${GOVDATA_PARQUET_DIR}/edu)
 #   EDU_CACHE_DIR           Local/S3 path for raw download cache
 #                           (falls back to ${GOVDATA_CACHE_DIR}/edu)
 #
@@ -76,7 +76,7 @@ run_edu_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-  local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/source=edu}"
+  local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/edu}"
   local cache_dir="${EDU_CACHE_DIR:-${GOVDATA_CACHE_DIR}/edu}"
   local end_year_json=""
   [ -n "$end_year" ] && end_year_json=",

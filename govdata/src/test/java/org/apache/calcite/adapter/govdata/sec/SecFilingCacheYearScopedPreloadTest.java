@@ -38,9 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class SecFilingCacheYearScopedPreloadTest {
 
-  // Production: govdataParquetDir already includes /source=sec (set by materializeDirectory in
+  // Production: govdataParquetDir already includes /sec (set by materializeDirectory in
   // sec-schema.yaml). SecFilingCache receives this value directly as parquetBaseDir.
-  private static final String PARQUET_BASE = "s3://govdata-parquet-v1/source=sec";
+  private static final String PARQUET_BASE = "s3://govdata-parquet-v1/sec";
   private static final String SEC_DIR = PARQUET_BASE;
 
   // ---------------------------------------------------------------------------

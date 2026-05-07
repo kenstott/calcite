@@ -194,7 +194,7 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
-   * Scans only the {@code source=sec/year=YYYY/} partitions for {@code startYear..endYear}
+   * Scans only the {@code sec/year=YYYY/} partitions for {@code startYear..endYear}
    * and caches all known file paths in memory.
    *
    * <p>After this call, {@link #checkS3Files} answers existence queries from the
@@ -202,7 +202,7 @@ public class SecFilingCache implements AutoCloseable {
    *
    * <p>Cost: one paginated {@code ListObjectsV2} scan per year partition
    * (roughly 1 Class A op per 1 000 files in each year).  Scoping to the worker's
-   * actual year range avoids listing the full multi-million-file {@code source=sec/}
+   * actual year range avoids listing the full sec/}
    * prefix that would otherwise cost 1 000+ Class A ops and take many minutes.
    *
    * <p>Thread-safety note: both caches are replaced atomically.  Workers operating on
@@ -233,9 +233,9 @@ public class SecFilingCache implements AutoCloseable {
       totalBatchFiles += result[1];
     }
 
-    // Legacy fallback: previous builds wrote staging to source=sec/source=sec/ due to a
+    // Legacy fallback: previous builds wrote staging to sec/sec/ due to a
     // double-append bug. Scan that subtree too so self-healing can find those files.
-    String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "sec");
     if (!legacySecDir.equals(secDir)) {
       int legacyVirtual = 0;
       int legacyBatchFiles = 0;

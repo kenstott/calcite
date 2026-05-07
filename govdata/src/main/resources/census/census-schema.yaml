@@ -14,7 +14,7 @@
 
 schemaName: "${SCHEMA_NAME:census}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=census"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/census"
 
 comment: >
   U.S. Census Bureau demographic and population data including American Community Survey (ACS)
@@ -207,7 +207,7 @@ dimension_values:
 materializationDefaults:
   format: iceberg
   options:
-    warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+    warehousePath: "${GOVDATA_PARQUET_DIR}/census"
     icebergTableName: "${TABLE_NAME}"
     catalogType: hadoop
     runCompaction: true
@@ -298,7 +298,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_population
         catalogType: hadoop
         runCompaction: true
@@ -366,7 +366,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_income
         catalogType: hadoop
         runCompaction: true
@@ -449,7 +449,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_housing
         catalogType: hadoop
         runCompaction: true
@@ -532,7 +532,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_education
         catalogType: hadoop
         runCompaction: true
@@ -610,7 +610,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_employment
         catalogType: hadoop
         runCompaction: true
@@ -678,7 +678,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_poverty
         catalogType: hadoop
         runCompaction: true
@@ -768,7 +768,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: decennial_population
         catalogType: hadoop
         runCompaction: true
@@ -864,7 +864,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_race_ethnicity
         catalogType: hadoop
         runCompaction: true
@@ -939,7 +939,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_age
         catalogType: hadoop
         runCompaction: true
@@ -1030,7 +1030,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_commuting
         catalogType: hadoop
         runCompaction: true
@@ -1105,7 +1105,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_health_insurance
         catalogType: hadoop
         runCompaction: true
@@ -1190,7 +1190,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_language
         catalogType: hadoop
         runCompaction: true
@@ -1270,7 +1270,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_disability
         catalogType: hadoop
         runCompaction: true
@@ -1345,7 +1345,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_veterans
         catalogType: hadoop
         runCompaction: true
@@ -1425,7 +1425,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_migration
         catalogType: hadoop
         runCompaction: true
@@ -1505,7 +1505,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_occupation
         catalogType: hadoop
         runCompaction: true
@@ -1625,7 +1625,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_industry
         catalogType: hadoop
         runCompaction: true
@@ -1707,7 +1707,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_internet
         catalogType: hadoop
         runCompaction: true
@@ -1782,7 +1782,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_nativity
         catalogType: hadoop
         runCompaction: true
@@ -1898,7 +1898,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_marital_status
         catalogType: hadoop
         runCompaction: true
@@ -1988,7 +1988,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_household_type
         catalogType: hadoop
         runCompaction: true
@@ -2068,7 +2068,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_housing_tenure
         catalogType: hadoop
         runCompaction: true
@@ -2158,7 +2158,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_income_distribution
         catalogType: hadoop
         runCompaction: true
@@ -2232,7 +2232,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: decennial_housing
         catalogType: hadoop
         runCompaction: true
@@ -2315,7 +2315,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: pep_population
         catalogType: hadoop
         runCompaction: true
@@ -2399,7 +2399,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: cbp_establishments
         catalogType: hadoop
         runCompaction: true
@@ -2474,7 +2474,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs1_population
         catalogType: hadoop
         runCompaction: true
@@ -2533,7 +2533,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs1_income
         catalogType: hadoop
         runCompaction: true
@@ -2630,7 +2630,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: economic_census
         catalogType: hadoop
         runCompaction: true
@@ -2716,7 +2716,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: saipe_poverty
         catalogType: hadoop
         runCompaction: true
@@ -2795,7 +2795,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: sahie_insurance
         catalogType: hadoop
         runCompaction: true
@@ -2884,7 +2884,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: bds_dynamics
         catalogType: hadoop
         runCompaction: true
@@ -2961,7 +2961,7 @@ partitionedTables:
       partition:
         columns: [type, year, geography]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: abs_characteristics
         catalogType: hadoop
         runCompaction: true
@@ -3043,7 +3043,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: nonemployer_statistics
         catalogType: hadoop
         runCompaction: true
@@ -3154,7 +3154,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: building_permits
         catalogType: hadoop
         runCompaction: true
@@ -3260,7 +3260,7 @@ partitionedTables:
       partition:
         columns: [type, time]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: qwi_employment
         catalogType: hadoop
         runCompaction: true
@@ -3367,7 +3367,7 @@ partitionedTables:
       partition:
         columns: [type, year, state]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: lodes_workplace
         catalogType: hadoop
         runCompaction: true
@@ -3446,7 +3446,7 @@ partitionedTables:
       partition:
         columns: [type, direction, time]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: trade_exports
         catalogType: hadoop
         runCompaction: true
@@ -3520,7 +3520,7 @@ partitionedTables:
       partition:
         columns: [type, direction, time]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: trade_imports
         catalogType: hadoop
         runCompaction: true

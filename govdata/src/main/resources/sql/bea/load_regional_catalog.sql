@@ -2,7 +2,7 @@
 -- Uses wildcard pattern to read multiple parquet files at once
 -- Parameters: {wildcardPath}
 -- Usage (CLI):
---   sed 's|{wildcardPath}|s3://bucket/source=econ/type=reference/tablename=*/linecodes.parquet|g' \
+--   sed 's|{wildcardPath}|s3://bucket/econ/type=reference/tablename=*/linecodes.parquet|g' \
 --       load_regional_catalog.sql | duckdb
 --
 -- Returns: TableName, LineCode pairs sorted by TableName then LineCode

@@ -54,7 +54,7 @@ S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
 S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE:-}"
 TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
 
-ICEBERG_BASE="$S3_BUCKET/source=sec/SEC"
+ICEBERG_BASE="$S3_BUCKET/sec"
 
 SEC_TABLES=(
     "filing_contexts"

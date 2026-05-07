@@ -38,7 +38,7 @@ fi
 
 S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-4}"
 S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE}"
-ICEBERG_PATH="$S3_BUCKET/source=sec/SEC/vectorized_chunks"
+ICEBERG_PATH="$S3_BUCKET/sec/vectorized_chunks"
 OPERATING_DIR="${GOVDATA_HOME}/build/.aperio/sec"
 PARTITION_DB="$OPERATING_DIR/.partition_status.duckdb"
 VSS_DB="${VSS_DB:-$GOVDATA_HOME/build/.aperio/vss/chunks_vss.duckdb}"
@@ -57,7 +57,7 @@ echo ""
 # -----------------------------------------------
 echo "Step 1: Deleting staging *_chunks.parquet files from S3..."
 
-DELETED=$(aws s3 rm "$S3_BUCKET/source=sec/" \
+DELETED=$(aws s3 rm "$S3_BUCKET/sec/" \
     --recursive \
     --exclude "*" \
     --include "*_chunks.parquet" \
@@ -91,7 +91,7 @@ except Exception as e1:
     # Fallback: try in-memory catalog with S3 warehouse
     try:
         s3_bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
-        warehouse = f"{s3_bucket}/source=sec/SEC".replace("s3://", "s3a://")
+        warehouse = f"{s3_bucket}/sec".replace("s3://", "s3a://")
 
         catalog = load_catalog("default", **{
             "type": "in-memory",
@@ -110,7 +110,7 @@ except Exception as e1:
         import subprocess
         bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
         endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
-        iceberg_meta = f"{bucket}/source=sec/SEC/vectorized_chunks/metadata/"
+        iceberg_meta = f"{bucket}/sec/vectorized_chunks/metadata/"
         result = subprocess.run(
             ["aws", "s3", "rm", iceberg_meta, "--recursive", "--endpoint-url", endpoint],
             capture_output=True, text=True

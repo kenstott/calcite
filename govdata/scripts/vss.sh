@@ -69,7 +69,7 @@ SET unsafe_enable_version_guessing = true;
 
 CREATE TEMP TABLE keys AS
 SELECT cik, accession_number, chunk_id
-FROM iceberg_scan('s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks')
+FROM iceberg_scan('s3://govdata-parquet-v1/sec/vectorized_chunks')
 WHERE "year" = ${YEAR}
 LIMIT 50000;
 
@@ -78,7 +78,7 @@ SELECT COUNT(*) as keys FROM keys;
 CREATE TABLE chunks AS
 SELECT src.cik, src.accession_number, src."year" as yr, src.chunk_id,
        src.section, src.chunk_text, src.embedding
-FROM iceberg_scan('s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks') src
+FROM iceberg_scan('s3://govdata-parquet-v1/sec/vectorized_chunks') src
 WHERE EXISTS (SELECT 1 FROM keys k WHERE k.cik = src.cik AND k.accession_number = src.accession_number AND k.chunk_id = src.chunk_id);
 
 SELECT COUNT(*) as chunks FROM chunks;

@@ -7,7 +7,7 @@
 # ============================================================================
 
 schemaName: "${EDU_SCHEMA_NAME:edu}"
-materializeDirectory: "${EDU_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=edu}"
+materializeDirectory: "${EDU_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/edu}"
 
 comment: >
   Institutional education data for K-12 districts, schools, and higher education.

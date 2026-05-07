@@ -10,7 +10,7 @@ SET unsafe_enable_version_guessing = true;
 -- Insert only new accessions
 INSERT INTO vectorized_chunks
 SELECT src.*
-FROM iceberg_scan('s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks') src
+FROM iceberg_scan('s3://govdata-parquet-v1/sec/vectorized_chunks') src
 WHERE src.accession_number NOT IN (
     SELECT accession_number FROM loaded_accessions
 )
@@ -19,7 +19,7 @@ AND src.embedding IS NOT NULL;
 -- Track newly loaded accessions
 INSERT INTO loaded_accessions (accession_number)
 SELECT DISTINCT accession_number 
-FROM iceberg_scan('s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks')
+FROM iceberg_scan('s3://govdata-parquet-v1/sec/vectorized_chunks')
 WHERE accession_number NOT IN (
     SELECT accession_number FROM loaded_accessions
 );

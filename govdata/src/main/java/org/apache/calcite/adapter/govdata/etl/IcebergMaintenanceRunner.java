@@ -41,7 +41,7 @@ import java.util.Map;
  * <pre>
  * # Compact a table on S3/R2
  * java -cp "build/libs/*" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
- *   --warehouse s3a://govdata-parquet-v1/source=sec/SEC \
+ *   --warehouse s3a://govdata-parquet-v1/sec \
  *   --table vectorized_chunks \
  *   --s3-access-key $AWS_ACCESS_KEY_ID \
  *   --s3-secret-key $AWS_SECRET_ACCESS_KEY \
@@ -49,7 +49,7 @@ import java.util.Map;
  *
  * # Dry run (report only)
  * java -cp "build/libs/*" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
- *   --warehouse s3a://govdata-parquet-v1/source=sec/SEC \
+ *   --warehouse s3a://govdata-parquet-v1/sec \
  *   --table vectorized_chunks \
  *   --s3-access-key $AWS_ACCESS_KEY_ID \
  *   --s3-secret-key $AWS_SECRET_ACCESS_KEY \

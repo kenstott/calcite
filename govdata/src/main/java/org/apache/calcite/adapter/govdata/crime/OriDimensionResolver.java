@@ -58,7 +58,7 @@ import java.util.Map;
  *   ori:
  *     type: custom
  *     properties:
- *       agenciesTablePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME/cde_agencies"
+ *       agenciesTablePath: "${GOVDATA_PARQUET_DIR}/crime/cde_agencies"
  * }</pre>
  */
 public class OriDimensionResolver implements DimensionResolver {

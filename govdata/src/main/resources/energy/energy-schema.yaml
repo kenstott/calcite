@@ -23,7 +23,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:energy}"
-materializeDirectory: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=energy}"
+materializeDirectory: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/energy}"
 
 comment: >
   Comprehensive U.S. energy data from the Energy Information Administration (EIA) and
@@ -82,7 +82,7 @@ column_templates:
     enabled: true
 
   iceberg_common: &iceberg_common
-    warehousePath: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=energy}/ENERGY"
+    warehousePath: "${ENERGY_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/energy}"
     catalogType: hadoop
     runCompaction: true
     compactionTargetFileSizeBytes: 134217728

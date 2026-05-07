@@ -454,7 +454,7 @@ check_pending_chunks() {
     log "Pre-flight check: Checking for chunks that need embeddings..."
 
     local s3_endpoint="${AWS_ENDPOINT_OVERRIDE#https://}"
-    local iceberg_chunks="s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks"
+    local iceberg_chunks="s3://govdata-parquet-v1/sec/vectorized_chunks"
 
     # Use python+duckdb to check pending chunks. The system duckdb CLI (1.4.x)
     # has a filter pushdown bug on list columns in iceberg_scan that silently

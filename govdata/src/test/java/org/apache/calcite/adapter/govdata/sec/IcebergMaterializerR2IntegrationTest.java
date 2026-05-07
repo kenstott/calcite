@@ -61,7 +61,7 @@ public class IcebergMaterializerR2IntegrationTest {
   // Use CIK prefix in glob to read only Apple filings — avoids scanning all year=2024 files.
   // Files are named {cik}_{accession}_metadata.parquet, so 0000320193_* matches only Apple.
   private static final String SOURCE_PATTERN =
-      "s3://" + BUCKET + "/source=sec/year=2024/0000320193_*_metadata.parquet";
+      "s3://" + BUCKET + "/sec/year=2024/0000320193_*_metadata.parquet";
   private static final String WAREHOUSE =
       "s3a://" + BUCKET + "/ci-test/iceberg-r2-validate";
   private static final String TABLE_ID = "filing_metadata_ci_test";
@@ -69,7 +69,7 @@ public class IcebergMaterializerR2IntegrationTest {
   // Batch-style source pattern: {tableType}_batch_{N}.parquet files written by LocalStagingStorageProvider.
   // Use first two metadata_batch files to keep test fast while covering multi-file discovery.
   private static final String BATCH_SOURCE_PATTERN =
-      "s3://" + BUCKET + "/source=sec/year=*/metadata_batch*.parquet";
+      "s3://" + BUCKET + "/sec/year=*/metadata_batch*.parquet";
   private static final String BATCH_STAGING_TABLE_ID = "filing_metadata_ci_batch_staging_test";
 
   // Apple Inc. — small, well-known, reliably has 2024 filings.

@@ -41,7 +41,7 @@ import java.util.Set;
 /**
  * One-time DQ patch job for filing_metadata parquet files in R2.
  *
- * <p>Reads each {@code *_metadata.parquet} under {@code govdata-parquet-v1/source=sec/},
+ * <p>Reads each {@code *_metadata.parquet} under {@code govdata-parquet-v1/sec/},
  * skips non-patchable filings, applies DQ normalization (filing_type, period_of_report,
  * fiscal_year_end, ticker, sic_code, fiscal_year), and rewrites in place.
  *
@@ -62,7 +62,7 @@ public class FilingMetadataPatchJob {
   private static final Logger LOGGER = LoggerFactory.getLogger(FilingMetadataPatchJob.class);
 
   private static final String BUCKET = "govdata-parquet-v1";
-  private static final String SEC_PREFIX = "source=sec/";
+  private static final String SEC_PREFIX = "sec/";
 
   private static final Set<String> PATCHABLE_TYPES = new HashSet<>(Arrays.asList(
       "10-K", "10-Q", "10-K/A", "10-Q/A",

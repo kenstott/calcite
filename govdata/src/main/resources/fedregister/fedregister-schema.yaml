@@ -15,7 +15,7 @@
 
 schemaName: "${SCHEMA_NAME:fedregister}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=fedregister"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/fedregister"
 
 comment: >
   U.S. Federal Register documents from the Office of the Federal Register API.

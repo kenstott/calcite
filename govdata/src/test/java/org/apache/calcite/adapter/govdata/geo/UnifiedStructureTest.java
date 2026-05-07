@@ -42,7 +42,7 @@ public class UnifiedStructureTest {
 
     // Use the unified directory on T9
     String baseDir = "/Volumes/T9/govdata-parquet";
-    File geoDir = new File(baseDir, "source=geo");
+    File geoDir = new File(baseDir, "geo");
     File demographicDir = new File(geoDir, "type=demographic");
     demographicDir.mkdirs();
 

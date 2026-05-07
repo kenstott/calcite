@@ -21,7 +21,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:ref}"
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=ref"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/ref"
 
 comment: >
   Reference and cross-referencing tables for financial entity identification.

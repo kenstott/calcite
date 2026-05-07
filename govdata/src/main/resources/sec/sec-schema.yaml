@@ -17,7 +17,7 @@
 
 schemaName: "${SCHEMA_NAME:sec}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=sec"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/sec"
 refreshInterval: "PT1H"
 
 comment: >
@@ -280,7 +280,7 @@ materialize_defaults: &materialize_defaults
     stagingMode: local
 
 iceberg_defaults: &iceberg_defaults
-  warehousePath: "${GOVDATA_PARQUET_DIR}/source=sec/SEC"
+  warehousePath: "${GOVDATA_PARQUET_DIR}/sec"
   catalogType: hadoop
   targetFileSizeBytes: 134217728  # 128MB
   runMaintenance: true

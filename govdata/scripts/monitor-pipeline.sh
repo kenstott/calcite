@@ -15,7 +15,7 @@ fi
 : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY not set}"
 : "${AWS_ENDPOINT_OVERRIDE:?AWS_ENDPOINT_OVERRIDE not set}"
 
-GOVDATA_PARQUET_BASE="${GOVDATA_PARQUET_BASE:-s3://govdata-parquet-v1/source=sec/SEC}"
+GOVDATA_PARQUET_BASE="${GOVDATA_PARQUET_BASE:-s3://govdata-parquet-v1/sec}"
 ENDPOINT="${AWS_ENDPOINT_OVERRIDE#https://}"
 ENDPOINT="${ENDPOINT%/}"
 
@@ -60,7 +60,7 @@ $1" 2>&1 | _strip_success; }
 echo "--- Raw Staging Filings by Year (metadata_batch*.parquet) ---"
 run_duckdb "
 SELECT year, count(*) AS raw_filings, count(DISTINCT cik) AS distinct_ciks
-FROM read_parquet('${GOVDATA_PARQUET_BASE%/source=sec/SEC}/source=sec/year=*/metadata_batch*.parquet',
+FROM read_parquet('${GOVDATA_PARQUET_BASE}/year=*/metadata_batch*.parquet',
                   hive_partitioning=true)
 WHERE year >= 2019
 GROUP BY year ORDER BY year;

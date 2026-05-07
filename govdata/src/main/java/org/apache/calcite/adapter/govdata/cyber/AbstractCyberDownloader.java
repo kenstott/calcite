@@ -51,7 +51,7 @@ public abstract class AbstractCyberDownloader {
 
   protected final StorageProvider storageProvider;
 
-  /** Absolute path to the table's parquet directory (e.g. {@code /data/source=cyber/vuln}). */
+  /** Absolute path to the table's parquet directory (e.g. {@code /data/cyber_vuln}). */
   protected final String parquetDirectory;
 
   protected final HttpClient httpClient;

@@ -47,7 +47,7 @@ public class QuickGeoDownloadTest {
     System.out.println("Base directory: " + baseDir);
 
     // Create hive-partitioned structure
-    File geoDir = new File(baseDir, "source=geo");
+    File geoDir = new File(baseDir, "geo");
     File boundaryDir = new File(geoDir, "type=boundary");
     boundaryDir.mkdirs();
 
@@ -73,7 +73,7 @@ public class QuickGeoDownloadTest {
     showStructure(geoDir, "");
 
     // Verify the hive partitioning
-    assertTrue(statesDir.getAbsolutePath().contains("source=geo"), "Should be in geo partition");
+    assertTrue(statesDir.getAbsolutePath().contains("geo"), "Should be in geo partition");
     assertTrue(statesDir.getAbsolutePath().contains("type=boundary"), "Should be in boundary partition");
 
     System.out.println("\n✓ SUCCESS: Geographic data downloaded into unified hive-partitioned structure!");

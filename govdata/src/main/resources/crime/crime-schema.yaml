@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:crime}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=crime"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/crime"
 
 comment: >
   Comprehensive U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and
@@ -300,7 +300,7 @@ partitionedTables:
       partition:
         columns: [type, state_abbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_agencies
         catalogType: hadoop
         runCompaction: true
@@ -383,7 +383,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_offenses
         catalogType: hadoop
         runCompaction: true
@@ -459,7 +459,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_police_employment
         catalogType: hadoop
         runCompaction: true
@@ -519,7 +519,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_hate_crimes
         catalogType: hadoop
         runCompaction: true
@@ -578,7 +578,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_use_of_force
         catalogType: hadoop
         runCompaction: true
@@ -608,7 +608,7 @@ partitionedTables:
         type: custom
         properties:
           contextKey: state_abbr
-          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME/cde_agencies"
+          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/crime/cde_agencies"
 
     columns:
       - name: ori
@@ -669,7 +669,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_crime_agency
         catalogType: hadoop
         runCompaction: true
@@ -737,7 +737,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_arrests
         catalogType: hadoop
         runCompaction: true
@@ -800,7 +800,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_shr
         catalogType: hadoop
         runCompaction: true
@@ -863,7 +863,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_leoka
         catalogType: hadoop
         runCompaction: true
@@ -931,7 +931,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_trends
         catalogType: hadoop
         runCompaction: true
@@ -994,7 +994,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_supplemental
         catalogType: hadoop
         runCompaction: true
@@ -1061,7 +1061,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_cargo_theft
         catalogType: hadoop
         runCompaction: true
@@ -1124,7 +1124,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_human_trafficking
         catalogType: hadoop
         runCompaction: true
@@ -1188,7 +1188,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_participation
         catalogType: hadoop
         runCompaction: true
@@ -1263,7 +1263,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_estimates
         catalogType: hadoop
         runCompaction: true
@@ -1377,7 +1377,7 @@ partitionedTables:
       partition:
         columns: [type, endpoint_id]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_nibrs_estimates
         catalogType: hadoop
         runCompaction: true
@@ -1497,7 +1497,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal
         catalogType: hadoop
         runCompaction: true
@@ -1600,7 +1600,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal_pop
         catalogType: hadoop
         runCompaction: true
@@ -1698,7 +1698,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household
         catalogType: hadoop
         runCompaction: true
@@ -1784,7 +1784,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household_pop
         catalogType: hadoop
         runCompaction: true

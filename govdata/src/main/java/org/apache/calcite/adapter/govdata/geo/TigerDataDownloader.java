@@ -480,7 +480,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build parquet target path
     String outputPath =
-        storageProvider.resolvePath(parquetDirectory, "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
+        storageProvider.resolvePath(parquetDirectory, "type=boundary/" + yearPath + "/" + tableName + ".parquet");
 
     // Build cache key params
     java.util.Map<String, String> params = new java.util.HashMap<>();

@@ -2,7 +2,7 @@
 # spot-check-iceberg.sh — Data quality spot check using DuckDB + iceberg_scan
 #
 # SEC Iceberg catalog lives at:
-#   s3://govdata-parquet-4/source=sec/SEC/{tableName}/
+#   s3://govdata-parquet-4/sec/{tableName}/
 #
 # Tables: filing_metadata, financial_line_items, filing_contexts, mda_sections,
 #         xbrl_relationships, insider_transactions, earnings_transcripts,
@@ -27,7 +27,7 @@ while IFS='=' read -r key value; do
   export "$key=$value"
 done < <(grep -E '^[A-Z_]+=.' "$ENV_FILE")
 
-BASE="s3://govdata-parquet-v1/source=sec/SEC"
+BASE="s3://govdata-parquet-v1/sec"
 
 # Strip https:// — DuckDB CREATE SECRET ENDPOINT expects hostname only
 ENDPOINT="${AWS_ENDPOINT_OVERRIDE#https://}"

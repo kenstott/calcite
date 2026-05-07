@@ -5,7 +5,7 @@
 # ============================================================================
 
 schemaName: "${HEALTH_SCHEMA_NAME:health}"
-materializeDirectory: "${HEALTH_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/source=health}"
+materializeDirectory: "${HEALTH_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/health}"
 
 comment: >
   Pharmaceutical safety and public health data. Phase 1 covers five openFDA

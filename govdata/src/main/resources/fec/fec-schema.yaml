@@ -28,7 +28,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fec}"
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=fec"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/fec"
 
 comment: >
   Federal Election Commission campaign finance data. Contains candidate and

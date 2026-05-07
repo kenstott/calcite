@@ -736,8 +736,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Year range: {} to {}", startYear, endYear);
 
       String govdataParquetDir = GovDataUtils.getParquetDir(operand);
-      // govdataParquetDir already resolves to the sec-specific path (e.g. ".../source=sec")
-      // because sec-schema.yaml sets materializeDirectory to "${GOVDATA_PARQUET_DIR}/source=sec"
+      // govdataParquetDir already resolves to the sec-specific path (e.g. ".../sec")
+      // because sec-schema.yaml sets materializeDirectory to "${GOVDATA_PARQUET_DIR}/sec"
       // which overrides the operand's "directory" key in FileSchemaBuilder.
       String secParquetDir = govdataParquetDir;
 
@@ -980,7 +980,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Get warehouse path from operand or compute from base directory
     String warehousePath = (String) operand.get("warehousePath");
     if (warehousePath == null) {
-      warehousePath = secParquetDir + "/SEC";
+      warehousePath = secParquetDir;
     }
     // Normalize for Hadoop
     if (warehousePath.startsWith("s3://")) {
@@ -3478,7 +3478,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void createMockStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
     try {
       // baseDirPath is the cache directory (sec-cache)
-      // We need to create files in govdata-parquet/source=sec/stock_prices
+      // We need to create files in govdata-parquet/sec/stock_prices
       String govdataParquetDir = getGovDataParquetDir();
       String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "stock_prices");
       LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir);

@@ -427,7 +427,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // Year-only partitioning for optimal 128MB file sizes
       String partitionYear = getPartitionYear(filingType, actualFilingDate, periodEndDate, doc);
 
-      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
       String relativePartitionPath = String.format("year=%s", partitionYear);
 
@@ -4281,7 +4281,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // For insider forms (3/4/5), filing date is used for partition year (not 10-K/10-Q)
       String partitionYear = getPartitionYear(filingType, filingDate, filingDate, doc);
 
-      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
       String relativePartitionPath = String.format("year=%s", partitionYear);
 

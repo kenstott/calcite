@@ -42,13 +42,13 @@ EMBEDDING_DIM = 384
 BATCH_SIZE = 64
 
 S3_BUCKET = "s3://govdata-parquet-v1"
-ICEBERG_CHUNKS = f"{S3_BUCKET}/source=sec/SEC/vectorized_chunks"
+ICEBERG_CHUNKS = f"{S3_BUCKET}/sec/vectorized_chunks"
 VSS_CACHE_PATH = f"{S3_BUCKET}/cache/vss/chunks_vss.duckdb"
 VSS_METADATA_PATH = f"{S3_BUCKET}/cache/vss/metadata.json"
 
 # Iceberg table identifier
 ICEBERG_TABLE = "vectorized_chunks"
-ICEBERG_WAREHOUSE = f"{S3_BUCKET}/source=sec/SEC"
+ICEBERG_WAREHOUSE = f"{S3_BUCKET}/sec"
 
 
 def check_gpu() -> str:

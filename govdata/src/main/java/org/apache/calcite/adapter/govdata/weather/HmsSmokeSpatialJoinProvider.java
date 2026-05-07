@@ -290,7 +290,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
     if (parquetDir == null || parquetDir.isEmpty()) {
       throw new IOException("GOVDATA_PARQUET_DIR not set");
     }
-    String warehousePath = parquetDir + "/source=geo/GEO";
+    String warehousePath = parquetDir;
 
     // Cap to the range of TIGER years we have materialized
     int tigerYear = Math.min(Integer.parseInt(year), MAX_TIGER_YEAR);

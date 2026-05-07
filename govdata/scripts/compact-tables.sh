@@ -30,33 +30,33 @@ fi
 # Tables that need compaction: table_name|warehouse_path|min_files
 TABLES=(
   # Crime — worst offenders
-  "cde_offenses|s3a://govdata-parquet-v1/source=crime/CRIME|3"
-  "cde_police_employment|s3a://govdata-parquet-v1/source=crime/CRIME|3"
-  "cde_use_of_force|s3a://govdata-parquet-v1/source=crime/CRIME|3"
-  "cde_hate_crimes|s3a://govdata-parquet-v1/source=crime/CRIME|5"
-  "cde_leoka|s3a://govdata-parquet-v1/source=crime/CRIME|3"
-  "cde_agencies|s3a://govdata-parquet-v1/source=crime/CRIME|5"
+  "cde_offenses|s3a://govdata-parquet-v1/crime|3"
+  "cde_police_employment|s3a://govdata-parquet-v1/crime|3"
+  "cde_use_of_force|s3a://govdata-parquet-v1/crime|3"
+  "cde_hate_crimes|s3a://govdata-parquet-v1/crime|5"
+  "cde_leoka|s3a://govdata-parquet-v1/crime|3"
+  "cde_agencies|s3a://govdata-parquet-v1/crime|5"
   # Census
-  "qwi_employment|s3a://govdata-parquet-v1/source=census/CENSUS|3"
-  "acs1_population|s3a://govdata-parquet-v1/source=census/CENSUS|3"
-  "acs1_income|s3a://govdata-parquet-v1/source=census/CENSUS|3"
+  "qwi_employment|s3a://govdata-parquet-v1/census|3"
+  "acs1_population|s3a://govdata-parquet-v1/census|3"
+  "acs1_income|s3a://govdata-parquet-v1/census|3"
   # Econ
-  "ita_data|s3a://govdata-parquet-v1/source=econ/econ|3"
-  "fred_indicators|s3a://govdata-parquet-v1/source=econ/econ|3"
-  "industry_gdp|s3a://govdata-parquet-v1/source=econ/econ|3"
-  "gdp_statistics|s3a://govdata-parquet-v1/source=econ/econ|3"
-  "wage_growth|s3a://govdata-parquet-v1/source=econ/econ|3"
-  "national_accounts|s3a://govdata-parquet-v1/source=econ/econ|3"
+  "ita_data|s3a://govdata-parquet-v1/econ|3"
+  "fred_indicators|s3a://govdata-parquet-v1/econ|3"
+  "industry_gdp|s3a://govdata-parquet-v1/econ|3"
+  "gdp_statistics|s3a://govdata-parquet-v1/econ|3"
+  "wage_growth|s3a://govdata-parquet-v1/econ|3"
+  "national_accounts|s3a://govdata-parquet-v1/econ|3"
   # Geo
-  "state_legislative_lower|s3a://govdata-parquet-v1/source=geo/GEO|3"
-  "state_legislative_upper|s3a://govdata-parquet-v1/source=geo/GEO|3"
-  "pumas|s3a://govdata-parquet-v1/source=geo/GEO|3"
-  "congressional_districts|s3a://govdata-parquet-v1/source=geo/GEO|3"
-  "states|s3a://govdata-parquet-v1/source=geo/GEO|3"
-  "watersheds_huc2|s3a://govdata-parquet-v1/source=geo/GEO|3"
+  "state_legislative_lower|s3a://govdata-parquet-v1/geo|3"
+  "state_legislative_upper|s3a://govdata-parquet-v1/geo|3"
+  "pumas|s3a://govdata-parquet-v1/geo|3"
+  "congressional_districts|s3a://govdata-parquet-v1/geo|3"
+  "states|s3a://govdata-parquet-v1/geo|3"
+  "watersheds_huc2|s3a://govdata-parquet-v1/geo|3"
   # Weather
-  "cdo_annual_summaries|s3a://govdata-parquet-v1/source=weather/WEATHER|5"
-  "cdo_monthly_summaries|s3a://govdata-parquet-v1/source=weather/WEATHER|5"
+  "cdo_annual_summaries|s3a://govdata-parquet-v1/weather|5"
+  "cdo_monthly_summaries|s3a://govdata-parquet-v1/weather|5"
 )
 
 # Parse args

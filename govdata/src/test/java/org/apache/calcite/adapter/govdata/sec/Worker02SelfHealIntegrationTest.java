@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   <li>{@code AWS_ACCESS_KEY_ID}</li>
  *   <li>{@code AWS_SECRET_ACCESS_KEY}</li>
  *   <li>{@code AWS_ENDPOINT_OVERRIDE} — e.g. R2 endpoint URL</li>
- *   <li>{@code GOVDATA_PARQUET_DIR} — defaults to {@code s3://govdata-parquet-v1/source=sec}</li>
+ *   <li>{@code GOVDATA_PARQUET_DIR} — defaults to {@code s3://govdata-parquet-v1/sec}</li>
  *   <li>{@code CALCITE_TRACKER_S3_BUCKET} — defaults to {@code s3://govdata-tracker-v1}</li>
  * </ul>
  */
@@ -91,12 +91,12 @@ public class Worker02SelfHealIntegrationTest {
     String govdataParquetDir = getGovdataParquetDir();
     StorageProvider storage = buildStorageProvider();
 
-    // govdataParquetDir already contains /source=sec (mirrors production SecFilingCache.parquetBaseDir)
+    // govdataParquetDir already contains /sec (mirrors production SecFilingCache.parquetBaseDir)
     String primaryYearDir =
         storage.resolvePath(govdataParquetDir, "year=" + YEAR);
-    // Legacy path: files written before Fix 1 lived at source=sec/source=sec/year=YYYY
+    // Legacy path: files written before Fix 1 lived at sec/sec/year=YYYY
     String legacySecDir =
-        storage.resolvePath(govdataParquetDir, "source=sec");
+        storage.resolvePath(govdataParquetDir, "sec");
     String legacyYearDir =
         storage.resolvePath(legacySecDir, "year=" + YEAR);
 
@@ -131,7 +131,7 @@ public class Worker02SelfHealIntegrationTest {
         storage.resolvePath(govdataParquetDir, "year=" + YEAR));
     int legacyCount = countFiles(storage,
         storage.resolvePath(
-            storage.resolvePath(govdataParquetDir, "source=sec"), "year=" + YEAR));
+            storage.resolvePath(govdataParquetDir, "sec"), "year=" + YEAR));
     assumeTrue(primaryCount + legacyCount >= MIN_FILES_FOR_TEST,
         "Fewer than " + MIN_FILES_FOR_TEST + " staging files found — skipping preload test");
 
@@ -179,7 +179,7 @@ public class Worker02SelfHealIntegrationTest {
         storage.resolvePath(govdataParquetDir, "year=" + YEAR));
     int legacyCount = countFiles(storage,
         storage.resolvePath(
-            storage.resolvePath(govdataParquetDir, "source=sec"), "year=" + YEAR));
+            storage.resolvePath(govdataParquetDir, "sec"), "year=" + YEAR));
     assumeTrue(primaryCount + legacyCount >= MIN_FILES_FOR_TEST,
         "Fewer than " + MIN_FILES_FOR_TEST + " staging files found — skipping self-heal test");
 
@@ -221,16 +221,16 @@ public class Worker02SelfHealIntegrationTest {
   // -------------------------------------------------------------------------
 
   private static String getGovdataParquetDir() {
-    // Production: sec-schema.yaml sets materializeDirectory="${GOVDATA_PARQUET_DIR}/source=sec".
+    // Production: sec-schema.yaml sets materializeDirectory="${GOVDATA_PARQUET_DIR}/sec".
     // FileSchemaBuilder resolves that value and passes it as govdataParquetDir to SecFilingCache.
-    // So the value already contains /source=sec — we must do the same append here.
+    // So the value already contains /sec — we must do the same append here.
     String raw = System.getenv("GOVDATA_PARQUET_DIR");
     if (raw != null && !raw.isEmpty()) {
       // Strip any trailing slash before appending
       String base = raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
-      return base + "/source=sec";
+      return base + "/sec";
     }
-    return "s3://govdata-parquet-v1/source=sec";
+    return "s3://govdata-parquet-v1/sec";
   }
 
   private static StorageProvider buildStorageProvider() {
@@ -269,7 +269,7 @@ public class Worker02SelfHealIntegrationTest {
     List<String[]> pairs = readCikAccessionPairsFromDir(storage, yearDir, limit);
     if (pairs.isEmpty()) {
       String legacyYearDir = storage.resolvePath(
-          storage.resolvePath(govdataParquetDir, "source=sec"), "year=" + YEAR);
+          storage.resolvePath(govdataParquetDir, "sec"), "year=" + YEAR);
       pairs = readCikAccessionPairsFromDir(storage, legacyYearDir, limit);
     }
     return pairs;
@@ -339,7 +339,7 @@ public class Worker02SelfHealIntegrationTest {
     } catch (Exception e) {
       LOGGER.warn("buildCandidatesFromS3: primary path failed, trying legacy — {}", e.getMessage());
       String legacyYearDir = storage.resolvePath(
-          storage.resolvePath(govdataParquetDir, "source=sec"), "year=" + YEAR);
+          storage.resolvePath(govdataParquetDir, "sec"), "year=" + YEAR);
       pairs = readCikAccessionPairsFromDir(storage, legacyYearDir, 200);
     }
 

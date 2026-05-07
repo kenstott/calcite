@@ -23,7 +23,7 @@
 #   GOVDATA_INCREMENTAL_START_YEAR  Boundary year between historical and daily (default: 2026)
 #
 # Optional env vars:
-#   HEALTH_PARQUET_DIR            Overrides GOVDATA_PARQUET_DIR/source=health
+#   HEALTH_PARQUET_DIR            Overrides GOVDATA_PARQUET_DIR/health
 #   HEALTH_CACHE_DIR              Overrides GOVDATA_CACHE_DIR/health
 #   HEALTH_FDA_API_KEY            openFDA API key (improves rate limits)
 #   MEDICAID_SINCE_QUARTER        Quarter number (1-4) for Medicaid incremental start
@@ -65,8 +65,8 @@ run_health_model() {
   [ -n "$extra_operands" ] && extra_json=",
       ${extra_operands}"
 
-  # Use HEALTH_PARQUET_DIR if set; fall back to GOVDATA_PARQUET_DIR/source=health
-  local parquet_dir="${HEALTH_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/source=health}"
+  # Use HEALTH_PARQUET_DIR if set; fall back to GOVDATA_PARQUET_DIR/health
+  local parquet_dir="${HEALTH_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/health}"
   local cache_dir="${HEALTH_CACHE_DIR:-${GOVDATA_CACHE_DIR}/health}"
 
   cat > "$model_file" <<ENDJSON

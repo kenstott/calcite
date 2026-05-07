@@ -265,7 +265,7 @@ public class LimitedGeoDataTest {
       File cacheRoot = new File(cacheDir);
       if (cacheRoot.exists()) {
         // Check for boundary data
-        File boundaryDir = new File(cacheRoot, "source=geo/type=boundary");
+        File boundaryDir = new File(cacheRoot, "geo/type=boundary");
         if (boundaryDir.exists()) {
           File[] boundaryFiles = boundaryDir.listFiles((dir, name) -> name.endsWith(".parquet"));
           if (boundaryFiles != null && boundaryFiles.length > 0) {
@@ -277,7 +277,7 @@ public class LimitedGeoDataTest {
         }
 
         // Check for demographic data
-        File demoDir = new File(cacheRoot, "source=geo/type=demographic");
+        File demoDir = new File(cacheRoot, "geo/type=demographic");
         if (demoDir.exists()) {
           File[] demoFiles = demoDir.listFiles((dir, name) -> name.endsWith(".parquet"));
           if (demoFiles != null && demoFiles.length > 0) {
@@ -286,7 +286,7 @@ public class LimitedGeoDataTest {
         }
 
         // Check for crosswalk data
-        File crosswalkDir = new File(cacheRoot, "source=geo/type=crosswalk");
+        File crosswalkDir = new File(cacheRoot, "geo/type=crosswalk");
         if (crosswalkDir.exists()) {
           File[] crosswalkFiles = crosswalkDir.listFiles((dir, name) -> name.endsWith(".parquet"));
           if (crosswalkFiles != null && crosswalkFiles.length > 0) {

@@ -215,7 +215,7 @@ public class SecIntegrationTest {
     // Build Iceberg catalog config
     Map<String, Object> icebergConfig = new HashMap<>();
     icebergConfig.put("catalog", "hadoop");
-    icebergConfig.put("warehouse", parquetDir + "/source=sec/SEC");
+    icebergConfig.put("warehouse", parquetDir + "/sec");
 
     // S3 configuration - both Iceberg S3FileIO and Hadoop S3A settings
     String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");

@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:weather}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=weather"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/weather"
 
 comment: >
   U.S. weather, climate, and air quality data from NWS (weather.gov), NOAA Climate
@@ -349,7 +349,7 @@ partitionedTables:
       partition:
         columns: [type, state_abbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_stations
         catalogType: hadoop
         runCompaction: true
@@ -447,7 +447,7 @@ partitionedTables:
       partition:
         columns: [type, state_abbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_alerts
         catalogType: hadoop
         runCompaction: true
@@ -538,7 +538,7 @@ partitionedTables:
       partition:
         columns: [type, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_stations
         catalogType: hadoop
         overwritePartitions: true
@@ -625,7 +625,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_monthly_summaries
         catalogType: hadoop
         runCompaction: true
@@ -708,7 +708,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_annual_summaries
         catalogType: hadoop
         runCompaction: true
@@ -798,7 +798,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: epa_annual_aqi
         catalogType: hadoop
         runCompaction: true
@@ -906,7 +906,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: epa_daily_aqi
         catalogType: hadoop
         runCompaction: true
@@ -997,7 +997,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_stations_with_county
         catalogType: hadoop
         runCompaction: true
@@ -1102,7 +1102,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips, month]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_daily
         catalogType: hadoop
         runCompaction: true
@@ -1209,7 +1209,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_abbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: drought_monitor_weekly
         catalogType: hadoop
         runCompaction: true
@@ -1290,7 +1290,7 @@ partitionedTables:
       partition:
         columns: [type, year, month]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_daily
         catalogType: hadoop
         runCompaction: true
@@ -1356,7 +1356,7 @@ partitionedTables:
       partition:
         columns: [type, year, month]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_polygons
         catalogType: hadoop
         runCompaction: true
@@ -1465,7 +1465,7 @@ partitionedTables:
       partition:
         columns: [type, state_fips, month]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: climate_normals_monthly
         catalogType: hadoop
         runCompaction: true

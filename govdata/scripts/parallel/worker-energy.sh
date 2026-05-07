@@ -21,7 +21,7 @@
 #             state energy consumption (SEDS), coal mines (MSHA).
 #
 # Required env vars (set in .env.prod or equivalent):
-#   GOVDATA_PARQUET_DIR     Root Parquet directory (energy data lands in source=energy subdir)
+#   GOVDATA_PARQUET_DIR     Root Parquet directory (energy data lands in energy subdir)
 #   GOVDATA_CACHE_DIR       Root cache directory
 #   GOVDATA_START_YEAR      Historical start year for all modes (default 2010)
 #
@@ -59,7 +59,7 @@ run_energy_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-  local parquet_dir="${GOVDATA_PARQUET_DIR}/source=energy"
+  local parquet_dir="${GOVDATA_PARQUET_DIR}/energy"
   local cache_dir="${GOVDATA_CACHE_DIR}/energy"
   local end_year_json=""
   [ -n "$end_year" ] && end_year_json=",

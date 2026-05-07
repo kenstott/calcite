@@ -91,7 +91,7 @@ public class MinimalGeoLoadTest {
       if (parquetDir == null) {
         parquetDir = System.getProperty("user.home") + "/govdata-parquet";
       }
-      File geoDir = new File(parquetDir + "/source=geo/type=boundary");
+      File geoDir = new File(parquetDir + "/geo/type=boundary");
 
       System.out.println("Looking in directory: " + geoDir.getAbsolutePath());
 
