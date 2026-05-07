@@ -203,7 +203,7 @@ public class IcebergMaintenanceRunner {
         ? StorageProviderFactory.createFromType("s3", s3Config)
         : StorageProviderFactory.createFromType("local", null);
 
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, hadoopConf);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // First expire old snapshots to clean up lineage
     // (RewriteFiles needs valid snapshot lineage to commit)

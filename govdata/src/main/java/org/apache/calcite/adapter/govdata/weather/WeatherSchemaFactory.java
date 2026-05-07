@@ -59,18 +59,19 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
           "cdo_stations",
           "cdo_monthly_summaries",
           "cdo_annual_summaries",
-          "ghcnd_daily",
           "climate_normals_monthly"));
 
   // EPA AQS tables (require EPA_AQS_EMAIL + EPA_AQS_KEY)
   private static final Set<String> EPA_TABLES =
-      new HashSet<>(Collections.singletonList(
-          "epa_annual_aqi"));
+      new HashSet<>(Arrays.asList(
+          "epa_annual_aqi",
+          "epa_daily_aqi"));
 
-  // GHCND station inventory (no auth required, single global file)
+  // GHCND tables (no auth required — station inventory + bulk daily files)
   private static final Set<String> GHCND_STATION_TABLES =
-      new HashSet<>(Collections.singletonList(
-          "ghcnd_stations_with_county"));
+      new HashSet<>(Arrays.asList(
+          "ghcnd_stations_with_county",
+          "ghcnd_daily"));
 
   // Drought Monitor tables (no auth required)
   private static final Set<String> DROUGHT_TABLES =
@@ -105,7 +106,7 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
 
     if (!hasCdoToken) {
       LOGGER.info("NOAA_CDO_TOKEN not set — CDO tables (cdo_stations, "
-          + "cdo_monthly_summaries, cdo_annual_summaries, ghcnd_daily, "
+          + "cdo_monthly_summaries, cdo_annual_summaries, "
           + "climate_normals_monthly) will be disabled");
     }
     if (!hasEpaCredentials) {

@@ -146,7 +146,7 @@ public class CompactionRunner {
       }
 
       // Run compaction
-      IcebergTableWriter writer = new IcebergTableWriter(table, null, conf);
+      IcebergTableWriter writer = new IcebergTableWriter(table, null);
       int compacted = writer.compactSmallFiles(targetFileSize, minFiles, smallFileSize);
 
       // Report post-compaction state

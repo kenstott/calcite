@@ -13,6 +13,33 @@ Creates DuckDB catalog over Parquet files
 Always uses 1 catalog: "memory"
 ```
 
+### iceberg_scan on R2/S3 — Critical Rules
+
+1. **Always pass the table root directory, never a specific metadata JSON file.**
+   - Correct:  `iceberg_scan('s3://bucket/source=weather/WEATHER/nws_stations', allow_moved_paths=true)`
+   - Wrong:    `iceberg_scan('s3://bucket/.../metadata/v37.metadata.json', allow_moved_paths=true)`
+   - Passing a metadata JSON with `allow_moved_paths=true` causes DuckDB to treat the
+     `metadata/` directory as the relocated base, producing broken paths like
+     `v37.metadata.json/metadata/snap-xxx.avro` (HTTP 404 on every table).
+
+2. **Always include `allow_moved_paths=true`.**
+   - Paths stored in Iceberg manifests contain `=` (e.g. `source=weather`, `type=drought_weekly`).
+   - Without it, DuckDB URL-encodes `=` to `%3D` in S3 requests, causing auth/SSL failures from R2.
+   - Already applied in `DuckDBDialect.java:66,93` and `DuckDBJdbcSchema.java:165` for the
+     Calcite engine path. Must be added manually in any raw DQ SQL scripts.
+
+3. **For raw DuckDB DQ scripts** (not going through Calcite), use `SET s3_*` variables rather than
+   `CREATE SECRET name (...)`. Named secrets are not automatically applied by `iceberg_scan`.
+
+4. **Do NOT set `s3_url_style='path'` when using `iceberg_scan`** — it causes DuckDB to URL-encode
+   `=` in data file paths (`source%3Dweather`), breaking S3 requests even with `allow_moved_paths=true`.
+
+5. **DuckDB CLI v1.5.2 vs JDBC v1.4.3.0 behave differently**: CLI v1.5.2 still URL-encodes `=` in
+   parquet data file paths during full scans (COUNT(*) works because it reads only metadata).
+   `allow_moved_paths=true` does not fix this in the CLI. Use local cached files for DQ analysis
+   when the Iceberg table has `=` in its S3 path. The JDBC driver (used by Calcite engine) handles
+   this correctly.
+
 ### Common DuckDB Error Patterns
 ```
 Error: "catalog 'X' does not exist"

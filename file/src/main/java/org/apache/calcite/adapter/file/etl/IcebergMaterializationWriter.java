@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
 
@@ -102,7 +101,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private MaterializeConfig config;
   private Map<String, Object> catalogConfig;
-  private Configuration hadoopConfiguration;
   private Table table;
   private IcebergTableWriter tableWriter;
   private long totalRowsWritten;
@@ -219,9 +217,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
 
-    // Build Hadoop configuration from catalog config (includes S3 credentials)
-    this.hadoopConfiguration = buildHadoopConfiguration();
-
     // Get target table identifier
     String targetTableId = config.getTargetTableId();
     if (targetTableId == null || targetTableId.isEmpty()) {
@@ -233,7 +228,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Ensure table exists
     this.table = ensureTableExists(targetTableId);
-    this.tableWriter = new IcebergTableWriter(table, storageProvider, hadoopConfiguration);
+    this.tableWriter = new IcebergTableWriter(table, storageProvider);
 
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
         targetTableId, warehousePath);
@@ -336,29 +331,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     return hadoopConfig;
-  }
-
-  /**
-   * Builds Hadoop Configuration from catalogConfig.
-   *
-   * <p>Extracts the hadoopConfig map from catalogConfig and creates
-   * a Configuration object with S3 credentials for file access.
-   */
-  @SuppressWarnings("unchecked")
-  private Configuration buildHadoopConfiguration() {
-    Configuration conf = new Configuration();
-
-    // Extract hadoopConfig from catalogConfig
-    Object hadoopConfigObj = catalogConfig.get("hadoopConfig");
-    if (hadoopConfigObj instanceof Map) {
-      Map<String, String> hadoopConfigMap = (Map<String, String>) hadoopConfigObj;
-      for (Map.Entry<String, String> entry : hadoopConfigMap.entrySet()) {
-        conf.set(entry.getKey(), entry.getValue());
-      }
-      LOGGER.debug("Built Hadoop configuration with {} properties", hadoopConfigMap.size());
-    }
-
-    return conf;
   }
 
   /**

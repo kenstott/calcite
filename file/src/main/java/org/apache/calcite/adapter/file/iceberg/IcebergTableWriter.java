@@ -18,8 +18,6 @@ package org.apache.calcite.adapter.file.iceberg;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.FileFormat;
@@ -35,7 +33,6 @@ import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
 import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.hadoop.HadoopInputFile;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
 import org.apache.iceberg.io.InputFile;
@@ -73,30 +70,15 @@ public class IcebergTableWriter {
 
   private final Table table;
   private final StorageProvider storageProvider;
-  private final Configuration hadoopConf;
 
   /**
    * Creates a writer for the specified Iceberg table.
-   *
-   * @param table The Iceberg table to write to
-   * @param storageProvider Storage provider for file operations (local/S3)
    */
   public IcebergTableWriter(Table table, StorageProvider storageProvider) {
-    this(table, storageProvider, new Configuration());
-  }
-
-  /**
-   * Creates a writer for the specified Iceberg table with custom Hadoop configuration.
-   *
-   * @param table The Iceberg table to write to
-   * @param storageProvider Storage provider for file operations (local/S3)
-   * @param hadoopConf Hadoop configuration with S3 credentials
-   */
-  public IcebergTableWriter(Table table, StorageProvider storageProvider, Configuration hadoopConf) {
     this.table = table;
     this.storageProvider = storageProvider;
-    this.hadoopConf = hadoopConf;
   }
+
 
   /**
    * Commits files from a staging directory to the Iceberg table.
@@ -1053,35 +1035,19 @@ public class IcebergTableWriter {
     long totalRecords = 0;
     long totalBytes = 0;
     Set<DataFile> filesToDelete = new HashSet<>();
-    List<String> s3Paths = new ArrayList<>();
 
     for (FileScanTask task : smallFiles) {
       DataFile dataFile = task.file();
       filesToDelete.add(dataFile);
       totalRecords += dataFile.recordCount();
       totalBytes += dataFile.fileSizeInBytes();
-      String path = dataFile.path().toString();
-      if (path.startsWith("s3a://")) {
-        path = "s3://" + path.substring(6);
-      }
-      s3Paths.add(path);
     }
 
     if (totalRecords == 0) {
       return;
     }
 
-    // For S3-based files, use DuckDB for parallel reads (much faster than sequential HTTPS)
-    if (!s3Paths.isEmpty() && s3Paths.get(0).startsWith("s3://")) {
-      try {
-        compactPartitionWithDuckDB(filesToDelete, s3Paths, totalRecords, schema, spec);
-        return;
-      } catch (Exception e) {
-        LOGGER.warn("DuckDB compaction failed ({}), falling back to Java reader", e.getMessage());
-      }
-    }
-
-    // Fallback: sequential Java reader (slow for many S3 files but always works)
+    // Java reader: uses table.io() FileIO which has S3 credentials already configured
     StructLike partitionData = smallFiles.get(0).file().partition();
     PartitionKey partitionKey = new PartitionKey(spec, schema);
     copyPartitionValues(partitionKey, partitionData, spec);
@@ -1103,8 +1069,7 @@ public class IcebergTableWriter {
     try {
       for (FileScanTask task : smallFiles) {
         DataFile dataFile = task.file();
-        String inputPath = normalizeS3Path(dataFile.path().toString());
-        InputFile inputFile = HadoopInputFile.fromPath(new Path(inputPath), hadoopConf);
+        InputFile inputFile = table.io().newInputFile(dataFile.path().toString());
 
         try (CloseableIterable<Record> records = Parquet.read(inputFile)
             .project(schema)
@@ -1184,19 +1149,6 @@ public class IcebergTableWriter {
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
   }
 
-  /**
-   * DuckDB-based compaction: reads all S3 files in parallel, writes one merged output,
-   * then commits a rewrite. Much faster than sequential Java reads for many small S3 files.
-   */
-  // CRITICAL: Do NOT use DuckDB for compaction. DuckDB's COPY TO PARQUET omits Iceberg field IDs,
-  // causing iceberg_scan to return NULLs for every column. This has already been tried and broken
-  // production data. The Java fallback (Parquet.writeData + GenericParquetWriter::buildWriter)
-  // is the only correct compaction path — it embeds field IDs as required by the Iceberg spec.
-  private void compactPartitionWithDuckDB(
-      Set<DataFile> filesToDelete, List<String> s3Paths, long totalRecords,
-      Schema schema, PartitionSpec spec) throws IOException {
-    throw new IOException("DuckDB compaction disabled: does not embed Iceberg field IDs");
-  }
 
   /**
    * Copies partition values from StructLike to PartitionKey.

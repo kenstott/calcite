@@ -41,10 +41,9 @@ import java.util.Map;
  *
  * <p>Output: one row per (station_id, date) with element values pivoted to columns.
  *
- * <p>Unit note: GHCND element values follow GHCND conventions unless the CDO API
- * converts them. Typical GHCND conventions: TMAX/TMIN/TAVG in tenths of degrees C,
- * PRCP in tenths of mm, SNOW in mm, SNWD in mm, AWND in tenths of m/s. Values are
- * stored exactly as CDO returns them without modification.
+ * <p>Unit note: CDO returns TMAX/TMIN/TAVG in tenths of degrees C, PRCP in tenths
+ * of mm, AWND in tenths of m/s. This transformer divides those by 10 to store
+ * values in standard units (°C, mm, m/s). SNOW and SNWD are returned in mm as-is.
  */
 public class GhcndDailyTransformer implements ResponseTransformer {
 
@@ -106,23 +105,25 @@ public class GhcndDailyTransformer implements ResponseTransformer {
         Double value = (valueNode != null && valueNode.isNumber()) ? valueNode.doubleValue() : null;
         String attributes = getTextOrNull(item, "attributes");
 
+        // CDO returns TMAX/TMIN/TAVG in tenths of °C, PRCP in tenths of mm,
+        // AWND in tenths of m/s. Divide by 10 to store in standard units.
         if ("TMAX".equals(datatype)) {
-          rec.tmaxC = value;
+          rec.tmaxC = value != null ? value / 10.0 : null;
           rec.tmaxFlag = attributes;
         } else if ("TMIN".equals(datatype)) {
-          rec.tminC = value;
+          rec.tminC = value != null ? value / 10.0 : null;
           rec.tminFlag = attributes;
         } else if ("TAVG".equals(datatype)) {
-          rec.tavgC = value;
+          rec.tavgC = value != null ? value / 10.0 : null;
         } else if ("PRCP".equals(datatype)) {
-          rec.prcpMm = value;
+          rec.prcpMm = value != null ? value / 10.0 : null;
           rec.prcpFlag = attributes;
         } else if ("SNOW".equals(datatype)) {
           rec.snowMm = value;
         } else if ("SNWD".equals(datatype)) {
           rec.snwdMm = value;
         } else if ("AWND".equals(datatype)) {
-          rec.awndMs = value;
+          rec.awndMs = value != null ? value / 10.0 : null;
         }
       }
 

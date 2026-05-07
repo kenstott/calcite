@@ -260,7 +260,7 @@ dimension_values:
   # Drought Monitor year range (data available from 2000)
   drought_year_range: &drought_year_range
     type: yearRange
-    start: "${DROUGHT_START_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2000}"
     end: current
     dataLag: 0
 
@@ -808,6 +808,114 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # EPA DAILY AQI - Air quality index by monitoring site per day
+  # ---------------------------------------------------------------------------
+  - name: epa_daily_aqi
+    pattern: "type=epa_daily_aqi/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA AQS daily air quality data by monitoring site. One row per site per day
+      per pollutant standard. Includes AQI where applicable (24-hour block averages).
+      Requires EPA_AQS_EMAIL and EPA_AQS_KEY environment variables.
+
+    dimensions:
+      type:
+        - epa_daily_aqi
+      year: *weather_year_range
+      state_fips: *all_state_fips
+      param: *aqi_pollutants
+
+    columns:
+      - <<: *state_fips_column
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: "5-digit county FIPS code"
+      - name: site_number
+        type: string
+        nullable: true
+        comment: "Monitoring site number"
+      - name: parameter_code
+        type: string
+        nullable: true
+        comment: "Pollutant code (88101, 44201, etc.)"
+      - name: parameter_name
+        type: string
+        nullable: true
+        comment: "Pollutant name (e.g., 'PM2.5 - Local Conditions')"
+      - <<: *year_column
+      - name: date
+        type: string
+        nullable: false
+        comment: "Sample date (YYYY-MM-DD)"
+      - name: sample_duration
+        type: string
+        nullable: true
+        comment: "Sample duration (e.g., '24-HR BLK AVG', '1 HOUR')"
+      - name: pollutant_standard
+        type: string
+        nullable: true
+        comment: "Pollutant standard used for AQI calculation"
+      - name: arithmetic_mean
+        type: double
+        nullable: true
+        comment: "Daily mean concentration"
+      - name: first_max_value
+        type: double
+        nullable: true
+        comment: "Highest recorded value for the day"
+      - name: aqi
+        type: integer
+        nullable: true
+        comment: "Air Quality Index (null for non-daily-standard measurements)"
+      - name: observation_count
+        type: integer
+        nullable: true
+        comment: "Number of observations"
+      - name: latitude
+        type: double
+        nullable: true
+        comment: "Site latitude"
+      - name: longitude
+        type: double
+        nullable: true
+        comment: "Site longitude"
+
+    source:
+      type: http
+      url: "https://aqs.epa.gov/data/api/dailyData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={year}0101&edate={year}1231&state={state_fips}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.167  # 10 req/min
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.EpaDailyAqiTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=epa_daily_aqi/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=weather/WEATHER"
+        tableName: epa_daily_aqi
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # GHCND STATIONS WITH COUNTY - NOAA station inventory + county FIPS (no auth)
   # ---------------------------------------------------------------------------
   - name: ghcnd_stations_with_county
@@ -897,131 +1005,93 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
-  # GHCND DAILY - NOAA GHCN-Daily station observations (requires NOAA_CDO_TOKEN)
+  # GHCND DAILY - NOAA GHCN-Daily bulk annual files (no auth required)
   # ---------------------------------------------------------------------------
   - name: ghcnd_daily
     pattern: "type=ghcnd_daily/year=*/state_fips=*/month=*/*.parquet"
     partitions: *ghcnd_daily_partitions
     comment: >
-      NOAA GHCN-Daily station observations via CDO API. Daily temperature, precipitation,
-      and snow measurements at station level. Wide-format: one row per station per day.
-      Values are in metric units (°C, mm, m/s). Requires NOAA_CDO_TOKEN. Cross-references
-      ghcnd_stations_with_county via station_id for county_fips joins. Primary source for
-      weather_daily_by_county aggregations.
+      NOAA GHCN-Daily station observations from NCEI annual bulk files
+      (https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/YYYY.csv.gz).
+      One row per station per day. Wide-format with daily temperature, precipitation,
+      snow, and wind in metric units (°C, mm, m/s). Q_FLAG-filtered (only rows that
+      passed all NCEI quality checks are included). Cross-references
+      ghcnd_stations_with_county via station_id for county_fips joins. No auth needed.
 
     dimensions:
       type:
         - ghcnd_daily
       year: *ghcnd_year_range
-      state_fips: *all_state_fips
-      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
 
     columns:
       - name: station_id
         type: string
         nullable: false
-        comment: "GHCND station ID (e.g., 'GHCND:USW00094846')"
+        comment: "GHCND station ID (e.g., 'USW00094846')"
       - <<: *state_fips_column
       - name: date
         type: string
         nullable: false
         comment: Observation date (ISO format YYYY-MM-DD)
       - <<: *year_column
+      - name: month
+        type: string
+        nullable: false
+        comment: "2-digit month (01-12), derived from date"
       - name: tmax_c
         type: double
         nullable: true
-        comment: Maximum temperature in °C (CDO TMAX element)
+        comment: Maximum temperature in °C (NCEI TMAX, tenths-of-°C ÷ 10)
       - name: tmin_c
         type: double
         nullable: true
-        comment: Minimum temperature in °C (CDO TMIN element)
+        comment: Minimum temperature in °C (NCEI TMIN, tenths-of-°C ÷ 10)
       - name: tavg_c
         type: double
         nullable: true
-        comment: Average temperature in °C (CDO TAVG element)
+        comment: Average temperature in °C (NCEI TAVG, tenths-of-°C ÷ 10)
       - name: prcp_mm
         type: double
         nullable: true
-        comment: Precipitation in mm (CDO PRCP element)
+        comment: Precipitation in mm (NCEI PRCP, tenths-of-mm ÷ 10)
       - name: snow_mm
         type: double
         nullable: true
-        comment: Snowfall in mm (CDO SNOW element)
+        comment: Snowfall in mm (NCEI SNOW, native mm)
       - name: snwd_mm
         type: double
         nullable: true
-        comment: Snow depth in mm (CDO SNWD element)
+        comment: Snow depth in mm (NCEI SNWD, native mm)
       - name: awnd_ms
         type: double
         nullable: true
-        comment: Average wind speed in m/s (CDO AWND element)
+        comment: Average wind speed in m/s (NCEI AWND, tenths-of-m/s ÷ 10)
       - name: tmax_flag
         type: string
         nullable: true
-        comment: Quality flag for tmax (blank = passed all checks)
+        comment: Measurement flag for tmax
       - name: tmin_flag
         type: string
         nullable: true
-        comment: Quality flag for tmin
+        comment: Measurement flag for tmin
       - name: prcp_flag
         type: string
         nullable: true
-        comment: Quality flag for prcp
+        comment: Measurement flag for prcp
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-{month}-01&enddate={year}-{month}-31&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-      urlRules:
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "02"
-          yearRange: [2012, 2012]
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "02"
-          yearRange: [2016, 2016]
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "02"
-          yearRange: [2020, 2020]
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-29&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "02"
-          yearRange: [2024, 2024]
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-02-01&enddate={year}-02-28&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "02"
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-04-01&enddate={year}-04-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "04"
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-06-01&enddate={year}-06-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "06"
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-09-01&enddate={year}-09-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "09"
-        - url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&locationid=FIPS:{state_fips}&startdate={year}-11-01&enddate={year}-11-30&datatypeid=TMAX,TMIN,TAVG,PRCP,SNOW,SNWD,AWND&limit=1000&offset=1"
-          variableMatch:
-            month: "11"
+      url: "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/{year}.csv.gz"
       method: GET
       response:
-        format: json
-      headers:
-        token: "{env:NOAA_CDO_TOKEN}"
+        format: text
       rateLimit:
-        requestsPerSecond: 5.0
+        requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
-      pagination:
-        enabled: true
-        offsetParam: offset
-        limitParam: limit
-        maxPerRequest: 1000
-      rawCache:
-        enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.GhcndDailyTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.weather.GhcndBulkDataProvider"
 
     materialize:
       format: iceberg
@@ -1038,7 +1108,6 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
-        batchPartitionColumns: [year, state_fips, month]
         incrementalKeys: [year]
         overwritePartitions: true
 
