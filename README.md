@@ -56,6 +56,32 @@ This is a fork of Apache Calcite with significant enhancements and new adapters 
   - Streaming support for large datasets
   - Memory-efficient processing for file adapters
 
+## Getting Started
+
+### 1. Clone and initialise
+
+```bash
+git clone git@github.com:kenstott/calcite.git
+cd calcite
+./setup.sh        # clones the private Claude configuration into .claude/
+```
+
+`setup.sh` clones [kenstott/calcite-private](https://github.com/kenstott/calcite-private) into `.claude/`. It is a no-op if `.claude/` is already a git repository.
+
+### 2. Keep in sync
+
+```bash
+./pull-claude.sh  # pull latest for both this repo and .claude/
+```
+
+### 3. Save Claude configuration changes
+
+```bash
+./push-claude.sh  # commit + push any changes in .claude/ with a timestamp message
+```
+
+---
+
 ## Upstream Merge Status
 This fork was last merged with upstream Apache Calcite on commit b5fb7233, maintaining compatibility while preserving all custom enhancements.
 <!--
