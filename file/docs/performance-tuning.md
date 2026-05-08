@@ -347,20 +347,40 @@ Configure join reordering and optimization:
 }
 ```
 
-### Statistics-Based Optimization
+### Metadata-Based COUNT(*)
 
-Enable HyperLogLog statistics for better query planning:
+DuckDB's `COUNT(*)` reads every file in the table to count rows — even when the answer is already known. On a billion-row table spread across thousands of Parquet files, this is a multi-minute scan. The adapter intercepts `COUNT(*)` and returns the row count stored in Iceberg or Parquet footer metadata instead — making it instant at any scale.
+
+```sql
+-- Returns immediately from metadata — no file scan, regardless of table size
+SELECT COUNT(*) FROM orders;
+```
+
+This is automatic. No configuration required. It applies whenever the table has been materialized to Iceberg or Hive-partitioned Parquet — which is the default for any table written through the ingestion pipeline.
+
+### HyperLogLog Sketches for Approximate Distinct Counts
+
+`COUNT(DISTINCT ...)` requires a full table scan — on a large dataset this can take minutes. The adapter builds HyperLogLog (HLL) sketches during ingestion — compact probabilistic summaries that answer distinct-count queries in microseconds with ~2% error, regardless of how large the dataset is.
+
+```sql
+-- Uses HLL sketch — no scan, answer in microseconds
+SELECT APPROX_COUNT_DISTINCT(customer_id) FROM orders;
+```
+
+Enable sketch generation at ingestion time:
 
 ```json
 {
   "statisticsConfig": {
     "enableHLL": true,
-    "sampleSize": 10000,
-    "accuracy": 0.05,
-    "autoUpdate": true
+    "accuracy": 0.05
   }
 }
 ```
+
+Sketches are built once per ingestion run and stored alongside the Parquet/Iceberg data. They are used automatically by `APPROX_COUNT_DISTINCT` — the exact `COUNT(DISTINCT ...)` form still performs a full scan and returns a precise answer.
+
+Use HLL when approximate cardinality is sufficient — dashboard filters, query planner hints, data profiling. Use exact `COUNT(DISTINCT)` when precision is required.
 
 ## File Organization
 
