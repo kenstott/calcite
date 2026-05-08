@@ -368,9 +368,9 @@ Optimized for analytical workloads with advanced SQL features, enhanced with Cal
 {
   "executionEngine": "duckdb",
   "duckdbConfig": {
-    "memoryLimit": "2GB",
+    "memory_limit": "2GB",
     "threads": 4,
-    "enableOptimizations": true
+    "temp_directory": "/var/tmp/duckdb"
   }
 }
 ```
@@ -1019,7 +1019,7 @@ materialize:
 The `CompactionRunner` is a standalone command-line tool for Iceberg table compaction, independent of the ETL pipeline. Use it for ad-hoc compaction of tables that have accumulated small files.
 
 ```bash
-java -cp govdata-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
+java -cp file/build/libs/calcite-file-adapter-*-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
   --warehouse s3://bucket/warehouse --table table_name
 ```
 
@@ -1068,27 +1068,28 @@ Dimensions define the parameter space for API queries. The ETL pipeline expands 
 
 ```yaml
 dimensions:
-  type: [sales]                    # Static values
-  frequency: [M, Q, A]             # Monthly, Quarterly, Annual
+  type: [sales]                    # list — explicit values (shorthand)
+  frequency: [M, Q, A]             # list — Monthly, Quarterly, Annual
   year:
     type: yearRange
     start: 2020
-    end: ${CURRENT_YEAR}           # Environment variable
-    lag: 1                         # Don't query current year
+    end: current                   # "current" = current year, or explicit integer
+    dataLag: 1                     # Don't query current year until 1 year has passed
   region:
-    type: reference
-    table: regions                 # Lookup from reference table
-    column: region_code
+    type: query
+    sql: "SELECT DISTINCT region_code FROM reference.regions"
 ```
 
 #### Dimension Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| Static list | Explicit values | `type: [A, B, C]` |
-| `yearRange` | Range of years | `start: 2020, end: 2025, lag: 1` |
-| `reference` | Lookup from table | `table: regions, column: code` |
-| `constants` | From YAML constants file | `file: constants.yaml, path: codes` |
+| Type | Description |
+|------|-------------|
+| `list` (shorthand array) | Explicit static values — `[A, B, C]` |
+| `range` | Numeric sequence — `start`, `end`, `step` |
+| `yearRange` | Year sequence — `start`, `end`, `dataLag`, `releaseMonth`, `excludeYears` |
+| `query` | SQL-driven — `sql` query whose result rows supply values |
+| `json_catalog` | Values loaded from a classpath JSON file via `source` + `path` |
+| `custom` | Programmatic — resolved by a `DimensionResolver` implementation |
 
 #### Incremental Processing
 

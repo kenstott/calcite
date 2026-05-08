@@ -51,11 +51,11 @@ Embedded SQL engine, no external server required.
 
 ```json
 {
-  "queryEngine": {
-    "type": "duckdb",
-    "path": "/tmp/cache.duckdb",
+  "executionEngine": "DUCKDB",
+  "duckdbConfig": {
+    "memory_limit": "4GB",
     "threads": 4,
-    "memoryLimit": "4GB"
+    "temp_directory": "/var/tmp/duckdb"
   }
 }
 ```
@@ -141,8 +141,8 @@ Requires Spark Thrift Server (HiveServer2 interface). **Not recommended for new 
 
 ```json
 {
-  "queryEngine": {
-    "type": "spark",
+  "executionEngine": "SPARK",
+  "sparkConfig": {
     "host": "spark-thrift.example.com",
     "port": "10000",
     "database": "default"
@@ -161,8 +161,8 @@ Supports embedded (chDB) or distributed cluster.
 
 ```json
 {
-  "queryEngine": {
-    "type": "clickhouse",
+  "executionEngine": "CLICKHOUSE",
+  "clickhouseConfig": {
     "host": "clickhouse.example.com",
     "port": "8123",
     "database": "default"

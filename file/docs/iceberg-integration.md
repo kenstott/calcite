@@ -370,7 +370,7 @@ The `CompactionRunner` is a standalone command-line tool for compacting small Ic
 #### Usage
 
 ```bash
-java -cp govdata-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
+java -cp file/build/libs/calcite-file-adapter-*-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
   --warehouse s3://bucket/warehouse \
   --table table_name
 ```
@@ -409,7 +409,54 @@ When `AWS_ENDPOINT_OVERRIDE` is set, the runner automatically:
 
 #### Inline Compaction
 
-For compaction that runs automatically as part of ETL pipelines, see the `runCompaction` option in the [Configuration Reference](configuration-reference.md#iceberg-specific-options).
+Inline compaction runs automatically at the end of each ETL write — no cron job or manual invocation needed. Enable it in the table's `materialize:` block:
+
+```json
+{
+  "name": "financial_facts",
+  "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json",
+  "dimensions": { "cik": ["0000320193", "0000789019"] },
+  "responseTransformer": "com.example.FinancialFactsTransformer",
+  "materialize": {
+    "format": "iceberg",
+    "iceberg": {
+      "runCompaction": true,
+      "compactionMinFiles": 10,
+      "compactionTargetFileSizeBytes": 134217728,
+      "compactionSmallFileSizeBytes": 10485760
+    }
+  }
+}
+```
+
+##### Compaction Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `runCompaction` | boolean | `false` | Enable automatic compaction after each ETL write |
+| `compactionMinFiles` | int | `10` | Minimum number of small files in a partition before compaction triggers |
+| `compactionTargetFileSizeBytes` | long | `134217728` (128 MB) | Target file size after compaction |
+| `compactionSmallFileSizeBytes` | long | `10485760` (10 MB) | Files smaller than this are candidates for compaction |
+
+##### When to Use Inline Compaction
+
+ETL pipelines that write one Parquet file per partition per run accumulate many small files over time. For example, a daily pipeline writing 50 partitions produces 50 files/day — after a month that is 1,500 files that must be opened for every query. Inline compaction merges them automatically after each write.
+
+Use inline compaction when:
+- The pipeline writes many partitioned files per run (dimension expansion, high-cardinality partitions)
+- The table is queried frequently between ETL runs
+- You want compaction managed by the pipeline rather than a separate cron job
+
+Use `CompactionRunner` (standalone CLI) instead when:
+- You need a one-time compaction of an existing table
+- You want compaction on a schedule independent of ETL runs
+- You are compacting a table that is not written by this adapter
+
+##### Post-Compaction Cleanup
+
+After compaction, the adapter automatically expires all snapshots except the current one and removes orphan files. No separate maintenance step is needed.
+
+Note: the `compactionMinFiles` default is `10` for inline compaction vs `3` for the standalone `CompactionRunner`. The higher default prevents compaction from triggering on partitions that receive only a few files per run.
 
 ## Type Mapping
 

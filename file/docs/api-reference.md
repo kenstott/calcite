@@ -647,6 +647,124 @@ System.out.println("Average query time: " + metrics.getAverageQueryTime() + "ms"
 System.out.println("Cache hit rate: " + metrics.getCacheHitRate() + "%");
 ```
 
+## ETL Extension Points
+
+The ETL pipeline is extended through hook interfaces. All are registered by fully-qualified class name in the `hooks` block of a table config, or (for schema-level hooks) in the schema-level `hooks` block.
+
+### ResponseTransformer
+
+Converts a raw API or file response string into a JSON array of row objects:
+
+```java
+public interface ResponseTransformer {
+    String transform(String response, RequestContext context);
+}
+```
+
+Return a JSON array string (`[{...}, {...}]`). Called once per API response. See [Document ETL](document-etl.md#writing-a-responsetransformer) for a full example.
+
+### RowTransformer
+
+Transforms or drops individual rows after parsing:
+
+```java
+public interface RowTransformer {
+    Map<String, Object> transform(Map<String, Object> row, RowContext context);
+}
+```
+
+Return the modified row, or `null` to drop the row from output. Multiple transformers can be chained in the `rowTransformers` list.
+
+### Validator
+
+Validates individual rows and controls what happens on invalid data:
+
+```java
+public interface Validator {
+    ValidationResult validate(Map<String, Object> row);
+}
+```
+
+`ValidationResult` carries one of four actions: `VALID`, `DROP`, `WARN`, `FAIL`.
+
+### DataProvider
+
+Replaces the built-in HTTP fetch entirely. Use for sources that cannot be described as a single URL — batched APIs, FTP, database queries:
+
+```java
+@FunctionalInterface
+public interface DataProvider {
+    Iterator<Map<String, Object>> fetch(EtlPipelineConfig config, Map<String, String> variables);
+}
+```
+
+Return `null` to fall through to the built-in `HttpSource`.
+
+### DimensionResolver
+
+Resolves values for a `custom`-type dimension at runtime. Receives `context` — the already-resolved values of preceding dimensions — enabling dependent dimensions:
+
+```java
+public interface DimensionResolver {
+    List<String> resolve(String dimensionName, DimensionConfig config,
+        Map<String, String> context, StorageProvider storageProvider);
+}
+```
+
+### VariableNormalizer
+
+Maps API-specific field names to stable canonical column names. Called per column name during row parsing:
+
+```java
+public interface VariableNormalizer {
+    String normalize(String apiVariable, Map<String, String> context);
+
+    // Return true to always keep this column (default: geo columns like state, fips)
+    default boolean shouldPreserve(String apiVariable) { ... }
+}
+```
+
+The built-in `MappingFileVariableNormalizer` reads mappings from a classpath JSON file. See [Configuration Reference — Variable Normalization](configuration-reference.md#schema-evolution-with-variable-normalization).
+
+### TableLifecycleListener
+
+Full lifecycle hook around a single table's ETL run. All methods have default no-op implementations:
+
+```java
+public interface TableLifecycleListener {
+    default void beforeTable(EtlPipelineConfig config) {}
+    default void resolveDimensions(EtlPipelineConfig config, List<DimensionConfig> dims) {}
+    default void beforeSource(EtlPipelineConfig config, Map<String, String> variables) {}
+    default Iterator<Map<String,Object>> fetchData(EtlPipelineConfig config, Map<String,String> variables) { return null; }
+    default void afterSource(EtlPipelineConfig config, Map<String, String> variables, int rowCount) {}
+    default void beforeMaterialize(EtlPipelineConfig config, List<Map<String,Object>> rows) {}
+    default long writeData(EtlPipelineConfig config, List<Map<String,Object>> rows) { return -1; }
+    default void afterMaterialize(EtlPipelineConfig config, long rowsWritten) {}
+    default void afterTable(EtlPipelineConfig config, EtlResult result) {}
+    default void onTableError(EtlPipelineConfig config, Exception error) {}
+}
+```
+
+`fetchData()` returning non-null replaces `HttpSource`. `writeData()` returning >= 0 replaces the built-in Iceberg/Parquet writer.
+
+### SchemaLifecycleListener
+
+Schema-level lifecycle — wraps the entire schema run. Configured in the schema-level `hooks` block, not per table:
+
+```java
+public interface SchemaLifecycleListener {
+    void beforeSchema(SchemaContext context) throws Exception;
+    void afterSchema(SchemaContext context, SchemaResult result);
+    void onSchemaError(SchemaContext context, Exception error);
+
+    // Optional: override to supply custom bulk-download logic. Return null for default HTTP.
+    default String downloadBulkFile(SchemaContext context, BulkDownloadConfig bulkConfig,
+        Map<String, String> variables, String targetPath) throws Exception { return null; }
+}
+```
+
+---
+
 ## Integration Examples
 
 ### JDBC Integration
