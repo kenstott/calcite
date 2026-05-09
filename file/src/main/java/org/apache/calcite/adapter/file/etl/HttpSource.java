@@ -305,6 +305,17 @@ public class HttpSource implements DataSource {
       params.put(e.getKey(), substituteVariables(e.getValue(), variables));
     }
 
+    // Streaming short-circuit: bypasses StringWriter pipeline entirely
+    if (responseTransformer instanceof StreamingResponseTransformer) {
+      RequestContext ctx = RequestContext.builder()
+          .url(url)
+          .parameters(params)
+          .headers(config.getHeaders())
+          .dimensionValues(variables)
+          .build();
+      return ((StreamingResponseTransformer) responseTransformer).fetchAndTransform(ctx);
+    }
+
     // Check raw cache first (persistent storage-based)
     String rawCacheFilePath = null;
     if (isRawCacheEnabled()) {
@@ -355,7 +366,8 @@ public class HttpSource implements DataSource {
       }
 
       // For JSON, read from cache, transform, and parse
-      String content = readFromCache(cachePath);
+      // cachePath is "" when skipResponseBody=true; skip readFromCache in that case
+      String content = cachePath.isEmpty() ? "" : readFromCache(cachePath);
       content = transformResponse(content, url, params, variables);
       allData.addAll(parseResponse(content));
     } else {
@@ -749,6 +761,16 @@ public class HttpSource implements DataSource {
         String extractPattern = config.getExtractPattern();
         if (extractPattern != null && !extractPattern.isEmpty()) {
           return extractFromZip(conn.getInputStream(), extractPattern, rawCachePath);
+        }
+        // Transformer downloads its own data — discard response body to avoid OOM
+        if (config.isSkipResponseBody()) {
+          try (java.io.InputStream is = conn.getInputStream()) {
+            byte[] drain = new byte[8192];
+            while (is.read(drain) != -1) {
+              // intentionally empty
+            }
+          }
+          return "";
         }
         // Read response into memory first to check for API-level errors before caching
         String responseBody = readResponse(conn.getInputStream());

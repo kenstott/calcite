@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
@@ -143,7 +144,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Now add the main schema
-    String operatingDirectory = establishOperatingDirectory(dataSource);
+    String operatingDirectory = establishOperatingDirectory(dataSource, operand);
     IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name, operand);
 
     // Check for freshStart option - clears all completion tracking to force re-download
@@ -241,10 +242,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "campaign_finance":
         return new FecSchemaFactory();
 
+      case "patents":
+      case "patent":
+      case "uspto":
+        return new PatentsSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec, patents");
     }
   }
 
@@ -384,6 +390,26 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       }
     }
     return directory;
+  }
+
+  /**
+   * Establish the operating directory (.aperio/<dataSource>/).
+   * Always on local filesystem (for file locking).
+   *
+   * <p>Honors an explicit {@code operatingDirectory} key in the operand when present,
+   * allowing tests and callers to isolate tracker state in a temp directory per run.
+   */
+  private String establishOperatingDirectory(String dataSource, Map<String, Object> operand) {
+    Object configured = operand != null ? operand.get("operatingDirectory") : null;
+    if (configured instanceof String && !((String) configured).isEmpty()) {
+      File dir = new File((String) configured);
+      if (!dir.exists()) {
+        dir.mkdirs();
+      }
+      LOGGER.debug("Using configured operating directory: {}", configured);
+      return (String) configured;
+    }
+    return establishOperatingDirectory(dataSource);
   }
 
   /**

@@ -1,0 +1,705 @@
+# ============================================================================
+# U.S. Patents and Trademarks Schema (PATENTS)
+# ============================================================================
+# Data Sources:
+#   - USPTO PatentsView bulk TSV downloads (S3: data.patentsview.org)
+#       - Patent grants: 5-file ETL join (g_patent + g_application +
+#         g_patent_abstract + g_figures + citation aggregates)
+#       - Inventors: g_inventor_disambiguated.tsv (~8 GB uncompressed)
+#       - Assignees: g_assignee_disambiguated.tsv + location join
+#       - CPC classifications: g_cpc_current.tsv
+#       - Claims: per-year g_claims_{year}.tsv.zip
+#       - Brief summaries: per-year g_brf_sum_text_{year}.tsv.zip
+#   - USPTO Trademark bulk CSV (trademark.USPTO.gov)
+#       - 5-file join: case_file + owner + classification + intl_class + statement
+#
+# Run Cadence:
+#   - Quarterly: PatentsView releases updated bulk files ~6 weeks after
+#     each quarter end. Active months: 3, 6, 9, 12. All other months
+#     are BLACKOUT — worker-81 (daily) calls within_release_window and
+#     exits immediately if the month is not in {3, 6, 9, 12}.
+#   - Worker 80 (initial/historical): full backfill 2010 through
+#     GOVDATA_INCREMENTAL_START_YEAR - 1; release-window check skipped.
+#
+# Incremental Strategy:
+#   - Year-partitioned tables: transformer receives year from dimension context
+#   - Full-dump files (g_patent.tsv etc.): transformer downloads once,
+#     caches to GOVDATA_CACHE_DIR/patents/, re-uses within quarterly TTL,
+#     filters output to the requested grant_year.
+#   - Per-year ZIPs (claims, summaries): transformer downloads only the
+#     {grant_year} file; no cross-year cache needed.
+#
+# Cross-Schema References:
+#   - geo.states / geo.counties via state_fips, county_fips
+#   - sec (via entity extraction — not wired here)
+#   - census.acs (county-level STEM pipeline)
+#   - econ.bls_employment (tech cluster analysis via CPC section G)
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:patents}"
+materializeDirectory: "${PATENTS_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/patents}"
+
+comment: >
+  USPTO patent grant and trademark application data from PatentsView bulk downloads
+  and USPTO trademark bulk CSV. Patent tables are year-partitioned by grant_year (1976+).
+  Trademark tables are year-partitioned by application_year. Claims and summaries include
+  vector embedding columns (FLOAT[]) populated at ingestion time via batched embedding
+  calls. Full-dump files are cached locally under GOVDATA_CACHE_DIR/patents/ with a
+  quarterly TTL to avoid re-downloading on every year invocation.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  grant_year_column: &grant_year_column
+    name: grant_year
+    type: integer
+    nullable: false
+    comment: Calendar year of patent grant; primary partition key
+
+  patent_id_column: &patent_id_column
+    name: patent_id
+    type: string
+    nullable: false
+    comment: USPTO patent number (e.g., 10123456)
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code; FK to geo.states
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code; FK to geo.counties
+
+  country_code_column: &country_code_column
+    name: country_code
+    type: string
+    nullable: true
+    comment: 2-letter ISO country code
+
+  latitude_column: &latitude_column
+    name: latitude
+    type: double
+    nullable: true
+    comment: Latitude from g_location_disambiguated
+
+  longitude_column: &longitude_column
+    name: longitude
+    type: double
+    nullable: true
+    comment: Longitude from g_location_disambiguated
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  patents_iceberg_common: &patents_iceberg_common
+    warehousePath: "${PATENTS_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/patents}"
+    catalogType: hadoop
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
+
+  raw_cache_enabled: &raw_cache_enabled
+    enabled: true
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Patent grants — data available from 1976; GOVDATA_START_YEAR caps the backfill
+  patent_grant_years: &patent_grant_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 2
+
+  # Claims and summaries: per-year files, same year range
+  patent_text_years: &patent_text_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 2
+
+  # Trademark applications: data available from 1870; cap at GOVDATA_START_YEAR
+  trademark_years: &trademark_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 2
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # PATENT_GRANTS — Core patent dimension table
+  # ---------------------------------------------------------------------------
+  - name: patent_grants
+    pattern: "type=patent_grants/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per granted utility patent (design patents excluded by default;
+      set PATENTS_INCLUDE_DESIGN=true to include). Requires ETL join of 5 files:
+      g_patent.tsv (core attributes), g_application.tsv (filing date),
+      g_patent_abstract.tsv (abstract text), g_figures.tsv (figure/sheet counts),
+      and citation aggregates from g_us_patent_citation.tsv + g_foreign_citation.tsv.
+      All files are full-dump snapshots cached locally with quarterly TTL.
+      Transformer filters output to the requested grant_year dimension.
+
+    dimensions:
+      type:
+        - patent_grants
+      year: *patent_grant_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: patent_date
+        type: string
+        nullable: true
+        comment: Date of patent grant (YYYY-MM-DD)
+      - name: filing_date
+        type: string
+        nullable: true
+        comment: Original application filing date from g_application.tsv
+      - name: patent_type
+        type: string
+        nullable: true
+        comment: utility / design / plant
+      - name: patent_title
+        type: string
+        nullable: true
+        comment: Patent title
+      - name: patent_abstract
+        type: string
+        nullable: true
+        comment: Patent abstract text (from g_patent_abstract.tsv)
+      - name: num_claims
+        type: integer
+        nullable: true
+        comment: Number of claims
+      - name: num_figures
+        type: integer
+        nullable: true
+        comment: Number of figures (from g_figures.tsv)
+      - name: num_sheets
+        type: integer
+        nullable: true
+        comment: Number of drawing sheets (from g_figures.tsv)
+      - name: num_us_citations
+        type: integer
+        nullable: true
+        comment: Count of forward US patent citations (innovation signal)
+      - name: num_foreign_citations
+        type: integer
+        nullable: true
+        comment: Count of forward foreign patent citations
+      - name: wipo_kind
+        type: string
+        nullable: true
+        comment: WIPO kind code (B1, B2, etc.)
+      - name: withdrawn
+        type: boolean
+        nullable: true
+        comment: Whether patent was withdrawn; filter to false for active grants
+      - name: patent_application_type
+        type: string
+        nullable: true
+        comment: Application type (e.g., utility, continuation) from g_application.tsv
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_patent.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentGrantsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_grants/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_grants
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_ASSIGNEES — Patent ownership at grant time
+  # ---------------------------------------------------------------------------
+  - name: patent_assignees
+    pattern: "type=patent_assignees/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per patent-assignee combination. Organizations (companies, universities,
+      governments) that own patents at grant time. Requires join of
+      g_assignee_disambiguated.tsv + g_location_disambiguated.tsv via location_id
+      for geographic fields. Assignee-to-SEC entity matching is handled outside
+      this schema via entity extraction.
+
+    dimensions:
+      type:
+        - patent_assignees
+      year: *patent_grant_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: assignee_sequence
+        type: integer
+        nullable: true
+        comment: Order when patent has multiple assignees (0-based)
+      - name: assignee_id
+        type: string
+        nullable: true
+        comment: PatentsView disambiguated assignee ID
+      - name: assignee_organization
+        type: string
+        nullable: true
+        comment: Organization name; null for individual assignees
+      - name: assignee_name_first
+        type: string
+        nullable: true
+        comment: First name; null for org assignees
+      - name: assignee_name_last
+        type: string
+        nullable: true
+        comment: Last name; null for org assignees
+      - name: assignee_type
+        type: string
+        nullable: true
+        comment: US company / foreign company / US government / individual
+      - *state_fips_column
+      - *county_fips_column
+      - *country_code_column
+      - *latitude_column
+      - *longitude_column
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_assignee_disambiguated.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentAssigneesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_assignees/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_assignees
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_INVENTORS — Inventor listing per patent
+  # ---------------------------------------------------------------------------
+  - name: patent_inventors
+    pattern: "type=patent_inventors/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per patent-inventor combination. Requires join of
+      g_inventor_disambiguated.tsv (~8 GB uncompressed) +
+      g_location_disambiguated.tsv via location_id. File is cached locally
+      with quarterly TTL. Initial load worker (80) requires -t 480 (8-hour timeout).
+
+    dimensions:
+      type:
+        - patent_inventors
+      year: *patent_grant_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: inventor_id
+        type: string
+        nullable: true
+        comment: PatentsView disambiguated inventor ID
+      - name: inventor_sequence
+        type: integer
+        nullable: true
+        comment: Inventor order on patent (0 = first/primary)
+      - name: name_first
+        type: string
+        nullable: true
+        comment: First name
+      - name: name_last
+        type: string
+        nullable: true
+        comment: Last name
+      - name: gender_code
+        type: string
+        nullable: true
+        comment: M / F (inferred by PatentsView disambiguation); useful for diversity analysis
+      - *state_fips_column
+      - *county_fips_column
+      - *country_code_column
+      - *latitude_column
+      - *longitude_column
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_inventor_disambiguated.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentInventorsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_inventors/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_inventors
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_CPC_CLASSES — CPC technology classification per patent
+  # ---------------------------------------------------------------------------
+  - name: patent_cpc_classes
+    pattern: "type=patent_cpc/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per patent-CPC code combination. CPC is the primary technology
+      taxonomy for patent analysis. Source: g_cpc_current.tsv (full-dump snapshot,
+      cached locally with quarterly TTL, filtered by grant_year).
+
+    dimensions:
+      type:
+        - patent_cpc
+      year: *patent_grant_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: cpc_sequence
+        type: integer
+        nullable: true
+        comment: CPC code sequence on patent
+      - name: cpc_section
+        type: string
+        nullable: true
+        comment: CPC section (A-H, Y)
+      - name: cpc_class
+        type: string
+        nullable: true
+        comment: CPC class (2-char, e.g., H04)
+      - name: cpc_subclass
+        type: string
+        nullable: true
+        comment: CPC subclass (1-char, e.g., L)
+      - name: cpc_group
+        type: string
+        nullable: true
+        comment: Full CPC classification string (e.g., H04L0009000)
+      - name: cpc_type
+        type: string
+        nullable: true
+        comment: i (inventive) or a (additional)
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_cpc_current.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentCpcClassesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_cpc/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_cpc_classes
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_CLAIMS — Individual patent claims with vector embeddings
+  # ---------------------------------------------------------------------------
+  - name: patent_claims
+    pattern: "type=patent_claims/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per patent claim. Claims define the legal scope of the patent —
+      the most analytically useful text component. Per-year source files:
+      g_claims_{year}.tsv.zip from the PatentsView claims/ subdirectory.
+      The embedding column is populated at ingestion time via batched embedding
+      calls. For dependent claims, the transformer prepends the parent independent
+      claim text before embedding to capture full legal scope.
+
+    dimensions:
+      type:
+        - patent_claims
+      year: *patent_text_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: claim_sequence
+        type: integer
+        nullable: true
+        comment: Processing order of claim (1-based)
+      - name: claim_number
+        type: integer
+        nullable: true
+        comment: Claim number as printed in the patent
+      - name: claim_text
+        type: string
+        nullable: true
+        comment: Full claim text
+      - name: dependent
+        type: integer
+        nullable: true
+        comment: 0 = independent claim; positive integer = claim_sequence of parent
+      - name: exemplary
+        type: boolean
+        nullable: true
+        comment: Claim designated as exemplary; useful for ML classification
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/claims/g_claims_{year}.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentClaimsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_claims/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_claims
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_SUMMARIES — Brief summary text with vector embeddings
+  # ---------------------------------------------------------------------------
+  - name: patent_summaries
+    pattern: "type=patent_summaries/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per patent. Brief summary section text from the patent specification.
+      More concise than the full description; covers key aspects and distinguishing
+      features over prior art. Per-year source files:
+      g_brf_sum_text_{year}.tsv.zip from the PatentsView brief-summary-text/ subdirectory.
+      The embedding column is populated at ingestion time.
+
+    dimensions:
+      type:
+        - patent_summaries
+      year: *patent_text_years
+
+    columns:
+      - *patent_id_column
+      - *grant_year_column
+      - name: summary_text
+        type: string
+        nullable: true
+        comment: Full brief summary section text
+
+    source:
+      type: http
+      url: "https://s3.amazonaws.com/data.patentsview.org/brief-summary-text/g_brf_sum_text_{year}.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentSummariesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_summaries/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: patent_summaries
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # TRADEMARK_APPLICATIONS — USPTO trademark applications and registrations
+  # ---------------------------------------------------------------------------
+  - name: trademark_applications
+    pattern: "type=trademark_apps/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per trademark application. USPTO trademark bulk dataset is a 13-table
+      relational dataset. This flat table requires ETL join of 5 files on serial_no:
+      case_file.csv (79 columns, core attributes), owner.csv (applicant identity),
+      classification.csv (US class codes), intl_class.csv (international class codes),
+      statement.csv (goods and services text). Files are cached locally with quarterly TTL
+      and filtered by application_year (parsed from filing_dt). applicant_state is a
+      2-letter code, not FIPS — join to geo.states for FIPS.
+
+    dimensions:
+      type:
+        - trademark_apps
+      year: *trademark_years
+
+    columns:
+      - name: serial_no
+        type: string
+        nullable: false
+        comment: USPTO trademark serial number (primary key)
+      - name: registration_no
+        type: string
+        nullable: true
+        comment: Registration number; null if pending
+      - name: application_year
+        type: integer
+        nullable: false
+        comment: Year parsed from filing_dt; partition key
+      - name: filing_dt
+        type: string
+        nullable: true
+        comment: Application filing date (YYYYMMDD)
+      - name: registration_dt
+        type: string
+        nullable: true
+        comment: Registration date; null if not registered
+      - name: abandon_dt
+        type: string
+        nullable: true
+        comment: Abandonment date; null for live marks
+      - name: mark_id_char
+        type: string
+        nullable: true
+        comment: Trademark text; null for design marks
+      - name: mark_draw_cd
+        type: string
+        nullable: true
+        comment: Drawing code 1=typed 2=design 3=stylized 4=standard char 5=color
+      - name: cfh_status_cd
+        type: string
+        nullable: true
+        comment: Status code (live/dead/registered/abandoned/cancelled)
+      - name: cfh_status_dt
+        type: string
+        nullable: true
+        comment: Date of current status
+      - name: publication_dt
+        type: string
+        nullable: true
+        comment: Date published for opposition
+      - name: renewal_dt
+        type: string
+        nullable: true
+        comment: Most recent renewal date
+      - name: std_char_claim_in
+        type: string
+        nullable: true
+        comment: Standard character mark flag (T/F)
+      - name: applicant_name
+        type: string
+        nullable: true
+        comment: Owner/applicant name from owner.csv
+      - name: applicant_type
+        type: string
+        nullable: true
+        comment: Owner type code
+      - name: applicant_state
+        type: string
+        nullable: true
+        comment: 2-letter state code (not FIPS); join to geo.states for FIPS
+      - name: applicant_country
+        type: string
+        nullable: true
+        comment: 2-letter ISO country code
+      - name: goods_services_class
+        type: string
+        nullable: true
+        comment: International class(es) comma-separated (1-45)
+      - name: goods_services_description
+        type: string
+        nullable: true
+        comment: Description of goods/services (truncated to 2000 chars)
+
+    source:
+      type: http
+      url: "https://bulkdata.uspto.gov/data/trademark/casefile/economics/2024/case_file.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkApplicationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trademark_apps/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: trademark_applications
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
