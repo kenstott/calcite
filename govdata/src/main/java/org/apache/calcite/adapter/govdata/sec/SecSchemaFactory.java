@@ -29,6 +29,10 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataUtils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+
 import org.apache.hadoop.conf.Configuration;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,19 +47,24 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.Year;
 import java.util.ArrayList;
-import java.util.Locale;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -491,7 +500,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         boolean manifestExists = localStorageProvider.exists(manifestPath);
         if (manifestExists) {
           try (BufferedReader reader = new BufferedReader(
-              new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
+              new InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
             String line;
             while ((line = reader.readLine()) != null) {
               if (line.startsWith(entryPrefix)) {
@@ -530,7 +539,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (manifestExists) {
             List<String> updatedLines = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
+                new InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 // Skip old entries for this CIK|ACCESSION
@@ -778,7 +787,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   return !decision.shouldProcess();
                 }
                 @Override public void markProcessed(String cik, String accession, String formType,
-                    java.util.List<String> outputFiles) {
+                    List<String> outputFiles) {
                   String form = formType != null ? formType : "UNKNOWN";
                   if (outputFiles == null || outputFiles.isEmpty()) {
                     cache.markNoXbrl(cik, accession, form, "");
@@ -788,7 +797,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   }
                 }
                 @Override public boolean areAllProcessed(String cik,
-                    java.util.List<String> accessions, java.util.List<String> formTypes) {
+                    List<String> accessions, List<String> formTypes) {
                   return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
                 }
               }
@@ -859,7 +868,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 && (((String) cikConfig).contains("_ALL_EDGAR_FILERS")
                     || ((String) cikConfig).contains("_ALL"));
             if (!isAllFilers && !ciks.isEmpty()) {
-              Set<String> cikSet = new java.util.HashSet<String>(ciks);
+              Set<String> cikSet = new HashSet<String>(ciks);
               List<EdgarFullIndexCache.IndexEntry> cikFiltered =
                   new ArrayList<EdgarFullIndexCache.IndexEntry>();
               for (EdgarFullIndexCache.IndexEntry entry : allEntries) {
@@ -992,6 +1001,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     IncrementalTracker incrementalTracker =
         PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
 
+    // Preload all table completion markers in one batch to avoid per-table round-trips
+    incrementalTracker.preloadAllCompletions();
+
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
         warehousePath, storageProvider, incrementalTracker);
@@ -1112,7 +1124,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     boolean deferEmbeddings = getBooleanValue(operand, "deferEmbeddings", false);
     if (deferEmbeddings && !computedColumns.isEmpty()) {
       // Filter out embed() expressions - these will be computed by GPU pipeline
-      Map<String, String> filteredColumns = new java.util.LinkedHashMap<>();
+      Map<String, String> filteredColumns = new LinkedHashMap<>();
       for (Map.Entry<String, String> entry : computedColumns.entrySet()) {
         if (!entry.getValue().contains("embed(") && !entry.getValue().contains("embed_jina")) {
           filteredColumns.put(entry.getKey(), entry.getValue());
@@ -1396,7 +1408,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   private Map<String, String> extractComputedColumns(Map<String, Object> tableConfig) {
-    Map<String, String> computedColumns = new java.util.LinkedHashMap<String, String>();
+    Map<String, String> computedColumns = new LinkedHashMap<String, String>();
 
     Object columnsObj = tableConfig.get("columns");
     if (!(columnsObj instanceof List)) {
@@ -2232,7 +2244,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Set<String> processedFilingsManifest = new HashSet<>();
       if (localStorageProvider.exists(manifestFilePath)) {
         try (BufferedReader reader = new BufferedReader(
-            new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+            new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
           Set<String> rawEntries = new HashSet<>();
           String line;
           while ((line = reader.readLine()) != null) {
@@ -2277,7 +2289,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Mark this CIK as fully processed for each year+type combination
           if (cacheManifest != null && startYear == endYear) {
             // Group filings by type and mark each type as processed
-            Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+            Map<String, Integer> filingCountsByType = new HashMap<>();
             for (FilingToDownload f : filingsToDownload) {
               filingCountsByType.merge(f.form, 1, Integer::sum);
             }
@@ -2347,7 +2359,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         if (cacheManifest != null && filingsToDownload.size() > 0 && startYear == endYear) {
           LOGGER.info("All {} filings for CIK {} are already processed - marking as fully processed", filingsToDownload.size(), normalizedCik);
           // Group filings by type and mark each type as processed
-          Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+          Map<String, Integer> filingCountsByType = new HashMap<>();
           for (FilingToDownload f : filingsToDownload) {
             filingCountsByType.merge(f.form, 1, Integer::sum);
           }
@@ -2734,7 +2746,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             List<String> existingLines = new ArrayList<>();
             if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                  new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   existingLines.add(line);
@@ -2989,7 +3001,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 List<String> existingLines = new ArrayList<>();
                 if (localStorageProvider.exists(manifestFilePath)) {
                   try (BufferedReader reader = new BufferedReader(
-                      new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                      new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                       existingLines.add(line);
@@ -3088,7 +3100,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             StringBuilder sb = new StringBuilder();
             if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                  new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   sb.append(line).append("\n");
@@ -3122,7 +3134,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           StringBuilder sb = new StringBuilder();
           if (localStorageProvider.exists(outerManifestFilePath)) {
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(localStorageProvider.openInputStream(outerManifestFilePath)))) {
+                new InputStreamReader(localStorageProvider.openInputStream(outerManifestFilePath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 sb.append(line).append("\n");
@@ -3534,17 +3546,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         + "]"
         + "}";
 
-    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse(schemaString);
+    Schema schema = new Schema.Parser().parse(schemaString);
 
     // Create records using StorageProvider approach
-    java.util.List<org.apache.avro.generic.GenericRecord> records = new java.util.ArrayList<>();
+    List<GenericRecord> records = new ArrayList<>();
     double basePrice = 100.0 + (ticker.hashCode() % 100);
 
     for (int month = 1; month <= 3; month++) { // Just 3 months of data for testing
       String date = String.format("%04d-%02d-%02d", year, month, 15);
 
-      org.apache.avro.generic.GenericRecord record =
-          new org.apache.avro.generic.GenericData.Record(schema);
+      GenericRecord record = new GenericData.Record(schema);
       // Include CIK as regular column, ticker and year come from directory structure
       record.put("cik", cik);
       record.put("date", date);

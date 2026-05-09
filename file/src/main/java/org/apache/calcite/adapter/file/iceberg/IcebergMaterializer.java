@@ -41,6 +41,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -623,8 +624,8 @@ public class IcebergMaterializer {
         long durationMs = System.currentTimeMillis() - startTime;
         LOGGER.info("Skipping materialization for '{}' - no source file changes since {} (watermark={})",
             config.getTargetTableId(),
-            new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
-                new java.util.Date(cached.completedAt)),
+            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
+                new Date(cached.completedAt)),
             cached.sourceFileWatermark);
         return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
       }
@@ -1154,7 +1155,7 @@ public class IcebergMaterializer {
 
       // Remove rows for accessions already committed in an earlier chunk of this run.
       if (!committedInThisRun.isEmpty() && accessionCol != null) {
-        java.util.Iterator<Map<String, Object>> it = rows.iterator();
+        Iterator<Map<String, Object>> it = rows.iterator();
         int before = rows.size();
         while (it.hasNext()) {
           Object val = it.next().get(accessionCol);
@@ -1403,14 +1404,18 @@ public class IcebergMaterializer {
       completed = latch.await(timeoutSeconds, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      try { conn.close(); } catch (Exception ignored) { }
+      try { conn.close(); } catch (Exception closeEx) {
+        LOGGER.debug("Failed to close DuckDB connection after interrupt: {}", closeEx.getMessage());
+      }
       throw new SQLException("DuckDB chunk query interrupted");
     }
 
     if (!completed) {
       LOGGER.warn("DuckDB chunk query timed out after {}s — closing connection to unblock",
           timeoutSeconds);
-      try { conn.close(); } catch (Exception ignored) { }
+      try { conn.close(); } catch (Exception closeEx) {
+        LOGGER.debug("Failed to close DuckDB connection after timeout: {}", closeEx.getMessage());
+      }
       throw new SQLException(
           "DuckDB chunk query timed out after " + timeoutSeconds + "s (R2 network stall)");
     }
@@ -2434,12 +2439,9 @@ public class IcebergMaterializer {
         globPattern = globPattern + "/**/*" + ext;
       }
 
-      // DuckDB glob() returns 'file' column; 'last_modified' only available for local files
-      // For S3 paths, we skip watermark optimization (always re-check)
       boolean isS3 = globPattern.startsWith("s3://") || globPattern.startsWith("s3a://");
       if (isS3) {
-        LOGGER.debug("S3 path detected, skipping watermark (not available): {}", globPattern);
-        return 0;  // No watermark for S3 - always check for changes
+        return getS3SourceFileWatermark(globPattern, ext);
       }
 
       String sql = "SELECT file, last_modified FROM glob('" + globPattern + "')";
@@ -2462,6 +2464,46 @@ public class IcebergMaterializer {
           sourcePattern, e.getMessage());
     }
 
+    return maxLastModified;
+  }
+
+  /**
+   * Computes the max lastModified watermark for S3 source files by listing objects
+   * under the non-wildcard base prefix of the source pattern.
+   *
+   * @param globPattern S3 glob pattern (e.g., "s3://bucket/prefix/year=*&#47;*.parquet")
+   * @param ext File extension to filter by (e.g., ".parquet")
+   * @return Max lastModified timestamp in milliseconds, or 0 on error
+   */
+  private long getS3SourceFileWatermark(String globPattern, String ext) {
+    // Extract the non-wildcard prefix to use as the S3 listing base path
+    String basePath = globPattern;
+    int wildcardIdx = basePath.indexOf('*');
+    if (wildcardIdx >= 0) {
+      basePath = basePath.substring(0, wildcardIdx);
+      int lastSlash = basePath.lastIndexOf('/');
+      if (lastSlash >= 0) {
+        basePath = basePath.substring(0, lastSlash + 1);
+      }
+    }
+    LOGGER.debug("Computing S3 source file watermark for base path: {}", basePath);
+    long maxLastModified = 0;
+    try {
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, true);
+      for (StorageProvider.FileEntry entry : files) {
+        if (!entry.isDirectory() && entry.getPath().endsWith(ext)) {
+          long lastMod = entry.getLastModified();
+          if (lastMod > maxLastModified) {
+            maxLastModified = lastMod;
+          }
+        }
+      }
+      LOGGER.debug("S3 source file watermark: {} ({} objects scanned, base: {})",
+          maxLastModified, files.size(), basePath);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to compute S3 source file watermark for {}: {}", basePath, e.getMessage());
+      return 0;
+    }
     return maxLastModified;
   }
 
