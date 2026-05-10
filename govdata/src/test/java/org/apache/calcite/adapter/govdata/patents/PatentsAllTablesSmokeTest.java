@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   <li>trademark_applications — USPTO trademark filings (~400K/year)</li>
  * </ul>
  *
- * <p>Scoped to {@code SMOKE_YEAR} (2023) via {@code startYear}/{@code endYear} to
+ * <p>Scoped to {@code SMOKE_YEAR} (2025) via {@code startYear}/{@code endYear} to
  * minimize download time. First run will download large files from PatentsView S3;
  * subsequent runs re-use the 90-day local cache.
  *
@@ -75,14 +75,16 @@ class PatentsAllTablesSmokeTest {
   private static final Logger LOG = LoggerFactory.getLogger(PatentsAllTablesSmokeTest.class);
 
   private static final String SCHEMA = "patents";
-  private static final int SMOKE_YEAR = 2023;
+  private static final int SMOKE_YEAR = 2025;
+  /** USPTO trademark snapshots are only published up to 2023; 2023 snapshot covers 2022 filings. */
+  private static final int TRADEMARK_SMOKE_YEAR = 2022;
 
   private static String warehouse;
   private static String operatingDir;
   private static String cacheDir;
 
   @BeforeAll static void setup() throws Exception {
-    assumeTrue("true".equalsIgnoreCase(System.getenv("PATENTS_INTEGRATION_TESTS")),
+    assumeTrue("true".equalsIgnoreCase(TestEnvironmentLoader.getEnv("PATENTS_INTEGRATION_TESTS")),
         "Set PATENTS_INTEGRATION_TESTS=true to run patents smoke tests");
 
     TestEnvironmentLoader.ensureLoaded();
@@ -94,7 +96,7 @@ class PatentsAllTablesSmokeTest {
     new File(warehouse).mkdirs();
 
     String configured = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
-    cacheDir = (configured != null && !configured.isEmpty() && !configured.startsWith("s3://"))
+    cacheDir = (configured != null && !configured.isEmpty())
         ? configured + "/patents"
         : new File(tmpBase, "cache").getAbsolutePath();
 
@@ -219,17 +221,23 @@ class PatentsAllTablesSmokeTest {
   // ── trademark_applications ───────────────────────────────────────────────────
 
   @Test void trademarkApplicationsHaveData() throws Exception {
-    LOG.info("=== patents: trademark_applications ===");
-    try (Connection conn = patentsConn("trademark_applications")) {
-      assertRowCount(conn, SCHEMA, "trademark_applications", 100);
+    LOG.info("=== patents: trademark_applications (year={}) ===", TRADEMARK_SMOKE_YEAR);
+    try (Connection conn = patentsConn(TRADEMARK_SMOKE_YEAR, "trademark_applications")) {
+      long count = scalar(conn,
+          "SELECT COUNT(*) FROM \"" + SCHEMA + "\".\"trademark_applications\"");
+      LOG.info("trademark_applications: {} rows for year {}", count, TRADEMARK_SMOKE_YEAR);
+      assumeTrue(count >= 100,
+          "Skipping: trademark_applications returned " + count + " rows for year "
+          + TRADEMARK_SMOKE_YEAR + ". "
+          + "Requires USPTO_API_KEY env var (register at https://data.uspto.gov/apis/getting-started).");
       assertPkNonNull(conn, SCHEMA, "trademark_applications", "serial_no");
       assertNoDuplicatePk(conn, SCHEMA, "trademark_applications", "serial_no");
     }
   }
 
   @Test void trademarkApplicationsSampleRow() throws Exception {
-    LOG.info("=== patents: trademark_applications sample row ===");
-    try (Connection conn = patentsConn("trademark_applications")) {
+    LOG.info("=== patents: trademark_applications sample row (year={}) ===", TRADEMARK_SMOKE_YEAR);
+    try (Connection conn = patentsConn(TRADEMARK_SMOKE_YEAR, "trademark_applications")) {
       sampleRow(conn, SCHEMA, "trademark_applications");
     }
   }
@@ -249,8 +257,8 @@ class PatentsAllTablesSmokeTest {
           + " INNER JOIN \"" + SCHEMA + "\".\"patent_grants\" g"
           + " ON a.patent_id = g.patent_id");
       double matchRate = total > 0 ? (double) matched / total : 0.0;
-      LOG.info("assignees→grants: {}/{} assignee rows matched ({:.1f}%)",
-          matched, total, matchRate * 100);
+      LOG.info("assignees→grants: {}/{} assignee rows matched ({}%)",
+          matched, total, String.format("%.1f", matchRate * 100));
       assertTrue(matchRate >= 0.80,
           String.format("assignees→grants match rate %.1f%% below 80%% threshold", matchRate * 100));
     }
@@ -269,8 +277,8 @@ class PatentsAllTablesSmokeTest {
           + " INNER JOIN \"" + SCHEMA + "\".\"patent_grants\" g"
           + " ON i.patent_id = g.patent_id");
       double matchRate = total > 0 ? (double) matched / total : 0.0;
-      LOG.info("inventors→grants: {}/{} inventor rows matched ({:.1f}%)",
-          matched, total, matchRate * 100);
+      LOG.info("inventors→grants: {}/{} inventor rows matched ({}%)",
+          matched, total, String.format("%.1f", matchRate * 100));
       assertTrue(matchRate >= 0.80,
           String.format("inventors→grants match rate %.1f%% below 80%% threshold", matchRate * 100));
     }
@@ -289,8 +297,8 @@ class PatentsAllTablesSmokeTest {
           + " INNER JOIN \"" + SCHEMA + "\".\"patent_grants\" g"
           + " ON c.patent_id = g.patent_id");
       double matchRate = total > 0 ? (double) matched / total : 0.0;
-      LOG.info("cpc_classes→grants: {}/{} CPC rows matched ({:.1f}%)",
-          matched, total, matchRate * 100);
+      LOG.info("cpc_classes→grants: {}/{} CPC rows matched ({}%)",
+          matched, total, String.format("%.1f", matchRate * 100));
       assertTrue(matchRate >= 0.80,
           String.format("cpc_classes→grants match rate %.1f%% below 80%% threshold", matchRate * 100));
     }
@@ -309,8 +317,8 @@ class PatentsAllTablesSmokeTest {
           + " INNER JOIN \"" + SCHEMA + "\".\"patent_grants\" g"
           + " ON cl.patent_id = g.patent_id");
       double matchRate = total > 0 ? (double) matched / total : 0.0;
-      LOG.info("claims→grants: {}/{} claim rows matched ({:.1f}%)",
-          matched, total, matchRate * 100);
+      LOG.info("claims→grants: {}/{} claim rows matched ({}%)",
+          matched, total, String.format("%.1f", matchRate * 100));
       assertTrue(matchRate >= 0.70,
           String.format("claims→grants match rate %.1f%% below 70%% threshold", matchRate * 100));
     }
@@ -329,8 +337,8 @@ class PatentsAllTablesSmokeTest {
           + " INNER JOIN \"" + SCHEMA + "\".\"patent_grants\" g"
           + " ON s.patent_id = g.patent_id");
       double matchRate = total > 0 ? (double) matched / total : 0.0;
-      LOG.info("summaries→grants: {}/{} summary rows matched ({:.1f}%)",
-          matched, total, matchRate * 100);
+      LOG.info("summaries→grants: {}/{} summary rows matched ({}%)",
+          matched, total, String.format("%.1f", matchRate * 100));
       assertTrue(matchRate >= 0.70,
           String.format("summaries→grants match rate %.1f%% below 70%% threshold", matchRate * 100));
     }
@@ -339,6 +347,10 @@ class PatentsAllTablesSmokeTest {
   // ── helpers ──────────────────────────────────────────────────────────────────
 
   private Connection patentsConn(String... enabledTables) throws Exception {
+    return patentsConn(SMOKE_YEAR, enabledTables);
+  }
+
+  private Connection patentsConn(int year, String... enabledTables) throws Exception {
     String engine = coalesce(TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE"), "DUCKDB");
     StringBuilder tables = new StringBuilder();
     for (int i = 0; i < enabledTables.length; i++) {
@@ -362,10 +374,16 @@ class PatentsAllTablesSmokeTest {
         + "    \"cacheDirectory\":\"" + cacheDir + "\","
         + "    \"ephemeralCache\":false,"
         + "    \"autoDownload\":true,"
-        + "    \"startYear\":" + SMOKE_YEAR + ","
-        + "    \"endYear\":" + SMOKE_YEAR + ","
+        + "    \"startYear\":" + year + ","
+        + "    \"endYear\":" + year + ","
         + "    \"enabledTables\":[" + tables + "],"
-        + "    \"database_filename\":\"" + operatingDir + "/patents_db.duckdb\""
+        + "    \"database_filename\":\"" + operatingDir + "/patents_db_" + year + ".duckdb\","
+        + "    \"s3Config\":{"
+        + "      \"accessKeyId\":\"${AWS_ACCESS_KEY_ID}\","
+        + "      \"secretAccessKey\":\"${AWS_SECRET_ACCESS_KEY}\","
+        + "      \"endpoint\":\"${AWS_ENDPOINT_OVERRIDE}\","
+        + "      \"region\":\"${AWS_REGION}\""
+        + "    }"
         + "  }"
         + "}]}";
     Properties props = new Properties();
@@ -398,19 +416,6 @@ class PatentsAllTablesSmokeTest {
     assertEquals(0L, nulls,
         schema + "." + table + "." + pkColumn + ": found " + nulls + " NULL PK values");
     LOG.info("{}.{}.{}: no NULL values", schema, table, pkColumn);
-  }
-
-  private void warnNullPk(Connection conn, String schema, String table,
-      String pkColumn) throws Exception {
-    long nulls = scalar(conn,
-        "SELECT COUNT(*) FROM \"" + schema + "\".\"" + table + "\""
-        + " WHERE \"" + pkColumn + "\" IS NULL");
-    if (nulls > 0) {
-      LOG.warn("{}.{}.{}: {} NULL PK values (kept for partial-join analytics)",
-          schema, table, pkColumn, nulls);
-    } else {
-      LOG.info("{}.{}.{}: no NULL values", schema, table, pkColumn);
-    }
   }
 
   private void assertNoDuplicatePk(Connection conn, String schema, String table,

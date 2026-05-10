@@ -16,11 +16,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -52,16 +50,16 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
       return Collections.emptyIterator();
     }
 
-    File patentFile = downloadAndCacheTsv(
+    String patentFile = downloadAndCacheTsv(
         BASE_URL + "g_patent.tsv.zip", cacheFile("g_patent.tsv"));
-    final File cpcFile = downloadAndCacheTsv(
+    final String cpcFile = downloadAndCacheTsv(
         BASE_URL + "g_cpc_current.tsv.zip", cacheFile("g_cpc_current.tsv"));
 
     final Set<String> patentIds = readPatentIdsForYear(patentFile, yearStr);
     LOGGER.info("PatentCpcClasses: {} patent IDs for year {}", patentIds.size(), yearStr);
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(cpcFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(cpcFile), StandardCharsets.UTF_8));
     String headerLine = reader.readLine();
     if (headerLine == null) {
       reader.close();

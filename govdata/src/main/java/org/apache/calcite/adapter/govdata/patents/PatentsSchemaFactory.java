@@ -16,7 +16,11 @@ import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Factory for the Patents schema.
@@ -40,11 +44,27 @@ import java.util.Map;
 public class PatentsSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(PatentsSchemaFactory.class);
 
+  private static final List<String> ALL_TABLES = Arrays.asList(
+      "patent_grants", "patent_assignees", "patent_inventors",
+      "patent_cpc_classes", "patent_claims", "patent_summaries",
+      "trademark_applications");
+
   @Override public String getSchemaResourceName() {
     return "/patents/patents-schema.yaml";
   }
 
   @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for PATENTS schema");
+    @SuppressWarnings("unchecked")
+    List<String> enabledTablesList = (List<String>) operand.get("enabledTables");
+    if (enabledTablesList == null || enabledTablesList.isEmpty()) {
+      LOGGER.debug("enabledTables not set — all patent tables enabled");
+      return;
+    }
+    final Set<String> enabled = new HashSet<>(enabledTablesList);
+    LOGGER.debug("Patents enabledTables filter: {}", enabled);
+    for (final String tableName : ALL_TABLES) {
+      builder.isEnabled(tableName, ctx -> enabled.contains(tableName));
+    }
   }
 }

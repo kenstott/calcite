@@ -16,11 +16,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -47,7 +45,7 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
     }
 
     String url = context.getUrl();
-    File dest = cacheFile("g_claims_" + yearStr + ".tsv");
+    String dest = cacheFile("g_claims_" + yearStr + ".tsv");
     if (!isCacheValid(dest)) {
       LOGGER.info("PatentClaims downloading year {}: {}", yearStr, url);
       downloadAndCacheTsv(url, dest);
@@ -56,7 +54,7 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
     }
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(dest.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(dest), StandardCharsets.UTF_8));
     String headerLine = reader.readLine();
     if (headerLine == null) {
       reader.close();
@@ -78,8 +76,12 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
               continue;
             }
             String[] parts = splitTsv(line);
+            String patentId = getField(parts, hdr, "patent_id");
+            if (patentId == null || patentId.isEmpty() || "-".equals(patentId)) {
+              continue;
+            }
             Map<String, Object> row = new HashMap<>();
-            row.put("patent_id", strVal(getField(parts, hdr, "patent_id")));
+            row.put("patent_id", strVal(patentId));
             row.put("grant_year", intVal(yearStr));
             row.put("claim_sequence", intVal(getField(parts, hdr, "claim_sequence")));
             row.put("claim_number", intVal(getField(parts, hdr, "claim_number")));

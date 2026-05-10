@@ -16,15 +16,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,8 +48,16 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
   private static final Logger LOGGER =
       LoggerFactory.getLogger(TrademarkApplicationsTransformer.class);
 
-  private static final String TM_BASE =
-      "https://bulkdata.uspto.gov/data/trademark/casefile/economics/2024/";
+  /**
+   * USPTO Open Data Portal API endpoint for trademark casefile economics bulk downloads.
+   * Requires X-Api-Key header. Register at https://data.uspto.gov/apis/getting-started
+   * Only snapshots for years 2011, 2021, 2022, 2023 are currently published.
+   * Each snapshot {year} contains applications filed in {year-1}.
+   */
+  private static final String TM_API_BASE =
+      "https://api.uspto.gov/api/v1/datasets/products/files/TRCFECO2/";
+
+  private static final String USPTO_API_KEY_ENV = "USPTO_API_KEY";
 
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
@@ -61,10 +68,36 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
       return Collections.emptyIterator();
     }
 
-    final File caseFile = downloadAndCacheCsv(TM_BASE + "case_file.zip", "tm_case_file.csv");
-    File ownerFile = downloadAndCacheCsv(TM_BASE + "owner.zip", "tm_owner.csv");
-    File intlClassFile = downloadAndCacheCsv(TM_BASE + "intl_class.zip", "tm_intl_class.csv");
-    File statementFile = downloadAndCacheCsv(TM_BASE + "statement.zip", "tm_statement.csv");
+    // The USPTO economics/{year}/ snapshot is published in {year} and contains
+    // applications filed in {year-1}. Offset the snapshot year by +1 to retrieve
+    // the target filing year's data.
+    final String snapshotYear = String.valueOf(Integer.parseInt(yearStr) + 1);
+    final String apiKey = System.getenv(USPTO_API_KEY_ENV);
+    if (apiKey == null || apiKey.isEmpty()) {
+      LOGGER.warn("TrademarkApplications: {} not set — skipping trademark download. "
+          + "Register at https://data.uspto.gov/apis/getting-started", USPTO_API_KEY_ENV);
+      return Collections.emptyIterator();
+    }
+    final String tmBase = TM_API_BASE + snapshotYear + "/";
+    final String caseFile;
+    final String ownerFile;
+    final String intlClassFile;
+    final String statementFile;
+    try {
+      caseFile = downloadAndCacheCsv(tmBase + "case_file.csv.zip",
+          "tm_case_file_" + snapshotYear + ".csv", apiKey);
+      ownerFile = downloadAndCacheCsv(tmBase + "owner.csv.zip",
+          "tm_owner_" + snapshotYear + ".csv", apiKey);
+      intlClassFile = downloadAndCacheCsv(tmBase + "intl_class.csv.zip",
+          "tm_intl_class_" + snapshotYear + ".csv", apiKey);
+      statementFile = downloadAndCacheCsv(tmBase + "statement.csv.zip",
+          "tm_statement_" + snapshotYear + ".csv", apiKey);
+    } catch (IOException e) {
+      LOGGER.warn("TrademarkApplications: download failed for snapshot year {} — {}. "
+          + "Data may not be published yet (available years: 2011, 2021, 2022, 2023).",
+          snapshotYear, e.getMessage());
+      return Collections.emptyIterator();
+    }
 
     final Set<String> serialNos =
         readCsvYearColumnKeys(caseFile, "filing_dt", yearStr, "serial_no");
@@ -78,7 +111,7 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
         readCsvSingleValueForKeys(statementFile, "serial_no", serialNos, "statement_text");
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(caseFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(caseFile), StandardCharsets.UTF_8));
     String headerLine = reader.readLine();
     if (headerLine == null) {
       reader.close();
@@ -174,22 +207,25 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
     return v.isEmpty() ? null : v;
   }
 
-  private File downloadAndCacheCsv(String url, String cacheFileName) throws IOException {
-    File dest = cacheFile(cacheFileName);
+  private String downloadAndCacheCsv(String url, String cacheFileName, String apiKey)
+      throws IOException {
+    String dest = cacheFile(cacheFileName);
     if (isCacheValid(dest)) {
       LOGGER.debug("Trademark cache hit: {}", cacheFileName);
       return dest;
     }
     LOGGER.info("Trademark downloading: {}", url);
-    extractZipEntryToFile(url, dest, ".csv");
+    Map<String, String> headers = new LinkedHashMap<>();
+    headers.put("X-Api-Key", apiKey);
+    extractZipEntryToFile(url, headers, dest, ".csv");
     return dest;
   }
 
   private Set<String> readCsvYearColumnKeys(
-      File csvFile, String dateColumn, String yearStr, String keyColumn) throws IOException {
+      String path, String dateColumn, String yearStr, String keyColumn) throws IOException {
     Set<String> result = new HashSet<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(csvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -236,11 +272,11 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
   }
 
   private Map<String, Map<String, String>> readCsvAsLookupForKeys(
-      File csvFile, String keyColumn, Set<String> keysToRetain,
+      String path, String keyColumn, Set<String> keysToRetain,
       String... retainColumns) throws IOException {
     Map<String, Map<String, String>> result = new HashMap<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(csvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -288,11 +324,11 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
   }
 
   private Map<String, Set<String>> readCsvMultiValueForKeys(
-      File csvFile, String keyColumn, Set<String> keysToRetain,
+      String path, String keyColumn, Set<String> keysToRetain,
       String valueColumn) throws IOException {
     Map<String, Set<String>> result = new HashMap<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(csvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -343,11 +379,11 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
   }
 
   private Map<String, String> readCsvSingleValueForKeys(
-      File csvFile, String keyColumn, Set<String> keysToRetain,
+      String path, String keyColumn, Set<String> keysToRetain,
       String valueColumn) throws IOException {
     Map<String, String> result = new HashMap<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(csvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {

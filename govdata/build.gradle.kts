@@ -75,8 +75,22 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
-tasks.register<Delete>("cleanTestLogs") {
-    delete(layout.buildDirectory.dir("test-logs"))
+tasks.register("cleanTestLogs") {
+    // Always run — no UP-TO-DATE skipping on ExFAT/APFS where ._* sidecar files accumulate
+    outputs.upToDateWhen { false }
+    doLast {
+        // macOS creates AppleDouble ._* files that block Gradle's directory deletion on ExFAT/APFS.
+        // Gradle's fileTree excludes hidden files by default, so use exec(find) to reach them.
+        val buildDir = layout.buildDirectory.get().asFile
+        exec {
+            commandLine("find", buildDir.absolutePath, "-name", "._*", "-delete")
+            isIgnoreExitValue = true
+        }
+        val testLogs = layout.buildDirectory.dir("test-logs").get().asFile
+        if (testLogs.exists()) {
+            testLogs.deleteRecursively()
+        }
+    }
 }
 
 tasks.test {

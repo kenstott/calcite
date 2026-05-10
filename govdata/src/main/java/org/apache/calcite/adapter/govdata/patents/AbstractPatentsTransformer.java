@@ -12,19 +12,18 @@ package org.apache.calcite.adapter.govdata.patents;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,9 +39,9 @@ import java.util.zip.ZipInputStream;
  *
  * <p>Provides shared utilities for:
  * <ul>
- *   <li>Downloading large ZIP files as byte arrays</li>
+ *   <li>Downloading large ZIP files via HTTP</li>
  *   <li>Extracting TSV files from ZIP archives</li>
- *   <li>File-based caching with quarterly TTL (90 days)</li>
+ *   <li>Storage-provider-backed caching with quarterly TTL (90 days)</li>
  *   <li>TSV parsing with header detection</li>
  *   <li>JSON field helpers (null-safe)</li>
  * </ul>
@@ -61,67 +60,103 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 600_000; // 10 min for large files
 
+  private volatile StorageProvider storageProvider;
+
+  /** Returns the storage provider for the govdata cache, initializing lazily on first call. */
+  protected StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      synchronized (this) {
+        if (storageProvider == null) {
+          storageProvider = StorageProviderFactory.createForGovDataCache();
+        }
+      }
+    }
+    return storageProvider;
+  }
+
   // ── Cache path resolution ─────────────────────────────────────────────────
 
-  /** Returns the patents cache directory (GOVDATA_CACHE_DIR/patents/). */
-  protected File cacheDir() {
-    String root = System.getenv("GOVDATA_CACHE_DIR");
-    if (root == null || root.isEmpty()) {
-      root = System.getProperty("java.io.tmpdir");
-    }
-    File dir = new File(root, "patents");
-    if (!dir.exists()) {
-      dir.mkdirs();
-    }
-    return dir;
+  /** Returns the patents cache directory path (GOVDATA_CACHE_DIR/patents/). */
+  protected String cacheDir() {
+    return storageProvider().resolvePath(StorageProviderFactory.getGovDataCacheDir(), "patents");
   }
 
-  /** Returns the cache file for a given filename. */
-  protected File cacheFile(String filename) {
-    return new File(cacheDir(), filename);
+  /** Returns the cache path for a given filename. */
+  protected String cacheFile(String filename) {
+    return storageProvider().resolvePath(cacheDir(), filename);
   }
 
-  /** Returns true if the cache file exists and is within TTL. */
-  protected boolean isCacheValid(File file) {
-    return file.exists()
-        && (System.currentTimeMillis() - file.lastModified()) < CACHE_TTL_MS;
+  /** Returns true if the cache path exists and is within TTL. */
+  protected boolean isCacheValid(String path) {
+    try {
+      if (!storageProvider().exists(path)) {
+        return false;
+      }
+      StorageProvider.FileMetadata meta = storageProvider().getMetadata(path);
+      return meta != null
+          && (System.currentTimeMillis() - meta.getLastModified()) < CACHE_TTL_MS;
+    } catch (IOException e) {
+      return false;
+    }
   }
 
   // ── Download and cache ─────────────────────────────────────────────────────
 
   /**
    * Downloads a ZIP from {@code url}, streams the first TSV/TXT entry directly to
-   * {@code dest}, and returns the path. Re-uses cached file if valid.
+   * {@code destPath} via the storage provider, and returns the path.
+   * Re-uses cached file if valid.
    *
-   * <p>Streams HTTP → ZipInputStream → FileOutputStream with no intermediate buffering,
+   * <p>Streams HTTP → ZipInputStream → StorageProvider with no intermediate buffering,
    * allowing arbitrarily large files (the full-dump files exceed 2–8 GB uncompressed).
    */
-  protected File downloadAndCacheTsv(String url, File dest) throws IOException {
-    if (isCacheValid(dest)) {
-      LOGGER.debug("Patents cache hit: {}", dest.getName());
-      return dest;
+  protected String downloadAndCacheTsv(String url, String destPath) throws IOException {
+    if (isCacheValid(destPath)) {
+      LOGGER.debug("Patents cache hit: {}", destPath);
+      return destPath;
     }
     LOGGER.info("Patents downloading: {}", url);
-    extractZipEntryToFile(url, dest, ".tsv", ".txt");
-    LOGGER.info("Patents cached {} bytes to {}", dest.length(), dest.getName());
-    return dest;
+    extractZipEntryToFile(url, destPath, ".tsv", ".txt");
+    LOGGER.info("Patents cached to {}", destPath);
+    return destPath;
   }
 
   /**
    * Streams an HTTP ZIP response, locates the first entry whose name ends with one of
-   * {@code extensions}, and writes it directly to {@code dest}.
+   * {@code extensions}, and writes it to {@code destPath} via the storage provider.
    *
    * <p>No intermediate byte[] or String buffer is used; memory footprint is O(buffer_size).
    */
-  protected void extractZipEntryToFile(String url, File dest, String... extensions)
+  protected void extractZipEntryToFile(String url, String destPath, String... extensions)
       throws IOException {
+    extractZipEntryToFile(url, null, destPath, extensions);
+  }
+
+  /**
+   * Streams an HTTP ZIP response with optional request headers (e.g., API key), locates the
+   * first entry whose name ends with one of {@code extensions}, and writes it to {@code destPath}
+   * via the storage provider. Detects WAF/HTML responses and throws a descriptive IOException.
+   */
+  protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
+      String destPath, String... extensions) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
     conn.setReadTimeout(READ_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    if (requestHeaders != null) {
+      for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
+        conn.setRequestProperty(h.getKey(), h.getValue());
+      }
+    }
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
+    }
+    String contentType = conn.getContentType();
+    if (contentType != null && contentType.contains("text/html")) {
+      throw new IOException(
+          "Expected ZIP but got HTML response from: " + url
+          + " — source may be WAF-blocked or unavailable");
     }
     ZipInputStream zis = new ZipInputStream(conn.getInputStream());
     try {
@@ -136,16 +171,14 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
           }
         }
         if (matches) {
-          FileOutputStream fos = new FileOutputStream(dest);
-          try {
-            byte[] buf = new byte[65536];
-            int len;
-            while ((len = zis.read(buf)) > 0) {
-              fos.write(buf, 0, len);
+          // Wrap in non-closing stream so writeFile doesn't close the ZipInputStream
+          final ZipInputStream finalZis = zis;
+          java.io.InputStream nonClosingEntry = new java.io.FilterInputStream(finalZis) {
+            @Override public void close() {
+              // intentionally empty — caller closes the ZipInputStream
             }
-          } finally {
-            fos.close();
-          }
+          };
+          storageProvider().writeFile(destPath, nonClosingEntry);
           return;
         }
         zis.closeEntry();
@@ -165,10 +198,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * <p>Uses streaming to avoid loading the entire file into memory.
    */
   protected List<Map<String, String>> readTsvFilteredByYear(
-      File tsvFile, String yearColumn, String yearValue) throws IOException {
+      String path, String yearColumn, String yearValue) throws IOException {
     List<Map<String, String>> result = new ArrayList<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -212,11 +245,11 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * is present in {@code keysToRetain}. Streams the file — memory is O(keysToRetain.size()).
    */
   protected Map<String, Map<String, String>> readTsvAsLookupForKeys(
-      File tsvFile, String keyColumn, Set<String> keysToRetain,
+      String path, String keyColumn, Set<String> keysToRetain,
       String... retainColumns) throws IOException {
     Map<String, Map<String, String>> result = new HashMap<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -231,8 +264,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         }
       }
       if (keyIdx < 0) {
-        LOGGER.warn("Patents lookup: key column '{}' not found in {}", keyColumn,
-            tsvFile.getName());
+        LOGGER.warn("Patents lookup: key column '{}' not found in {}", keyColumn, path);
         return result;
       }
 
@@ -271,10 +303,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * Only loads the specified columns to limit memory usage.
    */
   protected Map<String, Map<String, String>> readTsvAsLookup(
-      File tsvFile, String keyColumn, String... retainColumns) throws IOException {
+      String path, String keyColumn, String... retainColumns) throws IOException {
     Map<String, Map<String, String>> result = new HashMap<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -289,7 +321,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         }
       }
       if (keyIdx < 0) {
-        LOGGER.warn("Patents lookup: key column '{}' not found in {}", keyColumn, tsvFile.getName());
+        LOGGER.warn("Patents lookup: key column '{}' not found in {}", keyColumn, path);
         return result;
       }
 
@@ -339,10 +371,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * Reads g_patent.tsv, filters rows where {@code patent_date} starts with {@code yearStr},
    * and returns the set of patent_id values for that year. Memory is O(patent count per year).
    */
-  protected Set<String> readPatentIdsForYear(File patentFile, String yearStr) throws IOException {
+  protected Set<String> readPatentIdsForYear(String path, String yearStr) throws IOException {
     Set<String> result = new HashSet<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(patentFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -360,7 +392,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         }
       }
       if (patentIdIdx < 0 || patentDateIdx < 0) {
-        LOGGER.warn("readPatentIdsForYear: required columns not found in {}", patentFile.getName());
+        LOGGER.warn("readPatentIdsForYear: required columns not found in {}", path);
         return result;
       }
       String line;
@@ -389,10 +421,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * is present in {@code patentIds}. Used by tables with no year column.
    */
   protected Set<String> readTsvKeysByPatentIds(
-      File tsvFile, Set<String> patentIds, String keyColumn) throws IOException {
+      String path, Set<String> patentIds, String keyColumn) throws IOException {
     Set<String> result = new HashSet<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -410,7 +442,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         }
       }
       if (patentIdIdx < 0 || keyIdx < 0) {
-        LOGGER.warn("readTsvKeysByPatentIds: required columns not found in {}", tsvFile.getName());
+        LOGGER.warn("readTsvKeysByPatentIds: required columns not found in {}", path);
         return result;
       }
       String line;
@@ -468,10 +500,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * {@code yearColumn} equals {@code yearValue}. Returns the set of non-blank keys.
    */
   protected Set<String> readTsvYearColumnKeys(
-      File tsvFile, String yearColumn, String yearValue, String keyColumn) throws IOException {
+      String path, String yearColumn, String yearValue, String keyColumn) throws IOException {
     Set<String> result = new HashSet<>();
     BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -490,7 +522,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       }
       if (keyIdx < 0) {
         LOGGER.warn("readTsvYearColumnKeys: key column '{}' not found in {}",
-            keyColumn, tsvFile.getName());
+            keyColumn, path);
         return result;
       }
       String line;

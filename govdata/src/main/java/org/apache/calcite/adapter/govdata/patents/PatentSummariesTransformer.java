@@ -16,15 +16,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Transforms PatentsView per-year brief summary ZIP into patent_summaries rows.
@@ -39,6 +38,8 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(PatentSummariesTransformer.class);
 
+  private static final Pattern PATENT_ID_PATTERN = Pattern.compile("[A-Za-z]{0,2}\\d+");
+
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
@@ -49,7 +50,7 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
     }
 
     String url = context.getUrl();
-    File dest = cacheFile("g_brf_sum_text_" + yearStr + ".tsv");
+    String dest = cacheFile("g_brf_sum_text_" + yearStr + ".tsv");
     if (!isCacheValid(dest)) {
       LOGGER.info("PatentSummaries downloading year {}: {}", yearStr, url);
       downloadAndCacheTsv(url, dest);
@@ -58,7 +59,7 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
     }
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(dest.toPath()), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(dest), StandardCharsets.UTF_8));
     String headerLine = reader.readLine();
     if (headerLine == null) {
       reader.close();
@@ -80,8 +81,16 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
               continue;
             }
             String[] parts = splitTsv(line);
+            if (parts.length < 2) {
+              continue;
+            }
+            String patentId = getField(parts, hdr, "patent_id");
+            if (patentId == null || patentId.isEmpty()
+                || !PATENT_ID_PATTERN.matcher(patentId).matches()) {
+              continue;
+            }
             Map<String, Object> row = new HashMap<>();
-            row.put("patent_id", strVal(getField(parts, hdr, "patent_id")));
+            row.put("patent_id", strVal(patentId));
             row.put("grant_year", intVal(yearStr));
             row.put("summary_text", strVal(getField(parts, hdr, "summary_text")));
             count[0]++;
