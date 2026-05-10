@@ -101,7 +101,7 @@ public class HttpSourceConfig {
    * Pagination types.
    */
   public enum PaginationType {
-    NONE, OFFSET, CURSOR, PAGE, CSV_STREAM
+    NONE, OFFSET, CURSOR, PAGE, PAGE_ZERO, CSV_STREAM
   }
 
   /**
@@ -127,6 +127,7 @@ public class HttpSourceConfig {
   // Bulk download reference (alternative to direct HTTP)
   private final String bulkDownload;
   private final String extractPattern;
+  private final String extractPatternFallback;
 
   // Row filtering for CSV parsing (to avoid loading entire file into memory)
   private final RowFilterConfig rowFilter;
@@ -161,6 +162,7 @@ public class HttpSourceConfig {
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
     this.bulkDownload = builder.bulkDownload;
     this.extractPattern = builder.extractPattern;
+    this.extractPatternFallback = builder.extractPatternFallback;
     this.parameters = builder.parameters != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.parameters))
         : Collections.<String, String>emptyMap();
@@ -376,6 +378,10 @@ public class HttpSourceConfig {
     return extractPattern;
   }
 
+  public String getExtractPatternFallback() {
+    return extractPatternFallback;
+  }
+
   /**
    * Returns the row filter configuration for CSV parsing.
    *
@@ -494,6 +500,10 @@ public class HttpSourceConfig {
     Object extractPatternObj = map.get("extractPattern");
     if (extractPatternObj instanceof String) {
       builder.extractPattern((String) extractPatternObj);
+    }
+    Object extractPatternFallbackObj = map.get("extractPatternFallback");
+    if (extractPatternFallbackObj instanceof String) {
+      builder.extractPatternFallback((String) extractPatternFallbackObj);
     }
     Object skipResponseBodyObj = map.get("skipResponseBody");
     if (skipResponseBodyObj instanceof Boolean) {
@@ -1059,9 +1069,10 @@ public class HttpSourceConfig {
     private final String cursorPath;
     private final String pageParam;
     private final int pageSize;
+    private final String countPath;
 
     private PaginationConfig(PaginationType type, String limitParam, String offsetParam,
-        String cursorParam, String cursorPath, String pageParam, int pageSize) {
+        String cursorParam, String cursorPath, String pageParam, int pageSize, String countPath) {
       this.type = type;
       this.limitParam = limitParam;
       this.offsetParam = offsetParam;
@@ -1069,20 +1080,21 @@ public class HttpSourceConfig {
       this.cursorPath = cursorPath;
       this.pageParam = pageParam;
       this.pageSize = pageSize;
+      this.countPath = countPath;
     }
 
     public static PaginationConfig none() {
-      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0);
+      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0, null);
     }
 
     public static PaginationConfig offset(String limitParam, String offsetParam, int pageSize) {
       return new PaginationConfig(PaginationType.OFFSET, limitParam, offsetParam,
-          null, null, null, pageSize);
+          null, null, null, pageSize, null);
     }
 
     public static PaginationConfig cursor(String cursorParam, String cursorPath, int pageSize) {
       return new PaginationConfig(PaginationType.CURSOR, null, null,
-          cursorParam, cursorPath, null, pageSize);
+          cursorParam, cursorPath, null, pageSize, null);
     }
 
     public PaginationType getType() {
@@ -1113,6 +1125,11 @@ public class HttpSourceConfig {
       return pageSize;
     }
 
+    /** JSON dot-notation path to the total record count field (e.g. {@code "metadata.total"}). */
+    public String getCountPath() {
+      return countPath;
+    }
+
     public static PaginationConfig fromMap(Map<String, Object> map) {
       if (map == null) {
         return none();
@@ -1136,7 +1153,8 @@ public class HttpSourceConfig {
           (String) map.get("cursorParam"),
           (String) map.get("cursorPath"),
           (String) map.get("pageParam"),
-          pageSize);
+          pageSize,
+          (String) map.get("countPath"));
     }
   }
 
@@ -2220,6 +2238,7 @@ public class HttpSourceConfig {
     private RawCacheConfig rawCache;
     private String bulkDownload;
     private String extractPattern;
+    private String extractPatternFallback;
     private RowFilterConfig rowFilter;
     private ResponsePartitioningConfig responsePartitioning;
     private WideToNarrowConfig wideToNarrow;
@@ -2297,6 +2316,11 @@ public class HttpSourceConfig {
 
     public Builder extractPattern(String extractPattern) {
       this.extractPattern = extractPattern;
+      return this;
+    }
+
+    public Builder extractPatternFallback(String extractPatternFallback) {
+      this.extractPatternFallback = extractPatternFallback;
       return this;
     }
 

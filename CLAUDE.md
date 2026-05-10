@@ -1,7 +1,6 @@
 # Claude Development Guidelines
 
 ## Token Management
-- CRITICAL: Run /compact after every 5 tool calls or 10 messages. Immediately follow /compact with "continue" to resume work.
 - CRITICAL: Use /context every 15 minutes to verify 'Messages' < 40k tokens.
 - If 'Messages' > 50k, stop work and run /compact immediately.
 

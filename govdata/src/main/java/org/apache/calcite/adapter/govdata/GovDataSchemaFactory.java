@@ -440,23 +440,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * allowing tests and callers to isolate tracker state in a temp directory per run.
    */
   private String establishOperatingDirectory(String dataSource, Map<String, Object> operand) {
-    Object configured = operand != null ? operand.get("operatingDirectory") : null;
-    if (configured instanceof String && !((String) configured).isEmpty()) {
-      File dir = new File((String) configured);
-      if (!dir.exists()) {
-        dir.mkdirs();
-      }
-      LOGGER.debug("Using configured operating directory: {}", configured);
-      return (String) configured;
-    }
-    return establishOperatingDirectory(dataSource);
-  }
-
-  /**
-   * Establish the operating directory (.aperio/<dataSource>/).
-   * Always on local filesystem (for file locking).
-   */
-  private String establishOperatingDirectory(String dataSource, Map<String, Object> operand) {
     // Allow tests/callers to override the operating directory entirely
     Object override = operand != null ? operand.get("operatingDirectory") : null;
     if (override instanceof String && !((String) override).isEmpty()) {

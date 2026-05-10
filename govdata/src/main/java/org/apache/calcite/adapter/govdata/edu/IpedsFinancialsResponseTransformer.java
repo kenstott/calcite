@@ -208,9 +208,13 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
       }
 
       String[] header = rows.get(0);
-      // Uppercase header for map lookup
+      // Uppercase header for map lookup; strip UTF-8 BOM from first column if present
       for (int i = 0; i < header.length; i++) {
-        header[i] = header[i].trim().toUpperCase();
+        String h = header[i].trim().toUpperCase();
+        if (i == 0 && !h.isEmpty() && h.charAt(0) == '﻿') {
+          h = h.substring(1);
+        }
+        header[i] = h;
       }
 
       ArrayNode out = MAPPER.createArrayNode();

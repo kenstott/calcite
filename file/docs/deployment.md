@@ -104,10 +104,11 @@ For larger datasets or higher query concurrency. Trino executes queries distribu
 {
   "operand": {
     "executionEngine": "TRINO",
-    "trino": {
-      "jdbcUrl":  "jdbc:trino://trino-coordinator:8080",
-      "username": "${TRINO_USER}",
-      "catalog":  "iceberg"
+    "trinoConfig": {
+      "host":    "trino-coordinator",
+      "port":    "8080",
+      "catalog": "iceberg",
+      "user":    "${TRINO_USER}"
     }
   }
 }

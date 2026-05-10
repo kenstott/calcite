@@ -167,17 +167,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/school-districts/ccd/directory/{year}/"
       method: GET
-      parameters:
-        limit: "2000"
-        year: "${EDU_CCD_YEAR:2022}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 2000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -372,17 +368,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/schools/ccd/directory/{year}/"
       method: GET
-      parameters:
-        limit: "5000"
-        year: "${EDU_CCD_YEAR:2022}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 5000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -583,7 +575,7 @@ partitionedTables:
       CRDC school-level equity data consolidated from four Urban Institute sub-endpoints.
       crdc_topic dimension selects the sub-endpoint: directory, chronic-absenteeism,
       offenses, teachers-staff. Join to ccd_schools via ncessch. crdc_id = ncessch for
-      most schools. Available biennially (2013, 2015, 2017, 2019, 2021); 2021 is latest.
+      most schools. Available biennially (2013, 2015, 2017, 2020, 2021); 2021 is latest.
 
     columns:
       - name: crdc_id
@@ -731,17 +723,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/schools/crdc/directory/{year}/"
       method: GET
-      parameters:
-        limit: "5000"
-        year: "${EDU_CRDC_YEAR:2017}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 5000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       urlRules:
         - url: "https://educationdata.urban.org/api/v1/schools/crdc/chronic-absenteeism/{year}/"
           variableMatch:
@@ -774,9 +762,9 @@ partitionedTables:
           - 2013
           - 2015
           - 2017
-          - 2019
+          - 2020
           - 2021
-        minYear: "${GOVDATA_START_YEAR:2013}"
+        minYear: 2013
         maxYear: 2021
       crdc_topic:
         - directory
@@ -957,17 +945,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/college-university/ipeds/directory/{year}/"
       method: GET
-      parameters:
-        limit: "2000"
-        year: "${EDU_IPEDS_YEAR:2022}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 2000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -1070,17 +1054,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/college-university/ipeds/completions-cip-2/{year}/"
       method: GET
-      parameters:
-        limit: "5000"
-        year: "${EDU_IPEDS_YEAR:2022}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 5000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -1101,6 +1081,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
+        maxYear: 2022   # Urban Institute completions-cip-2 endpoint confirmed data through 2022
 
     materialize:
       enabled: true
@@ -1311,13 +1292,11 @@ partitionedTables:
       type: http
       url: "https://nces.ed.gov/ipeds/datacenter/data/F{fiscal_yy1}{fiscal_yy2}_{form_type}.zip"
       method: GET
+      # ZIP contains base file and _rv (revised) file. Prefer _rv; fall back to base.
+      extractPattern: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}_rv.csv"
+      extractPatternFallback: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}.csv"
       response:
         format: csv
-        encoding: ZIP
-        # ZIP contains base file and _rv (revised) file with same row count but corrected values.
-        # Prefer _rv when present; fall back to base. Both have identical schema.
-        filePattern: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}_rv.csv"
-        filePatternFallback: "f{fiscal_yy1}{fiscal_yy2}_{form_type_lower}.csv"
         # X-prefixed columns are imputation flags — transformer must skip them.
         # Column coding differs per form_type; transformer maps all three to canonical names:
         #   F1A: F1B01=tuition_net, F1C011=instruction, F1H01/02=endowment_beg/end
@@ -1445,17 +1424,13 @@ partitionedTables:
       type: http
       url: "https://educationdata.urban.org/api/v1/college-university/ipeds/academic-year-tuition/{year}/"
       method: GET
-      parameters:
-        limit: "5000"
-        year: "${EDU_IPEDS_YEAR:2022}"
       response:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
-          pageSize: 5000
-          limitParam: "limit"
-          offsetParam: "offset"
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -1476,6 +1451,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
+        maxYear: 2021   # Urban Institute academic-year-tuition endpoint only has data through 2021
 
     materialize:
       enabled: true
@@ -1645,10 +1621,11 @@ partitionedTables:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
+          type: PAGE_ZERO
           pageSize: 100
           limitParam: "per_page"
-          offsetParam: "page"
+          pageParam: "page"
+          countPath: "metadata.total"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
@@ -1772,10 +1749,11 @@ partitionedTables:
         format: json
         dataPath: "results"
         pagination:
-          type: OFFSET
+          type: PAGE_ZERO
           pageSize: 100
           limitParam: "per_page"
-          offsetParam: "page"
+          pageParam: "page"
+          countPath: "metadata.total"
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 5
