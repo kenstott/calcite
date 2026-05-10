@@ -152,6 +152,10 @@ public class HttpSourceConfig {
   // Incremental fetch configuration (sinceDate / sinceYear+sinceQuarter)
   private final IncrementalConfig incremental;
 
+  // When true, HttpSource drains and discards the response body instead of buffering it.
+  // Use for tables whose transformer downloads its own data and ignores the response parameter.
+  private final boolean skipResponseBody;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -183,6 +187,7 @@ public class HttpSourceConfig {
         : Collections.<UrlRule>emptyList();
     this.parallel = builder.parallel > 0 ? builder.parallel : 1;
     this.incremental = builder.incremental;
+    this.skipResponseBody = builder.skipResponseBody;
   }
 
   private static String determineSourceType(Builder builder) {
@@ -464,6 +469,10 @@ public class HttpSourceConfig {
     return parallel;
   }
 
+  public boolean isSkipResponseBody() {
+    return skipResponseBody;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -485,6 +494,12 @@ public class HttpSourceConfig {
     Object extractPatternObj = map.get("extractPattern");
     if (extractPatternObj instanceof String) {
       builder.extractPattern((String) extractPatternObj);
+    }
+    Object skipResponseBodyObj = map.get("skipResponseBody");
+    if (skipResponseBodyObj instanceof Boolean) {
+      builder.skipResponseBody((Boolean) skipResponseBodyObj);
+    } else if ("true".equalsIgnoreCase(String.valueOf(skipResponseBodyObj))) {
+      builder.skipResponseBody(true);
     }
 
     Object methodObj = map.get("method");
@@ -2213,6 +2228,7 @@ public class HttpSourceConfig {
     private List<UrlRule> urlRules;
     private int parallel = 1;
     private IncrementalConfig incremental;
+    private boolean skipResponseBody;
 
     public Builder url(String url) {
       this.url = url;
@@ -2321,6 +2337,11 @@ public class HttpSourceConfig {
 
     public Builder incremental(IncrementalConfig incremental) {
       this.incremental = incremental;
+      return this;
+    }
+
+    public Builder skipResponseBody(boolean skipResponseBody) {
+      this.skipResponseBody = skipResponseBody;
       return this;
     }
 

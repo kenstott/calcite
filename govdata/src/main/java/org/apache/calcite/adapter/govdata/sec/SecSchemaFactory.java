@@ -26,6 +26,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataUtils;
 
@@ -991,10 +992,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (warehousePath == null) {
       warehousePath = secParquetDir;
     }
-    // Normalize for Hadoop
-    if (warehousePath.startsWith("s3://")) {
-      warehousePath = "s3a://" + warehousePath.substring(5);
-    }
+    warehousePath = StorageProviderFactory.normalizeForHadoop(warehousePath);
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
     // Get incremental tracker for skipping already-materialized partitions

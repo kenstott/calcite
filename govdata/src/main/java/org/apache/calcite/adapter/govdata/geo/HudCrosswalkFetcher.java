@@ -246,15 +246,9 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   }
 
   /**
-   * Download from cache to temp file (for S3 access), or return File directly (for local).
+   * Downloads from cache storage to a local temp file for reading.
    */
   private File downloadCacheToTemp(String cachePath, String filename) throws IOException {
-    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
-      // Local filesystem - return as-is
-      return new File(cachePath);
-    }
-
-    // S3 - download to temp
     File tempFile = File.createTempFile("hud-cache-", "-" + filename);
     try (java.io.InputStream in = storageProvider.openInputStream(cachePath);
          java.io.OutputStream out = new java.io.FileOutputStream(tempFile)) {
