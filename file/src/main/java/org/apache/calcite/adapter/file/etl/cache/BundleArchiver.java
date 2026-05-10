@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -294,12 +295,12 @@ public class BundleArchiver {
     for (File f : files) {
       String sourceKey = relativize(cacheRoot, f);
       String objectPath = objectPrefix + sourceKey;
-      try {
-        byte[] content = Files.readAllBytes(f.toPath());
-        storageProvider.writeFile(objectPath, content);
+      try (InputStream in = Files.newInputStream(f.toPath())) {
+        long length = f.length();
+        storageProvider.writeFile(objectPath, in);
         index.put(sourceKey,
-            BundleEntry.individual(content.length, f.lastModified() / 1000));
-        LOGGER.info("Uploaded individual object: {} ({} bytes)", objectPath, content.length);
+            BundleEntry.individual(length, f.lastModified() / 1000));
+        LOGGER.info("Uploaded individual object: {} ({} bytes)", objectPath, length);
       } catch (IOException e) {
         LOGGER.warn("Failed to upload large file {} (skipping): {}", objectPath, e.getMessage());
       }

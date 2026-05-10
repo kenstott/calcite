@@ -10,16 +10,22 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.PerRecordResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.StringWriter;
 
 /**
  * Base transformer for Urban Institute Education Data Portal API responses.
@@ -28,8 +34,11 @@ import org.slf4j.LoggerFactory;
  * {@code {"count": N, "next": "...", "previous": null, "results": [...]}}
  * This class extracts the {@code results} array and delegates per-record
  * augmentation to subclasses via {@link #augmentRecord}.
+ *
+ * <p>Responses can be very large (100k+ records). This class uses streaming
+ * JSON parsing to process one record at a time, avoiding full-tree allocation.
  */
-abstract class AbstractUrbanInstituteResponseTransformer implements ResponseTransformer {
+abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(AbstractUrbanInstituteResponseTransformer.class);
@@ -41,43 +50,49 @@ abstract class AbstractUrbanInstituteResponseTransformer implements ResponseTran
       return "[]";
     }
 
-    try {
-      JsonNode root = MAPPER.readTree(response);
-
-      // Handle direct array responses
-      if (root.isArray()) {
-        return augmentAll((ArrayNode) root, context);
+    try (JsonParser parser = MAPPER.getFactory().createParser(response)) {
+      JsonToken first = parser.nextToken();
+      if (first == JsonToken.START_ARRAY) {
+        return streamArray(parser, context);
       }
-
-      JsonNode results = root.path("results");
-      if (!results.isArray()) {
-        LOGGER.warn("Urban Institute: no results array in response for {}", context.getUrl());
-        return "[]";
+      if (first == JsonToken.START_OBJECT) {
+        while (parser.nextToken() != null) {
+          if ("results".equals(parser.currentName())
+              && parser.nextToken() == JsonToken.START_ARRAY) {
+            return streamArray(parser, context);
+          }
+          parser.skipChildren();
+        }
       }
-
-      return augmentAll((ArrayNode) results, context);
-
+      LOGGER.warn("Urban Institute: no results array in response for {}", context.getUrl());
+      return "[]";
     } catch (Exception e) {
       LOGGER.error("Urban Institute: transform failed for {}: {}", context.getUrl(), e.getMessage());
       return "[]";
     }
   }
 
-  private String augmentAll(ArrayNode results, RequestContext context) {
-    ArrayNode out = MAPPER.createArrayNode();
-    for (JsonNode record : results) {
-      if (!record.isObject()) {
-        continue;
+  // Streams the already-opened START_ARRAY, emitting one record at a time.
+  private String streamArray(JsonParser parser, RequestContext context) throws Exception {
+    StringWriter sw = new StringWriter(1 << 16);
+    try (JsonGenerator gen = MAPPER.getFactory().createGenerator(sw)) {
+      gen.writeStartArray();
+      while (parser.nextToken() == JsonToken.START_OBJECT) {
+        ObjectNode row = MAPPER.readTree(parser);
+        augmentRecord(row, context);
+        MAPPER.writeTree(gen, row);
       }
-      ObjectNode row = (ObjectNode) record.deepCopy();
-      augmentRecord(row, context);
-      out.add(row);
+      gen.writeEndArray();
     }
-    return out.toString();
+    return sw.toString();
+  }
+
+  @Override public void transformRecord(Map<String, Object> row, RequestContext context) {
+    // no-op: subclasses that need per-row augmentation must override this method
   }
 
   /**
-   * Augment a single row after extraction.
+   * Augment a single row after extraction (String-based path).
    * Default implementation is a no-op; subclasses override to inject dimension values
    * or rename fields.
    */

@@ -14,6 +14,8 @@ import org.apache.calcite.adapter.file.etl.RequestContext;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.Map;
+
 /**
  * Transforms Urban Institute CRDC school equity responses.
  *
@@ -24,6 +26,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * stored in the same partitioned table.
  */
 public class CrdcSchoolsResponseTransformer extends AbstractUrbanInstituteResponseTransformer {
+
+  @Override public void transformRecord(Map<String, Object> row, RequestContext context) {
+    String topic = context.getDimensionValues().get("crdc_topic");
+    if (topic != null) {
+      row.put("crdc_topic", topic);
+    }
+  }
 
   @Override protected void augmentRecord(ObjectNode row, RequestContext context) {
     String topic = context.getDimensionValues().get("crdc_topic");

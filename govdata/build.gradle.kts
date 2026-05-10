@@ -73,6 +73,7 @@ dependencies {
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
     testImplementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
     testImplementation("org.apache.hadoop:hadoop-aws:3.3.6")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
