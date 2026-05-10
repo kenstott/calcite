@@ -221,9 +221,16 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
 
   /**
    * Find TableScan in the input tree, handling RelSubset nodes.
+   * Stops recursion at Filter nodes: COUNT(*) optimization is only valid when
+   * there is no WHERE predicate between the aggregate and the scan.
    */
   private TableScan findTableScan(RelNode node) {
     if (node == null) {
+      return null;
+    }
+
+    // A filter restricts rows — the cached total count is no longer valid.
+    if (node instanceof org.apache.calcite.rel.core.Filter) {
       return null;
     }
 

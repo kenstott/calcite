@@ -303,6 +303,37 @@ public class StorageProviderFactory {
   }
 
   /**
+   * Normalizes a storage path for Hadoop/Iceberg, which requires the {@code s3a://} scheme.
+   * Converts {@code s3://bucket/...} to {@code s3a://bucket/...}; all other paths pass through.
+   */
+  public static String normalizeForHadoop(String path) {
+    if (path != null && path.startsWith("s3://")) {
+      return "s3a://" + path.substring(5);
+    }
+    return path;
+  }
+
+  /**
+   * Returns the govdata cache root directory from {@code GOVDATA_CACHE_DIR}, falling back to
+   * the JVM temp directory when the variable is unset or empty.
+   */
+  public static String getGovDataCacheDir() {
+    String dir = System.getenv("GOVDATA_CACHE_DIR");
+    return (dir != null && !dir.isEmpty()) ? dir : System.getProperty("java.io.tmpdir");
+  }
+
+  /**
+   * Creates a storage provider for the govdata cache directory.
+   * Reads {@code GOVDATA_CACHE_DIR} and delegates to {@link #createFromUrl(String)}.
+   *
+   * <p>Throws {@link IllegalArgumentException} if {@code GOVDATA_CACHE_DIR} points to an S3
+   * path, since S3 requires explicit credentials via model.json storageConfig.
+   */
+  public static StorageProvider createForGovDataCache() {
+    return createFromUrl(getGovDataCacheDir());
+  }
+
+  /**
    * Clears the provider cache. Useful for testing.
    */
   public static void clearCache() {

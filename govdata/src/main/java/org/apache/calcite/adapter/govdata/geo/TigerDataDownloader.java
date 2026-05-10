@@ -1056,20 +1056,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
-   * Download files from cache storage to a temp directory for reading.
-   * Used when shapefiles exist in remote storage but need to be read locally.
+   * Downloads files from cache storage to a temp directory for reading.
    */
   private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
-    // For local filesystem cache, just return the path directly
-    if (cacheDirectory != null && !cacheDirectory.startsWith("s3://")) {
-      // Local path - can use directly
-      File localPath = new File(cachePath);
-      if (localPath.exists()) {
-        return localPath;
-      }
-    }
-
-    // For remote storage, download files to temp directory
+    // Download all files to temp directory via storage provider
     File tempDir = Files.createTempDirectory(tempPrefix + "-").toFile();
 
     // List all files in the cache path recursively and download them
@@ -1921,17 +1911,6 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Check if a shapefile exists in the cache.
    */
   public boolean isShapefileAvailable(String category) {
-    // For local filesystem cache
-    if (cacheDirectory != null && !cacheDirectory.startsWith("s3://")) {
-      File dir = new File(cacheDirectory, category);
-      if (!dir.exists()) {
-        return false;
-      }
-      File[] shpFiles = dir.listFiles((d, name) -> name.endsWith(".shp"));
-      return shpFiles != null && shpFiles.length > 0;
-    }
-
-    // For remote storage, check if any .shp files exist in the category path
     String categoryPath = storageProvider.resolvePath(cacheDirectory, category);
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(categoryPath, true);

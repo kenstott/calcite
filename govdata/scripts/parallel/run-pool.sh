@@ -85,6 +85,14 @@ for arg in "$@"; do
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ]; then
       for i in $(seq 1 58); do queue+=("$i"); done
+      for i in 80 81; do queue+=("$i"); done
+    elif [ "$part" = "historical" ]; then
+      export GOVDATA_RUN_MODE="historical"
+      for i in $(seq 1 41); do queue+=("$i"); done
+      for i in 60 61 62 67 71 74 80; do queue+=("$i"); done
+    elif [ "$part" = "daily" ]; then
+      export GOVDATA_RUN_MODE="daily"
+      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81; do queue+=("$i"); done
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
     elif [[ "$part" =~ ^[0-9]+$ ]]; then

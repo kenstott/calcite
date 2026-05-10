@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Patents ETL worker — parameterized by MODE.
+#
+# Usage:
+#   worker-patents.sh <mode> [--force]
+#
+# Modes:
+#   historical  One-time backfill: all patent and trademark tables from
+#               GOVDATA_START_YEAR (default 2010) through
+#               GOVDATA_INCREMENTAL_START_YEAR - 1.
+#               Release-window checks are skipped — historical always runs in full.
+#
+#   daily       Recurring quarterly cadence: all patent and trademark tables
+#               for the current year (GOVDATA_INCREMENTAL_START_YEAR).
+#               Gated by within_release_window "patent" "3,6,9,12" — exits
+#               immediately in months outside {3, 6, 9, 12}.
+#
+# Required env vars (set in .env.prod or equivalent):
+#   GOVDATA_PARQUET_DIR     Root Parquet directory (patent data lands in patents subdir)
+#   GOVDATA_CACHE_DIR       Root cache directory (full-dump TSVs cached under patents/)
+#   GOVDATA_START_YEAR      Historical start year (default 2010)
+#   GOVDATA_INCREMENTAL_START_YEAR  First year of incremental / daily window
+#
+# Optional env vars:
+#   PATENTS_INCLUDE_DESIGN  Set to "true" to include design patents (default: false)
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
+load_env
+
+MODE="${1:-}"
+if [ -z "$MODE" ]; then
+  echo "Usage: $0 <historical|daily> [--force]" >&2
+  exit 1
+fi
+
+FORCE=${FORCE:-false}
+for arg in "${@:2}"; do
+  [ "$arg" = "--force" ] && FORCE=true
+done
+export FORCE
+
+WORKER_ID="worker-patents-${MODE}"
+MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
+mkdir -p "$MODEL_DIR"
+
+PATENTS_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/patents/patents-schema.yaml"
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+run_patents_model() {
+  local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
+
+  local model_file="$MODEL_DIR/${model_name}.json"
+  local parquet_dir="${PATENTS_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/patents}"
+  local cache_dir="${GOVDATA_CACHE_DIR}/patents"
+  local end_year_json=""
+  [ -n "$end_year" ] && end_year_json=",
+      \"endYear\": ${end_year}"
+
+  cat > "$model_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "patents",
+  "schemas": [{
+    "name": "patents",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "patents",
+      "directory": "${parquet_dir}",
+      "cacheDirectory": "${cache_dir}",
+      "autoDownload": true,
+      "startYear": ${start_year}${end_year_json},
+      "enabledTables": [${enabled_tables}],
+      "s3Config": {
+        "accessKeyId": "${AWS_ACCESS_KEY_ID:-}",
+        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY:-}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}",
+        "region": "${AWS_REGION:-us-east-1}"
+      }
+    }
+  }]
+}
+ENDJSON
+
+  log_info "$WORKER_ID: running $model_name"
+  run_etl "$model_file" "$WORKER_ID"
+}
+
+# ── modes ─────────────────────────────────────────────────────────────────────
+
+INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+
+case "$MODE" in
+
+  historical)
+    START=${GOVDATA_START_YEAR:-2010}
+    END=$((INCREMENTAL_YEAR - 1))
+    # Full historical backfill — no release-window check.
+    # Core patent tables (large files — run with extended timeout via -t 480)
+    run_patents_model "patents-historical-grants" \
+      '"patent_grants"' "$START" "$END"
+
+    run_patents_model "patents-historical-assignees" \
+      '"patent_assignees"' "$START" "$END"
+
+    # Inventor file is ~8 GB uncompressed; runs last to avoid blocking other tables
+    run_patents_model "patents-historical-inventors" \
+      '"patent_inventors"' "$START" "$END"
+
+    run_patents_model "patents-historical-cpc" \
+      '"patent_cpc_classes"' "$START" "$END"
+
+    run_patents_model "patents-historical-claims" \
+      '"patent_claims"' "$START" "$END"
+
+    run_patents_model "patents-historical-summaries" \
+      '"patent_summaries"' "$START" "$END"
+
+    run_patents_model "patents-historical-trademarks" \
+      '"trademark_applications"' "$START" "$END"
+    ;;
+
+  daily)
+    # Quarterly cadence — gate on release window months {3, 6, 9, 12}
+    if ! $FORCE; then
+      within_release_window "patent" "3,6,9,12" || exit 0
+    fi
+
+    START=$INCREMENTAL_YEAR
+
+    run_patents_model "patents-daily-grants" \
+      '"patent_grants"' "$START"
+
+    run_patents_model "patents-daily-assignees" \
+      '"patent_assignees"' "$START"
+
+    run_patents_model "patents-daily-inventors" \
+      '"patent_inventors"' "$START"
+
+    run_patents_model "patents-daily-cpc" \
+      '"patent_cpc_classes"' "$START"
+
+    run_patents_model "patents-daily-claims" \
+      '"patent_claims"' "$START"
+
+    run_patents_model "patents-daily-summaries" \
+      '"patent_summaries"' "$START"
+
+    run_patents_model "patents-daily-trademarks" \
+      '"trademark_applications"' "$START"
+    ;;
+
+  *)
+    echo "Unknown mode: $MODE. Valid modes: historical, daily" >&2
+    exit 1
+    ;;
+esac
+
+log_info "$WORKER_ID complete"

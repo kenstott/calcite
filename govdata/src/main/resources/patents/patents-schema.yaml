@@ -128,23 +128,23 @@ dimension_values:
   # Patent grants — data available from 1976; GOVDATA_START_YEAR caps the backfill
   patent_grant_years: &patent_grant_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
-    end: current
-    dataLag: 2
+    start: "${GOVDATA_START_YEAR:2025}"
+    end: "${GOVDATA_END_YEAR:current}"
+    dataLag: 1
 
   # Claims and summaries: per-year files, same year range
   patent_text_years: &patent_text_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
-    end: current
-    dataLag: 2
+    start: "${GOVDATA_START_YEAR:2025}"
+    end: "${GOVDATA_END_YEAR:current}"
+    dataLag: 1
 
   # Trademark applications: data available from 1870; cap at GOVDATA_START_YEAR
   trademark_years: &trademark_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
-    end: current
-    dataLag: 2
+    start: "${GOVDATA_START_YEAR:2025}"
+    end: "${GOVDATA_END_YEAR:current}"
+    dataLag: 1
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -682,7 +682,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://bulkdata.uspto.gov/data/trademark/casefile/economics/2024/case_file.zip"
+      url: "https://data.uspto.gov/trademark/casefile/economics/2026/case_file.zip"
       method: GET
       skipResponseBody: true
       response:
