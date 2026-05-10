@@ -1141,6 +1141,13 @@ public class HttpSource implements DataSource {
         return cacheResponseString(responseBody, rawCachePath);
       } else {
         String errorBody = readResponse(conn.getErrorStream());
+        if (config.isSkipResponseBody()) {
+          // Trigger URL failed but body is skipped — transformer owns all actual fetching.
+          // Log and return empty string so the transformer can still run (and decide to skip).
+          LOGGER.warn("Trigger URL returned HTTP {} (skipResponseBody=true): {}",
+              responseCode, urlString);
+          return "";
+        }
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
       }
     } finally {

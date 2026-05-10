@@ -72,7 +72,11 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
     // applications filed in {year-1}. Offset the snapshot year by +1 to retrieve
     // the target filing year's data.
     final String snapshotYear = String.valueOf(Integer.parseInt(yearStr) + 1);
-    final String apiKey = System.getenv(USPTO_API_KEY_ENV);
+    String apiKeyRaw = System.getenv(USPTO_API_KEY_ENV);
+    if (apiKeyRaw == null || apiKeyRaw.isEmpty()) {
+      apiKeyRaw = System.getProperty(USPTO_API_KEY_ENV);
+    }
+    final String apiKey = apiKeyRaw;
     if (apiKey == null || apiKey.isEmpty()) {
       LOGGER.warn("TrademarkApplications: {} not set — skipping trademark download. "
           + "Register at https://data.uspto.gov/apis/getting-started", USPTO_API_KEY_ENV);
@@ -183,7 +187,7 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
           reader.close();
           LOGGER.info("TrademarkApplications: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
-          try { reader.close(); } catch (IOException ignored) { }
+          try { reader.close(); } catch (IOException closeEx) { LOGGER.warn("Failed to close trademark reader: {}", closeEx.getMessage()); }
           throw new RuntimeException("TrademarkApplicationsTransformer read failed", e);
         }
       }

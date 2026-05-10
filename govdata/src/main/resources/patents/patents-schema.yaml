@@ -682,8 +682,10 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.uspto.gov/trademark/casefile/economics/2026/case_file.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/TRCFECO2/"
       method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
       skipResponseBody: true
       response:
         format: JSON
