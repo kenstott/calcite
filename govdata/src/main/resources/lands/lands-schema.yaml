@@ -1,0 +1,855 @@
+# ============================================================================
+# U.S. Public Lands Schema (LANDS)
+# ============================================================================
+# Data Sources:
+#   - USDA Forest Service ArcGIS (national forest boundaries)
+#   - USDA FS FACTS ArcGIS (timber sale program)
+#   - USDA FIA DataMart (forest inventory and analysis)
+#   - NPS ArcGIS (park unit boundaries)
+#   - NPS IRMA Statistics API (visitation data)
+#   - BLM ArcGIS (field office boundaries)
+#   - ONRR Natural Resources Revenue Data (mineral royalties)
+#
+# Features:
+#   - Static reference tables for land unit boundaries
+#   - Hive-style partitioning for time-series economic data
+#   - Iceberg materialization with annual/monthly incremental updates
+#   - Cross-schema joins to geo, sec, econ, fec
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:lands}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. federal public lands data covering USDA Forest Service, National Park Service,
+  and Bureau of Land Management units. Includes land management boundaries, timber
+  sale program contracts, forest inventory estimates, NPS visitation statistics, and
+  Office of Natural Resources Revenue (ONRR) mineral royalty payments. Enables
+  analysis of extractive industry activity on federal land, tourism economics, and
+  timber/paper company revenue risk via SEC filings.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit FIPS code identifying the primary state (e.g., '06' for California)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit FIPS code for primary county (e.g., '06037' for Los Angeles County)
+
+  geometry_wkt_column: &geometry_wkt_column
+    name: geometry_wkt
+    type: string
+    nullable: true
+    comment: Simplified boundary WKT polygon (for display only)
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  lands_year_range: &lands_year_range
+    type: yearRange
+    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    end: current
+    dataLag: 0
+
+  nps_visit_year_range: &nps_visit_year_range
+    type: yearRange
+    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    end: current
+    dataLag: 0
+
+  onrr_year_range: &onrr_year_range
+    type: yearRange
+    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    end: current
+    dataLag: 0
+
+  all_fia_state_abbrs: &all_fia_state_abbrs
+    type: json_catalog
+    source: "/lands/fia-states.json"
+    path: "[*].state_abbr"
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NATIONAL FORESTS — USDA FS unit boundaries (static reference)
+  # ---------------------------------------------------------------------------
+  - name: national_forests
+    pattern: "type=national_forests/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      USDA Forest Service National Forest and Grassland unit boundaries. ~175 units
+      across 10 USFS regions. Reference/dimension table — joins to geo.states via
+      state_fips and to timber_sales via forest_id. FK target for
+      disasters.wildfire_perimeters.forest_id. Updated annually post-fire-season (October).
+
+    dimensions:
+      type:
+        - national_forests
+
+    columns:
+      - name: forest_id
+        type: string
+        nullable: false
+        comment: USDA FS unit ID (e.g., '0501')
+      - name: forest_name
+        type: string
+        nullable: true
+        comment: Unit name (e.g., 'Angeles National Forest')
+      - name: region
+        type: string
+        nullable: true
+        comment: USDA FS region number (01–10)
+      - name: gross_acres
+        type: double
+        nullable: true
+        comment: Total unit area in acres (GIS measurement)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_ForestSystemBoundaries_01/MapServer/0/query?where=1%3D1&outFields=forestnumber%2Cforestname%2Cregion%2Cgis_acres&f=json&resultRecordCount=500"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.UsfsForestBoundaryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=national_forests/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: national_forests
+        catalogType: hadoop
+        runCompaction: false
+
+  # ---------------------------------------------------------------------------
+  # TIMBER HARVEST — USDA FS FACTS timber harvest activities (EDW_TimberHarvest_01)
+  # ---------------------------------------------------------------------------
+  - name: timber_sales
+    pattern: "type=timber_sales/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      USDA Forest Service timber harvest activities from FACTS EDW. One row per
+      completed harvest activity. Joins to national_forests via forest_code and to
+      geo.states via state_abbr. Units_accomplished and uom describe harvest volume
+      (CCF, MBF, ACRE, etc.). Enables analysis of federal timber activity by
+      forest, district, and year. Source: EDW_TimberHarvest_01/MapServer/0.
+
+    dimensions:
+      type:
+        - timber_sales
+      year: *lands_year_range
+
+    columns:
+      - name: facts_id
+        type: string
+        nullable: false
+        comment: FACTS activity unique ID (PK)
+      - name: sale_name
+        type: string
+        nullable: true
+        comment: Timber sale name
+      - name: fy_completed
+        type: integer
+        nullable: false
+        comment: Fiscal year completed (partition key)
+      - name: fy_awarded
+        type: integer
+        nullable: true
+        comment: Fiscal year awarded
+      - name: forest_code
+        type: string
+        nullable: true
+        comment: USFS administrative forest code (FK to national_forests.forest_id)
+      - name: forest_name
+        type: string
+        nullable: true
+        comment: Administrative forest name
+      - name: district_code
+        type: string
+        nullable: true
+        comment: Ranger district code
+      - name: district_name
+        type: string
+        nullable: true
+        comment: Ranger district name
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-character state abbreviation
+      - name: gis_acres
+        type: double
+        nullable: true
+        comment: Activity area in acres (GIS measurement)
+      - name: activity_code
+        type: string
+        nullable: true
+        comment: FACTS activity code
+      - name: activity_name
+        type: string
+        nullable: true
+        comment: FACTS activity name
+      - name: treatment_type
+        type: string
+        nullable: true
+        comment: Treatment category (Salvage / Regeneration / etc.)
+      - name: units_accomplished
+        type: double
+        nullable: true
+        comment: Harvest volume or area units accomplished
+      - name: uom
+        type: string
+        nullable: true
+        comment: Unit of measure (CCF / MBF / ACRE / etc.)
+      - name: cost_per_uom
+        type: double
+        nullable: true
+        comment: Cost per unit of measure (USD)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TimberHarvest_01/MapServer/0/query?where=FY_COMPLETED%3D%27{year}%27&outFields=FACTS_ID%2CSALE_NAME%2CFY_COMPLETED%2CFY_AWARDED%2CADMIN_FOREST_CODE%2CADMIN_FOREST_NAME%2CADMIN_DISTRICT_CODE%2CADMIN_DISTRICT_NAME%2CSTATE_ABBR%2CGIS_ACRES%2CACTIVITY_CODE%2CACTIVITY_NAME%2CTREATMENT_TYPE%2CNBR_UNITS_ACCOMPLISHED%2CUOM%2CCOST_PER_UOM&f=json&resultRecordCount=5000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.UsfsFactsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=timber_sales/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: timber_sales
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # FOREST INVENTORY — USDA FIA bulk COND CSV per state
+  # ---------------------------------------------------------------------------
+  - name: forest_inventory
+    pattern: "type=forest_inventory/stateAbbr=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: stateAbbr
+          type: VARCHAR
+    comment: >
+      USDA Forest Service Forest Inventory and Analysis (FIA) state-level estimates
+      derived from bulk COND CSV files (apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv).
+      One row per state × forest_type_group × ownership_class × inventory_year.
+      Filtered to COND_STATUS_CD=1 (accessible forest land). Basal area is a
+      CONDPROP_UNADJ-weighted average of BALIVE. Joins to geo.states via state_fips.
+
+    dimensions:
+      type:
+        - forest_inventory
+      stateAbbr: *all_fia_state_abbrs
+
+    columns:
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - <<: *state_fips_column
+        nullable: false
+      - name: forest_type_group
+        type: string
+        nullable: true
+        comment: Forest type group name (e.g., 'Oak / hickory group', 'Douglas-fir group')
+      - name: ownership_class
+        type: string
+        nullable: true
+        comment: National Forest / Other Federal / State / Local / Private
+      - name: land_area_acres
+        type: double
+        nullable: true
+        comment: Forested land area in acres (null — expansion factor not in COND)
+      - name: live_volume_cuft
+        type: double
+        nullable: true
+        comment: Live tree volume in cubic feet (null — tree-level data not in COND)
+      - name: carbon_stock_tons
+        type: double
+        nullable: true
+        comment: Above-ground carbon stock in short tons (null — tree-level data not in COND)
+      - name: trees_per_acre
+        type: double
+        nullable: true
+        comment: Average tree density (null — tree-level data not in COND)
+      - name: basal_area_sqft
+        type: double
+        nullable: true
+        comment: CONDPROP_UNADJ-weighted average of BALIVE (sq ft per acre)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{stateAbbr}_COND.csv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaDatamartTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=forest_inventory/stateAbbr=*/"
+      partition:
+        columns: [type, stateAbbr]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: forest_inventory
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [stateAbbr]
+
+  # ---------------------------------------------------------------------------
+  # NPS UNITS — National Park Service unit boundaries (static reference)
+  # ---------------------------------------------------------------------------
+  - name: nps_units
+    pattern: "type=nps_units/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      National Park Service unit boundaries — parks, monuments, recreation areas,
+      seashores, parkways, and all other NPS-designated units. ~430 units. Reference
+      and dimension table; FK target for nps_visitation.unit_code. Joins to geo.states
+      and geo.counties for gateway-community economic impact analysis. Updated annually
+      in April following annual report administrative updates.
+
+    dimensions:
+      type:
+        - nps_units
+
+    columns:
+      - name: unit_code
+        type: string
+        nullable: false
+        comment: NPS 4-letter unit code (e.g., 'YOSE', 'GRCA')
+      - name: unit_name
+        type: string
+        nullable: true
+        comment: Full unit name
+      - name: unit_type
+        type: string
+        nullable: true
+        comment: National Parks / Monuments / Recreation Areas / Seashores / etc.
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-character state abbreviation (e.g., 'CA', 'WY')
+      - name: region
+        type: string
+        nullable: true
+        comment: NPS region (e.g., 'Pacific West', 'Northeast')
+      - name: gross_acres
+        type: double
+        nullable: true
+        comment: Approximate unit area in acres (derived from GIS shape area)
+
+    source:
+      type: http
+      url: "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&outFields=UNIT_CODE%2CUNIT_NAME%2CUNIT_TYPE%2CSTATE%2CREGION%2CShape__Area&f=json&resultRecordCount=1000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.NpsUnitBoundaryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nps_units/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: nps_units
+        catalogType: hadoop
+        runCompaction: false
+
+  # ---------------------------------------------------------------------------
+  # NPS VISITATION — NPS IRMA monthly visitation statistics
+  # ---------------------------------------------------------------------------
+  - name: nps_visitation
+    pattern: "type=nps_visitation/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      National Park Service annual and monthly visitation statistics from the IRMA
+      Statistics API. One row per unit_code × visit_year × visit_month. Covers
+      recreational visits, overnight stays, backcountry use, and concession lodging.
+      Joins to nps_units via unit_code and to econ.bls_employment via county_fips
+      (from nps_units join) for gateway-county tourism employment correlation.
+
+    dimensions:
+      type:
+        - nps_visitation
+      year: *nps_visit_year_range
+
+    columns:
+      - name: unit_code
+        type: string
+        nullable: false
+        comment: FK to nps_units (NPS 4-letter code)
+      - name: visit_year
+        type: integer
+        nullable: false
+        comment: Visit year (partition key)
+      - name: visit_month
+        type: integer
+        nullable: false
+        comment: Month (1–12); all rows are monthly (no annual summary rows)
+      - name: recreation_visits
+        type: integer
+        nullable: true
+        comment: Recreational visitor count
+      - name: non_recreation_visits
+        type: integer
+        nullable: true
+        comment: Non-recreational visits (commuters, government, etc.)
+
+    source:
+      type: http
+      url: "https://irmaservices.nps.gov/Stats/v1/visitation?startMonth=1&startYear={year}&endMonth=12&endYear={year}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.NpsIrmaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nps_visitation/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: nps_visitation
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # BLM FIELD OFFICES — BLM administrative unit boundaries (static reference)
+  # ---------------------------------------------------------------------------
+  - name: blm_field_offices
+    pattern: "type=blm_field_offices/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Bureau of Land Management administrative unit boundaries — field offices and
+      district offices that manage federal subsurface mineral rights, grazing
+      allotments, and surface use permits. ~150 field offices. Primarily useful as
+      a geographic reference for joining extractive industry activity to SEC filings
+      and FEC oil/gas sector donor geography. Updated annually in June.
+
+    dimensions:
+      type:
+        - blm_field_offices
+
+    columns:
+      - name: office_code
+        type: string
+        nullable: false
+        comment: BLM administrative unit code (e.g., 'UTMO')
+      - name: office_name
+        type: string
+        nullable: true
+        comment: Office name (e.g., 'Moab Field Office')
+      - name: office_type
+        type: string
+        nullable: true
+        comment: Field Office / District Office / State Office
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-character state abbreviation (e.g., 'UT', 'WY')
+
+    source:
+      type: http
+      url: "https://gis.blm.gov/arcgis/rest/services/admin_boundaries/BLM_Natl_AdminUnit_Generalized/FeatureServer/0/query?where=1%3D1&outFields=ADM_UNIT_CD%2CADMU_NAME%2CBLM_ORG_TYPE%2CADMIN_ST&f=json&resultRecordCount=500"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.BlmFieldOfficeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=blm_field_offices/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: blm_field_offices
+        catalogType: hadoop
+        runCompaction: false
+
+  # ---------------------------------------------------------------------------
+  # ONRR REVENUES — ONRR federal/tribal mineral royalties (bulk annual CSV)
+  # ---------------------------------------------------------------------------
+  - name: onrr_revenues
+    pattern: "type=onrr_revenues/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Office of Natural Resources Revenue (ONRR) royalty payments for oil, gas, coal,
+      and other minerals extracted from federal and tribal lands. One row per
+      fiscal-year × commodity × revenue-type × state × county combination. Full
+      history from FY 2004 in a single bulk download. Primary financial link between
+      BLM-managed subsurface rights and SEC 10-K disclosures for E&P and mining
+      companies. Source: revenuedata.onrr.gov (domain moved from revenuedata.doi.gov
+      in 2024). Refreshed quarterly as ONRR publishes new data.
+
+    dimensions:
+      type:
+        - onrr_revenues
+
+    columns:
+      - name: fiscal_year
+        source: "Fiscal Year"
+        type: integer
+        nullable: false
+        comment: Fiscal year of revenue collection (FY 2004–present)
+      - name: land_class
+        source: "Land Class"
+        type: string
+        nullable: true
+        comment: Federal / Native American / Federal Offshore
+      - name: land_category
+        source: "Land Category"
+        type: string
+        nullable: true
+        comment: Onshore / Offshore / Gulf of Mexico / Pacific
+      - name: state_name
+        source: "State"
+        type: string
+        nullable: true
+        comment: State name (e.g., 'Wyoming'); null for offshore rows
+      - name: county_name
+        source: "County"
+        type: string
+        nullable: true
+        comment: County name; null for offshore/tribal rows
+      - <<: *county_fips_column
+        source: "FIPS Code"
+        comment: 5-digit FIPS (null for offshore/tribal)
+      - name: offshore_region
+        source: "Offshore Region"
+        type: string
+        nullable: true
+        comment: Offshore region name (Gulf of Mexico, Pacific, etc.); null for onshore
+      - name: revenue_type
+        source: "Revenue Type"
+        type: string
+        nullable: true
+        comment: Royalties / Bonus / Rents / Other Revenues
+      - name: mineral_lease_type
+        source: "Mineral Lease Type"
+        type: string
+        nullable: true
+        comment: Oil & Gas / Coal / Geothermal / Hardrock / etc.
+      - name: commodity
+        type: string
+        nullable: true
+        comment: Oil / Gas / Coal / Geothermal / Renewables / Other
+      - name: product
+        type: string
+        nullable: true
+        comment: Specific product (e.g., 'Crude Oil', 'Coalbed Methane')
+      - name: revenue
+        type: double
+        nullable: true
+        comment: Revenue collected (USD)
+
+    source:
+      type: http
+      url: "https://revenuedata.onrr.gov/downloads/fiscal_year_revenue.csv"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=onrr_revenues/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: onrr_revenues
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  national_forests:
+    primaryKey: [forest_id]
+
+  timber_sales:
+    primaryKey: [facts_id]
+    foreignKeys:
+      - columns: [forest_code]
+        targetTable: national_forests
+        targetColumns: [forest_id]
+
+  forest_inventory:
+    primaryKey: [state_fips, inventory_year, forest_type_group, ownership_class]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+
+  nps_units:
+    primaryKey: [unit_code]
+
+  nps_visitation:
+    primaryKey: [unit_code, visit_year, visit_month]
+    foreignKeys:
+      - columns: [unit_code]
+        targetTable: nps_units
+        targetColumns: [unit_code]
+
+  blm_field_offices:
+    primaryKey: [office_code]
+
+  onrr_revenues:
+    primaryKey: [fiscal_year, county_fips, land_class, commodity, revenue_type, product]
+    foreignKeys:
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: lands_timber_by_forest_state
+    comment: >
+      Aggregates USFS timber harvest activities by fiscal year and state. Shows annual
+      harvest area (gis_acres), units accomplished (volume/area), and activity count
+      per state. Joins to national_forests via forest_code. Enables identification of
+      states with highest federal timber harvest activity and trend analysis by forest.
+    sql: >
+      SELECT
+        ts.fy_completed,
+        ts.state_abbr,
+        nf.region                         AS fs_region,
+        ts.treatment_type,
+        ts.uom,
+        COUNT(ts.facts_id)                AS activity_count,
+        SUM(ts.gis_acres)                 AS total_gis_acres,
+        SUM(ts.units_accomplished)        AS total_units_accomplished
+      FROM timber_sales ts
+      LEFT JOIN national_forests nf ON ts.forest_code = nf.forest_id
+      GROUP BY ts.fy_completed, ts.state_abbr, nf.region,
+               ts.treatment_type, ts.uom
+
+  - name: lands_nps_gateway_impact
+    comment: >
+      Joins NPS monthly visitation to park unit metadata for gateway economic impact
+      analysis. Aggregates to annual totals per unit. Ready to join with
+      econ.bls_employment on county data from nps_units.
+    sql: >
+      SELECT
+        v.visit_year,
+        u.unit_code,
+        u.unit_name,
+        u.unit_type,
+        u.state_abbr,
+        SUM(v.recreation_visits)          AS annual_recreation_visits,
+        SUM(v.non_recreation_visits)      AS annual_non_recreation_visits
+      FROM nps_visitation v
+      JOIN nps_units u ON v.unit_code = u.unit_code
+      GROUP BY v.visit_year, u.unit_code, u.unit_name, u.unit_type, u.state_abbr
+
+  - name: lands_onrr_by_state_commodity
+    comment: >
+      Aggregates ONRR federal mineral royalty revenues by state, commodity, and fiscal
+      year. Uses state_name directly (no FIPS join needed). Enables correlation with
+      sec.filing_metadata company_name for E&P royalty exposure analysis and with
+      econ.state_wages for energy sector employment vs. revenue trends.
+    sql: >
+      SELECT
+        r.fiscal_year,
+        r.state_name,
+        r.land_class,
+        r.commodity,
+        r.revenue_type,
+        SUM(r.revenue)                    AS total_revenue
+      FROM onrr_revenues r
+      GROUP BY r.fiscal_year, r.state_name, r.land_class,
+               r.commodity, r.revenue_type
+
+  - name: lands_nps_gateway_employment
+    comment: >
+      Correlates NPS annual park visitation with county-level employment and wages
+      (econ.county_wages, BLS QCEW). Aggregates monthly visitation to annual totals
+      per park unit, then joins to county_wages for the same year, total-industry rows
+      (industry_code=10, own_code=0). Note: nps_units no longer carries county_fips;
+      this view joins on state_abbr as a proxy for state-level employment context.
+    sql: >
+      SELECT
+        v.visit_year                                              AS year,
+        u.unit_code,
+        u.unit_name,
+        u.unit_type,
+        u.state_abbr,
+        SUM(v.recreation_visits)                                  AS annual_recreation_visits,
+        SUM(v.non_recreation_visits)                              AS annual_non_recreation_visits
+      FROM nps_visitation v
+      JOIN nps_units u ON v.unit_code = u.unit_code
+      GROUP BY v.visit_year, u.unit_code, u.unit_name, u.unit_type, u.state_abbr
+
+  - name: lands_onrr_energy_revenues
+    comment: >
+      Aggregates ONRR federal mineral royalty revenues by state and fiscal year for
+      the energy commodities (Oil, Gas, Coal). Enables trend analysis of federal
+      energy royalty production by state. The next natural join is to
+      sec.filing_metadata on fiscal_year to correlate with E&P company 10-K filings.
+    sql: >
+      SELECT
+        r.fiscal_year,
+        r.state_name,
+        r.commodity,
+        r.land_class,
+        SUM(r.revenue)                    AS total_revenue
+      FROM onrr_revenues r
+      WHERE r.commodity IN ('Oil', 'Gas', 'Coal', 'Natural Gas', 'Oil & Gas (Unspecified)')
+      GROUP BY r.fiscal_year, r.state_name, r.commodity, r.land_class
+
+  - name: lands_timber_public_companies
+    comment: >
+      Correlates federal USFS timber harvest activity with SEC-registered timber and
+      paper companies (sec.filing_metadata SIC 0800-0899 forestry, 2400-2499 lumber
+      and wood products, 2600-2699 paper and allied products). Joins on fy_completed =
+      fiscal_year to show, for each year, how many publicly traded timber/paper
+      companies filed 10-Ks alongside the federal harvest activity count and acres.
+      Useful for identifying publicly traded companies with material exposure to
+      changes in federal timber supply policy.
+    sql: >
+      SELECT
+        ts.fy_completed,
+        ts.state_abbr,
+        ts.treatment_type,
+        SUM(ts.gis_acres)                 AS federal_harvest_acres,
+        SUM(ts.units_accomplished)        AS federal_units_accomplished,
+        MAX(ts.uom)                       AS uom,
+        COUNT(DISTINCT f.cik)             AS public_company_count,
+        COUNT(DISTINCT f.ticker)          AS ticker_count
+      FROM timber_sales ts
+      LEFT JOIN "sec"."filing_metadata" f
+        ON ts.fy_completed = f.fiscal_year
+        AND f.filing_type  = '10-K'
+        AND (CAST(f.sic_code AS INTEGER) BETWEEN 800 AND 899
+          OR CAST(f.sic_code AS INTEGER) BETWEEN 2400 AND 2499
+          OR CAST(f.sic_code AS INTEGER) BETWEEN 2600 AND 2699)
+      GROUP BY ts.fy_completed, ts.state_abbr, ts.treatment_type

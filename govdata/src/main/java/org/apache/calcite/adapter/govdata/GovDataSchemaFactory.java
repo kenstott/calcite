@@ -28,6 +28,7 @@ import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
 import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
+import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
 import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
@@ -68,6 +69,7 @@ import java.util.Map;
  *   <li>cyber_vuln - Cybersecurity vulnerability data (NVD CVEs, CISA KEV, OSV, GitHub SA)</li>
  *   <li>cyber_threat - Cyber threat intelligence (ATT&CK, IOC feeds, exploits, standards)</li>
  *   <li>energy - U.S. energy data (EIA electricity, fossil fuel production, storage, prices)</li>
+ *   <li>lands - U.S. federal public lands (USFS, NPS, BLM, ONRR, FIA)</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -286,11 +288,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "uspto":
         return new PatentsSchemaFactory();
 
+      case "lands":
+        return new LandsSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands");
     }
   }
 
