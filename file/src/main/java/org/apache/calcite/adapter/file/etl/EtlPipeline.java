@@ -474,6 +474,20 @@ public class EtlPipeline {
         }
       }
 
+      // No completion marker found — if there is also no Iceberg data, skip the
+      // expensive full-bucket batch scan and treat all combinations as unprocessed.
+      // This covers fresh rebuilds where the tracker was cleared but batch parquet
+      // files from other schemas remain, making the glob scan very slow.
+      if (!forceReprocessAll && !usePartitionedExpansion
+          && materializeConfig != null
+          && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
+          && !verifyDataExists(pipelineName, config)) {
+        LOGGER.info("Pipeline '{}': no completion marker and no Iceberg data — "
+            + "skipping batch scan, force-reprocessing all {} combinations",
+            pipelineName, totalBatches);
+        forceReprocessAll = true;
+      }
+
       if (progressListener != null) {
         progressListener.onPhaseStart("dimension_expansion", totalBatches);
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
