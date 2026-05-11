@@ -289,7 +289,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         return new PatentsSchemaFactory();
 
       case "lands":
-      case "public_lands":
         return new LandsSchemaFactory();
 
       default:
