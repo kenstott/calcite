@@ -25,7 +25,9 @@ import org.slf4j.LoggerFactory;
  * Transforms BLM ArcGIS FeatureServer responses into {@code blm_field_offices} rows.
  *
  * <p>Input: ArcGIS query JSON from
- * {@code BLM_National_Administrative_Units/FeatureServer/1/query?where=1%3D1&outFields=*&f=json}
+ * {@code admin_boundaries/BLM_Natl_AdminUnit_Generalized/FeatureServer/0/query}.
+ * {@code ADMIN_ST} is a 2-character state abbreviation (not FIPS). {@code GIS_ACRES} is
+ * not available in this endpoint.
  * <pre>
  * {
  *   "features": [
@@ -33,9 +35,8 @@ import org.slf4j.LoggerFactory;
  *       "attributes": {
  *         "ADM_UNIT_CD": "UTMO",
  *         "ADMU_NAME": "Moab Field Office",
- *         "ADMU_TYPE": "Field Office",
- *         "STATE_FIPS": "49",
- *         "GIS_ACRES": 3236000.0
+ *         "BLM_ORG_TYPE": "Field Office",
+ *         "ADMIN_ST": "UT"
  *       }
  *     }
  *   ]
@@ -81,10 +82,8 @@ public class BlmFieldOfficeTransformer implements ResponseTransformer {
         ObjectNode row = MAPPER.createObjectNode();
         row.put("office_code", textOrNull(attrs, "ADM_UNIT_CD"));
         row.put("office_name", textOrNull(attrs, "ADMU_NAME"));
-        row.put("office_type", textOrNull(attrs, "ADMU_TYPE"));
-        row.put("state_fips", textOrNull(attrs, "STATE_FIPS"));
-        row.put("adm_acres", doubleOrNull(attrs, "GIS_ACRES"));
-        row.putNull("geometry_wkt");
+        row.put("office_type", textOrNull(attrs, "BLM_ORG_TYPE"));
+        row.put("state_abbr", textOrNull(attrs, "ADMIN_ST"));
         result.add(row);
       }
 
@@ -99,13 +98,5 @@ public class BlmFieldOfficeTransformer implements ResponseTransformer {
   private String textOrNull(JsonNode node, String field) {
     JsonNode val = node.path(field);
     return val.isNull() || val.isMissingNode() ? null : val.asText(null);
-  }
-
-  private Double doubleOrNull(JsonNode node, String field) {
-    JsonNode val = node.path(field);
-    if (val.isNull() || val.isMissingNode()) {
-      return null;
-    }
-    return val.asDouble();
   }
 }

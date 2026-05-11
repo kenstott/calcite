@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.govdata.econ.EconReferenceSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
+import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
@@ -241,10 +242,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "campaign_finance":
         return new FecSchemaFactory();
 
+      case "lands":
+      case "public_lands":
+        return new LandsSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec");
+            "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
+            + " lands");
     }
   }
 

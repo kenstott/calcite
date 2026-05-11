@@ -22,20 +22,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Transforms USDA FS ArcGIS FeatureServer responses into {@code national_forests} rows.
+ * Transforms USDA FS ArcGIS MapServer responses into {@code national_forests} rows.
  *
- * <p>Input: ArcGIS query JSON from {@code EDW_ForestSystemBoundaries_01/FeatureServer/0/query}
+ * <p>Input: ArcGIS query JSON from {@code EDW_ForestSystemBoundaries_01/MapServer/0/query}.
+ * The MapServer returns lowercase field names. {@code STATE} and {@code PROCLAIMED_ACRES}
+ * are no longer available in this endpoint.
  * <pre>
  * {
  *   "features": [
  *     {
  *       "attributes": {
- *         "FORESTNUMBER": "0501",
- *         "FORESTNAME": "Angeles National Forest",
- *         "REGION": "05",
- *         "STATE": "06",
- *         "GIS_ACRES": 694516.4,
- *         "PROCLAIMED_ACRES": 692413.3
+ *         "forestnumber": "0501",
+ *         "forestname": "Angeles National Forest",
+ *         "region": "05",
+ *         "gis_acres": 694516.4
  *       }
  *     }
  *   ]
@@ -79,13 +79,10 @@ public class UsfsForestBoundaryTransformer implements ResponseTransformer {
         }
 
         ObjectNode row = MAPPER.createObjectNode();
-        row.put("forest_id", textOrNull(attrs, "FORESTNUMBER"));
-        row.put("forest_name", textOrNull(attrs, "FORESTNAME"));
-        row.put("region", textOrNull(attrs, "REGION"));
-        row.put("state_fips", padStateFips(textOrNull(attrs, "STATE")));
-        row.put("gross_acres", doubleOrNull(attrs, "GIS_ACRES"));
-        row.put("proclaimed_acres", doubleOrNull(attrs, "PROCLAIMED_ACRES"));
-        row.putNull("geometry_wkt");
+        row.put("forest_id", textOrNull(attrs, "forestnumber"));
+        row.put("forest_name", textOrNull(attrs, "forestname"));
+        row.put("region", textOrNull(attrs, "region"));
+        row.put("gross_acres", doubleOrNull(attrs, "gis_acres"));
         result.add(row);
       }
 
@@ -108,12 +105,5 @@ public class UsfsForestBoundaryTransformer implements ResponseTransformer {
       return null;
     }
     return val.asDouble();
-  }
-
-  private String padStateFips(String raw) {
-    if (raw == null) {
-      return null;
-    }
-    return raw.length() == 1 ? "0" + raw : raw;
   }
 }

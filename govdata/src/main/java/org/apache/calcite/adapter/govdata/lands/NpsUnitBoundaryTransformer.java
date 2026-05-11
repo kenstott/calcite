@@ -24,8 +24,10 @@ import org.slf4j.LoggerFactory;
 /**
  * Transforms NPS ArcGIS FeatureServer responses into {@code nps_units} rows.
  *
- * <p>Input: ArcGIS query JSON from
- * {@code NPS_Land_Resources/MapServer/2/query?where=1%3D1&outFields=*&f=json}
+ * <p>Input: ArcGIS query JSON from the NPS hosted feature service.
+ * {@code STATE} is a 2-character state abbreviation (not FIPS). {@code Shape__Area} is in
+ * square meters and is converted to acres by dividing by 4046.856.
+ * {@code GIS_ACRES}, {@code DATE_EST}, and {@code COUNTY_FIPS} are not available.
  * <pre>
  * {
  *   "features": [
@@ -33,12 +35,10 @@ import org.slf4j.LoggerFactory;
  *       "attributes": {
  *         "UNIT_CODE": "YOSE",
  *         "UNIT_NAME": "Yosemite National Park",
- *         "UNIT_TYPE": "National Park",
- *         "STATE_FIPS": "06",
- *         "COUNTY_FIPS": "06109",
- *         "GIS_ACRES": 748036.0,
- *         "DATE_EST": 1283212800000,
- *         "REGION": "Pacific West"
+ *         "UNIT_TYPE": "National Parks",
+ *         "STATE": "CA",
+ *         "REGION": "Pacific West",
+ *         "Shape__Area": 9640234567.0
  *       }
  *     }
  *   ]
@@ -52,6 +52,8 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(NpsUnitBoundaryTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  private static final double SQ_METERS_PER_ACRE = 4046.856;
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -85,12 +87,9 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
         row.put("unit_code", textOrNull(attrs, "UNIT_CODE"));
         row.put("unit_name", textOrNull(attrs, "UNIT_NAME"));
         row.put("unit_type", textOrNull(attrs, "UNIT_TYPE"));
-        row.put("state_fips", textOrNull(attrs, "STATE_FIPS"));
-        row.put("county_fips", textOrNull(attrs, "COUNTY_FIPS"));
-        row.put("gross_acres", doubleOrNull(attrs, "GIS_ACRES"));
-        row.put("established_date", epochToDate(attrs, "DATE_EST"));
+        row.put("state_abbr", textOrNull(attrs, "STATE"));
         row.put("region", textOrNull(attrs, "REGION"));
-        row.putNull("geometry_wkt");
+        row.put("gross_acres", sqMetersToAcres(attrs, "Shape__Area"));
         result.add(row);
       }
 
@@ -107,29 +106,11 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
     return val.isNull() || val.isMissingNode() ? null : val.asText(null);
   }
 
-  private Double doubleOrNull(JsonNode node, String field) {
+  private Double sqMetersToAcres(JsonNode node, String field) {
     JsonNode val = node.path(field);
     if (val.isNull() || val.isMissingNode()) {
       return null;
     }
-    return val.asDouble();
-  }
-
-  private String epochToDate(JsonNode node, String field) {
-    JsonNode val = node.path(field);
-    if (val.isNull() || val.isMissingNode()) {
-      return null;
-    }
-    if (val.isNumber()) {
-      long epochMs = val.asLong();
-      if (epochMs == 0) {
-        return null;
-      }
-      return java.time.Instant.ofEpochMilli(epochMs)
-          .atZone(java.time.ZoneOffset.UTC)
-          .toLocalDate()
-          .toString();
-    }
-    return val.asText(null);
+    return val.asDouble() / SQ_METERS_PER_ACRE;
   }
 }
