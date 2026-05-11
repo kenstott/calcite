@@ -471,6 +471,15 @@ generate_single_schema_model() {
       operand_body="\"dataSource\": \"lands\",
       ${_YEAR_RANGE}"
       ;;
+    edu)
+      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition"'
+      if [ -n "${API_DATA_GOV:-}" ]; then
+        _EDU_TABLES="${_EDU_TABLES},\"college_scorecard\",\"college_scorecard_programs\""
+      fi
+      operand_body="\"dataSource\": \"edu\",
+      \"enabledTables\": [${_EDU_TABLES}],
+      ${_YEAR_RANGE}"
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1

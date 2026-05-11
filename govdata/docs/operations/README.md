@@ -54,10 +54,12 @@ Cyber                           workers 62 – 66    (worker-62 = initial, 63-66
 Health                          workers 67 – 70    (worker-67 = initial, 68-70 = recurring)
 Education                       workers 71 – 73    (worker-71 = initial, 72-73 = recurring)
 Energy                          workers 74 – 77    (worker-74 = initial, 75-77 = recurring)
+Patents                         worker  80 – 81    (worker-80 = initial, 81 = recurring)
+Lands (public lands)            workers 82 – 83    (worker-82 = initial, 83 = recurring)
 ```
 
-The `daily` alias covers workers: 1, 18–23, 40, 41, 60–61, 63–65, 68–70, 72–73, 75–77
-The `historical` alias covers workers: 1–41, 60–62, 67, 71, 74
+The `daily` alias covers workers: 1, 18–23, 40, 41, 60–61, 63–65, 68–70, 72–73, 75–77, 81, 83
+The `historical` alias covers workers: 1–41, 60–62, 67, 71, 74, 80, 82
 
 ---
 
@@ -399,6 +401,7 @@ cadence. Stock prices (40) are the only exception — run via `./run-pool.sh sto
 | Education NAEP/CRDC | 73 | Daily (data lags biennially) | Returns unchanged data in off-cycle years; safe to run daily |
 | Energy electricity/refinery | 75,76 | Daily (data lags weekly/monthly) | EIA API; skips years with no new data |
 | Energy surveys/coal | 77 | Daily (data lags annually) | EIA-861/EIA-860/MSHA; skips if no new release |
+| Lands visitation/revenues | 83 | Daily (data lags 1–3 months) | NPS IRMA XML + ONRR bulk CSV; other tables gated by release window |
 
 ---
 
@@ -444,3 +447,4 @@ See [cyber-maintenance.md](cyber-maintenance.md) for cyber-specific operational 
 See [health-maintenance.md](health-maintenance.md) for health-specific operational details.
 See [edu-maintenance.md](edu-maintenance.md) for education-specific operational details.
 See [energy-maintenance.md](energy-maintenance.md) for energy-specific operational details.
+See [lands-maintenance.md](lands-maintenance.md) for lands-specific operational details.
