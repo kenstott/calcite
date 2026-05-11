@@ -454,7 +454,7 @@ check_pending_chunks() {
     log "Pre-flight check: Checking for chunks that need embeddings..."
 
     local s3_endpoint="${AWS_ENDPOINT_OVERRIDE#https://}"
-    local iceberg_chunks="s3://govdata-parquet-v1/source=sec/SEC/vectorized_chunks"
+    local iceberg_chunks="s3://govdata-parquet-v1/sec/vectorized_chunks"
 
     # Use python+duckdb to check pending chunks. The system duckdb CLI (1.4.x)
     # has a filter pushdown bug on list columns in iceberg_scan that silently
@@ -503,16 +503,18 @@ main() {
     echo "=============================================="
     echo ""
 
-    # Check required environment variables
-    [[ -z "$VULTR_API_KEY" ]] && error "VULTR_API_KEY not set"
-    [[ -z "$VULTR_SSH_KEY_ID" ]] && error "VULTR_SSH_KEY_ID not set. Run: ./vss-gpu-runner.sh list-ssh-keys"
+    # Check required environment variables — missing credentials mean this machine is not
+    # configured as a GPU runner; skip gracefully so pool exit code is not poisoned.
+    _skip_missing() { warn "Skipping embeddings: $1"; exit 0; }
+    [[ -z "$VULTR_API_KEY" ]] && _skip_missing "VULTR_API_KEY not set"
+    [[ -z "$VULTR_SSH_KEY_ID" ]] && _skip_missing "VULTR_SSH_KEY_ID not set (run: ./vss-gpu-runner.sh list-ssh-keys)"
     [[ -z "$VULTR_NVIDIA_SCRIPT_ID" ]] && warn "VULTR_NVIDIA_SCRIPT_ID not set. NVIDIA driver will be installed manually (slower)."
-    [[ -z "$AWS_ACCESS_KEY_ID" ]] && error "AWS_ACCESS_KEY_ID not set"
-    [[ -z "$AWS_SECRET_ACCESS_KEY" ]] && error "AWS_SECRET_ACCESS_KEY not set"
-    [[ -z "$AWS_ENDPOINT_OVERRIDE" ]] && error "AWS_ENDPOINT_OVERRIDE not set"
+    [[ -z "$AWS_ACCESS_KEY_ID" ]] && _skip_missing "AWS_ACCESS_KEY_ID not set"
+    [[ -z "$AWS_SECRET_ACCESS_KEY" ]] && _skip_missing "AWS_SECRET_ACCESS_KEY not set"
+    [[ -z "$AWS_ENDPOINT_OVERRIDE" ]] && _skip_missing "AWS_ENDPOINT_OVERRIDE not set"
 
     # Check SSH key
-    [[ ! -f "$SSH_KEY_PATH" ]] && error "SSH key not found: $SSH_KEY_PATH"
+    [[ ! -f "$SSH_KEY_PATH" ]] && _skip_missing "SSH key not found: $SSH_KEY_PATH"
 
     log "Configuration:"
     log "  GPU Plan: $GPU_PLAN"

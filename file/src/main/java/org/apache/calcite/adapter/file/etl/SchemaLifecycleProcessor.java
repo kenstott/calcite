@@ -298,7 +298,15 @@ public class SchemaLifecycleProcessor {
       executeSchemaPostProcessing(schemaContext);
 
       // Phase 4b: Archive raw cache to S3 bundles
-      archiveRawCache(schemaContext);
+      // Run if new data was written OR if a prior archive is incomplete
+      if (resultBuilder.getTotalRows() > 0) {
+        archiveRawCache(schemaContext);
+      } else if (needsArchiveRetry(schemaContext)) {
+        LOGGER.info("Retrying raw cache archive — prior archive was incomplete");
+        archiveRawCache(schemaContext);
+      } else {
+        LOGGER.info("Skipping raw cache archive — no new data and archive is complete");
+      }
 
       // Phase 5: Schema post-processing hooks
       long elapsed = System.currentTimeMillis() - startTime;
@@ -429,6 +437,26 @@ public class SchemaLifecycleProcessor {
    *
    * @param schemaContext Schema context
    */
+  /**
+   * Checks if the raw cache archive needs a retry.
+   * Returns true if local cache files exist but no complete archive is in S3.
+   */
+  private boolean needsArchiveRetry(SchemaContext schemaContext) {
+    String opDir = schemaContext.getOperatingDirectory();
+    if (opDir == null) {
+      return false;
+    }
+    java.io.File cacheDir = new java.io.File(opDir + "/cache/raw");
+    if (!cacheDir.exists() || !cacheDir.isDirectory()) {
+      return false;
+    }
+    StorageProvider source = sourceStorageProvider;
+    if (source == null || "local".equals(source.getStorageType())) {
+      return false;
+    }
+    return !BundleArchiver.hasCompleteArchive(source, config.getName());
+  }
+
   private void archiveRawCache(SchemaContext schemaContext) {
     String opDir = schemaContext.getOperatingDirectory();
     if (opDir == null) {

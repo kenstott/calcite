@@ -3041,6 +3041,58 @@ public class SecDataFetcher {
     return tickers != null ? new ArrayList<>(tickers) : new ArrayList<>();
   }
 
+  private static final Map<String, Map<String, String>> COMPANY_INFO_CACHE = new ConcurrentHashMap<>();
+  private static final String SUBMISSIONS_URL_TMPL =
+      "https://data.sec.gov/submissions/CIK%s.json";
+
+  /**
+   * Returns ticker, sic_code, and fiscal_year_end (MMDD) for a CIK from EDGAR submissions.json.
+   * Results are cached in-process for the lifetime of the JVM.
+   */
+  public static Map<String, String> getCompanyInfoForCik(String cik) {
+    String normalized = cik.replaceAll("[^0-9]", "");
+    while (normalized.length() < 10) {
+      normalized = "0" + normalized;
+    }
+    if (COMPANY_INFO_CACHE.containsKey(normalized)) {
+      return COMPANY_INFO_CACHE.get(normalized);
+    }
+    Map<String, String> info = new HashMap<>();
+    try {
+      String url = String.format(SUBMISSIONS_URL_TMPL, normalized);
+      HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
+      conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+      conn.setConnectTimeout(8000);
+      conn.setReadTimeout(10000);
+      if (conn.getResponseCode() == 200) {
+        JsonNode node = MAPPER.readTree(conn.getInputStream());
+        JsonNode tickers = node.path("tickers");
+        if (tickers.isArray() && tickers.size() > 0) {
+          info.put("ticker", tickers.get(0).asText());
+        }
+        String sic = node.path("sic").asText(null);
+        if (sic != null && !sic.isEmpty()) {
+          info.put("sic_code", sic);
+        }
+        String fye = node.path("fiscalYearEnd").asText(null);
+        if (fye != null && !fye.isEmpty()) {
+          info.put("fiscal_year_end_mmdd", fye);
+        }
+        JsonNode mailing = node.path("addresses").path("mailing");
+        if (!mailing.isMissingNode()) {
+          String street1 = mailing.path("street1").asText(null);
+          if (street1 != null && !street1.isEmpty()) {
+            info.put("mailing_address", street1);
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());
+    }
+    COMPANY_INFO_CACHE.put(normalized, info);
+    return info;
+  }
+
   /**
    * Clear all caches (memory and disk).
    */

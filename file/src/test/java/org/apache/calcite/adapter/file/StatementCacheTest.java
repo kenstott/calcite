@@ -70,7 +70,7 @@ public class StatementCacheTest extends BaseFileTest {
         System.setProperty("calcite.statement.cache.enabled", "true");
         System.setProperty("calcite.statement.cache.size", "100");
 
-        try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+        try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
              CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
             SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -137,7 +137,7 @@ public class StatementCacheTest extends BaseFileTest {
             System.setProperty("calcite.statement.cache.enabled", "false");
 
             // Create new connection to pick up the setting
-            try (Connection conn2 = DriverManager.getConnection("jdbc:calcite:");
+            try (Connection conn2 = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
                  Statement stmt2 = conn2.createStatement()) {
 
                 // Warm up

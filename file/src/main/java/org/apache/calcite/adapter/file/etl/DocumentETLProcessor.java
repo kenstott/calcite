@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -90,6 +91,15 @@ public class DocumentETLProcessor {
   // In-memory cache fallback to avoid repeated S3 exists() checks when no tracker provided
   private final Set<String> existsCache = new HashSet<String>();
   private final Set<String> notExistsCache = new HashSet<String>();
+
+  // Per-CIK cache of accession → primaryDocument from data.sec.gov/submissions API.
+  // Avoids duplicate submissions.json fetches when a CIK has multiple accessions in the same run.
+  private final ConcurrentHashMap<String, Map<String, String>> cikSubmissionsCache =
+      new ConcurrentHashMap<String, Map<String, String>>();
+
+  // Limits diagnostic WARNs for submissions parse/miss — prevents log flooding.
+  private final AtomicInteger submissionsParseDiagCount = new AtomicInteger(0);
+  private final AtomicInteger submissionsMissDiagCount = new AtomicInteger(0);
 
   /**
    * Creates a new document ETL processor.
@@ -296,6 +306,7 @@ public class DocumentETLProcessor {
    * @throws IOException If processing fails fatally
    */
   public DocumentETLResult processEntities(List<Map<String, String>> entities) throws IOException {
+    prewarmExistsCache(extractYearsFromEntities(entities));
     long startTime = System.currentTimeMillis();
     int totalProcessed = 0;
     int totalSkipped = 0;
@@ -303,6 +314,8 @@ public class DocumentETLProcessor {
     List<String> allOutputFiles = new ArrayList<String>();
     List<String> allErrors = new ArrayList<String>();
 
+    int entityCount = 0;
+    int totalEntities = entities.size();
     for (Map<String, String> entityVariables : entities) {
       try {
         DocumentETLResult result = processEntity(entityVariables);
@@ -321,7 +334,10 @@ public class DocumentETLProcessor {
         String errorMsg = "Failed to process entity " + entityVariables + ": " + e.getMessage();
         LOGGER.error(errorMsg);
         allErrors.add(errorMsg);
-        // Continue with next entity
+      }
+      entityCount++;
+      if (entityCount % 500 == 0) {
+        LOGGER.info("ETL progress: {}/{} entities processed", entityCount, totalEntities);
       }
     }
 
@@ -350,10 +366,13 @@ public class DocumentETLProcessor {
    */
   public DocumentETLResult processEntitiesParallel(
       List<Map<String, String>> entities, int threadCount) throws IOException {
+    prewarmExistsCache(extractYearsFromEntities(entities));
     long startTime = System.currentTimeMillis();
     final AtomicInteger totalProcessed = new AtomicInteger();
     final AtomicInteger totalSkipped = new AtomicInteger();
     final AtomicInteger totalFailed = new AtomicInteger();
+    final AtomicInteger entityCount = new AtomicInteger();
+    final int totalEntities = entities.size();
     final List<String> allOutputFiles = Collections.synchronizedList(new ArrayList<String>());
     final List<String> allErrors = Collections.synchronizedList(new ArrayList<String>());
 
@@ -377,6 +396,10 @@ public class DocumentETLProcessor {
             totalFailed.incrementAndGet();
             allErrors.add("Failed: " + entityVariables + ": " + e.getMessage());
             LOGGER.error("Failed to process entity {}: {}", entityVariables, e.getMessage());
+          }
+          int count = entityCount.incrementAndGet();
+          if (count % 500 == 0) {
+            LOGGER.info("ETL progress: {}/{} entities processed", count, totalEntities);
           }
           return null;
         }
@@ -402,6 +425,256 @@ public class DocumentETLProcessor {
         allOutputFiles,
         allErrors,
         duration);
+  }
+
+  /**
+   * Processes a single accession whose metadata is already known from the full-index cache.
+   *
+   * <p>Unlike {@link #processEntity}, this method fetches the filing {@code index.json} to
+   * obtain the primary document (skipping the per-CIK {@code submissions.json} call) and
+   * calls {@link ProcessedDocumentTracker#markProcessed} unconditionally — even for
+   * zero-output filings — so the accession is never re-queued on subsequent runs.
+   *
+   * @param cik        Normalized 10-digit zero-padded CIK
+   * @param accession  Accession number with dashes (e.g. {@code 0000320193-25-000006})
+   * @param formType   Form type (e.g. {@code 10-K}, {@code 4})
+   * @param filingDate ISO filing date (e.g. {@code 2025-01-15})
+   * @return processing result
+   */
+  public DocumentETLResult processAccession(
+      String cik, String accession, String formType, String filingDate) {
+    long startTime = System.currentTimeMillis();
+
+    if (documentTracker != null && documentTracker.isProcessed(cik, accession, formType)) {
+      return new DocumentETLResult(0, 1, 0,
+          Collections.<String>emptyList(), Collections.<String>emptyList(),
+          System.currentTimeMillis() - startTime);
+    }
+
+    DocumentSource documentSource = new DocumentSource(config, storageProvider, cacheDirectory);
+
+    String cikUrl = cik.replaceFirst("^0+", "");
+    String accessionNoDashes = accession.replace("-", "");
+
+    String primaryDocument;
+    try {
+      primaryDocument = fetchPrimaryDocumentFromSubmissions(documentSource, cik, accession);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
+      if (documentTracker != null) {
+        documentTracker.markProcessed(cik, accession, formType,
+            Collections.<String>emptyList());
+      }
+      return new DocumentETLResult(0, 0, 1,
+          Collections.<String>emptyList(),
+          Collections.singletonList(
+              "submissions.json fetch failed for " + accession + ": " + e.getMessage()),
+          System.currentTimeMillis() - startTime);
+    }
+
+    // For Form 3/4/5 (insider trading), EDGAR returns XSL-transformed path like
+    // "xslF345X03/wf-form4_xxx.xml" — strip the prefix to get the raw XML filename.
+    if (primaryDocument != null && (formType.equals("3") || formType.equals("4")
+        || formType.equals("5") || formType.startsWith("3/")
+        || formType.startsWith("4/") || formType.startsWith("5/"))) {
+      if (primaryDocument.startsWith("xslF345X")) {
+        int slashIdx = primaryDocument.indexOf('/');
+        if (slashIdx > 0) {
+          primaryDocument = primaryDocument.substring(slashIdx + 1);
+        }
+      }
+    }
+
+    if (primaryDocument == null || primaryDocument.isEmpty()) {
+      LOGGER.debug("No primary document found for {}/{} form {}", cik, accession, formType);
+      if (documentTracker != null) {
+        documentTracker.markProcessed(cik, accession, formType,
+            Collections.<String>emptyList());
+      }
+      return new DocumentETLResult(0, 1, 0,
+          Collections.<String>emptyList(), Collections.<String>emptyList(),
+          System.currentTimeMillis() - startTime);
+    }
+
+    Map<String, String> docVariables = new HashMap<String, String>();
+    docVariables.put("cik", cik);
+    docVariables.put("cik_url", cikUrl);
+    docVariables.put("accession", accession);
+    docVariables.put("accession_url", accessionNoDashes);
+    docVariables.put("form", formType);
+    docVariables.put("filingDate", filingDate);
+    docVariables.put("document", primaryDocument);
+
+    List<String> converted;
+    List<String> errors = new ArrayList<String>();
+    int processed = 0;
+    int failed = 0;
+
+    try {
+      converted = processDocumentWithRetry(docVariables, documentSource, outputDirectory);
+      processed = 1;
+    } catch (IOException e) {
+      converted = Collections.<String>emptyList();
+      failed = 1;
+      errors.add("Failed to process " + accession + ": " + e.getMessage());
+      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, e.getMessage());
+    }
+
+    // Always mark processed — zero-output and errors are valid terminal states
+    if (documentTracker != null) {
+      documentTracker.markProcessed(cik, accession, formType, converted);
+    }
+
+    return new DocumentETLResult(processed, 0, failed,
+        converted, errors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Processes a list of accessions using the accession-centric path.
+   *
+   * @param accessions List of accessions to process
+   * @return Aggregated processing result
+   */
+  public DocumentETLResult processAccessions(List<AccessionRef> accessions) {
+    prewarmExistsCache(extractYearsFromAccessions(accessions));
+    long startTime = System.currentTimeMillis();
+    int totalProcessed = 0;
+    int totalSkipped = 0;
+    int totalFailed = 0;
+    List<String> allOutputFiles = new ArrayList<String>();
+    List<String> allErrors = new ArrayList<String>();
+
+    int count = 0;
+    int total = accessions.size();
+    for (AccessionRef ref : accessions) {
+      DocumentETLResult result =
+          processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      totalProcessed += result.getDocumentsProcessed();
+      totalSkipped += result.getDocumentsSkipped();
+      totalFailed += result.getDocumentsFailed();
+      allOutputFiles.addAll(result.getOutputFiles());
+      allErrors.addAll(result.getErrors());
+      count++;
+      if (count % 500 == 0) {
+        LOGGER.info("ETL progress: {}/{} accessions processed", count, total);
+      }
+    }
+
+    return new DocumentETLResult(totalProcessed, totalSkipped, totalFailed,
+        allOutputFiles, allErrors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Processes accessions in parallel using a thread pool.
+   *
+   * @param accessions  List of accessions to process
+   * @param threadCount Number of parallel threads
+   * @return Aggregated processing result
+   */
+  public DocumentETLResult processAccessionsParallel(
+      List<AccessionRef> accessions, int threadCount) {
+    prewarmExistsCache(extractYearsFromAccessions(accessions));
+    long startTime = System.currentTimeMillis();
+    final AtomicInteger totalProcessed = new AtomicInteger();
+    final AtomicInteger totalSkipped = new AtomicInteger();
+    final AtomicInteger totalFailed = new AtomicInteger();
+    final AtomicInteger count = new AtomicInteger();
+    final int total = accessions.size();
+    final List<String> allOutputFiles =
+        Collections.synchronizedList(new ArrayList<String>());
+    final List<String> allErrors =
+        Collections.synchronizedList(new ArrayList<String>());
+
+    ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+    List<Future<?>> futures = new ArrayList<Future<?>>();
+
+    for (final AccessionRef ref : accessions) {
+      futures.add(executor.submit(new Callable<Void>() {
+        @Override public Void call() {
+          DocumentETLResult result =
+              processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          totalProcessed.addAndGet(result.getDocumentsProcessed());
+          totalSkipped.addAndGet(result.getDocumentsSkipped());
+          totalFailed.addAndGet(result.getDocumentsFailed());
+          allOutputFiles.addAll(result.getOutputFiles());
+          allErrors.addAll(result.getErrors());
+          int c = count.incrementAndGet();
+          if (c % 500 == 0) {
+            LOGGER.info("ETL progress: {}/{} accessions processed", c, total);
+          }
+          return null;
+        }
+      }));
+    }
+
+    for (Future<?> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+      }
+    }
+    executor.shutdown();
+
+    return new DocumentETLResult(totalProcessed.get(), totalSkipped.get(), totalFailed.get(),
+        allOutputFiles, allErrors, System.currentTimeMillis() - startTime);
+  }
+
+  /**
+   * Looks up the primary document filename for an accession via the EDGAR submissions API.
+   *
+   * <p>Fetches {@code https://data.sec.gov/submissions/CIK{cik}.json} and returns the
+   * {@code primaryDocument} value whose {@code accessionNumber} matches the given accession.
+   * Results are cached per CIK so that multiple accessions from the same company only require
+   * one API call.
+   *
+   * @return primary document filename, or null if not found
+   */
+  private String fetchPrimaryDocumentFromSubmissions(
+      DocumentSource documentSource, String cik, String accession) throws IOException {
+    Map<String, String> byAccession = cikSubmissionsCache.get(cik);
+    if (byAccession == null) {
+      String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
+      String submissionsJson = documentSource.fetchUrlContent(submissionsUrl);
+      List<String> accessionNumbers = extractJsonArray(submissionsJson, "accessionNumber");
+      List<String> primaryDocuments = extractJsonArray(submissionsJson, "primaryDocument");
+      Map<String, String> map = new HashMap<String, String>();
+      int count = Math.min(accessionNumbers.size(), primaryDocuments.size());
+      for (int i = 0; i < count; i++) {
+        map.put(accessionNumbers.get(i), primaryDocuments.get(i));
+      }
+      if (accessionNumbers.isEmpty() && submissionsParseDiagCount.get() < 5) {
+        int diagIdx = submissionsParseDiagCount.getAndIncrement();
+        LOGGER.warn("submissions.json parse [diag {}]: url={} responseLen={} "
+            + "accessionNumbers=0 — first 200 chars of response: [{}]",
+            diagIdx, submissionsUrl, submissionsJson.length(),
+            submissionsJson.length() > 200 ? submissionsJson.substring(0, 200) : submissionsJson);
+      }
+      cikSubmissionsCache.putIfAbsent(cik, map);
+      byAccession = cikSubmissionsCache.get(cik);
+    }
+    String result = byAccession.get(accession);
+    if (result == null && submissionsMissDiagCount.get() < 5) {
+      int mapSize = byAccession.size();
+      if (mapSize > 0) {
+        int diagIdx = submissionsMissDiagCount.getAndIncrement();
+        String sampleKey = byAccession.keySet().iterator().hasNext()
+            ? byAccession.keySet().iterator().next() : "(none)";
+        LOGGER.warn("submissions.json miss [diag {}]: cik={} accession={} mapSize={} sampleKey={}",
+            diagIdx, cik, accession, mapSize, sampleKey);
+      }
+    }
+    return result;
+  }
+
+  private Set<String> extractYearsFromAccessions(List<AccessionRef> accessions) {
+    Set<String> years = new HashSet<String>();
+    for (AccessionRef ref : accessions) {
+      if (ref.filingDate != null && ref.filingDate.length() >= 4) {
+        years.add(ref.filingDate.substring(0, 4));
+      }
+    }
+    return years;
   }
 
   private static final int DOC_MAX_RETRIES = 3;
@@ -768,6 +1041,84 @@ public class DocumentETLProcessor {
   }
 
   /**
+   * Extracts a JSON string array by field name using simple string scanning (Java 8 compatible).
+   * Returns values from the first occurrence of {@code "fieldName": [...]}.
+   */
+  static List<String> extractJsonArray(String json, String fieldName) {
+    List<String> values = new ArrayList<String>();
+    int start = json.indexOf("\"" + fieldName + "\"");
+    if (start < 0) {
+      return values;
+    }
+    start = json.indexOf("[", start);
+    if (start < 0) {
+      return values;
+    }
+    int end = json.indexOf("]", start);
+    if (end < 0) {
+      return values;
+    }
+    String arrayContent = json.substring(start + 1, end);
+    int pos = 0;
+    while (pos < arrayContent.length()) {
+      int quoteStart = arrayContent.indexOf("\"", pos);
+      if (quoteStart < 0) {
+        break;
+      }
+      int quoteEnd = arrayContent.indexOf("\"", quoteStart + 1);
+      if (quoteEnd < 0) {
+        break;
+      }
+      values.add(arrayContent.substring(quoteStart + 1, quoteEnd));
+      pos = quoteEnd + 1;
+    }
+    return values;
+  }
+
+  /**
+   * Pre-warms the existsCache by listing all files in each output year partition.
+   * Replaces per-filing storageProvider.exists() (Class A R2 HEAD ops) with a single
+   * LIST per year. Called once before processing begins.
+   *
+   * @param years set of 4-digit year strings to list (e.g., {@code {"2025","2026"}})
+   */
+  private void prewarmExistsCache(Set<String> years) {
+    if (documentTracker != null) {
+      return;
+    }
+    for (String year : years) {
+      String yearPrefix = outputDirectory + "/year=" + year;
+      try {
+        List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearPrefix, true);
+        int count = 0;
+        for (StorageProvider.FileEntry entry : entries) {
+          if (!entry.isDirectory()) {
+            existsCache.add(entry.getPath());
+            count++;
+          }
+        }
+        LOGGER.info("Pre-warmed existsCache with {} files from {}", count, yearPrefix);
+      } catch (IOException e) {
+        LOGGER.warn("Could not pre-warm existsCache for {}: {}", yearPrefix, e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Extracts the unique year values from an entity list for existsCache pre-warming.
+   */
+  private Set<String> extractYearsFromEntities(List<Map<String, String>> entities) {
+    Set<String> years = new HashSet<String>();
+    for (Map<String, String> entity : entities) {
+      String year = entity.get("year");
+      if (year != null && !year.isEmpty()) {
+        years.add(year);
+      }
+    }
+    return years;
+  }
+
+  /**
    * Checks if a document has already been processed.
    * Uses documentTracker if available (no S3 checks), otherwise falls back to
    * in-memory cache and S3 exists checks.
@@ -861,6 +1212,25 @@ public class DocumentETLProcessor {
      * @param message Progress message
      */
     void onProgress(int processed, int total, String message);
+  }
+
+  /** Descriptor for one accession in the accession-centric ETL path. */
+  public static class AccessionRef {
+    public final String cik;
+    public final String accession;
+    public final String formType;
+    public final String filingDate;
+
+    public AccessionRef(String cik, String accession, String formType, String filingDate) {
+      this.cik = cik;
+      this.accession = accession;
+      this.formType = formType;
+      this.filingDate = filingDate;
+    }
+
+    @Override public String toString() {
+      return cik + "/" + accession + "(" + formType + ")";
+    }
   }
 
   /**
@@ -1105,48 +1475,7 @@ public class DocumentETLProcessor {
     }
 
     private List<String> extractJsonArray(String json, String fieldName) {
-      List<String> values = new ArrayList<String>();
-
-      // Simple JSON array extraction for field: ["value1", "value2", ...]
-      String pattern = "\"" + fieldName + "\"\\s*:\\s*\\[";
-      int start = json.indexOf(pattern.replace("\\s*", ""));
-      if (start < 0) {
-        // Try without strict matching
-        start = json.indexOf("\"" + fieldName + "\"");
-        if (start < 0) {
-          return values;
-        }
-        start = json.indexOf("[", start);
-        if (start < 0) {
-          return values;
-        }
-      } else {
-        start = json.indexOf("[", start);
-      }
-
-      int end = json.indexOf("]", start);
-      if (end < 0) {
-        return values;
-      }
-
-      String arrayContent = json.substring(start + 1, end);
-
-      // Extract string values
-      int pos = 0;
-      while (pos < arrayContent.length()) {
-        int quoteStart = arrayContent.indexOf("\"", pos);
-        if (quoteStart < 0) {
-          break;
-        }
-        int quoteEnd = arrayContent.indexOf("\"", quoteStart + 1);
-        if (quoteEnd < 0) {
-          break;
-        }
-        values.add(arrayContent.substring(quoteStart + 1, quoteEnd));
-        pos = quoteEnd + 1;
-      }
-
-      return values;
+      return DocumentETLProcessor.extractJsonArray(json, fieldName);
     }
 
     @Override public boolean hasNext() {

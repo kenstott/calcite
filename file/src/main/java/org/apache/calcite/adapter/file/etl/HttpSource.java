@@ -18,6 +18,8 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -47,6 +49,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -99,7 +102,8 @@ public class HttpSource implements DataSource {
   private final String localRawCachePath;
   /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
   private final String operatingDirectory;
-  private long lastRequestTime;
+  /** CAS-based slot reservation for lock-free rate limiting across parallel threads. */
+  private final AtomicLong nextAllowedNanos = new AtomicLong();
 
   /**
    * Creates a new HttpSource with the given configuration.
@@ -148,7 +152,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    this.lastRequestTime = 0;
+    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
     this.responseTransformer = loadResponseTransformer(hooksConfig);
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     this.storageProvider = storageProvider;
@@ -168,7 +172,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    this.lastRequestTime = 0;
+    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
     this.responseTransformer = responseTransformer;
     this.variableNormalizer = null;
     this.storageProvider = null;
@@ -296,6 +300,10 @@ public class HttpSource implements DataSource {
       return fetchWithBatching(variables);
     }
 
+    // Make a mutable copy of variables so incremental bounds can be injected for transformers
+    variables = new LinkedHashMap<String, String>(
+        variables != null ? variables : Collections.<String, String>emptyMap());
+
     // Build the URL with variables substituted (check urlRules for year-dependent URLs)
     String url = substituteVariables(config.getEffectiveUrl(variables), variables);
 
@@ -305,20 +313,63 @@ public class HttpSource implements DataSource {
       params.put(e.getKey(), substituteVariables(e.getValue(), variables));
     }
 
+    // Apply incremental filter when configured and a bound is active
+    HttpSourceConfig.IncrementalConfig incr = config.getIncremental();
+    if (incr != null && incr.getFilterParam() != null) {
+      String resolvedDate      = substituteVariables(
+          incr.getSinceDate()    != null ? incr.getSinceDate()    : "", variables);
+      String resolvedYear      = substituteVariables(
+          incr.getSinceYear()    != null ? incr.getSinceYear()    : "", variables);
+      String resolvedQuarter   = substituteVariables(
+          incr.getSinceQuarter() != null ? incr.getSinceQuarter() : "", variables);
+      String resolvedUntilDate = substituteVariables(
+          incr.getUntilDate()    != null ? incr.getUntilDate()    : "", variables);
+      String resolvedUntilYear = substituteVariables(
+          incr.getUntilYear()    != null ? incr.getUntilYear()    : "", variables);
+      String filterValue = incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter,
+          resolvedUntilDate, resolvedUntilYear);
+      if (filterValue != null) {
+        params.put(incr.getFilterParam(), filterValue);
+        // Expose bounds to transformers via RequestContext.dimensionValues
+        if (!resolvedDate.isEmpty())      { variables.put("sinceDate", resolvedDate); }
+        if (!resolvedYear.isEmpty())      { variables.put("sinceYear", resolvedYear); }
+        if (!resolvedQuarter.isEmpty())   { variables.put("sinceQuarter", resolvedQuarter); }
+        if (!resolvedUntilDate.isEmpty()) { variables.put("untilDate", resolvedUntilDate); }
+        if (!resolvedUntilYear.isEmpty()) { variables.put("untilYear", resolvedUntilYear); }
+        LOGGER.info("Incremental filter active: {}={}", incr.getFilterParam(), filterValue);
+      }
+    }
+
+    // Streaming short-circuit: bypasses StringWriter pipeline entirely
+    if (responseTransformer instanceof StreamingResponseTransformer) {
+      RequestContext ctx = RequestContext.builder()
+          .url(url)
+          .parameters(params)
+          .headers(config.getHeaders())
+          .dimensionValues(variables)
+          .build();
+      return ((StreamingResponseTransformer) responseTransformer).fetchAndTransform(ctx);
+    }
+
     // Check raw cache first (persistent storage-based)
     String rawCacheFilePath = null;
     if (isRawCacheEnabled()) {
       rawCacheFilePath = buildRawCachePath(variables);
       if (hasValidRawCache(rawCacheFilePath)) {
-        // For CSV/TSV, stream directly from raw cache to avoid OOM on large files
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
-        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
-            || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
+        if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
+            || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
+            && responseTransformer == null) {
           char delimiter = resolveDelimiter(respConfig);
           LOGGER.info("Streaming CSV from raw cache: {}", rawCacheFilePath);
           return parseDelimitedResponseStreaming(rawCacheFilePath, delimiter);
         }
-        // For JSON and other formats, read into memory (typically small)
+        // For JSON with a per-record transformer, stream directly from cache file
+        if (responseTransformer instanceof PerRecordResponseTransformer) {
+          return streamFromRawCache(rawCacheFilePath, url, params, variables,
+              (PerRecordResponseTransformer) responseTransformer);
+        }
+        // For JSON, or CSV/TSV with a responseTransformer, read into memory and transform
         String cachedResponse = readRawCache(rawCacheFilePath);
         cachedResponse = transformResponse(cachedResponse, url, params, variables);
         List<Map<String, Object>> data = parseResponse(cachedResponse);
@@ -338,34 +389,116 @@ public class HttpSource implements DataSource {
       }
     }
 
-    // Fetch data with pagination support
-    List<Map<String, Object>> allData = new ArrayList<Map<String, Object>>();
     HttpSourceConfig.PaginationConfig pagination = config.getResponse().getPagination();
 
     if (pagination.getType() == HttpSourceConfig.PaginationType.NONE) {
       // Single request - response is cached in doRequest, returns cache path
       String cachePath = executeRequest(url, params, variables, rawCacheFilePath);
 
-      // For CSV/TSV, stream directly from cache
+      // For CSV/TSV without a transformer, stream directly from cache
       HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
-      if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
-          || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
+      if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
+          || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
+          && responseTransformer == null) {
         char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
         return parseDelimitedResponseStreaming(cachePath, delimiter);
       }
 
       // For JSON, read from cache, transform, and parse
-      String content = readFromCache(cachePath);
+      // cachePath is "" when skipResponseBody=true; skip readFromCache in that case
+      String content = cachePath.isEmpty() ? "" : readFromCache(cachePath);
       content = transformResponse(content, url, params, variables);
-      allData.addAll(parseResponse(content));
-    } else {
-      // Paginated requests
-      int offset = 0;
-      int pageSize = pagination.getPageSize();
-      boolean hasMore = true;
+      List<Map<String, Object>> data = parseResponse(content);
+      data = normalizeRecords(data, variables);
 
-      while (hasMore) {
-        Map<String, String> pageParams = new LinkedHashMap<String, String>(params);
+      if (cache != null) {
+        long ttlMs = config.getCache().getTtlSeconds() * 1000;
+        cache.put(cacheKey, new CacheEntry(data, System.currentTimeMillis() + ttlMs));
+        LOGGER.debug("Cached {} records for {}", data.size(), cacheKey);
+      }
+
+      LOGGER.info("Fetched {} records from {}", data.size(), url);
+      return data.iterator();
+    } else {
+      // Paginated requests - use streaming iterator to avoid buffering all pages in memory
+      return new PaginatedIterator(url, params, variables, pagination, cacheKey, rawCacheFilePath);
+    }
+  }
+
+  private class PaginatedIterator implements Iterator<Map<String, Object>> {
+    private final String url;
+    private final Map<String, String> baseParams;
+    private final Map<String, String> variables;
+    private final HttpSourceConfig.PaginationConfig pagination;
+    private final String cacheKey;
+    private final String rawCacheFilePath;
+
+    private int offset = 0;
+    private int pageSize;
+    private String cursor = null;
+    private boolean hasMore = true;
+    private int totalCount = -1; // populated from API "count" field on first page
+
+    private Iterator<Map<String, Object>> currentPageIterator = null;
+    private long totalYielded = 0;
+
+    // CSV_STREAM state
+    private BufferedReader csvReader = null;
+    private String csvHeaderLine = null;
+
+    // Raw-cache accumulation: stream result records from each page to a temp file so
+    // we never hold more than one page of Jackson nodes in heap at a time.
+    private java.io.File tempCacheFile = null;
+    private java.io.FileOutputStream tempCacheStream = null;
+    private com.fasterxml.jackson.core.JsonGenerator cacheGenerator = null;
+    private long cachedRecordCount = 0;
+    private boolean mergedCacheWritten = false;
+
+    PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
+        HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath) {
+      this.url = url;
+      this.baseParams = baseParams;
+      this.variables = variables;
+      this.pagination = pagination;
+      this.pageSize = pagination.getPageSize();
+      this.cacheKey = cacheKey;
+      this.rawCacheFilePath = rawCacheFilePath;
+    }
+
+    @Override
+    public boolean hasNext() {
+      // If current page has more records, we have next
+      if (currentPageIterator != null && currentPageIterator.hasNext()) {
+        return true;
+      }
+
+      // If no more pages to fetch, we're done
+      if (!hasMore) {
+        return false;
+      }
+
+      // Try to fetch next page
+      return fetchNextPage();
+    }
+
+    @Override
+    public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new java.util.NoSuchElementException();
+      }
+
+      Map<String, Object> record = currentPageIterator.next();
+      totalYielded++;
+      return record;
+    }
+
+    private boolean fetchNextPage() {
+      if (!hasMore) {
+        return false;
+      }
+
+      try {
+        Map<String, String> pageParams = new LinkedHashMap<String, String>(baseParams);
 
         switch (pagination.getType()) {
           case OFFSET:
@@ -379,41 +512,259 @@ public class HttpSource implements DataSource {
               pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
             }
             break;
+          case PAGE_ZERO:
+            int pageZero = offset / pageSize;
+            pageParams.put(pagination.getPageParam(), String.valueOf(pageZero));
+            if (pagination.getLimitParam() != null) {
+              pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
+            }
+            break;
+          case CURSOR:
+            if (cursor != null) {
+              pageParams.put(pagination.getCursorParam(), cursor);
+            }
+            if (pagination.getLimitParam() != null) {
+              pageParams.put(pagination.getLimitParam(), String.valueOf(pageSize));
+            }
+            break;
+          case CSV_STREAM:
+            return fetchNextCsvBatch();
           default:
             hasMore = false;
-            continue;
+            return false;
         }
 
-        String response = executeRequest(url, pageParams, variables, null);  // No raw cache for pages
+        String response;
+        try {
+          response = executeRequest(url, pageParams, variables, null);
+        } catch (IOException e) {
+          // HTTP 400 during pagination means skip/offset limit exceeded
+          if (e.getMessage() != null && e.getMessage().startsWith("HTTP 400")) {
+            LOGGER.info("Pagination stopped at offset={}: results window limit reached",
+                offset);
+            hasMore = false;
+            writeMergedCache();
+            return false;
+          }
+          throw e;
+        }
+
+        // Extract total record count from API response before transformation.
+        // Required for APIs (e.g. Urban Institute) that wrap around and return page 1 data
+        // for out-of-bounds page numbers — pageData.size() < pageSize never triggers without this.
+        if (totalCount < 0) {
+          try {
+            JsonNode countRoot = OBJECT_MAPPER.readTree(response);
+            String countPath = pagination.getCountPath();
+            JsonNode countNode;
+            if (countPath != null && !countPath.isEmpty()) {
+              countNode = countRoot;
+              for (String segment : countPath.split("\\.")) {
+                countNode = countNode.path(segment);
+              }
+            } else {
+              countNode = countRoot.path("count");
+            }
+            if (!countNode.isMissingNode() && countNode.isNumber()) {
+              totalCount = countNode.intValue();
+              LOGGER.debug("Total record count from API: {}", totalCount);
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Could not extract count field from response: {}", e.getMessage());
+          }
+        }
+
+        accumulateRawPage(response);
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
         if (pageData.isEmpty()) {
           hasMore = false;
-        } else {
-          allData.addAll(pageData);
-          offset += pageSize;
+          writeMergedCache();
+          return false;
+        }
 
-          // Check if we got less than a full page
-          if (pageData.size() < pageSize) {
+        pageData = normalizeRecords(pageData, variables);
+        currentPageIterator = pageData.iterator();
+
+        // Handle pagination state for next fetch
+        if (pagination.getType() == HttpSourceConfig.PaginationType.CURSOR) {
+          try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(response);
+            String cursorPath = pagination.getCursorPath();
+            if (cursorPath != null && !cursorPath.isEmpty()) {
+              JsonNode cursorNode = root.path(cursorPath);
+              String nextCursor = cursorNode.asText(null);
+              if (nextCursor == null || nextCursor.isEmpty()) {
+                hasMore = false;
+                writeMergedCache();
+              } else {
+                cursor = nextCursor;
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Failed to extract cursor from response: {}", e.getMessage());
             hasMore = false;
           }
+        } else {
+          offset += pageSize;
+          // Stop if partial page OR we've fetched all records reported by the API
+          if (pageData.size() < pageSize || (totalCount >= 0 && offset >= totalCount)) {
+            hasMore = false;
+            writeMergedCache();
+          }
         }
+
+        LOGGER.debug("Fetched page with {} records (total yielded: {})", pageData.size(), totalYielded);
+        return true;
+
+      } catch (IOException e) {
+        LOGGER.error("Error fetching paginated data: {}", e.getMessage());
+        hasMore = false;
+        return false;
       }
     }
 
-    // Normalize field names for schema evolution
-    allData = normalizeRecords(allData, variables);
+    private boolean fetchNextCsvBatch() {
+      try {
+        if (csvReader == null) {
+          // Open the streaming connection on first call
+          enforceRateLimit();
+          String fullUrl = buildUrlWithParams(url, baseParams);
+          URL connUrl = java.net.URI.create(fullUrl).toURL();
+          HttpURLConnection conn = (HttpURLConnection) connUrl.openConnection();
+          conn.setRequestMethod("GET");
+          conn.setConnectTimeout(30000);
+          conn.setReadTimeout(300000); // 5 min for large CSV files
+          conn.setRequestProperty("User-Agent",
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+          for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+            conn.setRequestProperty(e.getKey(), e.getValue());
+          }
+          applyAuth(conn, variables);
+          int status = conn.getResponseCode();
+          if (status >= 400) {
+            throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
+          }
+          InputStream is = conn.getInputStream();
+          csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+          csvHeaderLine = csvReader.readLine();
+          if (csvHeaderLine == null) {
+            hasMore = false;
+            return false;
+          }
+          LOGGER.info("CSV_STREAM opened: {}", fullUrl);
+        }
 
-    // Store in cache if enabled
-    if (cache != null) {
-      long ttlMs = config.getCache().getTtlSeconds() * 1000;
-      cache.put(cacheKey, new CacheEntry(allData, System.currentTimeMillis() + ttlMs));
-      LOGGER.debug("Cached {} records for {}", allData.size(), cacheKey);
+        int batchSize = pageSize > 0 ? pageSize : 1000;
+        StringBuilder batchSb = new StringBuilder();
+        batchSb.append(csvHeaderLine).append("\n");
+        int linesRead = 0;
+        String line;
+        while (linesRead < batchSize && (line = csvReader.readLine()) != null) {
+          batchSb.append(line).append("\n");
+          linesRead++;
+        }
+
+        if (linesRead == 0) {
+          hasMore = false;
+          csvReader.close();
+          csvReader = null;
+          return false;
+        }
+
+        String csvBatch = batchSb.toString();
+        String jsonResponse = transformResponse(csvBatch, url, baseParams, variables);
+        List<Map<String, Object>> pageData = parseResponse(jsonResponse);
+
+        if (pageData.isEmpty()) {
+          hasMore = false;
+          return false;
+        }
+
+        pageData = normalizeRecords(pageData, variables);
+        currentPageIterator = pageData.iterator();
+
+        if (linesRead < batchSize) {
+          hasMore = false;
+          csvReader.close();
+          csvReader = null;
+        }
+
+        LOGGER.debug("CSV_STREAM batch: {} records (total yielded: {})", pageData.size(), totalYielded);
+        return true;
+
+      } catch (IOException e) {
+        LOGGER.error("Error in CSV_STREAM batch: {}", e.getMessage());
+        hasMore = false;
+        if (csvReader != null) {
+          try { csvReader.close(); } catch (IOException ignored) { }
+          csvReader = null;
+        }
+        return false;
+      }
     }
 
-    LOGGER.info("Fetched {} records from {}", allData.size(), url);
-    return allData.iterator();
+    private void accumulateRawPage(String rawResponse) {
+      if (rawCacheFilePath == null) {
+        return;
+      }
+      try {
+        if (cacheGenerator == null) {
+          tempCacheFile = java.io.File.createTempFile("http-raw-cache-", ".json");
+          tempCacheStream = new java.io.FileOutputStream(tempCacheFile);
+          cacheGenerator = OBJECT_MAPPER.getFactory().createGenerator(tempCacheStream,
+              com.fasterxml.jackson.core.JsonEncoding.UTF8);
+          cacheGenerator.writeStartObject();
+          cacheGenerator.writeArrayFieldStart("results");
+        }
+        com.fasterxml.jackson.databind.JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
+        com.fasterxml.jackson.databind.JsonNode resultsNode = root.has("results")
+            ? root.get("results") : root;
+        if (resultsNode != null && resultsNode.isArray()) {
+          for (com.fasterxml.jackson.databind.JsonNode record : resultsNode) {
+            OBJECT_MAPPER.writeTree(cacheGenerator, record);
+            cachedRecordCount++;
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to stream raw page to cache: {}", e.getMessage());
+      }
+    }
+
+    private void writeMergedCache() {
+      if (rawCacheFilePath == null || mergedCacheWritten || cacheGenerator == null) {
+        return;
+      }
+      try {
+        cacheGenerator.writeEndArray();
+        cacheGenerator.writeEndObject();
+        cacheGenerator.close();
+        tempCacheStream.close();
+        String parentPath = rawCacheFilePath.substring(0, rawCacheFilePath.lastIndexOf('/'));
+        if (isLocalPath(rawCacheFilePath)) {
+          java.io.File dest = new java.io.File(rawCacheFilePath);
+          dest.getParentFile().mkdirs();
+          java.nio.file.Files.copy(tempCacheFile.toPath(), dest.toPath(),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } else {
+          storageProvider.createDirectories(parentPath);
+          try (java.io.InputStream in = new java.io.FileInputStream(tempCacheFile)) {
+            storageProvider.writeFile(rawCacheFilePath, in);
+          }
+        }
+        mergedCacheWritten = true;
+        LOGGER.info("Wrote streaming merged cache: {} ({} records)",
+            rawCacheFilePath, cachedRecordCount);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to write merged cache: {}", e.getMessage());
+      } finally {
+        if (tempCacheFile != null && tempCacheFile.exists()) {
+          tempCacheFile.delete();
+        }
+      }
+    }
   }
 
   @Override public String getType() {
@@ -580,17 +931,20 @@ public class HttpSource implements DataSource {
     try {
       conn.setRequestMethod(config.getMethod().name());
       conn.setConnectTimeout(30000);
-      conn.setReadTimeout(60000);
+      conn.setReadTimeout(120000);
 
-      // Set default User-Agent if not specified (helps avoid bot detection by BLS, etc.)
       if (config.getHeaders().get("User-Agent") == null) {
         conn.setRequestProperty("User-Agent",
-            "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
       }
 
-      // Set headers
+      // Set headers (skip headers whose value is empty after substitution — avoids
+      // APIs that treat an empty header as invalid, e.g. NVD's apiKey check)
       for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        conn.setRequestProperty(e.getKey(), substituteVariables(e.getValue(), variables));
+        String value = substituteVariables(e.getValue(), variables);
+        if (value != null && !value.isEmpty()) {
+          conn.setRequestProperty(e.getKey(), value);
+        }
       }
 
       // Apply authentication
@@ -694,17 +1048,20 @@ public class HttpSource implements DataSource {
     try {
       conn.setRequestMethod(config.getMethod().name());
       conn.setConnectTimeout(30000);
-      conn.setReadTimeout(60000);
+      conn.setReadTimeout(120000);
 
-      // Set default User-Agent if not specified (helps avoid bot detection by BLS, etc.)
       if (config.getHeaders().get("User-Agent") == null) {
         conn.setRequestProperty("User-Agent",
-            "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
       }
 
-      // Set headers from config
+      // Set headers from config (skip empty values — avoids APIs treating an empty
+      // header as invalid)
       for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        conn.setRequestProperty(e.getKey(), substituteVariables(e.getValue(), variables));
+        String value = substituteVariables(e.getValue(), variables);
+        if (value != null && !value.isEmpty()) {
+          conn.setRequestProperty(e.getKey(), value);
+        }
       }
 
       // Log headers being used for debugging
@@ -748,7 +1105,25 @@ public class HttpSource implements DataSource {
         // Check if we need to extract from ZIP
         String extractPattern = config.getExtractPattern();
         if (extractPattern != null && !extractPattern.isEmpty()) {
-          return extractFromZip(conn.getInputStream(), extractPattern, rawCachePath);
+          Map<String, String> zipVars = addDerivedVariables(variables);
+          String resolvedPattern = substituteVariables(extractPattern, zipVars);
+          String fallbackPattern = config.getExtractPatternFallback();
+          if (fallbackPattern != null && !fallbackPattern.isEmpty()) {
+            String resolvedFallback = substituteVariables(fallbackPattern, zipVars);
+            return extractFromZipWithFallback(conn.getInputStream(), resolvedPattern,
+                resolvedFallback, rawCachePath);
+          }
+          return extractFromZip(conn.getInputStream(), resolvedPattern, rawCachePath);
+        }
+        // Transformer downloads its own data — discard response body to avoid OOM
+        if (config.isSkipResponseBody()) {
+          try (java.io.InputStream is = conn.getInputStream()) {
+            byte[] drain = new byte[8192];
+            while (is.read(drain) != -1) {
+              // intentionally empty
+            }
+          }
+          return "";
         }
         // Read response into memory first to check for API-level errors before caching
         String responseBody = readResponse(conn.getInputStream());
@@ -766,6 +1141,13 @@ public class HttpSource implements DataSource {
         return cacheResponseString(responseBody, rawCachePath);
       } else {
         String errorBody = readResponse(conn.getErrorStream());
+        if (config.isSkipResponseBody()) {
+          // Trigger URL failed but body is skipped — transformer owns all actual fetching.
+          // Log and return empty string so the transformer can still run (and decide to skip).
+          LOGGER.warn("Trigger URL returned HTTP {} (skipResponseBody=true): {}",
+              responseCode, urlString);
+          return "";
+        }
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
       }
     } finally {
@@ -782,6 +1164,9 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponse(InputStream input, String cachePath) throws IOException {
+    if (cachePath == null) {
+      return readResponse(input);
+    }
     if (isLocalPath(cachePath)) {
       File file = new File(cachePath);
       file.getParentFile().mkdirs();
@@ -811,6 +1196,9 @@ public class HttpSource implements DataSource {
    * @throws IOException if caching fails
    */
   private String cacheResponseString(String response, String cachePath) throws IOException {
+    if (cachePath == null) {
+      return response;
+    }
     if (isLocalPath(cachePath)) {
       File file = new File(cachePath);
       file.getParentFile().mkdirs();
@@ -906,6 +1294,113 @@ public class HttpSource implements DataSource {
    * @return The cache path
    * @throws IOException if extraction fails or no matching file found
    */
+  private Map<String, String> addDerivedVariables(Map<String, String> variables) {
+    Map<String, String> result = new LinkedHashMap<String, String>(variables);
+    String formType = variables.get("form_type");
+    if (formType != null) {
+      result.put("form_type_lower", formType.toLowerCase(java.util.Locale.ROOT));
+    }
+    return result;
+  }
+
+  private String extractFromZipWithFallback(InputStream input, String pattern,
+      String fallbackPattern, String cachePath) throws IOException {
+    String regex = pattern
+        .replace(".", "\\.")
+        .replace("*", ".*")
+        .replace("?", ".");
+    String fallbackRegex = fallbackPattern
+        .replace(".", "\\.")
+        .replace("*", ".*")
+        .replace("?", ".");
+
+    // Buffer ZIP bytes so we can scan twice if needed (primary then fallback)
+    byte[] zipBytes = readAllBytes(input);
+
+    // Try primary pattern first
+    try (ZipInputStream zis = new ZipInputStream(
+        new java.io.ByteArrayInputStream(zipBytes))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName();
+        if (name.matches(regex) || name.endsWith(pattern.replace("*", ""))) {
+          return writeZipEntry(zis, name, cachePath);
+        }
+        zis.closeEntry();
+      }
+    }
+
+    // Primary not found — try fallback
+    LOGGER.info("ZIP pattern '{}' not found, trying fallback '{}'", pattern, fallbackPattern);
+    try (ZipInputStream zis = new ZipInputStream(
+        new java.io.ByteArrayInputStream(zipBytes))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName();
+        if (name.matches(fallbackRegex) || name.endsWith(fallbackPattern.replace("*", ""))) {
+          return writeZipEntry(zis, name, cachePath);
+        }
+        zis.closeEntry();
+      }
+    }
+
+    throw new IOException("No file matching '" + pattern + "' or '" + fallbackPattern
+        + "' found in ZIP");
+  }
+
+  private byte[] readAllBytes(InputStream input) throws IOException {
+    java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+    byte[] tmp = new byte[65536];
+    int len;
+    while ((len = input.read(tmp)) > 0) {
+      buf.write(tmp, 0, len);
+    }
+    return buf.toByteArray();
+  }
+
+  private String writeZipEntry(ZipInputStream zis, String name, String cachePath)
+      throws IOException {
+    LOGGER.info("Extracting from ZIP: {}", name);
+    File tempFile = File.createTempFile("http-source-", ".tmp");
+    tempFile.deleteOnExit();
+    long totalBytes = 0;
+    try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+      byte[] buffer = new byte[65536];
+      int len;
+      long lastLogTime = System.currentTimeMillis();
+      while ((len = zis.read(buffer)) > 0) {
+        fos.write(buffer, 0, len);
+        totalBytes += len;
+        long now = System.currentTimeMillis();
+        if (now - lastLogTime > 5000) {
+          LOGGER.info("Extracting... {} MB", totalBytes / (1024 * 1024));
+          lastLogTime = now;
+        }
+      }
+    }
+    if (isLocalPath(cachePath)) {
+      File cacheFile = new File(cachePath);
+      cacheFile.getParentFile().mkdirs();
+      try (java.io.InputStream fis = new java.io.FileInputStream(tempFile);
+           FileOutputStream fos = new FileOutputStream(cacheFile)) {
+        byte[] copyBuf = new byte[65536];
+        int copyLen;
+        while ((copyLen = fis.read(copyBuf)) > 0) {
+          fos.write(copyBuf, 0, copyLen);
+        }
+      }
+    } else {
+      try (java.io.InputStream fis = new java.io.FileInputStream(tempFile)) {
+        String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+        storageProvider.createDirectories(parentPath);
+        storageProvider.writeFile(cachePath, fis);
+      }
+    }
+    tempFile.delete();
+    LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
+    return cachePath;
+  }
+
   private String extractFromZip(InputStream input, String pattern, String cachePath)
       throws IOException {
     String regex = pattern
@@ -1101,18 +1596,27 @@ public class HttpSource implements DataSource {
   private List<Map<String, Object>> parseResponse(String response) throws IOException {
     HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
 
-    // Handle CSV format
-    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV) {
+    // Handle CSV format — but only when no responseTransformer is present.
+    // A transformer always returns JSON regardless of the source format config.
+    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV && responseTransformer == null) {
       return parseDelimitedResponse(response, resolveDelimiter(respConfig));
     }
 
-    // Handle TSV format
-    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
+    // Handle TSV format — same transformer guard as CSV.
+    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV && responseTransformer == null) {
       return parseDelimitedResponse(response, resolveDelimiter(respConfig));
     }
 
-    if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON) {
+    if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON
+        && respConfig.getFormat() != HttpSourceConfig.ResponseFormat.TEXT
+        && responseTransformer == null) {
       throw new IOException("Unsupported response format: " + respConfig.getFormat());
+    }
+
+    // Transformer output is always a plain JSON array. Stream-parse to avoid building
+    // a full Jackson tree for large responses (100k+ records).
+    if (responseTransformer != null) {
+      return parseJsonArrayStreaming(response);
     }
 
     JsonNode root = OBJECT_MAPPER.readTree(response);
@@ -1143,8 +1647,12 @@ public class HttpSource implements DataSource {
       }
     }
 
-    // Navigate to data path if specified
-    if (respConfig.getDataPath() != null && !respConfig.getDataPath().isEmpty()) {
+    // Navigate to data path if specified — but skip when a responseTransformer was applied.
+    // Transformers are responsible for their own data extraction (e.g. via extractDataArray()).
+    // Applying dataPath to the transformer's already-extracted array returns empty results.
+    if (responseTransformer == null
+        && respConfig.getDataPath() != null
+        && !respConfig.getDataPath().isEmpty()) {
       root = navigateToPath(root, respConfig.getDataPath());
     }
 
@@ -1162,6 +1670,20 @@ public class HttpSource implements DataSource {
       result.add(row);
     }
 
+    return result;
+  }
+
+  private List<Map<String, Object>> parseJsonArrayStreaming(String json) throws IOException {
+    List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+    try (JsonParser parser = OBJECT_MAPPER.getFactory().createParser(json)) {
+      if (parser.nextToken() != JsonToken.START_ARRAY) {
+        return result;
+      }
+      while (parser.nextToken() == JsonToken.START_OBJECT) {
+        Map<String, Object> row = OBJECT_MAPPER.readValue(parser, Map.class);
+        result.add(row);
+      }
+    }
     return result;
   }
 
@@ -1367,7 +1889,7 @@ public class HttpSource implements DataSource {
             if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
               filterValue = filterValue.substring(1, filterValue.length() - 1);
             }
-            if (!filterRegex.matcher(filterValue).matches()) {
+            if (!filterRegex.matcher(filterValue).find()) {
               skippedRows++;
               continue;
             }
@@ -1629,7 +2151,7 @@ public class HttpSource implements DataSource {
           if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
             filterValue = filterValue.substring(1, filterValue.length() - 1);
           }
-          if (!filterRegex.matcher(filterValue).matches()) {
+          if (!filterRegex.matcher(filterValue).find()) {
             skippedRows++;
             continue;
           }
@@ -1843,15 +2365,19 @@ public class HttpSource implements DataSource {
     char separator = baseUrl.contains("?") ? '&' : '?';
 
     for (Map.Entry<String, String> e : params.entrySet()) {
+      String value = e.getValue();
+      if (value == null || value.isEmpty()) {
+        continue; // skip unresolved optional parameters (e.g. incremental bounds not yet set)
+      }
       try {
         url.append(separator)
             .append(URLEncoder.encode(e.getKey(), "UTF-8"))
             .append('=')
-            .append(URLEncoder.encode(e.getValue(), "UTF-8"));
+            .append(URLEncoder.encode(value, "UTF-8"));
         separator = '&';
       } catch (Exception ex) {
         // Fallback without encoding
-        url.append(separator).append(e.getKey()).append('=').append(e.getValue());
+        url.append(separator).append(e.getKey()).append('=').append(value);
         separator = '&';
       }
     }
@@ -1875,33 +2401,46 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Enforces rate limiting.
+   * Enforces rate limiting using lock-free CAS-based slot reservation.
+   * Each thread reserves a time slot on a timeline, allowing multiple threads
+   * to make concurrent requests while respecting the global rate limit.
    */
-  private synchronized void enforceRateLimit() {
+  private void enforceRateLimit() {
     int rps = config.getRateLimit().getRequestsPerSecond();
     if (rps <= 0) {
       return;
     }
 
-    long minInterval = 1000 / rps;
-    long now = System.currentTimeMillis();
-    long elapsed = now - lastRequestTime;
-
-    if (elapsed < minInterval) {
-      try {
-        Thread.sleep(minInterval - elapsed);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+    long intervalNanos = 1000000000L / rps;
+    while (true) {
+      long current = nextAllowedNanos.get();
+      long now = System.nanoTime();
+      long next = Math.max(now, current) + intervalNanos;
+      if (nextAllowedNanos.compareAndSet(current, next)) {
+        long sleepNanos = Math.max(0, current - now);
+        if (sleepNanos > 0) {
+          try {
+            Thread.sleep(sleepNanos / 1000000, (int) (sleepNanos % 1000000));
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+        return;
       }
+      // CAS failed (another thread reserved a slot), retry
     }
-
-    lastRequestTime = System.currentTimeMillis();
   }
 
   /**
    * Checks if we should retry based on the error.
    */
   private boolean shouldRetry(IOException e, HttpSourceConfig.RateLimitConfig rateLimit) {
+    // Socket-level timeouts (SocketTimeoutException) are always retryable — the server
+    // may be temporarily slow or the connection was idle-closed between pages.
+    if (e instanceof java.net.SocketTimeoutException) {
+      return true;
+    }
+
     String message = e.getMessage();
     if (message == null) {
       return false;
@@ -2147,6 +2686,127 @@ public class HttpSource implements DataSource {
       LOGGER.info("Raw cache hit: {} ({} bytes)", cachePath, content.length());
       return content;
     }
+  }
+
+  /**
+   * Streams a JSON array from the raw cache file without loading it into a String.
+   *
+   * <p>Used when the transformer implements {@link PerRecordResponseTransformer}: instead of
+   * reading the entire file into memory, this method opens an InputStream, navigates to the
+   * JSON array (either a bare array or a {@code results} field inside an object), and returns
+   * a lazy Iterator that decodes one row at a time.
+   */
+  private Iterator<Map<String, Object>> streamFromRawCache(
+      final String cachePath,
+      final String url,
+      final Map<String, String> params,
+      final Map<String, String> variables,
+      final PerRecordResponseTransformer transformer) throws IOException {
+
+    final RequestContext context = RequestContext.builder()
+        .url(url)
+        .parameters(params)
+        .headers(config.getHeaders())
+        .dimensionValues(variables)
+        .build();
+
+    final InputStream is = isLocalPath(cachePath)
+        ? new FileInputStream(cachePath)
+        : storageProvider.openInputStream(cachePath);
+
+    final JsonParser parser;
+    try {
+      parser = OBJECT_MAPPER.getFactory().createParser(is);
+      JsonToken token = parser.nextToken();
+      if (token == JsonToken.START_OBJECT) {
+        boolean found = false;
+        while (parser.nextToken() != null) {
+          if ("results".equals(parser.currentName())
+              && parser.nextToken() == JsonToken.START_ARRAY) {
+            found = true;
+            break;
+          }
+          parser.skipChildren();
+        }
+        if (!found) {
+          parser.close();
+          LOGGER.warn("streamFromRawCache: no results array in {}", cachePath);
+          return Collections.emptyIterator();
+        }
+      } else if (token != JsonToken.START_ARRAY) {
+        parser.close();
+        LOGGER.warn("streamFromRawCache: unexpected token {} in {}", token, cachePath);
+        return Collections.emptyIterator();
+      }
+    } catch (IOException e) {
+      is.close();
+      throw e;
+    }
+
+    LOGGER.info("Streaming from raw cache: {}", cachePath);
+
+    return new Iterator<Map<String, Object>>() {
+      private Map<String, Object> pending = null;
+      private boolean exhausted = false;
+
+      @Override public boolean hasNext() {
+        if (exhausted) {
+          return false;
+        }
+        if (pending != null) {
+          return true;
+        }
+        try {
+          if (parser.nextToken() == JsonToken.START_OBJECT) {
+            Map<String, Object> row = OBJECT_MAPPER.readValue(parser, Map.class);
+            transformer.transformRecord(row, context);
+            pending = normalizeRow(row, variables);
+            return true;
+          }
+        } catch (IOException e) {
+          LOGGER.error("streamFromRawCache: error reading {}: {}", cachePath, e.getMessage());
+        }
+        exhausted = true;
+        try {
+          parser.close();
+        } catch (IOException e) {
+          LOGGER.debug("streamFromRawCache: error closing parser for {}: {}", cachePath,
+              e.getMessage());
+        }
+        return false;
+      }
+
+      @Override public Map<String, Object> next() {
+        if (!hasNext()) {
+          throw new java.util.NoSuchElementException();
+        }
+        Map<String, Object> row = pending;
+        pending = null;
+        return row;
+      }
+    };
+  }
+
+  private Map<String, Object> normalizeRow(Map<String, Object> row,
+      Map<String, String> context) {
+    if (variableNormalizer == null) {
+      return row;
+    }
+    Map<String, Object> normalized = new LinkedHashMap<String, Object>(row.size());
+    for (Map.Entry<String, Object> entry : row.entrySet()) {
+      String fieldName = entry.getKey();
+      String normalizedName;
+      if (variableNormalizer.shouldPreserve(fieldName)) {
+        normalizedName = fieldName;
+      } else {
+        normalizedName = variableNormalizer.normalize(fieldName, context);
+        if (normalizedName == null) {
+          normalizedName = fieldName;
+        }
+      }
+      normalized.put(normalizedName, entry.getValue());
+    }
+    return normalized;
   }
 
   /**

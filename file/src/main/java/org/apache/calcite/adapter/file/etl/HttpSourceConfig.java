@@ -80,7 +80,7 @@ public class HttpSourceConfig {
    * Response format types.
    */
   public enum ResponseFormat {
-    JSON, CSV, XML, TSV
+    JSON, CSV, XML, TSV, TEXT
   }
 
   /**
@@ -101,7 +101,7 @@ public class HttpSourceConfig {
    * Pagination types.
    */
   public enum PaginationType {
-    NONE, OFFSET, CURSOR, PAGE
+    NONE, OFFSET, CURSOR, PAGE, PAGE_ZERO, CSV_STREAM
   }
 
   /**
@@ -127,6 +127,7 @@ public class HttpSourceConfig {
   // Bulk download reference (alternative to direct HTTP)
   private final String bulkDownload;
   private final String extractPattern;
+  private final String extractPatternFallback;
 
   // Row filtering for CSV parsing (to avoid loading entire file into memory)
   private final RowFilterConfig rowFilter;
@@ -143,14 +144,25 @@ public class HttpSourceConfig {
   // Source type: "http", "document", or "bulkDownload"
   private final String sourceType;
 
+  // Parallel fetch thread count (default 1 = sequential)
+  private final int parallel;
+
   // URL rules for year-dependent URL selection (e.g., TIGER ZCTA vintage changes)
   private final List<UrlRule> urlRules;
+
+  // Incremental fetch configuration (sinceDate / sinceYear+sinceQuarter)
+  private final IncrementalConfig incremental;
+
+  // When true, HttpSource drains and discards the response body instead of buffering it.
+  // Use for tables whose transformer downloads its own data and ignores the response parameter.
+  private final boolean skipResponseBody;
 
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
     this.bulkDownload = builder.bulkDownload;
     this.extractPattern = builder.extractPattern;
+    this.extractPatternFallback = builder.extractPatternFallback;
     this.parameters = builder.parameters != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.parameters))
         : Collections.<String, String>emptyMap();
@@ -175,6 +187,9 @@ public class HttpSourceConfig {
     this.urlRules = builder.urlRules != null
         ? Collections.unmodifiableList(new ArrayList<UrlRule>(builder.urlRules))
         : Collections.<UrlRule>emptyList();
+    this.parallel = builder.parallel > 0 ? builder.parallel : 1;
+    this.incremental = builder.incremental;
+    this.skipResponseBody = builder.skipResponseBody;
   }
 
   private static String determineSourceType(Builder builder) {
@@ -198,21 +213,40 @@ public class HttpSourceConfig {
    */
   public String getEffectiveUrl(Map<String, String> variables) {
     if (urlRules != null && !urlRules.isEmpty() && variables != null) {
-      String yearStr = variables.get("year");
-      if (yearStr != null) {
-        try {
-          int year = Integer.parseInt(yearStr);
-          for (UrlRule rule : urlRules) {
-            if (year >= rule.getYearMin() && year <= rule.getYearMax()) {
-              return rule.getUrl();
-            }
-          }
-        } catch (NumberFormatException e) {
-          // Not a numeric year, fall through to default
+      for (UrlRule rule : urlRules) {
+        if (ruleMatches(rule, variables)) {
+          return rule.getUrl();
         }
       }
     }
     return url;
+  }
+
+  private boolean ruleMatches(UrlRule rule, Map<String, String> variables) {
+    // Check variableMatch conditions first
+    Map<String, String> varMatch = rule.getVariableMatch();
+    if (varMatch != null && !varMatch.isEmpty()) {
+      for (Map.Entry<String, String> entry : varMatch.entrySet()) {
+        String actual = variables.get(entry.getKey());
+        if (!entry.getValue().equals(actual)) {
+          return false;
+        }
+      }
+    }
+    // Check year range if set
+    if (rule.getYearMin() != Integer.MIN_VALUE || rule.getYearMax() != Integer.MAX_VALUE) {
+      String yearStr = variables.get("year");
+      if (yearStr == null) {
+        return false;
+      }
+      try {
+        int year = Integer.parseInt(yearStr);
+        return year >= rule.getYearMin() && year <= rule.getYearMax();
+      } catch (NumberFormatException e) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -220,6 +254,10 @@ public class HttpSourceConfig {
    */
   public List<UrlRule> getUrlRules() {
     return urlRules;
+  }
+
+  public IncrementalConfig getIncremental() {
+    return incremental;
   }
 
   public HttpMethod getMethod() {
@@ -340,6 +378,10 @@ public class HttpSourceConfig {
     return extractPattern;
   }
 
+  public String getExtractPatternFallback() {
+    return extractPatternFallback;
+  }
+
   /**
    * Returns the row filter configuration for CSV parsing.
    *
@@ -426,6 +468,17 @@ public class HttpSourceConfig {
     return sourceType;
   }
 
+  /**
+   * Returns the number of parallel HTTP fetch threads (default 1 = sequential).
+   */
+  public int getParallel() {
+    return parallel;
+  }
+
+  public boolean isSkipResponseBody() {
+    return skipResponseBody;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -447,6 +500,16 @@ public class HttpSourceConfig {
     Object extractPatternObj = map.get("extractPattern");
     if (extractPatternObj instanceof String) {
       builder.extractPattern((String) extractPatternObj);
+    }
+    Object extractPatternFallbackObj = map.get("extractPatternFallback");
+    if (extractPatternFallbackObj instanceof String) {
+      builder.extractPatternFallback((String) extractPatternFallbackObj);
+    }
+    Object skipResponseBodyObj = map.get("skipResponseBody");
+    if (skipResponseBodyObj instanceof Boolean) {
+      builder.skipResponseBody((Boolean) skipResponseBodyObj);
+    } else if ("true".equalsIgnoreCase(String.valueOf(skipResponseBodyObj))) {
+      builder.skipResponseBody(true);
     }
 
     Object methodObj = map.get("method");
@@ -551,6 +614,22 @@ public class HttpSourceConfig {
       }
       if (!rules.isEmpty()) {
         builder.urlRules(rules);
+      }
+    }
+
+    // Parse parallel fetch thread count
+    Object parallelObj = map.get("parallel");
+    if (parallelObj instanceof Number) {
+      builder.parallel(((Number) parallelObj).intValue());
+    }
+
+    // Parse incremental fetch configuration
+    Object incrementalObj = map.get("incremental");
+    if (incrementalObj instanceof Map) {
+      @SuppressWarnings("unchecked")
+      IncrementalConfig incr = IncrementalConfig.fromMap((Map<String, Object>) incrementalObj);
+      if (incr != null) {
+        builder.incremental(incr);
       }
     }
 
@@ -987,26 +1066,35 @@ public class HttpSourceConfig {
     private final String limitParam;
     private final String offsetParam;
     private final String cursorParam;
+    private final String cursorPath;
     private final String pageParam;
     private final int pageSize;
+    private final String countPath;
 
     private PaginationConfig(PaginationType type, String limitParam, String offsetParam,
-        String cursorParam, String pageParam, int pageSize) {
+        String cursorParam, String cursorPath, String pageParam, int pageSize, String countPath) {
       this.type = type;
       this.limitParam = limitParam;
       this.offsetParam = offsetParam;
       this.cursorParam = cursorParam;
+      this.cursorPath = cursorPath;
       this.pageParam = pageParam;
       this.pageSize = pageSize;
+      this.countPath = countPath;
     }
 
     public static PaginationConfig none() {
-      return new PaginationConfig(PaginationType.NONE, null, null, null, null, 0);
+      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0, null);
     }
 
     public static PaginationConfig offset(String limitParam, String offsetParam, int pageSize) {
       return new PaginationConfig(PaginationType.OFFSET, limitParam, offsetParam,
-          null, null, pageSize);
+          null, null, null, pageSize, null);
+    }
+
+    public static PaginationConfig cursor(String cursorParam, String cursorPath, int pageSize) {
+      return new PaginationConfig(PaginationType.CURSOR, null, null,
+          cursorParam, cursorPath, null, pageSize, null);
     }
 
     public PaginationType getType() {
@@ -1025,12 +1113,21 @@ public class HttpSourceConfig {
       return cursorParam;
     }
 
+    public String getCursorPath() {
+      return cursorPath;
+    }
+
     public String getPageParam() {
       return pageParam;
     }
 
     public int getPageSize() {
       return pageSize;
+    }
+
+    /** JSON dot-notation path to the total record count field (e.g. {@code "metadata.total"}). */
+    public String getCountPath() {
+      return countPath;
     }
 
     public static PaginationConfig fromMap(Map<String, Object> map) {
@@ -1054,8 +1151,153 @@ public class HttpSourceConfig {
           (String) map.get("limitParam"),
           (String) map.get("offsetParam"),
           (String) map.get("cursorParam"),
+          (String) map.get("cursorPath"),
           (String) map.get("pageParam"),
-          pageSize);
+          pageSize,
+          (String) map.get("countPath"));
+    }
+  }
+
+  /**
+   * Incremental fetch configuration.
+   *
+   * <p>Supports two filter styles:
+   * <ul>
+   *   <li><b>WHERE-style</b> (when {@code dateField} or {@code yearField} is set): generates a
+   *       Socrata {@code $where} expression such as {@code date >= '2024-01-01'}.</li>
+   *   <li><b>Direct-param style</b> (no {@code dateField}/{@code yearField}): sets
+   *       {@code filterParam} to the resolved date value directly (e.g.
+   *       {@code lastUpdatePostDate.gte=2024-01-01} for the ClinicalTrials API).</li>
+   * </ul>
+   *
+   * <p>Field values may use {@code ${ENV_VAR:default}} substitution. An empty resolved value
+   * disables the filter, enabling full-refresh when no incremental bound is configured.
+   */
+  public static class IncrementalConfig {
+    private final String sinceDate;
+    private final String sinceYear;
+    private final String sinceQuarter;
+    private final String untilDate;
+    private final String untilYear;
+    private final String filterParam;
+    private final String dateField;
+    private final String yearField;
+    private final String quarterField;
+    /** When false, field values are compared without single-quote wrapping (numeric Socrata fields). */
+    private final boolean quoteValues;
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String filterParam, String dateField, String yearField, String quarterField) {
+      this(sinceDate, sinceYear, sinceQuarter, null, null, filterParam, dateField, yearField,
+          quarterField, true);
+    }
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String filterParam, String dateField, String yearField, String quarterField,
+        boolean quoteValues) {
+      this(sinceDate, sinceYear, sinceQuarter, null, null, filterParam, dateField, yearField,
+          quarterField, quoteValues);
+    }
+
+    public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String untilDate, String untilYear,
+        String filterParam, String dateField, String yearField, String quarterField,
+        boolean quoteValues) {
+      this.sinceDate = sinceDate;
+      this.sinceYear = sinceYear;
+      this.sinceQuarter = sinceQuarter;
+      this.untilDate = untilDate;
+      this.untilYear = untilYear;
+      this.filterParam = filterParam;
+      this.dateField = dateField;
+      this.yearField = yearField;
+      this.quarterField = quarterField;
+      this.quoteValues = quoteValues;
+    }
+
+    public String getSinceDate() { return sinceDate; }
+    public String getSinceYear() { return sinceYear; }
+    public String getSinceQuarter() { return sinceQuarter; }
+    public String getUntilDate() { return untilDate; }
+    public String getUntilYear() { return untilYear; }
+    public String getFilterParam() { return filterParam; }
+    public String getDateField() { return dateField; }
+    public String getYearField() { return yearField; }
+    public String getQuarterField() { return quarterField; }
+    public boolean isQuoteValues() { return quoteValues; }
+
+    private String q(String value) {
+      return quoteValues ? "'" + value + "'" : value;
+    }
+
+    /**
+     * Builds the filter value to inject into {@code filterParam}.
+     * Returns {@code null} when no incremental bound is active (all resolved values empty).
+     *
+     * <p>When {@code quoteValues} is {@code false}, field values are compared without
+     * single-quote wrapping — required for numeric Socrata field types (e.g. {@code year}).
+     *
+     * @param resolvedDate      resolved sinceDate value (may be null/empty)
+     * @param resolvedYear      resolved sinceYear value (may be null/empty)
+     * @param resolvedQuarter   resolved sinceQuarter value (may be null/empty)
+     * @param resolvedUntilDate resolved untilDate value (may be null/empty)
+     * @param resolvedUntilYear resolved untilYear value (may be null/empty)
+     * @return filter value string, or {@code null} if no constraint is active
+     */
+    public String buildFilterValue(String resolvedDate, String resolvedYear,
+        String resolvedQuarter, String resolvedUntilDate, String resolvedUntilYear) {
+      boolean hasDate = resolvedDate != null && !resolvedDate.isEmpty();
+      boolean hasYear = resolvedYear != null && !resolvedYear.isEmpty();
+      boolean hasQuarter = resolvedQuarter != null && !resolvedQuarter.isEmpty();
+      boolean hasUntilDate = resolvedUntilDate != null && !resolvedUntilDate.isEmpty();
+      boolean hasUntilYear = resolvedUntilYear != null && !resolvedUntilYear.isEmpty();
+
+      if (dateField != null && hasDate) {
+        String filter = dateField + " >= " + q(resolvedDate);
+        if (hasUntilDate) {
+          filter += " AND " + dateField + " <= " + q(resolvedUntilDate);
+        }
+        return filter;
+      }
+      if (yearField != null && hasYear) {
+        String filter;
+        if (quarterField != null && hasQuarter) {
+          filter = "(" + yearField + " > " + q(resolvedYear) + ") OR ("
+              + yearField + " = " + q(resolvedYear) + " AND "
+              + quarterField + " >= " + q(resolvedQuarter) + ")";
+        } else {
+          filter = yearField + " >= " + q(resolvedYear);
+        }
+        if (hasUntilYear) {
+          filter = "(" + filter + ") AND " + yearField + " <= " + q(resolvedUntilYear);
+        }
+        return filter;
+      }
+      // Direct-param style: pass resolved date straight to the filterParam
+      if (hasDate) {
+        return resolvedDate;
+      }
+      return null;
+    }
+
+    public static IncrementalConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      Object quoteObj = map.get("quoteValues");
+      boolean quoteValues = quoteObj == null || Boolean.TRUE.equals(quoteObj)
+          || "true".equalsIgnoreCase(String.valueOf(quoteObj));
+      return new IncrementalConfig(
+          (String) map.get("sinceDate"),
+          (String) map.get("sinceYear"),
+          (String) map.get("sinceQuarter"),
+          (String) map.get("untilDate"),
+          (String) map.get("untilYear"),
+          (String) map.get("filterParam"),
+          (String) map.get("dateField"),
+          (String) map.get("yearField"),
+          (String) map.get("quarterField"),
+          quoteValues);
     }
   }
 
@@ -1913,11 +2155,19 @@ public class HttpSourceConfig {
     private final int yearMin;
     private final int yearMax;
     private final String url;
+    private final Map<String, String> variableMatch;
 
     public UrlRule(int yearMin, int yearMax, String url) {
+      this(yearMin, yearMax, url, null);
+    }
+
+    public UrlRule(int yearMin, int yearMax, String url, Map<String, String> variableMatch) {
       this.yearMin = yearMin;
       this.yearMax = yearMax;
       this.url = url;
+      this.variableMatch = variableMatch != null
+          ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(variableMatch))
+          : Collections.<String, String>emptyMap();
     }
 
     public int getYearMin() {
@@ -1932,17 +2182,39 @@ public class HttpSourceConfig {
       return url;
     }
 
+    public Map<String, String> getVariableMatch() {
+      return variableMatch;
+    }
+
     @SuppressWarnings("unchecked")
     public static UrlRule fromMap(Map<String, Object> map) {
-      Object rangeObj = map.get("yearRange");
       String ruleUrl = (String) map.get("url");
-      if (rangeObj instanceof List && ruleUrl != null) {
+      if (ruleUrl == null) {
+        return null;
+      }
+      Map<String, String> varMatch = null;
+      Object vmObj = map.get("variableMatch");
+      if (vmObj instanceof Map) {
+        Map<?, ?> raw = (Map<?, ?>) vmObj;
+        varMatch = new LinkedHashMap<String, String>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+          if (entry.getKey() != null && entry.getValue() != null) {
+            varMatch.put(entry.getKey().toString(), entry.getValue().toString());
+          }
+        }
+      }
+      Object rangeObj = map.get("yearRange");
+      if (rangeObj instanceof List) {
         List<?> range = (List<?>) rangeObj;
         if (range.size() == 2) {
           int min = ((Number) range.get(0)).intValue();
           int max = ((Number) range.get(1)).intValue();
-          return new UrlRule(min, max, ruleUrl);
+          return new UrlRule(min, max, ruleUrl, varMatch);
         }
+      }
+      // variableMatch-only rule (no yearRange required)
+      if (varMatch != null && !varMatch.isEmpty()) {
+        return new UrlRule(Integer.MIN_VALUE, Integer.MAX_VALUE, ruleUrl, varMatch);
       }
       return null;
     }
@@ -1966,12 +2238,16 @@ public class HttpSourceConfig {
     private RawCacheConfig rawCache;
     private String bulkDownload;
     private String extractPattern;
+    private String extractPatternFallback;
     private RowFilterConfig rowFilter;
     private ResponsePartitioningConfig responsePartitioning;
     private WideToNarrowConfig wideToNarrow;
     private DocumentSourceConfig documentSource;
     private String sourceType;
     private List<UrlRule> urlRules;
+    private int parallel = 1;
+    private IncrementalConfig incremental;
+    private boolean skipResponseBody;
 
     public Builder url(String url) {
       this.url = url;
@@ -2043,6 +2319,11 @@ public class HttpSourceConfig {
       return this;
     }
 
+    public Builder extractPatternFallback(String extractPatternFallback) {
+      this.extractPatternFallback = extractPatternFallback;
+      return this;
+    }
+
     public Builder rowFilter(RowFilterConfig rowFilter) {
       this.rowFilter = rowFilter;
       return this;
@@ -2070,6 +2351,21 @@ public class HttpSourceConfig {
 
     public Builder urlRules(List<UrlRule> urlRules) {
       this.urlRules = urlRules;
+      return this;
+    }
+
+    public Builder parallel(int parallel) {
+      this.parallel = parallel;
+      return this;
+    }
+
+    public Builder incremental(IncrementalConfig incremental) {
+      this.incremental = incremental;
+      return this;
+    }
+
+    public Builder skipResponseBody(boolean skipResponseBody) {
+      this.skipResponseBody = skipResponseBody;
       return this;
     }
 

@@ -488,6 +488,7 @@ public class CsvTypeInferenceTest {
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
     model.append("        \"directory\": \"").append(resourceDir).append("\"");
+    model.append(",\n        \"ephemeralCache\": true");
     model.append(",\n        \"csvTypeInference\": {\n");
     model.append("          \"enabled\": true,\n");
     model.append("          \"samplingRate\": 1.0,\n");
@@ -507,8 +508,9 @@ public class CsvTypeInferenceTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(resourceDir).append("\"");
-    model.append("\n      }\n");
+    model.append("        \"directory\": \"").append(resourceDir).append("\",\n");
+    model.append("        \"ephemeralCache\": true\n");
+    model.append("      }\n");
     model.append("    }\n");
 
     model.append("  ]\n");
@@ -531,7 +533,8 @@ public class CsvTypeInferenceTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(resourceDir).append("\"");
+    model.append("        \"directory\": \"").append(resourceDir).append("\",\n");
+    model.append("        \"ephemeralCache\": true");
     if (inferenceEnabled) {
       model.append(",\n        \"csvTypeInference\": {\n");
       model.append("          \"enabled\": true,\n");
@@ -542,6 +545,8 @@ public class CsvTypeInferenceTest {
         model.append(",\n          \"blankStringsAsNull\": ").append(blankStringsAsNull);
       }
       model.append("\n        }\n");
+    } else {
+      model.append("\n");
     }
     // When inference is disabled, blankStringsAsNull defaults to true
     model.append("      }\n");
@@ -555,7 +560,7 @@ public class CsvTypeInferenceTest {
   /**
    * Test to verify what types are inferred for the mixed-types.csv file with LINQ4J engine.
    */
-  @Test @Tag("temp")
+  @Test
   void testListAllTables() throws Exception {
     // List all tables to see what's actually available
     String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
@@ -587,7 +592,7 @@ public class CsvTypeInferenceTest {
     }
   }
 
-  @Test @Tag("temp")
+  @Test
   void testMixedTypesColumnTypes() throws Exception {
     String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     Properties info = new Properties();

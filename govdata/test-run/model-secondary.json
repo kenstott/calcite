@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": [
+        "0000320193",
+        "0000789019",
+        "0001652044",
+        "0001318605",
+        "0001672773",
+        "0001895582",
+        "0001045810",
+        "0001326190",
+        "0001018724",
+        "0001326801",
+        "0001065280",
+        "0001067983",
+        "0001108524",
+        "0001730168",
+        "0000002488",
+        "0000070858",
+        "0000034088",
+        "0000200406",
+        "0000019617",
+        "0000104169",
+        "0000001800",
+        "0000093410",
+        "0000909832",
+        "0000059478",
+        "0000354950",
+        "0001141391",
+        "0001341439",
+        "0000078003",
+        "0000731766",
+        "0001403161"
+      ],
+      "filingTypes": ["8-K", "8-K/A", "DEF 14A", "3", "4", "5", "13F-HR", "13F-HR/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"],
+      "fetchStockPrices": false,
+      "startYear": 2025,
+      "endYear": 2026,
+      "autoDownload": true,
+      "directory": "/Volumes/dev/test/parquet-secondary",
+      "cacheDirectory": "/Volumes/T9/Users/kennethstott/calcite/govdata/test-run/cache",
+      "trackerBackend": "duckdb"
+    }
+  }]
+}

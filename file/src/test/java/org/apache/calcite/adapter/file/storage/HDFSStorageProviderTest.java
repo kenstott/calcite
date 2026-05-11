@@ -114,7 +114,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testGetMetadata() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(1024, false, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/file.txt"));
+        new FileStatus(1024, false, 1, 1024, 12345L, 0L, FsPermission.getDefault(), "user", "group", new Path("/test/file.txt"));
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
     StorageProvider.FileMetadata metadata = storageProvider.getMetadata("/test/file.txt");
@@ -129,7 +129,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testGetMetadataForJsonFile() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(512, false, 1, 1024, 0L, 67890L, FsPermission.getDefault(), "user", "group", new Path("/test/data.json"));
+        new FileStatus(512, false, 1, 1024, 67890L, 0L, FsPermission.getDefault(), "user", "group", new Path("/test/data.json"));
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
     StorageProvider.FileMetadata metadata = storageProvider.getMetadata("/test/data.json");

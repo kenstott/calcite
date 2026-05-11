@@ -485,6 +485,7 @@ public class FileConversionEndToEndTest {
       model.append("        \"engine\": \"").append(info.getProperty("engine")).append("\",\n");
     }
 
+    model.append("        \"ephemeralCache\": true,\n");
     model.append("        \"caseSensitive\": false\n");
     model.append("      }\n");
     model.append("    }\n");

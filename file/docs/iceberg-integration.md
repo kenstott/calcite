@@ -246,6 +246,24 @@ HAVING COUNT(DISTINCT snapshot_time) > 1;
 | `end` | Yes | - | End time in ISO-8601 format (inclusive) |
 | `snapshotColumn` | No | `snapshot_time` | Name of the snapshot timestamp column |
 
+#### Time Range with Trino (Distributed Iceberg)
+
+For distributed Iceberg queries, use the Trino engine with its native Iceberg connector:
+
+```json
+{
+  "name": "distributed_iceberg",
+  "executionEngine": "TRINO",
+  "trinoConfig": {
+    "host": "trino-cluster.internal",
+    "icebergCatalog": "iceberg",
+    "warehouseDir": "s3://bucket/warehouse"
+  }
+}
+```
+
+Trino registers Iceberg tables via `CALL iceberg.system.register_table()` and supports full Iceberg features (time travel, schema evolution, partition pruning) natively. For production use, generate Trino catalog files with `TrinoConfig.generateCatalogFiles()` and query via native Trino.
+
 #### Time Range with DuckDB Engine (Recommended)
 
 For maximum performance (10-20x improvement), use the DuckDB engine:
@@ -342,6 +360,103 @@ Iceberg metadata tables are being implemented with `$` suffix:
    SELECT * FROM my_iceberg_table$partitions;
    ```
    Columns: `partition`, `record_count`, `file_count`
+
+## Table Compaction
+
+### CompactionRunner (Standalone CLI)
+
+The `CompactionRunner` is a standalone command-line tool for compacting small Iceberg data files into larger files. This is useful for tables that accumulate many small files through frequent writes (e.g., ETL pipelines writing partitioned data).
+
+#### Usage
+
+```bash
+java -cp file/build/libs/calcite-file-adapter-*-all.jar org.apache.calcite.adapter.file.iceberg.CompactionRunner \
+  --warehouse s3://bucket/warehouse \
+  --table table_name
+```
+
+#### Arguments
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--warehouse` | Yes | - | Warehouse root path (e.g., `s3://bucket/warehouse`) |
+| `--table` | Yes | - | Table name within the warehouse |
+| `--target-file-size` | No | 134217728 (128MB) | Target file size in bytes after compaction |
+| `--min-files` | No | 3 | Minimum number of small files required to trigger compaction |
+| `--small-file-size` | No | 10485760 (10MB) | Files smaller than this (bytes) are candidates for compaction |
+
+#### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AWS_ACCESS_KEY_ID` | For S3 | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | For S3 | AWS secret key |
+| `AWS_ENDPOINT_OVERRIDE` | No | Custom S3 endpoint for R2/MinIO compatibility |
+
+#### How It Works
+
+1. Connects to the Iceberg table by scanning the `metadata/` directory for the latest `vN.metadata.json` file directly (bypasses `version-hint.text`)
+2. Scans all data files and reports pre-compaction statistics (total files, total size, small file count)
+3. If the number of small files meets the `--min-files` threshold, runs compaction
+4. Reports post-compaction statistics showing the before/after file counts
+
+#### R2/MinIO Compatibility
+
+When `AWS_ENDPOINT_OVERRIDE` is set, the runner automatically:
+- Enables path-style access (`fs.s3a.path.style.access=true`)
+- Disables change detection mode (R2 returns 403 instead of 404 for missing objects)
+- Loads table metadata directly instead of relying on `version-hint.text`
+
+#### Inline Compaction
+
+Inline compaction runs automatically at the end of each ETL write — no cron job or manual invocation needed. Enable it in the table's `materialize:` block:
+
+```json
+{
+  "name": "financial_facts",
+  "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json",
+  "dimensions": { "cik": ["0000320193", "0000789019"] },
+  "responseTransformer": "com.example.FinancialFactsTransformer",
+  "materialize": {
+    "format": "iceberg",
+    "iceberg": {
+      "runCompaction": true,
+      "compactionMinFiles": 10,
+      "compactionTargetFileSizeBytes": 134217728,
+      "compactionSmallFileSizeBytes": 10485760
+    }
+  }
+}
+```
+
+##### Compaction Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `runCompaction` | boolean | `false` | Enable automatic compaction after each ETL write |
+| `compactionMinFiles` | int | `10` | Minimum number of small files in a partition before compaction triggers |
+| `compactionTargetFileSizeBytes` | long | `134217728` (128 MB) | Target file size after compaction |
+| `compactionSmallFileSizeBytes` | long | `10485760` (10 MB) | Files smaller than this are candidates for compaction |
+
+##### When to Use Inline Compaction
+
+ETL pipelines that write one Parquet file per partition per run accumulate many small files over time. For example, a daily pipeline writing 50 partitions produces 50 files/day — after a month that is 1,500 files that must be opened for every query. Inline compaction merges them automatically after each write.
+
+Use inline compaction when:
+- The pipeline writes many partitioned files per run (dimension expansion, high-cardinality partitions)
+- The table is queried frequently between ETL runs
+- You want compaction managed by the pipeline rather than a separate cron job
+
+Use `CompactionRunner` (standalone CLI) instead when:
+- You need a one-time compaction of an existing table
+- You want compaction on a schedule independent of ETL runs
+- You are compacting a table that is not written by this adapter
+
+##### Post-Compaction Cleanup
+
+After compaction, the adapter automatically expires all snapshots except the current one and removes orphan files. No separate maintenance step is needed.
+
+Note: the `compactionMinFiles` default is `10` for inline compaction vs `3` for the standalone `CompactionRunner`. The higher default prevents compaction from triggering on partitions that receive only a few files per run.
 
 ## Type Mapping
 
@@ -502,11 +617,13 @@ JOIN iceberg_orders i
 7. **Delete File Support**: Full support for position and equality deletes
 8. **Statistics Integration**: Use Iceberg statistics for query optimization
 
+**Completed**:
+9. ✅ **Compaction**: Standalone CLI compaction via `CompactionRunner` and inline compaction via ETL config
+
 **Long-term**:
-9. **Hive Metastore Catalog**: Support for HMS catalog
-10. **AWS Glue Catalog**: Support for Glue Data Catalog
-11. **Incremental Reads**: Read only changed data between snapshots
-12. **Compaction**: Automatic file compaction strategies
+10. **Hive Metastore Catalog**: Support for HMS catalog
+11. **AWS Glue Catalog**: Support for Glue Data Catalog
+12. **Incremental Reads**: Read only changed data between snapshots
 
 ## References
 

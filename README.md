@@ -1,100 +1,125 @@
-# Extended Apache Calcite
+# Apache Calcite — Extended Fork
 
-This is a fork of Apache Calcite with significant enhancements and new adapters to support a wider range of data sources and improved functionality.
+A permanent fork of [Apache Calcite](https://calcite.apache.org) that adds new adapters, rewrites existing ones, and builds a data lake platform on top of Calcite's proven SQL foundation.
 
-## Key Differences from Upstream Apache Calcite
+This fork tracks upstream Calcite and merges periodically. All Calcite core modules — the SQL parser, query planner, optimizer, and algebraic framework — are unchanged. What this fork adds is entirely in the adapter layer and above.
 
-### New Adapters Added
-- **Arrow Adapter**: Support for Apache Arrow format files and Parquet files
-  - Direct Arrow file reading with memory-efficient streaming
-  - Parquet file support with schema inference
-  - Integration with Arrow's columnar format for better performance
+**Last merged with upstream**: commit `b5fb7233`
 
-- **OpenAPI Adapter**: Query REST APIs through SQL
-  - Configure multiple OpenAPI endpoints as SQL tables
-  - Support for parameterized API calls
-  - Response transformation and type mapping
+## Licensing
 
-- **GraphQL Adapter**: Query GraphQL endpoints using SQL
-  - SQL:2003 compliant query translation to GraphQL
-  - Support for window functions, CTEs, and set operations
-  - Built-in caching system (in-memory and Redis)
-  - Comprehensive type system mapping
+This repository contains code under two licenses:
 
-### Replaced Adapters (Complete Rewrites)
+- **Apache License 2.0** — all code originating from Apache Calcite, including the core modules and any modifications to upstream files. See [LICENSE](LICENSE).
+- **Business Source License 1.1** — all new adapters and original work added in this fork (file adapter rewrite, Splunk rewrite, SharePoint, Salesforce, GraphQL, OpenAPI adapters, and all govdata schemas). Free for teams with annual revenue under $1M; commercial license required above that threshold. See [LICENSE-BSL.txt](LICENSE-BSL.txt).
 
-- **File Adapter**: Complete replacement of the original Calcite file adapter
-  - Multi-engine support: DuckDB, Arrow, and Parquet backends
-  - S3/GCS/Azure protocol support for cloud storage
-  - Declarative YAML schema definitions
-  - Entity caching with Redis support
-  - File formats: CSV, JSON, Parquet, XLSX, YAML, HML
-  - Recursive file discovery and pattern matching
-  - Iceberg table materialization
+Each module's source files carry the appropriate license header.
 
-- **Splunk Adapter**: Complete replacement of the original Calcite Splunk adapter
-  - HTTP timeout configuration and connection pooling
-  - Token expiration retry logic
-  - Support for Common Information Models (CIM)
-  - Full predicate pushdown with field comparisons
-  - Nullable field handling
+---
 
-### Enhanced Existing Adapters
+## What This Fork Adds
 
-#### Additional Database Support
-- **SQLite**: Native SQLite database connectivity
-- **Redshift**: Amazon Redshift specific optimizations
-- **Cassandra**: Enhanced Cassandra adapter features
+### File Adapter — Rewritten as a Data Lake Platform
 
-### Technical Enhancements
-- **Type System Enhancements**: Stronger type mapping between SQL and native data sources
-- **Model-Driven Configuration**: JSON-based adapter configuration system
-- **Multi-level Caching**: Query result and schema metadata caching
-- **Performance Improvements**:
-  - Connection pooling enhancements
-  - Better error handling and retry logic
-  - Streaming support for large datasets
-  - Memory-efficient processing for file adapters
+The original Calcite file adapter read CSV files. This is a complete rewrite that turns it into a full data lake platform.
 
-## Upstream Merge Status
-This fork was last merged with upstream Apache Calcite on commit b5fb7233, maintaining compatibility while preserving all custom enhancements.
-<!--
-{% comment %}
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
-(the "License"); you may not use this file except in compliance with
-the License.  You may obtain a copy of the License at
+> **Point to files. Get a data lake.**
 
-http://www.apache.org/licenses/LICENSE-2.0
+Point it at a directory, S3 bucket, HTTP API, or document corpus. It discovers data, infers schemas, and makes everything queryable as SQL tables through a standard JDBC connection. Results materialize into Apache Iceberg (or Hive-partitioned Parquet) on S3 or local storage.
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-{% endcomment %}
--->
+Key capabilities:
+- **Tabular ingestion** — CSV, JSON, Parquet, Arrow, Iceberg, Excel, Word, PowerPoint, HTML, Markdown, XML, YAML; auto-discovered from directories, S3 prefixes, or glob patterns
+- **API to lake** — complex multi-endpoint HTTP APIs wired into tables entirely through config; no code
+- **Document ETL** — custom `ResponseTransformer` pipeline for normalizing complex document corpora into canonical Iceberg tables
+- **Relational model** — declarative PK/FK constraints for query optimization and BI tool integration
+- **Views** — transient (query-time) and materialized (stored in Iceberg)
+- **Computed columns** — derived fields, text embeddings, generated at ingestion
+- **Semantic search** — vector similarity functions and HNSW indexes via DuckDB VSS
+- **Pluggable execution** — DuckDB (embedded, zero infra) → Trino → Spark → ClickHouse as scale demands; same SQL, config change only
+- **Air-gapped** — runs fully on-prem with file mounts and DuckDB; no cloud dependency required
+
+**[Full documentation →](file/README.md)**
+
+---
+
+### Splunk Adapter — Rewritten
+
+Complete replacement of the original Calcite Splunk adapter:
+- Full predicate pushdown with field comparisons
+- HTTP timeout configuration and connection pooling
+- Token expiration and retry logic
+- Support for Splunk Common Information Models (CIM)
+- Nullable field handling
+
+**[Documentation →](splunk/README.md)**
+
+---
+
+### New Adapters
+
+**SharePoint List Adapter** — Full read/write access to SharePoint lists as SQL tables. Supports both SharePoint Online (OAuth) and On-Premises (NTLM). Create, read, update, and delete list items through standard SQL DML.
+
+**Salesforce Adapter** — Query Salesforce objects as SQL tables. Full SOQL pushdown, relationship traversal, and bulk API support.
+
+**GraphQL Adapter** — Query GraphQL endpoints using SQL. Translates SQL (including window functions, CTEs, and set operations) to GraphQL queries. Built-in caching.
+
+**OpenAPI Adapter** — Query any REST API described by an OpenAPI spec as SQL tables. Parameterized calls, response transformation, and type mapping from OpenAPI schemas.
+
+---
+
+### Government Data Schemas
+
+A suite of domain schemas built on the file adapter's Document ETL pipeline. Each schema materializes a public government data source into queryable Iceberg tables:
+
+| Module | Source |
+|--------|--------|
+| `sec` | SEC EDGAR — company filings, financial facts |
+| `weather` | NOAA/NWS — weather stations, observations, forecasts |
+| `crime` | FBI UCR / local agencies — crime statistics |
+| `edu` | NCES — school districts, NAEP scores, IPEDS |
+| `econ` | BLS, FRED, BEA — economic indicators, time series |
+| `health` | CDC, FDA, CMS — clinical, drug, and claims data |
+| `cyber` | NVD, OTX, ThreatFox — CVEs, threat intelligence |
+| `geo` | Census TIGER, HUD — geographic boundaries, demographics |
+| `census` | Census Bureau API — population, demographic data |
+| `bls` | Bureau of Labor Statistics — employment, inflation |
+| `fec` | FEC — campaign finance, contributions |
+| `fedregister` | Federal Register — regulatory notices |
+
+All schemas write to a shared Iceberg lake on S3/R2, queryable through a single JDBC connection.
+
+---
+
+## Repository Setup
+
+### Clone and initialise
+
+```bash
+git clone git@github.com:kenstott/calcite.git
+cd calcite
+./setup.sh        # clones private Claude configuration into .claude/
+```
+
+### Keep in sync
+
+```bash
+./pull-claude.sh  # pull latest for both this repo and .claude/
+```
+
+### Save Claude configuration changes
+
+```bash
+./push-claude.sh  # commit + push any changes in .claude/
+```
+
+---
+
+## About Apache Calcite
+
+Apache Calcite is a dynamic data management framework used as the SQL layer in Apache Drill, Dremio, Apache Flink, Apache Hive, Apache Phoenix, Apache Beam, and many others. It provides an industry-standard SQL parser, a customizable optimizer with pluggable rules and cost functions, and a rich adapter framework for connecting SQL to external data sources.
+
+This fork builds on that foundation without modifying it. For the upstream project, see [calcite.apache.org](https://calcite.apache.org).
+
+---
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.calcite/calcite-core/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.apache.calcite/calcite-core)
-[![CI Status](https://github.com/apache/calcite/workflows/CI/badge.svg?branch=main)](https://github.com/apache/calcite/actions?query=branch%3Amain)
-
-# Apache Calcite
-
-Apache Calcite is a dynamic data management framework.
-
-It contains many of the pieces that comprise a typical
-database management system but omits the storage primitives.
-It provides an industry standard SQL parser and validator,
-a customisable optimizer with pluggable rules and cost functions,
-logical and physical algebraic operators, various transformation
-algorithms from SQL to algebra (and the opposite), and many
-adapters for executing SQL queries over Cassandra, Druid,
-Elasticsearch, MongoDB, Kafka, and others, with minimal
-configuration.
-
-For more details, see the [home page](http://calcite.apache.org).
-
-The project uses [JIRA](https://issues.apache.org/jira/browse/CALCITE)
-for issue tracking. For further information, please see the [JIRA accounts guide](https://calcite.apache.org/develop/#jira-accounts).

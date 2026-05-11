@@ -46,7 +46,7 @@ public class NewDownloadMethodsTest {
 
     System.out.println("Base directory: " + baseDir);
 
-    File geoSourceDir = new File(baseDir, "source=geo");
+    File geoSourceDir = new File(baseDir, "geo");
     File boundaryDir = new File(geoSourceDir, "type=boundary");
     boundaryDir.mkdirs();
 

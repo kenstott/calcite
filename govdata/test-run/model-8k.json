@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": [
+        "0000320193",
+        "0000789019",
+        "0001652044",
+        "0001318605",
+        "0001672773",
+        "0001895582",
+        "0001045810",
+        "0001326190"
+      ],
+      "filingTypes": ["8-K", "8-K/A"],
+      "fetchStockPrices": false,
+      "startYear": 2026,
+      "endYear": 2026,
+      "autoDownload": true,
+      "directory": "/Volumes/T9/Users/kennethstott/calcite/govdata/test-run/parquet-8k",
+      "cacheDirectory": "/Volumes/T9/Users/kennethstott/calcite/govdata/test-run/cache",
+      "trackerBackend": "duckdb"
+    }
+  }]
+}

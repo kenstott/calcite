@@ -92,14 +92,34 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 | **ECON** | Economic Data | `reference_fred_series` (841K+ series), `fred_indicators`, employment/wages tables | BLS, FRED, Treasury, BEA, World Bank |
 | **GEO** | Geographic Boundaries | `states`, `counties`, `places`, `zctas`, `census_tracts`, `cbsa`, `congressional_districts` | Census TIGER/Line, HUD |
 | **CENSUS** | Demographics & Population | `acs_population`, `acs_demographics`, `acs_income`, `acs_education`, `acs_housing` | Census Bureau ACS, Decennial Census |
+| **EDU** | Education Institutions | `ccd_districts`, `ccd_schools`, `naep_scores`, `crdc_schools`, `ipeds_institutions`, `ipeds_completions`, `ipeds_financials`, `ipeds_tuition`, `college_scorecard`, `college_scorecard_programs` | NCES (CCD, IPEDS, NAEP), Dept of Ed (CRDC), College Scorecard API |
+| **CYBER** | Cybersecurity Intelligence | `vulnerabilities`, `cwe_catalog`, `kev_catalog`, `attack_techniques`, `nist_controls`, `cis_controls`, `owasp_top10`, `ioc_urls`, `ioc_hashes`, `threat_pulses` | NVD, MITRE ATT&CK, CISA KEV, OTX, ThreatFox |
+| **HEALTH** | Public Health | `clinical_trials`, `fda_drug_approvals`, `fda_adverse_events`, `cdc_mortality`, `cdc_brfss`, `cms_hospital_quality`, `medicaid_drug_utilization`, `rxnorm_drugs` | FDA, ClinicalTrials.gov, CDC, CMS, NIH RxNorm |
+| **FEC** | Campaign Finance | `individual_contributions`, `pac_contributions`, `candidate_summaries`, `committee_summaries` | FEC bulk data |
+| **REF** | Reference Identifiers | `lei_entities`, `lei_relationships` | GLEIF golden copy |
+| **CRIME** | Crime Statistics | `cde_agencies`, `cde_offenses`, `cde_hate_crimes`, `cde_police_employment`, `cde_use_of_force` | FBI Crime Data Explorer |
 
 ### Future Planned
-- **LEG**: Congressional bills, votes, committees, nominations, hearings
-- **POL**: Political offices (Presidents, Governors, Cabinet, SCOTUS), campaigns, executive orders
-- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters
-- **PUB**: NIH grants, NASA projects, NSF research, PTO patents
-- **HEALTH**: FDA approvals/recalls, CDC health statistics
-- **WEATHER**: NOAA weather data, climate indicators
+
+Plans with links have full data plans in `docs/data-plans/`. Workers 74–95 are reserved.
+
+Ordered by cross-schema leverage against existing data (highest first):
+
+| Priority | Schema | Domain | Key Tables | Workers | Plan |
+|---|---|---|---|---|---|
+| 1 | **ENERGY** | Energy Markets | `eia_electricity_generation`, `eia_fossil_fuel_production`, `eia_power_plants` | 82–83 | [energy.md](docs/data-plans/energy.md) |
+| 2 | **DISASTERS** | Emergency Events | `disaster_declarations`, `wildfire_perimeters`, `storm_events`, `nfip_claims` | 74–76 | [disasters.md](docs/data-plans/disasters.md) |
+| 3 | **HOUSING** | Housing & Mortgages | `hmda_loans`, `hud_fair_market_rents`, `census_building_permits` | 92–93 | [housing.md](docs/data-plans/housing.md) |
+| 4 | **ENV** | Environment & EPA | `epa_tri_releases`, `epa_ghg_emissions`, `epa_air_quality`, `epa_superfund_sites` | 86–87 | [environment.md](docs/data-plans/environment.md) |
+| 5 | **AGR** | Agriculture | `nass_crop_production`, `rma_crop_insurance`, `fsa_commodity_payments` | 84–85 | [agriculture.md](docs/data-plans/agriculture.md) |
+| 6 | **TRADE** | International Trade | `usa_trade_monthly`, `usa_trade_by_state`, `bea_fdi_by_industry` | 94–95 | [trade.md](docs/data-plans/trade.md) |
+| 7 | **PATENTS** | IP & Trademarks | `patent_grants`, `patent_assignees`, `patent_inventors`, `patent_cpc_classes` | 80–81 | [patents.md](docs/data-plans/patents.md) |
+| 8 | **TRANSPORT** | Transportation | `bts_airline_performance`, `fmcsa_carriers`, `ntsb_aviation_accidents` | 88–89 | [transport.md](docs/data-plans/transport.md) |
+| 9 | **LANDS** | Federal Public Lands | `national_forests`, `nps_units`, `nps_visitation`, `onrr_revenues` | 77–79 | [lands.md](docs/data-plans/lands.md) |
+| 10 | **CRIME+** | Crime (extensions) | `nibrs_offenses` (county-level), `bjs_state_corrections` | 90–91 | [crime.md](docs/data-plans/crime.md) |
+| — | **LEG** | Legislation | Congressional bills, votes, committees | TBD | — |
+| — | **POL** | Political Offices | Presidents, Governors, SCOTUS, executive orders | TBD | — |
+| — | **SAFETY** | Transportation Safety | NHTSA crash data | TBD | — |
 
 ## 🔧 Installation
 

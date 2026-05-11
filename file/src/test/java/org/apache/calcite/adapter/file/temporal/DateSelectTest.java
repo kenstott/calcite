@@ -21,6 +21,9 @@ import org.apache.calcite.adapter.file.FileAdapterTests;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -28,11 +31,16 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Test what SQL SELECT returns for DATE values.
  */
 @Tag("unit")
 public class DateSelectTest {
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(DateSelectTest.class);
 
   @Test public void testDateSelectOutput() throws Exception {
     Properties info = new Properties();
@@ -51,48 +59,54 @@ public class DateSelectTest {
           + "WHERE \"id\" IN (1, 4, 5, 6, 7) "
           + "ORDER BY \"id\"";
 
-      System.out.println("\n=== SQL SELECT Date Output ===");
-      System.out.println("Testing what SQL SELECT returns for DATE values\n");
-
       try (ResultSet resultSet = statement.executeQuery(sql)) {
+        assertTrue(resultSet.next(),
+            "Should have at least one result row");
+        int id = resultSet.getInt(1);
+        String desc = resultSet.getString(2);
+        Date dateValue = resultSet.getDate(3);
+        assertNotNull(dateValue,
+            "Date value should not be null for id=" + id);
+        // Use numeric epoch-day value for verification
+        int daysSinceEpoch = resultSet.getInt(3);
+        LOGGER.debug("id={}, desc={}, date={}, epochDays={}",
+            id, desc, dateValue, daysSinceEpoch);
+        assertTrue(daysSinceEpoch > 0,
+            "Days since epoch should be positive for modern dates");
+
+        // Verify additional rows exist
+        int rowCount = 1;
         while (resultSet.next()) {
-          int id = resultSet.getInt(1);
-          String desc = resultSet.getString(2);
-
-          // Get date using different methods
-          Date dateValue = resultSet.getDate(3);
-          String stringValue = resultSet.getString(4);
-          int daysSinceEpoch = resultSet.getInt(3); // Get as int directly from DATE column
-
-          System.out.println("Test " + id + ": " + desc);
-          System.out.println("  getDate(): " + dateValue);
-          System.out.println("  CAST AS VARCHAR: " + stringValue);
-          System.out.println("  Days since epoch (getInt): " + daysSinceEpoch);
-          System.out.println();
+          assertNotNull(resultSet.getDate(3),
+              "Date value should not be null");
+          rowCount++;
         }
+        assertTrue(rowCount >= 3,
+            "Should have at least 3 date format rows, got: " + rowCount);
       }
 
-      // Test date comparison
-      System.out.println("=== Date Comparison Test ===");
+      // Test date comparison - verify COUNT returns a result
       sql = "SELECT COUNT(*) FROM \"date_formats\" "
           + "WHERE \"date_value\" = DATE '2024-03-15'";
 
       try (ResultSet resultSet = statement.executeQuery(sql)) {
-        if (resultSet.next()) {
-          int count = resultSet.getInt(1);
-          System.out.println("Rows with date 2024-03-15: " + count);
-        }
+        assertTrue(resultSet.next(), "COUNT query should return a row");
+        int count = resultSet.getInt(1);
+        LOGGER.debug("Rows with date 2024-03-15: {}", count);
+        assertTrue(count >= 0,
+            "COUNT should return non-negative value");
       }
 
-      // Test epoch date
+      // Test epoch date comparison
       sql = "SELECT COUNT(*) FROM \"date_formats\" "
           + "WHERE \"date_value\" = DATE '1970-01-01'";
 
       try (ResultSet resultSet = statement.executeQuery(sql)) {
-        if (resultSet.next()) {
-          int count = resultSet.getInt(1);
-          System.out.println("Rows with epoch date: " + count);
-        }
+        assertTrue(resultSet.next(), "COUNT query should return a row");
+        int count = resultSet.getInt(1);
+        LOGGER.debug("Rows with epoch date: {}", count);
+        assertTrue(count >= 0,
+            "COUNT should return non-negative value");
       }
     }
   }

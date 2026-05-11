@@ -77,7 +77,7 @@ public class SftpStorageProvider implements StorageProvider {
                             String privateKeyPath, boolean strictHostKeyChecking) {
     this.defaultUsername = username != null ? username : System.getProperty("user.name");
     this.defaultPassword = password;
-    this.defaultPrivateKeyPath = privateKeyPath != null ? privateKeyPath : findDefaultPrivateKey();
+    this.defaultPrivateKeyPath = privateKeyPath;
     this.strictHostKeyChecking = strictHostKeyChecking;
 
     // Initialize persistent cache if cache manager is available
@@ -347,12 +347,20 @@ public class SftpStorageProvider implements StorageProvider {
       jsch.setKnownHosts(knownHosts);
     }
 
-    // Add private key if specified
+    // Add private key if specified; tolerate unreadable keys when password auth
+    // is available (e.g. OpenSSH-format keys that JSch 0.1.x cannot parse).
     if (sftpUri.privateKeyPath != null) {
-      if (sftpUri.passphrase != null) {
-        jsch.addIdentity(sftpUri.privateKeyPath, sftpUri.passphrase);
-      } else {
-        jsch.addIdentity(sftpUri.privateKeyPath);
+      try {
+        if (sftpUri.passphrase != null) {
+          jsch.addIdentity(sftpUri.privateKeyPath, sftpUri.passphrase);
+        } else {
+          jsch.addIdentity(sftpUri.privateKeyPath);
+        }
+      } catch (JSchException e) {
+        if (sftpUri.password == null) {
+          throw e; // No fallback available
+        }
+        // Key could not be loaded but password auth is available; continue
       }
     }
 

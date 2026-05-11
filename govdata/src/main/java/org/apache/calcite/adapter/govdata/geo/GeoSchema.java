@@ -131,24 +131,24 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
 
     // Initialize TIGER downloader with hive-partitioned structure
     if (enabledSources.contains("tiger") && !tigerYears.isEmpty()) {
-      // TIGER data goes under: /govdata-parquet/source=geo/type=boundary/year=YYYY/
+      // TIGER data goes under: /govdata-parquet/type=boundary/year=YYYY/
       // Note: GeoSchema uses File-based constructors (backward compatibility)
       // For S3 support, use GeoSchemaFactory instead which provides StorageProvider
-      File boundaryDir = new File(new File(cacheDir, "source=geo"), "type=boundary");
+      File boundaryDir = new File(cacheDir, "type=boundary");
       this.tigerDownloader = new TigerDataDownloader(boundaryDir, tigerYears, autoDownload);
     }
 
     // Initialize Census API client with hive-partitioned structure
     if (enabledSources.contains("census") && censusApiKey != null && !censusYears.isEmpty()) {
-      // Census data goes under: /govdata-parquet/source=geo/type=demographic/year=YYYY/
-      File demographicDir = new File(new File(cacheDir, "source=geo"), "type=demographic");
+      // Census data goes under: /govdata-parquet/type=demographic/year=YYYY/
+      File demographicDir = new File(cacheDir, "type=demographic");
       this.censusClient = new CensusApiClient(censusApiKey, demographicDir, censusYears);
     }
 
     // Initialize HUD crosswalk fetcher with hive-partitioned structure
     if (enabledSources.contains("hud")) {
-      // HUD data goes under: /govdata-parquet/source=geo/type=crosswalk/year=YYYY/
-      File crosswalkDir = new File(new File(cacheDir, "source=geo"), "type=crosswalk");
+      // HUD data goes under: /govdata-parquet/type=crosswalk/year=YYYY/
+      File crosswalkDir = new File(cacheDir, "type=crosswalk");
       if (hudToken != null && !hudToken.isEmpty()) {
         // Use token if available
         this.hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, crosswalkDir);

@@ -1,0 +1,43 @@
+# Build output - this is the big one
+target/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.eclipse/
+.settings/
+
+# Maven/Gradle
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+
+# Data files - agents don't need to read these
+*.parquet
+*.csv
+*.json.gz
+*.db
+*.duckdb
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# Calcite generated sources - massive files, never useful to agents
+target/
+target/generated-sources/
+target/generated-test-sources/
+src/main/codegen/  # if agents don't need to touch the FreeMarker templates
+
+# Test output artifacts
+target/surefire-reports/
+target/failsafe-reports/
+
+# Large test fixture files if auto-generated
+src/test/resources/**/*.xml
+src/test/resources/**/*.sql

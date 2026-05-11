@@ -126,7 +126,7 @@ public class PartitionedTableTest {
         createPartitionedTableConfig("sales", "sales/**/*.parquet", null)));
 
     // Run queries
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -172,13 +172,15 @@ public class PartitionedTableTest {
 
     // Create schema configuration with no partition config
     Map<String, Object> operand = new HashMap<>();
+    operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put(
         "partitionedTables", java.util.Arrays.asList(
         createPartitionedTableConfig("events", "events/**/*.parquet", null)));
 
     // Run queries - should work but without partition columns
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -213,7 +215,7 @@ public class PartitionedTableTest {
     Map<String, Object> partitionConfig = new HashMap<>();
     partitionConfig.put("style", "directory");
     partitionConfig.put(
-        "columns", java.util.Arrays.asList(
+        "columnDefinitions", java.util.Arrays.asList(
         new HashMap<String, Object>() {{
           put("name", "year");
           put("type", "INTEGER");
@@ -230,10 +232,11 @@ public class PartitionedTableTest {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with typed partition columns
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -296,10 +299,11 @@ public class PartitionedTableTest {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
 
     // Run queries with partition awareness
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();

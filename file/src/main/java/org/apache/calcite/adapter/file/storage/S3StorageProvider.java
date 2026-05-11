@@ -255,8 +255,10 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     ListObjectsV2Result result;
+    int page = 0;
     do {
       result = s3Client.listObjectsV2(request);
+      page++;
 
       for (S3ObjectSummary summary : result.getObjectSummaries()) {
         if (!summary.getKey().equals(s3Uri.key)) { // Skip the directory itself
@@ -282,6 +284,10 @@ public class S3StorageProvider implements StorageProvider {
               0,
               0));
         }
+      }
+
+      if (result.isTruncated() && page % 5 == 0) {
+        LOGGER.info("S3 LIST {}: {} entries so far (page {})", s3Uri.key, entries.size(), page);
       }
 
       request.setContinuationToken(result.getNextContinuationToken());

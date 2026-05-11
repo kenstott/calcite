@@ -22,6 +22,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Test JSONPath extraction from HTTP API responses.
  * This test verifies that JsonMultiTableFactory is properly wired up.
  */
+@Tag("integration")
 public class JsonPathExtractionTest {
 
   private HttpServer server;
@@ -127,6 +129,8 @@ public class JsonPathExtractionTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
   +
         "      \"operand\": {\n"
+  +
+        "        \"ephemeralCache\": true,\n"
   +
         "        \"tables\": [\n"
   +
@@ -276,6 +280,8 @@ public class JsonPathExtractionTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
   +
         "      \"operand\": {\n"
+  +
+        "        \"ephemeralCache\": true,\n"
   +
         "        \"tables\": [\n"
   +

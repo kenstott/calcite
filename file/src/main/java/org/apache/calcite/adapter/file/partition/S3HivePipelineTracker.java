@@ -20,20 +20,28 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.DeleteObjectsRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +53,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -85,6 +97,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private AmazonS3 s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
+  /** Cached processed keys per table from single S3 scan. null = not yet scanned. */
+  private volatile Map<String, Set<String>> processedKeysCache;
   /** In-memory cache of table completions for the duration of this tracker instance. */
   private final Map<String, CachedCompletion> completionCache =
       new ConcurrentHashMap<String, CachedCompletion>();
@@ -120,8 +134,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final List<PendingState> pendingStates = new ArrayList<PendingState>();
   /** Flush threshold for pending states. */
   private static final int PENDING_FLUSH_THRESHOLD = parsePendingFlushThreshold();
+  /** Number of parallel S3 PUT threads during flush. Overridable via ETL_TRACKER_FLUSH_PARALLELISM. */
+  private static final int FLUSH_PARALLELISM = parseFlushParallelism();
   /** Whether flush-on-shutdown hook has been registered. */
   private volatile boolean shutdownHookRegistered = false;
+  /** S3 paths of individual tracker files written during this run, for shutdown compaction. */
+  private final List<String> flushedIndividualPaths =
+      Collections.synchronizedList(new ArrayList<String>());
 
   /**
    * Create an S3-backed pipeline tracker.
@@ -256,39 +275,48 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.execute("INSTALL httpfs");
       stmt.execute("LOAD httpfs");
 
-      // Configure S3 - credentials must come from config (model.json operand)
-      String region = config.get("region");
-      if (region != null && !region.isEmpty()) {
-        stmt.execute("SET s3_region = '" + region + "'");
-      }
-
       String accessKey = config.get("accessKeyId");
       String secretKey = config.get("secretAccessKey");
-      if (accessKey != null && !accessKey.isEmpty()
-          && secretKey != null && !secretKey.isEmpty()) {
-        stmt.execute("SET s3_access_key_id = '" + accessKey + "'");
-        stmt.execute("SET s3_secret_access_key = '" + secretKey + "'");
-      } else {
+      if (accessKey == null || accessKey.isEmpty()
+          || secretKey == null || secretKey.isEmpty()) {
         LOGGER.warn("S3 tracker missing accessKeyId/secretAccessKey in config. "
             + "Provide credentials via model.json operand. Available keys: {}",
             config.keySet());
+        return;
+      }
+
+      // Default region to 'auto' when a custom endpoint is configured (e.g. R2).
+      // Without this, DuckDB httpfs defaults to 'us-east-1', causing HTTP 400 on R2 reads.
+      String region = config.get("region");
+      if ((region == null || region.isEmpty()) && endpoint != null && !endpoint.isEmpty()) {
+        region = "auto";
       }
 
       String sessionToken = config.get("sessionToken");
-      if (sessionToken != null && !sessionToken.isEmpty()) {
-        stmt.execute("SET s3_session_token = '" + sessionToken + "'");
-      }
 
+      StringBuilder sql = new StringBuilder(
+          "CREATE OR REPLACE SECRET s3_tracker_secret (TYPE S3");
+      sql.append(", KEY_ID '").append(accessKey).append("'");
+      sql.append(", SECRET '").append(secretKey).append("'");
+      if (region != null && !region.isEmpty()) {
+        sql.append(", REGION '").append(region).append("'");
+      }
+      if (sessionToken != null && !sessionToken.isEmpty()) {
+        sql.append(", SESSION_TOKEN '").append(sessionToken).append("'");
+      }
       if (endpoint != null && !endpoint.isEmpty()) {
-        stmt.execute("SET s3_endpoint = '" + endpoint.replaceAll("https?://", "") + "'");
-        stmt.execute("SET s3_url_style = 'path'");
+        String host = endpoint.replaceAll("https?://", "");
+        sql.append(", ENDPOINT '").append(host).append("'");
+        sql.append(", URL_STYLE 'path'");
         if (endpoint.startsWith("http://")) {
-          stmt.execute("SET s3_use_ssl = false");
+          sql.append(", USE_SSL false");
         }
       }
+      sql.append(")");
+      stmt.execute(sql.toString());
 
-      LOGGER.info("Initialized S3 httpfs extension for tracker at {} (endpoint={})",
-          bucketPath, endpoint);
+      LOGGER.info("Initialized S3 httpfs extension for tracker at {} (endpoint={}, region={})",
+          bucketPath, endpoint, region);
     }
   }
 
@@ -652,6 +680,23 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     LOGGER.info("Downloaded {} tracker files in {}ms ({} errors, {} threads)",
         completed.get(), downloadElapsed, errors.get(), threads);
 
+    // Remove corrupt/empty files — DuckDB read_parquet fails the entire glob if any file
+    // is below the 8-byte PAR1 magic minimum (happens after JVM-killed mid-upload).
+    int corrupt = 0;
+    java.io.File[] downloaded = tempDir.listFiles();
+    if (downloaded != null) {
+      for (java.io.File f : downloaded) {
+        if (f.length() < 8) {
+          f.delete();
+          corrupt++;
+        }
+      }
+    }
+    if (corrupt > 0) {
+      LOGGER.warn("Removed {} corrupt/empty tracker files from tempDir (size < 8 bytes)",
+          corrupt);
+    }
+
     if (errors.get() > total / 2) {
       throw new RuntimeException("Too many download errors: " + errors.get() + "/" + total);
     }
@@ -939,6 +984,32 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  private void compactOnClose() {
+    if (noCompact || fullyScannedYears.isEmpty()) {
+      return;
+    }
+    for (String year : new HashSet<String>(fullyScannedYears)) {
+      try {
+        deleteCompactedFiles(year);
+        compactFromCache(year);
+        List<String> toDelete = new ArrayList<String>();
+        for (String path : flushedIndividualPaths) {
+          if (path.contains("/year=" + year + "/")) {
+            toDelete.add(path);
+          }
+        }
+        if (!toDelete.isEmpty()) {
+          deleteSpecificFiles(toDelete, year);
+        }
+        LOGGER.info("Shutdown compaction complete for year={}: {} individual files removed",
+            year, toDelete.size());
+      } catch (Exception e) {
+        LOGGER.warn("Shutdown compaction failed for year={}: {}", year, e.getMessage());
+      }
+    }
+    flushedIndividualPaths.clear();
+  }
+
   /**
    * List files under a prefix, including files in _compacted/ directories.
    */
@@ -1086,27 +1157,44 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     Set<String> tables = new LinkedHashSet<String>();
     String year = extractYear(sourceKey, System.currentTimeMillis());
-    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
-        + "/*.parquet";
+    String prefix = "year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey) + "/";
+    List<String> files;
+    try {
+      files = listTrackerFiles(prefix);
+    } catch (Exception e) {
+      LOGGER.warn("Error listing tracker files for {}/{}: {}", sourceKey, phase, e.getMessage());
+      stageCache.put(cacheKey, tables);
+      return tables;
+    }
 
-    String sql = "SELECT table_name, state FROM ("
-        + "  SELECT table_name, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY table_name ORDER BY as_of DESC) AS rn "
-        + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
-        + "  WHERE source_key = ? AND phase = ?"
-        + ") WHERE rn = 1 AND state = 'complete'";
-
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, sourceKey);
-      stmt.setString(2, phase);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          tables.add(rs.getString("table_name"));
+    if (!files.isEmpty()) {
+      java.io.File tempDir = null;
+      try {
+        tempDir = downloadTrackerFilesParallel(files, year);
+        String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+        String sql = "SELECT table_name FROM ("
+            + "  SELECT table_name, state, ROW_NUMBER() OVER "
+            + "    (PARTITION BY table_name ORDER BY as_of DESC) AS rn "
+            + "  FROM read_parquet('" + localGlob + "', union_by_name=true) "
+            + "  WHERE phase = ?"
+            + ") WHERE rn = 1 AND state = 'complete'";
+        synchronized (connectionLock) {
+          try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+            stmt.setString(1, phase);
+            try (ResultSet rs = stmt.executeQuery()) {
+              while (rs.next()) {
+                tables.add(rs.getString("table_name"));
+              }
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading tracker for {}/{}: {}", sourceKey, phase, e.getMessage());
+      } finally {
+        if (tempDir != null) {
+          deleteDir(tempDir);
         }
       }
-    } catch (SQLException e) {
-      LOGGER.debug("Error getting completed tables for {}/{}: {}",
-          sourceKey, phase, e.getMessage());
     }
     // Cache the result (even if empty — prevents repeated S3 queries for missing data)
     stageCache.put(cacheKey, tables);
@@ -1169,9 +1257,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
-    // S3 tracker: scan all partitions for this alternate name
+    return getProcessedKeyValues(alternateName, null);
+  }
+
+  @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName,
+      String year) {
     Set<Map<String, String>> result = new HashSet<>();
-    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
+    String glob = year != null
+        ? bucketPath + "/year=" + year + "/source_key=*/*.parquet"
+        : bucketPath + "/year=*/source_key=*/*.parquet";
 
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "
@@ -1250,99 +1344,78 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
 
-    // Note: we intentionally do NOT cache "no data" across tables.
-    // A "No files found" for one table does not mean other tables lack tracker data.
-
-    // Build targeted globs from the known combinations instead of scanning source_key=*
-    // Use extractYear to target specific year partitions instead of year=*
-    // Pre-compute flattened keys for all combinations (reused for matching later)
-    String[] flatKeys = new String[allCombinations.size()];
-    List<String> sourceKeyPaths = new ArrayList<String>();
-    for (int i = 0; i < allCombinations.size(); i++) {
-      String flat = flattenKeyValues(allCombinations.get(i));
-      flatKeys[i] = flat;
-      String year = extractYear(flat, System.currentTimeMillis());
-      sourceKeyPaths.add(bucketPath + "/year=" + year + "/source_key="
-          + sanitizeHiveValue(flat) + "/*.parquet");
+    // Scan tracker S3 bucket once, cache results for all tables
+    if (processedKeysCache == null) {
+      processedKeysCache = loadAllProcessedKeys();
     }
 
-    // Deduplicate paths (multiple combinations may map to the same glob)
-    List<String> uniquePaths = new ArrayList<String>(new LinkedHashSet<String>(sourceKeyPaths));
-
-    // Query in chunks to avoid OOM with large dimension spaces (e.g., 3M+ combinations)
-    Set<String> processedKeys = new HashSet<String>();
-    boolean anyNoFiles = false;
-
-    for (int offset = 0; offset < uniquePaths.size(); offset += FILTER_CHUNK_SIZE) {
-      int end = Math.min(offset + FILTER_CHUNK_SIZE, uniquePaths.size());
-      List<String> chunk = uniquePaths.subList(offset, end);
-
-      if (uniquePaths.size() > FILTER_CHUNK_SIZE) {
-        LOGGER.info("Filtering chunk {}-{} of {} unique paths for {}",
-            offset, end, uniquePaths.size(), alternateName);
-      }
-
-      // Build path list for this chunk
-      StringBuilder pathList = new StringBuilder();
-      pathList.append("[");
-      boolean first = true;
-      for (String p : chunk) {
-        if (!first) {
-          pathList.append(", ");
-        }
-        pathList.append("'").append(p).append("'");
-        first = false;
-      }
-      pathList.append("]");
-
-      String sql = "SELECT source_key FROM ("
-          + "  SELECT source_key, state, ROW_NUMBER() OVER "
-          + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
-          + "  FROM read_parquet(" + pathList + ", "
-          + "hive_partitioning=true, union_by_name=true) "
-          + "  WHERE table_name = ? AND phase = 'incremental'"
-          + ") WHERE rn = 1 AND state = 'complete'";
-
-      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-        stmt.setString(1, alternateName);
-        try (ResultSet rs = stmt.executeQuery()) {
-          while (rs.next()) {
-            processedKeys.add(rs.getString("source_key"));
-          }
-        }
-      } catch (SQLException e) {
-        String msg = e.getMessage();
-        if (msg != null && (msg.contains("No files found")
-            || msg.contains("Could not find")
-            || msg.contains("HTTP 404"))) {
-          anyNoFiles = true;
-          // Continue to next chunk — other chunks may have data
-          continue;
-        }
-        LOGGER.debug("Error filtering unprocessed for {} (chunk {}-{}): {}",
-            alternateName, offset, end, msg);
-      }
-    }
-
-    // Cache positive result only — presence of data is safe to cache
-    if (!processedKeys.isEmpty()) {
-      hasAnyTrackerData = true;
-    }
-
-    // If ALL chunks returned "no files" and nothing was found, return all as unprocessed
-    if (processedKeys.isEmpty() && anyNoFiles) {
+    Set<String> processedKeys = processedKeysCache.get(alternateName);
+    if (processedKeys == null || processedKeys.isEmpty()) {
       LOGGER.info("No tracker data found for {} — all {} combinations unprocessed",
           alternateName, allCombinations.size());
       return allIndices(allCombinations.size());
     }
 
+    LOGGER.info("Tracker found {} processed keys for {} (out of {} total)",
+        processedKeys.size(), alternateName, allCombinations.size());
+
+    // Pre-compute flattened keys and match against cached processed set
     Set<Integer> unprocessed = new HashSet<Integer>();
     for (int i = 0; i < allCombinations.size(); i++) {
-      if (!processedKeys.contains(flatKeys[i])) {
+      String flat = flattenKeyValues(allCombinations.get(i));
+      if (!processedKeys.contains(flat)) {
         unprocessed.add(i);
       }
     }
     return unprocessed;
+  }
+
+  /** Scan all tracker batch files once and return processed keys grouped by table name. */
+  private Map<String, Set<String>> loadAllProcessedKeys() {
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    String globPath = bucketPath + "/year=*/source_key=_batch_*/*.parquet";
+
+    String sql = "SELECT table_name, source_key FROM ("
+        + "  SELECT table_name, source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY table_name, source_key ORDER BY as_of DESC) AS rn "
+        + "  FROM read_parquet('" + globPath + "', "
+        + "hive_partitioning=false, union_by_name=true) "
+        + "  WHERE phase = 'incremental'"
+        + ") WHERE rn = 1 AND state = 'complete'";
+
+    long start = System.currentTimeMillis();
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql);
+         ResultSet rs = stmt.executeQuery()) {
+      while (rs.next()) {
+        String tableName = rs.getString("table_name");
+        String sourceKey = rs.getString("source_key");
+        Set<String> keys = result.get(tableName);
+        if (keys == null) {
+          keys = new HashSet<String>();
+          result.put(tableName, keys);
+        }
+        keys.add(sourceKey);
+      }
+      hasAnyTrackerData = !result.isEmpty();
+      long elapsed = System.currentTimeMillis() - start;
+      int totalKeys = 0;
+      for (Set<String> v : result.values()) {
+        totalKeys += v.size();
+      }
+      LOGGER.info("Tracker scan complete: {} tables, {} processed keys in {}ms",
+          result.size(), totalKeys, elapsed);
+    } catch (SQLException e) {
+      String msg = e.getMessage();
+      if (msg != null && (msg.contains("No files found")
+          || msg.contains("Could not find")
+          || msg.contains("HTTP 404"))) {
+        LOGGER.info("No tracker batch files found ({}ms)",
+            System.currentTimeMillis() - start);
+        return result;
+      }
+      LOGGER.debug("Error loading tracker data: {}", msg);
+    }
+    return result;
   }
 
   private Set<Integer> allIndices(int size) {
@@ -1410,15 +1483,21 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     long queryStart = System.currentTimeMillis();
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
-    String sql = "SELECT config_hash, signature, row_count, as_of "
+    String sql = "SELECT config_hash, signature, row_count, as_of, state "
         + "FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
-        + "WHERE table_name = ? AND phase = 'table_completion' AND state = 'complete' "
+        + "WHERE table_name = ? AND phase = 'table_completion' "
         + "ORDER BY as_of DESC LIMIT 1";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, pipelineName);
       try (ResultSet rs = stmt.executeQuery()) {
         long queryElapsed = System.currentTimeMillis() - queryStart;
         if (rs.next()) {
+          String state = rs.getString("state");
+          if (!"complete".equals(state)) {
+            LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — latest state is '{}', not complete",
+                pipelineName, queryElapsed, state);
+            return null;
+          }
           String configHash = rs.getString("config_hash");
           String signature = rs.getString("signature");
           long rowCount = rs.getLong("row_count");
@@ -1461,11 +1540,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "/source_key=_table_complete/*.parquet";
     String sql = "SELECT table_name, config_hash, signature, row_count, as_of "
         + "FROM ("
-        + "  SELECT table_name, config_hash, signature, row_count, as_of, "
+        + "  SELECT table_name, config_hash, signature, row_count, as_of, state,"
         + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
         + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true)"
-        + "  WHERE phase = 'table_completion' AND state = 'complete'"
-        + ") WHERE rn = 1";
+        + "  WHERE phase = 'table_completion'"
+        + ") WHERE rn = 1 AND state = 'complete'";
     int count = 0;
     try (Statement stmt = getConnection().createStatement();
          ResultSet rs = stmt.executeQuery(sql)) {
@@ -1627,11 +1706,29 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return 500;
   }
 
+  private static int parseFlushParallelism() {
+    String env = System.getenv("ETL_TRACKER_FLUSH_PARALLELISM");
+    if (env != null && !env.isEmpty()) {
+      try {
+        return Math.max(1, Integer.parseInt(env));
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return 50;
+  }
+
   /**
    * Flush all pending tracker state writes to S3 as batched parquet files.
    *
-   * <p>Groups pending states by year partition and writes one parquet file per year,
-   * dramatically reducing S3 PUT calls compared to writing one file per state change.
+   * <p>Groups pending states by (year, sourceKey) and writes one parquet file per group.
+   * Files are written to the correct hive-partitioned path:
+   * {@code year={Y}/source_key={key}/{uuid}.parquet}, which is where
+   * {@link #getCompletedTables} reads from.
+   *
+   * <p>Writes use the AWS SDK directly (not DuckDB COPY TO) to avoid DuckDB httpfs
+   * URL-encoding the {@code =} signs in hive-partition directory names, which causes
+   * R2/S3 to return HTTP 400.
    */
   public void flushPendingStates() {
     List<PendingState> toFlush;
@@ -1643,71 +1740,165 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       pendingStates.clear();
     }
 
-    // Group by year (for S3 path partitioning)
-    Map<String, List<PendingState>> byYear = new LinkedHashMap<String, List<PendingState>>();
+    // Group by (year, sourceKey) — preserves the hive path layout that readers expect.
+    // Key format: year + NUL + sourceKey
+    Map<String, List<PendingState>> bySourceKey =
+        new LinkedHashMap<String, List<PendingState>>();
     for (PendingState ps : toFlush) {
       String year = "_table_complete".equals(ps.sourceKey)
           ? COMPLETION_YEAR : extractYear(ps.sourceKey, ps.asOf);
-      List<PendingState> list = byYear.get(year);
+      String groupKey = year + "\0" + ps.sourceKey;
+      List<PendingState> list = bySourceKey.get(groupKey);
       if (list == null) {
         list = new ArrayList<PendingState>();
-        byYear.put(year, list);
+        bySourceKey.put(groupKey, list);
       }
       list.add(ps);
     }
 
-    for (Map.Entry<String, List<PendingState>> entry : byYear.entrySet()) {
-      String year = entry.getKey();
-      List<PendingState> states = entry.getValue();
-      // Use UUID for unique file name
-      String batchId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-      String path = bucketPath + "/year=" + year + "/source_key=_batch_" + batchId
-          + "/batch.parquet";
+    // Phase 1 (sequential, DuckDB lock): write each group to a local temp parquet file.
+    // Phase 2 (parallel): upload all temp files to S3 concurrently.
+    final List<PendingState> failed =
+        Collections.synchronizedList(new ArrayList<PendingState>());
+    final AtomicInteger flushedCount = new AtomicInteger(0);
 
-      // Build a temp DuckDB table, insert all states, COPY TO S3 as one file
-      synchronized (connectionLock) {
-        try {
-          Connection conn = getConnection();
-          // Create temp table
-          try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("CREATE TEMP TABLE IF NOT EXISTS pending_flush ("
-                + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
-                + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
-                + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
-            stmt.executeUpdate("DELETE FROM pending_flush");
-          }
-          // Batch insert
-          try (PreparedStatement pstmt = conn.prepareStatement(
-              "INSERT INTO pending_flush VALUES (?,?,?,?,?,?,?,?,?)")) {
-            for (PendingState ps : states) {
-              pstmt.setString(1, ps.sourceKey);
-              pstmt.setString(2, ps.tableName);
-              pstmt.setString(3, ps.phase);
-              pstmt.setString(4, ps.state);
-              pstmt.setLong(5, ps.rowCount);
-              pstmt.setString(6, ps.configHash);
-              pstmt.setString(7, ps.signature);
-              pstmt.setString(8, ps.errorMessage);
-              pstmt.setLong(9, ps.asOf);
-              pstmt.addBatch();
+    // Build upload tasks: (tempFile, s3Path, states) for each group.
+    List<Object[]> uploads = new ArrayList<Object[]>(bySourceKey.size());
+    for (Map.Entry<String, List<PendingState>> entry : bySourceKey.entrySet()) {
+      String groupKey = entry.getKey();
+      int sep = groupKey.indexOf('\0');
+      String year = groupKey.substring(0, sep);
+      String sourceKey = groupKey.substring(sep + 1);
+      List<PendingState> states = entry.getValue();
+      String uuid = UUID.randomUUID().toString();
+      String s3Path = bucketPath + "/year=" + year + "/source_key="
+          + sanitizeHiveValue(sourceKey) + "/" + uuid + ".parquet";
+      try {
+        java.io.File tempFile = writeParquetToTemp(states);
+        uploads.add(new Object[]{tempFile, s3Path, states, sourceKey});
+      } catch (Exception e) {
+        LOGGER.error("Failed to write local parquet for source_key={}: {}",
+            sourceKey, e.getMessage());
+        failed.addAll(states);
+      }
+    }
+
+    // Phase 2: parallel S3 uploads.
+    ExecutorService pool = Executors.newFixedThreadPool(
+        Math.min(FLUSH_PARALLELISM, uploads.size()));
+    List<Future<?>> futures = new ArrayList<Future<?>>(uploads.size());
+    for (final Object[] upload : uploads) {
+      futures.add(pool.submit(new Runnable() {
+        public void run() {
+          java.io.File tempFile = (java.io.File) upload[0];
+          String s3Path = (String) upload[1];
+          @SuppressWarnings("unchecked")
+          List<PendingState> states = (List<PendingState>) upload[2];
+          String sourceKey = (String) upload[3];
+          try {
+            uploadTempToS3(tempFile, s3Path);
+            flushedIndividualPaths.add(s3Path);
+            flushedCount.addAndGet(states.size());
+            LOGGER.info("Flushed {} tracker states to {}", states.size(), s3Path);
+          } catch (Exception e) {
+            LOGGER.error("Failed to upload tracker states for source_key={}: {}",
+                sourceKey, e.getMessage());
+            failed.addAll(states);
+          } finally {
+            if (tempFile.exists() && !tempFile.delete()) {
+              LOGGER.warn("Could not delete temp tracker file: {}",
+                  tempFile.getAbsolutePath());
             }
-            pstmt.executeBatch();
-          }
-          // COPY to S3 as single file
-          try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("COPY pending_flush TO '" + path + "' (FORMAT PARQUET)");
-          }
-          LOGGER.info("Flushed {} tracker states to {} (year={})",
-              states.size(), path, year);
-        } catch (SQLException e) {
-          LOGGER.error("Failed to flush {} pending tracker states: {}",
-              states.size(), e.getMessage());
-          // Re-add failed states back to pending for retry
-          synchronized (connectionLock) {
-            pendingStates.addAll(0, states);
           }
         }
+      }));
+    }
+    pool.shutdown();
+    for (Future<?> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        LOGGER.error("Unexpected error waiting for flush upload: {}", e.getMessage());
       }
+    }
+
+    if (!failed.isEmpty()) {
+      synchronized (connectionLock) {
+        pendingStates.addAll(0, failed);
+      }
+    }
+
+    int total = flushedCount.get();
+    if (total > 0) {
+      LOGGER.info("Flushed {} total tracker states across {} source keys ({} threads)",
+          total, uploads.size(), Math.min(FLUSH_PARALLELISM, uploads.size()));
+    }
+  }
+
+  /**
+   * Write pending tracker states to a local temp parquet file (DuckDB, under connectionLock).
+   * The caller is responsible for deleting the returned file after upload.
+   *
+   * @param states  pending state rows to write
+   * @return local temp parquet file ready for upload
+   * @throws Exception if the local DuckDB write fails
+   */
+  private java.io.File writeParquetToTemp(List<PendingState> states) throws Exception {
+    java.io.File tempFile = java.io.File.createTempFile("tracker-flush-", ".parquet");
+    synchronized (connectionLock) {
+      Connection conn = getConnection();
+      try (Statement stmt = conn.createStatement()) {
+        stmt.executeUpdate("CREATE TEMP TABLE IF NOT EXISTS pending_flush_aws ("
+            + "source_key VARCHAR, table_name VARCHAR, phase VARCHAR, "
+            + "state VARCHAR, row_count BIGINT, config_hash VARCHAR, "
+            + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
+        stmt.executeUpdate("DELETE FROM pending_flush_aws");
+      }
+      try (PreparedStatement pstmt = conn.prepareStatement(
+          "INSERT INTO pending_flush_aws VALUES (?,?,?,?,?,?,?,?,?)")) {
+        for (PendingState ps : states) {
+          pstmt.setString(1, ps.sourceKey);
+          pstmt.setString(2, ps.tableName);
+          pstmt.setString(3, ps.phase);
+          pstmt.setString(4, ps.state);
+          pstmt.setLong(5, ps.rowCount);
+          pstmt.setString(6, ps.configHash);
+          pstmt.setString(7, ps.signature);
+          pstmt.setString(8, ps.errorMessage);
+          pstmt.setLong(9, ps.asOf);
+          pstmt.addBatch();
+        }
+        pstmt.executeBatch();
+      }
+      try (Statement stmt = conn.createStatement()) {
+        stmt.executeUpdate("COPY pending_flush_aws TO '"
+            + tempFile.getAbsolutePath().replace("'", "''")
+            + "' (FORMAT PARQUET)");
+      }
+    }
+    return tempFile;
+  }
+
+  /**
+   * Upload a local parquet file to S3 via the AWS SDK (no connectionLock needed).
+   *
+   * <p>Using the SDK avoids DuckDB httpfs URL-encoding {@code =} signs in hive-partition
+   * path components (e.g. {@code year=2026}), which causes R2/S3 to return HTTP 400.
+   *
+   * @param tempFile local parquet file to upload (caller deletes after this returns)
+   * @param s3Path   full S3 URI including hive partition directories
+   * @throws Exception if the S3 upload fails
+   */
+  private void uploadTempToS3(java.io.File tempFile, String s3Path) throws Exception {
+    String pathWithoutScheme = s3Path.startsWith("s3://") ? s3Path.substring(5) : s3Path;
+    int firstSlash = pathWithoutScheme.indexOf('/');
+    String bucket = pathWithoutScheme.substring(0, firstSlash);
+    String key = pathWithoutScheme.substring(firstSlash + 1);
+    com.amazonaws.services.s3.model.ObjectMetadata metadata =
+        new com.amazonaws.services.s3.model.ObjectMetadata();
+    metadata.setContentLength(tempFile.length());
+    try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile)) {
+      getS3Client().putObject(bucket, key, fis, metadata);
     }
   }
 
@@ -1724,6 +1915,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         @Override public void run() {
           try {
             tracker.flushPendingStates();
+          } catch (Exception e) {
+            // best effort on shutdown
+          }
+          try {
+            tracker.compactOnClose();
           } catch (Exception e) {
             // best effort on shutdown
           }
@@ -1759,12 +1955,78 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  /**
+   * Reads the ETL high-water mark date for the given run key.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @return the stored date, or null if none has been written yet
+   */
+  public LocalDate readEtlHighWaterMark(String runKey) {
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) : "";
+    String s3Key = (keyPrefix.isEmpty() ? "" : keyPrefix + "/")
+        + "_meta/etl_hwm/" + runKey + ".txt";
+    try {
+      S3Object obj = getS3Client().getObject(bucket, s3Key);
+      try (InputStream is = obj.getObjectContent()) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[64];
+        int n;
+        while ((n = is.read(buf)) != -1) {
+          baos.write(buf, 0, n);
+        }
+        return LocalDate.parse(baos.toString(StandardCharsets.UTF_8.name()).trim());
+      }
+    } catch (AmazonS3Exception e) {
+      if ("NoSuchKey".equals(e.getErrorCode())) {
+        return null;
+      }
+      LOGGER.warn("Failed to read ETL high-water mark ({}): {}", runKey, e.getMessage());
+      return null;
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read ETL high-water mark ({}): {}", runKey, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Writes the ETL high-water mark date for the given run key.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @param date   the high-water mark to store
+   */
+  public void writeEtlHighWaterMark(String runKey, LocalDate date) {
+    String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
+    int slash = path.indexOf('/');
+    String bucket = slash > 0 ? path.substring(0, slash) : path;
+    String keyPrefix = slash > 0 ? path.substring(slash + 1) : "";
+    String s3Key = (keyPrefix.isEmpty() ? "" : keyPrefix + "/")
+        + "_meta/etl_hwm/" + runKey + ".txt";
+    try {
+      byte[] bytes = date.toString().getBytes(StandardCharsets.UTF_8);
+      ObjectMetadata meta = new ObjectMetadata();
+      meta.setContentLength(bytes.length);
+      meta.setContentType("text/plain");
+      getS3Client().putObject(bucket, s3Key, new ByteArrayInputStream(bytes), meta);
+      LOGGER.info("Wrote ETL high-water mark ({}): {}", runKey, date);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write ETL high-water mark ({}): {}", runKey, e.getMessage());
+    }
+  }
+
   @Override public void close() {
     // Flush any pending states before closing the connection
     try {
       flushPendingStates();
     } catch (Exception e) {
       LOGGER.warn("Error flushing pending tracker states on close: {}", e.getMessage());
+    }
+    try {
+      compactOnClose();
+    } catch (Exception e) {
+      LOGGER.warn("Error compacting tracker on close: {}", e.getMessage());
     }
     synchronized (connectionLock) {
       if (connection != null) {

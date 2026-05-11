@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Live integration test for SharePoint with Calcite using Microsoft Graph API.
@@ -68,10 +69,15 @@ public class SharePointLiveIntegrationTest {
     // Load properties from local-test.properties file first
     Properties localProps = loadLocalProperties();
 
-    tenantId = getRequiredConfig("SHAREPOINT_TENANT_ID", localProps);
-    clientId = getRequiredConfig("SHAREPOINT_CLIENT_ID", localProps);
-    clientSecret = getRequiredConfig("SHAREPOINT_CLIENT_SECRET", localProps);
-    siteUrl = getRequiredConfig("SHAREPOINT_SITE_URL", localProps);
+    try {
+      tenantId = getRequiredConfig("SHAREPOINT_TENANT_ID", localProps);
+      clientId = getRequiredConfig("SHAREPOINT_CLIENT_ID", localProps);
+      clientSecret = getRequiredConfig("SHAREPOINT_CLIENT_SECRET", localProps);
+      siteUrl = getRequiredConfig("SHAREPOINT_SITE_URL", localProps);
+    } catch (IllegalStateException e) {
+      assumeTrue(false,
+          "SharePoint credentials not available: " + e.getMessage());
+    }
 
     // Create token manager
     tokenManager = new MicrosoftGraphTokenManager(tenantId, clientId, clientSecret, siteUrl);
@@ -439,6 +445,7 @@ public class SharePointLiveIntegrationTest {
       operand.put("storageType", "sharepoint");
       operand.put("recursive", true);  // Enable recursive traversal
       operand.put("executionEngine", "linq4j");  // Use LINQ4J for CSV processing
+      operand.put("ephemeralCache", true);
 
       Map<String, Object> storageConfig = new HashMap<>();
       storageConfig.put("siteUrl", siteUrl);

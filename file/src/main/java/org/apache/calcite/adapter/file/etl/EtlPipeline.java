@@ -222,6 +222,10 @@ public class EtlPipeline {
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
 
+    // Memory tracking
+    List<MemorySnapshot> memSnapshots = new ArrayList<MemorySnapshot>();
+    long peakUsedBytes = 0;
+
     // Track execution statistics
     long totalRows = 0;
     int successfulBatches = 0;
@@ -233,6 +237,11 @@ public class EtlPipeline {
             System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") != null
                 ? System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") : "10"));
     List<String> errors = new ArrayList<String>();
+
+    MemorySnapshot startSnap = MemorySnapshot.capture("pipeline_start");
+    memSnapshots.add(startSnap);
+    peakUsedBytes = startSnap.getUsedBytes();
+    LOGGER.debug("Memory at pipeline_start: {}", startSnap);
 
     MaterializationWriter writer = null;
 
@@ -389,6 +398,13 @@ public class EtlPipeline {
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
       }
 
+      MemorySnapshot dimSnap = MemorySnapshot.capture("after_dim_expansion");
+      memSnapshots.add(dimSnap);
+      if (dimSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = dimSnap.getUsedBytes();
+      }
+      LOGGER.debug("Memory after_dim_expansion: {}", dimSnap);
+
       // Fast-path: Check if entire pipeline was already completed with same dimensions
       if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
         // Verify data actually exists - completion marker may be stale if bucket was cleared
@@ -512,6 +528,13 @@ public class EtlPipeline {
         LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
             neededCount, totalBatches, filterElapsedMs,
             totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+
+        MemorySnapshot filterSnap = MemorySnapshot.capture("after_bulk_filter");
+        memSnapshots.add(filterSnap);
+        if (filterSnap.getUsedBytes() > peakUsedBytes) {
+          peakUsedBytes = filterSnap.getUsedBytes();
+        }
+        LOGGER.debug("Memory after_bulk_filter: {}", filterSnap);
       }
 
       // If all combinations are already processed, mark complete and return
@@ -618,6 +641,46 @@ public class EtlPipeline {
         int partCount = contextValues.size();
         int actualTotalBatches = 0;
 
+        // Pre-query Iceberg for existing partitions to skip redundant regeneration.
+        // If tracker says "not processed" but Iceberg already has the partition data,
+        // mark combos as processed and skip them (avoids re-fetching + re-writing).
+        java.util.Set<Map<String, String>> existingIcebergPartitions =
+            java.util.Collections.emptySet();
+        List<String> icebergPartitionColumns = Collections.emptyList();
+        if (!forceReprocessAll && materializeConfig != null
+            && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
+            && materializeConfig.isEnabled()) {
+          MaterializePartitionConfig partConfig = materializeConfig.getPartition();
+          icebergPartitionColumns = partConfig != null
+              ? partConfig.getColumns() : Collections.<String>emptyList();
+          if (!icebergPartitionColumns.isEmpty()) {
+            Map<String, Object> catalogConfig = buildIcebergCatalogConfig(materializeConfig);
+            String targetTableId = materializeConfig.getTargetTableId();
+            if (targetTableId == null || targetTableId.isEmpty()) {
+              targetTableId = materializeConfig.getName();
+            }
+            if (targetTableId == null || targetTableId.isEmpty()) {
+              targetTableId = config.getName();
+            }
+            LOGGER.info("Skip-if-materialized: querying Iceberg table '{}' for existing partitions",
+                targetTableId);
+            try {
+              existingIcebergPartitions = IcebergMaterializationWriter.getExistingPartitions(
+                  catalogConfig, targetTableId, icebergPartitionColumns);
+            } catch (Exception e) {
+              LOGGER.warn("Skip-if-materialized: failed to query Iceberg partitions for '{}': {}",
+                  targetTableId, e.getMessage());
+            }
+            if (!existingIcebergPartitions.isEmpty()) {
+              LOGGER.info("Found {} existing Iceberg partitions for skip-if-materialized check",
+                  existingIcebergPartitions.size());
+            } else {
+              LOGGER.info("Skip-if-materialized: no existing partitions found for '{}'",
+                  targetTableId);
+            }
+          }
+        }
+
         for (int pi = 0; pi < partCount; pi++) {
           String contextValue = contextValues.get(pi);
 
@@ -649,6 +712,36 @@ public class EtlPipeline {
                 partCombos.size());
             continue;
           }
+
+          // Skip-if-materialized: if tracker says unprocessed but Iceberg already has
+          // the partition data, mark all combos as processed and skip regeneration.
+          if (!existingIcebergPartitions.isEmpty() && !icebergPartitionColumns.isEmpty()
+              && !unprocessedIndices.isEmpty()) {
+            // Extract the Iceberg partition key from the first unprocessed combo
+            Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
+            Map<String, String> icebergKey = new java.util.LinkedHashMap<String, String>();
+            for (String col : icebergPartitionColumns) {
+              String val = sampleCombo.get(col);
+              if (val != null) {
+                icebergKey.put(col, val);
+              }
+            }
+            if (existingIcebergPartitions.contains(icebergKey)) {
+              // Iceberg already has this partition — mark all unprocessed combos as done
+              int skippedCount = unprocessedIndices.size();
+              for (int idx : unprocessedIndices) {
+                incrementalTracker.markProcessedWithRowCount(
+                    pipelineName, pipelineName, partCombos.get(idx), null, -1);
+              }
+              skippedBatches += partCombos.size();
+              LOGGER.info("Partition {}/{} ({}={}): skipped {} combos — Iceberg partition {} "
+                  + "already materialized",
+                  pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
+                  skippedCount, icebergKey);
+              continue;
+            }
+          }
+
           skippedBatches += partCombos.size() - unprocessedIndices.size();
           LOGGER.info("Partition {}/{} ({}={}): {} unprocessed of {} combinations",
               pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
@@ -750,6 +843,20 @@ public class EtlPipeline {
               Map<String, String> variables = partCombos.get(idx);
               processedCount++;
 
+              // Self-heal: if data files already exist on storage for this partition,
+              // re-register them in Iceberg and skip re-fetching from source.
+              long healedRows = trySelfHealFromStoredFiles(writer, variables);
+              if (healedRows > 0) {
+                LOGGER.info("Self-heal: skipping source fetch for partition {}/{} {} — "
+                    + "re-registered {} orphaned files (~{} rows)",
+                    pi + 1, partCount, variables, healedRows, healedRows);
+                incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
+                    variables, null, healedRows);
+                skippedBatches++;
+                totalRows += healedRows;
+                continue;
+              }
+
               if (progressListener != null) {
                 progressListener.onBatchStart(processedCount, neededCount, variables);
               }
@@ -769,6 +876,13 @@ public class EtlPipeline {
 
                 if (processedCount % 10 == 0) {
                   System.gc();
+                  MemorySnapshot batchSnap =
+                      MemorySnapshot.capture("batch_" + processedCount);
+                  memSnapshots.add(batchSnap);
+                  if (batchSnap.getUsedBytes() > peakUsedBytes) {
+                    peakUsedBytes = batchSnap.getUsedBytes();
+                  }
+                  LOGGER.debug("Memory {}: {}", batchSnap.getPhase(), batchSnap);
                 }
 
               } catch (IOException e) {
@@ -949,6 +1063,20 @@ public class EtlPipeline {
             Map<String, String> variables = combinations.get(idx);
             processedCount++;
 
+            // Self-heal: if data files already exist on storage for this partition,
+            // re-register them in Iceberg and skip re-fetching from source.
+            long healedRows = trySelfHealFromStoredFiles(writer, variables);
+            if (healedRows > 0) {
+              LOGGER.info("Self-heal: skipping source fetch for batch {}/{} {} — "
+                  + "re-registered orphaned files (~{} rows)",
+                  processedCount, neededCount, variables, healedRows);
+              incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
+                  variables, null, healedRows);
+              skippedBatches++;
+              totalRows += healedRows;
+              continue;
+            }
+
             if (progressListener != null) {
               progressListener.onBatchStart(processedCount, neededCount, variables);
             }
@@ -967,6 +1095,13 @@ public class EtlPipeline {
 
               if (processedCount % 10 == 0) {
                 System.gc();
+                MemorySnapshot batchSnap =
+                    MemorySnapshot.capture("batch_" + processedCount);
+                memSnapshots.add(batchSnap);
+                if (batchSnap.getUsedBytes() > peakUsedBytes) {
+                  peakUsedBytes = batchSnap.getUsedBytes();
+                }
+                LOGGER.debug("Memory {}: {}", batchSnap.getPhase(), batchSnap);
               }
 
             } catch (IOException e) {
@@ -1049,8 +1184,15 @@ public class EtlPipeline {
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
-      LOGGER.info("ETL pipeline '{}' complete: {} rows, {} successful, {} failed, {} skipped in {}ms",
-          pipelineName, totalRows, successfulBatches, failedBatches, skippedBatches, elapsed);
+
+      MemorySnapshot endSnap = MemorySnapshot.capture("pipeline_end");
+      memSnapshots.add(endSnap);
+      if (endSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = endSnap.getUsedBytes();
+      }
+      LOGGER.info("ETL pipeline '{}' complete: {} rows, {} successful, {} failed, {} skipped in {}ms, peakHeap={}MB",
+          pipelineName, totalRows, successfulBatches, failedBatches, skippedBatches, elapsed,
+          peakUsedBytes / (1024 * 1024));
 
       return EtlResult.builder()
           .pipelineName(pipelineName)
@@ -1062,6 +1204,8 @@ public class EtlPipeline {
           .errors(errors)
           .tableLocation(tableLocation)
           .materializeFormat(writerFormat)
+          .peakUsedBytes(peakUsedBytes)
+          .memorySnapshots(memSnapshots)
           .build();
 
     } catch (Exception e) {
@@ -1069,6 +1213,12 @@ public class EtlPipeline {
       String errorMsg =
           String.format("ETL pipeline '%s' failed after %dms: %s", pipelineName, elapsed, e.getMessage());
       LOGGER.error(errorMsg, e);
+
+      MemorySnapshot failSnap = MemorySnapshot.capture("pipeline_failure");
+      memSnapshots.add(failSnap);
+      if (failSnap.getUsedBytes() > peakUsedBytes) {
+        peakUsedBytes = failSnap.getUsedBytes();
+      }
 
       // Invalidate table completion on failure
       incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -1083,6 +1233,8 @@ public class EtlPipeline {
           .errors(errors)
           .failed(true)
           .failureMessage(e.getMessage())
+          .peakUsedBytes(peakUsedBytes)
+          .memorySnapshots(memSnapshots)
           .build();
     } finally {
       // Ensure writer is closed
@@ -2075,14 +2227,43 @@ public class EtlPipeline {
   }
 
   /**
-   * Returns the configured parallel thread count from the {@code calcite.etl.threads}
-   * system property. Returns 1 (sequential) if not set or invalid.
+   * Returns the configured parallel thread count. Checks the per-table
+   * {@code httpSource.parallel} config first, then falls back to the
+   * {@code calcite.etl.threads} system property. Returns 1 (sequential) if neither is set.
    */
-  private static int getParallelThreadCount() {
+  private int getParallelThreadCount() {
+    // Per-table parallel config takes precedence
+    HttpSourceConfig sourceConfig = config.getSource();
+    if (sourceConfig != null && sourceConfig.getParallel() > 1) {
+      return sourceConfig.getParallel();
+    }
     try {
       return Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
     } catch (NumberFormatException e) {
       return 1;
+    }
+  }
+
+  /**
+   * Attempts to self-heal a partition by detecting parquet files that exist on storage
+   * but are not registered in the Iceberg catalog. If found, re-registers them and marks
+   * the tracker complete — no source re-fetch needed.
+   *
+   * <p>Processing output is immutable: given the same inputs the same files are produced,
+   * so existing files on storage are always safe to re-register.
+   *
+   * @return estimated row count of re-registered files, or 0 if self-heal was not possible
+   */
+  private long trySelfHealFromStoredFiles(MaterializationWriter writer,
+      Map<String, String> variables) {
+    if (!(writer instanceof IcebergMaterializationWriter)) {
+      return 0;
+    }
+    try {
+      return ((IcebergMaterializationWriter) writer).selfHealPartition(variables);
+    } catch (IOException e) {
+      LOGGER.debug("Self-heal attempt failed for {}: {}", variables, e.getMessage());
+      return 0;
     }
   }
 }

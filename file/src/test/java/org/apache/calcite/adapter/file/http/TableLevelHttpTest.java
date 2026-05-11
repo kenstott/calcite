@@ -217,6 +217,7 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
         "          {" +
@@ -348,6 +349,7 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
         "          {" +
@@ -475,6 +477,7 @@ public class TableLevelHttpTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
         "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\"," +
+        "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
         "          {" +

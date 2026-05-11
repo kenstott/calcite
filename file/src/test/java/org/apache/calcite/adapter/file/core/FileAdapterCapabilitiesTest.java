@@ -60,7 +60,7 @@ public class FileAdapterCapabilitiesTest {
       writer.write("2024-01-02,Gizmo,3000.00\n");
     }
 
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:");
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
@@ -68,6 +68,7 @@ public class FileAdapterCapabilitiesTest {
       // Add file schema with engine configuration if set
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("ephemeralCache", true);
 
       // Use global engine configuration if set
       String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
@@ -87,7 +88,7 @@ public class FileAdapterCapabilitiesTest {
         String aggQuery = "SELECT \"date\", " +
             "COUNT(*) as transaction_count, " +
             "SUM(\"amount\") as daily_total " +
-            "FROM FILES.\"sales\" " +
+            "FROM \"FILES\".\"sales\" " +
             "GROUP BY \"date\" " +
             "ORDER BY \"date\"";
 
@@ -108,7 +109,7 @@ public class FileAdapterCapabilitiesTest {
             "COUNT(*) as sales_count, " +
             "SUM(\"amount\") as total_revenue, " +
             "AVG(\"amount\") as avg_sale " +
-            "FROM FILES.\"sales\" " +
+            "FROM \"FILES\".\"sales\" " +
             "GROUP BY \"product\" " +
             "ORDER BY total_revenue DESC";
 

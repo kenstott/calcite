@@ -129,6 +129,7 @@ public class SharePointRecursiveTest {
         operand.put("storageType", "sharepoint");
         operand.put("recursive", true);  // This should find files in any subdirectory
         operand.put("executionEngine", "linq4j");
+        operand.put("ephemeralCache", true);
 
         Map<String, Object> storageConfig = new HashMap<>();
         storageConfig.put("siteUrl", siteUrl);

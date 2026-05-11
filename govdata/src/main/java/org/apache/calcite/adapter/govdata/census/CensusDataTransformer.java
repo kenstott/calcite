@@ -210,7 +210,7 @@ public class CensusDataTransformer {
       Map<String, Object> transformedRecord = new HashMap<>();
 
       // NOTE: Do NOT add year, source, or type to the data - they are partition columns
-      // and should only exist in the directory structure (e.g., source=census/type=acs/year=2020/)
+      // and should only exist in the directory structure (e.g., census/type=acs/year=2020/)
 
       // Add geoid column
       String geoid = createGeoid(rawRecord);

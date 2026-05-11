@@ -39,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -97,6 +98,101 @@ public class XbrlToParquetConverter implements FileConverter {
   // HTML tag removal pattern
   private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+  private static final java.util.Map<String, String> HTML_ENTITY_MAP = buildHtmlEntityMap();
+
+  private static java.util.Map<String, String> buildHtmlEntityMap() {
+    java.util.Map<String, String> m = new java.util.HashMap<>();
+    // Latin-1 supplement
+    m.put("nbsp", "&#160;"); m.put("iexcl", "&#161;"); m.put("cent", "&#162;");
+    m.put("pound", "&#163;"); m.put("curren", "&#164;"); m.put("yen", "&#165;");
+    m.put("brvbar", "&#166;"); m.put("sect", "&#167;"); m.put("uml", "&#168;");
+    m.put("copy", "&#169;"); m.put("ordf", "&#170;"); m.put("laquo", "&#171;");
+    m.put("not", "&#172;"); m.put("shy", "&#173;"); m.put("reg", "&#174;");
+    m.put("macr", "&#175;"); m.put("deg", "&#176;"); m.put("plusmn", "&#177;");
+    m.put("sup2", "&#178;"); m.put("sup3", "&#179;"); m.put("acute", "&#180;");
+    m.put("micro", "&#181;"); m.put("para", "&#182;"); m.put("middot", "&#183;");
+    m.put("cedil", "&#184;"); m.put("sup1", "&#185;"); m.put("ordm", "&#186;");
+    m.put("raquo", "&#187;"); m.put("frac14", "&#188;"); m.put("frac12", "&#189;");
+    m.put("frac34", "&#190;"); m.put("iquest", "&#191;");
+    // Accented uppercase
+    m.put("Agrave", "&#192;"); m.put("Aacute", "&#193;"); m.put("Acirc", "&#194;");
+    m.put("Atilde", "&#195;"); m.put("Auml", "&#196;"); m.put("Aring", "&#197;");
+    m.put("AElig", "&#198;"); m.put("Ccedil", "&#199;");
+    m.put("Egrave", "&#200;"); m.put("Eacute", "&#201;"); m.put("Ecirc", "&#202;"); m.put("Euml", "&#203;");
+    m.put("Igrave", "&#204;"); m.put("Iacute", "&#205;"); m.put("Icirc", "&#206;"); m.put("Iuml", "&#207;");
+    m.put("ETH", "&#208;"); m.put("Ntilde", "&#209;");
+    m.put("Ograve", "&#210;"); m.put("Oacute", "&#211;"); m.put("Ocirc", "&#212;");
+    m.put("Otilde", "&#213;"); m.put("Ouml", "&#214;"); m.put("times", "&#215;");
+    m.put("Oslash", "&#216;"); m.put("Ugrave", "&#217;"); m.put("Uacute", "&#218;");
+    m.put("Ucirc", "&#219;"); m.put("Uuml", "&#220;"); m.put("Yacute", "&#221;");
+    m.put("THORN", "&#222;"); m.put("szlig", "&#223;");
+    // Accented lowercase
+    m.put("agrave", "&#224;"); m.put("aacute", "&#225;"); m.put("acirc", "&#226;");
+    m.put("atilde", "&#227;"); m.put("auml", "&#228;"); m.put("aring", "&#229;");
+    m.put("aelig", "&#230;"); m.put("ccedil", "&#231;");
+    m.put("egrave", "&#232;"); m.put("eacute", "&#233;"); m.put("ecirc", "&#234;"); m.put("euml", "&#235;");
+    m.put("igrave", "&#236;"); m.put("iacute", "&#237;"); m.put("icirc", "&#238;"); m.put("iuml", "&#239;");
+    m.put("eth", "&#240;"); m.put("ntilde", "&#241;");
+    m.put("ograve", "&#242;"); m.put("oacute", "&#243;"); m.put("ocirc", "&#244;");
+    m.put("otilde", "&#245;"); m.put("ouml", "&#246;"); m.put("divide", "&#247;");
+    m.put("oslash", "&#248;"); m.put("ugrave", "&#249;"); m.put("uacute", "&#250;");
+    m.put("ucirc", "&#251;"); m.put("uuml", "&#252;"); m.put("yacute", "&#253;");
+    m.put("thorn", "&#254;"); m.put("yuml", "&#255;");
+    // Common typographic and symbol entities
+    m.put("trade", "&#8482;"); m.put("mdash", "&#8212;"); m.put("ndash", "&#8211;");
+    m.put("lsquo", "&#8216;"); m.put("rsquo", "&#8217;"); m.put("sbquo", "&#8218;");
+    m.put("ldquo", "&#8220;"); m.put("rdquo", "&#8221;"); m.put("bdquo", "&#8222;");
+    m.put("bull", "&#8226;"); m.put("hellip", "&#8230;"); m.put("euro", "&#8364;");
+    m.put("dagger", "&#8224;"); m.put("Dagger", "&#8225;"); m.put("permil", "&#8240;");
+    m.put("lsaquo", "&#8249;"); m.put("rsaquo", "&#8250;"); m.put("fnof", "&#402;");
+    m.put("OElig", "&#338;"); m.put("oelig", "&#339;"); m.put("Scaron", "&#352;");
+    m.put("scaron", "&#353;"); m.put("Yuml", "&#376;"); m.put("circ", "&#710;");
+    m.put("tilde", "&#732;"); m.put("ensp", "&#8194;"); m.put("emsp", "&#8195;");
+    m.put("thinsp", "&#8201;"); m.put("zwnj", "&#8204;"); m.put("zwj", "&#8205;");
+    m.put("lrm", "&#8206;"); m.put("rlm", "&#8207;"); m.put("minus", "&#8722;");
+    m.put("prime", "&#8242;"); m.put("Prime", "&#8243;"); m.put("oline", "&#8254;");
+    m.put("frasl", "&#8260;");
+    // Greek letters
+    m.put("Alpha", "&#913;"); m.put("Beta", "&#914;"); m.put("Gamma", "&#915;");
+    m.put("Delta", "&#916;"); m.put("Epsilon", "&#917;"); m.put("Zeta", "&#918;");
+    m.put("Eta", "&#919;"); m.put("Theta", "&#920;"); m.put("Iota", "&#921;");
+    m.put("Kappa", "&#922;"); m.put("Lambda", "&#923;"); m.put("Mu", "&#924;");
+    m.put("Nu", "&#925;"); m.put("Xi", "&#926;"); m.put("Omicron", "&#927;");
+    m.put("Pi", "&#928;"); m.put("Rho", "&#929;"); m.put("Sigma", "&#931;");
+    m.put("Tau", "&#932;"); m.put("Upsilon", "&#933;"); m.put("Phi", "&#934;");
+    m.put("Chi", "&#935;"); m.put("Psi", "&#936;"); m.put("Omega", "&#937;");
+    m.put("alpha", "&#945;"); m.put("beta", "&#946;"); m.put("gamma", "&#947;");
+    m.put("delta", "&#948;"); m.put("epsilon", "&#949;"); m.put("zeta", "&#950;");
+    m.put("eta", "&#951;"); m.put("theta", "&#952;"); m.put("iota", "&#953;");
+    m.put("kappa", "&#954;"); m.put("lambda", "&#955;"); m.put("mu", "&#956;");
+    m.put("nu", "&#957;"); m.put("xi", "&#958;"); m.put("omicron", "&#959;");
+    m.put("pi", "&#960;"); m.put("rho", "&#961;"); m.put("sigmaf", "&#962;");
+    m.put("sigma", "&#963;"); m.put("tau", "&#964;"); m.put("upsilon", "&#965;");
+    m.put("phi", "&#966;"); m.put("chi", "&#967;"); m.put("psi", "&#968;");
+    m.put("omega", "&#969;"); m.put("thetasym", "&#977;"); m.put("upsih", "&#978;");
+    m.put("piv", "&#982;");
+    // Math and arrows
+    m.put("forall", "&#8704;"); m.put("part", "&#8706;"); m.put("exist", "&#8707;");
+    m.put("empty", "&#8709;"); m.put("nabla", "&#8711;"); m.put("isin", "&#8712;");
+    m.put("notin", "&#8713;"); m.put("ni", "&#8715;"); m.put("prod", "&#8719;");
+    m.put("sum", "&#8721;"); m.put("lowast", "&#8727;"); m.put("radic", "&#8730;");
+    m.put("prop", "&#8733;"); m.put("infin", "&#8734;"); m.put("ang", "&#8736;");
+    m.put("and", "&#8743;"); m.put("or", "&#8744;"); m.put("cap", "&#8745;");
+    m.put("cup", "&#8746;"); m.put("int", "&#8747;"); m.put("there4", "&#8756;");
+    m.put("sim", "&#8764;"); m.put("cong", "&#8773;"); m.put("asymp", "&#8776;");
+    m.put("ne", "&#8800;"); m.put("equiv", "&#8801;"); m.put("le", "&#8804;");
+    m.put("ge", "&#8805;"); m.put("sub", "&#8834;"); m.put("sup", "&#8835;");
+    m.put("nsub", "&#8836;"); m.put("sube", "&#8838;"); m.put("supe", "&#8839;");
+    m.put("oplus", "&#8853;"); m.put("otimes", "&#8855;"); m.put("perp", "&#8869;");
+    m.put("sdot", "&#8901;"); m.put("lceil", "&#8968;"); m.put("rceil", "&#8969;");
+    m.put("lfloor", "&#8970;"); m.put("rfloor", "&#8971;"); m.put("lang", "&#9001;");
+    m.put("rang", "&#9002;"); m.put("loz", "&#9674;");
+    m.put("larr", "&#8592;"); m.put("uarr", "&#8593;"); m.put("rarr", "&#8594;");
+    m.put("darr", "&#8595;"); m.put("harr", "&#8596;"); m.put("crarr", "&#8629;");
+    m.put("spades", "&#9824;"); m.put("clubs", "&#9827;"); m.put("hearts", "&#9829;");
+    m.put("diams", "&#9830;");
+    return java.util.Collections.unmodifiableMap(m);
+  }
 
   @Override public boolean canConvert(String sourceFormat, String targetFormat) {
     return ("xbrl".equalsIgnoreCase(sourceFormat) || "xml".equalsIgnoreCase(sourceFormat)
@@ -195,6 +291,13 @@ public class XbrlToParquetConverter implements FileConverter {
       if (hintFilingType != null && is13DGFiling(hintFilingType)) {
         LOGGER.debug("13D/G filing detected: {}", fileName);
         return process13DGForm(sourceFilePath, targetDirectoryPath, metadata);
+      }
+
+      // Fast path: Forms 3/4/5 are XML ownership documents — parse directly as XML
+      // bypassing the HTML/inline-XBRL detection path which would fail on xslF345X HTML files
+      if (hintFilingType != null && isInsiderForm(null, hintFilingType)) {
+        LOGGER.info("Insider form {} detected, parsing XML directly: {}", hintFilingType, fileName);
+        return processInsiderXmlForm(sourceFilePath, targetDirectoryPath, metadata);
       }
 
       Document doc = null;
@@ -324,7 +427,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // Year-only partitioning for optimal 128MB file sizes
       String partitionYear = getPartitionYear(filingType, actualFilingDate, periodEndDate, doc);
 
-      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
       String relativePartitionPath = String.format("year=%s", partitionYear);
 
@@ -627,9 +730,16 @@ public class XbrlToParquetConverter implements FileConverter {
     NodeList periodOfReports = doc.getElementsByTagName("periodOfReport");
     if (periodOfReports.getLength() > 0) {
       String date = periodOfReports.item(0).getTextContent().trim();
-      // Validate date format (should be YYYY-MM-DD)
+      // Validate date format (should be YYYY-MM-DD); also strip timezone offset (e.g. 2026-03-18-05:00)
       if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
         return date;
+      }
+      if (date.length() > 10 && date.substring(0, 10).matches("\\d{4}-\\d{2}-\\d{2}")) {
+        return date.substring(0, 10);
+      }
+      // Normalize compact YYYYMMDD format (used by some older SEC filings)
+      if (date.matches("\\d{8}")) {
+        return date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
       }
     }
 
@@ -741,9 +851,67 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    // Insider form fallback: use latest transactionDate or signatureDate across all transactions.
+    // Forms 3/4/5 may lack periodOfReport or XBRL metadata but always have transaction/signature dates.
+    String insiderFallback = extractInsiderFormPeriodDate(doc);
+    if (insiderFallback != null) {
+      LOGGER.debug("Extracted period end date from insider transaction/signature date: " + insiderFallback);
+      return insiderFallback;
+    }
+
     // Return null if no date found - let the caller handle this
     LOGGER.warn("Could not extract period end date from: " + filename);
     return null;
+  }
+
+  private String extractInsiderFormPeriodDate(Document doc) {
+    String latest = null;
+    // Scan nonDerivativeTransaction, derivativeTransaction, nonDerivativeHolding, derivativeHolding
+    String[] txnTags = {"nonDerivativeTransaction", "derivativeTransaction",
+        "nonDerivativeHolding", "derivativeHolding"};
+    for (String tag : txnTags) {
+      NodeList nodes = doc.getElementsByTagName(tag);
+      for (int i = 0; i < nodes.getLength(); i++) {
+        Element el = (Element) nodes.item(i);
+        String date = getElementText(el, "transactionDate", "value");
+        if (date != null && date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          if (latest == null || date.compareTo(latest) > 0) {
+            latest = date;
+          }
+        }
+        // YYYYMMDD compact format
+        if (date != null && date.matches("\\d{8}")) {
+          String normalized = date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
+          if (latest == null || normalized.compareTo(latest) > 0) {
+            latest = normalized;
+          }
+        }
+      }
+    }
+    if (latest != null) {
+      return latest;
+    }
+    // Last resort: signatureDate on the ownershipDocument
+    NodeList sigDates = doc.getElementsByTagName("signatureDate");
+    for (int i = 0; i < sigDates.getLength(); i++) {
+      String date = sigDates.item(i).getTextContent().trim();
+      // Strip timezone offset (e.g. 2026-03-18-05:00 → 2026-03-18)
+      if (date.length() > 10 && date.substring(0, 10).matches("\\d{4}-\\d{2}-\\d{2}")) {
+        date = date.substring(0, 10);
+      }
+      if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+        if (latest == null || date.compareTo(latest) > 0) {
+          latest = date;
+        }
+      }
+      if (date.matches("\\d{8}")) {
+        String normalized = date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8);
+        if (latest == null || normalized.compareTo(latest) > 0) {
+          latest = normalized;
+        }
+      }
+    }
+    return latest;
   }
 
   private List<Map<String, Object>> writeFactsToParquet(Document doc, String outputPath,
@@ -755,6 +923,31 @@ public class XbrlToParquetConverter implements FileConverter {
     // Load column metadata from sec-schema.json
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("financial_line_items");
+
+    // Build context period map for joining period dates onto facts
+    Map<String, Map<String, Object>> contextPeriodMap = new HashMap<>();
+    NodeList ctxNodes = doc.getElementsByTagName("context");
+    if (ctxNodes.getLength() == 0) {
+      ctxNodes = doc.getElementsByTagNameNS("*", "context");
+    }
+    for (int c = 0; c < ctxNodes.getLength(); c++) {
+      Node ctxNode = ctxNodes.item(c);
+      if (!(ctxNode instanceof Element)) continue;
+      Element ctxElement = (Element) ctxNode;
+      String id = ctxElement.getAttribute("id");
+      if (id == null || id.isEmpty()) continue;
+      NodeList starts = ctxElement.getElementsByTagNameNS("*", "startDate");
+      if (starts.getLength() == 0) starts = ctxElement.getElementsByTagName("startDate");
+      NodeList ends = ctxElement.getElementsByTagNameNS("*", "endDate");
+      if (ends.getLength() == 0) ends = ctxElement.getElementsByTagName("endDate");
+      NodeList instants = ctxElement.getElementsByTagNameNS("*", "instant");
+      if (instants.getLength() == 0) instants = ctxElement.getElementsByTagName("instant");
+      Map<String, Object> cp = new HashMap<>();
+      cp.put("period_start", starts.getLength() > 0 ? starts.item(0).getTextContent().trim() : null);
+      cp.put("period_end", ends.getLength() > 0 ? ends.item(0).getTextContent().trim() : null);
+      cp.put("is_instant", instants.getLength() > 0);
+      contextPeriodMap.put(id, cp);
+    }
 
     // Extract all fact elements
     List<Map<String, Object>> dataList = new ArrayList<>();
@@ -815,23 +1008,14 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("year", year);
 
         // For inline XBRL, concept is in 'name' attribute; for regular XBRL, it's the element name
+        // Keep the namespace prefix (e.g., "us-gaap:Assets") per schema definition
         String concept;
         if (element.hasAttribute("name")) {
-          // Inline XBRL: concept is in the 'name' attribute
           concept = element.getAttribute("name");
-          // Remove namespace prefix if present (e.g., "us-gaap:NetIncomeLoss" -> "NetIncomeLoss")
-          if (concept != null && concept.contains(":")) {
-            concept = concept.substring(concept.indexOf(":") + 1);
-          }
         } else {
-          // Regular XBRL: concept is the element's local name or tag name
-          concept = element.getLocalName();
-          if (concept == null) {
-            concept = element.getTagName();
-            // Remove namespace prefix if present
-            if (concept != null && concept.contains(":")) {
-              concept = concept.substring(concept.indexOf(":") + 1);
-            }
+          concept = element.getTagName();
+          if (concept == null || concept.isEmpty()) {
+            concept = element.getLocalName();
           }
         }
 
@@ -839,9 +1023,57 @@ public class XbrlToParquetConverter implements FileConverter {
         if (concept == null || concept.isEmpty()) {
           continue;
         }
+
+        // Skip XBRL context structure elements — they are not financial facts.
+        // These leak in when the enhanced element selector captures elements with
+        // numeric/date text content (e.g. identifier="0001652044", startDate="2024-01-01").
+        String conceptLocal = concept.contains(":") ? concept.substring(concept.indexOf(':') + 1) : concept;
+        if (!element.hasAttribute("contextRef") && !element.hasAttribute("name")
+            && (conceptLocal.equals("context") || conceptLocal.equals("entity")
+                || conceptLocal.equals("identifier") || conceptLocal.equals("period")
+                || conceptLocal.equals("instant") || conceptLocal.equals("startDate")
+                || conceptLocal.equals("endDate") || conceptLocal.equals("segment")
+                || conceptLocal.equals("scenario"))) {
+          continue;
+        }
+
         data.put("concept", concept);
-        data.put("context_ref", element.getAttribute("contextRef"));
-        data.put("unit_ref", element.getAttribute("unitRef"));
+        String contextRefVal = element.getAttribute("contextRef");
+        data.put("context_ref", contextRefVal);
+        String unitRef = element.getAttribute("unitRef");
+        String unitRefRaw = unitRef.isEmpty() ? null : unitRef;
+        data.put("unit_ref", unitRefRaw);
+        data.put("unit_ref_normalized", unitRefRaw != null ? normalizeUnitRef(unitRefRaw) : null);
+        String decimalsAttr = element.getAttribute("decimals");
+        Integer decimalsInt = null;
+        if (!decimalsAttr.isEmpty()) {
+          try { decimalsInt = Integer.parseInt(decimalsAttr); } catch (NumberFormatException ignored) { }
+        }
+        data.put("decimals", decimalsInt);
+        String scaleAttr = element.getAttribute("scale");
+        Integer scaleInt = null;
+        if (!scaleAttr.isEmpty()) {
+          try { scaleInt = Integer.parseInt(scaleAttr); } catch (NumberFormatException ignored) { }
+        }
+        // NULL scale for a numeric fact means factor=1 (same as scale=0)
+        if (scaleInt == null && !unitRef.isEmpty()) scaleInt = 0;
+        data.put("scale", scaleInt);
+        // Populate period fields from context map
+        Map<String, Object> cp = contextPeriodMap.get(contextRefVal);
+        if (cp != null) {
+          data.put("period_start", cp.get("period_start"));
+          Object rawPeriodEnd = cp.get("period_end");
+          if (rawPeriodEnd instanceof String && ((String) rawPeriodEnd).matches("--\\d{2}-\\d{2}")) {
+            data.put("period_end", resolveRelativePeriodDate((String) rawPeriodEnd, filingDate));
+          } else {
+            data.put("period_end", rawPeriodEnd);
+          }
+          data.put("is_instant", cp.get("is_instant"));
+        } else {
+          data.put("period_start", null);
+          data.put("period_end", null);
+          data.put("is_instant", false);
+        }
 
         // Get raw text content
         String rawValue = element.getTextContent().trim();
@@ -865,6 +1097,21 @@ public class XbrlToParquetConverter implements FileConverter {
           cleanValue = cleanHtmlText(rawValue);
         }
 
+        // Convert parenthetical notation to negative (e.g., "(1234)" -> "-1234")
+        if (cleanValue != null && cleanValue.startsWith("(") && cleanValue.endsWith(")")) {
+          cleanValue = "-" + cleanValue.substring(1, cleanValue.length() - 1).replaceAll(",", "");
+        }
+
+        // Apply iXBRL sign attribute: sign="-" negates the value
+        String signAttr = element.getAttribute("sign");
+        if ("-".equals(signAttr) && cleanValue != null && !cleanValue.isEmpty()) {
+          if (cleanValue.startsWith("-")) {
+            cleanValue = cleanValue.substring(1);
+          } else {
+            cleanValue = "-" + cleanValue;
+          }
+        }
+
         data.put("value", cleanValue);
         data.put("full_text", fullText);
 
@@ -884,19 +1131,21 @@ public class XbrlToParquetConverter implements FileConverter {
         }
         data.put("element_id", elementId);
 
-        // Try to parse as numeric (using cleaned value)
-        try {
-          double numValue =
-              Double.parseDouble(cleanValue.replaceAll(",", ""));
-          data.put("numeric_value", numValue);
-        } catch (NumberFormatException e) {
-          data.put("numeric_value", null);
+        // Resolve numeric value with provenance
+        if (cleanValue == null || cleanValue.isEmpty()) {
+          data.put("value_numeric", null);
+          data.put("value_numeric_method", null);
+        } else {
+          try {
+            double numValue = Double.parseDouble(cleanValue.replaceAll(",", ""));
+            data.put("value_numeric", numValue);
+            data.put("value_numeric_method", "direct");
+          } catch (NumberFormatException e) {
+            Double heuristic = applyNumericHeuristic(cleanValue);
+            data.put("value_numeric", heuristic);
+            data.put("value_numeric_method", heuristic != null ? "heuristic" : null);
+          }
         }
-
-        // Set period_start and period_end to null for now (will be populated from contexts)
-        data.put("period_start", null);
-        data.put("period_end", null);
-        data.put("is_instant", false);
 
         dataList.add(data);
       }
@@ -969,7 +1218,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("cik", cik);
     data.put("accession_number", accessionNumber);
-    data.put("filing_type", filingType);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
 
     // Extract year for Iceberg partitioning
@@ -1002,43 +1251,182 @@ public class XbrlToParquetConverter implements FileConverter {
                                            extractDeiValue(doc, "EntityIncorporationStateCountryCode", "StateOrCountryOfIncorporation");
     data.put("state_of_incorporation", stateOfIncorp);
 
-    String fiscalYearEnd = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
+    // Fetch authoritative company info from EDGAR submissions.json (ticker, sic, fiscalYearEnd)
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+
+    String fiscalYearEndRaw = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
+    String fiscalYearEnd = normalizeFiscalYearEnd(fiscalYearEndRaw);
+    if (fiscalYearEnd == null && submissionsInfo.containsKey("fiscal_year_end_mmdd")) {
+      fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
+    }
     data.put("fiscal_year_end", fiscalYearEnd);
 
     String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
     data.put("business_address", businessAddress);
 
-    String mailingAddress = extractDeiValue(doc, "EntityAddressMailingAddressLine1", "MailingAddress");
+    String mailingAddress = submissionsInfo.get("mailing_address");
     data.put("mailing_address", mailingAddress);
 
-    String phone = extractDeiValue(doc, "EntityPhoneNumber", "Phone");
+    String areaCode = extractDeiValue(doc, "CityAreaCode", "EntityPhoneAreaCode");
+    String localPhone = extractDeiValue(doc, "LocalPhoneNumber", "EntityPhoneNumber");
+    String phone = null;
+    if (areaCode != null && localPhone != null) {
+      phone = areaCode + localPhone;
+    } else if (localPhone != null) {
+      phone = localPhone;
+    } else if (areaCode != null) {
+      phone = areaCode;
+    }
     data.put("phone", phone);
 
     String docType = extractDeiValue(doc, "DocumentType", "FormType");
     data.put("document_type", docType);
 
-    String periodEnd = extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate");
+    String periodEnd = normalizeDateToIso(
+        extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate"));
+    if (periodEnd == null) {
+      periodEnd = normalizeDateToIso(getElementText(doc, "periodOfReport"));
+    }
     data.put("period_end_date", periodEnd);
-    data.put("period_of_report", periodEnd);
+    data.put("period_of_report", periodEnd != null ? periodEnd : filingDate);
     data.put("primary_document", filename);
 
-    // Try to extract SIC code
+    // SIC code: try XBRL DEI first, fall back to submissions.json
     String sicStr = extractDeiValue(doc, "EntityStandardIndustrialClassificationCode", "SicCode");
+    if (sicStr == null) {
+      sicStr = submissionsInfo.get("sic_code");
+    }
     data.put("sic_code", sicStr);
 
     String irsNumber = extractDeiValue(doc, "EntityTaxIdentificationNumber", "IrsNumber");
     data.put("irs_number", irsNumber);
 
-    // Set remaining fields to null/defaults
+    // Ticker from EDGAR company_tickers.json reverse lookup
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+
+    // fiscal_year derived from period_of_report
+    Integer fiscalYear = null;
+    if (periodEnd != null && periodEnd.length() >= 4) {
+      try {
+        fiscalYear = Integer.parseInt(periodEnd.substring(0, 4));
+      } catch (NumberFormatException ignored) { }
+    }
+
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
-    data.put("fiscal_year", null);
+    data.put("fiscal_year", fiscalYear);
 
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
     LOGGER.info("Successfully wrote " + dataList.size() + " metadata records to " + outputPath);
+  }
+
+  // ---- DQ helpers ----
+
+  public static String normalizeFilingType(String filingType) {
+    if (filingType == null) return null;
+    String t = filingType.trim().toUpperCase().replace(" ", "");
+    switch (t) {
+      case "10K":    return "10-K";
+      case "10Q":    return "10-Q";
+      case "10KA":   // fall-through
+      case "10K/A":  return "10-K/A";
+      case "10QA":   // fall-through
+      case "10Q/A":  return "10-Q/A";
+      default:       return filingType;
+    }
+  }
+
+  private static final Map<String, Double> NUMERIC_HEURISTICS;
+  static {
+    Map<String, Double> m = new java.util.LinkedHashMap<>();
+    // Nil markers → 0
+    m.put("—", 0.0); m.put("–", 0.0); m.put("-–", 0.0); m.put("-—", 0.0);
+    m.put("none", 0.0); m.put("nil", 0.0); m.put("no", 0.0); m.put("not", 0.0); m.put("null", 0.0);
+    // Word numerals → integer
+    m.put("one", 1.0); m.put("two", 2.0); m.put("three", 3.0); m.put("four", 4.0);
+    m.put("five", 5.0); m.put("six", 6.0); m.put("seven", 7.0); m.put("eight", 8.0);
+    m.put("nine", 9.0); m.put("ten", 10.0); m.put("eleven", 11.0); m.put("twelve", 12.0);
+    m.put("thirteen", 13.0); m.put("fourteen", 14.0); m.put("fifteen", 15.0);
+    m.put("sixteen", 16.0); m.put("seventeen", 17.0); m.put("eighteen", 18.0);
+    m.put("nineteen", 19.0); m.put("twenty", 20.0); m.put("thirty", 30.0);
+    m.put("forty", 40.0); m.put("fifty", 50.0); m.put("sixty", 60.0);
+    m.put("seventy", 70.0); m.put("eighty", 80.0); m.put("ninety", 90.0);
+    NUMERIC_HEURISTICS = java.util.Collections.unmodifiableMap(m);
+  }
+
+  private static Double applyNumericHeuristic(String value) {
+    if (value == null) return null;
+    String lower = value.trim().toLowerCase(Locale.ENGLISH);
+    Double direct = NUMERIC_HEURISTICS.get(lower);
+    if (direct != null) return direct;
+    // Compound word numerals up to ninety-nine (e.g. "twenty-one")
+    if (lower.contains("-")) {
+      String[] parts = lower.split("-", 2);
+      Double tens = NUMERIC_HEURISTICS.get(parts[0]);
+      Double ones = NUMERIC_HEURISTICS.get(parts[1]);
+      if (tens != null && ones != null && tens >= 20.0 && ones >= 1.0 && ones <= 9.0) {
+        return tens + ones;
+      }
+    }
+    return null;
+  }
+
+  private static String resolveRelativePeriodDate(String mmdd, String filingDate) {
+    try {
+      String monthDay = mmdd.substring(2); // "--07-31" → "07-31"
+      int filingYear = Integer.parseInt(filingDate.substring(0, 4));
+      String candidate = filingYear + "-" + monthDay;
+      return candidate.compareTo(filingDate) <= 0 ? candidate : (filingYear - 1) + "-" + monthDay;
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  public static String normalizeDateToIso(String raw) {
+    if (raw == null || raw.trim().isEmpty()) return null;
+    String d = raw.trim().replaceAll("\\s+", " ").replaceAll("\\s+,", ",");
+    List<DateTimeFormatter> fmts = new ArrayList<>();
+    fmts.add(new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+        .appendPattern("MMMM d, yyyy").toFormatter(Locale.ENGLISH));
+    fmts.add(new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+        .appendPattern("MMM d, yyyy").toFormatter(Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("MM-dd-yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("M-d-yyyy", Locale.ENGLISH));
+    fmts.add(DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH));
+    for (DateTimeFormatter fmt : fmts) {
+      try {
+        return LocalDate.parse(d, fmt).format(DateTimeFormatter.ISO_LOCAL_DATE);
+      } catch (Exception ignored) { }
+    }
+    // Handle YYYY-MM (year-month only) — default to first of month
+    if (d.matches("\\d{4}-\\d{2}")) {
+      try {
+        return YearMonth.parse(d).atDay(1).format(DateTimeFormatter.ISO_LOCAL_DATE);
+      } catch (Exception ignored) { }
+    }
+    return raw;
+  }
+
+  public static String normalizeFiscalYearEnd(String raw) {
+    if (raw == null) return null;
+    String s = raw.trim();
+    if (s.matches("\\d{4}")) {
+      return "--" + s.substring(0, 2) + "-" + s.substring(2);
+    }
+    if (s.startsWith("--") && s.matches("--\\d{2}-\\d{2}")) {
+      return s;
+    }
+    String iso = normalizeDateToIso(s);
+    if (iso != null && iso.matches("\\d{4}-\\d{2}-\\d{2}")) {
+      return "--" + iso.substring(5);
+    }
+    return raw;
   }
 
   private String extractDeiValue(Document doc, String... possibleTags) {
@@ -1121,10 +1509,15 @@ public class XbrlToParquetConverter implements FileConverter {
     // creates context elements without a namespace, and some DOM implementations don't
     // return null-namespace elements when using getElementsByTagNameNS("*", ...)
     List<Map<String, Object>> dataList = new ArrayList<>();
+    Set<String> seenContextIds = new java.util.HashSet<>();
     NodeList contexts = doc.getElementsByTagName("context");
 
     for (int i = 0; i < contexts.getLength(); i++) {
       Element context = (Element) contexts.item(i);
+      String contextId = context.getAttribute("id");
+      if (!seenContextIds.add(contextId)) {
+        continue;
+      }
       Map<String, Object> data = new HashMap<>();
 
       // Required data columns (cik and accession_number are in schema)
@@ -1142,12 +1535,13 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
       data.put("year", year);
-      data.put("context_id", context.getAttribute("id"));
+      data.put("context_id", contextId);
 
-      // Extract entity information
-      // Use getElementsByTagName (not getElementsByTagNameNS) since inline XBRL parsing
-      // creates elements without namespaces
+      // Extract entity information — try bare name first, then NS-wildcard
       NodeList identifiers = context.getElementsByTagName("identifier");
+      if (identifiers.getLength() == 0) {
+        identifiers = context.getElementsByTagNameNS("*", "identifier");
+      }
       if (identifiers.getLength() > 0) {
         Element identifier = (Element) identifiers.item(0);
         data.put("entity_identifier", identifier.getTextContent());
@@ -1158,30 +1552,26 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("entity_scheme", "http://www.sec.gov/CIK");
       }
 
-      // Extract period information
-      NodeList startDates = context.getElementsByTagName("startDate");
-      NodeList endDates = context.getElementsByTagName("endDate");
-      NodeList instants = context.getElementsByTagName("instant");
+      // Extract period information — NS-wildcard first, bare-name fallback
+      NodeList startDates = context.getElementsByTagNameNS("*", "startDate");
+      if (startDates.getLength() == 0) startDates = context.getElementsByTagName("startDate");
+      NodeList endDates = context.getElementsByTagNameNS("*", "endDate");
+      if (endDates.getLength() == 0) endDates = context.getElementsByTagName("endDate");
+      NodeList instants = context.getElementsByTagNameNS("*", "instant");
+      if (instants.getLength() == 0) instants = context.getElementsByTagName("instant");
 
-      if (startDates.getLength() > 0) {
-        data.put("period_start", startDates.item(0).getTextContent());
-      } else {
-        data.put("period_start", null);
-      }
-      if (endDates.getLength() > 0) {
-        data.put("period_end", endDates.item(0).getTextContent());
-      } else {
-        data.put("period_end", null);
-      }
-      if (instants.getLength() > 0) {
-        data.put("period_instant", instants.item(0).getTextContent());
-      } else {
-        data.put("period_instant", null);
-      }
+      data.put("period_start", startDates.getLength() > 0 ? startDates.item(0).getTextContent().trim() : null);
+      data.put("period_end", endDates.getLength() > 0 ? endDates.item(0).getTextContent().trim() : null);
+      data.put("period_instant", instants.getLength() > 0 ? instants.item(0).getTextContent().trim() : null);
 
-      // Set segment and scenario to null for now
-      data.put("segment", null);
-      data.put("scenario", null);
+      // Extract segment and scenario (dimension members for segmented contexts)
+      NodeList segments = context.getElementsByTagNameNS("*", "segment");
+      if (segments.getLength() == 0) segments = context.getElementsByTagName("segment");
+      NodeList scenarios = context.getElementsByTagNameNS("*", "scenario");
+      if (scenarios.getLength() == 0) scenarios = context.getElementsByTagName("scenario");
+
+      data.put("segment", segments.getLength() > 0 ? segments.item(0).getTextContent().trim() : null);
+      data.put("scenario", scenarios.getLength() > 0 ? scenarios.item(0).getTextContent().trim() : null);
 
       dataList.add(data);
     }
@@ -1201,6 +1591,88 @@ public class XbrlToParquetConverter implements FileConverter {
 
   @Override public String getTargetFormat() {
     return "parquet";
+  }
+
+  private String normalizeUnitRef(String unitRef) {
+    if (unitRef == null) return null;
+    String lower = unitRef.toLowerCase();
+    // Currency: case variants, U_/Unit_ prefixes, and XBRL Unit_Standard_<currency>_<hash>
+    if (lower.equals("usd") || lower.equals("u_usd") || lower.equals("unit_usd")
+        || lower.startsWith("unit_standard_usd_")) return "USD";
+    if (lower.equals("eur") || lower.equals("u_eur")
+        || lower.startsWith("unit_standard_eur_")) return "EUR";
+    if (lower.equals("gbp") || lower.equals("u_gbp")
+        || lower.startsWith("unit_standard_gbp_")) return "GBP";
+    if (lower.equals("cad") || lower.equals("u_cad")
+        || lower.startsWith("unit_standard_cad_")) return "CAD";
+    if (lower.equals("aud") || lower.equals("u_aud")
+        || lower.startsWith("unit_standard_aud_")) return "AUD";
+    if (lower.equals("chf") || lower.equals("u_chf")
+        || lower.startsWith("unit_standard_chf_")) return "CHF";
+    if (lower.equals("jpy") || lower.equals("u_jpy")
+        || lower.startsWith("unit_standard_jpy_")) return "JPY";
+    if (lower.equals("cny") || lower.equals("u_cny") || lower.equals("rmb")
+        || lower.startsWith("unit_standard_cny_")) return "CNY";
+    if (lower.equals("hkd") || lower.equals("u_hkd") || lower.equals("unit_hkd")
+        || lower.startsWith("unit_standard_hkd_")) return "HKD";
+    if (lower.equals("sgd") || lower.equals("u_sgd")
+        || lower.startsWith("unit_standard_sgd_")) return "SGD";
+    if (lower.equals("czk") || lower.equals("u_czk")
+        || lower.startsWith("unit_standard_czk_")) return "CZK";
+    if (lower.equals("mxn") || lower.equals("u_mxn")
+        || lower.startsWith("unit_standard_mxn_")) return "MXN";
+    if (lower.equals("brl") || lower.equals("u_brl")
+        || lower.startsWith("unit_standard_brl_")) return "BRL";
+    if (lower.equals("inr") || lower.equals("u_inr")
+        || lower.startsWith("unit_standard_inr_")) return "INR";
+    if (lower.equals("krw") || lower.equals("u_krw")
+        || lower.startsWith("unit_standard_krw_")) return "KRW";
+    if (lower.equals("nzd") || lower.equals("u_nzd")
+        || lower.startsWith("unit_standard_nzd_")) return "NZD";
+    // Shares
+    if (lower.equals("shares") || lower.equals("share") || lower.equals("u_shares")
+        || lower.equals("unit_shares") || lower.equals("shares2")
+        || lower.startsWith("unit_standard_shares_")) return "shares";
+    // Pure/ratio and dimensionless
+    if (lower.equals("pure") || lower.equals("u_pure") || lower.equals("unit_pure")
+        || lower.startsWith("unit_standard_pure_")) return "pure";
+    if (lower.equals("multiplier")) return "pure";
+    // Number: generic counts and domain count-nouns
+    if (lower.equals("number") || lower.equals("u_number") || lower.equals("integer")
+        || lower.equals("unit") || lower.equals("u_segment") || lower.equals("segment")
+        || lower.equals("position") || lower.equals("security") || lower.equals("cases")
+        || lower.equals("claims") || lower.equals("claimant") || lower.equals("claim")
+        || lower.equals("project") || lower.equals("site") || lower.equals("lot")
+        || lower.equals("well") || lower.equals("wells") || lower.equals("brinesandwells")
+        || lower.equals("employee") || lower.equals("loan") || lower.equals("lawsuit")
+        || lower.equals("acquisition") || lower.equals("agent") || lower.equals("party")
+        || lower.equals("participant") || lower.equals("review") || lower.equals("office")
+        || lower.equals("data_center") || lower.equals("manufacturingsites")
+        || lower.equals("numberofpositions") || lower.equals("u_warrant")
+        || lower.equals("u_derivative") || lower.equals("u_security")
+        || lower.equals("property") || lower.equals("holding") || lower.equals("agency")
+        || lower.equals("instrument") || lower.equals("extension") || lower.equals("lease")
+        || lower.equals("u_right") || lower.equals("u_loan")
+        || lower.startsWith("unit_standard_item_")
+        || lower.startsWith("unit_standard_home_")
+        || lower.startsWith("unit_standard_aft_")
+        || lower.startsWith("unit_standard_letterofcredit_")) return "number";
+    // USD-per-share variants
+    if (lower.equals("usdpershare") || lower.equals("usdpershares") || lower.equals("usdpshares")
+        || lower.equals("unit_usd_per_share") || lower.equals("u_unitedstatesofamericadollarsshare")
+        || lower.equals("usdsecurity") || lower.equals("usdsec")
+        || lower.equals("u_usdshares") || lower.equals("usdpersecurity")
+        || lower.startsWith("unit_divide_usd_shares_")) return "usdPerShare";
+    // Time units
+    if (lower.equals("tradingdays")) return "day";
+    if (lower.equals("u_y") || lower.equals("y")) return "year";
+    // Physical units: normalize case only
+    if (lower.equals("mw")) return "MW";
+    if (lower.equals("mwh")) return "MWh";
+    if (lower.equals("sqft") || lower.equals("u_sqft")) return "sqft";
+    if (lower.equals("mi") || lower.equals("u_mi")) return "mi";
+    if (lower.equals("barrels") || lower.equals("bbl")) return "bbl";
+    return unitRef;
   }
 
   /**
@@ -1671,6 +2143,17 @@ public class XbrlToParquetConverter implements FileConverter {
               namespace + ":" + localName);
           fact.setAttribute("contextRef", contextRef);
 
+          // Copy unitRef, decimals, scale, sign from iXBRL element attributes
+          String unitRefVal = ixElement.attr("unitref");
+          if (unitRefVal.isEmpty()) unitRefVal = ixElement.attr("unitRef");
+          if (!unitRefVal.isEmpty()) fact.setAttribute("unitRef", unitRefVal);
+          String decimalsVal = ixElement.attr("decimals");
+          if (!decimalsVal.isEmpty()) fact.setAttribute("decimals", decimalsVal);
+          String scaleVal = ixElement.attr("scale");
+          if (!scaleVal.isEmpty()) fact.setAttribute("scale", scaleVal);
+          String signVal = ixElement.attr("sign");
+          if (!signVal.isEmpty()) fact.setAttribute("sign", signVal);
+
           // Handle numeric values - remove commas and formatting
           if (ixElement.hasAttr("scale") || ixElement.hasAttr("decimals")) {
             value = value.replaceAll("[,$()]", "").trim();
@@ -1687,21 +2170,38 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // Extract contexts from HTML (both ix:context and xbrli:context)
-      org.jsoup.select.Elements contexts = new org.jsoup.select.Elements();
-      contexts.addAll(jsoupDoc.getElementsByTag("ix:context"));
-      contexts.addAll(jsoupDoc.getElementsByTag("xbrli:context"));
-      contexts.addAll(jsoupDoc.select("[id^='c'], [id^='C']"));
+      // Extract contexts from HTML (ix:context, xbrli:context, i:context), deduplicating by id
+      // Some filers use xmlns:i as a short alias for the xbrli namespace (e.g. Limitless Projects)
+      Map<String, org.jsoup.nodes.Element> contextById = new java.util.LinkedHashMap<>();
+      for (String ctxTag : new String[]{"ix:context", "xbrli:context", "i:context"}) {
+        for (org.jsoup.nodes.Element ctx : jsoupDoc.getElementsByTag(ctxTag)) {
+          String cid = ctx.attr("id");
+          if (!cid.isEmpty()) contextById.put(cid, ctx);
+        }
+      }
+      // Fallback CSS selector: only add elements not already captured and that look like contexts
+      for (org.jsoup.nodes.Element ctx : jsoupDoc.select("[id^='c'],[id^='C']")) {
+        String cid = ctx.attr("id");
+        if (!cid.isEmpty() && !contextById.containsKey(cid)
+            && ctx.selectFirst("[class~=period],[*|period],[*|startDate],[*|endDate],[*|instant]") != null) {
+          contextById.put(cid, ctx);
+        }
+      }
+      org.jsoup.select.Elements contexts = new org.jsoup.select.Elements(contextById.values());
       Map<String, Element> contextMap = new HashMap<>();
       for (org.jsoup.nodes.Element context : contexts) {
         Element xmlContext = doc.createElement("context");
         xmlContext.setAttribute("id", context.attr("id"));
 
-        // Extract entity, period, etc from context
-        org.jsoup.nodes.Element entity = context.selectFirst("[*|entity]");
+        // Extract entity, period, etc from context — use tag-name lookup for xbrli:* child elements
+        org.jsoup.nodes.Element entity = context.getElementsByTag("xbrli:entity").first();
+        if (entity == null) entity = context.getElementsByTag("i:entity").first();
+        if (entity == null) entity = context.getElementsByTag("entity").first();
         if (entity != null) {
           Element xmlEntity = doc.createElement("entity");
-          org.jsoup.nodes.Element identifier = entity.selectFirst("[*|identifier]");
+          org.jsoup.nodes.Element identifier = entity.getElementsByTag("xbrli:identifier").first();
+          if (identifier == null) identifier = entity.getElementsByTag("i:identifier").first();
+          if (identifier == null) identifier = entity.getElementsByTag("identifier").first();
           if (identifier != null) {
             Element xmlIdentifier = doc.createElement("identifier");
             xmlIdentifier.setAttribute("scheme", identifier.attr("scheme"));
@@ -1711,29 +2211,64 @@ public class XbrlToParquetConverter implements FileConverter {
           xmlContext.appendChild(xmlEntity);
         }
 
-        // Extract period
-        org.jsoup.nodes.Element period = context.selectFirst("[*|period]");
+        // Extract period — use tag-name lookup for xbrli:period / i:period child elements
+        org.jsoup.nodes.Element period = context.getElementsByTag("xbrli:period").first();
+        if (period == null) period = context.getElementsByTag("i:period").first();
+        if (period == null) period = context.getElementsByTag("period").first();
         if (period != null) {
           Element xmlPeriod = doc.createElement("period");
-          org.jsoup.nodes.Element instant = period.selectFirst("[*|instant]");
+          org.jsoup.nodes.Element instant = period.getElementsByTag("xbrli:instant").first();
+          if (instant == null) instant = period.getElementsByTag("i:instant").first();
+          if (instant == null) instant = period.getElementsByTag("instant").first();
           if (instant != null) {
             Element xmlInstant = doc.createElement("instant");
             xmlInstant.setTextContent(instant.text());
             xmlPeriod.appendChild(xmlInstant);
           }
-          org.jsoup.nodes.Element startDate = period.selectFirst("[*|startDate]");
+          org.jsoup.nodes.Element startDate = period.getElementsByTag("xbrli:startDate").first();
+          if (startDate == null) startDate = period.getElementsByTag("i:startDate").first();
+          if (startDate == null) startDate = period.getElementsByTag("startDate").first();
           if (startDate != null) {
             Element xmlStart = doc.createElement("startDate");
             xmlStart.setTextContent(startDate.text());
             xmlPeriod.appendChild(xmlStart);
           }
-          org.jsoup.nodes.Element endDate = period.selectFirst("[*|endDate]");
+          org.jsoup.nodes.Element endDate = period.getElementsByTag("xbrli:endDate").first();
+          if (endDate == null) endDate = period.getElementsByTag("i:endDate").first();
+          if (endDate == null) endDate = period.getElementsByTag("endDate").first();
           if (endDate != null) {
             Element xmlEnd = doc.createElement("endDate");
             xmlEnd.setTextContent(endDate.text());
             xmlPeriod.appendChild(xmlEnd);
           }
           xmlContext.appendChild(xmlPeriod);
+        }
+
+        // Extract segment — contains XBRL dimension/member pairs (axis=member)
+        org.jsoup.nodes.Element segment = context.getElementsByTag("xbrli:segment").first();
+        if (segment == null) segment = context.getElementsByTag("i:segment").first();
+        if (segment == null) segment = context.getElementsByTag("segment").first();
+        if (segment != null) {
+          Element xmlSegment = doc.createElement("segment");
+          StringBuilder segText = new StringBuilder();
+          for (org.jsoup.nodes.Element member : segment.getElementsByTag("xbrldi:explicitmember")) {
+            if (segText.length() > 0) segText.append("; ");
+            String dimension = member.attr("dimension");
+            String memberVal = member.text().trim();
+            if (!dimension.isEmpty()) {
+              segText.append(dimension).append("=").append(memberVal);
+            } else {
+              segText.append(memberVal);
+            }
+          }
+          if (segText.length() == 0) {
+            String raw = segment.text().trim();
+            if (!raw.isEmpty()) segText.append(raw);
+          }
+          if (segText.length() > 0) {
+            xmlSegment.setTextContent(segText.toString());
+            xmlContext.appendChild(xmlSegment);
+          }
         }
 
         root.appendChild(xmlContext);
@@ -1782,7 +2317,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // 1. Extract MD&A from HTML using semantic chunking
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     if (filename.endsWith(".htm") || filename.endsWith(".html")) {
-      extractMDAWithChunker(sourcePath, dataList, cik, accessionNumber, filingDate, chunker);
+      extractMDAWithChunker(sourcePath, dataList, cik, accessionNumber, filingDate, filingType, chunker);
     }
 
     // 2. Also extract from XBRL TextBlocks (if present)
@@ -1813,7 +2348,7 @@ public class XbrlToParquetConverter implements FileConverter {
               }
               data.put("year", year);
               data.put("section", "XBRL MD&A");
-              data.put("subsection", concept);
+              data.put("subsection", null);
               data.put("paragraph_number", dataList.size() + 1);
               data.put("paragraph_text", chunk.getText());
               data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
@@ -1844,6 +2379,26 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Builds a globally unique chunk_id: {accession}_{seq}_{sha256[:16]}.
+   * The hash prevents collisions when the same logical sequence position appears across accessions.
+   */
+  private String buildGlobalChunkId(String accession, int seq, String text) {
+    try {
+      java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+      byte[] hash = md.digest(
+          (accession + "_" + seq + "_" + (text != null ? text : ""))
+              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder();
+      for (int i = 0; i < 8; i++) {
+        hex.append(String.format("%02x", hash[i]));
+      }
+      return accession + "_" + seq + "_" + hex;
+    } catch (java.security.NoSuchAlgorithmException e) {
+      return accession + "_" + seq;
+    }
+  }
+
+  /**
    * Formats footnote references list as comma-separated string.
    */
   private String formatFootnoteRefs(List<String> refs) {
@@ -1858,24 +2413,28 @@ public class XbrlToParquetConverter implements FileConverter {
    * Finds Item 7 and Item 7A sections and extracts content using optimal chunk sizes.
    */
   private void extractMDAWithChunker(String htmlPath, List<Map<String, Object>> dataList,
-      String cik, String accessionNumber, String filingDate, SemanticTextChunker chunker) {
+      String cik, String accessionNumber, String filingDate, String filingType,
+      SemanticTextChunker chunker) {
     try {
       org.jsoup.nodes.Document doc;
       try (InputStream is = storageProvider.openInputStream(htmlPath)) {
         doc = Jsoup.parse(is, "UTF-8", "");
       }
 
-      // Find Item 7 and Item 7A sections
-      List<MDASection> sections = findMDASections(doc);
+      boolean is10Q = filingType != null && (filingType.startsWith("10-Q") || filingType.startsWith("10Q"));
+      List<MDASection> sections = findMDASections(doc, is10Q);
+      // Stop pattern: 10-Q Item 2 stops at Item 3; 10-K Item 7 stops at Item 8 or 9
+      String stopPattern = is10Q ? "(?i)item\\s*3\\b" : "(?i)item\\s*(8|9)\\b";
 
       for (MDASection section : sections) {
         // Use semantic chunker to extract content
         List<SemanticTextChunker.Chunk> chunks = chunker.chunkFromElement(
             section.startElement,
-            "(?i)item\\s*(8|9)\\b"  // Stop at Item 8 or 9
+            stopPattern
         );
 
         for (SemanticTextChunker.Chunk chunk : chunks) {
+          if (chunk.getText() == null || chunk.getText().trim().length() < 20) continue;
           Map<String, Object> data = new HashMap<>();
           data.put("cik", cik);
           data.put("accession_number", accessionNumber);
@@ -1891,7 +2450,10 @@ public class XbrlToParquetConverter implements FileConverter {
           }
           data.put("year", year);
           data.put("section", section.sectionName);
-          data.put("subsection", chunk.getContentType().name());
+          List<String> sectionPath = chunk.getSectionPath();
+          data.put("subsection", sectionPath.isEmpty() ? null : sectionPath.get(sectionPath.size() - 1));
+          data.put("section_path", sectionPath.isEmpty() ? null : String.join(" > ", sectionPath));
+          data.put("paragraph_continuation", chunk.isParagraphContinuation());
           data.put("paragraph_number", dataList.size() + 1);
           data.put("paragraph_text", chunk.getText());
           data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
@@ -1905,7 +2467,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
     } catch (Exception e) {
-      LOGGER.warn("Failed to extract MD&A from HTML using chunker: " + e.getMessage());
+      LOGGER.warn("Failed to extract MD&A from HTML using chunker: {}", e.getMessage(), e);
     }
   }
 
@@ -1925,43 +2487,60 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Finds MD&A sections (Item 7 and Item 7A) in the document.
    */
-  private List<MDASection> findMDASections(org.jsoup.nodes.Document doc) {
+  private List<MDASection> findMDASections(org.jsoup.nodes.Document doc, boolean is10Q) {
     List<MDASection> sections = new ArrayList<>();
 
-    // Strategy 1: Look for Item 7 text in various formats
-    org.jsoup.select.Elements elements = doc.select("*:matchesOwn((?i)item\\s*7[A]?\\b)");
-
-    // Strategy 2: Also look for Management's Discussion and Analysis directly
-    if (elements.isEmpty()) {
-      elements = doc.select("*:matchesOwn((?i)management.{0,5}discussion.{0,5}analysis)");
-    }
-
-    // Strategy 3: Look for specific HTML patterns common in SEC filings
-    if (elements.isEmpty()) {
-      elements = doc.select("td:matchesOwn((?i)item\\s*7), div:matchesOwn((?i)item\\s*7)");
-    }
-
-    for (org.jsoup.nodes.Element element : elements) {
-      String text = element.text();
-
-      // Validate this is actually Item 7 or 7A (not Item 17, 27, etc.)
-      if (!text.matches("(?i).*item\\s*7[A]?\\b.*") ||
-          text.matches("(?i).*item\\s*[1-6]?7[0-9].*")) {
-        continue;
+    if (is10Q) {
+      // 10-Q: MD&A is Item 2 (or equivalent discussion section in non-standard filers)
+      // The discussion pattern covers "Management's", "General Partner's", "Managing Member's", etc.
+      String discussionPattern = "(?i)(management|general.{0,10}partner|managing.{0,5}member).{0,5}discussion.{0,5}analysis";
+      org.jsoup.select.Elements elements = doc.select("*:matchesOwn((?i)item\\s*2\\b)");
+      if (elements.isEmpty()) {
+        elements = doc.select("*:matchesOwn(" + discussionPattern + ")");
       }
-
-      // Skip table of contents entries
-      if (text.length() < 100 &&
-          (text.matches("(?i).*page.*") || text.matches(".*\\d+$"))) {
-        continue;
+      if (elements.isEmpty()) {
+        elements = doc.select("td:matchesOwn((?i)item\\s*2), div:matchesOwn((?i)item\\s*2)");
       }
-
-      String sectionName = text.contains("7A") || text.contains("7a") ? "Item 7A" : "Item 7";
-
-      // Find content start - may be this element or a sibling
-      org.jsoup.nodes.Element contentStart = findContentStart(element);
-      if (contentStart != null) {
-        sections.add(new MDASection(sectionName, contentStart));
+      for (org.jsoup.nodes.Element element : elements) {
+        String text = element.text();
+        boolean isItem2 = text.matches("(?i).*item\\s*2\\b.*");
+        boolean isDiscussionSection = text.matches("(?i).*" + discussionPattern + ".*");
+        if (!isItem2 && !isDiscussionSection) continue;
+        // Skip table of contents entries
+        if (text.length() < 100 &&
+            (text.matches("(?i).*page.*") || text.matches(".*\\d+$"))) {
+          continue;
+        }
+        org.jsoup.nodes.Element contentStart = findContentStart(element);
+        if (contentStart != null) {
+          sections.add(new MDASection("Item 2", contentStart));
+        }
+      }
+    } else {
+      // 10-K: MD&A is Item 7 and Item 7A
+      org.jsoup.select.Elements elements = doc.select("*:matchesOwn((?i)item\\s*7[A]?\\b)");
+      if (elements.isEmpty()) {
+        elements = doc.select("*:matchesOwn((?i)management.{0,5}discussion.{0,5}analysis)");
+      }
+      if (elements.isEmpty()) {
+        elements = doc.select("td:matchesOwn((?i)item\\s*7), div:matchesOwn((?i)item\\s*7)");
+      }
+      for (org.jsoup.nodes.Element element : elements) {
+        String text = element.text();
+        if (!text.matches("(?i).*item\\s*7[A]?\\b.*") ||
+            text.matches("(?i).*item\\s*[1-6]?7[0-9].*")) {
+          continue;
+        }
+        // Skip table of contents entries
+        if (text.length() < 100 &&
+            (text.matches("(?i).*page.*") || text.matches(".*\\d+$"))) {
+          continue;
+        }
+        String sectionName = text.contains("7A") || text.contains("7a") ? "Item 7A" : "Item 7";
+        org.jsoup.nodes.Element contentStart = findContentStart(element);
+        if (contentStart != null) {
+          sections.add(new MDASection(sectionName, contentStart));
+        }
       }
     }
 
@@ -1977,19 +2556,26 @@ public class XbrlToParquetConverter implements FileConverter {
       return headerElement;
     }
 
-    // Look at parent's next sibling
-    org.jsoup.nodes.Element parent = headerElement.parent();
-    if (parent != null) {
-      org.jsoup.nodes.Element nextSibling = parent.nextElementSibling();
-      if (nextSibling != null && nextSibling.text().length() > 200) {
-        return nextSibling;
-      }
-    }
-
-    // Try direct next sibling
+    // Try direct next sibling first
     org.jsoup.nodes.Element nextSibling = headerElement.nextElementSibling();
     if (nextSibling != null && nextSibling.text().length() > 200) {
       return nextSibling;
+    }
+
+    // Climb up through inline/block ancestors to find the nearest block-level container,
+    // then look at that container's next sibling for actual content.
+    // This handles headings nested inside <b>/<span>/<td> where content follows as siblings.
+    org.jsoup.nodes.Element current = headerElement;
+    while (current.parent() != null) {
+      org.jsoup.nodes.Element parent = current.parent();
+      String parentTag = parent.tagName().toLowerCase(java.util.Locale.ROOT);
+      // Block-level tags: the content likely follows as parent's siblings
+      if (parentTag.equals("p") || parentTag.equals("div") || parentTag.equals("td")
+          || parentTag.equals("tr") || parentTag.equals("li") || parentTag.equals("section")) {
+        // Return the block-level parent itself so the chunker includes heading + content siblings
+        return parent;
+      }
+      current = parent;
     }
 
     // Fall back to the header element itself
@@ -2061,6 +2647,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
     List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(content);
     for (SemanticTextChunker.Chunk chunk : chunks) {
+      if (chunk.getText() == null || chunk.getText().trim().length() < 20) continue;
       Map<String, Object> data = new HashMap<>();
       data.put("cik", cik);
       data.put("accession_number", accessionNumber);
@@ -2076,7 +2663,9 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       data.put("year", year);
       data.put("section", section);
-      data.put("subsection", "General");
+      data.put("subsection", null);
+      data.put("section_path", null);
+      data.put("paragraph_continuation", chunk.isParagraphContinuation());
       data.put("paragraph_number", dataList.size() + 1);
       data.put("paragraph_text", chunk.getText());
       data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
@@ -2203,7 +2792,7 @@ public class XbrlToParquetConverter implements FileConverter {
   private void extractMDAContent(org.jsoup.nodes.Element startElement, String sectionName,
       List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
 
-    String subsection = "Overview";
+    String subsection = null;
     int paragraphNum = 1;
     org.jsoup.nodes.Element current = startElement;
     int emptyCount = 0;
@@ -2239,6 +2828,8 @@ public class XbrlToParquetConverter implements FileConverter {
             data.put("filing_date", filingDate);
             data.put("section", sectionName);
             data.put("subsection", subsection);
+            data.put("section_path", null);
+            data.put("paragraph_continuation", false);
             data.put("paragraph_number", paragraphNum++);
             data.put("paragraph_text", paragraph.trim());
             data.put("footnote_refs", extractFootnoteReferences(paragraph));
@@ -2276,7 +2867,9 @@ public class XbrlToParquetConverter implements FileConverter {
           data.put("accession_number", accessionNumber);
           data.put("filing_date", filingDate);
           data.put("section", sectionName);
-          data.put("subsection", "General");
+          data.put("subsection", null);
+          data.put("section_path", null);
+          data.put("paragraph_continuation", false);
           data.put("paragraph_number", paragraphNum++);
           data.put("paragraph_text", paragraphText);
           data.put("footnote_refs", extractFootnoteReferences(paragraphText));
@@ -2296,7 +2889,9 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("filing_date", filingDate);
       data.put("year", extractYearFromDate(filingDate));
       data.put("section", sectionName);
-      data.put("subsection", "General");
+      data.put("subsection", null);
+      data.put("section_path", null);
+      data.put("paragraph_continuation", false);
       data.put("paragraph_number", paragraphNum);
       data.put("paragraph_text", remaining);
       data.put("footnote_refs", extractFootnoteReferences(remaining));
@@ -2472,6 +3067,16 @@ public class XbrlToParquetConverter implements FileConverter {
       String linkbaseType = determineLinkbaseType(arcRole);
       data.put("linkbase_type", linkbaseType);
       data.put("arc_role", arcRole);
+      Node arcParent1 = arc.getParentNode();
+      String linkRole1 = null;
+      if (arcParent1 instanceof Element) {
+        Element parentLink1 = (Element) arcParent1;
+        linkRole1 = parentLink1.getAttribute("xlink:role");
+        if (linkRole1 == null || linkRole1.isEmpty()) {
+          linkRole1 = parentLink1.getAttribute("role");
+        }
+      }
+      data.put("link_role", linkRole1);
 
       // Get from and to concepts
       String from = arc.getAttribute("from");
@@ -2606,10 +3211,14 @@ public class XbrlToParquetConverter implements FileConverter {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
-        try (InputStream is = storageProvider.openInputStream(sourcePath)) {
+        try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourcePath))) {
           originalHtmlDoc = builder.parse(is);
         }
         LOGGER.debug("Successfully parsed original HTML file for relationship extraction");
+      } catch (org.xml.sax.SAXParseException e) {
+        LOGGER.info("Strict XML parse failed for {} relationships: {} — falling back to JSoup",
+            filename, e.getMessage());
+        originalHtmlDoc = parseWithJsoupFallback(sourcePath);
       } catch (Exception e) {
         LOGGER.warn("Failed to parse original HTML file for relationships: " + e.getMessage());
       }
@@ -2654,6 +3263,16 @@ public class XbrlToParquetConverter implements FileConverter {
               data.put("year", extractYearFromDate(filingDate));
               data.put("linkbase_type", determineLinkbaseType(arcrole));
               data.put("arc_role", arcrole);
+              Node ixRelParent = ixRel.getParentNode();
+              String ixRelLinkRole = null;
+              if (ixRelParent instanceof Element) {
+                Element ixRelParentLink = (Element) ixRelParent;
+                ixRelLinkRole = ixRelParentLink.getAttribute("xlink:role");
+                if (ixRelLinkRole == null || ixRelLinkRole.isEmpty()) {
+                  ixRelLinkRole = ixRelParentLink.getAttribute("role");
+                }
+              }
+              data.put("link_role", ixRelLinkRole);
               data.put("from_concept", cleanConceptName(fromRef));
               data.put("to_concept", cleanConceptName(toRef));
               data.put("weight", weight != null && !weight.isEmpty() ? Double.parseDouble(weight) : null);
@@ -2701,6 +3320,16 @@ public class XbrlToParquetConverter implements FileConverter {
                 data.put("year", extractYearFromDate(filingDate));
                 data.put("linkbase_type", "reference");
                 data.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
+                Node footnoteParent = footnote.getParentNode();
+                String footnoteLinkRole = null;
+                if (footnoteParent instanceof Element) {
+                  Element footnoteParentLink = (Element) footnoteParent;
+                  footnoteLinkRole = footnoteParentLink.getAttribute("xlink:role");
+                  if (footnoteLinkRole == null || footnoteLinkRole.isEmpty()) {
+                    footnoteLinkRole = footnoteParentLink.getAttribute("role");
+                  }
+                }
+                data.put("link_role", footnoteLinkRole);
                 data.put("from_concept", cleanConceptName(concept));
                 data.put("to_concept", "footnote_" + id);
                 data.put("weight", null);
@@ -2750,6 +3379,16 @@ public class XbrlToParquetConverter implements FileConverter {
                   data.put("year", extractYearFromDate(filingDate));
                   data.put("linkbase_type", "presentation");
                   data.put("arc_role", "table-structure");
+                  Node cellParent = cell.getParentNode();
+                  String cellLinkRole = null;
+                  if (cellParent instanceof Element) {
+                    Element cellParentLink = (Element) cellParent;
+                    cellLinkRole = cellParentLink.getAttribute("xlink:role");
+                    if (cellLinkRole == null || cellLinkRole.isEmpty()) {
+                      cellLinkRole = cellParentLink.getAttribute("role");
+                    }
+                  }
+                  data.put("link_role", cellLinkRole);
                   data.put("from_concept", cleanConceptName(lastParentConcept));
                   data.put("to_concept", cleanConceptName(concept));
                   data.put("weight", null);
@@ -2794,6 +3433,16 @@ public class XbrlToParquetConverter implements FileConverter {
             data.put("year", extractYearFromDate(filingDate));
             data.put("linkbase_type", "calculation");
             data.put("arc_role", "summation-item");
+            Node elementParent = element.getParentNode();
+            String elementLinkRole = null;
+            if (elementParent instanceof Element) {
+              Element elementParentLink = (Element) elementParent;
+              elementLinkRole = elementParentLink.getAttribute("xlink:role");
+              if (elementLinkRole == null || elementLinkRole.isEmpty()) {
+                elementLinkRole = elementParentLink.getAttribute("role");
+              }
+            }
+            data.put("link_role", elementLinkRole);
             data.put("from_concept", cleanConceptName(parentConcept));
             data.put("to_concept", cleanConceptName(concept));
             data.put("weight", weight.isEmpty() ? 1.0 : Double.parseDouble(weight));
@@ -2910,6 +3559,27 @@ public class XbrlToParquetConverter implements FileConverter {
 
     LOGGER.debug("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
 
+    // Fallback: linkbases embedded directly in the XSD (no linkbaseRef elements)
+    if (linkbaseRefs.getLength() == 0) {
+      boolean foundEmbedded = false;
+      String[] embeddedTypes = {"calculationLink", "presentationLink", "definitionLink"};
+      for (String linkType : embeddedTypes) {
+        NodeList embedded = xsdDoc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", linkType);
+        if (embedded.getLength() == 0) {
+          embedded = xsdDoc.getElementsByTagName("link:" + linkType);
+        }
+        if (embedded.getLength() > 0) {
+          foundEmbedded = true;
+          break;
+        }
+      }
+      if (foundEmbedded) {
+        LOGGER.debug("Detected linkbase arcs embedded directly in XSD — parsing XSD as linkbase document");
+        extractLinkbaseRelationships(xsdDoc, columns, dataList, cik, accession, filingDate, "mixed");
+        return;
+      }
+    }
+
     // Process each linkbase file
     for (int i = 0; i < linkbaseRefs.getLength(); i++) {
       Element linkbaseRef = (Element) linkbaseRefs.item(i);
@@ -2995,6 +3665,16 @@ public class XbrlToParquetConverter implements FileConverter {
             arcRole = element.getAttribute("arcrole");
           }
           data.put("arc_role", arcRole);
+          Node linkbaseArcParent = element.getParentNode();
+          String linkbaseArcLinkRole = null;
+          if (linkbaseArcParent instanceof Element) {
+            Element linkbaseArcParentLink = (Element) linkbaseArcParent;
+            linkbaseArcLinkRole = linkbaseArcParentLink.getAttribute("xlink:role");
+            if (linkbaseArcLinkRole == null || linkbaseArcLinkRole.isEmpty()) {
+              linkbaseArcLinkRole = linkbaseArcParentLink.getAttribute("role");
+            }
+          }
+          data.put("link_role", linkbaseArcLinkRole);
 
           // Clean concept names
           data.put("from_concept", cleanConceptName(from));
@@ -3177,29 +3857,185 @@ public class XbrlToParquetConverter implements FileConverter {
    * <p>Valid entity references ({@code &amp;}, {@code &lt;}, {@code &gt;},
    * {@code &quot;}, {@code &apos;}, {@code &#NNN;}, {@code &#xHHH;}) are preserved.
    */
-  private InputStream sanitizeXmlStream(InputStream is) throws IOException {
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    byte[] buf = new byte[8192];
-    int n;
-    while ((n = is.read(buf)) != -1) {
-      baos.write(buf, 0, n);
+  private InputStream sanitizeXmlStream(InputStream is) {
+    return new HtmlEntityFilterStream(is);
+  }
+
+  /**
+   * Streaming filter that replaces HTML named entities (e.g. {@code &nbsp;}) with their numeric
+   * XML equivalents on the fly. Processes the stream with O(1) memory — no full-file buffering.
+   *
+   * <p>The five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;}) pass through
+   * unchanged. Unknown HTML entities have their {@code &} escaped to {@code &amp;}.
+   * Bare {@code &} characters (not followed by a valid entity name and {@code ;}) are also
+   * escaped to {@code &amp;}.
+   */
+  private static final class HtmlEntityFilterStream extends InputStream {
+    private static final int MAX_ENTITY_NAME = 20;
+    private static final int BUF_SIZE = 8192;
+
+    // BufferedInputStream ensures large reads from source; PushbackInputStream
+    // is only used to push back single bytes (entity name chars on mismatch).
+    private final java.io.PushbackInputStream in;
+
+    // Pending output bytes: replacement text waiting to be consumed by read()
+    private final byte[] pending = new byte[MAX_ENTITY_NAME + 8];
+    private int pendingStart = 0;
+    private int pendingEnd = 0;
+
+    // Overflow: tail of a bulk-read chunk saved here instead of pushed back to
+    // the inner stream. The pushback buffer (22 bytes) is too small for a full
+    // SAX read chunk (typically 4-8 KB), so we keep excess bytes here.
+    private byte[] overflow = null;
+    private int overflowPos = 0;
+
+    private final byte[] nameBuf = new byte[MAX_ENTITY_NAME];
+
+    HtmlEntityFilterStream(InputStream source) {
+      this.in = new java.io.PushbackInputStream(
+          new java.io.BufferedInputStream(source, BUF_SIZE),
+          MAX_ENTITY_NAME + 2);
     }
-    is.close();
 
-    String content = baos.toString(StandardCharsets.UTF_8.name());
+    @Override public int read() throws IOException {
+      if (pendingStart < pendingEnd) return pending[pendingStart++] & 0xFF;
+      pendingStart = pendingEnd = 0;
 
-    // Replace bare '&' that are NOT followed by a valid entity reference:
-    //   &amp; &lt; &gt; &quot; &apos; &#digits; &#xhex;
-    // The negative lookahead matches '&' not followed by word-chars+semicolon or #
-    String sanitized = content.replaceAll("&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)", "&amp;");
+      int b = nextByte();
+      if (b == -1 || b != '&') return b;
 
-    if (!sanitized.equals(content)) {
-      int fixes = sanitized.length() - content.length();
-      // Each bare '&' becomes '&amp;' — 4 extra chars per fix
-      LOGGER.info("Sanitized {} bare '&' characters in XML input", fixes / 4);
+      int nameLen = 0;
+      boolean foundSemi = false;
+      while (nameLen < MAX_ENTITY_NAME) {
+        int c = nextByte();
+        if (c == -1) break;
+        if (c == ';') { foundSemi = true; break; }
+        boolean valid = nameLen == 0
+            ? ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+            : ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
+        if (!valid) { pushOneByte((byte) c); break; }
+        nameBuf[nameLen++] = (byte) c;
+      }
+
+      if (nameLen > 0 && foundSemi) {
+        byte[] repl = resolveEntity(new String(nameBuf, 0, nameLen, StandardCharsets.US_ASCII))
+            .getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(repl, 1, pending, 0, repl.length - 1);
+        pendingEnd = repl.length - 1;
+        return repl[0] & 0xFF;
+      }
+
+      // Not a complete/known entity — push name bytes back and emit &amp;
+      for (int i = nameLen - 1; i >= 0; i--) pushOneByte(nameBuf[i]);
+      pending[0] = 'a'; pending[1] = 'm'; pending[2] = 'p'; pending[3] = ';';
+      pendingEnd = 4;
+      return '&';
     }
 
-    return new ByteArrayInputStream(sanitized.getBytes(StandardCharsets.UTF_8));
+    @Override public int read(byte[] buf, int off, int len) throws IOException {
+      if (len == 0) return 0;
+
+      // Drain pending replacement bytes first
+      if (pendingStart < pendingEnd) {
+        int n = Math.min(pendingEnd - pendingStart, len);
+        System.arraycopy(pending, pendingStart, buf, off, n);
+        pendingStart += n;
+        return n;
+      }
+      pendingStart = pendingEnd = 0;
+
+      // Drain overflow from a previous bulk read
+      if (overflow != null) {
+        int avail = overflow.length - overflowPos;
+        // Scan for '&' in the available slice (up to len bytes)
+        int scan = Math.min(avail, len);
+        for (int i = 0; i < scan; i++) {
+          if (overflow[overflowPos + i] == '&') {
+            if (i > 0) {
+              System.arraycopy(overflow, overflowPos, buf, off, i);
+              overflowPos += i;
+              return i;
+            }
+            // '&' at start of overflow — fall through to single-byte path below
+            break;
+          }
+        }
+        if (overflow[overflowPos] != '&') {
+          // No '&' in window — copy and advance
+          System.arraycopy(overflow, overflowPos, buf, off, scan);
+          overflowPos += scan;
+          if (overflowPos >= overflow.length) overflow = null;
+          return scan;
+        }
+        // '&' is at overflow[overflowPos] — handle via single-byte read()
+        int b = read();
+        if (b == -1) return -1;
+        buf[off] = (byte) b;
+        return 1;
+      }
+
+      // Fast path: read a chunk from the buffered inner stream
+      int n = in.read(buf, off, len);
+      if (n <= 0) return n;
+
+      for (int i = 0; i < n; i++) {
+        if (buf[off + i] == '&') {
+          if (i > 0) {
+            // Save tail starting at '&' as overflow; return clean prefix
+            overflow = java.util.Arrays.copyOfRange(buf, off + i, off + n);
+            overflowPos = 0;
+            return i;
+          }
+          // '&' at position 0: save everything after it as overflow, process '&'
+          if (n > 1) {
+            overflow = java.util.Arrays.copyOfRange(buf, off + 1, off + n);
+            overflowPos = 0;
+          }
+          int b = read();
+          if (b == -1) return -1;
+          buf[off] = (byte) b;
+          return 1;
+        }
+      }
+      return n;
+    }
+
+    /** Returns next byte from overflow (if any) then from the pushback stream. */
+    private int nextByte() throws IOException {
+      if (overflow != null && overflowPos < overflow.length) {
+        int b = overflow[overflowPos++] & 0xFF;
+        if (overflowPos >= overflow.length) overflow = null;
+        return b;
+      }
+      return in.read();
+    }
+
+    /** Pushes a single byte so it is returned by the next nextByte() call. */
+    private void pushOneByte(byte b) throws IOException {
+      if (overflow != null) {
+        // Prepend to overflow rather than using the small pushback buffer
+        byte[] ext = new byte[overflow.length - overflowPos + 1];
+        ext[0] = b;
+        System.arraycopy(overflow, overflowPos, ext, 1, overflow.length - overflowPos);
+        overflow = ext;
+        overflowPos = 0;
+      } else {
+        in.unread(b); // single byte — always fits in pushback buffer
+      }
+    }
+
+    @Override public void close() throws IOException {
+      in.close();
+    }
+
+    private static String resolveEntity(String name) {
+      if ("amp".equals(name) || "lt".equals(name) || "gt".equals(name)
+          || "quot".equals(name) || "apos".equals(name)) {
+        return "&" + name + ";";
+      }
+      String numeric = HTML_ENTITY_MAP.get(name);
+      return numeric != null ? numeric : "&amp;" + name + ";";
+    }
   }
 
   /**
@@ -3358,8 +4194,63 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Also check for ownershipDocument root element
+    if (doc == null) {
+      return false;
+    }
     NodeList ownershipDocs = doc.getElementsByTagName("ownershipDocument");
     return ownershipDocs.getLength() > 0;
+  }
+
+  /**
+   * Parse a Form 3/4/5 XML file directly and delegate to convertInsiderForm.
+   * Bypasses the HTML/inline-XBRL detection path so that ownership XML documents
+   * are never mistaken for plain HTML pages.
+   */
+  private List<String> processInsiderXmlForm(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
+    String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1);
+    String accession = metadata != null ? metadata.getHint("accession") : null;
+    if (accession == null || accession.isEmpty()) {
+      accession = extractAccessionFromPath(sourceFilePath);
+    }
+    Document doc;
+    try {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
+        doc = builder.parse(is);
+      }
+    } catch (org.xml.sax.SAXParseException e) {
+      LOGGER.info("XML parse failed for insider form {}: {} — falling back to JSoup", fileName, e.getMessage());
+      doc = parseWithJsoupFallback(sourceFilePath);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to parse insider form {}: {}", fileName, e.getMessage());
+      return new ArrayList<String>();
+    }
+    if (doc == null) {
+      LOGGER.warn("No parseable document found for insider form: {}", fileName);
+      return new ArrayList<String>();
+    }
+    String cik = extractCik(doc, sourceFilePath);
+    if (cik == null || cik.equals("0000000000")) {
+      LOGGER.warn("Could not extract CIK from insider form: {}", fileName);
+      return new ArrayList<String>();
+    }
+    String filingType = extractFilingType(doc, sourceFilePath);
+    if (filingType == null || filingType.equals("UNKNOWN")) {
+      String hintForm = metadata != null ? metadata.getHint("form") : null;
+      filingType = hintForm != null ? hintForm : "4";
+    }
+    String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
+    String hintFilingDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String actualFilingDate = (hintFilingDate != null) ? hintFilingDate : periodEndDate;
+    if (actualFilingDate == null) {
+      actualFilingDate = String.valueOf(java.time.Year.now().getValue()) + "-01-01";
+    }
+    LOGGER.info("Processing insider form {} CIK={} period={} accession={}",
+        filingType, cik, periodEndDate, accession);
+    return convertInsiderForm(doc, sourceFilePath, targetDirectoryPath, cik, filingType, actualFilingDate, accession);
   }
 
   /**
@@ -3390,7 +4281,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // For insider forms (3/4/5), filing date is used for partition year (not 10-K/10-Q)
       String partitionYear = getPartitionYear(filingType, filingDate, filingDate, doc);
 
-      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes sec)
       // Uses year-only partitioning - CIK/filing_type filtering done via Parquet/Iceberg statistics
       String relativePartitionPath = String.format("year=%s", partitionYear);
 
@@ -3484,6 +4375,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String officerTitle = getElementText(reportingOwner, "officerTitle");
 
         // Process all transaction and holding types for this reporting owner
+        int sizeBefore = dataList.size();
         addNonDerivativeTransactions(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addNonDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
@@ -3492,6 +4384,14 @@ public class XbrlToParquetConverter implements FileConverter {
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
             isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
+
+        // If no transactions or holdings were found (e.g., Form 3 with noSecuritiesOwned),
+        // create an initial appointment record to preserve the insider relationship data
+        if (dataList.size() == sizeBefore) {
+          addInitialAppointmentRecord(cik, filingType, filingDate, accession,
+              reportingPersonCik, reportingPersonName, isDirector, isOfficer,
+              isTenPercentOwner, officerTitle, dataList);
+        }
       }
     } else {
       // Fallback for documents without explicit reporting owner structure
@@ -3511,6 +4411,12 @@ public class XbrlToParquetConverter implements FileConverter {
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       addDerivativeHoldings(doc, cik, filingType, filingDate, accession, reportingPersonCik, reportingPersonName,
           isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
+
+      if (dataList.isEmpty()) {
+        addInitialAppointmentRecord(cik, filingType, filingDate, accession,
+            reportingPersonCik, reportingPersonName, isDirector, isOfficer,
+            isTenPercentOwner, officerTitle, dataList);
+      }
     }
 
     return dataList;
@@ -3779,6 +4685,47 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Creates an initial appointment record for insiders with no securities owned.
+   *
+   * <p>Form 3 filings with {@code <noSecuritiesOwned>} indicate a newly appointed insider
+   * who holds zero shares. This method preserves the insider relationship data
+   * (name, CIK, role flags, officer title) that would otherwise be lost.
+   *
+   * <p>The record uses {@code transaction_code = "I"} (Initial appointment, no holdings)
+   * with {@code shares_owned_after = 0} to distinguish from holdings ({@code "H"})
+   * and transactions ({@code "P"}, {@code "S"}, etc.).
+   */
+  private void addInitialAppointmentRecord(String cik, String filingType, String filingDate,
+      String accession, String reportingPersonCik, String reportingPersonName,
+      boolean isDirector, boolean isOfficer, boolean isTenPercentOwner, String officerTitle,
+      List<Map<String, Object>> dataList) {
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("accession_number", accession);
+    data.put("cik", cik);
+    data.put("filing_date", filingDate);
+    data.put("filing_type", filingType);
+    data.put("year", extractYearFromDate(filingDate));
+    data.put("reporting_person_cik", reportingPersonCik);
+    data.put("reporting_person_name", reportingPersonName);
+    data.put("is_director", isDirector);
+    data.put("is_officer", isOfficer);
+    data.put("is_ten_percent_owner", isTenPercentOwner);
+    data.put("officer_title", officerTitle);
+    data.put("transaction_date", filingDate);
+    data.put("transaction_code", "I"); // I = Initial appointment, no securities owned
+    data.put("security_title", null);
+    data.put("shares_transacted", null);
+    data.put("price_per_share", null);
+    data.put("shares_owned_after", 0.0);
+    data.put("acquired_disposed_code", null);
+    data.put("ownership_type", null);
+    data.put("footnotes", "No securities beneficially owned at time of initial filing");
+
+    dataList.add(data);
+  }
+
+  /**
    * Load schema for insider transactions from metadata.
    */
   private java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> loadInsiderTransactionColumns() {
@@ -3978,7 +4925,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("cik", cik);
         chunk.put("accession_number", accession);
         chunk.put("year", year);
-        chunk.put("chunk_id", "item_" + itemNumber + "_" + paraSeq);
+        chunk.put("chunk_id", accession + "_item_" + i + "_" + paraSeq);
         chunk.put("source_type", "8k_item");
         chunk.put("section", "Item " + itemNumber);
         chunk.put("sequence", sequence++);
@@ -4007,10 +4954,13 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
     data.put("accession_number", accession);
-    data.put("filing_type", filingType);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
 
     int year = 0;
@@ -4032,16 +4982,18 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("primary_document", filename);
     data.put("document_type", filingType);
 
-    // DEI fields not available from plain HTML (no XBRL)
+    // Enrich from EDGAR submissions.json for fields unavailable in plain HTML
+    String fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
     data.put("state_of_incorporation", null);
-    data.put("fiscal_year_end", null);
+    data.put("fiscal_year_end", fiscalYearEnd);
     data.put("business_address", null);
     data.put("mailing_address", null);
     data.put("phone", null);
     data.put("period_end_date", null);
-    data.put("period_of_report", null);
-    data.put("sic_code", null);
+    data.put("period_of_report", filingDate);
+    data.put("sic_code", submissionsInfo.get("sic_code"));
     data.put("irs_number", null);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
     data.put("acceptance_datetime", null);
     data.put("file_size", null);
     data.put("fiscal_year", null);
@@ -4093,7 +5045,7 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("cik", cik);
         data.put("accession_number", accession);
         data.put("year", year);  // Required for Iceberg partitioning
-        data.put("chunk_id", "remark_" + i);
+        data.put("chunk_id", accession + "_remark_" + i);
         data.put("source_type", "insider_remark");
         data.put("section", "Form " + filingType);
         data.put("sequence", sequence++);
@@ -4116,7 +5068,7 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("cik", cik);
         data.put("accession_number", accession);
         data.put("year", year);  // Required for Iceberg partitioning
-        data.put("chunk_id", "footnote_" + i);
+        data.put("chunk_id", accession + "_footnote_" + i);
         data.put("source_type", "insider_footnote");
         data.put("section", "Form " + filingType);
         data.put("sequence", sequence++);
@@ -4137,6 +5089,69 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Wrote " + dataList.size() + " vectorized insider chunks to " + outputPath);
     } else {
       LOGGER.info("Created empty chunks file (no content > 20 chars) for " + outputPath);
+    }
+  }
+
+  /**
+   * Downloads EX-99.x exhibit files for an 8-K filing into the accession cache directory.
+   * Skips files that are already cached. Parses the EDGAR formatted filing index to find
+   * exhibit links; does nothing if the index cannot be fetched.
+   */
+  private void downloadExhibitFilesForAccession(String cik, String accession,
+      String accessionDir) {
+    String cikNumeric = cik.replaceFirst("^0+", "");
+    String accessionNoDash = accession.replace("-", "");
+    String indexUrl = String.format(
+        "https://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.html",
+        cikNumeric, accessionNoDash, accession);
+
+    String indexHtml = downloadFile(indexUrl);
+    if (indexHtml == null) {
+      LOGGER.debug("Could not fetch 8-K exhibit index for {}", accession);
+      return;
+    }
+
+    LOGGER.info("Fetching 8-K exhibit index for {}", accession);
+
+    org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+    org.jsoup.select.Elements rows = doc.select("table tr");
+    String baseUrl = String.format(
+        "https://www.sec.gov/Archives/edgar/data/%s/%s", cikNumeric, accessionNoDash);
+
+    for (org.jsoup.nodes.Element row : rows) {
+      org.jsoup.select.Elements cells = row.select("td");
+      if (cells.size() < 4) {
+        continue;
+      }
+      String typeText = cells.get(3).text().trim().toUpperCase(Locale.ROOT);
+      if (!typeText.startsWith("EX-99")) {
+        continue;
+      }
+      org.jsoup.select.Elements links = cells.get(2).select("a[href]");
+      if (links.isEmpty()) {
+        continue;
+      }
+      String href = links.first().attr("href");
+      String filename = href.contains("/") ? href.substring(href.lastIndexOf('/') + 1) : href;
+      String filenameLower = filename.toLowerCase(Locale.ROOT);
+      if (!filenameLower.endsWith(".htm") && !filenameLower.endsWith(".html")) {
+        continue;
+      }
+
+      String targetPath = storageProvider.resolvePath(accessionDir, filename);
+      try {
+        if (storageProvider.exists(targetPath)) {
+          continue;
+        }
+        String exhibitContent = downloadFile(baseUrl + "/" + filename);
+        if (exhibitContent != null) {
+          storageProvider.writeFile(targetPath,
+              exhibitContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          LOGGER.info("Downloaded 8-K exhibit {} for {}", filename, accession);
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to download exhibit {}: {}", filename, e.getMessage());
+      }
     }
   }
 
@@ -4211,6 +5226,46 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
+      // Download EX-99.x exhibit files from EDGAR if not already cached
+      String accessionDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+      String primaryDocName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
+      if (accession != null && !accession.isEmpty() && cik != null && !cik.isEmpty()) {
+        downloadExhibitFilesForAccession(cik, accession, accessionDir);
+      }
+
+      // Process separately-downloaded exhibit files from the accession directory
+      try {
+        List<StorageProvider.FileEntry> exhibitFiles = storageProvider.listFiles(accessionDir, false);
+        for (StorageProvider.FileEntry entry : exhibitFiles) {
+          if (entry.isDirectory()) {
+            continue;
+          }
+          String entryName = entry.getName();
+          if (entryName.equals(primaryDocName)) {
+            continue;
+          }
+          String entryLower = entryName.toLowerCase(Locale.ROOT);
+          if (!entryLower.endsWith(".htm") && !entryLower.endsWith(".html")) {
+            continue;
+          }
+          try (InputStream exhibitIs = storageProvider.openInputStream(entry.getPath())) {
+            String exhibitContent = new String(readAllBytes(exhibitIs),
+                java.nio.charset.StandardCharsets.UTF_8);
+            List<Map<String, Object>> exhibitRecords =
+                extractEarningsFromExhibit(exhibitContent, cik, filingType, filingDate, accession);
+            if (!exhibitRecords.isEmpty()) {
+              LOGGER.info("Extracted {} earnings paragraphs from exhibit {} for {}",
+                  exhibitRecords.size(), entryName, accession);
+              earningsRecords.addAll(exhibitRecords);
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Failed to process exhibit {}: {}", entryName, e.getMessage());
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to list exhibits in {}: {}", accessionDir, e.getMessage());
+      }
+
       // 3. Write earnings_transcripts (unchanged - only when earnings content found)
       if (!earningsRecords.isEmpty()) {
         String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
@@ -4238,7 +5293,7 @@ public class XbrlToParquetConverter implements FileConverter {
           chunk.put("cik", cik);
           chunk.put("accession_number", accession);
           chunk.put("year", year);
-          chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+          chunk.put("chunk_id", accession + "_earnings_" + earnings.get("paragraph_number"));
           chunk.put("source_type", "earnings");
           chunk.put("section", earnings.get("section_type"));
           chunk.put("sequence", sequence++);
@@ -4316,7 +5371,7 @@ public class XbrlToParquetConverter implements FileConverter {
       chunk.put("cik", cik);
       chunk.put("accession_number", accession);
       chunk.put("year", year);
-      chunk.put("chunk_id", "earnings_" + earnings.get("paragraph_number"));
+      chunk.put("chunk_id", accession + "_earnings_" + earnings.get("paragraph_number"));
       chunk.put("source_type", "earnings");
       chunk.put("section", earnings.get("section_type"));
       chunk.put("sequence", sequence++);
@@ -4461,46 +5516,102 @@ public class XbrlToParquetConverter implements FileConverter {
     return "other";
   }
 
-  /**
-   * Extract speaker name from paragraph (for transcripts).
-   */
   private String extractSpeaker(String text) {
-    // Look for patterns like "Name - Title:" or "Name:"
-    Pattern speakerPattern = Pattern.compile("^([A-Z][a-z]+ [A-Z][a-z]+)\\s*[-:]");
-    Matcher matcher = speakerPattern.matcher(text);
-
-    if (matcher.find()) {
-      return matcher.group(1);
+    // Press release: "...", said [First] [Last], [title].
+    Pattern afterQuote = Pattern.compile(
+        "said\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+)[,.]");
+    Matcher m1 = afterQuote.matcher(text);
+    if (m1.find()) {
+      return m1.group(1);
     }
-
+    // Press release: [First] [Last], [title], said: "..."
+    Pattern beforeQuote = Pattern.compile(
+        "^([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+)\\s*,.*?\\bsaid\\b");
+    Matcher m2 = beforeQuote.matcher(text);
+    if (m2.find()) {
+      return m2.group(1);
+    }
+    // Transcript ALL-CAPS format: "OPERATOR:" or "TIM COOK:" (max 2 words to avoid headers)
+    Pattern allCaps = Pattern.compile("^([A-Z]{2,}(?:\\s+[A-Z]{2,})?):");
+    Matcher m3 = allCaps.matcher(text);
+    if (m3.find()) {
+      String[] words = m3.group(1).split("\\s+");
+      String lastWord = words[words.length - 1].toLowerCase(Locale.ROOT);
+      if (!NON_SURNAME_WORDS.contains(lastWord)) {
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+          if (sb.length() > 0) sb.append(' ');
+          sb.append(Character.toUpperCase(word.charAt(0)))
+              .append(word.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return sb.toString();
+      }
+    }
+    // Transcript: "Name:" or "Name - Title:" (space required before dash to avoid compound words)
+    Pattern transcript = Pattern.compile("^([A-Z][a-z]+ [A-Z][a-z]+)(\\s*:|\\s+-)");
+    Matcher m4 = transcript.matcher(text);
+    if (m4.find()) {
+      String candidate = m4.group(1);
+      String lastName = candidate.substring(candidate.indexOf(' ') + 1).toLowerCase(Locale.ROOT);
+      if (!NON_SURNAME_WORDS.contains(lastName)) {
+        return candidate;
+      }
+    }
     return null;
   }
 
-  /**
-   * Extract speaker role from paragraph.
-   */
-  private String extractSpeakerRole(String text) {
-    // Look for patterns like "Name - CEO:" or "Name, Chief Executive Officer:"
-    Pattern rolePattern = Pattern.compile("[-,]\\s*([^:]+):");
-    Matcher matcher = rolePattern.matcher(text);
+  private static final java.util.Set<String> NON_SURNAME_WORDS =
+      new java.util.HashSet<>(java.util.Arrays.asList(
+          "contact", "metrics", "east", "west", "north", "south", "center",
+          "division", "update", "summary", "overview", "statement", "report",
+          "services", "solutions", "systems", "technologies", "products",
+          "reconciliation", "highlights", "guidance", "outlook", "segment"
+      ));
 
-    if (matcher.find()) {
-      String role = matcher.group(1).trim();
-
-      // Normalize common roles
-      if (role.contains("Chief Executive") || role.contains("CEO")) {
-        return "CEO";
-      } else if (role.contains("Chief Financial") || role.contains("CFO")) {
-        return "CFO";
-      } else if (role.contains("Analyst")) {
-        return "Analyst";
-      } else if (role.contains("Operator")) {
-        return "Operator";
-      }
-
-      return role;
+  private String normalizeRole(String role) {
+    if (role == null) {
+      return null;
     }
+    String upper = role.toUpperCase(Locale.ROOT);
+    if (upper.contains("CHIEF EXECUTIVE") || upper.contains("CEO")) {
+      return "CEO";
+    } else if (upper.contains("CHIEF FINANCIAL") || upper.contains("CFO")) {
+      return "CFO";
+    } else if (upper.contains("ANALYST")) {
+      return "Analyst";
+    } else if (upper.contains("OPERATOR")) {
+      return "Operator";
+    }
+    return role;
+  }
 
+  private String extractSpeakerRole(String text) {
+    // Press release after-quote: said [Name], [role] of [Company].
+    Pattern afterQuoteRole = Pattern.compile(
+        "said\\s+[A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+,\\s*([^.]+)\\.");
+    Matcher m1 = afterQuoteRole.matcher(text);
+    if (m1.find()) {
+      String role = m1.group(1).trim().replaceAll("\\s+of\\s+.*$", "").trim();
+      return normalizeRole(role);
+    }
+    // Press release before-quote: [Name], [role], said:
+    Pattern beforeQuoteRole = Pattern.compile(
+        "^[A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)+,\\s*([^,]+),.*?\\bsaid\\b");
+    Matcher m2 = beforeQuoteRole.matcher(text);
+    if (m2.find()) {
+      String role = m2.group(1).trim().replaceAll("\\s+of\\s+.*$", "").trim();
+      return normalizeRole(role);
+    }
+    // Transcript: "Name - Role:" or "Name, Role:"
+    Pattern transcriptRole = Pattern.compile("[-,]\\s*([^:]+):");
+    Matcher m3 = transcriptRole.matcher(text);
+    if (m3.find()) {
+      String role = m3.group(1).trim().replaceAll(",?\\s*\\bsaid\\b\\s*$", "").trim();
+      if (role.isEmpty() || Character.isDigit(role.charAt(0))) {
+        return null;
+      }
+      return normalizeRole(role);
+    }
     return null;
   }
 
@@ -4607,11 +5718,17 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("accession_number", accessionNumber != null ? accessionNumber : cik + "-" + filingDate);
       data.put("year", year);
 
-      // Core identifiers
-      data.put("chunk_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
+      // Core identifiers — chunk_id is globally unique: accession + sequence + sha256[:16] of text
+      int seq = sequence++;
+      data.put("chunk_id", buildGlobalChunkId(
+          accessionNumber != null ? accessionNumber : cik, seq, chunk.text));
       data.put("source_type", chunk.blobType);
       data.put("section", chunk.metadata.get("parent_section"));
-      data.put("sequence", sequence++);
+      data.put("subsection", chunk.metadata.get("subsection"));
+      data.put("section_path", chunk.metadata.get("section_path"));
+      Object pcObj = chunk.metadata.get("paragraph_continuation");
+      data.put("paragraph_continuation", pcObj instanceof Boolean ? pcObj : false);
+      data.put("sequence", seq);
       data.put("filing_date", filingDate);
 
       // Text columns - chunk_text is original before normalization, enriched_text is normalized
@@ -4831,64 +5948,41 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<SecTextVectorizer.TextBlob> convertMDADataToBlobs(List<Map<String, Object>> mdaData) {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
-
     int counter = 0;
-    // Pending header text to propagate as the subsection of subsequent content paragraphs.
-    // Section headers (e.g., "Item 7. Management's Discussion and Analysis...")
-    // should not be standalone chunks — they become the subsection in the
-    // [HIERARCHY: Management Discussion and Analysis > <header text>] tag.
-    String pendingHeader = null;
-    int headersAbsorbed = 0;
 
     for (Map<String, Object> data : mdaData) {
       String text = (String) data.get("paragraph_text");
-      if (text == null || text.length() <= 50) {
-        continue;
-      }
-      String subsection = (String) data.getOrDefault("subsection", "PARAGRAPH");
-
-      // Detect standalone section headers: either classified as HEADING by the chunker,
-      // or matching SEC Item header patterns (Item 7, Item 7A, etc.)
-      if ("HEADING".equals(subsection) || isSectionHeader(text)) {
-        // Accumulate headers (there can be multiple, e.g., "Item 7" followed by
-        // "Management's Discussion and Analysis of Financial Condition and Results of Operations")
-        if (pendingHeader != null) {
-          pendingHeader = pendingHeader + " — " + text.trim();
-        } else {
-          pendingHeader = text.trim();
-        }
+      if (text == null || text.length() <= 10) {
         continue;
       }
 
-      // Normal content paragraph — use pending header as subsection if available.
-      // This flows into the existing [HIERARCHY: parentSection > subsection] tag
-      // in vectorizeMDAParagraph(), giving the embedding model section context.
-      String effectiveSubsection;
-      if (pendingHeader != null) {
-        effectiveSubsection = pendingHeader;
-        headersAbsorbed++;
-        // Don't clear pendingHeader — it applies to ALL paragraphs in this section
-        // until the next header replaces it
-      } else {
-        effectiveSubsection = subsection;
+      // Skip standalone section headers from XBRL extraction path (HTML path produces none)
+      if (isSectionHeader(text)) {
+        continue;
       }
+
+      // subsection and section_path are set by extractMDAWithChunker from the heading stack;
+      // null when no heading context is available (aggressive fallback path)
+      String subsection = (String) data.get("subsection");
+      String sectionPath = (String) data.get("section_path");
+      Object pcObj = data.get("paragraph_continuation");
+      boolean paragraphContinuation = pcObj instanceof Boolean ? (Boolean) pcObj : false;
 
       String id = "mda_para_" + (++counter);
 
       Map<String, String> attributes = new HashMap<>();
       attributes.put("source", "mda_sections");
+      if (sectionPath != null) {
+        attributes.put("section_path", sectionPath);
+      }
+      attributes.put("paragraph_continuation", Boolean.toString(paragraphContinuation));
 
       SecTextVectorizer.TextBlob blob =
           new SecTextVectorizer.TextBlob(id, "mda_paragraph", text,
-              "Management Discussion and Analysis", effectiveSubsection, attributes);
+              "Management Discussion and Analysis", subsection, attributes);
       blobs.add(blob);
     }
 
-    // Trailing header with no following content is dropped (no content to contextualize)
-
-    if (headersAbsorbed > 0) {
-      LOGGER.info("Absorbed {} section headers into [HIERARCHY:] subsections", headersAbsorbed);
-    }
     LOGGER.debug("Converted {} MDA records to {} TextBlobs", mdaData.size(), blobs.size());
     return blobs;
   }
@@ -4923,39 +6017,6 @@ public class XbrlToParquetConverter implements FileConverter {
     return SEC_ITEM_PATTERN.matcher(trimmed).matches();
   }
 
-  /**
-   * Detect MD&A subsection from paragraph content.
-   */
-  private String detectMDASubsection(String text) {
-    if (text == null || text.length() < 20) return null;
-
-    String lower = text.toLowerCase();
-
-    // Check for common MD&A subsections
-    if (lower.contains("overview") || lower.contains("executive summary")) {
-      return "Overview";
-    } else if (lower.contains("results") && lower.contains("operation")) {
-      return "Results of Operations";
-    } else if (lower.contains("liquidity") && lower.contains("capital")) {
-      return "Liquidity and Capital Resources";
-    } else if (lower.contains("liquidity")) {
-      return "Liquidity";
-    } else if (lower.contains("capital") && (lower.contains("resource") || lower.contains("cash flow"))) {
-      return "Capital Resources";
-    } else if (lower.contains("critical") && lower.contains("accounting")) {
-      return "Critical Accounting Policies";
-    } else if (lower.contains("risk factor") || lower.contains("uncertainties")) {
-      return "Risk Factors";
-    } else if (lower.contains("outlook") || lower.contains("guidance")) {
-      return "Outlook";
-    } else if (lower.contains("segment") || lower.contains("geographic")) {
-      return "Segment Analysis";
-    }
-
-    return null;  // No specific subsection detected
-  }
-
-  // Method already exists above - removing duplicate
 
   /**
    * Check if text is boilerplate that should be skipped.
@@ -5171,19 +6232,36 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
     data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
+    data.put("year", Integer.parseInt(partitionYear));
     data.put("company_name", companyInfo.get("company_name"));
     data.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
-    data.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
-    data.put("sic_code", companyInfo.get("sic_code"));
+    String fiscalYearEnd = normalizeFiscalYearEnd(companyInfo.get("fiscal_year_end"));
+    if (fiscalYearEnd == null) {
+      fiscalYearEnd = normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd"));
+    }
+    data.put("fiscal_year_end", fiscalYearEnd);
+    String sicCode = companyInfo.get("sic_code");
+    if (sicCode == null) sicCode = submissionsInfo.get("sic_code");
+    data.put("sic_code", sicCode);
     data.put("irs_number", companyInfo.get("irs_number"));
     data.put("business_address", companyInfo.get("business_address"));
     data.put("mailing_address", companyInfo.get("mailing_address"));
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+    data.put("fiscal_year", null);
+    data.put("period_of_report", filingDate);
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    data.put("filing_url", filename);
+    data.put("primary_document", filename);
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
@@ -5204,20 +6282,30 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
+    Map<String, String> submissionsInfo = SecDataFetcher.getCompanyInfoForCik(cik);
+    List<String> tickers = SecDataFetcher.getTickersForCik(cik);
+
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
     data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
-    // We don't have company info from inline XBRL that failed to parse
+    data.put("year", Integer.parseInt(partitionYear));
     data.put("company_name", null);
     data.put("state_of_incorporation", null);
-    data.put("fiscal_year_end", null);
-    data.put("sic_code", null);
+    data.put("fiscal_year_end", normalizeFiscalYearEnd(submissionsInfo.get("fiscal_year_end_mmdd")));
+    data.put("sic_code", submissionsInfo.get("sic_code"));
     data.put("irs_number", null);
     data.put("business_address", null);
     data.put("mailing_address", null);
+    data.put("ticker", tickers.isEmpty() ? submissionsInfo.get("ticker") : tickers.get(0));
+    data.put("fiscal_year", null);
+    data.put("period_of_report", filingDate);
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    data.put("filing_url", filename);
+    data.put("primary_document", filename);
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
@@ -5419,9 +6507,42 @@ public class XbrlToParquetConverter implements FileConverter {
       // We need to download it from EDGAR.
       Document infoTableDoc = download13FInfoTable(cik, accession);
 
+      // Extract report period from cover page (primary_doc.xml has it; info table does not)
+      String coverReportPeriod = getElementText(primaryDoc, "reportCalendarOrQuarter");
+      if (coverReportPeriod == null) {
+        coverReportPeriod = getElementText(primaryDoc, "periodOfReport");
+      }
+      if (coverReportPeriod == null) {
+        // HTML cover page: <table summary="Calendar Year or Quarter End">...<td class="FormDataR">12-31-2025</td>
+        NodeList tables = primaryDoc.getElementsByTagName("table");
+        outer:
+        for (int ti = 0; ti < tables.getLength(); ti++) {
+          Element table = (Element) tables.item(ti);
+          String summary = table.getAttribute("summary");
+          if (summary != null && summary.toLowerCase().contains("calendar year or quarter")) {
+            NodeList tds = table.getElementsByTagName("td");
+            for (int ti2 = 0; ti2 < tds.getLength(); ti2++) {
+              Element td = (Element) tds.item(ti2);
+              String cls = td.getAttribute("class");
+              if ("FormDataR".equals(cls)) {
+                String val = td.getTextContent().trim();
+                if (!val.isEmpty()) {
+                  coverReportPeriod = val;
+                  break outer;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (coverReportPeriod == null) {
+        coverReportPeriod = filingDate;
+      }
+      coverReportPeriod = normalizeDateToIso(coverReportPeriod);
+
       List<Map<String, Object>> holdings;
       if (infoTableDoc != null) {
-        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year);
+        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year, coverReportPeriod);
         // Extract manager name from primary doc if not in info table
         if (!holdings.isEmpty()) {
           String managerName = getElementText(primaryDoc, "filingManager");
@@ -5633,7 +6754,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * }</pre>
    */
   private List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
-      String filingType, String filingDate, String accession, int year) {
+      String filingType, String filingDate, String accession, int year, String reportPeriod) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Extract manager info from the primary doc (headerData or coverPage)
@@ -5642,12 +6763,6 @@ public class XbrlToParquetConverter implements FileConverter {
       managerName = getElementText(doc, "name");
     }
     String managerCik = cik;
-
-    // Extract report period
-    String reportPeriod = getElementText(doc, "reportCalendarOrQuarter");
-    if (reportPeriod == null) {
-      reportPeriod = getElementText(doc, "periodOfReport");
-    }
 
     // Find infoTable entries (handles both namespaced and non-namespaced)
     NodeList entries = doc.getElementsByTagName("infoTable");
@@ -6039,7 +7154,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("cik", cik);
         chunk.put("accession_number", accession);
         chunk.put("year", year);
-        chunk.put("chunk_id", "13dg_item_" + itemNumber + "_" + paraSeq);
+        chunk.put("chunk_id", accession + "_13dg_item_" + i + "_" + paraSeq);
         chunk.put("source_type", "13dg_item");
         chunk.put("section", "Item " + itemNumber);
         chunk.put("sequence", sequence++);

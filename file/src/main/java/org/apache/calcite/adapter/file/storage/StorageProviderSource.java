@@ -24,9 +24,12 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.zip.GZIPInputStream;
 
 /**
  * A Source implementation that reads from a StorageProvider.
@@ -89,7 +92,14 @@ public class StorageProviderSource implements Source {
   @Override public Reader reader() throws IOException {
     LOGGER.debug("Opening reader for actualPath: {}, displayPath: {}, storageProvider: {}",
         actualPath, displayPath, storageProvider.getClass().getSimpleName());
-    return storageProvider.openReader(actualPath);
+    // Handle .gz decompression, matching behavior of Calcite's standard Source.reader()
+    final InputStream is;
+    if (actualPath.endsWith(".gz")) {
+      is = new GZIPInputStream(openStream());
+    } else {
+      is = openStream();
+    }
+    return new InputStreamReader(is, StandardCharsets.UTF_8);
   }
 
   @Override public String protocol() {

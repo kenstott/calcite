@@ -39,6 +39,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -65,11 +68,14 @@ public class DuckDBJdbcSchemaFactory {
     final DataSource dataSource;
     final Connection setupConnection;
     final String jdbcUrl;
+    final String catalogPath;
 
-    SharedDatabaseInfo(DataSource dataSource, Connection setupConnection, String jdbcUrl) {
+    SharedDatabaseInfo(DataSource dataSource, Connection setupConnection, String jdbcUrl,
+        String catalogPath) {
       this.dataSource = dataSource;
       this.setupConnection = setupConnection;
       this.jdbcUrl = jdbcUrl;
+      this.catalogPath = catalogPath;
     }
   }
 
@@ -358,9 +364,9 @@ public class DuckDBJdbcSchemaFactory {
       registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
           fileSchema, recreatedIcebergTables);
 
-      // Register SQL views from schema JSON definitions
-      // These views may reference the Parquet views created above
-      registerSqlViewsInDuckDB(setupConn, duckdbSchema, operand);
+      // Enqueue SQL views for deferred creation (views may reference cross-schema tables
+      // that don't exist yet during schema init — flushed lazily on first getTable() call)
+      registerSqlViewsInDuckDB(catalogPath, duckdbSchema, operand);
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
@@ -434,11 +440,13 @@ public class DuckDBJdbcSchemaFactory {
 
       // DuckDB named databases use the database name as catalog and our created schema
       DuckDBJdbcSchema schema =
-                                                    new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema, directoryPath, recursive, setupConn, fileSchema);
+          new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema,
+              directoryPath, recursive, setupConn, fileSchema, catalogPath);
 
       // Add to connection pool if this is a persistent database (for future schema sharing)
       if (catalogPath != null) {
-        SharedDatabaseInfo sharedInfo = new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl);
+        SharedDatabaseInfo sharedInfo =
+            new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl, catalogPath);
         DATABASE_POOL.put(catalogPath, sharedInfo);
         LOGGER.info("Added DuckDB database to connection pool: {}", catalogPath);
       }
@@ -491,6 +499,9 @@ public class DuckDBJdbcSchemaFactory {
       registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
           fileSchema, recreatedIcebergTables);
 
+      // Enqueue SQL views for deferred creation
+      registerSqlViewsInDuckDB(sharedInfo.catalogPath, duckdbSchema, operand);
+
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
            ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
@@ -512,7 +523,7 @@ public class DuckDBJdbcSchemaFactory {
       // Create schema using shared database (dbName is null for shared databases)
       DuckDBJdbcSchema schema =
           new DuckDBJdbcSchema(sharedInfo.dataSource, dialect, convention, null, duckdbSchema,
-                              directoryPath, recursive, setupConn, fileSchema);
+              directoryPath, recursive, setupConn, fileSchema, sharedInfo.catalogPath);
 
       return schema;
 
@@ -1104,7 +1115,7 @@ public class DuckDBJdbcSchemaFactory {
             // View doesn't exist - create it (this will access S3)
             {
               String sql =
-                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, icebergTablePath);
+                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)", duckdbSchema, tableName, icebergTablePath);
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
                          duckdbSchema, tableName, icebergTablePath);
 
@@ -1511,14 +1522,15 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
-   * Registers SQL views from schema JSON definitions in DuckDB.
-   * Extracts view definitions from the "tables" array in the operand and creates them in DuckDB.
+   * Enqueues SQL views from schema JSON definitions for deferred DuckDB creation.
+   * Views may reference cross-schema tables that don't exist yet during schema init;
+   * they are flushed lazily on first {@code getTable()} via {@link DuckDBPendingViews}.
    *
-   * @param conn DuckDB connection
+   * @param dbPath DuckDB catalog file path (key for pending view store)
    * @param duckdbSchema DuckDB schema name where views will be created
    * @param operand Schema operand containing "tables" array and "declaredSchemaName"
    */
-  private static void registerSqlViewsInDuckDB(Connection conn, String duckdbSchema,
+  private static void registerSqlViewsInDuckDB(String dbPath, String duckdbSchema,
                                                Map<String, Object> operand) {
     if (operand == null) {
       LOGGER.debug("No operand provided, skipping SQL view registration");
@@ -1529,7 +1541,20 @@ public class DuckDBJdbcSchemaFactory {
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> tables = (List<Map<String, Object>>) operand.get("tables");
 
-    if (tables == null || tables.isEmpty()) {
+    // Also pick up entries from the YAML `views:` section (which lack type: "view")
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> yamlViews = (List<Map<String, Object>>) operand.get("views");
+
+    List<Map<String, Object>> allTables = new ArrayList<>(tables != null ? tables : Collections.emptyList());
+    if (yamlViews != null) {
+      for (Map<String, Object> view : yamlViews) {
+        Map<String, Object> viewEntry = new HashMap<>(view);
+        viewEntry.put("type", "view");
+        allTables.add(viewEntry);
+      }
+    }
+
+    if (allTables.isEmpty()) {
       LOGGER.debug("No tables in operand, skipping SQL view registration");
       return;
     }
@@ -1540,10 +1565,10 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("Registering SQL views in DuckDB schema '{}' (declaredSchemaName='{}')",
                 duckdbSchema, declaredSchemaName);
 
-    int viewCount = 0;
+    int enqueueCount = 0;
     int skippedCount = 0;
 
-    for (Map<String, Object> table : tables) {
+    for (Map<String, Object> table : allTables) {
       String tableType = (String) table.get("type");
 
       // Only process view definitions
@@ -1564,50 +1589,25 @@ public class DuckDBJdbcSchemaFactory {
         continue;
       }
 
-      try {
-        // Pre-check if view already exists to avoid expensive validation
-        String checkViewSql =
-            String.format("SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' "
-                + "AND table_name = '%s' AND table_type = 'VIEW'",
-            duckdbSchema, viewName);
-        try (Statement checkStmt = conn.createStatement();
-             ResultSet rs = checkStmt.executeQuery(checkViewSql)) {
-          if (rs.next()) {
-            LOGGER.debug("View {}.{} already exists, skipping creation", duckdbSchema, viewName);
-            viewCount++;
-            continue;
-          }
-        }
+      // Rewrite schema references if needed
+      String rewrittenViewDef = viewDef;
+      if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(duckdbSchema)) {
+        rewrittenViewDef = rewriteSchemaReferencesInSql(viewDef, declaredSchemaName, duckdbSchema);
+      }
 
-        // Rewrite schema references if needed
-        String rewrittenViewDef = viewDef;
-        if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(duckdbSchema)) {
-          rewrittenViewDef = rewriteSchemaReferencesInSql(viewDef, declaredSchemaName, duckdbSchema);
-        }
-
-        // Create the view in DuckDB
-        String createViewSql =
-                                            String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s", duckdbSchema, viewName, rewrittenViewDef);
-
-        LOGGER.info("Creating SQL view: {}.{}", duckdbSchema, viewName);
-        LOGGER.debug("View SQL: {}", rewrittenViewDef.length() > 200 ?
-                    rewrittenViewDef.substring(0, 200) + "..." : rewrittenViewDef);
-
-        conn.createStatement().execute(createViewSql);
-        viewCount++;
-
-        LOGGER.info("✅ Created SQL view: {}.{}", duckdbSchema, viewName);
-
-      } catch (SQLException e) {
-        LOGGER.error("Failed to create SQL view '{}': {}", viewName, e.getMessage());
-        LOGGER.error("View definition was: {}", viewDef);
-        LOGGER.error("SQL State: {}, Error Code: {}", e.getSQLState(), e.getErrorCode());
+      // Enqueue for deferred creation — views may reference cross-schema tables that don't exist yet
+      if (dbPath != null) {
+        DuckDBPendingViews.enqueue(dbPath, duckdbSchema, viewName, rewrittenViewDef);
+        LOGGER.debug("Enqueued deferred view: {}.{}", duckdbSchema, viewName);
+        enqueueCount++;
+      } else {
+        LOGGER.warn("No dbPath for view {}.{} — skipping deferred registration", duckdbSchema, viewName);
         skippedCount++;
       }
     }
 
-    LOGGER.info("SQL view registration complete: {} views created, {} skipped/failed",
-                viewCount, skippedCount);
+    LOGGER.info("SQL view enqueueing complete: {} views deferred, {} skipped",
+        enqueueCount, skippedCount);
   }
 
 }

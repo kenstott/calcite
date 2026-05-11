@@ -26,8 +26,13 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 
 import org.apache.hadoop.conf.Configuration;
 
@@ -37,21 +42,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jsoup.Jsoup;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -487,7 +501,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         boolean manifestExists = localStorageProvider.exists(manifestPath);
         if (manifestExists) {
           try (BufferedReader reader = new BufferedReader(
-              new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
+              new InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
             String line;
             while ((line = reader.readLine()) != null) {
               if (line.startsWith(entryPrefix)) {
@@ -526,7 +540,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (manifestExists) {
             List<String> updatedLines = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
+                new InputStreamReader(localStorageProvider.openInputStream(manifestPath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 // Skip old entries for this CIK|ACCESSION
@@ -653,7 +667,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("DEBUG: Mock data mode - created mock Parquet files");
 
         // Also create mock stock prices if enabled
-        boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
+        boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", false);
         if (fetchStockPrices) {
           LOGGER.debug("Creating mock stock prices for testing");
           createMockStockPrices(this.secOperatingDirectory, ciks, startYear, endYear);
@@ -678,7 +692,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Download stock prices (still needed as separate step)
-      boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
+      boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", false);
       if (fetchStockPrices) {
         List<String> ciks = getCiksFromConfig(operand);
         int startYear = (Integer) operand.getOrDefault("startYear", 2020);
@@ -732,134 +746,216 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Year range: {} to {}", startYear, endYear);
 
       String govdataParquetDir = GovDataUtils.getParquetDir(operand);
-      String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+      // govdataParquetDir already resolves to the sec-specific path (e.g. ".../sec")
+      // because sec-schema.yaml sets materializeDirectory to "${GOVDATA_PARQUET_DIR}/sec"
+      // which overrides the operand's "directory" key in FileSchemaBuilder.
+      String secParquetDir = govdataParquetDir;
 
       DocumentETLProcessor.DocumentETLResult result;
 
       if (!ciks.isEmpty()) {
-        // Create HttpSourceConfig from YAML-style configuration
-        HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
+        // When filingTypes is empty (e.g., prices-only workers), skip all filing
+        // processing — no index cache, no document tracker, no entity iteration.
+        // Jump straight to stock price download.
+        if (!filingTypes.isEmpty()) {
+          // Create HttpSourceConfig from YAML-style configuration
+          HttpSourceConfig httpSourceConfig = createHttpSourceConfig(operand, filingTypes, startYear, endYear);
 
-        // Get or create document converter with vectorization enabled if configured
-        FileConverter documentConverter = getOrCreateXbrlConverter(operand);
+          // Wrap storage provider with local staging to batch SEC parquet writes,
+          // reducing R2 Class A operations from ~10/filing to ~1/batch of filings.
+          LocalStagingStorageProvider stagingProvider =
+              new LocalStagingStorageProvider(storageProvider);
 
-        // Initialize filing cache if not yet done
-        if (this.filingCache == null && this.secOperatingDirectory != null) {
-          org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
-              PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
-          this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
-          LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
-        }
+          // Get or create document converter with vectorization enabled if configured
+          FileConverter documentConverter = getOrCreateXbrlConverter(operand, stagingProvider);
 
-        // Create document tracker using SecFilingCache with complete self-healing
-        final SecFilingCache cache = this.filingCache;
-        final boolean vectorizationEnabled = isVectorizedChunksEnabled();
-        ProcessedDocumentTracker documentTracker = cache != null
-            ? new ProcessedDocumentTracker() {
-              @Override public boolean isProcessed(String cik, String accession, String formType) {
-                String form = formType != null ? formType : "UNKNOWN";
-                ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
-                return !decision.shouldProcess();
+          // Initialize filing cache if not yet done
+          if (this.filingCache == null && this.secOperatingDirectory != null) {
+            org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
+                PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+            this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
+            LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
+          }
+
+          // Create document tracker using SecFilingCache with complete self-healing
+          final SecFilingCache cache = this.filingCache;
+          final boolean vectorizationEnabled = isVectorizedChunksEnabled();
+          ProcessedDocumentTracker documentTracker = cache != null
+              ? new ProcessedDocumentTracker() {
+                @Override public boolean isProcessed(String cik, String accession, String formType) {
+                  String form = formType != null ? formType : "UNKNOWN";
+                  ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
+                  return !decision.shouldProcess();
+                }
+                @Override public void markProcessed(String cik, String accession, String formType,
+                    List<String> outputFiles) {
+                  String form = formType != null ? formType : "UNKNOWN";
+                  if (outputFiles == null || outputFiles.isEmpty()) {
+                    cache.markNoXbrl(cik, accession, form, "");
+                  } else {
+                    FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
+                    cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
+                  }
+                }
+                @Override public boolean areAllProcessed(String cik,
+                    List<String> accessions, List<String> formTypes) {
+                  return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
+                }
               }
-              @Override public void markProcessed(String cik, String accession, String formType,
-                  java.util.List<String> outputFiles) {
-                String form = formType != null ? formType : "UNKNOWN";
-                FileInventory inventory = buildInventoryFromOutputFiles(outputFiles);
-                cache.markComplete(cik, accession, form, "", vectorizationEnabled, inventory);
+              : null;
+          LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
+
+          // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
+          FilingIndexProvider indexCache = null;
+          try {
+            indexCache = new EdgarFullIndexCache(
+                storageProvider, this.secCacheDirectory, startYear, endYear);
+          } catch (Exception e) {
+            LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
+                e.getMessage());
+          }
+
+          // Bulk-preload tracker state so getActiveCiks can filter in-memory
+          if (indexCache != null && cache != null) {
+            long preloadStart = System.currentTimeMillis();
+            LOGGER.info("Building accession list from full-index for years {}-{}...",
+                startYear, endYear);
+            List<String> allAccessions = new ArrayList<String>();
+            for (int year = startYear; year <= endYear; year++) {
+              allAccessions.addAll(
+                  ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
+            }
+            LOGGER.info("Collected {} accessions from full-index in {}ms, preloading tracker state...",
+                allAccessions.size(), System.currentTimeMillis() - preloadStart);
+            if (!allAccessions.isEmpty()) {
+              cache.preload(allAccessions);
+            }
+            // Bulk-scan only the worker's year partitions once so that self-healing
+            // file-existence checks cost zero Class A LIST ops (answered from in-memory set).
+            cache.preloadFileInventory(startYear, endYear);
+          }
+
+          // Ensure file inventory is pre-loaded even when indexCache is unavailable
+          if (indexCache == null && cache != null) {
+            cache.preloadFileInventory(startYear, endYear);
+          }
+
+          // Create processor - pass cache directory as String to support S3 paths
+          DocumentETLProcessor processor = new DocumentETLProcessor(
+              httpSourceConfig,
+              storageProvider,
+              secParquetDir,
+              this.secCacheDirectory,
+              documentConverter,
+              null,  // progressListener
+              documentTracker,
+              indexCache);
+
+          int threads = Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
+          if (indexCache instanceof EdgarFullIndexCache) {
+            // Accession-centric path: full-index → filter year + form types
+            // → fast in-memory filter + parallel self-heal → execute on final dataset
+            List<EdgarFullIndexCache.IndexEntry> allEntries =
+                new ArrayList<EdgarFullIndexCache.IndexEntry>();
+            for (int year = startYear; year <= endYear; year++) {
+              allEntries.addAll(((EdgarFullIndexCache) indexCache)
+                  .getActiveAccessions(year, filingTypes, null));
+            }
+            LOGGER.info("Full-index returned {} candidates (years {}-{}), filtering...",
+                allEntries.size(), startYear, endYear);
+            // Apply CIK filter when a specific list is configured (not _ALL_EDGAR_FILERS)
+            Object cikConfig = operand.get("ciks");
+            boolean isAllFilers = cikConfig instanceof String
+                && (((String) cikConfig).contains("_ALL_EDGAR_FILERS")
+                    || ((String) cikConfig).contains("_ALL"));
+            if (!isAllFilers && !ciks.isEmpty()) {
+              Set<String> cikSet = new HashSet<String>(ciks);
+              List<EdgarFullIndexCache.IndexEntry> cikFiltered =
+                  new ArrayList<EdgarFullIndexCache.IndexEntry>();
+              for (EdgarFullIndexCache.IndexEntry entry : allEntries) {
+                if (cikSet.contains(entry.cik)) {
+                  cikFiltered.add(entry);
+                }
               }
-              @Override public boolean areAllProcessed(String cik,
-                  java.util.List<String> accessions, java.util.List<String> formTypes) {
-                return cache.areAllFilingsComplete(accessions, formTypes, vectorizationEnabled);
+              LOGGER.info("CIK filter reduced {} candidates to {} for {} configured CIKs",
+                  allEntries.size(), cikFiltered.size(), ciks.size());
+              allEntries = cikFiltered;
+            }
+            int selfHealThreads = Integer.parseInt(
+                System.getProperty("calcite.etl.selfheal.threads", "50"));
+            boolean chunksBackfill = Boolean.TRUE.equals(operand.get("chunksBackfill"));
+            Object forceAccObj = operand.get("forceAccessions");
+            Set<String> forceAccessions = new HashSet<String>();
+            if (forceAccObj instanceof List) {
+              for (Object acc : (List<?>) forceAccObj) {
+                if (acc instanceof String) {
+                  forceAccessions.add((String) acc);
+                }
               }
             }
-            : null;
-        LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
-
-        // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
-        FilingIndexProvider indexCache = null;
-        try {
-          indexCache = new EdgarFullIndexCache(
-              storageProvider, this.secCacheDirectory, startYear, endYear);
-        } catch (Exception e) {
-          LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
-              e.getMessage());
-        }
-
-        // Bulk-preload tracker state so getActiveCiks can filter in-memory
-        if (indexCache != null && cache != null) {
-          long preloadStart = System.currentTimeMillis();
-          LOGGER.info("Building accession list from full-index for years {}-{}...",
-              startYear, endYear);
-          List<String> allAccessions = new ArrayList<String>();
-          for (int year = startYear; year <= endYear; year++) {
-            allAccessions.addAll(
-                ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
+            if (!forceAccessions.isEmpty()) {
+              LOGGER.info("Force-reprocessing {} accession(s): {}", forceAccessions.size(),
+                  forceAccessions);
+            }
+            List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)
+                ? cache.filterAndSelfHeal(allEntries, isVectorizedChunksEnabled(), selfHealThreads,
+                    chunksBackfill, forceAccessions)
+                : allEntries;
+            List<DocumentETLProcessor.AccessionRef> activeAccessions =
+                new ArrayList<DocumentETLProcessor.AccessionRef>();
+            for (EdgarFullIndexCache.IndexEntry entry : filtered) {
+              activeAccessions.add(new DocumentETLProcessor.AccessionRef(
+                  entry.cik, entry.accession, entry.formType, entry.filingDate));
+            }
+            LOGGER.info("Processing {} accessions from full-index (years {}-{})",
+                activeAccessions.size(), startYear, endYear);
+            if (threads > 1) {
+              LOGGER.info("Using {} parallel threads for {} accessions",
+                  threads, activeAccessions.size());
+              result = processor.processAccessionsParallel(activeAccessions, threads);
+            } else {
+              result = processor.processAccessions(activeAccessions);
+            }
+          } else {
+            // CIK-centric fallback (when full-index cache is unavailable)
+            List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
+            for (String cik : ciks) {
+              String normalizedCik = normalizeCik(cik);
+              for (int year = startYear; year <= endYear; year++) {
+                Map<String, String> entity = new HashMap<String, String>();
+                entity.put("cik", normalizedCik);
+                entity.put("year", String.valueOf(year));
+                entities.add(entity);
+              }
+            }
+            LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations (CIK-centric fallback)",
+                ciks.size(), (endYear - startYear + 1), entities.size());
+            if (threads > 1) {
+              LOGGER.info("Using {} parallel entity threads", threads);
+              result = processor.processEntitiesParallel(entities, threads);
+            } else {
+              result = processor.processEntities(entities);
+            }
           }
-          LOGGER.info("Collected {} accessions from full-index in {}ms, preloading tracker state...",
-              allAccessions.size(), System.currentTimeMillis() - preloadStart);
-          if (!allAccessions.isEmpty()) {
-            cache.preload(allAccessions);
-          }
-        }
 
-        // Narrow CIK list to only those with unprocessed filings
-        if (indexCache != null) {
-          Set<String> activeCiks = new java.util.LinkedHashSet<String>();
-          for (int year = startYear; year <= endYear; year++) {
-            activeCiks.addAll(indexCache.getActiveCiks(year, filingTypes, documentTracker));
-          }
-          int originalSize = ciks.size();
-          ciks = new ArrayList<String>(activeCiks);
-          LOGGER.info("Narrowed CIK list from {} to {} using full-index (tracker-filtered)",
-              originalSize, ciks.size());
-        }
+          // Flush any remaining staged parquet files to R2 as final batch
+          stagingProvider.flushAll();
 
-        // Create processor - pass cache directory as String to support S3 paths
-        DocumentETLProcessor processor = new DocumentETLProcessor(
-            httpSourceConfig,
-            storageProvider,
-            secParquetDir,
-            this.secCacheDirectory,
-            documentConverter,
-            null,  // progressListener
-            documentTracker,
-            indexCache);
-
-        // Build entity list with CIKs and year range
-        List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
-        for (String cik : ciks) {
-          String normalizedCik = normalizeCik(cik);
-          for (int year = startYear; year <= endYear; year++) {
-            Map<String, String> entity = new HashMap<String, String>();
-            entity.put("cik", normalizedCik);
-            entity.put("year", String.valueOf(year));
-            entities.add(entity);
-          }
-        }
-
-        LOGGER.info("Processing {} CIKs x {} years = {} entity-year combinations",
-            ciks.size(), (endYear - startYear + 1), entities.size());
-
-        // Process all entities (parallel if --threads > 1)
-        int threads = Integer.parseInt(
-            System.getProperty("calcite.etl.threads", "1"));
-        if (threads > 1) {
-          LOGGER.info("Using {} parallel entity threads", threads);
-          result = processor.processEntitiesParallel(entities, threads);
+          LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
+              result.getDocumentsProcessed(),
+              result.getDocumentsSkipped(),
+              result.getDocumentsFailed(),
+              result.getDurationMs());
         } else {
-          result = processor.processEntities(entities);
+          LOGGER.info("No filing types configured — skipping filing processing");
+          result = new DocumentETLProcessor.DocumentETLResult(
+              0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
         }
-
-        LOGGER.info("Document ETL completed: {} processed, {} skipped, {} failed in {}ms",
-            result.getDocumentsProcessed(),
-            result.getDocumentsSkipped(),
-            result.getDocumentsFailed(),
-            result.getDurationMs());
 
         // Download stock prices via Stooq (separate from EDGAR filings)
         Object fetchStockPricesObj = operand.get("fetchStockPrices");
-        boolean fetchStockPrices = fetchStockPricesObj == null ? true
-            : Boolean.parseBoolean(fetchStockPricesObj.toString());
+        boolean fetchStockPrices = fetchStockPricesObj != null
+            && Boolean.parseBoolean(fetchStockPricesObj.toString());
         if (fetchStockPrices) {
           LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
               ciks.size(), startYear, endYear);
@@ -909,17 +1005,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Get warehouse path from operand or compute from base directory
     String warehousePath = (String) operand.get("warehousePath");
     if (warehousePath == null) {
-      warehousePath = secParquetDir + "/SEC";
+      warehousePath = secParquetDir;
     }
-    // Normalize for Hadoop
-    if (warehousePath.startsWith("s3://")) {
-      warehousePath = "s3a://" + warehousePath.substring(5);
-    }
+    warehousePath = StorageProviderFactory.normalizeForHadoop(warehousePath);
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
     // Get incremental tracker for skipping already-materialized partitions
     IncrementalTracker incrementalTracker =
-        PipelineTrackerFactory.createFromOperand(this.currentOperand, this.secOperatingDirectory);
+        PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+
+    // Preload all table completion markers in one batch to avoid per-table round-trips
+    incrementalTracker.preloadAllCompletions();
 
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
@@ -1041,7 +1137,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     boolean deferEmbeddings = getBooleanValue(operand, "deferEmbeddings", false);
     if (deferEmbeddings && !computedColumns.isEmpty()) {
       // Filter out embed() expressions - these will be computed by GPU pipeline
-      Map<String, String> filteredColumns = new java.util.LinkedHashMap<>();
+      Map<String, String> filteredColumns = new LinkedHashMap<>();
       for (Map.Entry<String, String> entry : computedColumns.entrySet()) {
         if (!entry.getValue().contains("embed(") && !entry.getValue().contains("embed_jina")) {
           filteredColumns.put(entry.getKey(), entry.getValue());
@@ -1125,6 +1221,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
+    // Determine fileChunkSize: YAML-configured value takes precedence over the derived value.
+    // processWithFileChunkingToIceberg() loads all rows from fileChunkSize files into memory at once,
+    // so large chunks risk both OOM and exceeding CHUNK_QUERY_TIMEOUT_SECONDS (1800s) over R2.
+    // Derivation fallback: rowBatchSize/500 (e.g., 50000/500=100 files × ~332 rows/file ≈ 33k rows).
+    int fileChunkSize = 0;
+    if (materializeConfig != null) {
+      Object configuredChunkSize = materializeConfig.get("fileChunkSize");
+      if (configuredChunkSize instanceof Number) {
+        fileChunkSize = ((Number) configuredChunkSize).intValue();
+        LOGGER.info("Using configured fileChunkSize={} for table '{}'", fileChunkSize, tableName);
+      }
+    }
+    if (fileChunkSize == 0 && rowBatchSize > 0) {
+      fileChunkSize = Math.max(1, rowBatchSize / 500);
+      LOGGER.info("Derived fileChunkSize={} from rowBatchSize={} for table '{}'",
+          fileChunkSize, rowBatchSize, tableName);
+    }
+
     // Extract full table columns from YAML config for Iceberg table creation
     List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
     LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
@@ -1148,6 +1262,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .yearRange(startYear, endYear)
         .computedColumns(computedColumns)
         .rowBatchSize(rowBatchSize)
+        .fileChunkSize(fileChunkSize)
         .rowFilter(rowFilter)
         .icebergTableLocation(warehousePath + "/" + icebergTableName)
         .accessionColumn("accession_number")
@@ -1306,7 +1421,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   private Map<String, String> extractComputedColumns(Map<String, Object> tableConfig) {
-    Map<String, String> computedColumns = new java.util.LinkedHashMap<String, String>();
+    Map<String, String> computedColumns = new LinkedHashMap<String, String>();
 
     Object columnsObj = tableConfig.get("columns");
     if (!(columnsObj instanceof List)) {
@@ -1685,6 +1800,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand) {
+    return getOrCreateXbrlConverter(operand, storageProvider);
+  }
+
+  private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand,
+      StorageProvider converterStorageProvider) {
     try {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
@@ -1697,12 +1817,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       try {
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class, boolean.class)
-            .newInstance(storageProvider, enableVectorization);
+            .newInstance(converterStorageProvider, enableVectorization);
       } catch (NoSuchMethodException e) {
         // Fall back to single-arg constructor (vectorization disabled)
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class)
-            .newInstance(storageProvider);
+            .newInstance(converterStorageProvider);
       }
     } catch (Exception e) {
       LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
@@ -2137,7 +2257,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Set<String> processedFilingsManifest = new HashSet<>();
       if (localStorageProvider.exists(manifestFilePath)) {
         try (BufferedReader reader = new BufferedReader(
-            new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+            new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
           Set<String> rawEntries = new HashSet<>();
           String line;
           while ((line = reader.readLine()) != null) {
@@ -2182,7 +2302,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Mark this CIK as fully processed for each year+type combination
           if (cacheManifest != null && startYear == endYear) {
             // Group filings by type and mark each type as processed
-            Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+            Map<String, Integer> filingCountsByType = new HashMap<>();
             for (FilingToDownload f : filingsToDownload) {
               filingCountsByType.merge(f.form, 1, Integer::sum);
             }
@@ -2252,7 +2372,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         if (cacheManifest != null && filingsToDownload.size() > 0 && startYear == endYear) {
           LOGGER.info("All {} filings for CIK {} are already processed - marking as fully processed", filingsToDownload.size(), normalizedCik);
           // Group filings by type and mark each type as processed
-          Map<String, Integer> filingCountsByType = new java.util.HashMap<>();
+          Map<String, Integer> filingCountsByType = new HashMap<>();
           for (FilingToDownload f : filingsToDownload) {
             filingCountsByType.merge(f.form, 1, Integer::sum);
           }
@@ -2613,6 +2733,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Use the vectorization flag set earlier based on checkFilingStatus()
       boolean needParquetReprocessing = needsVectorizationReprocessing;
 
+      // Download EX-99.x exhibits for 8-K filings before the early-return cache check,
+      // so exhibits are fetched even when the primary HTML is already cached on disk.
+      if (is8KForm) {
+        download8KExhibits(provider, cik, accession, accessionClean, accessionPath);
+      }
+
       // Critical fix: Detect inline XBRL in cached HTML files that need Parquet processing
       // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
       // but Parquet files were never generated due to cache logic gaps
@@ -2633,7 +2759,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             List<String> existingLines = new ArrayList<>();
             if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                  new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   existingLines.add(line);
@@ -2860,7 +2986,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // addToManifest will mark as PROCESSED_WITH_VECTORS when vectorization is enabled
             String govdataParquetDir = getGovDataParquetDir();
             if (govdataParquetDir != null) {
-              String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+              String secParquetDirPath = govdataParquetDir;
               addToManifest(xbrlPath, secParquetDirPath, new ArrayList<>());
 
               // Update unified cache - check existing files since this is an upgrade
@@ -2888,7 +3014,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 List<String> existingLines = new ArrayList<>();
                 if (localStorageProvider.exists(manifestFilePath)) {
                   try (BufferedReader reader = new BufferedReader(
-                      new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                      new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                       existingLines.add(line);
@@ -2928,7 +3054,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
           // Get parquet directory
           String govdataParquetDir = getGovDataParquetDir();
-          String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
+          String secParquetDirPath = govdataParquetDir;
 
           if (secParquetDirPath != null) {
             // Check if vectorization is enabled via YAML config
@@ -2987,7 +3113,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             StringBuilder sb = new StringBuilder();
             if (localStorageProvider.exists(manifestFilePath)) {
               try (BufferedReader reader = new BufferedReader(
-                  new java.io.InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
+                  new InputStreamReader(localStorageProvider.openInputStream(manifestFilePath)))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                   sb.append(line).append("\n");
@@ -3021,7 +3147,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           StringBuilder sb = new StringBuilder();
           if (localStorageProvider.exists(outerManifestFilePath)) {
             try (BufferedReader reader = new BufferedReader(
-                new java.io.InputStreamReader(localStorageProvider.openInputStream(outerManifestFilePath)))) {
+                new InputStreamReader(localStorageProvider.openInputStream(outerManifestFilePath)))) {
               String line;
               while ((line = reader.readLine()) != null) {
                 sb.append(line).append("\n");
@@ -3197,6 +3323,102 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
+   * Download EX-99.x exhibit files for an 8-K filing by parsing the EDGAR filing index HTML.
+   * Exhibits contain press releases and earnings call transcripts used for speaker extraction.
+   */
+  private void download8KExhibits(SecHttpStorageProvider provider, String cik,
+      String accession, String accessionClean, String accessionPath) {
+    String cikNumeric = cik.replaceFirst("^0+", "");
+    String indexUrl = String.format(Locale.ROOT,
+        "https://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.htm",
+        cikNumeric, accessionClean, accession);
+
+    LOGGER.info("Fetching 8-K exhibit index: {}", indexUrl);
+    try {
+      String indexHtml;
+      try (InputStream indexIs = provider.openInputStream(indexUrl)) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = indexIs.read(buf)) != -1) {
+          baos.write(buf, 0, n);
+        }
+        indexHtml = baos.toString(StandardCharsets.UTF_8.name());
+      }
+
+      org.jsoup.nodes.Document doc = Jsoup.parse(indexHtml);
+      for (org.jsoup.nodes.Element row : doc.select("tr")) {
+        org.jsoup.select.Elements cells = row.select("td");
+        boolean isExhibit99 = false;
+        String exhibitHref = null;
+
+        for (org.jsoup.nodes.Element cell : cells) {
+          String cellText = cell.text().trim();
+          if (cellText.startsWith("EX-99")) {
+            isExhibit99 = true;
+          }
+          org.jsoup.nodes.Element link = cell.selectFirst("a[href]");
+          if (link != null) {
+            String href = link.attr("href");
+            String hrefLower = href.toLowerCase(Locale.ROOT);
+            if (hrefLower.endsWith(".htm") || hrefLower.endsWith(".html")) {
+              exhibitHref = href;
+            }
+          }
+        }
+
+        if (!isExhibit99 || exhibitHref == null) {
+          continue;
+        }
+
+        String filename = exhibitHref.substring(exhibitHref.lastIndexOf('/') + 1);
+
+        if (cacheManifest.isFileDownloaded(cik, accession, filename)) {
+          LOGGER.debug("8-K exhibit already downloaded: {}", filename);
+          continue;
+        }
+
+        String exhibitPath = storageProvider.resolvePath(accessionPath, filename);
+        try {
+          if (storageProvider.exists(exhibitPath)
+              && storageProvider.getMetadata(exhibitPath).getSize() > 0) {
+            cacheManifest.markFileDownloaded(cik, accession, filename);
+            continue;
+          }
+        } catch (IOException e) {
+          // File doesn't exist yet
+        }
+
+        String exhibitUrl = String.format(Locale.ROOT,
+            "https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
+            cikNumeric, accessionClean, filename);
+
+        try (InputStream exhibitIs = provider.openInputStream(exhibitUrl)) {
+          ByteArrayOutputStream exhibitBaos = new ByteArrayOutputStream();
+          byte[] buf = new byte[8192];
+          int n;
+          while ((n = exhibitIs.read(buf)) != -1) {
+            exhibitBaos.write(buf, 0, n);
+          }
+          storageProvider.writeFile(exhibitPath, exhibitBaos.toByteArray());
+          cacheManifest.markFileDownloaded(cik, accession, filename);
+          LOGGER.info("Downloaded 8-K exhibit {} for accession {}", filename, accession);
+        } catch (Exception e) {
+          LOGGER.debug("Failed to download 8-K exhibit {}: {}", filename, e.getMessage());
+        }
+
+        try {
+          Thread.sleep(100);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.info("Failed to fetch 8-K exhibit index for {}: {}", accession, e.getMessage());
+    }
+  }
+
+  /**
    * Check if HTML file contains inline XBRL markers.
    *
    * @param htmlFile The HTML file to check
@@ -3281,9 +3503,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void createMockStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
     try {
       // baseDirPath is the cache directory (sec-cache)
-      // We need to create files in govdata-parquet/source=sec/stock_prices
+      // We need to create files in govdata-parquet/sec/stock_prices
       String govdataParquetDir = getGovDataParquetDir();
-      String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "source=sec/stock_prices");
+      String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "stock_prices");
       LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir);
 
       // For each CIK, create mock price data
@@ -3337,17 +3559,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         + "]"
         + "}";
 
-    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse(schemaString);
+    Schema schema = new Schema.Parser().parse(schemaString);
 
     // Create records using StorageProvider approach
-    java.util.List<org.apache.avro.generic.GenericRecord> records = new java.util.ArrayList<>();
+    List<GenericRecord> records = new ArrayList<>();
     double basePrice = 100.0 + (ticker.hashCode() % 100);
 
     for (int month = 1; month <= 3; month++) { // Just 3 months of data for testing
       String date = String.format("%04d-%02d-%02d", year, month, 15);
 
-      org.apache.avro.generic.GenericRecord record =
-          new org.apache.avro.generic.GenericData.Record(schema);
+      GenericRecord record = new GenericData.Record(schema);
       // Include CIK as regular column, ticker and year come from directory structure
       record.put("cik", cik);
       record.put("date", date);
@@ -3381,7 +3602,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("GOVDATA_PARQUET_DIR not set and no baseDirPath provided, skipping stock price download");
         return;
       }
-      String basePath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+      String basePath = govdataParquetDir;
 
       // Check if stock prices are already cached and up-to-date (daily refresh)
       if (areStockPricesCached(basePath, ciks, startYear, endYear)) {
@@ -3390,7 +3611,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Build list of ticker-CIK pairs
-      List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
+      List<StooqDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
       Set<String> processedTickers = new HashSet<>();
 
       for (String cik : ciks) {
@@ -3410,7 +3631,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // This was actually a ticker, use it
             String ticker = cik.toUpperCase();
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new StooqDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           } else {
@@ -3420,15 +3641,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Add all tickers for this CIK
           for (String ticker : tickers) {
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new StooqDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           }
         }
       }
 
-      LOGGER.debug("DEBUG downloadStockPrices: govdataParquetDir={}, basePath={}", govdataParquetDir, basePath);
-      LOGGER.info("STOCK DOWNLOAD STARTING NOW WITH basePath={}", basePath);
+      LOGGER.info("Starting stock price download with basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
         // Determine which stock price source to use
@@ -3450,27 +3670,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
           LOGGER.info("Downloading stock prices for {} tickers using Stooq", tickerCikPairs.size());
           StooqDownloader downloader = new StooqDownloader(storageProvider, stooqUsername, stooqPassword);
+          // Initialize cache manifest if not already set (e.g., prices-only workers)
+          if (this.cacheManifest == null && this.secCacheDirectory != null) {
+            this.cacheManifest = SecCacheManifest.load(this.secCacheDirectory);
+          }
           // Set cache manifest for tracking unavailable tickers (skips tickers that don't exist on Stooq)
           if (cacheManifest != null) {
             downloader.setCacheManifest(cacheManifest);
           }
           downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
 
-        } else if ("alphavantage".equals(stockPriceSource)) {
-          // Use Alpha Vantage downloader (requires API key)
-          String apiKey = getEnvOrOperand("ALPHA_VANTAGE_KEY", "alphaVantageKey");
-
-          if (apiKey == null || apiKey.isEmpty()) {
-            LOGGER.warn("ALPHA_VANTAGE_KEY not found in environment, skipping stock price download");
-            return;
-          }
-
-          LOGGER.info("Downloading stock prices for {} tickers using Alpha Vantage", tickerCikPairs.size());
-          AlphaVantageDownloader downloader = new AlphaVantageDownloader(apiKey, storageProvider);
-          downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
-
         } else {
-          LOGGER.warn("Unknown stock price source: {}. Supported values: stooq, alphavantage", stockPriceSource);
+          LOGGER.warn("Unknown stock price source: {}. Supported value: stooq", stockPriceSource);
         }
       } else {
         LOGGER.info("No tickers found for stock price download");
@@ -3680,6 +3891,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param minSizeBytes Minimum file size - files smaller than this are considered empty
    */
   private void cleanupEmptyParquetFiles(String baseDir, String pattern, long minSizeBytes) {
+    if (baseDir != null && (baseDir.startsWith("s3://") || baseDir.startsWith("s3a://"))) {
+      return;
+    }
     try {
       LOGGER.debug("Cleaning up empty parquet files in {} matching: {}", baseDir, pattern);
 

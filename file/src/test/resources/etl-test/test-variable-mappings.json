@@ -1,0 +1,29 @@
+{
+  "conceptualVariables": {
+    "total_population": {
+      "description": "Total population count",
+      "acs": {
+        "allYears": { "variable": "B01001_001E" }
+      },
+      "decennial": {
+        "2010": { "variable": "P001001" },
+        "2020": { "variable": "P1_001N" }
+      }
+    },
+    "median_income": {
+      "description": "Median household income",
+      "acs": {
+        "allYears": { "variable": "B19013_001E" }
+      }
+    },
+    "total_housing": {
+      "description": "Total housing units",
+      "acs": {
+        "allYears": { "variable": "B25001_001E" }
+      },
+      "decennial": {
+        "2020": { "variable": "H1_001N" }
+      }
+    }
+  }
+}

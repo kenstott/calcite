@@ -218,7 +218,7 @@ public class SimpleNewTablesTest {
     File testDir = new File(tempDir);
 
     // Test the expected hive-partitioned directory structure
-    File geoSourceDir = new File(testDir, "source=geo");
+    File geoSourceDir = new File(testDir, "geo");
     File boundaryDir = new File(geoSourceDir, "type=boundary");
     File crosswalkDir = new File(geoSourceDir, "type=crosswalk");
 
@@ -238,11 +238,11 @@ public class SimpleNewTablesTest {
 
     // Test that paths contain expected patterns
     String boundaryPath = boundaryDir.getAbsolutePath();
-    assertTrue(boundaryPath.contains("source=geo"), "Should contain geo source partition");
+    assertTrue(boundaryPath.contains("geo"), "Should contain geo source partition");
     assertTrue(boundaryPath.contains("type=boundary"), "Should contain boundary type partition");
 
     String crosswalkPath = crosswalkDir.getAbsolutePath();
-    assertTrue(crosswalkPath.contains("source=geo"), "Should contain geo source partition");
+    assertTrue(crosswalkPath.contains("geo"), "Should contain geo source partition");
     assertTrue(crosswalkPath.contains("type=crosswalk"), "Should contain crosswalk type partition");
 
     System.out.println("✓ Hive partition structure verified");

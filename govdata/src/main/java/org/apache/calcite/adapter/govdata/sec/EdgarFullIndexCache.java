@@ -214,6 +214,84 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
     return result;
   }
 
+  /**
+   * Returns active CIKs filtered to only accessions filed after the high-water mark.
+   *
+   * <p>Accessions with {@code date_filed <= highWaterMark} are excluded entirely —
+   * they were evaluated in a previous run. Only new accessions (after HWM) are
+   * considered, reducing the entity corpus from ~38K to ~2K per incremental run.
+   */
+  public Set<String> getActiveCiks(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker, LocalDate highWaterMark) {
+    Set<String> result = new HashSet<String>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      List<IndexEntry> matching = new ArrayList<IndexEntry>();
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year != year) {
+          continue;
+        }
+        if (!matchesFilingType(ie.formType, filingTypes)) {
+          continue;
+        }
+        if (highWaterMark != null && ie.filingDate != null && !ie.filingDate.isEmpty()) {
+          try {
+            if (!LocalDate.parse(ie.filingDate).isAfter(highWaterMark)) {
+              continue;
+            }
+          } catch (Exception e) {
+            // unparseable date: include it to be safe
+          }
+        }
+        matching.add(ie);
+      }
+      if (matching.isEmpty()) {
+        continue;
+      }
+      if (tracker == null) {
+        result.add(entry.getKey());
+        continue;
+      }
+      List<String> accessions = new ArrayList<String>(matching.size());
+      List<String> formTypes = new ArrayList<String>(matching.size());
+      for (IndexEntry ie : matching) {
+        accessions.add(ie.accession);
+        formTypes.add(ie.formType);
+      }
+      if (!tracker.areAllProcessed(entry.getKey(), accessions, formTypes)) {
+        result.add(entry.getKey());
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Returns unprocessed accessions filtered by year and form types.
+   *
+   * @param year        Filing year
+   * @param filingTypes Form types to include, or null for all
+   * @param tracker     Tracker for per-accession processed-status checks, or null to include all
+   * @return list of unprocessed IndexEntry objects for the given year
+   */
+  public List<IndexEntry> getActiveAccessions(int year, List<String> filingTypes,
+      ProcessedDocumentTracker tracker) {
+    List<IndexEntry> result = new ArrayList<IndexEntry>();
+    for (Map.Entry<String, List<IndexEntry>> entry : entriesByCik.entrySet()) {
+      for (IndexEntry ie : entry.getValue()) {
+        if (ie.year != year) {
+          continue;
+        }
+        if (!matchesFilingType(ie.formType, filingTypes)) {
+          continue;
+        }
+        if (tracker != null && tracker.isProcessed(ie.cik, ie.accession, ie.formType)) {
+          continue;
+        }
+        result.add(ie);
+      }
+    }
+    return result;
+  }
+
   /** Check whether a form type matches the requested filing types. */
   private static boolean matchesFilingType(String formType, List<String> filingTypes) {
     if (filingTypes == null || filingTypes.isEmpty()) {
@@ -339,8 +417,8 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    *
    * <p>The file uses fixed-width columns:
    * <pre>
-   * Company Name (col 0-61) | Form Type (col 62-73) | CIK (col 74-85) |
-   * Date Filed (col 86-97) | File Name (col 98+)
+   * Company Name (col 0-61) | Form Type (col 62-73) | CIK (col 74-90) |
+   * Date Filed (col 91-100) | File Name (col 103+)
    * </pre>
    *
    * <p>Header lines and the dashes separator are skipped. The filename field
@@ -350,12 +428,12 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    * @return number of entries parsed
    */
   private int parseIndex(String content, int year, int quarter) {
-    // Fixed-width column positions from the header line:
-    // Company Name(0) Form Type(62) CIK(74) Date Filed(86) File Name(98)
+    // Fixed-width column positions from EDGAR company.idx format:
+    // Company Name(0) Form Type(62) CIK(74) Date Filed(91) File Name(103)
     final int formTypeStart = 62;
     final int cikStart = 74;
-    final int dateFiledStart = 86;
-    final int fileNameStart = 98;
+    final int dateFiledStart = 91;
+    final int fileNameStart = 103;
 
     int count = 0;
     boolean pastHeader = false;
@@ -458,14 +536,14 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
   }
 
   /** Parsed entry from a company.idx line. */
-  static class IndexEntry {
-    final String companyName;
-    final String formType;
-    final String cik;
-    final String filingDate;
-    final String accession;
-    final int year;
-    final int quarter;
+  public static class IndexEntry {
+    public final String companyName;
+    public final String formType;
+    public final String cik;
+    public final String filingDate;
+    public final String accession;
+    public final int year;
+    public final int quarter;
 
     IndexEntry(String companyName, String formType, String cik,
         String filingDate, String accession, int year, int quarter) {

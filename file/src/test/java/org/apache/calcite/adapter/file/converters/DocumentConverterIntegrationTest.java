@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.converters;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Integration test for document converters (DOCX, PPTX, Markdown).
  * Verifies that FileConversionManager properly routes to the scanners.
  */
+@Tag("integration")
 public class DocumentConverterIntegrationTest {
 
   @TempDir

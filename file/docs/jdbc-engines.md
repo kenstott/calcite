@@ -51,11 +51,11 @@ Embedded SQL engine, no external server required.
 
 ```json
 {
-  "queryEngine": {
-    "type": "duckdb",
-    "path": "/tmp/cache.duckdb",
+  "executionEngine": "DUCKDB",
+  "duckdbConfig": {
+    "memory_limit": "4GB",
     "threads": 4,
-    "memoryLimit": "4GB"
+    "temp_directory": "/var/tmp/duckdb"
   }
 }
 ```
@@ -66,24 +66,74 @@ Embedded SQL engine, no external server required.
 
 ### Trino
 
-Requires external Trino cluster. The dialect generates DDL to register tables in Trino's catalog automatically.
+Requires an external Trino cluster. Trino uses two distinct catalogs configured server-side: a **Hive catalog** for Parquet external tables and an **Iceberg catalog** for Iceberg tables. The adapter registers Aperio-discovered files as external tables in the Hive catalog and uses `CALL iceberg.system.register_table()` for Iceberg.
+
+**Two integration patterns:**
+
+1. **Execution Engine** (acid testing/validation) — Aperio creates external tables in Trino, pushes SQL down via JDBC
+2. **Catalog Export** (recommended for production) — Use `TrinoConfig.generateCatalogFiles()` to generate Trino catalog property files, then query via native Trino
 
 ```json
 {
-  "queryEngine": {
-    "type": "trino",
+  "executionEngine": "TRINO",
+  "trinoConfig": {
     "host": "trino.example.com",
     "port": "8080",
     "catalog": "hive",
     "schema": "default",
+    "icebergCatalog": "iceberg",
+    "warehouseDir": "/data/warehouse",
     "user": "${TRINO_USER}"
   }
 }
 ```
 
+**Configuration Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | String | `localhost` | Trino server hostname |
+| `port` | String | `8080` | Trino server port |
+| `catalog` | String | `hive` | Hive catalog for Parquet external tables |
+| `schema` | String | `default` | Default schema within the catalog |
+| `user` | String | - | Trino user (defaults to system user) |
+| `password` | String | - | Password for secured clusters (optional) |
+| `icebergCatalog` | String | `iceberg` | Separate catalog for Iceberg connector |
+| `warehouseDir` | String | `/data/warehouse` | Warehouse directory for catalog metadata |
+| `s3AccessKey` | String | - | AWS access key for S3 (optional) |
+| `s3SecretKey` | String | - | AWS secret key for S3 (optional) |
+| `s3Endpoint` | String | - | Custom S3 endpoint for MinIO/R2 (optional) |
+
+Additional keys in `trinoConfig` are passed as `SET SESSION` commands.
+
+**Catalog File Generation (Production Pattern):**
+
+For production use, generate Trino catalog files and let Trino query natively:
+
+```java
+TrinoConfig config = new TrinoConfig(configMap);
+config.generateCatalogFiles("/path/to/trino/etc/catalog");
+// Writes: hive.properties, iceberg.properties
+```
+
+This generates the server-side config files that Trino needs in its `etc/catalog/` directory, including S3 credentials if configured.
+
 **Requirements:**
-- External Trino cluster with Hive connector (or similar) for external table support
+- External Trino cluster with Hive and/or Iceberg connectors configured
+- JDBC driver: `io.trino:trino-jdbc:439`
 - Authentication via Kerberos, LDAP, or OAuth2 supported
+
+**Running Trino (Docker):**
+
+```bash
+# Generate catalog files first
+# Then start Trino with catalogs mounted
+docker run -d --name trino \
+  -p 8080:8080 \
+  -v /data:/data \
+  -v /path/to/catalogs:/etc/trino/catalog \
+  trinodb/trino:439
+```
 
 ### Spark SQL (Legacy)
 
@@ -91,8 +141,8 @@ Requires Spark Thrift Server (HiveServer2 interface). **Not recommended for new 
 
 ```json
 {
-  "queryEngine": {
-    "type": "spark",
+  "executionEngine": "SPARK",
+  "sparkConfig": {
     "host": "spark-thrift.example.com",
     "port": "10000",
     "database": "default"
@@ -111,8 +161,8 @@ Supports embedded (chDB) or distributed cluster.
 
 ```json
 {
-  "queryEngine": {
-    "type": "clickhouse",
+  "executionEngine": "CLICKHOUSE",
+  "clickhouseConfig": {
     "host": "clickhouse.example.com",
     "port": "8123",
     "database": "default"
@@ -136,9 +186,12 @@ JDBC engines are **read-only**. All write operations (materialization, partition
 - In-memory caching for repeated queries
 - No external infrastructure required
 
-### Trino (Federated Queries)
+### Trino (Federated Queries / Native Catalog)
+- **Production pattern**: Aperio discovers files, generates Trino catalog config, query natively
+- **Testing pattern**: Execution engine registers external tables via JDBC
 - Query across multiple data sources (Postgres, S3, Kafka, etc.)
 - Distributed execution for datasets exceeding single-node capacity
+- Native Iceberg support via Iceberg connector
 - Query latency 5-15 seconds typical (not for sub-second interactive)
 
 ### ClickHouse (OLAP Workloads)
@@ -160,7 +213,7 @@ JDBC drivers are optional dependencies. Add the appropriate driver for your engi
 implementation 'org.duckdb:duckdb_jdbc:1.0.0'
 
 // Trino
-runtimeOnly 'io.trino:trino-jdbc:428'
+runtimeOnly 'io.trino:trino-jdbc:439'
 
 // Spark (Hive JDBC)
 runtimeOnly 'org.apache.hive:hive-jdbc:3.1.3'

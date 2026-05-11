@@ -49,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.*;
       // Create FileSchema with the simple configuration
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", "/tmp");  // Use a simple directory that exists
+      operand.put("ephemeralCache", true);
 
     System.out.println("Creating FileSchema with directory: /tmp");
     FileSchemaFactory factory = FileSchemaFactory.INSTANCE;

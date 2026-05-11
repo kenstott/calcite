@@ -195,6 +195,8 @@ public class JsonApiIntegrationTest extends BaseFileTest {
   +
         "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n"
   +
+        "        \"ephemeralCache\": true,\n"
+  +
         "        \"columnNameCasing\": \"UNCHANGED\"\n"
   +
         "      }\n"

@@ -80,6 +80,8 @@ public class DimensionConfig {
   private final String path;
   private final Map<String, String> properties;
   private final List<Integer> excludeYears;
+  private final Integer minYear;
+  private final Integer maxYear;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -101,6 +103,8 @@ public class DimensionConfig {
     this.excludeYears = builder.excludeYears != null
         ? Collections.unmodifiableList(new ArrayList<Integer>(builder.excludeYears))
         : Collections.<Integer>emptyList();
+    this.minYear = builder.minYear;
+    this.maxYear = builder.maxYear;
   }
 
   /**
@@ -166,6 +170,22 @@ public class DimensionConfig {
    */
   public Integer getReleaseMonth() {
     return releaseMonth;
+  }
+
+  /**
+   * Returns the hard floor year for YEAR_RANGE dimensions.
+   * Batches requested before this year are skipped immediately.
+   */
+  public Integer getMinYear() {
+    return minYear;
+  }
+
+  /**
+   * Returns the hard ceiling year for YEAR_RANGE dimensions.
+   * Batches requested after this year are skipped immediately (data discontinued).
+   */
+  public Integer getMaxYear() {
+    return maxYear;
   }
 
   /**
@@ -395,6 +415,27 @@ public class DimensionConfig {
       builder.excludeYears(excludeList);
     }
 
+    // Parse data availability bounds (hard floor/ceiling independent of start/end)
+    Object minYearObj = map.get("minYear");
+    if (minYearObj instanceof Number) {
+      builder.minYear(((Number) minYearObj).intValue());
+    } else if (minYearObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) minYearObj);
+      if (resolved != null) {
+        builder.minYear(resolved);
+      }
+    }
+
+    Object maxYearObj = map.get("maxYear");
+    if (maxYearObj instanceof Number) {
+      builder.maxYear(((Number) maxYearObj).intValue());
+    } else if (maxYearObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) maxYearObj);
+      if (resolved != null) {
+        builder.maxYear(resolved);
+      }
+    }
+
     // Parse custom properties (for CUSTOM type dimensions)
     // Properties are stored as-is; variable resolution happens at runtime
     Object propsObj = map.get("properties");
@@ -506,6 +547,8 @@ public class DimensionConfig {
     private String path;
     private Map<String, String> properties;
     private List<Integer> excludeYears;
+    private Integer minYear;
+    private Integer maxYear;
 
     public Builder name(String name) {
       this.name = name;
@@ -569,6 +612,16 @@ public class DimensionConfig {
 
     public Builder excludeYears(List<Integer> excludeYears) {
       this.excludeYears = excludeYears;
+      return this;
+    }
+
+    public Builder minYear(Integer minYear) {
+      this.minYear = minYear;
+      return this;
+    }
+
+    public Builder maxYear(Integer maxYear) {
+      this.maxYear = maxYear;
       return this;
     }
 

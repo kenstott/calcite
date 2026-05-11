@@ -523,15 +523,22 @@ public class CalcitePrepareImpl implements CalcitePrepare {
       return simplePrepare(context, castNonNull(query.sql));
     }
 
-    // Simple plan cache for regular Statement queries using just SQL string
-    // This dramatically improves performance for repeated identical queries
-    // especially important for API-based access where PreparedStatements aren't used
+    // Simple plan cache for repeated identical queries on the SAME connection.
+    // The key includes the mutable root schema identity so that different connections
+    // (e.g. Trino vs ClickHouse) never share cached plans, even for identical SQL.
+    // We use getMutableRootSchema() because getRootSchema() creates a new snapshot
+    // per call, while the mutable root schema is stable per CalciteConnection.
+    final String cacheKey;
     if (isCacheEnabled()) {
+      cacheKey = System.identityHashCode(context.getMutableRootSchema())
+          + ":" + query.sql;
       @SuppressWarnings("unchecked")
-      CalciteSignature<T> cached = (CalciteSignature<T>) STATEMENT_CACHE.getIfPresent(query.sql);
+      CalciteSignature<T> cached = (CalciteSignature<T>) STATEMENT_CACHE.getIfPresent(cacheKey);
       if (cached != null) {
         return cached;
       }
+    } else {
+      cacheKey = null;
     }
     final JavaTypeFactory typeFactory = context.getTypeFactory();
     CalciteCatalogReader catalogReader =
@@ -558,8 +565,8 @@ public class CalcitePrepareImpl implements CalcitePrepare {
             prepare2_(context, query, elementType, maxRowCount, catalogReader, preparingStmt);
 
         // Store in cache for future use
-        if (isCacheEnabled() && signature != null) {
-          STATEMENT_CACHE.put(query.sql, signature);
+        if (cacheKey != null && signature != null) {
+          STATEMENT_CACHE.put(cacheKey, signature);
         }
 
         return signature;

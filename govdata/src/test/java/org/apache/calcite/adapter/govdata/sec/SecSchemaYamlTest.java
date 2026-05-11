@@ -17,15 +17,20 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn;
+import org.apache.calcite.adapter.file.partition.PipelineTracker;
+import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -129,6 +134,24 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
     assertNotNull(cikColumn);
     assertTrue(cikColumn.getComment().contains("Central Index Key"),
         "cik column should have template comment");
+  }
+
+  /**
+   * Regression test: materializeStagingFilesToIceberg previously used this.currentOperand
+   * instead of the operand parameter, causing NPE when called from configureHooks because
+   * currentOperand is only set inside downloadSecData (a code path not taken from configureHooks).
+   * The fix passes operand directly to PipelineTrackerFactory.createFromOperand.
+   */
+  @Test
+  void testPipelineTrackerFactoryRequiresNonNullOperand() {
+    // Null operand → NPE (demonstrates the bug that was present before the fix)
+    assertThrows(NullPointerException.class, () ->
+        PipelineTrackerFactory.createFromOperand(null, "/tmp/test"));
+
+    // Non-null operand (what the fixed code now passes) → no NPE
+    Map<String, Object> operand = new HashMap<>();
+    PipelineTracker tracker = PipelineTrackerFactory.createFromOperand(operand, "/tmp/test");
+    assertNotNull(tracker, "tracker should be created from valid operand");
   }
 
   private TableColumn findColumn(List<TableColumn> columns, String name) {

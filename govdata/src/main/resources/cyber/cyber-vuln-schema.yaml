@@ -1,0 +1,828 @@
+# ============================================================================
+# Cyber Vulnerability Schema (CYBER_VULN)
+# ============================================================================
+# Vulnerability records, advisory metadata, and cross-source identifier
+# mappings sourced from NVD, CISA KEV, OSV, GitHub Security Advisories,
+# MITRE CVE list, and related feeds.
+#
+# TTL strategy:
+#   - vulnerabilities, affected_products, cve_references: no TTL (immutable once published)
+#   - kev_catalog: ttl_days: 1 (force daily re-ingest; single file, diff on catalogVersion)
+#   - osv_vulnerabilities, osv_advisories: no TTL (updated via delta by modified date)
+#
+# Partition note: all tables partition by the dimension columns defined below.
+# ============================================================================
+
+schemaName: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+materializeDirectory: "${CYBER_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/cyber_vuln}"
+
+comment: >
+  Cybersecurity vulnerability data. Canonical vulnerability records from NVD,
+  active exploitation catalog from CISA KEV, CWE taxonomy, and cross-source
+  identifier mappings. Part of the govdata cyber sub-domain.
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ==========================================================================
+  # CWE CATALOG — Canonical CWE dimension shared by cyber_vuln and cyber_threat
+  # ==========================================================================
+  - name: cwe_catalog
+    releaseWindow:
+      dow: [0]              # Weekly refresh; Sunday run catches MITRE quarterly updates
+    pattern: "type=cwe_catalog.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      MITRE Common Weakness Enumeration (CWE) catalog. Canonical dimension table
+      for weakness classifications referenced by NVD CVEs, CAPEC patterns,
+      OSV entries, and OWASP Top 10. Sourced from cwec_latest.xml.zip.
+
+    columns:
+      - name: cwe_id
+        type: string
+        nullable: false
+        comment: CWE identifier (e.g., CWE-79)
+      - name: name
+        type: string
+        nullable: true
+        comment: CWE name
+      - name: abstraction
+        type: string
+        nullable: true
+        comment: Abstraction level (Class, Base, Variant, Compound)
+      - name: structure
+        type: string
+        nullable: true
+        comment: Structure (Simple, Chain, Composite)
+      - name: status
+        type: string
+        nullable: true
+        comment: Status (Draft, Stable, Deprecated, Incomplete, Obsolete)
+      - name: description
+        type: string
+        nullable: true
+        comment: Short description
+      - name: extended_description
+        type: string
+        nullable: true
+        comment: Extended description
+      - name: parent_ids
+        type: string
+        nullable: true
+        comment: Pipe-delimited parent CWE IDs (ChildOf relationships)
+      - name: cwe_url
+        type: string
+        nullable: true
+        comment: Canonical URL on cwe.mitre.org
+
+    source:
+      type: http
+      url: "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
+      method: GET
+      extractPattern: "*.xml"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CweResponseTransformer"
+
+    dimensions:
+      type:
+        - cwe_catalog
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # VULNERABILITIES — NVD CVE 2.0 canonical records
+  # ==========================================================================
+  - name: vulnerabilities
+    pattern: "type=vulnerabilities.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      NVD CVE 2.0 canonical vulnerability records. One row per CVE. CVSS V31
+      preferred; falls back to V2 when V31 absent. CVSS V40 stored when present.
+      Paginated ingest via startIndex + resultsPerPage (max 2000). ~347k CVEs total.
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier (e.g., CVE-2021-44228)
+      - name: published
+        type: string
+        nullable: true
+        comment: Publication date (ISO 8601)
+      - name: last_modified
+        type: string
+        nullable: true
+        comment: Last modification date (ISO 8601)
+      - name: vuln_status
+        type: string
+        nullable: true
+        comment: Vulnerability status (Analyzed, Modified, Rejected, etc.)
+      - name: description_en
+        type: string
+        nullable: true
+        comment: English description
+      - name: cvss_v2_score
+        type: double
+        nullable: true
+        comment: CVSS v2 base score
+      - name: cvss_v2_vector
+        type: string
+        nullable: true
+        comment: CVSS v2 vector string
+      - name: cvss_v31_score
+        type: double
+        nullable: true
+        comment: CVSS v3.1 base score
+      - name: cvss_v31_vector
+        type: string
+        nullable: true
+        comment: CVSS v3.1 vector string
+      - name: cvss_v31_severity
+        type: string
+        nullable: true
+        comment: CVSS v3.1 severity (LOW, MEDIUM, HIGH, CRITICAL)
+      - name: cvss_v40_score
+        type: double
+        nullable: true
+        comment: CVSS v4.0 base score when present
+      - name: cwe_ids
+        type: string
+        nullable: true
+        comment: Pipe-delimited CWE IDs
+      - name: source
+        type: string
+        nullable: true
+        comment: Feed source (nvd)
+
+    source:
+      type: http
+      url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+      method: GET
+      headers:
+        apiKey: "${CYBER_NVD_API_KEY:}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.167
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdResponseTransformer"
+
+    dimensions:
+      type:
+        - vulnerabilities
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # VULNERABILITY_CWES — NVD CVE→CWE junction, materialized at ingest
+  # ==========================================================================
+  - name: vulnerability_cwes
+    pattern: "type=vulnerability_cwes.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Junction table of CVE→CWE pairs, materialized from NVD at ingest time.
+      One row per (cve_id, cwe_id) pair. Replaces query-time UNNEST on the
+      pipe-delimited cwe_ids column in vulnerabilities.
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier
+      - name: cwe_id
+        type: string
+        nullable: false
+        comment: CWE identifier (e.g., CWE-79)
+
+    source:
+      type: http
+      url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+      method: GET
+      headers:
+        apiKey: "${CYBER_NVD_API_KEY:}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.167
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdVulnCwesResponseTransformer"
+
+    dimensions:
+      type:
+        - vulnerability_cwes
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # CISA KEV CATALOG — Known Exploited Vulnerabilities
+  # ==========================================================================
+  - name: kev_catalog
+    pattern: "type=kev_catalog.parquet"
+    ttl_days: 1
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      CISA Known Exploited Vulnerabilities (KEV) catalog. Single JSON file,
+      ~1,585 entries. No ETag/delta endpoint; diff on catalogVersion field
+      (format YYYY.MM.DD). notes field is semicolon-delimited string of URLs,
+      not an array. cwes array may be empty on older entries.
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier
+      - name: vendor_project
+        type: string
+        nullable: true
+        comment: Vendor or project name (KEV vendorProject)
+      - name: product
+        type: string
+        nullable: true
+        comment: Product name
+      - name: vulnerability_name
+        type: string
+        nullable: true
+        comment: Vulnerability name (KEV vulnerabilityName)
+      - name: date_added
+        type: string
+        nullable: true
+        comment: Date added to KEV catalog (YYYY-MM-DD)
+      - name: short_description
+        type: string
+        nullable: true
+        comment: Short description
+      - name: required_action
+        type: string
+        nullable: true
+        comment: Required action for federal agencies
+      - name: due_date
+        type: string
+        nullable: true
+        comment: Remediation due date for FCEB agencies (YYYY-MM-DD)
+      - name: known_ransomware_use
+        type: string
+        nullable: true
+        comment: Known ransomware campaign use (Known or Unknown)
+      - name: notes_urls
+        type: string
+        nullable: true
+        comment: Pipe-delimited URLs split from KEV notes field on semicolon
+      - name: cwes
+        type: string
+        nullable: true
+        comment: Pipe-delimited CWE IDs from KEV cwes array (may be empty)
+      - name: catalog_version
+        type: string
+        nullable: true
+        comment: Catalog version at ingest time (YYYY.MM.DD) for delta detection
+
+    source:
+      type: http
+      url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevResponseTransformer"
+
+    dimensions:
+      type:
+        - kev_catalog
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # KEV_CWES — CISA KEV CVE→CWE junction, materialized at ingest
+  # ==========================================================================
+  - name: kev_cwes
+    pattern: "type=kev_cwes.parquet"
+    ttl_days: 1
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Junction table of KEV CVE→CWE pairs, materialized from CISA KEV at ingest time.
+      One row per (cve_id, cwe_id) pair. Replaces query-time UNNEST on the
+      pipe-delimited cwes column in kev_catalog.
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier
+      - name: cwe_id
+        type: string
+        nullable: false
+        comment: CWE identifier (e.g., CWE-78)
+
+    source:
+      type: http
+      url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevCwesResponseTransformer"
+
+    dimensions:
+      type:
+        - kev_cwes
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # OSV VULNERABILITIES — Open Source Vulnerabilities per-ecosystem records
+  # ==========================================================================
+  - name: osv_vulnerabilities
+    releaseWindow:
+      dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
+    pattern: "type=osv_vulnerabilities.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      OSV (Open Source Vulnerabilities) records. One row per OSV entry. Ecosystems
+      controlled by CYBER_OSV_ECOSYSTEMS env var (default: PyPI, npm, Go, Maven, etc.).
+      Includes OSV-native entries without a CVE assignment. CVE-aliased entries are also
+      cross-referenced in vuln_cross_refs.
+
+    columns:
+      - name: osv_id
+        type: string
+        nullable: false
+        comment: OSV identifier (e.g., GHSA-xxxx, OSV-2021-xxx, PYSEC-2021-xxx)
+      - name: modified
+        type: string
+        nullable: false
+        comment: Last modification timestamp (ISO 8601)
+      - name: published
+        type: string
+        nullable: true
+        comment: Publication timestamp (ISO 8601)
+      - name: withdrawn
+        type: string
+        nullable: true
+        comment: Withdrawal timestamp if entry was retracted (ISO 8601)
+      - name: aliases
+        type: string
+        nullable: true
+        comment: Pipe-delimited alias IDs (CVE IDs, GHSA IDs, etc.)
+      - name: summary
+        type: string
+        nullable: true
+        comment: Short summary
+      - name: details
+        type: string
+        nullable: true
+        comment: Detailed description (may include Markdown)
+      - name: severity_type
+        type: string
+        nullable: true
+        comment: Severity type (CVSS_V3, CVSS_V4, etc.)
+      - name: severity_score
+        type: string
+        nullable: true
+        comment: CVSS vector string or numeric score
+      - name: ecosystem
+        type: string
+        nullable: true
+        comment: Package ecosystem (PyPI, npm, Go, Maven, etc.)
+      - name: package_name
+        type: string
+        nullable: true
+        comment: Package name within the ecosystem
+      - name: package_purl
+        type: string
+        nullable: true
+        comment: Package URL (purl) for the affected package
+      - name: schema_version
+        type: string
+        nullable: true
+        comment: OSV schema version
+      - name: database_specific
+        type: string
+        nullable: true
+        comment: JSON blob of database-specific metadata
+
+    source:
+      type: http
+      url: "https://osv-vulnerabilities.storage.googleapis.com"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.OsvResponseTransformer"
+
+    dimensions:
+      type:
+        - osv_vulnerabilities
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # VULN CROSS REFS — CVE to external identifier mappings
+  # ==========================================================================
+  - name: vuln_cross_refs
+    releaseWindow:
+      dow: [0]              # Weekly refresh; cross-reference data changes infrequently
+    pattern: "type=vuln_cross_refs.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Cross-reference mappings from CVE identifiers to external advisory IDs.
+      Populated by three sources: GitHub Security Advisories (GHSA), MITRE CVE
+      daily delta ZIPs, and OSV alias lists. Dedup key is (cve_id, external_id,
+      external_source). external_source values: ghsa, nvd, cisa, mitre, github, cve.
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier (CVE-YYYY-NNNNN normalized form)
+      - name: external_id
+        type: string
+        nullable: false
+        comment: External identifier (GHSA ID, NVD URL slug, etc.)
+      - name: external_source
+        type: string
+        nullable: false
+        comment: Source system (ghsa, nvd, cisa, mitre, github, cve)
+      - name: url
+        type: string
+        nullable: true
+        comment: URL of the external advisory or reference
+
+    source:
+      type: http
+      url: "https://api.github.com/graphql"
+      method: POST
+      headers:
+        Authorization: "bearer ${CYBER_GITHUB_TOKEN:}"
+        Content-Type: "application/json"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.GithubSaResponseTransformer"
+
+    dimensions:
+      type:
+        - vuln_cross_refs
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+  # ==========================================================================
+  # ADVISORIES — CISA cybersecurity advisories
+  # ==========================================================================
+  - name: advisories
+    releaseWindow:
+      dow: [0]              # Weekly refresh; CISA/GitHub advisories aggregated weekly
+    pattern: "type=advisories.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      CISA cybersecurity advisory metadata. Parsed from the CISA advisory listing
+      HTML page. Advisory detail pages are fetched for CVE IDs, severity, and
+      affected systems. PDF-only advisories fall back to PdfAdvisoryExtractor.
+
+    columns:
+      - name: advisory_id
+        type: string
+        nullable: false
+        comment: Advisory identifier (e.g., AA24-001A, ICSA-24-001-01)
+      - name: source
+        type: string
+        nullable: false
+        comment: Advisory source (cisa)
+      - name: title
+        type: string
+        nullable: true
+        comment: Advisory title
+      - name: published_date
+        type: string
+        nullable: true
+        comment: Publication date (YYYY-MM-DD)
+      - name: severity
+        type: string
+        nullable: true
+        comment: Severity label (CRITICAL, HIGH, MEDIUM, LOW)
+      - name: cve_ids
+        type: string
+        nullable: true
+        comment: Pipe-delimited CVE IDs mentioned in the advisory
+      - name: affected_systems
+        type: string
+        nullable: true
+        comment: Short description of affected products or systems
+      - name: url
+        type: string
+        nullable: true
+        comment: Canonical URL of the advisory
+
+    source:
+      type: http
+      url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaAdvisoryResponseTransformer"
+
+    dimensions:
+      type:
+        - advisories
+
+    materialize:
+      enabled: true
+      format: parquet
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: kev_enriched
+    comment: >
+      KEV entries enriched with NVD vulnerability data via LEFT JOIN.
+      Orphaned KEV entries (no matching NVD record) still appear with NULL NVD columns.
+    sql: >
+      SELECT k.cve_id, k.vendor_project, k.product, k.vulnerability_name,
+             k.date_added, k.short_description, k.required_action, k.due_date,
+             k.known_ransomware_use, k.notes_urls, k.cwes, k.catalog_version,
+             v.published, v.last_modified, v.vuln_status, v.description_en,
+             v.cvss_v2_score, v.cvss_v31_score, v.cvss_v31_severity, v.cvss_v40_score
+      FROM kev_catalog k
+      LEFT JOIN vulnerabilities v ON k.cve_id = v.cve_id
+
+  - name: vuln_cwe_enriched
+    comment: >
+      Vulnerability-CWE junction enriched with CWE catalog details via LEFT JOIN.
+      Unresolved CWE IDs still appear with NULL catalog columns.
+    sql: >
+      SELECT vc.cve_id, vc.cwe_id,
+             c.name AS cwe_name, c.abstraction, c.status, c.description
+      FROM vulnerability_cwes vc
+      LEFT JOIN cwe_catalog c ON vc.cwe_id = c.cwe_id
+
+  - name: kev_cwe_enriched
+    comment: >
+      KEV CWE references enriched with CWE catalog details via LEFT JOIN.
+      Unresolved CWE IDs still appear with NULL catalog columns.
+    sql: >
+      SELECT kc.cve_id, kc.cwe_id,
+             c.name AS cwe_name, c.abstraction, c.status, c.description
+      FROM kev_cwes kc
+      LEFT JOIN cwe_catalog c ON kc.cwe_id = c.cwe_id
+
+  - name: vuln_threat_chain
+    comment: >
+      Cross-domain vulnerability chain: CVE → KEV status → CWE → OWASP Top 10 category.
+      Bridges cyber_vuln and cyber_threat schemas. Filter on cve_id or owasp_rank
+      to navigate the chain. CVE→ATT&CK linkage requires the entity resolution layer
+      (no structural mapping exists in the current data).
+    sql: >
+      SELECT
+        v.cve_id,
+        v.published,
+        v.cvss_v31_score,
+        v.cvss_v31_severity,
+        CASE WHEN k.cve_id IS NOT NULL THEN 'yes' ELSE 'no' END AS is_known_exploited,
+        k.date_added  AS kev_date_added,
+        k.due_date    AS kev_due_date,
+        k.known_ransomware_use,
+        k.vendor_project,
+        vc.cwe_id,
+        cw.name       AS cwe_name,
+        cw.abstraction AS cwe_abstraction,
+        o.rank        AS owasp_rank,
+        o.name        AS owasp_category
+      FROM vulnerabilities v
+      LEFT JOIN kev_catalog       k  ON v.cve_id  = k.cve_id
+      LEFT JOIN vulnerability_cwes vc ON v.cve_id  = vc.cve_id
+      LEFT JOIN cwe_catalog       cw ON vc.cwe_id  = cw.cwe_id
+      LEFT JOIN "cyber_threat"."owasp_top10" o
+        ON ('|' || o.cwe_ids || '|') LIKE ('%|' || vc.cwe_id || '|%')
+
+  - name: kev_cross_threat
+    comment: >
+      Enriches the CISA Known Exploited Vulnerabilities catalog with NVD CVSS scores
+      and CWE taxonomy names. Aggregates multiple CWE assignments per CVE into
+      comma-delimited strings. One row per CVE in KEV.
+    sql: >
+      SELECT
+        k.cve_id,
+        k.vendor_project,
+        k.product,
+        k.vulnerability_name,
+        k.date_added,
+        k.due_date,
+        k.known_ransomware_use,
+        v.cvss_v31_score,
+        v.cvss_v31_severity,
+        v.cvss_v2_score,
+        STRING_AGG(DISTINCT vc.cwe_id, ', ') AS cwe_ids,
+        STRING_AGG(DISTINCT cw.name,   '; ') AS cwe_names
+      FROM kev_catalog k
+      LEFT JOIN vulnerabilities  v  ON k.cve_id  = v.cve_id
+      LEFT JOIN vulnerability_cwes vc ON k.cve_id = vc.cve_id
+      LEFT JOIN cwe_catalog      cw ON vc.cwe_id  = cw.cwe_id
+      GROUP BY k.cve_id, k.vendor_project, k.product, k.vulnerability_name,
+               k.date_added, k.due_date, k.known_ransomware_use,
+               v.cvss_v31_score, v.cvss_v31_severity, v.cvss_v2_score
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  cwe_catalog:
+    primaryKey: [type, cwe_id]
+
+  vulnerabilities:
+    primaryKey: [type, cve_id]
+
+  kev_catalog:
+    primaryKey: [type, cve_id]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: vulnerabilities
+        targetColumns: [cve_id]
+        comment: KEV entries reference NVD canonical CVE records
+
+  osv_vulnerabilities:
+    primaryKey: [type, osv_id]
+
+  vuln_cross_refs:
+    primaryKey: [type, cve_id, external_id, external_source]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: vulnerabilities
+        targetColumns: [cve_id]
+        comment: Cross-refs link back to NVD canonical CVE records
+
+  vulnerability_cwes:
+    primaryKey: [type, cve_id, cwe_id]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: vulnerabilities
+        targetColumns: [cve_id]
+        comment: Links CWE classification back to NVD canonical CVE record
+      - columns: [cwe_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: cwe_catalog
+        targetColumns: [cwe_id]
+        comment: Links CVE-CWE pair to CWE taxonomy entry
+
+  kev_cwes:
+    primaryKey: [type, cve_id, cwe_id]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: kev_catalog
+        targetColumns: [cve_id]
+        comment: Links KEV CWE entry back to CISA KEV catalog record
+      - columns: [cwe_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: cwe_catalog
+        targetColumns: [cwe_id]
+        comment: Links KEV-CWE pair to CWE taxonomy entry
+
+  advisories:
+    primaryKey: [type, advisory_id]

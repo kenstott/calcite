@@ -11,12 +11,12 @@
 # Features:
 #   - Cross-references with geo.states via state_abbr
 #   - Hive-style partitioning for efficient querying
-#   - Rate-limited API integration (2 req/sec)
+#   - Rate-limited API integration (10 req/sec)
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:crime}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=crime"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/crime"
 
 comment: >
   Comprehensive U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and
@@ -284,7 +284,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -300,9 +300,12 @@ partitionedTables:
       partition:
         columns: [type, state_abbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_agencies
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDE OFFENSES - Summarized crime rates by state, offense, and month
@@ -364,7 +367,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -380,9 +383,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_offenses
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -437,7 +443,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -453,9 +459,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_police_employment
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -494,7 +503,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -510,9 +519,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_hate_crimes
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -550,7 +562,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -566,9 +578,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_use_of_force
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -593,7 +608,7 @@ partitionedTables:
         type: custom
         properties:
           contextKey: state_abbr
-          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME/cde_agencies"
+          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/crime/cde_agencies"
 
     columns:
       - name: ori
@@ -633,10 +648,11 @@ partitionedTables:
       type: http
       url: "https://cde.ucr.cjis.gov/LATEST/summarized/agency/{ori}/{offense}?from=01-{year}&to=12-{year}"
       method: GET
+      parallel: 5
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -653,9 +669,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_crime_agency
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -702,7 +721,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -718,9 +737,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_arrests
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -762,7 +784,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -778,9 +800,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_shr
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -822,7 +847,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -838,9 +863,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_leoka
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -887,7 +915,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -903,9 +931,12 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_trends
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # CDE SUPPLEMENTAL - Stolen and recovered property values
@@ -947,7 +978,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -963,9 +994,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_supplemental
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1011,7 +1045,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1027,9 +1061,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_cargo_theft
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1071,7 +1108,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1087,9 +1124,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_human_trafficking
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1132,7 +1172,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1148,9 +1188,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_participation
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1204,7 +1247,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1220,9 +1263,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: cde_estimates
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1315,7 +1361,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1331,9 +1377,12 @@ partitionedTables:
       partition:
         columns: [type, endpoint_id]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_nibrs_estimates
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
   # BJS NCVS PERSONAL - National Crime Victimization Survey
@@ -1432,7 +1481,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1448,9 +1497,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1532,7 +1584,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1548,9 +1600,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal_pop
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1627,7 +1682,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1643,9 +1698,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1710,7 +1768,7 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1726,9 +1784,12 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=crime/CRIME"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household_pop
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1858,4 +1919,39 @@ constraints:
       - estimate_domain_1
       - estimate_domain_2
       - time_series_start_year
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: crime_enforcement_equity
+    comment: >
+      Correlates annual FBI CDE offense rates with police employment by state and year.
+      Monthly offense rows are averaged to produce annual rates. One row per
+      state+year+offense_code — enables enforcement resource allocation analysis.
+    sql: >
+      SELECT
+        o.state_abbr,
+        gs.state_name,
+        gs.state_fips,
+        o.year,
+        o.offense_code,
+        AVG(o.offense_rate)                                  AS avg_monthly_offense_rate,
+        AVG(o.clearance_rate)                                AS avg_monthly_clearance_rate,
+        pe.officers_per_1000,
+        pe.male_officers + pe.female_officers                AS total_officers,
+        CASE
+          WHEN pe.officers_per_1000 IS NOT NULL
+            AND pe.officers_per_1000 > 0
+          THEN AVG(o.offense_rate) / pe.officers_per_1000
+          ELSE NULL
+        END                                                  AS offense_rate_per_officer
+      FROM cde_offenses o
+      LEFT JOIN cde_police_employment pe
+        ON o.state_abbr = pe.state_abbr AND o.year = pe.year
+      LEFT JOIN "geo"."states" gs ON o.state_abbr = gs.state_abbr
+      GROUP BY o.state_abbr, gs.state_name, gs.state_fips, o.year, o.offense_code,
+               pe.officers_per_1000, pe.male_officers, pe.female_officers
 

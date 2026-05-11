@@ -29,3 +29,15 @@ org.apache.calcite.adapter.govdata.weather.NwsAlertTransformer
 org.apache.calcite.adapter.govdata.weather.CdoDataTransformer
 org.apache.calcite.adapter.govdata.weather.CdoStationTransformer
 org.apache.calcite.adapter.govdata.weather.EpaAqsTransformer
+
+# Education data APIs (K-12 and higher ed)
+org.apache.calcite.adapter.govdata.edu.CcdDistrictsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.NaepScoresResponseTransformer
+org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer
+org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer
+org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer

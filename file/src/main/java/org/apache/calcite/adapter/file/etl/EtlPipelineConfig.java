@@ -639,14 +639,17 @@ public class EtlPipelineConfig {
       if (name == null || name.isEmpty()) {
         throw new IllegalArgumentException("Pipeline name is required");
       }
-      // Source is required unless hooks are enabled (hooks-only tables skip ETL pipeline)
-      boolean hooksEnabled = hooks != null && hooks.isEnabled();
-      if (source == null && rawSourceConfig == null && !hooksEnabled) {
-        throw new IllegalArgumentException("Source configuration is required");
-      }
-      // Materialize is required unless this is a hooks-only table
-      if (materialize == null && !hooksEnabled) {
-        throw new IllegalArgumentException("Materialize configuration is required");
+      // Skip source/materialize validation for disabled pipelines
+      if (enabled) {
+        // Source is required unless hooks are enabled (hooks-only tables skip ETL pipeline)
+        boolean hooksEnabled = hooks != null && hooks.isEnabled();
+        if (source == null && rawSourceConfig == null && !hooksEnabled) {
+          throw new IllegalArgumentException("Source configuration is required");
+        }
+        // Materialize is required unless this is a hooks-only table
+        if (materialize == null && !hooksEnabled) {
+          throw new IllegalArgumentException("Materialize configuration is required");
+        }
       }
       return new EtlPipelineConfig(this);
     }

@@ -451,7 +451,8 @@ public class MaterializeConfig {
     }
 
     public MaterializeConfig build() {
-      if (output == null) {
+      // Skip output validation for disabled materialization
+      if (output == null && (enabled == null || enabled)) {
         throw new IllegalArgumentException("Output configuration is required");
       }
       return new MaterializeConfig(this);
@@ -504,6 +505,7 @@ public class MaterializeConfig {
     private final long compactionTargetFileSizeBytes;
     private final int compactionMinFiles;
     private final long compactionSmallFileSizeBytes;
+    private final boolean overwritePartitions;
 
     private IcebergConfig(IcebergConfigBuilder builder) {
       this.catalogType = builder.catalogType != null ? builder.catalogType : CatalogType.HADOOP;
@@ -528,6 +530,7 @@ public class MaterializeConfig {
           ? builder.compactionMinFiles : 10;
       this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
           ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
+      this.overwritePartitions = builder.overwritePartitions;
     }
 
     public CatalogType getCatalogType() {
@@ -584,6 +587,10 @@ public class MaterializeConfig {
 
     public long getCompactionSmallFileSizeBytes() {
       return compactionSmallFileSizeBytes;
+    }
+
+    public boolean isOverwritePartitions() {
+      return overwritePartitions;
     }
 
     public static IcebergConfigBuilder builder() {
@@ -680,6 +687,11 @@ public class MaterializeConfig {
         builder.compactionSmallFileSizeBytes(((Number) smallSizeObj).longValue());
       }
 
+      Object overwriteObj = map.get("overwritePartitions");
+      if (overwriteObj instanceof Boolean) {
+        builder.overwritePartitions((Boolean) overwriteObj);
+      }
+
       return builder.build();
     }
 
@@ -716,6 +728,7 @@ public class MaterializeConfig {
       private long compactionTargetFileSizeBytes;
       private int compactionMinFiles;
       private long compactionSmallFileSizeBytes;
+      private boolean overwritePartitions;
 
       public IcebergConfigBuilder catalogType(CatalogType catalogType) {
         this.catalogType = catalogType;
@@ -784,6 +797,11 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder compactionSmallFileSizeBytes(long compactionSmallFileSizeBytes) {
         this.compactionSmallFileSizeBytes = compactionSmallFileSizeBytes;
+        return this;
+      }
+
+      public IcebergConfigBuilder overwritePartitions(boolean overwritePartitions) {
+        this.overwritePartitions = overwritePartitions;
         return this;
       }
 

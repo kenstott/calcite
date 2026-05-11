@@ -40,21 +40,33 @@ The bundle scope is the **ETL session** (one bundle per session). The source key
 
 A bundle is a flat binary concatenation of cache entries with a sidecar index.
 
-### Data file: `{bundleId}.bin`
+### Data file: `{bundleId}-NNN.bin` (chunked)
 
-Raw concatenation of cache entry bytes. No framing, no headers, no compression (responses are already small). Entries are appended in write order.
+Raw concatenation of cache entry bytes, split into chunks of up to 256MB each (`DEFAULT_CHUNK_SIZE = 256MB`). Each chunk is uploaded as a separate `.bin` file. Entries are appended in write order; when a chunk would exceed the size limit, a new chunk is started.
+
+**Chunk naming:**
+- `{bundleId}-001.bin` — first chunk
+- `{bundleId}-002.bin` — second chunk (if needed)
+- `{bundleId}-003.bin` — etc.
 
 ```
-[entry-0 bytes][entry-1 bytes][entry-2 bytes]...
+# Chunk 001:
+[entry-0 bytes][entry-1 bytes]...[entry-N bytes]
+
+# Chunk 002 (if entries exceed 256MB):
+[entry-N+1 bytes][entry-N+2 bytes]...
 ```
 
-### Index file: `{bundleId}.idx.jsonl`
+### Index file: `{bundleId}.idx.jsonl` or `{bundleId}.idx-NNN.jsonl` (partitioned)
 
-One JSON line per entry, written in append order:
+One JSON line per entry, written in append order. For small indexes (up to 50,000 entries), a single file is used. For larger indexes, the index is split into parts of 50,000 entries each.
+
+**Small index** (<=50K entries): `{bundleId}.idx.jsonl`
+**Large index** (>50K entries): `{bundleId}.idx-001.jsonl`, `{bundleId}.idx-002.jsonl`, etc.
 
 ```jsonl
-{"key":"year=2023/state=06/response.json","offset":0,"length":4821,"ts":1710000000}
-{"key":"year=2023/state=08/response.json","offset":4821,"length":3102,"ts":1710000001}
+{"key":"year=2023/state=06/response.json","bundleFile":"run-20260310T1423-001.bin","offset":0,"length":4821,"ts":1710000000}
+{"key":"year=2023/state=08/response.json","bundleFile":"run-20260310T1423-001.bin","offset":4821,"length":3102,"ts":1710000001}
 {"key":"year=2016/state=47/tl_2016_47_tract.zip","storage":"object","length":98123456,"ts":1710000005}
 ```
 
@@ -69,12 +81,14 @@ Fields:
 
 ```
 s3://bucket/.raw/bundles/
-  census/                          # schema name
-    run-20260310T1423.bin          # bundle data (entire ETL session)
-    run-20260310T1423.idx.jsonl    # bundle index
-  sec/                             # schema name
-    run-20260310T1600.bin
-    run-20260310T1600.idx.jsonl
+  census/                               # schema name
+    run-20260310T1423-001.bin           # bundle chunk 1
+    run-20260310T1423-002.bin           # bundle chunk 2 (if data > 256MB)
+    run-20260310T1423.idx.jsonl         # index (single file if <=50K entries)
+  sec/                                  # schema name
+    run-20260310T1600-001.bin           # bundle chunk 1
+    run-20260310T1600.idx-001.jsonl     # index part 1 (split if >50K entries)
+    run-20260310T1600.idx-002.jsonl     # index part 2
 ```
 
 Bundle ID = `run-{ISO timestamp of ETL start}`. One bundle per ETL session. The source key inside the index identifies the origin request (e.g., `year=2023/state=06/response.json` for API calls, `0000070502/000007050224000001/form4.xml` for document downloads).
@@ -100,9 +114,10 @@ BundleArchiver.archive(localCacheDir, storageProvider, bundlePath, sizeThreshold
    - **Small files** (API responses, small documents) → bundled
    - **Large files** (shapefiles, bulk downloads) → individual S3 PUTs
 3. For small files:
-   - Append bytes to data buffer, record `(key, offset, length, timestamp)` in index
-   - Write `{bundleId}.bin` to S3 via single PUT
-   - Write `{bundleId}.idx.jsonl` to S3 via single PUT
+   - Append bytes to in-memory chunk buffer, record `(key, bundleFile, offset, length, timestamp)` in index
+   - When chunk buffer exceeds 256MB, flush as `{bundleId}-NNN.bin` and start a new chunk
+   - After all files processed, flush final chunk
+   - Write index: single `{bundleId}.idx.jsonl` if <=50K entries, or split into `{bundleId}.idx-NNN.jsonl` parts
 4. For large files:
    - PUT individually to `s3://bucket/.raw/objects/<schema>/<sourceKey>`
    - Record in the same index with `"storage":"object"` (no offset/length)
@@ -110,7 +125,7 @@ BundleArchiver.archive(localCacheDir, storageProvider, bundlePath, sizeThreshold
 
 The size threshold is a pragmatic split: millions of 1KB API responses benefit from bundling; hundreds of 100MB+ shapefiles don't — they're already few enough that per-file PUTs are cheap and individual storage makes them directly accessible.
 
-**Streaming for large bundles:** If the bundled portion exceeds ~256MB, use S3 multipart upload. The index is still built in memory since it's small.
+**Chunking for large bundles:** When bundled data exceeds 256MB, files are split across multiple chunk files (`{bundleId}-001.bin`, `{bundleId}-002.bin`, etc.). Each chunk is uploaded as a separate S3 PUT. The index records which chunk file each entry belongs to via the `bundleFile` field. Similarly, indexes with more than 50K entries are split into parts (`{bundleId}.idx-001.jsonl`, etc.) to avoid building multi-GB strings in memory.
 
 **Error handling:** If archive fails, it's not fatal. Local cache remains. Next run will re-archive. No state to clean up.
 

@@ -100,13 +100,29 @@ public class HiveParquetWriter {
 
   /**
    * Resolves the output path from config, using baseDirectory when location is not specified.
+   * When no partition columns are configured, resolves to a file inside the directory
+   * because DuckDB COPY TO expects a file path for non-partitioned writes.
    */
   private String resolveOutputPath(MaterializeConfig config) {
     String outputLocation = config.getOutput() != null ? config.getOutput().getLocation() : null;
-    if (outputLocation == null || outputLocation.isEmpty() || "{baseDirectory}".equals(outputLocation)) {
-      return baseDirectory;
+    String resolved;
+    if (outputLocation == null || outputLocation.isEmpty()
+        || "{baseDirectory}".equals(outputLocation)) {
+      resolved = baseDirectory;
+    } else {
+      resolved = storageProvider.resolvePath(baseDirectory, outputLocation);
     }
-    return storageProvider.resolvePath(baseDirectory, outputLocation);
+
+    // DuckDB COPY TO with PARTITION_BY expects a directory, without it expects a file.
+    // When no partition columns are configured, write to a file inside the directory.
+    boolean hasPartitions = config.getPartition() != null
+        && config.getPartition().getColumns() != null
+        && !config.getPartition().getColumns().isEmpty();
+    if (!hasPartitions) {
+      String name = config.getName() != null ? config.getName() : "data";
+      resolved = resolved + "/" + name + ".parquet";
+    }
+    return resolved;
   }
 
   /**

@@ -11,17 +11,29 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
+import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SEC-specific facade for filing processing state.
@@ -50,6 +62,14 @@ public class SecFilingCache implements AutoCloseable {
 
   private static final int MAX_ERROR_RETRIES = 3;
 
+  /** Matches batch-merged parquet files written by LocalStagingStorageProvider. */
+  private static final Pattern BATCH_FILE_PATTERN =
+      Pattern.compile("^([a-z_]+)_batch_(\\d+)\\.parquet$", Pattern.CASE_INSENSITIVE);
+
+  /** Base table types always expected for a complete 10-K/10-Q filing. */
+  private static final String[] BASE_FILE_TYPES =
+      {"metadata", "facts", "contexts", "relationships", "mda"};
+
   /** Phase name for SEC staging (initial file creation). */
   private static final String PHASE_STAGING = "staging";
 
@@ -65,6 +85,23 @@ public class SecFilingCache implements AutoCloseable {
   private final PipelineTracker tracker;
   private final StorageProvider storageProvider;
   private final String parquetBaseDir;
+
+  /**
+   * In-memory cache of known parquet file paths in S3.
+   * Populated by {@link #preloadFileInventory(int, int)} to eliminate per-file LIST ops during
+   * self-healing checks.  When null, fileExists() falls back to live S3 queries.
+   */
+  private volatile java.util.Set<String> s3FileCache = null;
+
+  /**
+   * Secondary index: parquet filename (without directory) → full S3 path.
+   * Populated alongside {@link #s3FileCache} to enable O(1) lookups when the
+   * filing date (and therefore year partition) is unknown.
+   */
+  private volatile java.util.Map<String, String> s3FileCacheByName = null;
+
+  /** Lazily-initialized DuckDB connection used to read batch parquet files during preload. */
+  private Connection duckdbConn = null;
 
   /**
    * Create a new filing cache backed by a PipelineTracker.
@@ -109,6 +146,442 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
+   * Backfills no_xbrl sentinel parquet files to S3 for filings already marked
+   * {@code _no_xbrl} in the tracker but lacking a sentinel file in S3.
+   *
+   * <p>The original {@link #writeNoXbrlSentinel} had a bug where it returned early when
+   * {@code filingDate} was empty, so historical no_xbrl filings were never written to S3.
+   * This one-time backfill corrects that gap so the self-heal path can skip no_xbrl
+   * filings without needing a tracker.
+   *
+   * <p>Requires that {@link #preloadFileInventory} has already been called so the
+   * in-memory byName cache can be used to skip sentinels that already exist.
+   *
+   * @param candidates index entries to inspect (typically all EDGAR year candidates)
+   * @return number of sentinels newly written to S3
+   */
+  public int backfillNoXbrlSentinels(List<EdgarFullIndexCache.IndexEntry> candidates) {
+    if (candidates.isEmpty()) {
+      return 0;
+    }
+    List<String> accessions = new ArrayList<String>(candidates.size());
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      accessions.add(ie.accession);
+    }
+    Map<String, Set<String>> bulk = tracker.bulkGetCompletedTables(accessions, PHASE_STAGING);
+    int written = 0;
+    int alreadyExists = 0;
+    int notNoXbrl = 0;
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      Set<String> tables = bulk.get(ie.accession);
+      if (tables == null || !tables.contains(TABLE_NO_XBRL)) {
+        notNoXbrl++;
+        continue;
+      }
+      String fileName = ie.cik + "_" + ie.accession + "_no_xbrl.parquet";
+      java.util.Map<String, String> byName = this.s3FileCacheByName;
+      if (byName != null && byName.containsKey(fileName)) {
+        alreadyExists++;
+        continue;
+      }
+      writeNoXbrlSentinel(ie.cik, ie.accession, ie.filingDate);
+      written++;
+    }
+    LOGGER.info(
+        "backfillNoXbrlSentinels: {} sentinels written, {} already existed, {} not no_xbrl",
+        written, alreadyExists, notNoXbrl);
+    return written;
+  }
+
+  /**
+   * Scans only the {@code sec/year=YYYY/} partitions for {@code startYear..endYear}
+   * and caches all known file paths in memory.
+   *
+   * <p>After this call, {@link #checkS3Files} answers existence queries from the
+   * in-memory set — zero additional Class A LIST ops per filing check.
+   *
+   * <p>Cost: one paginated {@code ListObjectsV2} scan per year partition
+   * (roughly 1 Class A op per 1 000 files in each year).  Scoping to the worker's
+   * actual year range avoids listing the full sec/}
+   * prefix that would otherwise cost 1 000+ Class A ops and take many minutes.
+   *
+   * <p>Thread-safety note: both caches are replaced atomically.  Workers operating on
+   * disjoint filing ranges see the same consistent snapshot.  Files written by other
+   * workers AFTER this scan are not in the cache; they will not be visible via the
+   * cache but the tracker will have marked them complete before self-healing would
+   * ever run for those filings.
+   *
+   * @param startYear first year partition to include (e.g. 2026)
+   * @param endYear   last year partition to include (inclusive)
+   */
+  public void preloadFileInventory(int startYear, int endYear) {
+    long start = System.currentTimeMillis();
+    String secDir = parquetBaseDir;
+    // Scan one year before startYear to catch Jan–Apr 10-K/Q filings whose output was written
+    // to year=(startYear-1) by getPartitionYear's fiscal-year heuristic.
+    int scanStart = startYear - 1;
+    LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{} (fiscal buffer from {})",
+        secDir, startYear, endYear, scanStart);
+    java.util.Set<String> cache = new java.util.HashSet<String>();
+    java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
+    int totalVirtual = 0;
+    int totalBatchFiles = 0;
+    for (int year = scanStart; year <= endYear; year++) {
+      String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
+      int[] result = scanYearIntoCache(yearDir, year, cache, byName);
+      totalVirtual += result[0];
+      totalBatchFiles += result[1];
+    }
+
+    // Legacy fallback: previous builds wrote staging to sec/sec/ due to a
+    // double-append bug. Scan that subtree too so self-healing can find those files.
+    String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "sec");
+    if (!legacySecDir.equals(secDir)) {
+      int legacyVirtual = 0;
+      int legacyBatchFiles = 0;
+      for (int year = scanStart; year <= endYear; year++) {
+        String legacyYearDir = storageProvider.resolvePath(legacySecDir, "year=" + year);
+        int[] result = scanYearIntoCache(legacyYearDir, year, cache, byName);
+        legacyVirtual += result[0];
+        legacyBatchFiles += result[1];
+      }
+      if (legacyVirtual > 0) {
+        LOGGER.info("preloadFileInventory: found {} virtual entries at legacy double-path {}",
+            legacyVirtual, legacySecDir);
+      }
+      totalVirtual += legacyVirtual;
+      totalBatchFiles += legacyBatchFiles;
+    }
+
+    if (totalBatchFiles > 0 && totalVirtual == 0) {
+      // Batch files exist but DuckDB failed to extract any (cik, accession) pairs.
+      // Committing an empty byName would cause fileExists() to return false for every
+      // accession, re-queuing the entire year. Leave s3FileCache = null so the slow
+      // path (DuckDB batch lookup) can still answer queries correctly.
+      LOGGER.error("preloadFileInventory: found {} batch files but DuckDB extracted 0 virtual "
+          + "entries — DuckDB population failed. Leaving cache null for slow-path fallback.",
+          totalBatchFiles);
+      return;
+    }
+
+    this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
+    this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
+    long elapsed = System.currentTimeMillis() - start;
+    LOGGER.info("preloadFileInventory: cached {} virtual entries from {} batch files "
+        + "(years {}-{}) in {}ms",
+        totalVirtual, totalBatchFiles, startYear, endYear, elapsed);
+  }
+
+  /**
+   * Scans one year partition into the in-memory cache.
+   *
+   * @return int[]{virtualEntriesAdded, batchFilesFound}
+   */
+  private int[] scanYearIntoCache(String yearDir, int year,
+      java.util.Set<String> cache, java.util.Map<String, String> byName) {
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
+      java.util.Map<String, List<String>> batchByType =
+          new java.util.LinkedHashMap<String, List<String>>();
+      int yearCount = 0;
+      int batchCount = 0;
+      for (StorageProvider.FileEntry entry : entries) {
+        if (!entry.isDirectory()) {
+          String path = entry.getPath();
+          int slash = path.lastIndexOf('/');
+          String name = (slash >= 0) ? path.substring(slash + 1) : path;
+          Matcher m = BATCH_FILE_PATTERN.matcher(name);
+          if (m.matches()) {
+            String tableType = m.group(1).toLowerCase();
+            List<String> paths = batchByType.get(tableType);
+            if (paths == null) {
+              paths = new ArrayList<String>();
+              batchByType.put(tableType, paths);
+            }
+            paths.add(path);
+            batchCount++;
+          } else {
+            cache.add(path);
+            byName.put(name, path);
+            yearCount++;
+          }
+        }
+      }
+      for (Map.Entry<String, List<String>> batchEntry : batchByType.entrySet()) {
+        yearCount += populateCacheFromBatchFiles(
+            batchEntry.getKey(), batchEntry.getValue(), yearDir, year, cache, byName);
+      }
+      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} virtual entries from {} batch files",
+          yearDir, yearCount, batchCount);
+      return new int[]{yearCount, batchCount};
+    } catch (IOException e) {
+      LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
+      return new int[]{0, 0};
+    }
+  }
+
+  /** Chunk size for DuckDB batch-parquet reads. Small to avoid R2/SSL connection drops. */
+  private static final int DUCKDB_BATCH_CHUNK_SIZE = 5;
+
+  private int populateCacheFromBatchFiles(String tableType, List<String> batchPaths,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
+    int total = 0;
+    int chunkStart = 0;
+    while (chunkStart < batchPaths.size()) {
+      int chunkEnd = Math.min(chunkStart + DUCKDB_BATCH_CHUNK_SIZE, batchPaths.size());
+      List<String> chunk = batchPaths.subList(chunkStart, chunkEnd);
+      total += populateCacheFromChunk(tableType, chunk, yearDir, year, cache, byName);
+      chunkStart = chunkEnd;
+    }
+    LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
+        tableType, batchPaths.size(), total);
+    return total;
+  }
+
+  private int populateCacheFromChunk(String tableType, List<String> chunk,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
+    int result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
+    if (result == 0 && !chunk.isEmpty()) {
+      // Retry once with a fresh DuckDB connection in case the old one was broken by an SSL drop.
+      resetDuckdbConn();
+      result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
+      if (result > 0) {
+        LOGGER.info("populateCacheFromChunk: retry succeeded for type={} year={} chunk-size={}",
+            tableType, year, chunk.size());
+      }
+    }
+    return result;
+  }
+
+  private int tryPopulateChunk(String tableType, List<String> chunk,
+      String yearDir, int year, java.util.Set<String> cache,
+      java.util.Map<String, String> byName) {
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      LOGGER.warn("tryPopulateChunk: no DuckDB connection, skipping type={}", tableType);
+      return 0;
+    }
+    try {
+      StringBuilder pathList = new StringBuilder();
+      for (int i = 0; i < chunk.size(); i++) {
+        if (i > 0) {
+          pathList.append(", ");
+        }
+        pathList.append("'").append(chunk.get(i)).append("'");
+      }
+      String sql = "SELECT DISTINCT cik, accession_number FROM read_parquet(["
+          + pathList + "], union_by_name=true)";
+      int count = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          String cik = rs.getString("cik");
+          String accession = rs.getString("accession_number");
+          if (cik == null || accession == null) {
+            continue;
+          }
+          addVirtualEntry(yearDir, cik, accession, tableType, cache, byName);
+          count++;
+          if ("chunks".equalsIgnoreCase(tableType)) {
+            for (String baseType : BASE_FILE_TYPES) {
+              addVirtualEntry(yearDir, cik, accession, baseType, cache, byName);
+            }
+          }
+        }
+      }
+      return count;
+    } catch (Exception e) {
+      LOGGER.warn("tryPopulateChunk: type={} year={} chunk-size={} failed — {}",
+          tableType, year, chunk.size(), e.getMessage());
+      resetDuckdbConn();
+      return 0;
+    }
+  }
+
+  private void addVirtualEntry(String yearDir, String cik, String accession,
+      String tableType, java.util.Set<String> cache, java.util.Map<String, String> byName) {
+    String name = cik + "_" + accession + "_" + tableType + ".parquet";
+    String path = storageProvider.resolvePath(yearDir, name);
+    cache.add(path);
+    byName.put(name, path);
+  }
+
+  private Connection getOrCreateDuckdbConn() {
+    if (duckdbConn == null) {
+      try {
+        duckdbConn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
+      } catch (Exception e) {
+        LOGGER.warn("getOrCreateDuckdbConn: failed to initialize DuckDB — {}", e.getMessage());
+      }
+    }
+    return duckdbConn;
+  }
+
+  private void resetDuckdbConn() {
+    if (duckdbConn != null) {
+      try {
+        duckdbConn.close();
+      } catch (Exception ignored) {
+        // best-effort close
+      }
+      duckdbConn = null;
+    }
+  }
+
+  /**
+   * Filter index candidates to the unprocessed work queue, self-healing tracker state in
+   * parallel for accessions whose S3 files exist but have no tracker entry.
+   *
+   * <p>Pass 1 is pure in-memory (uses preloaded tracker + file inventory — no R2 ops).
+   * Pass 2 writes self-heal tracker entries concurrently, reducing wall-clock time from
+   * O(n &times; R2_latency) to O(n / threads &times; R2_latency).
+   *
+   * @param candidates           index entries already filtered by year and form type
+   * @param vectorizationEnabled whether vectorized chunks are required for completeness
+   * @param selfHealThreads      thread-pool size for parallel self-heal writes (capped at 50)
+   * @return entries that still need ETL processing
+   */
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads) {
+    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, false,
+        java.util.Collections.<String>emptySet());
+  }
+
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads,
+      boolean chunksBackfill) {
+    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, chunksBackfill,
+        java.util.Collections.<String>emptySet());
+  }
+
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads,
+      boolean chunksBackfill,
+      java.util.Set<String> forceAccessions) {
+
+    List<EdgarFullIndexCache.IndexEntry> toProcess =
+        new ArrayList<EdgarFullIndexCache.IndexEntry>();
+    final List<EdgarFullIndexCache.IndexEntry> toSelfHeal =
+        new ArrayList<EdgarFullIndexCache.IndexEntry>();
+
+    int cntNoXbrl = 0;
+    int cntTrackerComplete = 0;
+    int cntTrackerBaseComplete = 0;
+    int cntTrackerIncomplete = 0;
+    int cntS3Complete = 0;
+    int cntS3Partial = 0;
+    int cntNoFiles = 0;
+
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (!forceAccessions.isEmpty() && forceAccessions.contains(ie.accession)) {
+        toProcess.add(ie);
+        continue;
+      }
+      if (!forceAccessions.isEmpty()) {
+        // Reprocess-only mode: skip all candidates not explicitly listed.
+        continue;
+      }
+      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+        // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
+        // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
+        // Clear the stale marker and reprocess so they produce _insider.parquet output.
+        FormType form = FormType.fromString(ie.formType);
+        if (form.expectsInsider()) {
+          LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
+              ie.formType, ie.accession);
+          clearNoXbrl(ie.accession);
+          toProcess.add(ie);
+        }
+        cntNoXbrl++;
+        continue;
+      }
+      Set<String> completed = tracker.getCompletedTables(ie.accession, PHASE_STAGING);
+      if (!completed.isEmpty()) {
+        FormType form = FormType.fromString(ie.formType);
+        FileInventory inv = inventoryFromCompletedTables(completed);
+        if (inv.isComplete(form, vectorizationEnabled)) {
+          cntTrackerComplete++;
+          continue;
+        }
+        // Base staging parquet exists; only chunks are missing.
+        // In normal mode: skip — re-downloading just for chunks is unnecessary.
+        // In chunksBackfill mode: reprocess so chunks get written.
+        if (inv.isComplete(form, false) && (!chunksBackfill || inv.isComplete(form, true))) {
+          cntTrackerBaseComplete++;
+          continue;
+        }
+        cntTrackerIncomplete++;
+        toProcess.add(ie);
+        continue;
+      }
+      FileInventory s3Inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
+      if (s3Inv.hasNoXbrl()) {
+        // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data.
+        // Skip without adding to self-heal queue (no parquet to record).
+        cntNoXbrl++;
+      } else if (s3Inv.hasAnyFiles()) {
+        toSelfHeal.add(ie);
+        FormType form = FormType.fromString(ie.formType);
+        // Only process if base staging files are also incomplete, not just chunks.
+        if (!s3Inv.isComplete(form, false)) {
+          cntS3Partial++;
+          if (cntS3Partial <= 5) {
+            LOGGER.info("s3Partial sample: accession={} formType={} inventory={}",
+                ie.accession, ie.formType, s3Inv);
+          }
+          toProcess.add(ie);
+        } else {
+          cntS3Complete++;
+        }
+      } else {
+        cntNoFiles++;
+        toProcess.add(ie);
+      }
+    }
+
+    LOGGER.info(
+        "filterAndSelfHeal: candidates={} noXbrl={} trackerFull={} trackerBaseOnly={} "
+            + "trackerIncomplete={} s3Complete={} s3Partial={} noFiles={} toProcess={}",
+        candidates.size(), cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
+        cntTrackerIncomplete, cntS3Complete, cntS3Partial, cntNoFiles, toProcess.size());
+
+    if (!toSelfHeal.isEmpty()) {
+      int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
+      LOGGER.info("Self-healing {} accessions with {} threads", toSelfHeal.size(), poolSize);
+      long healStart = System.currentTimeMillis();
+      java.util.concurrent.ExecutorService pool =
+          java.util.concurrent.Executors.newFixedThreadPool(poolSize);
+      for (final EdgarFullIndexCache.IndexEntry ie : toSelfHeal) {
+        pool.submit(new Runnable() {
+          @Override public void run() {
+            FileInventory inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
+            recordInventory(ie.accession, inv);
+          }
+        });
+      }
+      pool.shutdown();
+      try {
+        pool.awaitTermination(30, java.util.concurrent.TimeUnit.MINUTES);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        LOGGER.warn("Self-heal batch interrupted");
+      }
+      LOGGER.info("Self-heal complete: {} accessions in {}ms",
+          toSelfHeal.size(), System.currentTimeMillis() - healStart);
+    }
+
+    return toProcess;
+  }
+
+  /**
    * Check if a filing needs processing.
    *
    * <p>Implements self-healing: if files exist in S3 but tracker has no state,
@@ -119,9 +592,15 @@ public class SecFilingCache implements AutoCloseable {
 
     FormType form = FormType.fromString(formType);
 
-    // Check for no_xbrl marker
+    // Check for no_xbrl marker — but insider forms (3/4/5) should never be no_xbrl;
+    // if they have this marker it's a stale bug artifact, clear it and reprocess.
     if (tracker.isComplete(accession, TABLE_NO_XBRL, PHASE_STAGING)) {
-      return ProcessingDecision.skip("No XBRL data available");
+      if (form.expectsInsider()) {
+        LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}", formType, accession);
+        clearNoXbrl(accession);
+      } else {
+        return ProcessingDecision.skip("No XBRL data available");
+      }
     }
 
     // Check for error state with retry limit
@@ -138,7 +617,7 @@ public class SecFilingCache implements AutoCloseable {
 
     if (completedTables.isEmpty()) {
       // Not in tracker - check if files exist (self-healing)
-      FileInventory inventory = checkS3Files(cik, accession);
+      FileInventory inventory = checkS3Files(cik, accession, filingDate);
       if (inventory.isComplete(form, vectorizationEnabled)) {
         // Files exist, heal tracker
         recordInventory(accession, inventory);
@@ -176,7 +655,7 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     // Partial state in tracker - verify against S3 (self-healing for partial)
-    FileInventory s3Inventory = checkS3Files(cik, accession);
+    FileInventory s3Inventory = checkS3Files(cik, accession, filingDate);
     if (s3Inventory.isComplete(form, vectorizationEnabled)) {
       recordInventory(accession, s3Inventory);
       return ProcessingDecision.skip("Self-healed: now complete");
@@ -228,30 +707,191 @@ public class SecFilingCache implements AutoCloseable {
    * Check which output files exist in S3.
    */
   public FileInventory checkS3Files(String cik, String accession) {
-    String secDir = storageProvider.resolvePath(parquetBaseDir, "source=sec");
+    return checkS3Files(cik, accession, null);
+  }
+
+  /**
+   * Check which output files exist in S3.
+   *
+   * @param filingDate ISO date string (e.g. "2024-03-15") used to build an exact year= partition
+   *                   path. When non-null this avoids a glob scan across all years (saves
+   *                   10 Class A LIST ops per call). Pass null to fall back to the year=* glob.
+   */
+  public FileInventory checkS3Files(String cik, String accession, String filingDate) {
+    String secDir = parquetBaseDir;
 
     FileInventory.Builder builder = FileInventory.builder();
 
-    builder.hasMetadata(fileExists(secDir, cik, accession, "metadata"));
-    builder.hasFacts(fileExists(secDir, cik, accession, "facts"));
-    builder.hasContexts(fileExists(secDir, cik, accession, "contexts"));
-    builder.hasRelationships(fileExists(secDir, cik, accession, "relationships"));
-    builder.hasMda(fileExists(secDir, cik, accession, "mda"));
-    builder.hasInsider(fileExists(secDir, cik, accession, "insider"));
-    builder.hasEarnings(fileExists(secDir, cik, accession, "earnings"));
-    builder.hasChunks(fileExists(secDir, cik, accession, "chunks"));
+    builder.hasNoXbrl(fileExists(secDir, cik, accession, "no_xbrl", filingDate));
+    builder.hasMetadata(fileExists(secDir, cik, accession, "metadata", filingDate));
+    builder.hasFacts(fileExists(secDir, cik, accession, "facts", filingDate));
+    builder.hasContexts(fileExists(secDir, cik, accession, "contexts", filingDate));
+    builder.hasRelationships(fileExists(secDir, cik, accession, "relationships", filingDate));
+    builder.hasMda(fileExists(secDir, cik, accession, "mda", filingDate));
+    builder.hasInsider(fileExists(secDir, cik, accession, "insider", filingDate));
+    builder.hasEarnings(fileExists(secDir, cik, accession, "earnings", filingDate));
+    builder.hasChunks(fileExists(secDir, cik, accession, "chunks", filingDate));
 
     return builder.build();
   }
 
-  private boolean fileExists(String secDir, String cik, String accession, String suffix) {
+  /**
+   * Returns the 4-digit year string from an ISO filing date ("YYYY-MM-DD").
+   * Falls back to null if the date is missing or malformed.
+   */
+  private static String yearFromFilingDate(String filingDate) {
+    if (filingDate != null && filingDate.length() >= 4) {
+      String year = filingDate.substring(0, 4);
+      try {
+        int y = Integer.parseInt(year);
+        if (y >= 2000 && y <= 2099) {
+          return year;
+        }
+      } catch (NumberFormatException ignored) {
+        // fall through to null
+      }
+    }
+    return null;
+  }
+
+  /** Extracts 4-digit year from accession number format {@code XXXXXXXXXX-YY-NNNNNN}. */
+  private static String yearFromAccession(String accession) {
+    if (accession == null) {
+      return null;
+    }
+    int first = accession.indexOf('-');
+    int second = first >= 0 ? accession.indexOf('-', first + 1) : -1;
+    if (first < 0 || second < 0 || second <= first + 1) {
+      return null;
+    }
+    String twoDigit = accession.substring(first + 1, second);
+    try {
+      int y = Integer.parseInt(twoDigit);
+      if (y >= 0 && y <= 99) {
+        int fullYear = y + 2000;
+        return String.valueOf(fullYear);
+      }
+    } catch (NumberFormatException ignored) {
+      // fall through
+    }
+    return null;
+  }
+
+  private boolean fileExists(String secDir, String cik, String accession, String suffix,
+      String filingDate) {
     String fileName = cik + "_" + accession + "_" + suffix + ".parquet";
-    String pattern = storageProvider.resolvePath(secDir, "year=*/" + fileName);
+
+    // Fast path: check in-memory cache populated by preloadFileInventory() — zero Class A ops.
+    java.util.Set<String> cache = this.s3FileCache;
+    if (cache != null) {
+      // Try the canonical exact path first (O(1)).
+      String year = yearFromFilingDate(filingDate);
+      if (year != null) {
+        String exactPath = storageProvider.resolvePath(secDir, "year=" + year + "/" + fileName);
+        if (cache.contains(exactPath)) {
+          return true;
+        }
+      }
+      // Fall through to byName — handles files at legacy paths (e.g. after a path-bug fix
+      // where existing files live at a different directory than the current secDir).
+      java.util.Map<String, String> byName = this.s3FileCacheByName;
+      if (byName != null) {
+        return byName.containsKey(fileName);
+      }
+      // byName not populated; fall back to linear scan.
+      for (String path : cache) {
+        if (path.endsWith("/" + fileName)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Slow path: live S3 query.
+    // First try the DuckDB batch-file lookup since production uses batch-only organization
+    // (per-accession files never exist; only {type}_batch_NNNN.parquet files are in S3).
+    String year = yearFromFilingDate(filingDate);
+    if (year != null) {
+      Boolean batchResult = existsInBatchFiles(secDir, cik, accession, suffix, year);
+      if (batchResult != null) {
+        return batchResult;
+      }
+    }
+
+    // Final fallback: check for a per-accession file (legacy / non-batch S3 layout).
+    String yearSegment = (year != null) ? "year=" + year : "year=*";
+    String pattern = storageProvider.resolvePath(secDir, yearSegment + "/" + fileName);
     try {
       return storageProvider.exists(pattern);
     } catch (IOException e) {
       LOGGER.debug("Error checking file existence: {}", e.getMessage());
       return false;
+    }
+  }
+
+  /**
+   * Checks whether {@code accession} appears in any {@code {suffix}_batch_*.parquet} file
+   * in {@code secDir/year={year}/}.
+   *
+   * <p>Used as the primary slow-path for production S3 which stores batch-merged parquet
+   * (not individual per-accession files). Only the first few batch files are queried to
+   * keep latency reasonable; if the accession isn't found, returns {@code false}.
+   *
+   * @return {@code true} / {@code false} if batch files exist and DuckDB answered,
+   *         {@code null} if no batch files found (caller should try legacy path)
+   */
+  private Boolean existsInBatchFiles(String secDir, String cik, String accession,
+      String suffix, String year) {
+    String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
+    List<String> batchPaths;
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, false);
+      batchPaths = new ArrayList<String>();
+      String prefix = suffix.toLowerCase() + "_batch_";
+      for (StorageProvider.FileEntry e : entries) {
+        if (!e.isDirectory()) {
+          String path = e.getPath();
+          int slash = path.lastIndexOf('/');
+          String name = (slash >= 0) ? path.substring(slash + 1) : path;
+          if (name.startsWith(prefix) && name.endsWith(".parquet")) {
+            batchPaths.add(path);
+            if (batchPaths.size() >= DUCKDB_BATCH_CHUNK_SIZE) {
+              break;
+            }
+          }
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("existsInBatchFiles: list failed for {} — {}", yearDir, e.getMessage());
+      return null;
+    }
+    if (batchPaths.isEmpty()) {
+      return null;
+    }
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      return null;
+    }
+    try {
+      StringBuilder pathList = new StringBuilder();
+      for (int i = 0; i < batchPaths.size(); i++) {
+        if (i > 0) {
+          pathList.append(", ");
+        }
+        pathList.append("'").append(batchPaths.get(i)).append("'");
+      }
+      String safe = accession.replace("'", "''");
+      String sql = "SELECT 1 FROM read_parquet([" + pathList
+          + "]) WHERE accession_number = '" + safe + "' LIMIT 1";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        return rs.next();
+      }
+    } catch (Exception e) {
+      LOGGER.debug("existsInBatchFiles: DuckDB query failed for {}/{} — {}", cik, accession,
+          e.getMessage());
+      resetDuckdbConn();
+      return null;
     }
   }
 
@@ -270,10 +910,92 @@ public class SecFilingCache implements AutoCloseable {
 
   /**
    * Mark filing as having no XBRL data.
+   *
+   * <p>Also writes a minimal sentinel parquet file to S3 ({@code {cik}_{accession}_no_xbrl.parquet})
+   * so that the self-heal path can detect and skip this filing even without a tracker.
    */
   public void markNoXbrl(String cik, String accession, String formType, String filingDate) {
     tracker.markComplete(accession, TABLE_NO_XBRL, PHASE_STAGING, 0);
+    writeNoXbrlSentinel(cik, accession, filingDate);
     LOGGER.debug("Marked no_xbrl: {}:{}", cik, accession);
+  }
+
+  private void writeNoXbrlSentinel(String cik, String accession, String filingDate) {
+    String year = yearFromFilingDate(filingDate);
+    if (year == null) {
+      year = yearFromAccession(accession);
+    }
+    if (year == null) {
+      LOGGER.warn("writeNoXbrlSentinel: cannot determine year for accession={}, skipping", accession);
+      return;
+    }
+    String yearDir = storageProvider.resolvePath(parquetBaseDir, "year=" + year);
+    String fileName = cik + "_" + accession + "_no_xbrl.parquet";
+    String destPath = storageProvider.resolvePath(yearDir, fileName);
+    File tmp = null;
+    try {
+      tmp = File.createTempFile("no_xbrl_sentinel_", ".parquet");
+      Connection conn = getOrCreateDuckdbConn();
+      if (conn == null) {
+        LOGGER.warn("writeNoXbrlSentinel: no DuckDB connection, skipping sentinel for {}", accession);
+        return;
+      }
+      String safeCik = cik.replace("'", "''");
+      String safeAccession = accession.replace("'", "''");
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("COPY (SELECT '" + safeCik + "' AS cik, '"
+            + safeAccession + "' AS accession_number) TO '"
+            + tmp.getAbsolutePath().replace("\\", "/") + "' (FORMAT PARQUET)");
+      }
+      try (InputStream in = new FileInputStream(tmp)) {
+        storageProvider.writeFile(destPath, in);
+      }
+      LOGGER.debug("Wrote no_xbrl sentinel: {}", destPath);
+    } catch (Exception e) {
+      LOGGER.warn("writeNoXbrlSentinel: failed for accession={} — {}", accession, e.getMessage());
+    } finally {
+      if (tmp != null) {
+        tmp.delete();
+      }
+    }
+  }
+
+  /**
+   * Clear the no_xbrl marker so the filing will be reprocessed.
+   * Used to fix accessions incorrectly marked no_xbrl due to converter bugs.
+   */
+  public void clearNoXbrl(String accession) {
+    tracker.markCleared(accession, TABLE_NO_XBRL, PHASE_STAGING);
+    LOGGER.debug("Cleared no_xbrl marker for accession: {}", accession);
+  }
+
+  /**
+   * Clear stale no_xbrl markers for insider forms (3/4/5) in the given candidates.
+   *
+   * <p>Unlike {@link #filterAndSelfHeal}, this method does NOT add cleared entries to any
+   * processing queue — it is a pure cleanup pass, intended for historical year sweeps where
+   * the current worker is not responsible for reprocessing.
+   *
+   * @param candidates index entries to inspect
+   * @return number of entries cleared
+   */
+  public int clearStaleInsiderNoXbrl(List<EdgarFullIndexCache.IndexEntry> candidates) {
+    int cleared = 0;
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+        FormType form = FormType.fromString(ie.formType);
+        if (form.expectsInsider()) {
+          LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
+              ie.formType, ie.accession);
+          clearNoXbrl(ie.accession);
+          cleared++;
+        }
+      }
+    }
+    if (cleared > 0) {
+      LOGGER.info("Cleared {} stale no_xbrl entries for insider forms (historical sweep)", cleared);
+    }
+    return cleared;
   }
 
   /**
@@ -452,6 +1174,38 @@ public class SecFilingCache implements AutoCloseable {
       } catch (Exception e) {
         LOGGER.error("Error closing tracker: {}", e.getMessage());
       }
+    }
+    if (duckdbConn != null) {
+      try {
+        duckdbConn.close();
+      } catch (SQLException e) {
+        LOGGER.error("Error closing DuckDB connection: {}", e.getMessage());
+      }
+      duckdbConn = null;
+    }
+  }
+
+  /**
+   * Returns the ETL high-water mark date for the given run key, or null if not set.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   */
+  public LocalDate readEtlHighWaterMark(String runKey) {
+    if (tracker instanceof S3HivePipelineTracker) {
+      return ((S3HivePipelineTracker) tracker).readEtlHighWaterMark(runKey);
+    }
+    return null;
+  }
+
+  /**
+   * Persists the ETL high-water mark date for the given run key. No-op for non-S3 trackers.
+   *
+   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
+   * @param date   the high-water mark to store
+   */
+  public void writeEtlHighWaterMark(String runKey, LocalDate date) {
+    if (tracker instanceof S3HivePipelineTracker) {
+      ((S3HivePipelineTracker) tracker).writeEtlHighWaterMark(runKey, date);
     }
   }
 

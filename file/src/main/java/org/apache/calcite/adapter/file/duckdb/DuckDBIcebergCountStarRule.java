@@ -26,6 +26,7 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -94,8 +95,50 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
       return false;
     }
 
+    // Only apply for bare COUNT(*) — skip when a Filter predicate is present
+    if (hasFilter(aggregate.getInput())) {
+      LOGGER.debug("[ICEBERG COUNT*] Skipping - Filter predicate present (e.g. WHERE col IS NULL)");
+      return false;
+    }
+
     LOGGER.info("[ICEBERG COUNT*] matches() returning true - found COUNT(*)");
     return true;
+  }
+
+  /**
+   * Returns true if the RelNode tree rooted at {@code node} contains any Filter node.
+   * Used to prevent the cached-count optimisation from firing on filtered COUNT(*) queries.
+   */
+  private boolean hasFilter(RelNode node) {
+    if (node == null) {
+      return false;
+    }
+    if (node instanceof Filter) {
+      return true;
+    }
+    // Unwrap RelSubset (Volcano planner wrapper)
+    if (node.getClass().getName().contains("RelSubset")) {
+      try {
+        java.lang.reflect.Method getBest = node.getClass().getMethod("getBest");
+        RelNode best = (RelNode) getBest.invoke(node);
+        if (best != null && best != node && hasFilter(best)) {
+          return true;
+        }
+        java.lang.reflect.Method getOriginal = node.getClass().getMethod("getOriginal");
+        RelNode original = (RelNode) getOriginal.invoke(node);
+        if (original != null && original != node && hasFilter(original)) {
+          return true;
+        }
+      } catch (Exception e) {
+        // conservative: if we can't inspect, assume no filter
+      }
+    }
+    for (RelNode input : node.getInputs()) {
+      if (hasFilter(input)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override public void onMatch(RelOptRuleCall call) {
@@ -221,9 +264,16 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
 
   /**
    * Find TableScan in the input tree, handling RelSubset nodes.
+   * Stops recursion at Filter nodes: COUNT(*) optimization is only valid when
+   * there is no WHERE predicate between the aggregate and the scan.
    */
   private TableScan findTableScan(RelNode node) {
     if (node == null) {
+      return null;
+    }
+
+    // A filter restricts rows — the cached total count is no longer valid.
+    if (node instanceof org.apache.calcite.rel.core.Filter) {
       return null;
     }
 

@@ -54,35 +54,38 @@ public class TestEnvironmentLoader {
     String cwd = System.getProperty("user.dir");
     LOGGER.info("Loading environment from working directory: {}", cwd);
 
-    // Look for .env.test file in the govdata module directory
-    Path[] possiblePaths = {
-        Paths.get("govdata/.env.test"),
-        Paths.get(".env.test"),
-        Paths.get("../.env.test")
+    // .env.prod is the canonical credentials file; .env.test is loaded second so it
+    // can override individual values for local dev.  Both are loaded when present.
+    Path[][] layeredPaths = {
+        {Paths.get("govdata/.env.prod"), Paths.get(".env.prod"), Paths.get("../.env.prod")},
+        {Paths.get("govdata/.env.test"), Paths.get(".env.test"), Paths.get("../.env.test")}
     };
 
-    File envFile = null;
-    for (Path path : possiblePaths) {
-      LOGGER.debug("Checking path: {} (exists: {})", path.toAbsolutePath(), Files.exists(path));
-      if (Files.exists(path)) {
-        envFile = path.toFile();
-        LOGGER.info("Found .env.test at: {}", path.toAbsolutePath());
-        break;
+    boolean anyLoaded = false;
+    for (Path[] candidates : layeredPaths) {
+      for (Path path : candidates) {
+        LOGGER.debug("Checking path: {} (exists: {})", path.toAbsolutePath(), Files.exists(path));
+        if (Files.exists(path)) {
+          loadFile(path.toFile());
+          anyLoaded = true;
+          break;
+        }
       }
     }
 
-    if (envFile == null || !envFile.exists()) {
-      LOGGER.warn("Warning: .env.test file not found. Tests may fail if they require environment variables.");
-      LOGGER.warn("Searched paths:");
-      for (Path path : possiblePaths) {
-        LOGGER.warn("  - {} (absolute: {})", path, path.toAbsolutePath());
-      }
+    if (!anyLoaded) {
+      LOGGER.warn("Warning: No .env.prod or .env.test file found. Tests may fail if they require environment variables.");
       loaded = true;
       return;
     }
 
+    loaded = true;
+  }
+
+  private static void loadFile(File envFile) {
     try (BufferedReader reader = new BufferedReader(new FileReader(envFile))) {
       String line;
+      int count = 0;
       while ((line = reader.readLine()) != null) {
         // Skip comments and empty lines
         if (line.trim().isEmpty() || line.trim().startsWith("#")) {
@@ -103,14 +106,14 @@ public class TestEnvironmentLoader {
           ENV_VARS.put(key, value);
           // Also set as system property for Calcite's EnvironmentVariableSubstitutor
           System.setProperty(key, value);
+          count++;
         }
       }
 
-      LOGGER.info("Loaded {} environment variables from .env.test", ENV_VARS.size());
-      loaded = true;
+      LOGGER.info("Loaded {} environment variables from {}", count, envFile.getName());
 
     } catch (IOException e) {
-      LOGGER.warn("Warning: Failed to load .env.test file: {}", e.getMessage());
+      LOGGER.warn("Warning: Failed to load {}: {}", envFile.getName(), e.getMessage());
       loaded = true;
     }
   }

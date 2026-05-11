@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "defaultSchema": "weather",
+  "schemas": [{
+    "name": "weather",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "weather",
+      "enabledSources": ["ghcnd"],
+      "startYear": 2025,
+      "endYear": 2025,
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+      "s3Config": {
+        "accessKeyId": "${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}",
+        "region": "${AWS_REGION}"
+      }
+    }
+  }]
+}

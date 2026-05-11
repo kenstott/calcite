@@ -22,6 +22,7 @@ import org.apache.calcite.test.CalciteAssert;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * NOTE: DuckDB cannot discover Excel files that are converted after connection creation.
  * All files must exist as Parquet before the DuckDB connection is established.
  */
+@Tag("integration")
 public class DuckDBExcelIntegrationTest extends BaseFileTest {
 
   @TempDir

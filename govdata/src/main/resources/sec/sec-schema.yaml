@@ -17,7 +17,8 @@
 
 schemaName: "${SCHEMA_NAME:sec}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=sec"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/sec"
+refreshInterval: "PT1H"
 
 comment: >
   Securities and Exchange Commission financial data including XBRL filings (10-K, 10-Q, 8-K),
@@ -89,13 +90,25 @@ column_templates:
     name: unit_ref
     type: string
     nullable: true
-    comment: Reference to unit element defining measurement units (e.g., 'USD', 'shares')
+    comment: Raw unit reference as reported in the source XBRL document
 
-  numeric_value_column: &numeric_value
-    name: numeric_value
+  unit_ref_normalized_column: &unit_ref_normalized
+    name: unit_ref_normalized
+    type: string
+    nullable: true
+    comment: Canonical unit (e.g. USD, shares, pure, usdPerShare); equals unit_ref when no normalization rule matches
+
+  value_numeric_column: &value_numeric
+    name: value_numeric
     type: double
     nullable: true
-    comment: Numeric value for monetary and numeric facts
+    comment: Best-effort numeric representation; not the original filing value
+
+  value_numeric_method_column: &value_numeric_method
+    name: value_numeric_method
+    type: string
+    nullable: true
+    comment: Provenance of value_numeric — direct, heuristic, or null if no conversion possible
 
   # --- Text Columns ---
 
@@ -194,6 +207,15 @@ dimension_values:
     - "S-3"
     - "424B2"
     - "424B5"
+    - "3"
+    - "4"
+    - "5"
+    - "13F-HR"
+    - "13F-HR/A"
+    - "SC 13D"
+    - "SC 13D/A"
+    - "SC 13G"
+    - "SC 13G/A"
 
   # --- Year Range ---
   # SEC defaults to 2010 (vs global 2000) due to XBRL adoption timeline
@@ -258,11 +280,14 @@ materialize_defaults: &materialize_defaults
     stagingMode: local
 
 iceberg_defaults: &iceberg_defaults
-  warehousePath: "${GOVDATA_PARQUET_DIR}/source=sec/SEC"
+  warehousePath: "${GOVDATA_PARQUET_DIR}/sec"
   catalogType: hadoop
   targetFileSizeBytes: 134217728  # 128MB
   runMaintenance: true
   snapshotRetentionDays: 7
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
 
 parquet_defaults: &parquet_defaults
   compression: snappy
@@ -285,7 +310,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: filing_metadata
-    pattern: "year=*/*_metadata.parquet"
+    pattern: "year=*/*metadata*.parquet"
     partitions: *sec_partitions
 
     comment: >
@@ -390,6 +415,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000  # Prevent OOM on first run — each year can have hundreds of thousands of filings
       output:
         pattern: "year=*/"
       partition:
@@ -408,7 +434,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: financial_line_items
-    pattern: "year=*/*_facts.parquet"
+    pattern: "year=*/*facts*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -431,6 +457,7 @@ partitionedTables:
       - *concept_column
       - *context_ref
       - *unit_ref
+      - *unit_ref_normalized
       - name: value
         type: string
         nullable: true
@@ -439,7 +466,8 @@ partitionedTables:
         type: string
         nullable: true
         comment: Full text content for TextBlock elements (narrative disclosures)
-      - *numeric_value
+      - *value_numeric
+      - *value_numeric_method
       - *period_start
       - *period_end
       - name: is_instant
@@ -482,6 +510,8 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
@@ -500,7 +530,7 @@ partitionedTables:
 
   - name: filing_contexts
     enabled: true
-    pattern: "year=*/*_contexts.parquet"
+    pattern: "year=*/*contexts*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -564,6 +594,8 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
@@ -581,7 +613,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: mda_sections
-    pattern: "year=*/*_mda.parquet"
+    pattern: "year=*/*mda*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -608,7 +640,15 @@ partitionedTables:
       - name: subsection
         type: string
         nullable: true
-        comment: Subsection name (e.g., 'Overview', 'Results of Operations')
+        comment: Immediate heading enclosing this chunk (null when no heading context)
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Full heading breadcrumb as ' > '-delimited string for cluster analysis
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: True when this chunk is a continuation of an oversized split element
       - name: paragraph_number
         type: int
         nullable: false
@@ -637,10 +677,13 @@ partitionedTables:
         - "10-K/A"
         - "10-Q"
         - "10-Q/A"
+        - "8-K"
+        - "8-K/A"
       year: *year_range
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 10000
       output:
         pattern: "year=*/"
       partition:
@@ -658,7 +701,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: xbrl_relationships
-    pattern: "year=*/*_relationships.parquet"
+    pattern: "year=*/*relationships*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -686,6 +729,10 @@ partitionedTables:
         type: string
         nullable: false
         comment: Arc role defining relationship type (e.g., parent-child, summation-item)
+      - name: link_role
+        type: string
+        nullable: true
+        comment: Role URI of the extended link element containing this arc (e.g., presentation role URL)
       - name: from_concept
         type: string
         nullable: false
@@ -728,6 +775,8 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 50000
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
@@ -745,7 +794,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: insider_transactions
-    pattern: "year=*/*_insider.parquet"
+    pattern: "year=*/*insider*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -797,7 +846,7 @@ partitionedTables:
       - name: transaction_code
         type: string
         nullable: true
-        comment: Transaction code (P=purchase, S=sale, A=award, H=holding)
+        comment: Transaction code (P=purchase, S=sale, A=award, H=holding, I=initial appointment with no securities)
       - name: security_title
         type: string
         nullable: true
@@ -843,6 +892,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -860,7 +910,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: institutional_holdings
-    pattern: "year=*/*_13f.parquet"
+    pattern: "year=*/*13f*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -891,7 +941,7 @@ partitionedTables:
         nullable: true
         comment: CIK of the filing investment manager
       - name: report_period
-        type: string
+        type: date
         nullable: true
         comment: Calendar quarter end date for the report (ISO 8601)
       - name: issuer_name
@@ -958,6 +1008,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -975,7 +1026,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: beneficial_ownership
-    pattern: "year=*/*_13dg.parquet"
+    pattern: "year=*/*13dg*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1078,6 +1129,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 25000
       output:
         pattern: "year=*/"
       partition:
@@ -1095,7 +1147,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: earnings_transcripts
-    pattern: "year=*/*_earnings.parquet"
+    pattern: "year=*/*earnings*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1155,6 +1207,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 5000
       output:
         pattern: "year=*/"
       partition:
@@ -1172,7 +1225,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: stock_prices
-    enabled: true
+    enabled: false
     pattern: "stock_prices/year=*/*_prices.parquet"
     partitions: *stock_partitions
     hooks:
@@ -1275,6 +1328,7 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 100000
       output:
         pattern: "stock_prices/year=*/"
       partition:
@@ -1292,7 +1346,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: vectorized_chunks
-    pattern: "year=*/*_chunks.parquet"
+    pattern: "year=*/*chunks*.parquet"
     partitions: *sec_partitions
     hooks:
       enabled: true
@@ -1330,6 +1384,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: Parent section (e.g., 'Item 7', 'Note 1')
+      - name: subsection
+        type: string
+        nullable: true
+        comment: Heading immediately enclosing this chunk (e.g., 'Results of Operations')
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Full heading breadcrumb as ' > '-delimited string for community/cluster analysis
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: True when this chunk is a continuation piece of an oversized prose or atomic element
       - name: sequence
         type: int
         nullable: false
@@ -1350,6 +1416,7 @@ partitionedTables:
       - name: embedding
         type: array<double>
         nullable: true
+        bulkGenerator: gpu_embeddings
         comment: 384-dim snowflake-arctic-embed-xs embedding via GPU bulk generation
       - name: content_type
         type: string
@@ -1384,13 +1451,12 @@ partitionedTables:
     dimensions:
       cik:
         type: inherited
-      filing_type:
-        - "10-K"
-        - "10-Q"
+      filing_type: *all_filing_types
       year: *year_range
 
     materialize:
       <<: *materialize_defaults
+      rowBatchSize: 5000
       output:
         pattern: "year=*/"
       partition:
@@ -1432,7 +1498,7 @@ constraints:
     indexes:
       - [concept]
       - [period_end]
-      - [numeric_value]
+      - [value_numeric]
     foreignKeys:
       - columns: [cik, accession_number]
         targetTable: filing_metadata
@@ -1511,6 +1577,11 @@ constraints:
       - columns: [cik]
         targetTable: filing_metadata
         targetColumns: [cik]
+      - columns: [ticker]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: figi_instruments
+        targetColumns: [ticker]
+        comment: Links stock price series to OpenFIGI instrument identifier
 
   vectorized_chunks:
     primaryKey: [cik, accession_number, chunk_id]
@@ -1546,11 +1617,11 @@ views:
         fm.company_name,
         fm.ticker,
         fli.period_end,
-        fli.numeric_value as revenue
+        fli.value_numeric as revenue
       FROM financial_line_items fli
       JOIN filing_metadata fm ON fli.cik = fm.cik AND fli.accession_number = fm.accession_number
       WHERE fli.concept LIKE '%Revenue%'
-        AND fli.numeric_value IS NOT NULL
+        AND fli.value_numeric IS NOT NULL
       ORDER BY fm.cik, fli.period_end
 
   - name: insider_activity_summary
@@ -1567,3 +1638,98 @@ views:
       JOIN filing_metadata fm ON it.cik = fm.cik
       WHERE it.transaction_code IN ('P', 'S')
       GROUP BY fm.company_name, fm.ticker, it.transaction_code
+
+  - name: financial_facts
+    comment: >
+      Normalized financial line items with canonical metric names and scaled dollar values.
+      Joins financial_line_items against an inline concept_aliases mapping to resolve XBRL
+      concept variants (e.g. both us-gaap:Revenues and
+      us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax map to canonical_name=revenue).
+      value_dollars applies the scale factor so callers never need to handle
+      value_numeric * POWER(10, scale) themselves.
+    sql: >
+      SELECT
+        li.cik,
+        li.accession_number,
+        li.filing_date,
+        li.year,
+        li.concept,
+        ca.canonical_name,
+        ca.metric_category,
+        li.context_ref,
+        li.unit_ref_normalized,
+        li.period_start,
+        li.period_end,
+        li.is_instant,
+        li.decimals,
+        li.scale,
+        li.value_numeric,
+        li.value_numeric * POWER(10, COALESCE(li.scale, 0)) AS value_dollars
+      FROM financial_line_items li
+      JOIN (VALUES
+        ('us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'revenue', 'income_statement'),
+        ('us-gaap:Revenues', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueNet', 'revenue', 'income_statement'),
+        ('us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueGoodsNet', 'revenue', 'income_statement'),
+        ('us-gaap:SalesRevenueServicesNet', 'revenue', 'income_statement'),
+        ('us-gaap:GrossProfit', 'gross_profit', 'income_statement'),
+        ('us-gaap:OperatingIncomeLoss', 'operating_income', 'income_statement'),
+        ('us-gaap:NetIncomeLoss', 'net_income', 'income_statement'),
+        ('us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic', 'net_income', 'income_statement'),
+        ('us-gaap:IncomeLossFromContinuingOperations', 'net_income', 'income_statement'),
+        ('us-gaap:CostOfRevenue', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:CostOfGoodsAndServicesSold', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:CostOfGoodsSold', 'cost_of_revenue', 'income_statement'),
+        ('us-gaap:ResearchAndDevelopmentExpense', 'rd_expense', 'income_statement'),
+        ('us-gaap:SellingGeneralAndAdministrativeExpense', 'sga_expense', 'income_statement'),
+        ('us-gaap:OperatingExpenses', 'operating_expenses', 'income_statement'),
+        ('us-gaap:EarningsPerShareBasic', 'eps_basic', 'income_statement'),
+        ('us-gaap:EarningsPerShareDiluted', 'eps_diluted', 'income_statement'),
+        ('us-gaap:Assets', 'total_assets', 'balance_sheet'),
+        ('us-gaap:AssetsCurrent', 'current_assets', 'balance_sheet'),
+        ('us-gaap:Liabilities', 'total_liabilities', 'balance_sheet'),
+        ('us-gaap:LiabilitiesCurrent', 'current_liabilities', 'balance_sheet'),
+        ('us-gaap:StockholdersEquity', 'shareholders_equity', 'balance_sheet'),
+        ('us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'shareholders_equity', 'balance_sheet'),
+        ('us-gaap:CashAndCashEquivalentsAtCarryingValue', 'cash', 'balance_sheet'),
+        ('us-gaap:CashCashEquivalentsAndShortTermInvestments', 'cash', 'balance_sheet'),
+        ('us-gaap:LongTermDebt', 'long_term_debt', 'balance_sheet'),
+        ('us-gaap:LongTermDebtNoncurrent', 'long_term_debt', 'balance_sheet'),
+        ('us-gaap:NetCashProvidedByUsedInOperatingActivities', 'operating_cash_flow', 'cash_flow'),
+        ('us-gaap:NetCashProvidedByUsedInInvestingActivities', 'investing_cash_flow', 'cash_flow'),
+        ('us-gaap:NetCashProvidedByUsedInFinancingActivities', 'financing_cash_flow', 'cash_flow'),
+        ('us-gaap:PaymentsToAcquirePropertyPlantAndEquipment', 'capex', 'cash_flow'),
+        ('us-gaap:CapitalExpendituresIncurredButNotYetPaid', 'capex', 'cash_flow'),
+        ('us-gaap:DepreciationDepletionAndAmortization', 'depreciation_amortization', 'cash_flow'),
+        ('us-gaap:ShareBasedCompensation', 'stock_based_compensation', 'cash_flow')
+      ) AS ca(xbrl_concept, canonical_name, metric_category)
+        ON li.concept = ca.xbrl_concept
+
+  - name: company_financial_profile
+    comment: >
+      Denormalised company identity: SEC filing metadata joined to GLEIF CIK-LEI
+      bridge and GLEIF entity registry. One row per company — enables CIK-to-LEI
+      resolution and cross-border corporate entity analysis.
+    sql: >
+      SELECT
+        fm.cik,
+        fm.company_name,
+        fm.ticker,
+        fm.sic_code,
+        fm.state_of_incorporation,
+        fm.irs_number,
+        gcm.lei,
+        ge.legal_name,
+        ge.jurisdiction,
+        ge.headquarters_country,
+        ge.headquarters_city,
+        COUNT(DISTINCT fm.accession_number) AS total_filings,
+        MAX(fm.filing_date)                 AS latest_filing_date
+      FROM filing_metadata fm
+      LEFT JOIN "ref"."gleif_cik_mapping" gcm ON fm.cik = gcm.cik
+      LEFT JOIN "ref"."gleif_entities"    ge  ON gcm.lei = ge.lei
+      GROUP BY fm.cik, fm.company_name, fm.ticker, fm.sic_code,
+               fm.state_of_incorporation, fm.irs_number,
+               gcm.lei, ge.legal_name, ge.jurisdiction,
+               ge.headquarters_country, ge.headquarters_city

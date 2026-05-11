@@ -54,9 +54,13 @@ public class PartitionDistinctRuleTest {
 
   private File tempDir;
   private Connection calciteConn;
+  private String savedPartitionDistinctEnabled;
 
   @BeforeEach
   public void setUp() throws Exception {
+    // Save existing system property before overriding
+    savedPartitionDistinctEnabled = System.getProperty("calcite.file.partition.distinct.enabled");
+
     // Enable partition distinct optimization
     System.setProperty("calcite.file.partition.distinct.enabled", "true");
 
@@ -75,6 +79,12 @@ public class PartitionDistinctRuleTest {
     }
     if (tempDir != null && tempDir.exists()) {
       deleteDirectory(tempDir);
+    }
+    // Restore the system property to its original state
+    if (savedPartitionDistinctEnabled == null) {
+      System.clearProperty("calcite.file.partition.distinct.enabled");
+    } else {
+      System.setProperty("calcite.file.partition.distinct.enabled", savedPartitionDistinctEnabled);
     }
   }
 
@@ -195,7 +205,7 @@ public class PartitionDistinctRuleTest {
   }
 
   private void setupCalciteConnection(String executionEngine) throws Exception {
-    calciteConn = DriverManager.getConnection("jdbc:calcite:");
+    calciteConn = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     CalciteConnection calciteConnection = calciteConn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 

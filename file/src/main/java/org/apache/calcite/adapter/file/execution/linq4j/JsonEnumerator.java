@@ -109,11 +109,6 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source,
       Map<String, Object> options, String columnNameCasing) {
-    // If source is a StorageProviderSource, assume JSON format since it's used in JsonTable
-    if (source instanceof org.apache.calcite.adapter.file.storage.StorageProviderSource) {
-      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
-    }
-
     Source sourceSansGz = source.trim(".gz");
     Source sourceSansJson = sourceSansGz.trimOrNull(".json");
     Source sourceSansYaml = sourceSansGz.trimOrNull(".yaml");
@@ -127,6 +122,9 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
       return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
     } else if (sourceSansYaml != null) {
       return deduceRowType(typeFactory, source, "yaml", options, columnNameCasing);
+    } else if (source instanceof org.apache.calcite.adapter.file.storage.StorageProviderSource) {
+      // StorageProviderSource (HTTP) without a recognizable extension: default to JSON
+      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + source);
     }

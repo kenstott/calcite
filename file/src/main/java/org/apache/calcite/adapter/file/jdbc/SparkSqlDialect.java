@@ -88,11 +88,28 @@ public class SparkSqlDialect implements JdbcDialect {
 
   @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     // Spark requires Iceberg tables to be registered in a catalog
-    // Using the Iceberg catalog reference syntax
+    // Reference the table via the aperio_iceberg catalog
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format(
-        "CREATE OR REPLACE VIEW %s AS SELECT * FROM iceberg.`%s`",
-        qualifiedName, tablePath);
+        "CREATE OR REPLACE VIEW %s AS SELECT * FROM aperio_iceberg.%s.%s",
+        qualifiedName, schemaName, viewName);
+  }
+
+  /**
+   * Generates SQL to register an Iceberg table in the Spark catalog.
+   *
+   * <p>Spark cannot scan Iceberg tables by path alone; tables must be registered
+   * in a catalog using {@code CREATE TABLE ... USING iceberg LOCATION '...'}.
+   *
+   * @param database the database name in the Iceberg catalog
+   * @param tableName the table name
+   * @param tableLocation the physical location of the Iceberg table
+   * @return SQL statement to register the table
+   */
+  public String createIcebergTableSql(String database, String tableName, String tableLocation) {
+    return String.format(
+        "CREATE TABLE IF NOT EXISTS aperio_iceberg.%s.%s USING iceberg LOCATION '%s'",
+        database, tableName, tableLocation);
   }
 
   @Override public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,

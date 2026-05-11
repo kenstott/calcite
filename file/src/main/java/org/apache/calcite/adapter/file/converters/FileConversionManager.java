@@ -370,7 +370,7 @@ public class FileConversionManager {
   private static boolean isConversionNeeded(File sourceFile, File baseDirectory) {
     try {
       ConversionMetadata metadata = new ConversionMetadata(baseDirectory);
-      ConversionMetadata.ConversionRecord record = metadata.getConversionRecord(sourceFile);
+      ConversionMetadata.ConversionRecord record = metadata.findRecordBySourceFile(sourceFile);
 
       if (record == null) {
         LOGGER.debug("No conversion record found for {}, conversion needed", sourceFile.getName());

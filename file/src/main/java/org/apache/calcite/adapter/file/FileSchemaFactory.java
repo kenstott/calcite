@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.clickhouse.ClickHouseJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
@@ -583,6 +584,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Auto-detected local storage from directory path: {}", directory);
     }
 
+    // Default to "local" when tables or partitioned tables are explicitly listed without a directory
+    if (storageType == null && ((tables != null && !tables.isEmpty())
+        || operand.get("partitionedTables") != null)) {
+      storageType = "local";
+      LOGGER.info("Auto-detected local storage from explicit tables/partitionedTables configuration");
+    }
+
     // Validate storageType is set
     if (storageType == null) {
       throw new IllegalStateException(
@@ -780,16 +788,298 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       return schemaToRegister;
     }
 
+    // Check if we're using ClickHouse engine
+    boolean isClickHouse = engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.CLICKHOUSE;
+    if (isClickHouse && directoryPath != null) {
+      LOGGER.info("[FileSchemaFactory] ==> *** ENTERING CLICKHOUSE PATH FOR SCHEMA: {} (storageType: {}) ***", name, storageType);
+      LOGGER.info("Using ClickHouse: Running conversions first, then creating JDBC adapter for schema: {}", name);
+
+      // Step 1: Create FileSchema with PARQUET engine for conversions (same pattern as DuckDB)
+      ExecutionEngineConfig conversionConfig =
+          new ExecutionEngineConfig("PARQUET", engineConfig.getBatchSize(), engineConfig.getMemoryThreshold(),
+          engineConfig.getMaterializedViewStoragePath(), engineConfig.getDuckDBConfig(),
+          engineConfig.getParquetCacheDirectory());
+
+      LOGGER.info("ClickHouse: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
+
+      FileSchema fileSchema =
+          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+
+      // Set constraint metadata on FileSchema if available
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for ClickHouse", constraintsToPass.size());
+        fileSchema.setConstraintMetadata(constraintsToPass);
+      }
+
+      // Pass conversion records to FileSchema
+      @SuppressWarnings("unchecked")
+      Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords =
+          (Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>)
+          operand.get("conversionRecords");
+      if (conversionRecords != null && !conversionRecords.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} conversion records on internal FileSchema for ClickHouse", conversionRecords.size());
+        fileSchema.setConversionRecords(conversionRecords);
+      }
+
+      // Force initialization to run conversions and populate the FileSchema
+      LOGGER.info("ClickHouse: About to call fileSchema.getTableMap() for table discovery");
+      Map<String, Table> tableMap;
+      try {
+        tableMap = fileSchema.getTableMap();
+        LOGGER.info("ClickHouse: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
+      } catch (Exception e) {
+        LOGGER.error("ERROR calling fileSchema.getTableMap(): {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to discover tables in FileSchema for ClickHouse", e);
+      }
+
+      // Update conversion metadata with materialization info
+      if (fileSchema.getConversionMetadata() != null) {
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, String>> materializationInfo =
+            (Map<String, Map<String, String>>) operand.get("_materializationInfo");
+        if (materializationInfo != null && !materializationInfo.isEmpty()) {
+          LOGGER.info("FileSchemaFactory: Updating conversion metadata with materialization info for {} tables",
+              materializationInfo.size());
+          org.apache.calcite.adapter.file.metadata.ConversionMetadata conversionMetadata =
+              fileSchema.getConversionMetadata();
+          for (Map.Entry<String, Map<String, String>> entry : materializationInfo.entrySet()) {
+            String tableName = entry.getKey();
+            Map<String, String> info = entry.getValue();
+            String tableLocation = info.get("tableLocation");
+            String conversionType = info.get("conversionType");
+            String rowCountStr = info.get("rowCount");
+            Long rowCount = rowCountStr != null ? Long.parseLong(rowCountStr) : null;
+            if (tableLocation != null && conversionType != null) {
+              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType, rowCount);
+            }
+          }
+        }
+      }
+
+      // Step 2: Create ClickHouse JDBC schema that reads the files
+      LOGGER.info("FileSchemaFactory: Now creating ClickHouse JDBC schema");
+      JdbcSchema clickhouseSchema = ClickHouseJdbcSchemaFactory.create(
+          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      LOGGER.info("FileSchemaFactory: ClickHouse JDBC schema created successfully");
+
+      // Wrap with constraint metadata if available
+      Schema schemaToRegister = clickhouseSchema;
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Wrapping ClickHouse schema with constraint metadata for {} tables",
+                    constraintsToPass.size());
+        schemaToRegister = new ConstraintAwareJdbcSchema(clickhouseSchema, constraintsToPass);
+      }
+
+      parentSchema.add(name, schemaToRegister);
+      LOGGER.info("FileSchemaFactory: Registered {} schema '{}' with parent schema for SQL validation",
+                  schemaToRegister.getClass().getSimpleName(), name);
+
+      addMetadataSchemas(parentSchema);
+      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+
+      return schemaToRegister;
+    }
+
+    // Check if we're using Trino engine
+    boolean isTrino = engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.TRINO;
+    if (isTrino && directoryPath != null) {
+      LOGGER.info("[FileSchemaFactory] ==> *** ENTERING TRINO PATH FOR SCHEMA: {} (storageType: {}) ***", name, storageType);
+      LOGGER.info("Using Trino: Running conversions first, then creating JDBC adapter for schema: {}", name);
+
+      // Step 1: Create FileSchema with PARQUET engine for conversions (same pattern as DuckDB/ClickHouse/Spark)
+      ExecutionEngineConfig conversionConfig =
+          new ExecutionEngineConfig("PARQUET", engineConfig.getBatchSize(), engineConfig.getMemoryThreshold(),
+          engineConfig.getMaterializedViewStoragePath(), engineConfig.getDuckDBConfig(),
+          engineConfig.getParquetCacheDirectory());
+
+      LOGGER.info("Trino: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
+
+      FileSchema fileSchema =
+          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+
+      // Set constraint metadata on FileSchema if available
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for Trino", constraintsToPass.size());
+        fileSchema.setConstraintMetadata(constraintsToPass);
+      }
+
+      // Pass conversion records to FileSchema
+      @SuppressWarnings("unchecked")
+      Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> trinoConversionRecords =
+          (Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>)
+          operand.get("conversionRecords");
+      if (trinoConversionRecords != null && !trinoConversionRecords.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} conversion records on internal FileSchema for Trino", trinoConversionRecords.size());
+        fileSchema.setConversionRecords(trinoConversionRecords);
+      }
+
+      // Force initialization to run conversions and populate the FileSchema
+      LOGGER.info("Trino: About to call fileSchema.getTableMap() for table discovery");
+      Map<String, Table> tableMap;
+      try {
+        tableMap = fileSchema.getTableMap();
+        LOGGER.info("Trino: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
+      } catch (Exception e) {
+        LOGGER.error("ERROR calling fileSchema.getTableMap(): {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to discover tables in FileSchema for Trino", e);
+      }
+
+      // Update conversion metadata with materialization info
+      if (fileSchema.getConversionMetadata() != null) {
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, String>> materializationInfo =
+            (Map<String, Map<String, String>>) operand.get("_materializationInfo");
+        if (materializationInfo != null && !materializationInfo.isEmpty()) {
+          LOGGER.info("FileSchemaFactory: Updating conversion metadata with materialization info for {} tables",
+              materializationInfo.size());
+          org.apache.calcite.adapter.file.metadata.ConversionMetadata conversionMetadata =
+              fileSchema.getConversionMetadata();
+          for (Map.Entry<String, Map<String, String>> entry : materializationInfo.entrySet()) {
+            String tableName = entry.getKey();
+            Map<String, String> info = entry.getValue();
+            String tableLocation = info.get("tableLocation");
+            String conversionType = info.get("conversionType");
+            String rowCountStr = info.get("rowCount");
+            Long rowCount = rowCountStr != null ? Long.parseLong(rowCountStr) : null;
+            if (tableLocation != null && conversionType != null) {
+              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType, rowCount);
+            }
+          }
+        }
+      }
+
+      // Step 2: Create Trino JDBC schema that reads the files
+      LOGGER.info("FileSchemaFactory: Now creating Trino JDBC schema");
+      JdbcSchema trinoSchema = org.apache.calcite.adapter.file.trino.TrinoJdbcSchemaFactory.create(
+          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      LOGGER.info("FileSchemaFactory: Trino JDBC schema created successfully");
+
+      // Wrap with constraint metadata if available
+      Schema schemaToRegister = trinoSchema;
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Wrapping Trino schema with constraint metadata for {} tables",
+                    constraintsToPass.size());
+        schemaToRegister = new ConstraintAwareJdbcSchema(trinoSchema, constraintsToPass);
+      }
+
+      parentSchema.add(name, schemaToRegister);
+      LOGGER.info("FileSchemaFactory: Registered {} schema '{}' with parent schema for SQL validation",
+                  schemaToRegister.getClass().getSimpleName(), name);
+
+      addMetadataSchemas(parentSchema);
+      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+
+      return schemaToRegister;
+    }
+
+    // Check if we're using Spark engine
+    boolean isSpark = engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.SPARK;
+    if (isSpark && directoryPath != null) {
+      LOGGER.info("[FileSchemaFactory] ==> *** ENTERING SPARK PATH FOR SCHEMA: {} (storageType: {}) ***", name, storageType);
+      LOGGER.info("Using Spark: Running conversions first, then creating JDBC adapter for schema: {}", name);
+
+      // Step 1: Create FileSchema with PARQUET engine for conversions (same pattern as DuckDB/ClickHouse)
+      ExecutionEngineConfig conversionConfig =
+          new ExecutionEngineConfig("PARQUET", engineConfig.getBatchSize(), engineConfig.getMemoryThreshold(),
+          engineConfig.getMaterializedViewStoragePath(), engineConfig.getDuckDBConfig(),
+          engineConfig.getParquetCacheDirectory());
+
+      LOGGER.info("Spark: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
+
+      FileSchema fileSchema =
+          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+
+      // Set constraint metadata on FileSchema if available
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for Spark", constraintsToPass.size());
+        fileSchema.setConstraintMetadata(constraintsToPass);
+      }
+
+      // Pass conversion records to FileSchema
+      @SuppressWarnings("unchecked")
+      Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> sparkConversionRecords =
+          (Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>)
+          operand.get("conversionRecords");
+      if (sparkConversionRecords != null && !sparkConversionRecords.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} conversion records on internal FileSchema for Spark", sparkConversionRecords.size());
+        fileSchema.setConversionRecords(sparkConversionRecords);
+      }
+
+      // Force initialization to run conversions and populate the FileSchema
+      LOGGER.info("Spark: About to call fileSchema.getTableMap() for table discovery");
+      Map<String, Table> tableMap;
+      try {
+        tableMap = fileSchema.getTableMap();
+        LOGGER.info("Spark: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
+      } catch (Exception e) {
+        LOGGER.error("ERROR calling fileSchema.getTableMap(): {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to discover tables in FileSchema for Spark", e);
+      }
+
+      // Update conversion metadata with materialization info
+      if (fileSchema.getConversionMetadata() != null) {
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, String>> materializationInfo =
+            (Map<String, Map<String, String>>) operand.get("_materializationInfo");
+        if (materializationInfo != null && !materializationInfo.isEmpty()) {
+          LOGGER.info("FileSchemaFactory: Updating conversion metadata with materialization info for {} tables",
+              materializationInfo.size());
+          org.apache.calcite.adapter.file.metadata.ConversionMetadata conversionMetadata =
+              fileSchema.getConversionMetadata();
+          for (Map.Entry<String, Map<String, String>> entry : materializationInfo.entrySet()) {
+            String tableName = entry.getKey();
+            Map<String, String> info = entry.getValue();
+            String tableLocation = info.get("tableLocation");
+            String conversionType = info.get("conversionType");
+            String rowCountStr = info.get("rowCount");
+            Long rowCount = rowCountStr != null ? Long.parseLong(rowCountStr) : null;
+            if (tableLocation != null && conversionType != null) {
+              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType, rowCount);
+            }
+          }
+        }
+      }
+
+      // Step 2: Create Spark JDBC schema that reads the files
+      LOGGER.info("FileSchemaFactory: Now creating Spark JDBC schema");
+      JdbcSchema sparkSchema = org.apache.calcite.adapter.file.spark.SparkJdbcSchemaFactory.create(
+          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      LOGGER.info("FileSchemaFactory: Spark JDBC schema created successfully");
+
+      // Wrap with constraint metadata if available
+      Schema schemaToRegister = sparkSchema;
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Wrapping Spark schema with constraint metadata for {} tables",
+                    constraintsToPass.size());
+        schemaToRegister = new ConstraintAwareJdbcSchema(sparkSchema, constraintsToPass);
+      }
+
+      parentSchema.add(name, schemaToRegister);
+      LOGGER.info("FileSchemaFactory: Registered {} schema '{}' with parent schema for SQL validation",
+                  schemaToRegister.getClass().getSimpleName(), name);
+
+      addMetadataSchemas(parentSchema);
+      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+
+      return schemaToRegister;
+    }
+
     // Otherwise use regular FileSchema
     LOGGER.info("[FileSchemaFactory] ==> *** USING REGULAR FILESCHEMA FOR SCHEMA: {} ***", name);
     LOGGER.info("[FileSchemaFactory] ==> - directoryPath={}, storageType='{}'",
                directoryPath != null ? directoryPath : "null", storageType);
-    // Pass user-configured baseDirectory or null to let FileSchema use its default
-    // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
-    // Pass null for File parameter - all file access goes through StorageProvider with directoryPath
-    // Pass canonicalSchemaName for consistent .aperio directory naming (e.g., "econ" vs "ECON")
+    // Pass resolved directoryPath as sourceDirectory so table URLs resolve relative to data directory
+    // Falls back to modelFileDirPath (model file parent) for model-relative URL resolution
+    File resolvedSourceDir = directoryPath != null ? new File(directoryPath)
+        : modelFileDirPath != null ? new File(modelFileDirPath) : null;
     FileSchema fileSchema =
-        new FileSchema(parentSchema, name, null, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
+        new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
@@ -923,7 +1213,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Now register SQL views from table definitions for PARQUET engine
     // (DuckDB engine handles views separately as native DuckDB views)
-    registerSqlViews(parentSchema, name, tables, operand);
+    // Also merge YAML `views:` section entries (which lack type: "view") into the list.
+    List<Map<String, Object>> allTablesForViews = new ArrayList<>(tables != null ? tables : Collections.emptyList());
+    if (views != null) {
+      for (Map<String, Object> view : views) {
+        Map<String, Object> viewEntry = new HashMap<>(view);
+        viewEntry.put("type", "view");
+        allTablesForViews.add(viewEntry);
+      }
+    }
+    registerSqlViews(parentSchema, name, allTablesForViews, operand);
 
     // Register materializations with MaterializationService for optimizer substitution
     // This enables Calcite's optimizer to automatically substitute materialized views

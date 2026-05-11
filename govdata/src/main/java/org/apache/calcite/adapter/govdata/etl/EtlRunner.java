@@ -438,6 +438,12 @@ public class EtlRunner {
       case "econ_reference":
       case "econ_ref":
       case "census":
+      case "cyber_vuln":
+      case "cybervuln":
+      case "cyber_vuln_smoke":
+      case "cybervulnsmoke":
+      case "cyber_threat":
+      case "cyberthreat":
         return true;
       default:
         return false;

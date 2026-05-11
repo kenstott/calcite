@@ -109,9 +109,29 @@ public class DuckDBPartitionStatusStore implements PipelineTracker, AutoCloseabl
       createTables();
       LOGGER.info("Initialized DuckDB partition status store at {}", dbPath);
     } catch (SQLException e) {
-      LOGGER.error("Failed to initialize partition status store at {}: {}",
+      LOGGER.warn("Partition status store at {} is corrupt or unreadable ({}), "
+          + "recovering by deleting and starting fresh — state will self-heal from source data",
           dbPath, e.getMessage());
-      throw new RuntimeException("Failed to initialize partition status store", e);
+      // Corrupt DuckDB file (e.g. JVM killed mid-write). Delete and retry.
+      // SecFilingCache self-heals from R2 existence checks so no work is reprocessed.
+      if (dbFile.exists() && !dbFile.delete()) {
+        LOGGER.error("Could not delete corrupt partition status store at {}", dbPath);
+        throw new RuntimeException("Failed to initialize partition status store", e);
+      }
+      File walFile = new File(dbPath + ".wal");
+      if (walFile.exists()) {
+        walFile.delete();
+      }
+      try {
+        connection = null;
+        getConnection();
+        createTables();
+        LOGGER.warn("Recovered partition status store at {} (previous tracker state lost)",
+            dbPath);
+      } catch (SQLException e2) {
+        LOGGER.error("Failed to recover partition status store at {}: {}", dbPath, e2.getMessage());
+        throw new RuntimeException("Failed to initialize partition status store", e2);
+      }
     }
   }
 

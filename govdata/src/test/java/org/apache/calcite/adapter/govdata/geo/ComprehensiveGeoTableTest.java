@@ -360,7 +360,7 @@ public class ComprehensiveGeoTableTest {
     System.out.println("\nTesting data file generation...");
 
     // Check that parquet files were created in hive-partitioned structure
-    File geoDir = new File(tempDir, "source=geo");
+    File geoDir = new File(tempDir, "geo");
     File boundaryDir = new File(geoDir, "type=boundary");
     File crosswalkDir = new File(geoDir, "type=crosswalk");
 

@@ -114,6 +114,30 @@ public interface IncrementalTracker {
   Set<Map<String, String>> getProcessedKeyValues(String alternateName);
 
   /**
+   * Gets processed key value combinations for an alternate partition scoped to a specific year.
+   *
+   * <p>Implementations should override this to use year-partitioned storage for efficiency.
+   * The default falls back to {@link #getProcessedKeyValues(String)} and filters by year.
+   *
+   * @param alternateName The alternate partition name
+   * @param year The year to scope results to (e.g. "2025"), or null for all years
+   * @return Set of processed key value maps for the given year, or empty set if none
+   */
+  default Set<Map<String, String>> getProcessedKeyValues(String alternateName, String year) {
+    Set<Map<String, String>> all = getProcessedKeyValues(alternateName);
+    if (year == null) {
+      return all;
+    }
+    Set<Map<String, String>> filtered = new HashSet<>();
+    for (Map<String, String> kv : all) {
+      if (year.equals(kv.get("year"))) {
+        filtered.add(kv);
+      }
+    }
+    return filtered;
+  }
+
+  /**
    * Invalidates (removes) a processed combination, forcing reprocessing.
    *
    * @param alternateName The alternate partition name

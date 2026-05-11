@@ -21,6 +21,9 @@ import org.apache.calcite.adapter.file.FileAdapterTests;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.net.URL;
 import java.sql.Connection;
@@ -55,6 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class DualTimestampTypeTest {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(DualTimestampTypeTest.class);
+
   // Disable inherited tests that have date shift issues
   @Test void testGroupByDate() {
     // Skip - this test has timezone-related date shift issues when run in this context
@@ -76,15 +81,15 @@ public class DualTimestampTypeTest {
     // Skip test if not running with DUCKDB or PARQUET engine
     String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     if (engineType == null || (!engineType.equals("DUCKDB") && !engineType.equals("PARQUET"))) {
-      System.out.println("Skipping testDualTimestampTypesWithParquet - requires DUCKDB or PARQUET engine, current: " + engineType);
+      LOGGER.debug("Skipping testDualTimestampTypesWithParquet - requires DUCKDB or PARQUET engine, current: {}", engineType);
       return;
     }
     testDualTimestampTypesWithoutEngineParam();
   }
 
   private void testDualTimestampTypesWithoutEngineParam() throws Exception {
-    System.out.println("\n=== Testing Dual Timestamp Types (engine from environment) ===");
-    System.out.println("Current JVM timezone: " + TimeZone.getDefault().getID());
+    LOGGER.debug("Testing Dual Timestamp Types (engine from environment)");
+    LOGGER.debug("Current JVM timezone: {}", TimeZone.getDefault().getID());
 
     final URL url = DualTimestampTypeTest.class.getResource("/bug/DUAL_TIMESTAMP_TEST.csv");
     final File file = new File(url.getFile());
@@ -101,7 +106,8 @@ public class DualTimestampTypeTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + parentDir + "'\n"
+        + "        directory: '" + parentDir + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -120,13 +126,13 @@ public class DualTimestampTypeTest {
       // TIMESTAMP column - stored as local time (naive)
       long naiveMillis = resultSet.getLong("naive_ts");
       String naiveString = resultSet.getString("naive_ts");
-      System.out.println("Row 1 - TIMESTAMP (naive): " + naiveString + " (" + naiveMillis + " ms)");
+      LOGGER.debug("Row 1 - TIMESTAMP (naive): {} ({} ms)", naiveString, naiveMillis);
 
       // TIMESTAMPTZ column - properly converts timezone for PARQUET/DUCKDB engines
       long awareMillis = resultSet.getLong("aware_ts");
       String awareString = resultSet.getString("aware_ts");
-      System.out.println("Row 1 - TIMESTAMPTZ (aware): " + awareString + " (" + awareMillis + " ms)");
-      System.out.println("Difference in milliseconds: " + Math.abs(awareMillis - naiveMillis));
+      LOGGER.debug("Row 1 - TIMESTAMPTZ (aware): {} ({} ms)", awareString, awareMillis);
+      LOGGER.debug("Difference in milliseconds: {}", Math.abs(awareMillis - naiveMillis));
 
       // Check more rows to see timezone conversion behavior
       for (int rowNum = 2; rowNum <= 3 && resultSet.next(); rowNum++) {
@@ -137,10 +143,10 @@ public class DualTimestampTypeTest {
         String awareStr2 = resultSet.getString("aware_ts");
         String desc = resultSet.getString("description");
 
-        System.out.println("Row " + id + " - " + desc + ":");
-        System.out.println("  NAIVE_TS:  " + naiveStr2 + " (" + naive2 + " ms)");
-        System.out.println("  AWARE_TS:  " + awareStr2 + " (" + aware2 + " ms)");
-        System.out.println("  DIFFERENCE: " + Math.abs(aware2 - naive2) + " ms");
+        LOGGER.debug("Row {} - {}:", id, desc);
+        LOGGER.debug("  NAIVE_TS:  {} ({} ms)", naiveStr2, naive2);
+        LOGGER.debug("  AWARE_TS:  {} ({} ms)", awareStr2, aware2);
+        LOGGER.debug("  DIFFERENCE: {} ms", Math.abs(aware2 - naive2));
       }
 
       // NOTE: PARQUET and DUCKDB engines should handle timezone aware timestamps
@@ -168,15 +174,15 @@ public class DualTimestampTypeTest {
         assertEquals(15, naiveCal.get(Calendar.DAY_OF_MONTH), "Naive timestamp day should be 15");
 
         // Log the actual values for debugging
-        System.out.println("DEBUG: Naive timestamp hour: " + naiveCal.get(Calendar.HOUR_OF_DAY));
-        System.out.println("DEBUG: Aware timestamp hour: " + awareCal.get(Calendar.HOUR_OF_DAY));
+        LOGGER.debug("Naive timestamp hour: {}", naiveCal.get(Calendar.HOUR_OF_DAY));
+        LOGGER.debug("Aware timestamp hour: {}", awareCal.get(Calendar.HOUR_OF_DAY));
       }
     }
   }
 
   private void testDualTimestampTypes(String engine) throws Exception {
-    System.out.println("\n=== Testing Dual Timestamp Types with " + engine + " ===");
-    System.out.println("Current JVM timezone: " + TimeZone.getDefault().getID());
+    LOGGER.debug("Testing Dual Timestamp Types with {}", engine);
+    LOGGER.debug("Current JVM timezone: {}", TimeZone.getDefault().getID());
 
     final URL url = DualTimestampTypeTest.class.getResource("/bug/DUAL_TIMESTAMP_TEST.csv");
     final File file = new File(url.getFile());
@@ -195,7 +201,8 @@ public class DualTimestampTypeTest {
         + "      operand: {\n"
         + "        directory: '" + parentDir + "',\n"
         + "        executionEngine: '" + engine + "',\n"
-        + "        parquetCacheDirectory: '" + parentDir + "/test_cache_dual_ts_" + engine.toLowerCase() + "'\n"
+        + "        parquetCacheDirectory: '" + parentDir + "/test_cache_dual_ts_" + engine.toLowerCase() + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -214,7 +221,7 @@ public class DualTimestampTypeTest {
       // TIMESTAMP column - should preserve wall clock time
       Timestamp naiveTs = resultSet.getTimestamp("naive_ts");
       String naiveString = resultSet.getString("naive_ts");
-      System.out.println("Row 1 - TIMESTAMP (naive): " + naiveString + " (" + naiveTs.getTime() + " ms)");
+      LOGGER.debug("Row 1 - TIMESTAMP (naive): {} ({} ms)", naiveString, naiveTs.getTime());
 
       // For TIMESTAMP WITHOUT TIME ZONE, the date parts should match exactly what's in the CSV
       // CSV has "2024-03-15 10:30:45"
@@ -230,7 +237,7 @@ public class DualTimestampTypeTest {
       // Use UTC calendar to get raw UTC epoch without timezone conversion
       Timestamp awareTs = resultSet.getTimestamp("aware_ts", Calendar.getInstance(TimeZone.getTimeZone("UTC")));
       String awareString = resultSet.getString("aware_ts");
-      System.out.println("Row 1 - TIMESTAMPTZ (aware): " + awareString + " (" + awareTs.getTime() + " ms)");
+      LOGGER.debug("Row 1 - TIMESTAMPTZ (aware): {} ({} ms)", awareString, awareTs.getTime());
 
       // For TIMESTAMPTZ, "2024-03-15 10:30:45Z" is UTC
       // When displayed in local time (EDT), it should show the adjusted time
@@ -241,9 +248,10 @@ public class DualTimestampTypeTest {
       // The actual hour will depend on the JVM's timezone offset from UTC
       // In EDT (UTC-4), 10:30:45 UTC would be 06:30:45 EDT
       // In EST (UTC-5), 10:30:45 UTC would be 05:30:45 EST
-      System.out.println("Timezone check: " + TimeZone.getDefault().getID() +
-                         ", naive hour=" + naiveCal.get(Calendar.HOUR_OF_DAY) +
-                         ", aware hour=" + awareCal.get(Calendar.HOUR_OF_DAY));
+      LOGGER.debug("Timezone check: {}, naive hour={}, aware hour={}",
+                   TimeZone.getDefault().getID(),
+                   naiveCal.get(Calendar.HOUR_OF_DAY),
+                   awareCal.get(Calendar.HOUR_OF_DAY));
 
       // All engines should have consistent timestamp behavior
       // UTC timestamp "2024-03-15T10:30:45Z" should display consistently
@@ -270,10 +278,10 @@ public class DualTimestampTypeTest {
         String awareStr2 = resultSet.getString("aware_ts");
         String desc = resultSet.getString("description");
 
-        System.out.println("Row " + id + " - " + desc + ":");
-        System.out.println("  NAIVE_TS:  " + naiveStr2 + " (" + naive2 + " ms)");
-        System.out.println("  AWARE_TS:  " + awareStr2 + " (" + aware2 + " ms)");
-        System.out.println("  DIFFERENCE: " + Math.abs(aware2 - naive2) + " ms");
+        LOGGER.debug("Row {} - {}:", id, desc);
+        LOGGER.debug("  NAIVE_TS:  {} ({} ms)", naiveStr2, naive2);
+        LOGGER.debug("  AWARE_TS:  {} ({} ms)", awareStr2, aware2);
+        LOGGER.debug("  DIFFERENCE: {} ms", Math.abs(aware2 - naive2));
 
         // Verify that each row has proper data using date parts
         assertThat("Row " + rowNum + " should have correct ID", id, is(rowNum));
@@ -342,7 +350,8 @@ public class DualTimestampTypeTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + parentDir + "'\n"
+        + "        directory: '" + parentDir + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -365,30 +374,30 @@ public class DualTimestampTypeTest {
         try {
           timestamp = resultSet.getTimestamp("ts");
         } catch (Exception e) {
-          System.out.println("DEBUG: Failed to convert ts to Timestamp: " + e.getMessage());
+          LOGGER.debug("Failed to convert ts to Timestamp: {}", e.getMessage());
           // DuckDB returns timezone-aware timestamps as OffsetDateTime, handle this case
           try {
             Object rawValue = resultSet.getObject("ts");
-            System.out.println("DEBUG: Raw value class: " + rawValue.getClass());
+            LOGGER.debug("Raw value class: {}", rawValue.getClass());
             if (rawValue instanceof java.time.OffsetDateTime) {
               java.time.OffsetDateTime odt = (java.time.OffsetDateTime) rawValue;
               timestamp = new java.sql.Timestamp(odt.toInstant().toEpochMilli());
-              System.out.println("DEBUG: Converted OffsetDateTime to Timestamp: " + timestamp);
+              LOGGER.debug("Converted OffsetDateTime to Timestamp: {}", timestamp);
             } else if (rawValue instanceof java.time.LocalDateTime) {
               java.time.LocalDateTime ldt = (java.time.LocalDateTime) rawValue;
               timestamp = java.sql.Timestamp.valueOf(ldt);
-              System.out.println("DEBUG: Converted LocalDateTime to Timestamp: " + timestamp);
+              LOGGER.debug("Converted LocalDateTime to Timestamp: {}", timestamp);
             } else {
-              System.out.println("DEBUG: Unsupported raw value type: " + rawValue.getClass());
+              LOGGER.debug("Unsupported raw value type: {}", rawValue.getClass());
               throw e; // Re-throw the original exception
             }
           } catch (Exception e2) {
-            System.out.println("DEBUG: Failed conversion fallback: " + e2.getMessage());
+            LOGGER.debug("Failed conversion fallback: {}", e2.getMessage());
             throw e; // Re-throw the original exception
           }
         }
         assertNotNull(timestamp);
-        System.out.println("TIMESTAMP with timezone info was accepted: " + resultSet.getString("ts"));
+        LOGGER.debug("TIMESTAMP with timezone info was accepted: {}", resultSet.getString("ts"));
       } catch (SQLException e) {
         // If an exception is thrown, it should be about timezone validation
         assertThat("If exception occurs, it should be about timezone validation",
@@ -424,7 +433,8 @@ public class DualTimestampTypeTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + parentDir + "'\n"
+        + "        directory: '" + parentDir + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -447,30 +457,30 @@ public class DualTimestampTypeTest {
         try {
           timestamp = resultSet.getTimestamp("ts");
         } catch (Exception e) {
-          System.out.println("DEBUG: Failed to convert ts to Timestamp: " + e.getMessage());
+          LOGGER.debug("Failed to convert ts to Timestamp: {}", e.getMessage());
           // DuckDB returns timezone-aware timestamps as OffsetDateTime, handle this case
           try {
             Object rawValue = resultSet.getObject("ts");
-            System.out.println("DEBUG: Raw value class: " + rawValue.getClass());
+            LOGGER.debug("Raw value class: {}", rawValue.getClass());
             if (rawValue instanceof java.time.OffsetDateTime) {
               java.time.OffsetDateTime odt = (java.time.OffsetDateTime) rawValue;
               timestamp = new java.sql.Timestamp(odt.toInstant().toEpochMilli());
-              System.out.println("DEBUG: Converted OffsetDateTime to Timestamp: " + timestamp);
+              LOGGER.debug("Converted OffsetDateTime to Timestamp: {}", timestamp);
             } else if (rawValue instanceof java.time.LocalDateTime) {
               java.time.LocalDateTime ldt = (java.time.LocalDateTime) rawValue;
               timestamp = java.sql.Timestamp.valueOf(ldt);
-              System.out.println("DEBUG: Converted LocalDateTime to Timestamp: " + timestamp);
+              LOGGER.debug("Converted LocalDateTime to Timestamp: {}", timestamp);
             } else {
-              System.out.println("DEBUG: Unsupported raw value type: " + rawValue.getClass());
+              LOGGER.debug("Unsupported raw value type: {}", rawValue.getClass());
               throw e; // Re-throw the original exception
             }
           } catch (Exception e2) {
-            System.out.println("DEBUG: Failed conversion fallback: " + e2.getMessage());
+            LOGGER.debug("Failed conversion fallback: {}", e2.getMessage());
             throw e; // Re-throw the original exception
           }
         }
         assertNotNull(timestamp);
-        System.out.println("TIMESTAMPTZ with naive timestamp was accepted: " + resultSet.getString("ts"));
+        LOGGER.debug("TIMESTAMPTZ with naive timestamp was accepted: {}", resultSet.getString("ts"));
       } catch (SQLException e) {
         // If an exception is thrown, it should be about timezone validation
         assertThat("If exception occurs, it should be about timezone validation",
@@ -512,7 +522,8 @@ public class DualTimestampTypeTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + parentDir + "'\n"
+        + "        directory: '" + parentDir + "',\n"
+        + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
         + "  ]\n"
@@ -548,38 +559,38 @@ public class DualTimestampTypeTest {
         }
 
         // Verify TIMESTAMPTZ - each row has different timezone, but all represent same UTC moment
-        System.out.println("DEBUG: Attempting to get utc_ts for row " + id);
+        LOGGER.debug("Attempting to get utc_ts for row {}", id);
         try {
           Object utcValue = resultSet.getObject("utc_ts");
-          System.out.println("DEBUG: Raw utc_ts value: " + utcValue + " (type: " +
-                           (utcValue != null ? utcValue.getClass().getName() : "null") + ")");
+          LOGGER.debug("Raw utc_ts value: {} (type: {})", utcValue,
+                       utcValue != null ? utcValue.getClass().getName() : "null");
         } catch (Exception e) {
-          System.out.println("DEBUG: Failed to get raw utc_ts: " + e.getMessage());
+          LOGGER.debug("Failed to get raw utc_ts: {}", e.getMessage());
         }
 
         Timestamp utcTimestamp = null;
         try {
           utcTimestamp = resultSet.getTimestamp("utc_ts");
         } catch (Exception e) {
-          System.out.println("DEBUG: Failed to convert utc_ts to Timestamp: " + e.getMessage());
+          LOGGER.debug("Failed to convert utc_ts to Timestamp: {}", e.getMessage());
           // DuckDB returns timezone-aware timestamps as OffsetDateTime, handle this case
           try {
             Object rawValue = resultSet.getObject("utc_ts");
-            System.out.println("DEBUG: Raw value class: " + rawValue.getClass());
+            LOGGER.debug("Raw value class: {}", rawValue.getClass());
             if (rawValue instanceof java.time.OffsetDateTime) {
               java.time.OffsetDateTime odt = (java.time.OffsetDateTime) rawValue;
               utcTimestamp = new java.sql.Timestamp(odt.toInstant().toEpochMilli());
-              System.out.println("DEBUG: Converted OffsetDateTime to Timestamp: " + utcTimestamp);
+              LOGGER.debug("Converted OffsetDateTime to Timestamp: {}", utcTimestamp);
             } else if (rawValue instanceof java.time.LocalDateTime) {
               java.time.LocalDateTime ldt = (java.time.LocalDateTime) rawValue;
               utcTimestamp = java.sql.Timestamp.valueOf(ldt);
-              System.out.println("DEBUG: Converted LocalDateTime to Timestamp: " + utcTimestamp);
+              LOGGER.debug("Converted LocalDateTime to Timestamp: {}", utcTimestamp);
             } else {
-              System.out.println("DEBUG: Unsupported raw value type: " + rawValue.getClass());
+              LOGGER.debug("Unsupported raw value type: {}", rawValue.getClass());
               throw e; // Re-throw the original exception
             }
           } catch (Exception e2) {
-            System.out.println("DEBUG: Failed conversion fallback: " + e2.getMessage());
+            LOGGER.debug("Failed conversion fallback: {}", e2.getMessage());
             throw e; // Re-throw the original exception
           }
         }
@@ -590,8 +601,8 @@ public class DualTimestampTypeTest {
           // UTC timestamp "2024-03-15T10:30:45Z" is explicitly UTC
           // Expected difference: 4 hours = 14400000ms when running in EDT timezone
           long timeDifference = Math.abs(utcTimestamp.getTime() - localTimestamp.getTime());
-          System.out.println("DEBUG: Row " + id + " time difference: " + timeDifference + "ms");
-          System.out.println("DEBUG: Local epoch: " + localTimestamp.getTime() + ", UTC epoch: " + utcTimestamp.getTime());
+          LOGGER.debug("Row {} time difference: {}ms", id, timeDifference);
+          LOGGER.debug("Local epoch: {}, UTC epoch: {}", localTimestamp.getTime(), utcTimestamp.getTime());
 
           // Verify the difference is reasonable (within 0-24 hours due to timezone offsets)
           assertTrue(timeDifference <= 24 * 60 * 60 * 1000,
@@ -620,7 +631,7 @@ public class DualTimestampTypeTest {
       Statement countStmt = connection.createStatement();
       ResultSet countRs = countStmt.executeQuery("SELECT COUNT(*) FROM \"null_timestamp_test\"");
       countRs.next();
-      System.out.println("Total rows in NULL_TIMESTAMP_TEST: " + countRs.getInt(1));
+      LOGGER.debug("Total rows in NULL_TIMESTAMP_TEST: {}", countRs.getInt(1));
 
       // Row 1: All values present
       assertTrue(rs.next());
@@ -635,11 +646,11 @@ public class DualTimestampTypeTest {
       assertTrue(rs.next());
       int nextId = rs.getInt("id");
       String nextName = rs.getString("name");
-      System.out.println("Next row ID: " + nextId + ", Name: " + nextName);
+      LOGGER.debug("Next row ID: {}, Name: {}", nextId, nextName);
 
       // If the Parquet engine filtered out the row with all nulls, we'll get ID=3 instead of ID=2
       if (nextId == 3) {
-        System.out.println("WARNING: Row with ID=2 (all nulls) was filtered out during Parquet conversion");
+        LOGGER.debug("WARNING: Row with ID=2 (all nulls) was filtered out during Parquet conversion");
         // Skip the null handling tests and move to row 3 tests
         assertEquals(3, nextId);
         assertEquals("Bob Wilson", nextName);
@@ -653,7 +664,7 @@ public class DualTimestampTypeTest {
       java.sql.Date dateVal = rs.getDate("created_date");
       if (dateVal != null && dateVal.toString().equals("1970-01-01")) {
         // Document this as a known limitation
-        System.out.println("Known limitation: null DATE returns as epoch date");
+        LOGGER.debug("Known limitation: null DATE returns as epoch date");
       }
 
         // TIME, TIMESTAMP, and TIMESTAMPTZ handle nulls correctly

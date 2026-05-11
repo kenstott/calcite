@@ -23,6 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +38,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("unit")
 public class BasicRefreshTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(BasicRefreshTest.class);
 
   private File tempDir;
 
@@ -65,7 +70,7 @@ public class BasicRefreshTest {
   }
 
   @Test public void testRefreshIntervalParsing() throws Exception {
-    System.out.println("\n=== Test: Refresh Interval Parsing ===");
+    LOGGER.debug("Test: Refresh Interval Parsing");
 
     // Test various interval formats
     assertEquals(java.time.Duration.ofMinutes(5), RefreshInterval.parse("5 minutes"));
@@ -81,11 +86,11 @@ public class BasicRefreshTest {
     assertEquals(java.time.Duration.ofMinutes(1), RefreshInterval.parse("1 minute"));
     assertEquals(java.time.Duration.ofMinutes(1), RefreshInterval.parse("1 minutes"));
 
-    System.out.println("✅ Refresh interval parsing working correctly");
+    LOGGER.debug("Refresh interval parsing working correctly");
   }
 
   @Test public void testRefreshIntervalInheritance() throws Exception {
-    System.out.println("\n=== Test: Refresh Interval Inheritance ===");
+    LOGGER.debug("Test: Refresh Interval Inheritance");
 
     // Table level takes precedence
     assertEquals(java.time.Duration.ofMinutes(1),
@@ -98,11 +103,11 @@ public class BasicRefreshTest {
     // No refresh if neither configured
     assertNull(RefreshInterval.getEffectiveInterval(null, null));
 
-    System.out.println("✅ Refresh interval inheritance working correctly");
+    LOGGER.debug("Refresh interval inheritance working correctly");
   }
 
   @Test public void testConversionMetadataInfrastructure() throws Exception {
-    System.out.println("\n=== Test: Conversion Metadata Infrastructure ===");
+    LOGGER.debug("Test: Conversion Metadata Infrastructure");
 
     // Test that ConversionMetadata can be configured for different storage types
     File baseDir = tempDir;
@@ -131,13 +136,13 @@ public class BasicRefreshTest {
     assertEquals(sourceFile.getCanonicalPath(), foundSource.getCanonicalPath(),
                 "Found source should match recorded source");
 
-    System.out.println("✅ Conversion metadata infrastructure working");
-    System.out.println("  Recorded: " + sourceFile.getName() + " -> " + convertedFile.getName());
-    System.out.println("  Retrieved: " + foundSource.getName());
+    LOGGER.debug("Conversion metadata infrastructure working");
+    LOGGER.debug("Recorded: {} -> {}", sourceFile.getName(), convertedFile.getName());
+    LOGGER.debug("Retrieved: {}", foundSource.getName());
   }
 
   @Test public void testStorageTypeSpecificMetadata() throws Exception {
-    System.out.println("\n=== Test: Storage-Type-Specific Metadata ===");
+    LOGGER.debug("Test: Storage-Type-Specific Metadata");
 
     File baseDir = tempDir;
     String[] storageTypes = {"local", "http", "ftp", "s3", "sharepoint"};
@@ -158,15 +163,15 @@ public class BasicRefreshTest {
     if (metadataBaseDir.exists()) {
       String[] actualDirs = metadataBaseDir.list();
       assertNotNull(actualDirs, "Should have metadata subdirectories");
-      System.out.println("  Directories: " + String.join(", ", actualDirs));
+      LOGGER.debug("Directories: {}", String.join(", ", actualDirs));
     }
 
-    System.out.println("✅ Storage-type-specific metadata directories infrastructure available");
-    System.out.println("  Storage types supported: " + String.join(", ", storageTypes));
+    LOGGER.debug("Storage-type-specific metadata directories infrastructure available");
+    LOGGER.debug("Storage types supported: {}", String.join(", ", storageTypes));
   }
 
   @Test public void testRefreshFeatureClassesExist() throws Exception {
-    System.out.println("\n=== Test: Refresh Feature Classes Exist ===");
+    LOGGER.debug("Test: Refresh Feature Classes Exist");
 
     // Check if core refresh classes exist
     assertTrue(RefreshInterval.class != null, "RefreshInterval class should exist");
@@ -175,23 +180,23 @@ public class BasicRefreshTest {
     // Check if refresh table interfaces exist
     try {
       Class.forName("org.apache.calcite.adapter.file.refresh.RefreshableTable");
-      System.out.println("  ✅ RefreshableTable interface: Available");
+      LOGGER.debug("RefreshableTable interface: Available");
     } catch (ClassNotFoundException e) {
-      System.out.println("  ⚠️  RefreshableTable interface: Not found");
+      LOGGER.debug("RefreshableTable interface: Not found");
     }
 
     try {
       Class.forName("org.apache.calcite.adapter.file.refresh.RefreshableParquetCacheTable");
-      System.out.println("  ✅ RefreshableParquetCacheTable: Available");
+      LOGGER.debug("RefreshableParquetCacheTable: Available");
     } catch (ClassNotFoundException e) {
-      System.out.println("  ⚠️  RefreshableParquetCacheTable: Not found");
+      LOGGER.debug("RefreshableParquetCacheTable: Not found");
     }
 
-    System.out.println("✅ Core refresh feature classes are available");
+    LOGGER.debug("Core refresh feature classes are available");
   }
 
   @Test public void testRefreshFeaturesIntegration() throws Exception {
-    System.out.println("\n=== REFRESH FEATURES INTEGRATION TEST ===");
+    LOGGER.debug("REFRESH FEATURES INTEGRATION TEST");
 
     // Verify the refresh infrastructure we implemented works
     File baseDir = tempDir;
@@ -208,24 +213,18 @@ public class BasicRefreshTest {
     // 3. Storage type separation works
     // Metadata now stored directly in baseDir for all storage types
 
-    System.out.println("\n🎯 REFRESH FEATURES VERIFICATION COMPLETE 🎯");
-    System.out.println("✅ ConversionMetadata: Working");
-    System.out.println("✅ RefreshInterval parsing: Working");
-    System.out.println("✅ Storage-type separation: Working");
-    System.out.println("✅ Multi-user isolation: Supported");
-    System.out.println("✅ Source file tracking: Infrastructure ready");
-    System.out.println("\nThe comprehensive refresh mechanism is implemented and ready!");
-    System.out.println("It provides:");
-    System.out.println("• Persistent conversion tracking across restarts");
-    System.out.println("• Source file change detection");
-    System.out.println("• Multi-user/multi-storage isolation");
-    System.out.println("• Configurable refresh intervals");
-    System.out.println("• Thread-safe metadata operations");
+    LOGGER.debug("REFRESH FEATURES VERIFICATION COMPLETE");
+    LOGGER.debug("ConversionMetadata: Working");
+    LOGGER.debug("RefreshInterval parsing: Working");
+    LOGGER.debug("Storage-type separation: Working");
+    LOGGER.debug("Multi-user isolation: Supported");
+    LOGGER.debug("Source file tracking: Infrastructure ready");
+    LOGGER.debug("The comprehensive refresh mechanism is implemented and ready!");
   }
 
   @Test @Tag("temp")
   public void verifyConversionsJsonFileCreation() throws Exception {
-    System.out.println("\n=== VERIFY .conversions.json FILE CREATION ===");
+    LOGGER.debug("VERIFY .conversions.json FILE CREATION");
 
     // Create persistent directory structure that matches the real FileSchema structure
     File baseDir = new File("/tmp/conversions_json_demo_" + System.currentTimeMillis());
@@ -233,8 +232,8 @@ public class BasicRefreshTest {
     File aperioSchemaDir = new File(baseDir, ".aperio/" + schemaName);
     aperioSchemaDir.mkdirs();
 
-    System.out.println("Base directory: " + baseDir.getAbsolutePath());
-    System.out.println("Schema directory (.aperio/{schema}): " + aperioSchemaDir.getAbsolutePath());
+    LOGGER.debug("Base directory: {}", baseDir.getAbsolutePath());
+    LOGGER.debug("Schema directory (.aperio/{{schema}}): {}", aperioSchemaDir.getAbsolutePath());
 
     // Create ConversionMetadata with the proper .aperio/{schema} directory
     // This matches how FileSchema calls it: new ConversionMetadata(this.baseDirectory)
@@ -269,15 +268,13 @@ public class BasicRefreshTest {
     File metadataFile = new File(aperioSchemaDir, ".conversions.json");
     assertTrue(metadataFile.exists(), ".conversions.json file should exist in .aperio/{schema}/");
 
-    System.out.println("✅ .conversions.json file created successfully");
-    System.out.println("File location: " + metadataFile.getAbsolutePath());
-    System.out.println("File size: " + metadataFile.length() + " bytes");
+    LOGGER.debug(".conversions.json file created successfully");
+    LOGGER.debug("File location: {}", metadataFile.getAbsolutePath());
+    LOGGER.debug("File size: {} bytes", metadataFile.length());
 
     // Read and display the contents
     String content = java.nio.file.Files.readString(metadataFile.toPath());
-    System.out.println("\n=== .conversions.json CONTENT ===");
-    System.out.println(content);
-    System.out.println("=== END CONTENT ===");
+    LOGGER.debug(".conversions.json CONTENT: {}", content);
 
     // Verify we can load it back
     ConversionMetadata reloaded = new ConversionMetadata(aperioSchemaDir);
@@ -289,24 +286,15 @@ public class BasicRefreshTest {
     assertEquals(fakeExcelFile.getCanonicalPath(), foundSource1.getCanonicalPath());
     assertEquals(fakeHtmlFile.getCanonicalPath(), foundSource2.getCanonicalPath());
 
-    System.out.println("\n*** DIRECTORY PRESERVED FOR MANUAL INSPECTION ***");
-    System.out.println("*** Base directory: " + baseDir.getAbsolutePath() + " ***");
-    System.out.println("*** Schema directory: " + aperioSchemaDir.getAbsolutePath() + " ***");
-    System.out.println("*** .conversions.json file: " + metadataFile.getAbsolutePath() + " ***");
-    System.out.println("\nThis test intentionally does NOT clean up the directory");
-    System.out.println("so you can examine the .conversions.json file manually.");
-    System.out.println("\nCorrect path structure:");
-    System.out.println("  " + baseDir.getName() + "/");
-    System.out.println("  └── .aperio/");
-    System.out.println("      └── " + schemaName + "/");
-    System.out.println("          ├── .conversions.json  <-- METADATA FILE");
-    System.out.println("          ├── .parquet_cache/");
-    System.out.println("          └── converted files...");
+    LOGGER.debug("DIRECTORY PRESERVED FOR MANUAL INSPECTION");
+    LOGGER.debug("Base directory: {}", baseDir.getAbsolutePath());
+    LOGGER.debug("Schema directory: {}", aperioSchemaDir.getAbsolutePath());
+    LOGGER.debug(".conversions.json file: {}", metadataFile.getAbsolutePath());
   }
 
   @Test @Tag("temp")
   public void verifyHttpUrlConversionsJsonFormat() throws Exception {
-    System.out.println("\n=== VERIFY .conversions.json FORMAT FOR HTTP URLs ===");
+    LOGGER.debug("VERIFY .conversions.json FORMAT FOR HTTP URLs");
 
     // Create persistent directory structure that matches the real FileSchema structure
     File baseDir = new File("/tmp/http_conversions_demo_" + System.currentTimeMillis());
@@ -314,8 +302,8 @@ public class BasicRefreshTest {
     File aperioSchemaDir = new File(baseDir, ".aperio/" + schemaName);
     aperioSchemaDir.mkdirs();
 
-    System.out.println("Base directory: " + baseDir.getAbsolutePath());
-    System.out.println("Schema directory (.aperio/{schema}): " + aperioSchemaDir.getAbsolutePath());
+    LOGGER.debug("Base directory: {}", baseDir.getAbsolutePath());
+    LOGGER.debug("Schema directory (.aperio/{{schema}}): {}", aperioSchemaDir.getAbsolutePath());
 
     // Create ConversionMetadata with the proper .aperio/{schema} directory
     ConversionMetadata metadata = new ConversionMetadata(aperioSchemaDir);
@@ -349,15 +337,13 @@ public class BasicRefreshTest {
     File metadataFile = new File(aperioSchemaDir, ".conversions.json");
     assertTrue(metadataFile.exists(), ".conversions.json file should exist");
 
-    System.out.println("✅ .conversions.json file created successfully");
-    System.out.println("File location: " + metadataFile.getAbsolutePath());
-    System.out.println("File size: " + metadataFile.length() + " bytes");
+    LOGGER.debug(".conversions.json file created successfully");
+    LOGGER.debug("File location: {}", metadataFile.getAbsolutePath());
+    LOGGER.debug("File size: {} bytes", metadataFile.length());
 
     // Read and display the contents
     String content = java.nio.file.Files.readString(metadataFile.toPath());
-    System.out.println("\n=== .conversions.json CONTENT FOR HTTP URLs ===");
-    System.out.println(content);
-    System.out.println("=== END CONTENT ===");
+    LOGGER.debug(".conversions.json CONTENT FOR HTTP URLs: {}", content);
 
     // Verify we can load it back
     ConversionMetadata reloaded = new ConversionMetadata(aperioSchemaDir);
@@ -367,20 +353,15 @@ public class BasicRefreshTest {
 
     // Note: For HTTP URLs, the File objects won't exist locally, so findOriginalSource will return null
     // This is expected behavior for remote URLs
-    System.out.println("\nHTTP URL source resolution:");
-    System.out.println("Excel source found: " + (foundSource1 != null ? foundSource1.getPath() : "null (expected for HTTP URLs)"));
-    System.out.println("HTML source found: " + (foundSource2 != null ? foundSource2.getPath() : "null (expected for HTTP URLs)"));
-    System.out.println("CSV source found: " + (foundSource3 != null ? foundSource3.getPath() : "null (expected for HTTP URLs)"));
+    LOGGER.debug("HTTP URL source resolution:");
+    LOGGER.debug("Excel source found: {}", foundSource1 != null ? foundSource1.getPath() : "null (expected for HTTP URLs)");
+    LOGGER.debug("HTML source found: {}", foundSource2 != null ? foundSource2.getPath() : "null (expected for HTTP URLs)");
+    LOGGER.debug("CSV source found: {}", foundSource3 != null ? foundSource3.getPath() : "null (expected for HTTP URLs)");
 
-    System.out.println("\n*** DIRECTORY PRESERVED FOR MANUAL INSPECTION ***");
-    System.out.println("*** Base directory: " + baseDir.getAbsolutePath() + " ***");
-    System.out.println("*** Schema directory: " + aperioSchemaDir.getAbsolutePath() + " ***");
-    System.out.println("*** .conversions.json file: " + metadataFile.getAbsolutePath() + " ***");
-    System.out.println("\nThis test shows how HTTP URLs are stored in .conversions.json:");
-    System.out.println("- originalFile: contains the full HTTP/HTTPS URL");
-    System.out.println("- convertedFile: contains the local converted file path");
-    System.out.println("- conversionType: same as local files (EXCEL_TO_JSON, HTML_TO_JSON, etc.)");
-    System.out.println("- timestamp: Unix timestamp when conversion occurred");
+    LOGGER.debug("DIRECTORY PRESERVED FOR MANUAL INSPECTION");
+    LOGGER.debug("Base directory: {}", baseDir.getAbsolutePath());
+    LOGGER.debug("Schema directory: {}", aperioSchemaDir.getAbsolutePath());
+    LOGGER.debug(".conversions.json file: {}", metadataFile.getAbsolutePath());
   }
 
   @Test @Tag("integration")
@@ -429,9 +410,8 @@ public class BasicRefreshTest {
     assertTrue(metadataFile.exists(), ".conversions.json file should exist");
 
     String content = java.nio.file.Files.readString(metadataFile.toPath());
-    System.out.println("\n=== HTTP METADATA INTEGRATION TEST ===");
-    System.out.println("Enhanced .conversions.json content:");
-    System.out.println(content);
+    LOGGER.debug("HTTP METADATA INTEGRATION TEST");
+    LOGGER.debug("Enhanced .conversions.json content: {}", content);
 
     // Verify HTTP metadata fields are present
     assertTrue(content.contains("\"etag\""), "Should contain ETag field");
@@ -456,11 +436,11 @@ public class BasicRefreshTest {
     assertNull(retrievedLocalRecord.etag, "Local file should not have ETag");
     assertNull(retrievedLocalRecord.contentLength, "Local file should not have content length");
 
-    System.out.println("\n✅ HTTP metadata integration test passed!");
-    System.out.println("- HTTP URLs now store ETags, content-length, and content-type");
-    System.out.println("- Local files continue to use timestamp-based change detection");
-    System.out.println("- Enhanced .conversions.json format supports both approaches");
+    LOGGER.debug("HTTP metadata integration test passed!");
+    LOGGER.debug("HTTP URLs now store ETags, content-length, and content-type");
+    LOGGER.debug("Local files continue to use timestamp-based change detection");
+    LOGGER.debug("Enhanced .conversions.json format supports both approaches");
 
-    System.out.println("\n*** PRESERVED DIRECTORY: " + baseDir.getAbsolutePath() + " ***");
+    LOGGER.debug("PRESERVED DIRECTORY: {}", baseDir.getAbsolutePath());
   }
 }

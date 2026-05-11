@@ -613,6 +613,69 @@ File Transfer Protocol support for legacy systems and secure file transfer.
 }
 ```
 
+## HDFS
+
+Reads from Hadoop Distributed File System. Uses standard Hadoop client configuration — no adapter-specific credential setup required.
+
+### Auto-Detection
+
+Any `directory` starting with `hdfs://` is automatically routed to the HDFS provider:
+
+```json
+{
+  "operand": {
+    "directory": "hdfs://namenode-host:9000/data/warehouse"
+  }
+}
+```
+
+No `storageType` field is needed. The adapter detects the prefix and selects HDFS automatically.
+
+### Explicit Configuration
+
+```json
+{
+  "operand": {
+    "storageType": "hdfs",
+    "directory": "hdfs://namenode-host:9000/data/warehouse"
+  }
+}
+```
+
+### Hadoop Configuration
+
+The HDFS provider loads Hadoop configuration from the classpath in the standard way — `core-site.xml` and `hdfs-site.xml` are picked up automatically if present on the classpath. No `storageConfig` block is needed for typical cluster setups.
+
+For HA clusters or non-standard namenode addresses, supply the standard Hadoop config files — there is no adapter-level override for namenode host/port beyond what is declared in `fs.defaultFS` in `core-site.xml`.
+
+### Authentication
+
+Authentication follows the Hadoop security model:
+
+| Mode | How it works |
+|------|-------------|
+| **Simple** (default) | Uses the OS user running the JVM |
+| **Kerberos** | Detected automatically when `hadoop.security.authentication=kerberos` is set in `core-site.xml`; uses the current Kerberos ticket cache |
+
+No adapter-level auth config is needed — configure Kerberos through standard `core-site.xml` and `krb5.conf` as you would for any Hadoop client.
+
+### Example — Air-Gapped Cluster
+
+```json
+{
+  "name": "warehouse",
+  "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+  "operand": {
+    "directory": "hdfs://namenode:9000/user/hive/warehouse",
+    "executionEngine": "DUCKDB"
+  }
+}
+```
+
+Hadoop config (`core-site.xml`, `hdfs-site.xml`) must be on the JVM classpath. The adapter discovers all files under the specified path recursively, the same as for local and S3 directories.
+
+---
+
 ## Multi-Provider Configuration
 
 Configure multiple storage providers for different data sources.

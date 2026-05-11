@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
 
@@ -102,7 +101,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private MaterializeConfig config;
   private Map<String, Object> catalogConfig;
-  private Configuration hadoopConfiguration;
   private Table table;
   private IcebergTableWriter tableWriter;
   private long totalRowsWritten;
@@ -133,13 +131,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** Flush threshold per partition (rows). Configurable via ETL_FLUSH_THRESHOLD env var. */
   private static final int DEFAULT_FLUSH_THRESHOLD = getEnvInt("ETL_FLUSH_THRESHOLD", 50000);
   /** Max total buffered rows across all partitions. Configurable via ETL_MAX_BUFFERED_ROWS. */
-  private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 500000);
+  private static final int DEFAULT_MAX_BUFFERED_ROWS = getEnvInt("ETL_MAX_BUFFERED_ROWS", 200000);
   /** Intermediate commit threshold: commit pending data files when count exceeds this.
    *  Configurable via ETL_COMMIT_THRESHOLD. Default 1000 files (~50M rows at 50k/file). */
   private static final int COMMIT_FILE_THRESHOLD = getEnvInt("ETL_COMMIT_THRESHOLD", 1000);
   private int flushThreshold = DEFAULT_FLUSH_THRESHOLD;
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
   private long totalCommittedFiles = 0;
+  /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
+  private java.util.Set<String> icebergPartitionColumns = java.util.Collections.emptySet();
+  private boolean overwritePartitions = false;
 
   /**
    * Represents a staged batch ready for commit.
@@ -191,6 +192,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (icebergConfig != null) {
       this.maxRetries = icebergConfig.getMaxRetries();
       this.retryDelayMs = icebergConfig.getRetryDelayMs();
+      this.overwritePartitions = icebergConfig.isOverwritePartitions();
     }
 
     // Apply options config (batch size, staging mode)
@@ -205,11 +207,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     LOGGER.info("Using batchSize={}, stagingMode={}, flushThreshold={}, maxBufferedRows={}",
         batchSize, stagingMode, flushThreshold, maxBufferedRows);
 
+    // Extract Iceberg partition columns for buffer key construction
+    MaterializePartitionConfig partConfig = config.getPartition();
+    if (partConfig != null && partConfig.getColumns() != null && !partConfig.getColumns().isEmpty()) {
+      this.icebergPartitionColumns = new java.util.HashSet<String>(partConfig.getColumns());
+      LOGGER.info("Iceberg partition columns for buffer key: {}", icebergPartitionColumns);
+    }
+
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
-
-    // Build Hadoop configuration from catalog config (includes S3 credentials)
-    this.hadoopConfiguration = buildHadoopConfiguration();
 
     // Get target table identifier
     String targetTableId = config.getTargetTableId();
@@ -222,7 +228,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Ensure table exists
     this.table = ensureTableExists(targetTableId);
-    this.tableWriter = new IcebergTableWriter(table, storageProvider, hadoopConfiguration);
+    this.tableWriter = new IcebergTableWriter(table, storageProvider);
 
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
         targetTableId, warehousePath);
@@ -325,29 +331,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     return hadoopConfig;
-  }
-
-  /**
-   * Builds Hadoop Configuration from catalogConfig.
-   *
-   * <p>Extracts the hadoopConfig map from catalogConfig and creates
-   * a Configuration object with S3 credentials for file access.
-   */
-  @SuppressWarnings("unchecked")
-  private Configuration buildHadoopConfiguration() {
-    Configuration conf = new Configuration();
-
-    // Extract hadoopConfig from catalogConfig
-    Object hadoopConfigObj = catalogConfig.get("hadoopConfig");
-    if (hadoopConfigObj instanceof Map) {
-      Map<String, String> hadoopConfigMap = (Map<String, String>) hadoopConfigObj;
-      for (Map.Entry<String, String> entry : hadoopConfigMap.entrySet()) {
-        conf.set(entry.getKey(), entry.getValue());
-      }
-      LOGGER.debug("Built Hadoop configuration with {} properties", hadoopConfigMap.size());
-    }
-
-    return conf;
   }
 
   /**
@@ -475,10 +458,21 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         }
       }
 
-      if (!missingDataColumns.isEmpty()) {
-        LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
-            + "Dropping and recreating table.",
-            targetTableId, missingDataColumns.size(), missingDataColumns);
+      // Also detect extra columns (schema drift) — existing table has more columns than expected
+      // Use expectedColumns.size() which is the merged set (data columns + synthetic partition
+      // columns not already in source data), avoiding double-counting shared columns like state_abbr
+      boolean hasExtraColumns = existingColumnNames.size() != expectedColumns.size();
+
+      if (!missingDataColumns.isEmpty() || hasExtraColumns) {
+        if (!missingDataColumns.isEmpty()) {
+          LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
+              + "Dropping and recreating table.",
+              targetTableId, missingDataColumns.size(), missingDataColumns);
+        } else {
+          LOGGER.warn("Existing Iceberg table '{}' has schema drift "
+              + "(existing={} columns, expected={}). Dropping and recreating table.",
+              targetTableId, existingColumnNames.size(), expectedColumns.size());
+        }
         IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
       } else {
         LOGGER.debug("Loading existing Iceberg table: {} (schema OK)", targetTableId);
@@ -684,7 +678,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (buffer == null) {
       buffer = new ArrayList<Map<String, Object>>();
       partitionBuffers.put(partitionKey, buffer);
-      partitionVarsMap.put(partitionKey, partitionVariables);
+      // Store only Iceberg partition columns for writeRecords —
+      // non-partition dimensions are already embedded in the transformed rows
+      if (!icebergPartitionColumns.isEmpty()) {
+        Map<String, String> icebergVars = new HashMap<String, String>();
+        for (Map.Entry<String, String> e : partitionVariables.entrySet()) {
+          if (icebergPartitionColumns.contains(e.getKey())) {
+            icebergVars.put(e.getKey(), e.getValue());
+          }
+        }
+        partitionVarsMap.put(partitionKey, icebergVars);
+      } else {
+        partitionVarsMap.put(partitionKey, partitionVariables);
+      }
     }
     buffer.addAll(transformedRows);
     bufferedRowCount += transformedRows.size();
@@ -702,13 +708,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Builds a canonical partition key string from partition variables.
-   * Uses sorted key=value pairs so the same partition always produces the same key.
+   * Uses only the Iceberg partition columns (not all dimension variables) so that
+   * rows from different non-partition dimensions accumulate in the same buffer,
+   * producing fewer, larger parquet files.
    */
   private String buildPartitionKey(Map<String, String> partitionVariables) {
     if (partitionVariables == null || partitionVariables.isEmpty()) {
       return "";
     }
-    TreeMap<String, String> sorted = new TreeMap<String, String>(partitionVariables);
+    TreeMap<String, String> sorted = new TreeMap<String, String>();
+    for (Map.Entry<String, String> entry : partitionVariables.entrySet()) {
+      // If icebergPartitionColumns is configured, only include those in the key
+      if (icebergPartitionColumns.isEmpty()
+          || icebergPartitionColumns.contains(entry.getKey())) {
+        sorted.put(entry.getKey(), entry.getValue());
+      }
+    }
     StringBuilder sb = new StringBuilder();
     for (Map.Entry<String, String> entry : sorted.entrySet()) {
       if (sb.length() > 0) {
@@ -779,6 +794,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private void commitInChunks(List<org.apache.iceberg.DataFile> files) throws IOException {
     int total = files.size();
+    if (overwritePartitions) {
+      long commitStart = System.currentTimeMillis();
+      tableWriter.replacePartitionsDataFiles(files);
+      totalCommittedFiles += total;
+      long elapsed = System.currentTimeMillis() - commitStart;
+      LOGGER.info("Replace-partitions committed {} files in {}ms ({} total committed)",
+          total, elapsed, totalCommittedFiles);
+      return;
+    }
     int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
     for (int i = 0; i < total; i += chunkSize) {
       int end = Math.min(i + chunkSize, total);
@@ -1764,6 +1788,38 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     LOGGER.info("Iceberg commit complete: {} rows in {} batches",
         totalRowsWritten, totalFilesWritten);
   }
+
+  /**
+   * Self-heals the tracker for a partition by detecting parquet files that exist on storage
+   * but are not registered in the Iceberg catalog. If found, commits them to the catalog so
+   * the tracker can be marked complete without re-fetching from source.
+   *
+   * <p>Processing results are immutable — the same source inputs always produce the same
+   * output — so existing staged files are always safe to re-register.
+   *
+   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
+   * @return estimated row count of re-registered files, or 0 if no orphaned files were found
+   */
+  public long selfHealPartition(Map<String, String> partitionVariables) throws IOException {
+    if (!initialized) {
+      return 0;
+    }
+    List<org.apache.iceberg.DataFile> orphaned = tableWriter.findOrphanedDataFiles(partitionVariables);
+    if (orphaned.isEmpty()) {
+      return 0;
+    }
+    LOGGER.info("Self-heal: found {} orphaned data files for partition {} — re-registering in catalog",
+        orphaned.size(), partitionVariables);
+    tableWriter.bulkCommitDataFiles(orphaned);
+    long estimated = 0;
+    for (org.apache.iceberg.DataFile f : orphaned) {
+      estimated += f.recordCount();
+    }
+    LOGGER.info("Self-heal complete for partition {}: {} files re-registered (~{} rows)",
+        partitionVariables, orphaned.size(), estimated);
+    return estimated;
+  }
+
 
   @Override public long getTotalRowsWritten() {
     return totalRowsWritten;

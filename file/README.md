@@ -1,707 +1,295 @@
 # Apache Calcite File Adapter
 
-The File Adapter is a high-performance data adapter that enables Apache Calcite to query files in multiple formats as SQL tables. It provides automatic schema discovery, advanced optimization features, and support for various storage systems.
+> **Point to files. Query in minutes. Scale when you're ready.**
 
-## Features
+A zero-infrastructure data lake that runs on a desktop and grows to a distributed cluster — same SQL, same JDBC connection, same config — no DBOps required.
 
-### Supported File Formats
-- **CSV/TSV** with automatic type inference
-- **JSON** with multi-table extraction and JSONPath support
-- **YAML** structured data files
-- **Parquet** columnar storage format
-- **Apache Arrow** in-memory columnar format
-- **Excel** (.xlsx, .xls) with multi-sheet support
-- **Word** (.docx) table extraction
-- **PowerPoint** (.pptx) slide table extraction
-- **HTML** table extraction with web crawling
-- **Markdown** table extraction
-- **XML** with XPath-based table extraction
-- **Apache Iceberg** table format
+Built on [Apache Calcite](https://calcite.apache.org) — the proven SQL foundation underneath Apache Drill, Dremio, Apache Flink, Apache Hive, and others.
 
-### Storage Systems
+**License**: [Business Source License 1.1](LICENSE-BSL.txt). This adapter is an original work in the fork — not derived from Apache Calcite source — and is licensed under BSL 1.1. Free for teams with annual revenue under $1M; commercial license required above that threshold. The Calcite core (SQL planner, optimizer, algebraic framework) that this adapter builds on remains under the [Apache License 2.0](../LICENSE).
 
-Storage providers can be configured at two levels:
+---
 
-**Schema-level** (all files use same provider):
-- **Amazon S3** - List and access all files in S3 bucket
-- **HDFS** - Direct access to Hadoop Distributed File System clusters
-- **HTTP/HTTPS** - Access files from web servers
-- **SharePoint** - Browse SharePoint document libraries
+## What It Does
 
-**Table-level** (auto-detected from URL):
-- `s3://bucket/file.csv` → S3 storage
-- `hdfs://namenode:9000/data/file.parquet` → HDFS storage
-- `https://api.com/data.json` → HTTP storage
-- `/local/path/file.parquet` → Local storage
+Point it at a directory, an S3 bucket, an HTTP API, or a set of documents. It discovers the data, infers schemas, and makes everything queryable as SQL tables through a standard JDBC connection. Results materialize into an Iceberg data lake on S3 (or local storage) — with a declared relational model, materialized views, computed columns, and semantic search built in.
 
-Mix storage types by using explicit table URLs or multiple schemas.
+**Small teams without DBOps** — DuckDB runs embedded in the JVM. Nothing to install, no cloud account, no services to start. Point at files you already have and query in minutes on a desktop.
 
-### Performance Features
-- **Multiple Execution Engines** - Choose the best engine for your workload:
-  - **Parquet**: Large datasets with automatic disk spillover
-  - **Arrow/Vectorized**: In-memory analytics with SIMD vectorization
-  - **DuckDB**: Embedded SQL analytics engine
-  - **Trino/Spark/ClickHouse**: Distributed SQL via JDBC
-- **Cross-Schema Materialized Views** - Join data across different engines and storage systems
-- **Automatic Parquet Conversion** - Convert all formats to optimized columnar storage
-- **HyperLogLog Statistics** - Advanced cardinality estimation for query optimization
-- **Query Optimization** - Column pruning, filter pushdown, join reordering
-- **Large Dataset Support** - Automatic disk spillover for data processing (Parquet engine) supporting datasets of several hundred GB, though metadata must fit in memory
+**Teams that grow** — Swap the execution engine (DuckDB → Trino, ClickHouse, or Spark) in a single config line. Schema, SQL, and JDBC connection are identical across engines. No migration, no rewrite.
 
-#### What File Adapter Adds
+**Air-gapped or regulated environments** — No cloud dependency required. Runs fully on-prem with local or network-mounted storage. Data never leaves your perimeter.
 
-**Zero-Config Table Discovery**: Point at a directory, get queryable tables.
-```
-data/
-├── sales.csv          → SELECT * FROM sales
-├── customers.json     → SELECT * FROM customers
-├── products.parquet   → SELECT * FROM products
-└── reports/*.xlsx     → SELECT * FROM reports (combined)
-```
+---
 
-**Persistent Optimization Layer**: Statistics that survive restarts.
-- HyperLogLog sketches for instant COUNT(DISTINCT)
-- Partition pruning before the query engine sees the query
-- Join ordering from persistent cardinality stats
+## Two Ingestion Paths
 
-**Declarative Materialization**: Define views in config, optimizer uses them automatically.
+### Tabular Mode — the source defines the schema
+
+Point at data, get tables. Schema is discovered automatically from the source. No transformer code required.
+
+**What you can point at:**
+
+| Transport | Examples |
+|-----------|---------|
+| Local filesystem | `/data/reports/`, `/mnt/nas/feeds/` |
+| S3 / R2 / MinIO | `s3://my-bucket/data/` |
+| HTTP / HTTPS | REST APIs, file servers, data feeds |
+| FTP / SFTP | Legacy data feeds |
+| SharePoint | Document libraries |
+
+**Formats with intrinsic tabular structure** (schema comes directly from the file):
+CSV, TSV, JSON, YAML, Parquet, Apache Arrow, Apache Iceberg
+
+**Formats with embedded tabular data** (adapter extracts tables automatically):
+Excel (each sheet → table), Word (tables → tables), PowerPoint (slide tables → tables),
+HTML (each `<table>` → table), Markdown (GFM tables), XML (XPath extraction)
+
+**Crawlers**: Point at a directory or S3 prefix — the adapter discovers all files recursively and creates tables from everything it finds. No enumeration required.
+
+**API to lake**: Point at a complex HTTP API with multiple query endpoints. Configure pagination, authentication, parameters, and dimension expansion in JSON. Each endpoint becomes a table. No code.
+
 ```json
-"materializedViews": [{
-  "name": "monthly_summary",
-  "sql": "SELECT month, SUM(amount) as total FROM sales GROUP BY month"
-}]
+{
+  "name": "weather_stations",
+  "url": "https://api.example.com/stations",
+  "storageType": "http",
+  "storageConfig": {
+    "auth": "bearer",
+    "token": "${API_TOKEN}"
+  }
+}
 ```
-Query `SELECT * FROM sales WHERE month = '2024-01'` automatically rewrites to use the materialized view when beneficial.
 
-**Pluggable Engines**: Same SQL, different execution - DuckDB, Trino, Spark, or ClickHouse.
+For multi-endpoint APIs that produce multiple tables, configure each endpoint as a table in the schema. The adapter handles pagination, retries, and Iceberg materialization automatically.
 
-### Data Discovery
-- **Automatic Schema Discovery** - Zero-configuration table creation
-- **Recursive Directory Scanning** - Hierarchical data lake support
-- **Glob Pattern Matching** - Tables can use glob patterns (e.g., `sales/*.csv`) to combine multiple files into a single table
-- **Partitioned Tables** - Automatic partition detection and pruning
-- **Multi-Table Extraction** - Extract multiple tables from single files (JSON, Excel, XML, HTML, Markdown, Word, PowerPoint)
+---
+
+### Document ETL Mode — the schema pre-exists, sources populate it
+
+For complex sources where a single canonical schema should be populated from many documents or API responses. The target schema is defined in advance; a `ResponseTransformer` normalizes each source into it.
+
+This is the path for:
+- APIs that return domain-specific response shapes requiring normalization
+- Large document corpora (SEC filings, regulatory documents) feeding a unified table
+- Any source where hundreds of differently-structured inputs must produce one canonical table
+
+```java
+public class MyTransformer implements ResponseTransformer {
+  @Override
+  public String transform(String response, RequestContext context) {
+    // Parse response, return JSON array matching your target schema
+  }
+}
+```
+
+Both paths write to the same Iceberg lake. The ingestion complexity is variable; the output is always the same queryable store.
+
+---
+
+## The Lake
+
+### Materialization Formats
+
+| Format | Recommendation |
+|--------|---------------|
+| **Apache Iceberg** | Recommended. Schema evolution, time travel (point-in-time queries), ACID. |
+| **Hive-partitioned Parquet** | Simpler. No schema evolution or time travel. |
+
+Storage backends: S3, R2, MinIO, or local/network file mounts. Fully air-gapped deployments use file mounts — no cloud account, no external network calls.
+
+### Relational Model
+
+Declare primary keys and foreign keys on any table. Constraints are unenforced (metadata-only) but serve three purposes:
+
+1. **Query optimization** — Calcite's planner uses uniqueness and FK relationships for join elimination and reordering
+2. **BI tool integration** — tools like Tableau, Power BI, and Metabase read FK metadata to auto-suggest joins
+3. **Schema documentation** — the relational model is explicit, not inferred at query time
+
+```json
+{
+  "name": "orders",
+  "primaryKey": ["order_id"],
+  "foreignKeys": [{
+    "columns": ["customer_id"],
+    "targetTable": "customers",
+    "targetColumns": ["id"]
+  }]
+}
+```
+
+### Views
+
+**Transient views** — defined in config, computed at query time from live source data:
+```json
+{
+  "views": [{
+    "name": "recent_orders",
+    "sql": "SELECT * FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '30' DAY"
+  }]
+}
+```
+
+**Materialized views** — pre-computed and stored in Iceberg. Query hits the lake, not the source:
+```json
+{
+  "materializations": [{
+    "view": "monthly_summary",
+    "table": "monthly_summary_cache",
+    "sql": "SELECT YEAR(order_date) as year, MONTH(order_date) as month, SUM(total) as revenue FROM orders GROUP BY 1, 2"
+  }]
+}
+```
+
+### Computed Columns and Semantic Search
+
+Columns can be computed at ingestion time — derived metrics, normalized text, hash keys, and text embeddings. Embeddings are stored as vector columns alongside the source data.
+
+With the DuckDB engine and the VSS extension, similarity queries use HNSW indexes for fast approximate nearest-neighbor search:
+
+```sql
+-- Find records semantically similar to a query
+SELECT id, title, COSINE_SIMILARITY(embedding, query_embedding) as score
+FROM documents
+WHERE VECTORS_SIMILAR(embedding, query_embedding, 0.8)
+ORDER BY score DESC
+LIMIT 10;
+```
+
+Semantic search is a first-class feature of the lake — not a bolt-on vector pipeline.
+
+---
+
+## The Query Layer
+
+All data is accessible through a standard Calcite JDBC connection. SQL dialect is Postgres-like. Works with any JDBC-compatible BI tool (Tableau, Power BI, Metabase, DBeaver, etc.).
+
+### Execution Engines
+
+The execution engine is a deployment decision, not an architectural one. Swap it as your needs grow — schema, SQL, and JDBC connection stay the same.
+
+| Engine | When to use |
+|--------|-------------|
+| **DuckDB** (recommended) | Start here. Embedded, zero infrastructure, handles up to ~100GB well. |
+| **Trino** | Production scale, distributed queries, federated sources. |
+| **ClickHouse** | Sub-second aggregations on billions of rows, high query concurrency. |
+| **Spark** | Existing Spark infrastructure, batch-oriented workloads. |
+| **Arrow** | In-memory SIMD processing for hot datasets. |
+| **Parquet** | Large datasets with automatic disk spillover. |
+
+Configure per schema — different schemas in the same model can use different engines:
+
+```json
+{
+  "executionEngine": "${CALCITE_FILE_ENGINE_TYPE:DUCKDB}"
+}
+```
+
+---
 
 ## Quick Start
 
-### Basic Configuration
+### Minimal Setup — Query Files in 5 Minutes
 
-Create a model configuration file:
-
+**1. Create `model.json`:**
 ```json
 {
   "version": "1.0",
-  "defaultSchema": "files",
-  "schemas": [
-    {
-      "name": "files",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/path/to/data"
-      }
+  "defaultSchema": "data",
+  "schemas": [{
+    "name": "data",
+    "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+    "operand": {
+      "directory": "/path/to/your/data"
     }
-  ]
+  }]
 }
 ```
 
-### Configuration with Environment Variables
-
-Use environment variables for flexible deployment across environments:
-
-```json
-{
-  "version": "1.0",
-  "defaultSchema": "${SCHEMA_NAME:files}",
-  "schemas": [
-    {
-      "name": "${SCHEMA_NAME:files}",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "${DATA_DIR:/data}",
-        "executionEngine": "${ENGINE_TYPE:PARQUET}",
-        "ephemeralCache": "${USE_TEMP_CACHE:false}",
-        "storageType": "${STORAGE_TYPE:local}",
-        "storageConfig": {
-          "bucketName": "${S3_BUCKET}",
-          "region": "${AWS_REGION:us-east-1}"
-        }
-      }
-    }
-  ]
-}
-```
-
-Then set environment variables:
+**2. Connect and query:**
 ```bash
-export DATA_DIR=/production/data
-export ENGINE_TYPE=DUCKDB
-export STORAGE_TYPE=s3
-export S3_BUCKET=my-data-bucket
-export AWS_REGION=us-west-2
-
-./sqlline -m model.json
+./sqlline "jdbc:calcite:model=model.json"
 ```
-
-### Connect and Query
-
-```bash
-# Start Calcite with the File Adapter (DuckDB engine)
-./sqlline "jdbc:calcite:model=model.json;executionEngine=duckdb"
-
-# Or with different engines:
-./sqlline "jdbc:calcite:model=model.json;executionEngine=parquet"
-./sqlline "jdbc:calcite:model=model.json;executionEngine=arrow"
-
-# Query discovered tables
-SELECT * FROM files.customers LIMIT 10;
-SELECT COUNT(*) FROM files.sales_data;
-```
-
-### Example Queries
-
 ```sql
--- Files in /path/to/data/:
---   sales_2024_q1.csv
---   customer_orders.json
---   financial_report.xlsx (with sheets: Summary, Details)
---   sales_data.parquet
---   customer_info.csv
-
--- Query CSV file (sales_2024_q1.csv → table: sales_2024_q1)
-SELECT customer_id, order_date, total_amount
-FROM files.sales_2024_q1
-WHERE order_date >= DATE '2024-01-01';
-
--- Query JSON with nested data (customer_orders.json → table: customer_orders)
-SELECT customer.name, address.city, order_total
-FROM files.customer_orders;
-
--- Query Excel sheets (financial_report.xlsx → tables: financial_report__summary, financial_report__details)
-SELECT * FROM files.financial_report__summary;
-SELECT * FROM files.financial_report__details;
-
--- Query across formats (sales_data.parquet, customer_info.csv)
-SELECT s.total_amount, c.customer_name
-FROM files.sales_data s
-JOIN files.customer_info c ON s.customer_id = c.id;
+-- Files in /path/to/your/data/ are immediately queryable
+SELECT * FROM data.sales LIMIT 10;
+SELECT COUNT(*) FROM data.customers;
+SELECT s.total, c.name FROM data.sales s JOIN data.customers c ON s.customer_id = c.id;
 ```
 
-## Configuration Reference
+That's it. CSV, JSON, Parquet, Excel, and other formats are auto-detected. Schema is inferred from the files.
 
-### Configuration Scope
-
-**Schema-level:** Each schema can have completely independent configurations:
-- Different execution engines (one schema uses Arrow, another uses Parquet)
-- Different storage providers (one schema on S3, another on local disk)
-- Different casing rules, statistics settings, etc.
-
-**Environment Variables:** Supported in all configuration values using `${VAR_NAME}` or `${VAR_NAME:default}` syntax:
-```json
-{
-  "directory": "${DATA_DIR:/data}",                    // With default value
-  "executionEngine": "${CALCITE_FILE_ENGINE_TYPE}",     // Required variable
-  "batchSize": "${BATCH_SIZE:1000}",                   // Numbers auto-converted
-  "ephemeralCache": "${USE_TEMP_CACHE:true}",          // Booleans auto-converted
-  "storageConfig": {
-    "accessKey": "${AWS_ACCESS_KEY}",
-    "secretKey": "${AWS_SECRET_KEY}"
-  }
-}
-```
-Variables are resolved from environment variables first, then system properties (for testing).
-
-**Global Settings:** Configured via Java system properties:
-- JVM memory settings (`-Xmx`, `-XX:MaxDirectMemorySize`)
-- Spillover base directory (`-Dcalcite.spillover.dir`)
-- Statistics cache directory (`-Dcalcite.file.statistics.cache.directory`)
-
-### Key Configuration Options
-
-**Common schema configuration properties:**
-- `directory` - Base directory path for file discovery
-- `directoryPattern` - Glob pattern to filter files within directory (e.g., `2024/*.csv`, `**/reports/*.json`)
-- `executionEngine` - Choose from `parquet`, `arrow`, `vectorized`, `duckdb`, `trino`, `spark`, `clickhouse`, `linq4j`
-- `storageType` - Storage provider: `local`, `s3`, `http`, `sharepoint`
-- `recursive` - Scan subdirectories (default: `true`, ignored if `directoryPattern` is set)
-- `tableNameCasing` - Transform table names: `SMART_CASING`, `UPPER`, `LOWER`, `UNCHANGED`
-
-**📚 For complete configuration options, see [Configuration Reference](docs/configuration-reference.md)**
-
-### Execution Engine Configuration
-
-Each schema can use a different execution engine optimized for its workload:
-- **Parquet** - Large datasets with disk spillover
-- **Arrow/Vectorized** - In-memory SIMD processing
-- **DuckDB** - Embedded analytical SQL
-- **Trino** - Distributed queries (requires cluster)
-- **Spark** - Spark SQL via Thrift Server
-- **ClickHouse** - Fast OLAP analytics
-- **LINQ4J** - Simple row-based processing
-
-**📚 For detailed configuration, see [Configuration Reference](docs/configuration-reference.md)**
-
-### Storage Provider Configuration
-
-The File Adapter supports multiple storage systems (Local, S3, HTTP/HTTPS, SharePoint, FTP/SFTP) with automatic detection or explicit configuration.
-
-**Quick Examples:**
-```json
-{
-  "storageType": "s3",           // Use S3 for all files in schema
-  "storageConfig": {
-    "bucket": "my-data-bucket",
-    "region": "us-east-1"
-  }
-```
-
-Or use URL-based auto-detection:
-- `s3://bucket/file.parquet` → S3 Storage
-- `hdfs://namenode:9000/data/file.parquet` → HDFS Storage
-- `https://api.com/data.json` → HTTP Storage
-- `/local/path/file.csv` → Local Storage
-
-**HDFS Configuration Example:**
-```json
-{
-  "storageType": "hdfs",
-  "storageConfig": {
-    "hadoopConfig": {
-      "fs.defaultFS": "hdfs://namenode:9000",
-      "dfs.client.use.datanode.hostname": "true"
-    }
-  }
-}
-```
-
-**📚 For complete configuration details, see [Storage Providers Documentation](docs/storage-providers.md)**
-
-## Advanced Features
-
-### Multi-Engine Optimization Pattern
-
-**Optimize different workloads with multiple execution engines in a single connection:**
-
-```json
-{
-  "schemas": [
-    {
-      "name": "hot_data",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/data/hot",
-        "executionEngine": "arrow",  // In-memory for frequently accessed data
-        "batchSize": 10000
-      }
-    },
-    {
-      "name": "warehouse",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "s3://data-lake/warehouse",
-        "executionEngine": "parquet",  // Spillover for massive datasets
-        "storageType": "s3",
-        "memoryThreshold": 268435456  // 256MB before spillover
-      }
-    },
-    {
-      "name": "data_lake",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "hdfs://namenode:9000/enterprise-data",
-        "executionEngine": "duckdb",  // Enterprise HDFS cluster with complex queries
-        "storageType": "hdfs",
-        "storageConfig": {
-          "hadoopConfig": {
-            "fs.defaultFS": "hdfs://namenode:9000",
-            "dfs.replication": "3"
-          }
-        }
-      }
-    },
-    {
-      "name": "analytics",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/data/analytics",
-        "executionEngine": "duckdb",  // Complex analytical queries
-        "duckdbConfig": {
-          "memory_limit": "8GB",
-          "threads": 16
-        }
-      }
-    }
-  ]
-}
-```
-
-**Query across different engines seamlessly:**
-```sql
--- Join hot in-memory data with warehouse data
-SELECT h.user_id, h.session_id, w.purchase_total
-FROM hot_data.active_sessions h
-JOIN warehouse.purchases w ON h.user_id = w.user_id
-WHERE h.last_activity > CURRENT_TIMESTAMP - INTERVAL '1' HOUR;
-
--- Query combining multiple engines including HDFS data lake
-SELECT
-  a.product_category,
-  COUNT(DISTINCT h.user_id) as active_users,
-  SUM(w.revenue) as total_revenue,
-  AVG(dl.customer_lifetime_value) as avg_clv
-FROM analytics.product_metrics a
-JOIN hot_data.user_activity h ON a.product_id = h.product_id
-JOIN warehouse.sales w ON a.product_id = w.product_id
-JOIN data_lake.customer_profiles dl ON h.user_id = dl.customer_id
-GROUP BY a.product_category;
-
--- Query enterprise HDFS data directly with DuckDB analytics
-SELECT customer_segment,
-       MEDIAN(purchase_amount) as median_purchase,
-       PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY purchase_amount) as p95_purchase
-FROM data_lake.customer_transactions
-WHERE transaction_date >= CURRENT_DATE - INTERVAL '30' DAY
-GROUP BY customer_segment;
-```
-
-### Materialized Views (Configuration Only)
-
-**Note:** The File Adapter is read-only. Materialized views are defined in the model configuration, not via SQL DDL.
-
-Configure pre-computed views in your schema (requires Parquet or DuckDB execution engine):
-
-```json
-{
-  "executionEngine": "parquet",  // Required: parquet or duckdb
-  "materializations": [           // Note: use "materializations" not "materializedViews"
-    {
-      "view": "monthly_summary",      // Name used in SQL queries
-      "table": "monthly_sales_data",  // Filename for cached Parquet file (.parquet added)
-      "sql": "SELECT YEAR(order_date) as year, MONTH(order_date) as month, SUM(total) as total_sales FROM sales GROUP BY YEAR(order_date), MONTH(order_date)"
-    }
-  ]
-}
-```
-
-**Key properties:**
-- `view`: The table name you'll use in SQL queries (e.g., `SELECT * FROM monthly_summary`)
-- `table`: The filename for the materialized Parquet file (stored as `.materialized_views/monthly_sales_data.parquet`)
-- `sql`: The query to materialize (executed once on first access)
-
-**Cross-Schema Materialized Views:**
-
-The schema containing the MV must use Parquet engine, but can query data from any schema:
-
-```json
-{
-  "name": "analytics",
-  "executionEngine": "parquet",  // This schema must use parquet
-  "materializations": [
-    {
-      "view": "unified_customer_view",
-      "table": "unified_customer_view",
-      "sql": "SELECT c.customer_id, c.name, s3.lifetime_value FROM hot_data.customers c JOIN warehouse.customer_analytics s3 ON c.customer_id = s3.id"
-    }
-  ]
-}
-```
-
-Once configured, query the materialized view like any table:
-```sql
-SELECT * FROM analytics.unified_customer_view WHERE lifetime_value > 1000;
-```
-
-### Multi-Table Extraction
-
-Extract multiple tables from various file formats:
-
-**JSON Files** - Extract different arrays as separate tables:
-```json
-{
-  "jsonTables": [
-    {
-      "name": "customers",
-      "path": "$.customers[*]"
-    },
-    {
-      "name": "orders",
-      "path": "$.orders[*]"
-    }
-  ]
-}
-```
-
-**Excel Files** - Each sheet becomes a separate table:
-- `financial_report.xlsx` → `financial_report__summary`, `financial_report__details`, `financial_report__charts`
-
-**XML Files** - Extract different elements as tables:
-```json
-{
-  "xmlTables": [
-    {
-      "name": "products",
-      "xpath": "//catalog/product"
-    },
-    {
-      "name": "categories",
-      "xpath": "//catalog/category"
-    }
-  ]
-}
-```
-
-**HTML Files** - Each `<table>` element becomes a separate table:
-- `report.html` → `report__table_1`, `report__table_2`, `report__table_3`
-
-**Word Documents** - Extract all tables:
-- `document.docx` → `document__table_1`, `document__table_2`
-
-**PowerPoint Presentations** - Tables include slide context:
-- `presentation.pptx` with titled slide → `presentation__slide_title__table_name`
-- `presentation.pptx` with untitled slide → `presentation__slide2__table_name`
-
-**Markdown Files** - Extract all markdown tables:
-- `documentation.md` → `documentation__table_1`, `documentation__table_2`
-
-### Glob Pattern Tables
-
-Tables can use glob patterns (`*`, `?`, `[]`) to combine multiple files into a single table:
-
-```json
-{
-  "tables": [
-    {
-      "name": "all_sales",
-      "url": "sales/*.csv"  // Combines all CSV files in sales directory
-    },
-    {
-      "name": "yearly_data",
-      "url": "file:///data/2024-*.parquet"  // All 2024 Parquet files
-    },
-    {
-      "name": "logs",
-      "url": "logs/**/*.json"  // All JSON files recursively
-    },
-    {
-      "name": "s3_data",
-      "url": "s3://bucket/path/2024-*.csv"  // S3 glob pattern
-    },
-    {
-      "name": "hdfs_logs",
-      "url": "hdfs://namenode:9000/logs/**/error-*.log"  // HDFS recursive glob pattern
-    }
-  ]
-}
-```
-
-**Storage Support for Glob Patterns:**
-- **Local files** (`file://` or bare paths): ✅ Supported
-- **S3** (`s3://`): ✅ Supported
-- **HDFS** (`hdfs://`): ✅ Supported
-- **HTTP/HTTPS**: ❌ Not supported - no directory listing capability
-- **FTP/SFTP**: ❌ Not supported
-
-The adapter automatically:
-- Detects glob patterns in local file paths
-- Creates a GlobParquetTable that consolidates matching files
-- Caches the combined data as Parquet for efficient querying
-- Supports refresh intervals for updating when files change
-
-### Partitioned Tables
-
-Automatically detect and utilize partitioned data:
-
-```json
-{
-  "partitionedTables": [
-    {
-      "name": "sales_data",
-      "partitionPattern": "year={year}/month={month}/*.parquet",
-      "partitionColumns": ["year", "month"]
-    }
-  ]
-}
-```
-
-## Refresh and Change Detection
-
-### How Refresh Works
-
-Tables can be configured with a `refreshInterval` to detect file changes:
-
-```json
-{
-  "tables": [
-    {
-      "name": "live_data",
-      "url": "data.csv",
-      "refreshInterval": "5 minutes"
-    }
-  ]
-}
-```
-
-**Refresh behavior:**
-- **Check on query** - When queried, checks if refresh interval has elapsed
-- **File change detection** - Uses modification time (local) or ETag/Last-Modified (HTTP)
-- **Lazy refresh** - No background polling; refresh happens on access
-- **Fresh data on same query** - If file changed, query returns updated data immediately
-
-### Refresh Support by File Type
-
-| File Type | Refresh Support | Notes |
-|-----------|-----------------|-------|
-| CSV/TSV | ✅ Data only | Re-reads data on interval; schema fixed at startup |
-| JSON/YAML | ✅ Data only | Re-reads data on interval; schema fixed at startup |
-| Parquet | ✅ Data only | Re-read each query; schema fixed at startup |
-| Arrow | ❌ None | Loaded once at startup |
-| Excel/Word/PowerPoint | ❌ None | Converted once at startup |
-| HTML | ❌ None | Converted once at startup |
-| XML | ❌ None | Converted once at startup |
-| Markdown | ❌ None | Converted once at startup |
-
-**Important:** All schemas are determined at startup and never change. Refresh only updates data within the existing schema. Schema changes require a restart.
-
-### Important Limitations
-
-**Refresh vs. Performance Tradeoff (Parquet/DuckDB engines):**
-- If `refreshInterval` is set: **Disables Parquet conversion**, reads CSV/JSON directly (slower but refreshable)
-- Without `refreshInterval`: Converts to Parquet cache once (fast but static)
-- **Cannot have both** Parquet performance and refresh capability currently
-- DuckDB engine **not actually used** for CSV/JSON when refresh is enabled (falls back to Calcite's native CSV/JSON readers)
-
-**Complex formats (Excel, HTML, Word, PowerPoint):**
-- Converted to JSON **once** at schema initialization
-- Changes to source files **not detected** even with refresh configured
-- Must restart to pick up changes
-
-**Materialized views:**
-- Computed **once** on first access
-- **Never refresh** even if source tables have refresh enabled
-- Delete `.materialized_views/*.parquet` files to force recomputation
-
-## Performance Optimization
-
-The File Adapter automatically optimizes queries through:
-- **Intelligent Engine Selection** - Each schema uses its optimal engine
-- **Automatic Memory Management** - Spillover to disk when needed
-- **Query Optimization** - Column pruning, filter pushdown, partition pruning
-- **Statistics-based Planning** - HyperLogLog cardinality estimates
-
-**📚 For detailed tuning strategies, see [Performance Tuning Guide](docs/performance-tuning.md)**
-
-## Complete Configuration Example
-
-### Multiple Schemas with Different Engines
+### With S3 and Iceberg Materialization
 
 ```json
 {
   "version": "1.0",
-  "defaultSchema": "reports",
-  "schemas": [
-    {
-      "name": "realtime",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/data/realtime",
-        "executionEngine": "arrow",
-        "batchSize": 1000,
-        "tableNameCasing": "LOWER",
-        "tables": [
-          {
-            "name": "live_events",
-            "url": "events.csv",
-            "refreshInterval": "30 seconds"
-          }
-        ],
-        "views": [
-          {
-            "name": "active_sessions",
-            "sql": "SELECT user_id, COUNT(*) as event_count FROM live_events WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '5' MINUTE GROUP BY user_id"
-          }
-        ]
-      }
-    },
-    {
-      "name": "analytics",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/data/warehouse",
-        "executionEngine": "duckdb",
-        "duckdbConfig": {
-          "memory_limit": "16GB",
-          "temp_directory": "/fast-disk/duckdb-temp"
-        }
-      }
-    },
-    {
-      "name": "reports",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
-      "operand": {
-        "directory": "/data/reports",
-        "executionEngine": "parquet",
-        "primeCache": true,
-        "tableNameCasing": "LOWER",
-        "materializations": [
-          {
-            "view": "quarterly_summary",
-            "table": "quarterly_summary_cache",
-            "sql": "SELECT quarter, SUM(revenue) as total_revenue FROM analytics.sales GROUP BY quarter"
-          }
-        ],
-        "views": [
-          {
-            "name": "current_month",
-            "sql": "SELECT * FROM realtime.live_events WHERE MONTH(timestamp) = MONTH(CURRENT_DATE)"
-          }
-        ]
+  "defaultSchema": "lake",
+  "schemas": [{
+    "name": "lake",
+    "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+    "operand": {
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "executionEngine": "DUCKDB",
+      "storageType": "s3",
+      "storageConfig": {
+        "accessKey": "${AWS_ACCESS_KEY_ID}",
+        "secretKey": "${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
       }
     }
-  ]
+  }]
 }
 ```
 
-**Query Examples with Multiple Schemas:**
+### Air-Gapped Deployment
 
-```sql
--- Query refreshable table (re-reads CSV every 30 seconds if changed)
-SELECT * FROM realtime.live_events WHERE timestamp > NOW() - INTERVAL '1' HOUR;
-
--- Query view (always fresh, re-executes on each query)
-SELECT * FROM realtime.active_sessions;
-
--- Query from analytics schema (DuckDB engine, complex SQL)
-SELECT customer_id,
-       SUM(amount) OVER (PARTITION BY region ORDER BY date) as running_total
-FROM analytics.sales_history;
-
--- Query materialized view (pre-computed, fast)
-SELECT * FROM reports.quarterly_summary WHERE total_revenue > 1000000;
-
--- Query regular view (fresh data from cross-schema query)
-SELECT * FROM reports.current_month;
-
--- Cross-schema join
-SELECT r.event_id, r.timestamp, a.customer_name
-FROM realtime.live_events r
-JOIN analytics.customers a ON r.customer_id = a.id;
+```json
+{
+  "operand": {
+    "directory": "/mnt/nas/data",
+    "executionEngine": "DUCKDB",
+    "format": "parquet"
+  }
+}
 ```
+
+Local file mount, Hive-partitioned Parquet, DuckDB embedded. No cloud dependency.
+
+---
 
 ## Documentation
 
-### User Guide
-- [Configuration Reference](docs/configuration-reference.md) - Complete configuration options
-- [Supported File Formats](docs/supported-formats.md) - All supported formats and features
-- [Storage Providers](docs/storage-providers.md) - Cloud, HTTP, SharePoint, and more
-- [Performance Tuning](docs/performance-tuning.md) - Optimization strategies and engine selection
+### Start Here
+- [Concepts](docs/concepts.md) — Mental model: two ingestion paths, the lake, the query layer
+- [Quick Start](docs/quickstart.md) — Working data lake in an afternoon
 
-### Advanced Features
-- [CSV Type Inference](docs/csv-type-inference.md) - Automatic column type detection
-- [Apache Iceberg Integration](docs/iceberg-integration.md) - Time travel and schema evolution
+### Ingestion
+- [Tabular Mode](docs/tabular-mode.md) — Files, crawlers, HTTP APIs, API-to-lake
+- [Document ETL](docs/document-etl.md) — Custom transformers, canonical schemas, complex document feeds
+- [Supported Formats](docs/supported-formats.md) — All formats, extraction behavior, performance characteristics
+- [Storage Providers](docs/storage-providers.md) — S3, HTTP, SharePoint, FTP, local filesystem
+
+### Lake Features
+- [Lake Features](docs/lake-features.md) — Iceberg vs Hive, PK/FK model, views, computed columns, embeddings
+- [Apache Iceberg Integration](docs/iceberg-integration.md) — Time travel, schema evolution, compaction
+- [Table Constraints](docs/CONSTRAINTS.md) — PK/FK declaration, optimizer impact, BI tool integration
+- [Vector Search](docs/vector-search.md) — Similarity functions, embedding generation, HNSW indexes
+
+### Deployment
+- [Deployment](docs/deployment.md) — Cloud, air-gapped, and hybrid profiles
 
 ### Reference
-- [API Reference](docs/api-reference.md) - Programmatic usage
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- [Configuration Reference](docs/configuration-reference.md) — Complete configuration options
+- [JDBC Engines](docs/jdbc-engines.md) — Engine selection, setup, and trade-offs
+- [Performance Tuning](docs/performance-tuning.md) — Optimization strategies
+- [Troubleshooting](docs/troubleshooting.md) — Common issues and solutions
+- [API Reference](docs/api-reference.md) — Programmatic usage
 
-## License
+---
 
-Licensed under the Apache License, Version 2.0. See the LICENSE file for details.
+## Origin
+
+This adapter shares a module name with the original Apache Calcite file adapter and retains the same module structure and factory class names for compatibility. It is a complete rewrite — the original read CSV files; this is a ground-up rebuild that builds a full data lake platform on top of the same Calcite SQL foundation.
+
+The Apache Calcite core (query planner, SQL parser, optimizer) is unchanged and used as a library. Calcite powers Apache Drill, Dremio, Apache Flink, Apache Hive, Apache Phoenix, and Apache Beam — the SQL layer here has been proven at scale across the industry.

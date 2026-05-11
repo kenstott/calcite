@@ -54,9 +54,47 @@ while [ $# -gt 0 ]; do
         echo "ERROR: -p requires a numeric argument (parallel entity threads)" >&2; exit 1
       fi
       PARALLEL_THREADS=$2; shift 2 ;;
+    --force)
+      export FORCE=true; shift ;;
+    --schema)
+      if [ -z "${2:-}" ]; then
+        echo "ERROR: --schema requires a schema name" >&2; exit 1
+      fi
+      SCHEMA_FILTER=$2; shift 2 ;;
     *) break ;;
   esac
 done
+
+SCHEMA_FILTER="${SCHEMA_FILTER:-}"
+RUN_EMBEDDINGS=false
+
+# Map schema name → worker numbers (for use with --schema filter)
+schema_workers() {
+  local s
+  s=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+  case "$s" in
+    sec|sec_primary)         echo "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17" ;;
+    sec_secondary|secondary) echo "23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39" ;;
+    stock|stock_prices|stocks|stooq) echo "40" ;;
+    econ|economic)           echo "18" ;;
+    census|acs)              echo "19" ;;
+    geo|geographic)          echo "20" ;;
+    crime|fbi)               echo "21" ;;
+    weather|climate)         echo "22" ;;
+    ref|reference|gleif|figi) echo "41" ;;
+    fec|campaign_finance)    echo "60" ;;
+    fedregister|federal_register|fr) echo "61" ;;
+    cyber|cyber_vuln|cyber_threat)   echo "62 63 64 65 66" ;;
+    health)                  echo "67 68 69 70" ;;
+    edu|education)           echo "71 72 73" ;;
+    energy|eia)              echo "74 75 76 77" ;;
+    patents|uspto)           echo "80 81" ;;
+    lands|public_lands)      echo "82 83" ;;
+    *)
+      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands" >&2
+      exit 1 ;;
+  esac
+}
 
 TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
@@ -66,7 +104,7 @@ if [ "$PARALLEL_THREADS" -gt 0 ]; then
 fi
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [-c] <worker-numbers...>"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [--schema name] <worker-numbers|alias...>"
   echo "  $0 18-26                  — auto-fit workers to available memory"
   echo "  $0 -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)"
   echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
@@ -74,6 +112,19 @@ if [ $# -eq 0 ]; then
   echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
   echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
   echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
+  echo "  $0 --force daily          — bypass all release-window checks (backfill/testing)"
+  echo ""
+  echo "  Named aliases:"
+  echo "  $0 all                    — all workers (1-41, 60-77, 80-83)"
+  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81,83)"
+  echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74,80,82)"
+  echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
+  echo ""
+  echo "  Schema filter (combine with any alias or range):"
+  echo "  $0 --schema energy daily  — run only the energy workers from the daily set"
+  echo "  $0 --schema sec historical — run only the SEC workers from the historical set"
+  echo "  Known schemas: sec, sec_secondary, stock, econ, census, geo, crime, weather,"
+  echo "                 ref, fec, fedregister, cyber, health, edu, energy, patents, lands"
   exit 1
 fi
 
@@ -84,7 +135,24 @@ for arg in "$@"; do
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ]; then
-      for i in $(seq 1 58); do queue+=("$i"); done
+      # All workers — exactly what exists: 1-41, 60-77, 80-83
+      for i in $(seq 1 41); do queue+=("$i"); done
+      for i in $(seq 60 77) 80 81 82 83; do queue+=("$i"); done
+    elif [ "$part" = "historical" ]; then
+      # All initial/backfill workers — run once on the ingest device.
+      # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77, 83); use 'daily' for those.
+      export GOVDATA_RUN_MODE="historical"
+      for i in $(seq 1 41); do queue+=("$i"); done
+      for i in 60 61 62 67 71 74 80 82; do queue+=("$i"); done
+    elif [ "$part" = "daily" ]; then
+      # All recurring workers — run this every day on the production server.
+      # Workers skip rows already materialized; each handles its own data-lag / release window.
+      export GOVDATA_RUN_MODE="daily"
+      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81 83; do queue+=("$i"); done
+      [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
+    elif [ "$part" = "stock-quotes" ]; then
+      # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
+      queue+=(40)
     elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
     elif [[ "$part" =~ ^[0-9]+$ ]]; then
@@ -96,14 +164,52 @@ for arg in "$@"; do
   done
 done
 
+# Apply --schema filter: keep only workers that belong to the requested schema
+if [ -n "$SCHEMA_FILTER" ]; then
+  allowed=$(schema_workers "$SCHEMA_FILTER")
+  filtered=()
+  for w in "${queue[@]}"; do
+    for a in $allowed; do
+      if [ "$w" -eq "$a" ]; then
+        filtered+=("$w")
+        break
+      fi
+    done
+  done
+  log_info "Schema filter '$SCHEMA_FILTER': ${#queue[@]} → ${#filtered[@]} workers (${filtered[*]:-none})"
+  queue=("${filtered[@]+"${filtered[@]}"}")
+fi
+
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
 
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# On Ctrl-C or SIGTERM, kill all active workers before exiting
+cleanup() {
+  echo ""
+  echo "=== Interrupted — killing active workers ==="
+  for i in "${!active_pids[@]}"; do
+    local pid="${active_pids[$i]}"
+    local id="${active_labels[$i]}"
+    echo "  Killing $id (PID $pid)"
+    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.5
+    kill -KILL -"$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null || true
+  echo "=== All workers terminated ==="
+  exit 130
+}
+trap cleanup INT TERM
+
 total=${#queue[@]}
-total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+if [ "$(uname)" = "Darwin" ]; then
+  total_mem_mb=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
+else
+  total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+fi
 budget_mb=$((total_mem_mb - OS_RESERVE_MB))
 echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
 if [ "$MAX_WORKERS" -lt 99 ]; then
@@ -169,9 +275,14 @@ launch_worker() {
   local log_file="$log_dir/launch.log"
   mkdir -p "$log_dir"
 
-  # setsid gives each worker its own process group so 'kill 0' in the worker
-  # trap only kills that worker's processes, not the pool runner or other workers
-  setsid nohup bash "$script" >> "$log_file" 2>&1 &
+  # Give each worker its own process group so 'kill 0' in the worker
+  # trap only kills that worker's processes, not the pool runner or other workers.
+  # macOS lacks setsid; use a subshell trick to create a new process group instead.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup bash "$script" >> "$log_file" 2>&1 &
+  else
+    (exec nohup bash "$script" >> "$log_file" 2>&1) &
+  fi
   local pid=$!
   echo "$pid" > "$PID_DIR/${id}.pid"
 
@@ -188,7 +299,15 @@ launch_worker() {
 
 # Check available system memory in MB
 get_available_mb() {
-  awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
+  if [ "$(uname)" = "Darwin" ]; then
+    # Parse vm_stat pages free + inactive, multiply by page size
+    local page_size=$(sysctl -n hw.pagesize)
+    local free_pages=$(vm_stat | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
+    local inactive_pages=$(vm_stat | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}')
+    echo $(( (free_pages + inactive_pages) * page_size / 1024 / 1024 ))
+  else
+    awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
+  fi
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
@@ -389,7 +508,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     activity=""
     if [ -f "$log_file" ]; then
       # Match progress patterns across all worker types (SEC, econ, census, geo, crime)
-      activity=$(grep -E "Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list|Processing 13F-HR|Converted 13F-HR|institutional holdings|Processing SC 13[DG]|Converted SC 13|beneficial ownership|13D/G filing detected|13F filing detected|GLEIF:|FIGI:|Extracted [0-9]+ records from|Extracted [0-9]+ holdings|Extracted [0-9]+ ownership|Extracted [0-9]+ instrument|OpenFIGI|gleif_entities|gleif_cik_mapping|figi_instruments|vectorized chunks from 13D" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
+      activity=$(grep -E "File chunk [0-9]+/[0-9]+|Chunk commit:|File chunking completed:|File chunking:|File-list optimization:|Tracked [0-9]+ newly materialized|Fast skip:|Row batch [0-9]+:|Row batching enabled|Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list|Processing 13F-HR|Converted 13F-HR|institutional holdings|Processing SC 13[DG]|Converted SC 13|beneficial ownership|13D/G filing detected|13F filing detected|GLEIF:|FIGI:|Extracted [0-9]+ records from|Extracted [0-9]+ holdings|Extracted [0-9]+ ownership|Extracted [0-9]+ instrument|OpenFIGI|gleif_entities|gleif_cik_mapping|figi_instruments|vectorized chunks from 13D|No data returned for|Skipping ticker|Marked ticker|appears to have no data" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
     fi
     printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done
@@ -405,4 +524,21 @@ if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
   exit 1
 fi
+
+# ── Embeddings (daily only) ───────────────────────────────────────────────────
+if $RUN_EMBEDDINGS; then
+  VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+  CURRENT_YEAR=$(date +%Y)
+  export VSS_YEARS="${VSS_YEARS:-$CURRENT_YEAR}"
+  log_info "Embeddings: refreshing year(s) $VSS_YEARS"
+  if [ -f "$VSS_DIR/vss-gpu-runner.sh" ]; then
+    bash "$VSS_DIR/vss-gpu-runner.sh"
+  fi
+  if [ -f "$VSS_DIR/vss.sh" ]; then
+    bash "$VSS_DIR/vss.sh" refresh "$VSS_YEARS"
+    bash "$VSS_DIR/vss.sh" upload
+  fi
+  log_info "Embeddings: complete"
+fi
+
 exit 0

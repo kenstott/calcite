@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:econ}"
 dataLagYears: 2
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=econ"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/econ"
 
 comment: >
   U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS),
@@ -558,6 +558,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- INFLATION METRICS ---
   - name: inflation_metrics
@@ -683,6 +686,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- REGIONAL CPI ---
   - name: regional_cpi
@@ -779,6 +785,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- METRO CPI ---
   - name: metro_cpi
@@ -919,6 +928,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE INDUSTRY ---
   - name: state_industry
@@ -1035,6 +1047,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE WAGES ---
   - name: state_wages
@@ -1146,6 +1161,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
@@ -1321,6 +1339,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- METRO WAGES ---
   - name: metro_wages
@@ -1434,6 +1455,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- COUNTY QCEW ---
   - name: county_qcew
@@ -1531,6 +1555,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- COUNTY WAGES ---
   - name: county_wages
@@ -1640,6 +1667,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
@@ -1781,12 +1811,11 @@ partitionedTables:
         incrementalKeys: [year, metric]
         runMaintenance: true
         snapshotRetentionDays: 7
-        targetFileSizeBytes: 134217728
-        # Test automatic compaction
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         compactionSmallFileSizeBytes: 1048576  # 1MB
+        targetFileSizeBytes: 134217728
 
   # --- JOLTS STATE ---
   - name: jolts_state
@@ -1911,6 +1940,9 @@ partitionedTables:
         incrementalKeys: [year, metric]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         targetFileSizeBytes: 134217728
 
   # --- WAGE GROWTH ---
@@ -2002,6 +2034,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
@@ -2123,6 +2158,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- TREASURY YIELDS ---
   - name: treasury_yields
@@ -2221,6 +2259,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
@@ -2319,6 +2360,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
@@ -2414,6 +2458,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
@@ -2563,6 +2610,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
@@ -2754,6 +2804,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE PERSONAL INCOME (BULK DOWNLOAD) ---
   # Efficient bulk download approach replacing 12,000+ API calls with single ~16MB download
@@ -2872,6 +2925,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE GDP (BULK DOWNLOAD) ---
   - name: state_gdp
@@ -2983,6 +3039,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE QUARTERLY INCOME (BULK DOWNLOAD) ---
   - name: state_quarterly_income
@@ -3094,6 +3153,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE QUARTERLY GDP (BULK DOWNLOAD) ---
   - name: state_quarterly_gdp
@@ -3205,6 +3267,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE CONSUMPTION (BULK DOWNLOAD) ---
   - name: state_consumption
@@ -3316,6 +3381,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- REGIONAL INCOME (API-BASED - DEPRECATED) ---
   # NOTE: This table uses per-API-call approach which is slow and memory-intensive.
@@ -3347,7 +3415,7 @@ partitionedTables:
         properties:
           # Reference directory containing regional_linecodes Iceberg table
           # Must point to the econ_reference schema output directory
-          referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/source=econ/ECON_REFERENCE}"
+          referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/econ_reference}"
 
     columns:
       - name: geo_fips
@@ -3578,12 +3646,10 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
-        # Automatic compaction - consolidates ~4,000 small files per year into ~1-2 large files
-        # This runs after commit to convert source dimension files into materialization dimension files
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728  # 128MB
-        compactionMinFiles: 10  # Only compact if partition has 10+ small files
-        compactionSmallFileSizeBytes: 10485760  # 10MB - files under this are "small"
+        compactionMinFiles: 10
+        compactionSmallFileSizeBytes: 10485760  # 10MB
 
     # Alternate partition layouts for optimized query patterns
     # Consolidated files use different partition keys within type=regional_income.
@@ -3840,6 +3906,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- GDP STATISTICS ---
   - name: gdp_statistics
@@ -3934,6 +4003,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # --- STATE GDP (View over regional_income) ---
   # Note: State GDP data is downloaded as part of regional_income (SAGDP* tables).
@@ -4099,6 +4171,9 @@ partitionedTables:
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # CONSTRAINTS
@@ -4600,3 +4675,31 @@ tables:
 #   - Rate limit documentation (BLS: 500 daily, 1.1s between requests)
 #   - Bulk download file size annotations (80MB annual, 323MB quarterly)
 # ============================================================================
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: state_economic_snapshot
+    comment: >
+      State-level economic snapshot joining BLS state wages and JOLTS state labor
+      market data, enriched with geographic identifiers. One row per state+year+
+      wage_series+jolts_series — filter on series codes to select specific indicators.
+      Use state_fips to join with geo.states, census, or health schemas.
+    sql: >
+      SELECT
+        w.state_fips,
+        gs.state_name,
+        gs.state_abbr,
+        w.year,
+        w.series          AS wage_series,
+        TRY_CAST(w.value AS DOUBLE) AS wage_value,
+        w.periodName      AS period,
+        j.series          AS jolts_series,
+        TRY_CAST(j.value AS DOUBLE) AS jolts_value
+      FROM state_wages w
+      LEFT JOIN jolts_state j
+        ON w.state_fips = j.state_fips AND w.year = j.year
+      LEFT JOIN "geo"."states" gs ON w.state_fips = gs.state_fips

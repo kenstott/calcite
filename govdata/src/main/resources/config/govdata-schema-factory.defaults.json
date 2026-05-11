@@ -1,6 +1,6 @@
 {
   "sec": {
-    "directory": "${GOVDATA_PARQUET_DIR}/source=sec",
+    "directory": "${GOVDATA_PARQUET_DIR}/sec",
     "cacheDirectory": "${GOVDATA_CACHE_DIR}/sec",
     "startYear": "${GOVDATA_START_YEAR:2020}",
     "endYear": "${GOVDATA_END_YEAR:2024}",
@@ -41,7 +41,7 @@
     "fetchStockPrices": true
   },
   "econ": {
-    "directory": "${GOVDATA_PARQUET_DIR}/source=econ",
+    "directory": "${GOVDATA_PARQUET_DIR}/econ",
     "cacheDirectory": "${GOVDATA_CACHE_DIR}/econ",
     "startYear": "${GOVDATA_START_YEAR:2020}",
     "endYear": "${GOVDATA_END_YEAR:2024}",
@@ -52,7 +52,7 @@
     "enabledSources": ["fred", "bls", "treasury"]
   },
   "geo": {
-    "directory": "${GOVDATA_PARQUET_DIR}/source=geo",
+    "directory": "${GOVDATA_PARQUET_DIR}/geo",
     "cacheDirectory": "${GOVDATA_CACHE_DIR}/geo",
     "startYear": "${GOVDATA_START_YEAR:2020}",
     "endYear": "${GOVDATA_END_YEAR:2024}",

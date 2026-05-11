@@ -374,6 +374,10 @@ public class SecTextVectorizer {
     // Add metadata about enrichment
     metadata.put("tokens_used", SecTokenManager.MAX_TOKENS - remainingBudget);
     metadata.put("token_budget", SecTokenManager.MAX_TOKENS);
+    metadata.put("parent_section", footnote.parentSection);
+    if (footnote.subsection != null) {
+      metadata.put("subsection", footnote.subsection);
+    }
     enriched.append(
         String.format("\n[ENRICHMENT_META tokens=%d/%d]",
         SecTokenManager.MAX_TOKENS - remainingBudget, SecTokenManager.MAX_TOKENS));
@@ -405,20 +409,6 @@ public class SecTextVectorizer {
 
     int tokensUsed = tokenManager.estimateTokens(enriched.toString());
     int remainingBudget = SecTokenManager.MAX_TOKENS - tokensUsed;
-
-    // Add section hierarchy
-    if (mdaPara.parentSection != null) {
-      String hierarchy = String.format("\n[HIERARCHY: %s", mdaPara.parentSection);
-      if (mdaPara.subsection != null) {
-        hierarchy += " > " + mdaPara.subsection;
-      }
-      hierarchy += "]";
-
-      if (tokenManager.estimateTokens(hierarchy) < remainingBudget * 0.1) {
-        enriched.append(hierarchy);
-        remainingBudget -= tokenManager.estimateTokens(hierarchy);
-      }
-    }
 
     // Find and add referenced footnotes
     List<String> footnotesReferenced = extractFootnoteReferences(mdaPara.text);
@@ -457,6 +447,19 @@ public class SecTextVectorizer {
           enriched.append(concept).append("=").append(formatValue(fact.value)).append(" ");
         }
       }
+    }
+
+    // Structured section metadata — stored as columns, NOT injected into embedding text
+    metadata.put("parent_section", mdaPara.parentSection);
+    if (mdaPara.subsection != null) {
+      metadata.put("subsection", mdaPara.subsection);
+    }
+    if (mdaPara.attributes != null && mdaPara.attributes.containsKey("section_path")) {
+      metadata.put("section_path", mdaPara.attributes.get("section_path"));
+    }
+    if (mdaPara.attributes != null && mdaPara.attributes.containsKey("paragraph_continuation")) {
+      metadata.put("paragraph_continuation",
+          Boolean.parseBoolean(mdaPara.attributes.get("paragraph_continuation")));
     }
 
     // Add metadata
@@ -520,20 +523,6 @@ public class SecTextVectorizer {
       }
     }
 
-    // Add section hierarchy
-    if (earningsBlob.parentSection != null) {
-      String hierarchy = String.format("\n[HIERARCHY: %s", earningsBlob.parentSection);
-      if (earningsBlob.subsection != null) {
-        hierarchy += " > " + earningsBlob.subsection;
-      }
-      hierarchy += "]";
-
-      if (tokenManager.estimateTokens(hierarchy) < remainingBudget * 0.1) {
-        enriched.append(hierarchy);
-        remainingBudget -= tokenManager.estimateTokens(hierarchy);
-      }
-    }
-
     // Find and add referenced footnotes (earnings calls may reference financial footnotes)
     List<String> footnotesReferenced = extractFootnoteReferences(earningsBlob.text);
     if (!footnotesReferenced.isEmpty() && remainingBudget > 300) {
@@ -574,9 +563,13 @@ public class SecTextVectorizer {
     }
 
     // Add metadata
+    // Structured section metadata — stored as columns, NOT injected into embedding text
     metadata.put("tokens_used", SecTokenManager.MAX_TOKENS - remainingBudget);
     metadata.put("original_text", earningsBlob.text);
     metadata.put("parent_section", earningsBlob.parentSection);
+    if (earningsBlob.subsection != null) {
+      metadata.put("subsection", earningsBlob.subsection);
+    }
 
     // Include speaker information in metadata
     if (earningsBlob.attributes != null) {

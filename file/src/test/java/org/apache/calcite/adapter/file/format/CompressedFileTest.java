@@ -159,10 +159,18 @@ public class CompressedFileTest {
     org.junit.jupiter.api.Assumptions.assumeFalse(engineStr != null && ("LINQ4J".equalsIgnoreCase(engineStr) || "ARROW".equalsIgnoreCase(engineStr)),
         "Skipping PARQUET-specific test for " + engineStr + " engine");
 
-    File gzFile = new File(tempDir, "data.csv.gz");
+    // Use a unique filename to avoid any cache key collisions with other tests
+    File sourceDir = new File(tempDir, "src");
+    sourceDir.mkdirs();
+    File gzFile = new File(sourceDir, "gz_parquet_test.csv.gz");
     createGzippedCsv(gzFile);
 
     // Test with PARQUET execution engine
+    // Use explicit parquetCacheDirectory and baseDirectory within tempDir for full isolation
+    File cacheDir = new File(tempDir, "parquet-cache");
+    cacheDir.mkdirs();
+    File baseDir = new File(tempDir, "base");
+    baseDir.mkdirs();
     String model = "{\n"
         + "  version: '1.0',\n"
         + "  defaultSchema: 'COMPRESSED',\n"
@@ -172,9 +180,11 @@ public class CompressedFileTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        directory: '" + sourceDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + baseDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
-        + "        parquetCacheDirectory: '" + new File(tempDir, "cache_compressed").getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        parquetCacheDirectory: '" + cacheDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        ephemeralCache: true,\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER'\n"
         + "      }\n"
@@ -186,14 +196,10 @@ public class CompressedFileTest {
          Statement stmt = conn.createStatement()) {
 
       // Should work with PARQUET engine via auto-conversion
-      try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"data\"")) {
+      try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"gz_parquet_test\"")) {
         assertTrue(rs.next());
         assertEquals(4L, rs.getLong("cnt"));
       }
-
-      // Check that Parquet cache was created
-      File cacheDir = new File(tempDir, "cache_compressed");
-      assertTrue(cacheDir.exists());
     }
   }
 

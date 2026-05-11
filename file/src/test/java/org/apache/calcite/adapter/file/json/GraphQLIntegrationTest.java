@@ -163,11 +163,15 @@ public class GraphQLIntegrationTest {
   +
         "        \"columnNameCasing\": \"UNCHANGED\",\n"
   +
+        "        \"executionEngine\": \"LINQ4J\",\n"
+  +
+        "        \"ephemeralCache\": true,\n"
+  +
         "        \"tables\": [\n"
   +
         "          {\n"
   +
-        "            \"name\": \"users\",\n"
+        "            \"name\": \"gql_users\",\n"
   +
         "            \"url\": \"" + baseUrl + "/graphql\",\n"
   +
@@ -221,14 +225,14 @@ public class GraphQLIntegrationTest {
       }
 
       // First, let's just check that we can query the table structure
-      ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as \"cnt\" FROM \"users\"");
+      ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as \"cnt\" FROM \"gql_users\"");
       assertTrue(rs.next());
       int count = rs.getInt("cnt");
       System.out.println("Table row count: " + count);
       rs.close();
 
       // Also try to get actual data to see what's happening
-      rs = stmt.executeQuery("SELECT * FROM \"users\" LIMIT 5");
+      rs = stmt.executeQuery("SELECT * FROM \"gql_users\" LIMIT 5");
       int actualRowCount = 0;
       while (rs.next()) {
         actualRowCount++;
@@ -239,7 +243,7 @@ public class GraphQLIntegrationTest {
 
       // If count > 0, try to get actual data
       if (count > 0) {
-        rs = stmt.executeQuery("SELECT * FROM \"users\" ORDER BY \"id\"");
+        rs = stmt.executeQuery("SELECT * FROM \"gql_users\" ORDER BY \"id\"");
 
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("id"));
@@ -255,7 +259,7 @@ public class GraphQLIntegrationTest {
       } else {
         // For debugging - let's see if we can get column metadata
         try {
-          rs = stmt.executeQuery("SELECT * FROM \"users\" LIMIT 1");
+          rs = stmt.executeQuery("SELECT * FROM \"gql_users\" LIMIT 1");
           java.sql.ResultSetMetaData metadata = rs.getMetaData();
           System.out.println("Column count: " + metadata.getColumnCount());
           for (int i = 1; i <= metadata.getColumnCount(); i++) {
@@ -289,6 +293,10 @@ public class GraphQLIntegrationTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
   +
         "      \"operand\": {\n"
+  +
+        "        \"executionEngine\": \"LINQ4J\",\n"
+  +
+        "        \"ephemeralCache\": true,\n"
   +
         "        \"tables\": [\n"
   +
@@ -353,7 +361,7 @@ public class GraphQLIntegrationTest {
       }
 
       // Query users table
-      ResultSet rs = stmt.executeQuery("SELECT name, totalOrders FROM \"company_data_users\" WHERE id <= 2 ORDER BY id");
+      ResultSet rs = stmt.executeQuery("SELECT \"name\", \"totalOrders\" FROM \"company_data_users\" WHERE \"id\" <= 2 ORDER BY \"id\"");
 
       assertTrue(rs.next());
       assertEquals("Alice", rs.getString("name"));
@@ -367,16 +375,17 @@ public class GraphQLIntegrationTest {
       rs.close();
 
       // Query orders table with join-like filter
-      rs = stmt.executeQuery("SELECT COUNT(*) as order_count, SUM(total) as total_amount FROM company_data_orders WHERE status = 'completed'");
+      rs = stmt.executeQuery("SELECT COUNT(*) as \"order_count\", SUM(\"total\") as \"total_amount\" FROM \"company_data_orders\" WHERE \"status\" = 'completed'");
 
       assertTrue(rs.next());
       assertEquals(4, rs.getInt("order_count"));
       assertEquals(1329.95, rs.getDouble("total_amount"), 0.01);
+      assertFalse(rs.next());
       rs.close();
 
       // Query products by category
-      rs = stmt.executeQuery("SELECT category, COUNT(*) as \"cnt\", AVG(price) as avg_price " +
-          "FROM company_data_products GROUP BY category ORDER BY category");
+      rs = stmt.executeQuery("SELECT \"category\", COUNT(*) as \"cnt\", AVG(\"price\") as \"avg_price\" " +
+          "FROM \"company_data_products\" GROUP BY \"category\" ORDER BY \"category\"");
 
       assertTrue(rs.next());
       assertEquals("Electronics", rs.getString("category"));
@@ -389,13 +398,15 @@ public class GraphQLIntegrationTest {
       assertEquals(149.99, rs.getDouble("avg_price"), 0.01);
 
       assertFalse(rs.next());
+
+      assertFalse(rs.next());
       rs.close();
     }
   }
 
   @Test public void testGraphQLWithComplexJoin() throws Exception {
     // Test a complex query that would normally require GraphQL field resolution
-    // but we simulate with separate tables
+    // but we simulate with separate tables using jsonSearchPaths to split one response
     String modelJson = "{\n"
   +
         "  \"version\": \"1.0\",\n"
@@ -414,37 +425,37 @@ public class GraphQLIntegrationTest {
   +
         "      \"operand\": {\n"
   +
+        "        \"executionEngine\": \"LINQ4J\",\n"
+  +
+        "        \"ephemeralCache\": true,\n"
+  +
         "        \"tables\": [\n"
   +
         "          {\n"
   +
-        "            \"name\": \"users\",\n"
+        "            \"name\": \"graphql_response\",\n"
   +
         "            \"url\": \"" + baseUrl + "/graphql\",\n"
+  +
+        "            \"format\": \"json\",\n"
   +
         "            \"method\": \"POST\",\n"
   +
         "            \"body\": \"{\\\"query\\\":\\\"{ users { id name email totalOrders } orders { id userId total status } products { id name price category } }\\\"}\",\n"
   +
-        "            \"jsonPath\": \"$.data.users\",\n"
+        "            \"headers\": {\n"
   +
-        "            \"flavor\": \"json\"\n"
+        "              \"Content-Type\": \"application/json\"\n"
   +
-        "          },\n"
+        "            },\n"
   +
-        "          {\n"
+        "            \"jsonSearchPaths\": [\n"
   +
-        "            \"name\": \"orders\",\n"
+        "              \"$.data.users\",\n"
   +
-        "            \"url\": \"" + baseUrl + "/graphql\",\n"
+        "              \"$.data.orders\"\n"
   +
-        "            \"method\": \"POST\",\n"
-  +
-        "            \"body\": \"{\\\"query\\\":\\\"{ users { id name email totalOrders } orders { id userId total status } products { id name price category } }\\\"}\",\n"
-  +
-        "            \"jsonPath\": \"$.data.orders\",\n"
-  +
-        "            \"flavor\": \"json\"\n"
+        "            ]\n"
   +
         "          }\n"
   +
@@ -468,12 +479,12 @@ public class GraphQLIntegrationTest {
          Statement stmt = conn.createStatement()) {
 
       // Complex join query
-      ResultSet rs = stmt.executeQuery("SELECT u.name, COUNT(o.id) as order_count, SUM(o.total) as total_spent " +
+      ResultSet rs = stmt.executeQuery("SELECT u.\"name\", COUNT(o.\"id\") as \"order_count\", SUM(o.\"total\") as \"total_spent\" " +
           "FROM \"users\" u " +
-          "JOIN orders o ON u.id = o.userId " +
-          "WHERE o.status = 'completed' " +
-          "GROUP BY u.name " +
-          "ORDER BY total_spent DESC");
+          "JOIN \"orders\" o ON u.\"id\" = o.\"userId\" " +
+          "WHERE o.\"status\" = 'completed' " +
+          "GROUP BY u.\"name\" " +
+          "ORDER BY \"total_spent\" DESC");
 
       assertTrue(rs.next());
       assertEquals("Charlie", rs.getString("name"));
@@ -484,6 +495,8 @@ public class GraphQLIntegrationTest {
       assertEquals("Alice", rs.getString("name"));
       assertEquals(2, rs.getInt("order_count"));
       assertEquals(279.97, rs.getDouble("total_spent"), 0.01);
+
+      assertFalse(rs.next());
 
       assertFalse(rs.next());
       rs.close();

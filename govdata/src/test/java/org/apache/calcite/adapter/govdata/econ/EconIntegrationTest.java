@@ -605,17 +605,17 @@ public class EconIntegrationTest {
         // Objective 2.1: Validate state_wages conversion
         LOGGER.info("\n1. OBJECTIVE 2.1: Validating state_wages conversion:");
         validatePhase2Table(stmt, "state_wages", cacheDir, parquetDir,
-            "source=econ/type=state_wages", "year", startYear, endYear);
+            "econ/type=state_wages", "year", startYear, endYear);
 
         // Objective 2.2: Validate world_indicators conversion
         LOGGER.info("\n2. OBJECTIVE 2.2: Validating world_indicators conversion:");
         validatePhase2Table(stmt, "world_indicators", cacheDir, parquetDir,
-            "source=econ/type=indicators", "year", startYear, endYear);
+            "econ/type=indicators", "year", startYear, endYear);
 
         // Objective 2.3: Validate metro_wages download and conversion
         LOGGER.info("\n3. OBJECTIVE 2.3: Validating metro_wages download and conversion:");
         validatePhase2Table(stmt, "metro_wages", cacheDir, parquetDir,
-            "source=econ/type=metro_wages", "year", startYear, endYear);
+            "econ/type=metro_wages", "year", startYear, endYear);
 
         LOGGER.info("\n================================================================================");
         LOGGER.info(" ✅ PHASE 2 COMPLETE: All JSON-to-Parquet conversions validated!");
@@ -632,7 +632,7 @@ public class EconIntegrationTest {
    * @param tableName Name of the table to validate
    * @param cacheDir Base cache directory path (for logging only)
    * @param parquetDir Base parquet directory path (for logging only)
-   * @param pathPrefix Hive-style path prefix (e.g., "source=econ/type=state_wages")
+   * @param pathPrefix Hive-style path prefix (e.g., "econ/type=state_wages")
    * @param partitionKey Partition key (typically "year")
    * @param startYear Start year for validation
    * @param endYear End year for validation
@@ -894,11 +894,11 @@ public class EconIntegrationTest {
       try (Statement stmt = conn.createStatement()) {
         LOGGER.info("\n1. Validating county_qcew table:");
         validatePhase2Table(stmt, "county_qcew", cacheDir, parquetDir,
-            "source=econ/type=county_qcew", "year", startYear, endYear);
+            "econ/type=county_qcew", "year", startYear, endYear);
 
         LOGGER.info("\n2. Validating county_wages table:");
         validatePhase2Table(stmt, "county_wages", cacheDir, parquetDir,
-            "source=econ/type=county_wages", "year", startYear, endYear);
+            "econ/type=county_wages", "year", startYear, endYear);
 
         LOGGER.info("\n================================================================================");
         LOGGER.info(" ✅ PHASE 6 COMPLETE: County-level QCEW data validated!");

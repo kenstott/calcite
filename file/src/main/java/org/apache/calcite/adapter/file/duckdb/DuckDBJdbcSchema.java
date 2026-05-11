@@ -49,11 +49,12 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   private final Connection persistentConnection;
   private final org.apache.calcite.adapter.file.FileSchema fileSchema; // Keep reference for refreshes
   private final String schemaName; // Keep local copy since parent field is package-private
+  private final String catalogPath; // DuckDB file path — used as key for pending view flush
 
   public DuckDBJdbcSchema(DataSource dataSource, SqlDialect dialect,
                          JdbcConvention convention, String catalog, String schema,
                          String directoryPath, boolean recursive, Connection persistentConnection,
-                         org.apache.calcite.adapter.file.FileSchema fileSchema) {
+                         org.apache.calcite.adapter.file.FileSchema fileSchema, String catalogPath) {
     // DuckDB uses in-memory databases where catalog concept is irrelevant
     // Always pass null as catalog to ensure 2-part naming (schema.table)
     super(dataSource, dialect, convention, null, schema);
@@ -62,6 +63,7 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     this.persistentConnection = persistentConnection;
     this.fileSchema = fileSchema; // Keep FileSchema alive for refresh handling
     this.schemaName = schema; // Keep local copy
+    this.catalogPath = catalogPath;
 
     LOGGER.info("Created DuckDB JDBC schema for directory: {} (recursive={}) with persistent connection",
                 directoryPath, recursive);
@@ -160,7 +162,7 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     try {
       // Use CREATE OR REPLACE to handle schema changes atomically
       String viewSql =
-          String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')",
+          String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)",
           schemaName, tableName, tableLocation);
 
       LOGGER.info("Recreating DuckDB Iceberg view after ETL: \"{}.{}\" -> {}",
@@ -214,6 +216,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
 
   @Override public Table getTable(String name) {
     LOGGER.info("Looking for table: '{}'", name);
+    // Flush deferred views on first access — all schemas are registered by now
+    if (catalogPath != null && DuckDBPendingViews.hasPending(catalogPath)) {
+      DuckDBPendingViews.flush(catalogPath, persistentConnection);
+    }
     Table table = super.getTable(name);
     if (table != null) {
       LOGGER.info("Found DuckDB table '{}' - all operations will be pushed to DuckDB", name);

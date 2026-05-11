@@ -18,14 +18,13 @@ package org.apache.calcite.adapter.file.iceberg;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.ReplacePartitions;
 import org.apache.iceberg.RewriteFiles;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.StructLike;
@@ -34,7 +33,6 @@ import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
 import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.hadoop.HadoopInputFile;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
 import org.apache.iceberg.io.InputFile;
@@ -72,30 +70,15 @@ public class IcebergTableWriter {
 
   private final Table table;
   private final StorageProvider storageProvider;
-  private final Configuration hadoopConf;
 
   /**
    * Creates a writer for the specified Iceberg table.
-   *
-   * @param table The Iceberg table to write to
-   * @param storageProvider Storage provider for file operations (local/S3)
    */
   public IcebergTableWriter(Table table, StorageProvider storageProvider) {
-    this(table, storageProvider, new Configuration());
-  }
-
-  /**
-   * Creates a writer for the specified Iceberg table with custom Hadoop configuration.
-   *
-   * @param table The Iceberg table to write to
-   * @param storageProvider Storage provider for file operations (local/S3)
-   * @param hadoopConf Hadoop configuration with S3 credentials
-   */
-  public IcebergTableWriter(Table table, StorageProvider storageProvider, Configuration hadoopConf) {
     this.table = table;
     this.storageProvider = storageProvider;
-    this.hadoopConf = hadoopConf;
   }
+
 
   /**
    * Commits files from a staging directory to the Iceberg table.
@@ -219,6 +202,28 @@ public class IcebergTableWriter {
 
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
+  }
+
+  /**
+   * Replaces all data in the affected partitions with the given files.
+   * Use for reference tables that should be fully overwritten each run.
+   */
+  public void replacePartitionsDataFiles(List<DataFile> allDataFiles) {
+    if (allDataFiles.isEmpty()) {
+      LOGGER.debug("No data files to replace partitions");
+      return;
+    }
+    LOGGER.info("Replace-partitions committing {} data files to Iceberg table {}",
+        allDataFiles.size(), table.name());
+    long startTime = System.currentTimeMillis();
+    ReplacePartitions replace = table.newReplacePartitions();
+    for (DataFile dataFile : allDataFiles) {
+      replace.addFile(dataFile);
+    }
+    replace.commit();
+    ensureVersionHint();
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.info("Replace-partitions commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
   }
 
   /**
@@ -395,6 +400,83 @@ public class IcebergTableWriter {
   private long estimateRecordCount(long fileSize) {
     // Rough estimate: ~100 bytes per row on average
     return Math.max(1, fileSize / 100);
+  }
+
+  /**
+   * Finds parquet files that exist on storage for the given partition but are not registered
+   * in the current Iceberg snapshot. Used for tracker self-healing: if a partition's data
+   * files exist on S3 but the catalog was cleared, we can re-register them without re-fetching
+   * from the source.
+   *
+   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
+   * @return DataFile list of orphaned files ready to commit; empty if none found
+   */
+  public List<DataFile> findOrphanedDataFiles(Map<String, String> partitionVariables)
+      throws IOException {
+    String hivePath = buildHivePartitionPath(partitionVariables);
+    String dataDir = table.location() + "/data"
+        + (hivePath.isEmpty() ? "" : "/" + hivePath);
+
+    List<StorageProvider.FileEntry> entries;
+    try {
+      entries = storageProvider.listFiles(dataDir, true);
+    } catch (IOException e) {
+      LOGGER.debug("Self-heal: no files at {}: {}", dataDir, e.getMessage());
+      return java.util.Collections.emptyList();
+    }
+    if (entries == null || entries.isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+
+    // Build set of paths already tracked by the current snapshot so we don't double-register.
+    Set<String> catalogPaths = new HashSet<String>();
+    if (table.currentSnapshot() != null) {
+      try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+        for (FileScanTask task : tasks) {
+          String p = task.file().path().toString();
+          int sl = p.lastIndexOf('/');
+          catalogPaths.add(sl >= 0 ? p.substring(sl + 1) : p);
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Self-heal: could not scan catalog for {}: {}", dataDir, e.getMessage());
+      }
+    }
+
+    List<DataFile> orphaned = new ArrayList<DataFile>();
+    for (StorageProvider.FileEntry entry : entries) {
+      String path = entry.getPath();
+      if (!path.endsWith(".parquet")) {
+        continue;
+      }
+      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      if (!catalogPaths.contains(fileName)) {
+        orphaned.add(buildDataFile(path, entry.getSize()));
+      }
+    }
+    return orphaned;
+  }
+
+  /**
+   * Builds a Hive-style partition path (e.g. {@code year=2025/month=4}) from partition
+   * variables, using the table's partition spec field order.
+   */
+  private String buildHivePartitionPath(Map<String, String> partitionVariables) {
+    if (partitionVariables == null || partitionVariables.isEmpty()) {
+      return "";
+    }
+    PartitionSpec spec = table.spec();
+    StringBuilder sb = new StringBuilder();
+    for (org.apache.iceberg.PartitionField field : spec.fields()) {
+      String name = field.name();
+      String val = partitionVariables.get(name);
+      if (val != null) {
+        if (sb.length() > 0) {
+          sb.append("/");
+        }
+        sb.append(name).append("=").append(val);
+      }
+    }
+    return sb.toString();
   }
 
   /**
@@ -627,13 +709,20 @@ public class IcebergTableWriter {
         return value.toString();
       case DATE:
         if (value instanceof java.time.LocalDate) {
-          return (int) ((java.time.LocalDate) value).toEpochDay();
+          return value;
+        }
+        if (value instanceof Integer) {
+          return java.time.LocalDate.ofEpochDay((Integer) value);
         }
         if (value instanceof java.sql.Date) {
-          return (int) ((java.sql.Date) value).toLocalDate().toEpochDay();
+          return ((java.sql.Date) value).toLocalDate();
         }
         if (value instanceof String) {
-          return (int) java.time.LocalDate.parse((String) value).toEpochDay();
+          try {
+            return java.time.LocalDate.parse((String) value);
+          } catch (Exception e) {
+            return null;
+          }
         }
         return value;
       case TIMESTAMP:
@@ -943,7 +1032,6 @@ public class IcebergTableWriter {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
 
-    // First pass: count total records and bytes to plan output files
     long totalRecords = 0;
     long totalBytes = 0;
     Set<DataFile> filesToDelete = new HashSet<>();
@@ -959,23 +1047,20 @@ public class IcebergTableWriter {
       return;
     }
 
-    // Estimate records per output file based on compression ratio
-    // Assume compacted files have similar compression to originals
-    double avgBytesPerRecord = (double) totalBytes / totalRecords;
-    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
-
-    LOGGER.info("Streaming compaction: {} records from {} files, ~{} records per output file",
-        totalRecords, smallFiles.size(), recordsPerFile);
-
-    // Get partition values from first file (all files in partition have same values)
+    // Java reader: uses table.io() FileIO which has S3 credentials already configured
     StructLike partitionData = smallFiles.get(0).file().partition();
     PartitionKey partitionKey = new PartitionKey(spec, schema);
     copyPartitionValues(partitionKey, partitionData, spec);
 
+    double avgBytesPerRecord = (double) totalBytes / totalRecords;
+    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
+
+    LOGGER.info("Java compaction: {} records from {} files, ~{} records per output file",
+        totalRecords, smallFiles.size(), recordsPerFile);
+
     String dataLocation = table.location() + "/data";
     String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
 
-    // Streaming compaction: read from input files and write directly to output
     List<DataFile> newFiles = new ArrayList<>();
     DataWriter<Record> currentWriter = null;
     int currentRecordCount = 0;
@@ -984,8 +1069,7 @@ public class IcebergTableWriter {
     try {
       for (FileScanTask task : smallFiles) {
         DataFile dataFile = task.file();
-        String inputPath = normalizeS3Path(dataFile.path().toString());
-        InputFile inputFile = HadoopInputFile.fromPath(new Path(inputPath), hadoopConf);
+        InputFile inputFile = table.io().newInputFile(dataFile.path().toString());
 
         try (CloseableIterable<Record> records = Parquet.read(inputFile)
             .project(schema)
@@ -995,14 +1079,12 @@ public class IcebergTableWriter {
             .build()) {
 
           for (Record record : records) {
-            // Open new writer if needed
             if (currentWriter == null) {
               String outputPath = dataLocation + "/" + partitionPath + "/compacted_"
                   + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
               if (outputPath.startsWith("s3://")) {
                 outputPath = "s3a://" + outputPath.substring(5);
               }
-
               OutputFile outputFile = table.io().newOutputFile(outputPath);
               currentWriter = Parquet.writeData(outputFile)
                   .schema(schema)
@@ -1013,19 +1095,13 @@ public class IcebergTableWriter {
                   .build();
               currentRecordCount = 0;
             }
-
-            // Write record
             currentWriter.write(record);
             currentRecordCount++;
             totalWritten++;
-
-            // Rotate file when target size reached
             if (currentRecordCount >= recordsPerFile) {
               currentWriter.close();
               newFiles.add(currentWriter.toDataFile());
               currentWriter = null;
-              LOGGER.debug("Compaction progress: {} records written to {} files",
-                  totalWritten, newFiles.size());
             }
           }
         } catch (Exception e) {
@@ -1033,14 +1109,12 @@ public class IcebergTableWriter {
         }
       }
 
-      // Close final writer if still open
       if (currentWriter != null) {
         currentWriter.close();
         newFiles.add(currentWriter.toDataFile());
         currentWriter = null;
       }
     } finally {
-      // Ensure writer is closed on any exception
       if (currentWriter != null) {
         try {
           currentWriter.close();
@@ -1055,7 +1129,7 @@ public class IcebergTableWriter {
       return;
     }
 
-    LOGGER.info("Streaming compaction wrote {} records to {} files", totalWritten, newFiles.size());
+    LOGGER.info("Java compaction wrote {} records to {} files", totalWritten, newFiles.size());
 
     // Commit the rewrite: delete old files, add new files
     RewriteFiles rewrite = table.newRewrite();
@@ -1074,6 +1148,7 @@ public class IcebergTableWriter {
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
   }
+
 
   /**
    * Copies partition values from StructLike to PartitionKey.

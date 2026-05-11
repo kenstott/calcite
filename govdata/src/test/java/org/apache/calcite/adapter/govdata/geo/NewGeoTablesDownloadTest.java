@@ -192,7 +192,7 @@ public class NewGeoTablesDownloadTest {
     System.out.println("Testing hive-partitioned structure in: " + tempDir);
 
     // Create the expected hive-partitioned directory structure
-    File geoSourceDir = new File(testDir, "source=geo");
+    File geoSourceDir = new File(testDir, "geo");
     File boundaryDir = new File(geoSourceDir, "type=boundary");
     File crosswalkDir = new File(geoSourceDir, "type=crosswalk");
 
@@ -208,13 +208,13 @@ public class NewGeoTablesDownloadTest {
     assertTrue(crosswalkDir.exists(), "crosswalk type partition should exist");
 
     System.out.println("✓ Hive-partitioned structure created:");
-    System.out.println("  source=geo/");
+    System.out.println("  geo/");
     System.out.println("    type=boundary/");
     System.out.println("    type=crosswalk/");
 
     // Test directory structure matches expectation
     String boundaryPath = boundaryDir.getAbsolutePath();
-    assertTrue(boundaryPath.contains("source=geo"), "Should contain geo source partition");
+    assertTrue(boundaryPath.contains("geo"), "Should contain geo source partition");
     assertTrue(boundaryPath.contains("type=boundary"), "Should contain boundary type partition");
 
     System.out.println("✓ Hive partitioning structure verified");

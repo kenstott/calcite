@@ -69,6 +69,10 @@ public abstract class AbstractSecDataDownloader {
             boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
             String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
             String expression = colNode.has("expression") ? colNode.get("expression").asText() : null;
+            // Columns with bulkGenerator are computed (deferred to GPU/batch processing)
+            if (expression == null && colNode.has("bulkGenerator")) {
+              expression = "__BULK_GENERATED__";
+            }
 
             if (colName != null) {
               columns.add(

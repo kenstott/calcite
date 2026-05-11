@@ -37,8 +37,8 @@ if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
 fi
 
 S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-4}"
-S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE}"
-ICEBERG_PATH="$S3_BUCKET/source=sec/SEC/vectorized_chunks"
+ICEBERG_PATH="$S3_BUCKET/sec/vectorized_chunks"
+RCLONE_BUCKET="$(echo "$S3_BUCKET" | sed 's|^s3://|r2:|')"
 OPERATING_DIR="${GOVDATA_HOME}/build/.aperio/sec"
 PARTITION_DB="$OPERATING_DIR/.partition_status.duckdb"
 VSS_DB="${VSS_DB:-$GOVDATA_HOME/build/.aperio/vss/chunks_vss.duckdb}"
@@ -57,11 +57,8 @@ echo ""
 # -----------------------------------------------
 echo "Step 1: Deleting staging *_chunks.parquet files from S3..."
 
-DELETED=$(aws s3 rm "$S3_BUCKET/source=sec/" \
-    --recursive \
-    --exclude "*" \
-    --include "*_chunks.parquet" \
-    --endpoint-url "$S3_ENDPOINT" 2>&1 | grep -c "^delete:" || true)
+DELETED=$(rclone ls "$RCLONE_BUCKET/sec/" --include "*_chunks.parquet" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+rclone delete "$RCLONE_BUCKET/sec/" --include "*_chunks.parquet" 2>/dev/null || true
 
 echo "  Deleted $DELETED staging chunk files"
 echo ""
@@ -91,7 +88,7 @@ except Exception as e1:
     # Fallback: try in-memory catalog with S3 warehouse
     try:
         s3_bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
-        warehouse = f"{s3_bucket}/source=sec/SEC".replace("s3://", "s3a://")
+        warehouse = f"{s3_bucket}/sec".replace("s3://", "s3a://")
 
         catalog = load_catalog("default", **{
             "type": "in-memory",
@@ -110,7 +107,7 @@ except Exception as e1:
         import subprocess
         bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
         endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
-        iceberg_meta = f"{bucket}/source=sec/SEC/vectorized_chunks/metadata/"
+        iceberg_meta = f"{bucket}/sec/vectorized_chunks/metadata/"
         result = subprocess.run(
             ["aws", "s3", "rm", iceberg_meta, "--recursive", "--endpoint-url", endpoint],
             capture_output=True, text=True
@@ -158,13 +155,11 @@ else
 fi
 
 # Also clean S3 VSS cache if it exists
-aws s3 rm "$S3_BUCKET/cache/vss/chunks_vss.duckdb" \
-    --endpoint-url "$S3_ENDPOINT" 2>/dev/null && \
+rclone deletefile "$RCLONE_BUCKET/cache/vss/chunks_vss.duckdb" 2>/dev/null && \
     echo "  Deleted S3 VSS cache: $S3_BUCKET/cache/vss/chunks_vss.duckdb" || \
     echo "  No S3 VSS cache found"
 
-aws s3 rm "$S3_BUCKET/cache/vss/metadata.json" \
-    --endpoint-url "$S3_ENDPOINT" 2>/dev/null && \
+rclone deletefile "$RCLONE_BUCKET/cache/vss/metadata.json" 2>/dev/null && \
     echo "  Deleted S3 VSS metadata" || true
 
 echo ""

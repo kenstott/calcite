@@ -400,7 +400,7 @@ public class FormatAwareSchemaResolver {
         String firstLine = reader.readLine();
         if (firstLine != null) {
           // Simple comma counting (not perfect, but works for basic CSV)
-          return firstLine.split(",").length;
+          return firstLine.split(",", -1).length;
         }
       }
       return 0;
@@ -416,7 +416,7 @@ public class FormatAwareSchemaResolver {
       try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
         String firstLine = reader.readLine();
         if (firstLine != null) {
-          String[] columns = firstLine.split(",");
+          String[] columns = firstLine.split(",", -1);
           RelDataTypeFactory.Builder builder = typeFactory.builder();
 
           for (int i = 0; i < columns.length; i++) {

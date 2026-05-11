@@ -14,7 +14,7 @@
 
 schemaName: "${SCHEMA_NAME:geo}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=geo"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/geo"
 refreshInterval: "PT1H"
 
 comment: >
@@ -185,7 +185,7 @@ dimension_values:
 materializationDefaults:
   format: iceberg
   options:
-    warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+    warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
     icebergTableName: "${TABLE_NAME}"
     partitionBy:
       - type
@@ -262,7 +262,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: states
         catalogType: hadoop
         runCompaction: true
@@ -320,7 +320,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: counties
         catalogType: hadoop
         runCompaction: true
@@ -380,7 +380,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: places
         catalogType: hadoop
         runCompaction: true
@@ -452,7 +452,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zctas
         catalogType: hadoop
         runCompaction: true
@@ -511,7 +511,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: census_tracts
         catalogType: hadoop
         runCompaction: true
@@ -570,7 +570,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: block_groups
         catalogType: hadoop
         runCompaction: true
@@ -630,7 +630,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: cbsa
         catalogType: hadoop
         runCompaction: true
@@ -693,7 +693,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: congressional_districts
         catalogType: hadoop
         runCompaction: true
@@ -755,7 +755,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: school_districts
         catalogType: hadoop
         runCompaction: true
@@ -815,7 +815,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_lower
         catalogType: hadoop
         runCompaction: true
@@ -872,7 +872,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_upper
         catalogType: hadoop
         runCompaction: true
@@ -935,7 +935,7 @@ partitionedTables:
       partition:
         columns: [type, year, state_fips]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: county_subdivisions
         catalogType: hadoop
         runCompaction: true
@@ -998,7 +998,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: tribal_areas
         catalogType: hadoop
         runCompaction: true
@@ -1085,7 +1085,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: urban_areas
         catalogType: hadoop
         runCompaction: true
@@ -1168,7 +1168,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: pumas
         catalogType: hadoop
         runCompaction: true
@@ -1253,7 +1253,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: voting_districts
         catalogType: hadoop
         runCompaction: true
@@ -1326,7 +1326,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_county_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1398,7 +1398,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_cbsa_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1470,7 +1470,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: tract_zip_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1543,7 +1543,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_tract_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1615,7 +1615,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_cd_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1684,7 +1684,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: county_zip_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1756,7 +1756,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: cd_zip_crosswalk
         catalogType: hadoop
         runCompaction: true
@@ -1830,7 +1830,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: rural_urban_continuum
         catalogType: hadoop
         runCompaction: true
@@ -1914,7 +1914,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: ruca_codes
         catalogType: hadoop
         runCompaction: true
@@ -1985,7 +1985,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_counties
         catalogType: hadoop
         runCompaction: true
@@ -2066,7 +2066,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_places
         catalogType: hadoop
         runCompaction: true
@@ -2138,7 +2138,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_zctas
         catalogType: hadoop
         runCompaction: true
@@ -2199,7 +2199,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc2
         catalogType: hadoop
         runCompaction: true
@@ -2260,7 +2260,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc4
         catalogType: hadoop
         runCompaction: true
@@ -2321,7 +2321,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc8
         catalogType: hadoop
         runCompaction: true
@@ -2382,7 +2382,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc12
         catalogType: hadoop
         runCompaction: true

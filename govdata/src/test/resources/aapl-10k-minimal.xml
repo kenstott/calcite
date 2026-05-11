@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xbrl xmlns="http://www.xbrl.org/2003/instance"
+      xmlns:dei="http://xbrl.sec.gov/dei/2022"
+      xmlns:xbrll="http://www.xbrl.org/2003/linkbase">
+  <dei:EntityRegistrantName contextRef="d1">Apple Inc.</dei:EntityRegistrantName>
+  <dei:EntityCentralIndexKey contextRef="d1">0000320193</dei:EntityCentralIndexKey>
+  <dei:DocumentType contextRef="d1">10-K</dei:DocumentType>
+  <dei:DocumentPeriodEndDate contextRef="d1">2023-09-30</dei:DocumentPeriodEndDate>
+  <dei:CurrentFiscalYearEndDate contextRef="d1">--09-30</dei:CurrentFiscalYearEndDate>
+  <dei:EntityIncorporationStateCountryCode contextRef="d1">CA</dei:EntityIncorporationStateCountryCode>
+  <context id="d1">
+    <entity><identifier scheme="http://www.sec.gov/CIK">0000320193</identifier></entity>
+    <period><endDate>2023-09-30</endDate></period>
+  </context>
+</xbrl>

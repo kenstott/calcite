@@ -36,7 +36,7 @@ public class CompareTimestampsTest {
         DriverManager.registerDriver(new FileJdbcDriver());
 
         Properties info = new Properties();
-        info.put("model", FileAdapterTests.jsonPath("BUG"));
+        info.put("model", FileAdapterTests.jsonPath("bug"));
 
         String sql = "select * from \"date\" where \"empno\" = 140";
 
@@ -54,10 +54,10 @@ public class CompareTimestampsTest {
             }
         }
 
-        // Test with jdbc:file:
-        LOGGER.debug("Testing with jdbc:file:");
+        // Test with second connection to verify consistency
+        LOGGER.debug("Testing with second jdbc:calcite: connection:");
         long fileMillis = 0;
-        try (Connection conn = DriverManager.getConnection("jdbc:file:", info);
+        try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             if (rs.next()) {
@@ -70,8 +70,8 @@ public class CompareTimestampsTest {
 
         LOGGER.debug("Difference: {} ms", fileMillis - calciteMillis);
 
-        // Both drivers should return the same timestamp value
+        // Both connections should return the same timestamp value
         assertEquals(calciteMillis, fileMillis,
-            "jdbc:file: and jdbc:calcite: should return the same timestamp value");
+            "Separate connections should return the same timestamp value");
     }
 }

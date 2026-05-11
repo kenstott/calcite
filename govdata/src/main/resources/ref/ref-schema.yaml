@@ -21,7 +21,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:ref}"
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=ref"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/ref"
 
 comment: >
   Reference and cross-referencing tables for financial entity identification.
@@ -213,6 +213,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # GLEIF CIK MAPPING — LEI <-> SEC CIK bridge table
@@ -280,6 +283,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
   # ==========================================================================
   # FIGI INSTRUMENTS — OpenFIGI instrument identifiers
@@ -383,6 +389,9 @@ partitionedTables:
         batchPartitionColumns: [type]
         runMaintenance: true
         snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
 
 # ============================================================================
 # CONSTRAINTS
@@ -402,6 +411,10 @@ constraints:
   gleif_cik_mapping:
     primaryKey: [type, lei]
     foreignKeys:
+      - columns: [lei]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+        comment: Links CIK-LEI bridge record to full GLEIF entity record
       - columns: [cik]
         targetSchema: "${SEC_SCHEMA_NAME:sec}"
         targetTable: filings
@@ -409,3 +422,31 @@ constraints:
 
   figi_instruments:
     primaryKey: [type, figi]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: ticker_instrument_map
+    comment: >
+      Connects OpenFIGI instruments to SEC filers via shared ticker symbol.
+      One row per ticker+figi — enables instrument-to-company resolution and
+      cross-referencing FIGI, CIK, and company name for equity analysis.
+    sql: >
+      SELECT
+        fi.ticker,
+        fi.figi,
+        fi.name          AS instrument_name,
+        fi.exchange_code,
+        fi.market_sector,
+        fi.security_type,
+        fm.cik,
+        fm.company_name,
+        COUNT(DISTINCT fm.accession_number) AS sec_filings_count
+      FROM figi_instruments fi
+      LEFT JOIN "sec"."filing_metadata" fm ON fi.ticker = fm.ticker
+      WHERE fi.ticker IS NOT NULL
+      GROUP BY fi.ticker, fi.figi, fi.name, fi.exchange_code,
+               fi.market_sector, fi.security_type, fm.cik, fm.company_name

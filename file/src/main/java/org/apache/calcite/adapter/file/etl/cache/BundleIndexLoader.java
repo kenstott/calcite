@@ -65,7 +65,8 @@ public class BundleIndexLoader {
       List<StorageProvider.FileEntry> files = storageProvider.listFiles(prefix, false);
       List<String> indexFiles = new ArrayList<String>();
       for (StorageProvider.FileEntry entry : files) {
-        if (entry.getPath().endsWith(".idx.jsonl")) {
+        if (entry.getPath().endsWith(".jsonl")
+            && entry.getPath().contains(".idx")) {
           indexFiles.add(entry.getPath());
         }
       }
@@ -89,7 +90,8 @@ public class BundleIndexLoader {
           if (lastSlash >= 0) {
             fileName = fileName.substring(lastSlash + 1);
           }
-          String bundleFile = fileName.replace(".idx.jsonl", ".bin");
+          // Strip index suffix: .idx.jsonl or .idx-NNN.jsonl → .bin
+          String bundleFile = fileName.replaceAll("\\.idx(-\\d+)?\\.jsonl$", ".bin");
           index.mergeFromJsonl(content, bundleFile);
           LOGGER.debug("Merged bundle index: {} ({} total entries)", indexFile, index.size());
         } catch (IOException e) {

@@ -163,6 +163,10 @@ public class SchemaResult {
       return this;
     }
 
+    public long getTotalRows() {
+      return totalRows;
+    }
+
     public Builder elapsedMs(long elapsedMs) {
       this.elapsedMs = elapsedMs;
       return this;

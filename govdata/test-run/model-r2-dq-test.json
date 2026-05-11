@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": [
+        "0001327688",
+        "0001842167",
+        "0000320193",
+        "0000789019",
+        "0001652044",
+        "0001318605",
+        "0001045810",
+        "0001326190",
+        "0001067983",
+        "0001108524",
+        "0001730168",
+        "0000002488",
+        "0000070858",
+        "0000034088",
+        "0000200406",
+        "0000019617",
+        "0000104169",
+        "0000001800",
+        "0000093410",
+        "0000909832"
+      ],
+      "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A"],
+      "fetchStockPrices": false,
+      "startYear": 2025,
+      "endYear": 2026,
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "${CALCITE_TRACKER_BACKEND}",
+      "s3Config": {
+        "accessKeyId": "${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}",
+        "region": "${AWS_REGION}"
+      }
+    }
+  }]
+}

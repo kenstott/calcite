@@ -52,6 +52,13 @@ dependencies {
     // HTML parsing for inline XBRL
     implementation("org.jsoup:jsoup")
 
+    // PDF text extraction for security advisories (cyber_vuln)
+    implementation("org.apache.pdfbox:pdfbox:2.0.31")
+
+    // Excel/XLSX parsing for EIA bulk downloads (EIA-860, EIA-861, EIA-814)
+    implementation("org.apache.poi:poi:5.3.0")
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
+
     // Geometry processing with JTS (lightweight)
     implementation("org.locationtech.jts:jts-core:1.19.0")
 
@@ -66,6 +73,9 @@ dependencies {
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
+    testImplementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
+    testImplementation("org.apache.hadoop:hadoop-aws:3.3.6")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
@@ -75,12 +85,35 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
-tasks.register<Delete>("cleanTestLogs") {
-    delete(layout.buildDirectory.dir("test-logs"))
+tasks.register("cleanTestLogs") {
+    // Always run — no UP-TO-DATE skipping on ExFAT/APFS where ._* sidecar files accumulate
+    outputs.upToDateWhen { false }
+    doLast {
+        // macOS creates AppleDouble ._* files that block Gradle's directory deletion on ExFAT/APFS.
+        // Gradle's fileTree excludes hidden files by default, so use exec(find) to reach them.
+        val buildDir = layout.buildDirectory.get().asFile
+        exec {
+            commandLine("find", buildDir.absolutePath, "-name", "._*", "-delete")
+            isIgnoreExitValue = true
+        }
+        val testLogs = layout.buildDirectory.dir("test-logs").get().asFile
+        if (testLogs.exists()) {
+            testLogs.deleteRecursively()
+        }
+    }
+}
+
+// Remove macOS resource fork (._*) files from build/test-* dirs before Gradle's own cleanup
+// runs — these files block Java's File.delete() on external HFS+ / APFS volumes.
+tasks.register<Exec>("cleanMacResourceForks") {
+    commandLine("sh", "-c",
+        "find '${layout.buildDirectory.get()}/test-results' " +
+        "'${layout.buildDirectory.get()}/test-logs' " +
+        "-name '._*' -delete 2>/dev/null; true")
 }
 
 tasks.test {
-    dependsOn("cleanTestLogs")
+    dependsOn("cleanMacResourceForks", "cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
     // Run tests serially to avoid DuckDB file lock conflicts
@@ -94,8 +127,8 @@ tasks.test {
     // Increase heap size for tests that process large CSV files
     // BLS QCEW bulk downloads can have 250k+ rows per year, each with 20+ columns
     // Note: Keep maxHeapSize below system RAM to avoid OOM kills (exit code 137)
-    minHeapSize = "1g"
-    maxHeapSize = "4g"
+    minHeapSize = System.getenv("TEST_MIN_HEAP") ?: "1g"
+    maxHeapSize = System.getenv("TEST_MAX_HEAP") ?: "4g"
 
     // JVM crash debugging - generates detailed crash logs and heap dumps
     jvmArgs(
@@ -154,8 +187,8 @@ tasks.register<JavaExec>("etlRunner") {
     mainClass.set("org.apache.calcite.adapter.govdata.etl.EtlRunner")
 
     // Default JVM memory settings for processing large datasets
-    minHeapSize = "1g"
-    maxHeapSize = "4g"
+    minHeapSize = System.getenv("ETL_MIN_HEAP") ?: "1g"
+    maxHeapSize = System.getenv("ETL_MAX_HEAP") ?: "4g"
 
     // Pass through any command line arguments
     // Usage: ./gradlew :govdata:etlRunner --args="--model path/to/model.json"

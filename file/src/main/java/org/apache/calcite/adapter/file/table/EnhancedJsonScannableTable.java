@@ -75,6 +75,16 @@ public class EnhancedJsonScannableTable extends JsonScannableTable {
     this.options = options;
   }
 
+  /**
+   * Creates an EnhancedJsonScannableTable with options, column casing, and forced data type.
+   */
+  public EnhancedJsonScannableTable(Source source, ExecutionEngineConfig engineConfig,
+      Map<String, Object> options, String columnNameCasing, String forcedDataType) {
+    super(source, options, columnNameCasing, forcedDataType);
+    this.engineConfig = engineConfig;
+    this.options = options;
+  }
+
   @Override public String toString() {
     return "EnhancedJsonScannableTable[engine=" + engineConfig.getEngineType() + "]";
   }

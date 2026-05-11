@@ -108,9 +108,31 @@ import java.util.regex.Pattern;
  *       across multiple FileSchema instances may cause conflicts</li>
  * </ul>
  */
-public class FileSchema extends AbstractSchema implements CommentableSchema {
+public class FileSchema extends AbstractSchema implements CommentableSchema, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileSchema.class);
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+
+  /** Registry of all FileSchema instances for cleanup. */
+  private static final List<java.lang.ref.WeakReference<FileSchema>> INSTANCES =
+      Collections.synchronizedList(new ArrayList<java.lang.ref.WeakReference<FileSchema>>());
+
+  static {
+    // Register JVM shutdown hook to clean up all refresh schedulers
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> closeAll(), "FileSchema-Cleanup"));
+  }
+
+  /** Closes all active FileSchema instances (shuts down refresh schedulers). */
+  public static void closeAll() {
+    synchronized (INSTANCES) {
+      for (java.lang.ref.WeakReference<FileSchema> ref : INSTANCES) {
+        FileSchema schema = ref.get();
+        if (schema != null) {
+          schema.close();
+        }
+      }
+      INSTANCES.clear();
+    }
+  }
 
   /** Brand name for cache and metadata directory */
   public static final String BRAND = "aperio";
@@ -588,6 +610,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // This is especially important for DUCKDB's internal PARQUET FileSchema
       startPeriodicRefresh();
     }
+
+    // Register this instance for lifecycle management (test cleanup, etc.)
+    INSTANCES.add(new java.lang.ref.WeakReference<>(this));
   }
 
   /**
@@ -618,6 +643,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Error during periodic refresh for schema '{}'", name, e);
       }
     }, seconds, seconds, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Shuts down the refresh scheduler and releases resources.
+   * This should be called when the schema is no longer needed.
+   */
+  @Override public void close() {
+    if (refreshScheduler != null && !refreshScheduler.isShutdown()) {
+      LOGGER.debug("Shutting down refresh scheduler for schema '{}'", name);
+      refreshScheduler.shutdownNow();
+    }
   }
 
   /**
@@ -1258,10 +1294,21 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       }
 
       try {
-        // Calculate relative path from sourceDirectory to preserve directory structure
+        // Calculate relative path from the data directory (baseDirectory) to preserve
+        // directory structure for files in subdirectories.
+        // Only use relativePath when the file is actually inside the base directory,
+        // otherwise the path becomes meaningless (e.g., ../../../../var/folders/...)
         String relativePath = null;
-        if (sourceDirectory != null) {
-          relativePath = sourceDirectory.toPath().relativize(file.toPath()).toString();
+        if (baseDirectory != null) {
+          try {
+            java.nio.file.Path baseDirPath = new File(baseDirectory).toPath().toAbsolutePath().normalize();
+            java.nio.file.Path sourceFilePath = file.toPath().toAbsolutePath().normalize();
+            if (sourceFilePath.startsWith(baseDirPath)) {
+              relativePath = baseDirPath.relativize(sourceFilePath).toString();
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Could not compute relative path for {}: {}", file.getName(), e.getMessage());
+          }
         }
 
         // Use FileConversionManager for centralized conversion logic
@@ -1316,10 +1363,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return;
     }
 
-    // Determine the base path for storage provider
+    // Determine the base path for storage provider using baseDirectory (data directory)
+    // not sourceDirectory (which may be the working directory)
     String basePath = "/";
-    if (sourceDirectory != null) {
-      basePath = sourceDirectory.getPath();
+    if (baseDirectory != null) {
+      basePath = baseDirectory;
       // Handle cloud storage URIs
       if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
           && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
@@ -1657,6 +1705,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     for (Map<String, Object> tableDef : this.tables) {
       addTable(builder, tableDef);
+      // Track explicit table names to prevent re-addition by processConvertedFiles
+      String defName = (String) tableDef.get("name");
+      if (defName != null) {
+        tableNameCounts.put(defName, tableNameCounts.getOrDefault(defName, 0) + 1);
+        registeredTableNames.add(defName);
+      }
     }
 
     // Process JSON flattening AFTER explicit table definitions but BEFORE bulk conversion
@@ -1767,12 +1821,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             } else if (rawName.endsWith(".yml")) {
               rawName = rawName.substring(0, rawName.lastIndexOf(".yml"));
             }
-            rawName = WHITESPACE_PATTERN.matcher(rawName.replace(File.separator, "_"))
+            rawName = WHITESPACE_PATTERN.matcher(rawName.replace(File.separator, "__"))
                 .replaceAll("_");
           } else {
             // Regular file - use path relative to base source
             rawName = WHITESPACE_PATTERN.matcher(sourceSansJson.relative(baseSource).path()
-                .replace(File.separator, "_"))
+                .replace(File.separator, "__"))
                 .replaceAll("_");
           }
           String baseName = applyCasing(rawName, tableNameCasing);
@@ -1802,6 +1856,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             // Step 1: Check if this file is a convertedFile in any record (it's a conversion result)
             ConversionMetadata.ConversionRecord existingRecord =
                 conversionMetadata.getConversionRecordByConvertedFile(source.path());
+            // Handle macOS /private prefix mismatch (symlinks /var -> /private/var)
+            if (existingRecord == null) {
+              existingRecord = conversionMetadata.getConversionRecordByConvertedFile(
+                  "/private" + source.path());
+            }
+            if (existingRecord == null && source.path().startsWith("/private")) {
+              existingRecord = conversionMetadata.getConversionRecordByConvertedFile(
+                  source.path().substring("/private".length()));
+            }
             if (existingRecord != null && existingRecord.tableName != null) {
               // This JSON file is a converted file from another source (e.g., HTML)
               // The table was already created during explicit table definition processing.
@@ -1972,7 +2035,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           String baseName =
               applyCasing(
                   WHITESPACE_PATTERN.matcher(sourceSansCsv.relative(baseSource).path()
-              .replace(File.separator, "_"))
+              .replace(File.separator, "__"))
               .replaceAll("_"), tableNameCasing);
 
           // Check if table name already exists and disambiguate if needed
@@ -1993,7 +2056,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           String baseName =
               applyCasing(
                   WHITESPACE_PATTERN.matcher(sourceSansTsv.relative(baseSource).path()
-              .replace(File.separator, "_"))
+              .replace(File.separator, "__"))
               .replaceAll("_"), tableNameCasing);
 
           // Check if table name already exists and disambiguate if needed
@@ -2013,7 +2076,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         if (sourceSansParquet != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansParquet.relative(baseSource).path()
-              .replace(File.separator, "_"))
+              .replace(File.separator, "__"))
               .replaceAll("_"), tableNameCasing);
           LOGGER.debug("Found Parquet file in directory scan: {} -> table: {}", source.path(), tableName);
           // Always try to create ParquetTranslatableTable - let it fail at query time if corrupted
@@ -2026,7 +2089,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         if (sourceSansArrow != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansArrow.relative(baseSource).path()
-              .replace(File.separator, "_"))
+              .replace(File.separator, "__"))
               .replaceAll("_"), tableNameCasing);
           try {
             Table arrowTable = createArrowTable(new java.io.File(source.path()));
@@ -2062,7 +2125,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // HTML tables are now handled as JSON files created by convertHtmlFilesToJson
       // The JSON files will be picked up in the regular file scanning below
     } else if (storageProvider != null) {
-      // Process files from storage provider
+      // Convert xlsx, html, and other convertible files to JSON before processing
+      // For local storage, convert directly from the data directory
+      // For remote storage (S3, etc.), download and convert via storage provider
+      if ("local".equals(storageType) && baseDirectory != null) {
+        File localSourceDir = new File(baseDirectory);
+        if (localSourceDir.exists() && localSourceDir.isDirectory()) {
+          LOGGER.debug("[FileSchema.getTableMap] Converting local files via storage provider path from: {}", baseDirectory);
+          convertLocalSupportedFilesToJson(localSourceDir);
+        }
+      } else if (storageProvider != null) {
+        convertStorageProviderFilesToJson();
+      }
+
+      // Process files from storage provider (includes converted JSON files)
       LOGGER.debug("[FileSchema.getTableMap] Using storage provider to process files");
       processStorageProviderFiles(builder, tableNameCounts);
     }
@@ -2853,11 +2929,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               List<Map<String, Object>> fieldConfigs = extractFieldConfigurations(tableDef, tableName);
 
               List<File> convertedFiles;
-              if (selector != null && index != null) {
-                // Use specific table selector and index - this should create exactly one table
-                LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
+              if (selector != null) {
+                // Use specific table selector - default index to 0 if not specified
+                int effectiveIndex = (index != null) ? index : 0;
+                LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
               } else {
                 // Use regular conversion that processes all tables
                 LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
@@ -3111,11 +3188,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             List<Map<String, Object>> fieldConfigs = extractFieldConfigurations(tableDef, tableName);
 
             List<File> convertedFiles;
-            if (selector != null && index != null) {
-              // Use specific table selector and index - this should create exactly one table
-              LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
+            if (selector != null) {
+              // Use specific table selector - default index to 0 if not specified
+              int effectiveIndex = (index != null) ? index : 0;
+              LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
             } else {
               // Use regular conversion that processes all tables
               LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
@@ -3251,11 +3329,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           List<Map<String, Object>> fieldConfigs = extractFieldConfigurations(tableDef, tableName);
 
           List<File> convertedFiles;
-          if (selector != null && index != null) {
-            // Use specific table selector and index - this should create exactly one table
-            LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
+          if (selector != null) {
+            // Use specific table selector - default index to 0 if not specified
+            int effectiveIndex = (index != null) ? index : 0;
+            LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
           } else {
             // Use regular conversion that processes all tables
             LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
@@ -3802,14 +3881,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             LOGGER.info("Table '{}' found in conversion metadata cache - skipping file enumeration", config.getName());
             matchingFiles = java.util.Collections.emptyList();
           } else {
-            matchingFiles = findMatchingFiles(config.getPattern());
+            // Iceberg tables don't use the staging pattern for reads — skip file enumeration
+            // and let discoverExistingIcebergTable locate the catalog instead
+            Map<String, Object> mat = config.getMaterialize();
+            boolean isIcebergFormat = mat != null && "iceberg".equals(mat.get("format"));
 
-            if (matchingFiles.isEmpty()) {
-              LOGGER.debug("No files found matching pattern: {}", config.getPattern());
-              continue;
+            if (isIcebergFormat) {
+              LOGGER.info("Table '{}' uses format=iceberg — skipping staging pattern enumeration", config.getName());
+              matchingFiles = java.util.Collections.emptyList();
+            } else {
+              matchingFiles = findMatchingFiles(config.getPattern());
+
+              if (matchingFiles.isEmpty()) {
+                LOGGER.debug("No files found matching pattern: {}", config.getPattern());
+                continue;
+              }
+
+              LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
             }
-
-            LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
           }
         }
 
@@ -4133,10 +4222,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET");
         LOGGER.info("Updated conversion record for '{}' to ICEBERG_PARQUET", tableName);
       } else {
-        LOGGER.debug("Iceberg table '{}' does not exist at warehouse: {}", icebergTableName, warehousePath);
+        throw new RuntimeException("Iceberg table '" + icebergTableName + "' not found at warehouse '"
+            + warehousePath + "'. Run ETL to materialize table '" + tableName + "'.");
       }
+    } catch (RuntimeException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.debug("Could not check for existing Iceberg table '{}': {}", tableName, e.getMessage());
+      throw new RuntimeException("Failed to verify Iceberg table '" + icebergTableName
+          + "' at warehouse '" + warehousePath + "': " + e.getMessage(), e);
     }
   }
 
@@ -4214,6 +4307,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     }
   }
 
+  private void collectFilesAtDepth(StorageProvider storageProvider, String path, int depth,
+      List<StorageProvider.FileEntry> result) {
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(path, false);
+      if (depth == 0) {
+        result.addAll(entries);
+      } else {
+        for (StorageProvider.FileEntry entry : entries) {
+          if (entry.isDirectory()) {
+            collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, result);
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("findMatchingFiles: error listing {}: {}", path, e.getMessage());
+    }
+  }
+
   /**
    * Find all files matching a glob pattern relative to baseDirectory.
    * Uses ConversionMetadata as primary source (fast) and falls back to
@@ -4227,26 +4338,68 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return result;
     }
 
-    // StorageProvider is the ONLY way to access files
-    if (storageProvider == null) {
-      LOGGER.error("findMatchingFiles: storageProvider is null - this is a configuration error");
+    // Determine the base directory to search
+    String searchPath = baseDirectory;
+    if (searchPath == null && sourceDirectory != null) {
+      searchPath = sourceDirectory.getAbsolutePath();
+    }
+    if (searchPath == null) {
+      LOGGER.warn("findMatchingFiles: no base directory available - returning empty");
       return result;
     }
 
-    // Determine the base directory to search
-    if (baseDirectory == null) {
-      LOGGER.warn("findMatchingFiles: baseDirectory is null - returning empty");
-      return result;
+    // Fallback to local file system when no storage provider is configured
+    if (storageProvider == null) {
+      LOGGER.debug("findMatchingFiles: using local file system fallback for pattern={}", pattern);
+      try {
+        java.nio.file.Path basePath = java.nio.file.Paths.get(searchPath);
+        if (!java.nio.file.Files.exists(basePath)) {
+          return result;
+        }
+        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+        PathMatcher rootMatcher = null;
+        if (pattern.startsWith("**/")) {
+          rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern.substring(3));
+        }
+        final PathMatcher finalRootMatcher = rootMatcher;
+        java.nio.file.Files.walk(basePath)
+            .filter(java.nio.file.Files::isRegularFile)
+            .forEach(p -> {
+              java.nio.file.Path relativePath = basePath.relativize(p);
+              if (matcher.matches(relativePath)
+                  || (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
+                result.add(p.toString());
+              }
+            });
+        LOGGER.debug("findMatchingFiles: local fallback found {} files", result.size());
+        return result;
+      } catch (IOException e) {
+        LOGGER.error("findMatchingFiles: error walking directory: {}", e.getMessage());
+        return result;
+      }
     }
-    String searchPath = baseDirectory;
 
     LOGGER.info("findMatchingFiles: baseDirectory={}, pattern={}, storageType={}",
                 searchPath, pattern, storageProvider.getStorageType());
 
     try {
-      // Use StorageProvider listing to find files matching the pattern
-      boolean recursive = pattern.contains("**") || pattern.contains("/");
-      List<StorageProvider.FileEntry> allFiles = storageProvider.listFiles(searchPath, recursive);
+      // Use StorageProvider listing to find files matching the pattern.
+      // For patterns with "/" but no "**" (fixed depth, e.g. "year=*/*.parquet"),
+      // do a bounded two-pass listing: list top-level dirs, then list each subdir.
+      // This avoids an unbounded recursive scan of the entire bucket.
+      boolean hasDoubleWildcard = pattern.contains("**");
+      boolean hasSlash = pattern.contains("/");
+      List<StorageProvider.FileEntry> allFiles;
+      if (!hasDoubleWildcard && hasSlash) {
+        // Count directory levels implied by the pattern (number of "/" separators)
+        // e.g. "year=*/data.parquet" → 1 dir level; "year=*/month=*/data.parquet" → 2 dir levels
+        String[] patternParts = pattern.split("/");
+        int dirDepth = patternParts.length - 1;
+        allFiles = new ArrayList<>();
+        collectFilesAtDepth(storageProvider, searchPath, dirDepth, allFiles);
+      } else {
+        allFiles = storageProvider.listFiles(searchPath, hasDoubleWildcard);
+      }
 
       LOGGER.debug("findMatchingFiles: StorageProvider returned {} files", allFiles.size());
 
@@ -4560,6 +4713,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     for (StorageProvider.FileEntry entry : entries) {
       if (entry.isDirectory() && recursive) {
+        // Skip hidden directories (e.g., .aperio, .DS_Store directories)
+        // Converted files from .aperio/conversions/ are handled separately
+        String dirName = entry.getName();
+        if (dirName.contains("/")) {
+          dirName = dirName.substring(dirName.lastIndexOf('/') + 1);
+        }
+        if (dirName.startsWith(".")) {
+          LOGGER.debug("Skipping hidden directory: {}", entry.getPath());
+          continue;
+        }
         // Recursively list files in subdirectory
         try {
           List<StorageProvider.FileEntry> subEntries = listFilesRecursively(entry.getPath(), true);
@@ -4568,6 +4731,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           LOGGER.error("Error listing files in directory {}: {}", entry.getPath(), e.getMessage());
         }
       } else if (!entry.isDirectory()) {
+        // Skip hidden files
+        String fileName = entry.getName();
+        if (fileName.contains("/")) {
+          fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
+        }
+        if (fileName.startsWith(".")) {
+          continue;
+        }
         // Add file to list
         allFiles.add(entry);
       }
@@ -4583,6 +4754,21 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     final String nameSansCompression = trimCompressedExtensions(fileName);
     // HTML is a special case - it's both a potential table source and a convertible file
     return isTableSourceFile(nameSansCompression) || nameSansCompression.toLowerCase().endsWith(".html");
+  }
+
+  /**
+   * Adds a path and its macOS /private prefix variant to a set.
+   * On macOS, /var symlinks to /private/var, causing path mismatches
+   * between File.getAbsolutePath() and StorageProvider paths.
+   */
+  private static void addWithPrivateVariants(Set<String> set, String path) {
+    set.add(path);
+    if (path.startsWith("/private")) {
+      set.add(path.substring("/private".length()));
+    } else if (path.startsWith("/var") || path.startsWith("/tmp")
+        || path.startsWith("/etc")) {
+      set.add("/private" + path);
+    }
   }
 
   /**
@@ -4630,17 +4816,85 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     }
 
     try {
-      LOGGER.debug("[FileSchema] Processing files from storage provider at: {}", basePath);
+      LOGGER.debug("[processStorageProviderFiles] Processing files from storage provider at: {}, recursive={}", basePath, recursive);
       List<StorageProvider.FileEntry> entries = listFilesRecursively(basePath, recursive);
-      LOGGER.debug("[FileSchema] Found {} entries from storage provider", entries.size());
+      LOGGER.debug("[processStorageProviderFiles] Found {} entries from storage provider", entries.size());
+
+      // Create a glob matcher if a directory pattern is configured
+      final java.nio.file.PathMatcher globMatcher;
+      final java.nio.file.PathMatcher rootGlobMatcher;
+      if (directoryPattern != null && !directoryPattern.isEmpty()) {
+        globMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern);
+        // Also match root-level files when pattern starts with **/
+        if (directoryPattern.startsWith("**/")) {
+          rootGlobMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern.substring(3));
+        } else {
+          rootGlobMatcher = null;
+        }
+      } else {
+        globMatcher = null;
+        rootGlobMatcher = null;
+      }
 
       // Create a virtual base source for relative path calculations
       final Source baseSource =
           new StorageProviderSource(new StorageProvider.FileEntry(basePath, "", true, 0, 0), storageProvider);
 
+      // Build set of files already processed by explicit table definitions
+      final Set<String> processedSourceFiles = new HashSet<>();
+      if (conversionMetadata != null) {
+        for (ConversionMetadata.ConversionRecord record
+            : conversionMetadata.getAllConversions().values()) {
+          if (record.sourceFile != null) {
+            addWithPrivateVariants(processedSourceFiles,
+                new File(record.sourceFile).getAbsolutePath());
+          }
+          // Also exclude converted output files to prevent re-adding as new tables
+          if (record.convertedFile != null) {
+            addWithPrivateVariants(processedSourceFiles,
+                new File(record.convertedFile).getAbsolutePath());
+          }
+        }
+      }
+      // Also track source files from explicit table definitions directly
+      for (Map<String, Object> td : tables) {
+        String url = (String) td.get("url");
+        if (url != null && sourceDirectory != null) {
+          File f = new File(sourceDirectory, url);
+          addWithPrivateVariants(processedSourceFiles, f.getAbsolutePath());
+        }
+      }
+      LOGGER.debug("[processStorageProviderFiles] Excluding {} already-processed source files: {}",
+          processedSourceFiles.size(), processedSourceFiles);
+
       // Process each file
       for (StorageProvider.FileEntry entry : entries) {
         if (!entry.isDirectory() && isFileNameSupported(entry.getName())) {
+          // Skip files already processed as explicit table definitions
+          if (processedSourceFiles.contains(
+              new File(entry.getPath()).getAbsolutePath())) {
+            LOGGER.debug("Skipping file {} - already processed as explicit table",
+                entry.getName());
+            continue;
+          }
+
+          // Apply glob filter if configured
+          if (globMatcher != null) {
+            // Compute relative path from base for glob matching
+            String entryPath = entry.getPath();
+            String relativePath = entryPath;
+            if (entryPath.startsWith(basePath)) {
+              relativePath = entryPath.substring(basePath.length());
+              if (relativePath.startsWith("/") || relativePath.startsWith(File.separator)) {
+                relativePath = relativePath.substring(1);
+              }
+            }
+            if (!globMatcher.matches(java.nio.file.Paths.get(relativePath))
+                && (rootGlobMatcher == null || !rootGlobMatcher.matches(java.nio.file.Paths.get(relativePath)))) {
+              LOGGER.debug("Skipping file {} - does not match glob pattern '{}'", entry.getName(), directoryPattern);
+              continue;
+            }
+          }
           // Create source for this file
           Source source = new StorageProviderSource(entry, storageProvider);
           Source sourceSansGz = source.trim(".gz");
@@ -4682,7 +4936,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               autoTableDef = new HashMap<>();
               autoTableDef.put("refreshInterval", this.refreshInterval);
             }
-            addTable(builder, source, tableName, autoTableDef);
+            try {
+              addTable(builder, source, tableName, autoTableDef);
+            } catch (Exception e) {
+              LOGGER.error("Failed to add JSON/YAML table '{}' from {}: {}", tableName, source.path(), e.getMessage());
+            }
             continue;
           }
 
@@ -4700,7 +4958,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               tableName = baseName + "_CSV";
             }
             tableNameCounts.put(baseName, tableNameCounts.getOrDefault(baseName, 0) + 1);
-            addTable(builder, source, tableName, null);
+            try {
+              addTable(builder, source, tableName, null);
+            } catch (Exception e) {
+              LOGGER.error("Failed to add CSV table '{}' from {}: {}", tableName, source.path(), e.getMessage());
+            }
             continue;
           }
 
@@ -4718,7 +4980,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               tableName = baseName + "_TSV";
             }
             tableNameCounts.put(baseName, tableNameCounts.getOrDefault(baseName, 0) + 1);
-            addTable(builder, source, tableName, null);
+            try {
+              addTable(builder, source, tableName, null);
+            } catch (Exception e) {
+              LOGGER.error("Failed to add TSV table '{}' from {}: {}", tableName, source.path(), e.getMessage());
+            }
             continue;
           }
 
@@ -4730,11 +4996,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                     WHITESPACE_PATTERN.matcher(sourceSansParquet.relative(baseSource).path()
                     .replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
-            // Note: Parquet files from storage providers might need special handling
-            // For now, skip them or use FileTable
             try {
-              FileTable table = FileTable.create(source, null);
-              builder.put(tableName, table);
+              Table parquetTable = new ParquetTranslatableTable(source.file(), name);
+              builder.put(tableName, parquetTable);
+              recordTableMetadata(tableName, parquetTable, source, null);
             } catch (Exception e) {
               LOGGER.error("Failed to add Parquet table from storage provider: {}", e.getMessage());
             }
@@ -4749,11 +5014,27 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                     WHITESPACE_PATTERN.matcher(sourceSansArrow.relative(baseSource).path()
                     .replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
-            // Note: Arrow files from storage providers might need special handling
-            // For now, skip them or use FileTable
             try {
-              FileTable table = FileTable.create(source, null);
-              builder.put(tableName, table);
+              Table arrowTable = createArrowTable(source.file());
+              if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
+                // Convert Arrow to Parquet
+                try {
+                  File cacheDir =
+                      ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
+                  File parquetFile =
+                      ParquetConversionUtil.convertToParquet(source, tableName, arrowTable, cacheDir, parentSchema, this.name, tableNameCasing);
+                  Table parquetTable = new ParquetTranslatableTable(parquetFile, name);
+                  builder.put(tableName, parquetTable);
+                  recordTableMetadata(tableName, parquetTable, source, null);
+                } catch (Exception conversionException) {
+                  LOGGER.warn("Parquet conversion failed for Arrow {}, using Arrow table: {}", tableName, conversionException.getMessage());
+                  builder.put(tableName, arrowTable);
+                  recordTableMetadata(tableName, arrowTable, source, null);
+                }
+              } else {
+                builder.put(tableName, arrowTable);
+                recordTableMetadata(tableName, arrowTable, source, null);
+              }
             } catch (Exception e) {
               LOGGER.error("Failed to add Arrow table from storage provider: {}", e.getMessage());
             }
@@ -4762,11 +5043,120 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         }
       }
 
+      // Process converted files from conversions directories (xlsx->JSON, html->JSON, etc.)
+      // These are always local files, so use Sources.of() instead of StorageProviderSource
+      processConvertedFiles(builder, tableNameCounts);
+
       LOGGER.debug("[FileSchema] Processed {} files from storage provider", entries.size());
 
     } catch (Exception e) {
       LOGGER.error("Error processing files from storage provider: {}", e.getMessage());
       e.printStackTrace();
+    }
+  }
+
+  /**
+   * Processes converted files from the conversions directories.
+   * These are local JSON files created from xlsx, html, docx conversions.
+   */
+  private void processConvertedFiles(ImmutableMap.Builder<String, Table> builder,
+                                     Map<String, Integer> tableNameCounts) {
+    List<File> convertedFiles = new ArrayList<>();
+
+    // Collect from conversions/ directory
+    File conversionsDir = new File(operatingCacheDirectory, "conversions");
+    LOGGER.debug("[processConvertedFiles] Looking for conversions in: {}, exists={}", conversionsDir.getAbsolutePath(), conversionsDir.exists());
+    if (conversionsDir.exists() && conversionsDir.isDirectory()) {
+      File[] files = conversionsDir.listFiles(file -> isFileTypeSupported(file));
+      if (files != null) {
+        for (File file : files) {
+          convertedFiles.add(file);
+        }
+      }
+    }
+
+    // Collect from .download-cache/conversions/ directory
+    File downloadCacheConversionsDir = new File(new File(operatingCacheDirectory, ".download-cache"), "conversions");
+    if (downloadCacheConversionsDir.exists() && downloadCacheConversionsDir.isDirectory()) {
+      File[] files = downloadCacheConversionsDir.listFiles(file -> isFileTypeSupported(file));
+      if (files != null) {
+        for (File file : files) {
+          convertedFiles.add(file);
+        }
+      }
+    }
+
+    if (convertedFiles.isEmpty()) {
+      LOGGER.debug("[processConvertedFiles] No converted files found");
+      return;
+    }
+
+    LOGGER.debug("[processConvertedFiles] Processing {} converted files from conversions directories", convertedFiles.size());
+
+    for (File file : convertedFiles) {
+      Source source;
+      if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
+        source = new DirectFileSource(file);
+      } else {
+        source = Sources.of(file);
+      }
+      Source sourceSansGz = source.trim(".gz");
+      Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+      if (sourceSansJson == null) {
+        sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      }
+      if (sourceSansJson == null) {
+        sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      }
+      if (sourceSansJson != null) {
+        // Use just the filename as the table name (already includes casing from conversion)
+        String rawName = file.getName();
+        // Remove extension
+        int extIdx = rawName.lastIndexOf('.');
+        if (extIdx > 0) {
+          rawName = rawName.substring(0, extIdx);
+        }
+        String tableName = applyCasing(rawName, tableNameCasing);
+
+        // Skip if already registered by derived name
+        if (tableNameCounts.containsKey(tableName)) {
+          LOGGER.debug("[processConvertedFiles] Skipping {} - table '{}' already registered",
+              file.getName(), tableName);
+          continue;
+        }
+
+        // Skip if this converted file belongs to an explicit table definition
+        if (conversionMetadata != null) {
+          ConversionMetadata.ConversionRecord record =
+              conversionMetadata.getConversionRecordByConvertedFile(file.getAbsolutePath());
+          if (record == null) {
+            // Also try with /private prefix (macOS symlinks /var -> /private/var)
+            record = conversionMetadata.getConversionRecordByConvertedFile(
+                "/private" + file.getAbsolutePath());
+          }
+          if (record == null && file.getAbsolutePath().startsWith("/private")) {
+            record = conversionMetadata.getConversionRecordByConvertedFile(
+                file.getAbsolutePath().substring("/private".length()));
+          }
+          if (record != null && record.tableName != null) {
+            LOGGER.debug("[processConvertedFiles] Skipping {} - already handled as "
+                + "explicit table '{}'", file.getName(), record.tableName);
+            continue;
+          }
+        }
+
+        tableNameCounts.put(tableName, 1);
+
+        // Create table with refresh interval if configured
+        Map<String, Object> autoTableDef = null;
+        if (this.refreshInterval != null) {
+          autoTableDef = new HashMap<>();
+          autoTableDef.put("refreshInterval", this.refreshInterval);
+        }
+        addTable(builder, source, tableName, autoTableDef);
+        LOGGER.debug("[processConvertedFiles] Added converted file as table: {} -> {}",
+            file.getName(), tableName);
+      }
     }
   }
 

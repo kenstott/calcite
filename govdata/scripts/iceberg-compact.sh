@@ -98,7 +98,7 @@ for TABLE in "${SELECTED_TABLES[@]}"; do
 
   if java -Xmx4g -cp "$CLASSPATH" \
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
-    --warehouse "s3a://govdata-parquet-v1/source=sec/SEC" \
+    --warehouse "s3a://govdata-parquet-v1/sec" \
     --table "$TABLE" \
     --s3-access-key "$AWS_ACCESS_KEY_ID" \
     --s3-secret-key "$AWS_SECRET_ACCESS_KEY" \

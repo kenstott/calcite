@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.format.json;
 
+import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.JsonTable;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.Source;
@@ -137,7 +138,7 @@ public class JsonMultiTableFactory {
       String tableName = resolveNameConflict(baseName, nameConflicts);
 
       // Create table with path-specific view
-      JsonTable table = new JsonTable(sharedData, path, config);
+      JsonTable table = new JsonScannableTable(sharedData, path, config);
       tables.put(tableName, table);
 
       LOGGER.info("Created table '{}' from JSONPath '{}'", tableName, path);
@@ -176,7 +177,7 @@ public class JsonMultiTableFactory {
       String tableName = resolveNameConflict(baseName, nameConflicts);
 
       // Create table with path-specific view
-      JsonTable table = new JsonTable(sharedData, path, config);
+      JsonTable table = new JsonScannableTable(sharedData, path, config);
       tables.put(tableName, table);
 
       LOGGER.info("Auto-discovered table '{}' from JSONPath '{}'", tableName, path);

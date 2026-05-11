@@ -1639,8 +1639,16 @@ public class ConversionMetadata {
             } else {
               // This is a file-based record, check if files still exist
               File convertedFile = new File(key);
-              File originalFile = new File(record.originalFile);
-              if (convertedFile.exists() && originalFile.exists()) {
+              boolean originalExists;
+              if (record.originalFile != null
+                  && (record.originalFile.startsWith("http://")
+                      || record.originalFile.startsWith("https://"))) {
+                // Remote URLs are always considered valid
+                originalExists = true;
+              } else {
+                originalExists = new File(record.originalFile).exists();
+              }
+              if (convertedFile.exists() && originalExists) {
                 conversions.put(key, record);
               } else {
                 LOGGER.debug("Skipping stale conversion record: {}", key);

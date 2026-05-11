@@ -41,11 +41,18 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Materializes data to Iceberg tables with batched processing to prevent OOM.
@@ -68,14 +75,40 @@ import java.util.UUID;
 public class IcebergMaterializer {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergMaterializer.class);
 
-  private static final int DEFAULT_MAX_RETRIES = 3;
-  private static final long DEFAULT_RETRY_DELAY_MS = 1000;
+  private static final int DEFAULT_MAX_RETRIES = 5;
+  private static final long DEFAULT_RETRY_DELAY_MS = 30000;
   private static final int DEFAULT_THREADS = 2;
+  private static final int DEFAULT_FILE_CHUNK_SIZE = 5000;
+
+  /**
+   * Per-chunk DuckDB query timeout in seconds. DuckDB JDBC does not implement
+   * setQueryTimeout(), so we enforce this via a daemon thread + connection close.
+   * Observed worst-case chunk time is ~22 min; 30 min gives headroom while
+   * catching R2 network stalls that hang indefinitely (4+ hours observed).
+   */
+  private static final long CHUNK_QUERY_TIMEOUT_SECONDS = 1800L;
 
   /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
   private static final String DUCKDB_MEMORY_LIMIT =
       System.getenv("DUCKDB_MEMORY_LIMIT") != null
           ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
+
+  /** DuckDB spill directory - DUCKDB_TEMP_DIR env var, else TMP/TEMP/java.io.tmpdir + "/duckdb". */
+  private static final String DUCKDB_TEMP_DIR = resolveDuckDbTempDir();
+
+  private static String resolveDuckDbTempDir() {
+    String override = System.getenv("DUCKDB_TEMP_DIR");
+    if (override != null && !override.isEmpty()) {
+      return override;
+    }
+    for (String var : new String[]{"TMP", "TEMP"}) {
+      String val = System.getenv(var);
+      if (val != null && !val.isEmpty()) {
+        return val + "/duckdb";
+      }
+    }
+    return System.getProperty("java.io.tmpdir") + "/duckdb";
+  }
 
   private final String warehousePath;
   private final Map<String, Object> catalogConfig;
@@ -91,6 +124,11 @@ public class IcebergMaterializer {
    *  Key: "year:suffix", Value: Map of CIK to Set of accession numbers. */
   private final Map<String, Map<String, Set<String>>> sourceAccessionsCache =
       new HashMap<String, Map<String, Set<String>>>();
+
+  /** Cache of full S3 paths per accession, populated alongside sourceAccessionsCache.
+   *  Key: "year:suffix", Value: Map of accession number to full S3 path. */
+  private final Map<String, Map<String, String>> sourcePathsCache =
+      new HashMap<String, Map<String, String>>();
 
   /**
    * Creates a materializer with default retry settings.
@@ -167,6 +205,7 @@ public class IcebergMaterializer {
     private final String description;
     private final Map<String, String> computedColumns;
     private final int rowBatchSize;
+    private final int fileChunkSize;  // Max files per DuckDB query; 0 = use glob (no chunking)
     private final String rowFilter;  // Optional WHERE clause filter (e.g., "cik IN ('0001', '0002')")
     private final String icebergTableLocation;  // Iceberg table location for accession-level dedup
     private final String accessionColumn;  // Column name for accession (default: "accession_number")
@@ -191,6 +230,7 @@ public class IcebergMaterializer {
       this.computedColumns = builder.computedColumns != null
           ? builder.computedColumns : Collections.<String, String>emptyMap();
       this.rowBatchSize = builder.rowBatchSize;
+      this.fileChunkSize = builder.fileChunkSize > 0 ? builder.fileChunkSize : DEFAULT_FILE_CHUNK_SIZE;
       this.rowFilter = builder.rowFilter;
       this.icebergTableLocation = builder.icebergTableLocation;
       this.accessionColumn = builder.accessionColumn != null ? builder.accessionColumn : "accession_number";
@@ -274,6 +314,16 @@ public class IcebergMaterializer {
     }
 
     /**
+     * Returns the file chunk size for S3 file-list optimization.
+     * When S3 LIST succeeds, new source files are split into explicit chunks of this size
+     * instead of using a glob pattern, avoiding full 100k+ file scans per DuckDB query.
+     * Defaults to {@value IcebergMaterializer#DEFAULT_FILE_CHUNK_SIZE}.
+     */
+    public int getFileChunkSize() {
+      return fileChunkSize;
+    }
+
+    /**
      * Returns the optional row filter (WHERE clause) to apply during materialization.
      * This is used to filter source data, e.g., by CIK list.
      */
@@ -324,6 +374,7 @@ public class IcebergMaterializer {
       private String description;
       private Map<String, String> computedColumns;
       private int rowBatchSize;
+      private int fileChunkSize;
       private String rowFilter;
       private String icebergTableLocation;
       private String accessionColumn;
@@ -410,6 +461,16 @@ public class IcebergMaterializer {
       }
 
       /**
+       * Sets the file chunk size for S3 file-list optimization.
+       * Splits new source files into explicit chunks instead of a glob scan.
+       * Defaults to {@value IcebergMaterializer#DEFAULT_FILE_CHUNK_SIZE} if not set.
+       */
+      public Builder fileChunkSize(int fileChunkSize) {
+        this.fileChunkSize = fileChunkSize;
+        return this;
+      }
+
+      /**
        * Sets an optional row filter (WHERE clause) to apply during materialization.
        * Use to filter source data, e.g., "cik IN ('0001', '0002')".
        */
@@ -467,20 +528,27 @@ public class IcebergMaterializer {
     private final int skippedCount;
     private final long durationMs;
     private final boolean tableRecreated;
+    private final long totalRowsWritten;
 
     public MaterializationResult(String tableId, int successCount, int failedCount,
         int skippedCount, long durationMs) {
-      this(tableId, successCount, failedCount, skippedCount, durationMs, false);
+      this(tableId, successCount, failedCount, skippedCount, durationMs, false, 0L);
     }
 
     public MaterializationResult(String tableId, int successCount, int failedCount,
         int skippedCount, long durationMs, boolean tableRecreated) {
+      this(tableId, successCount, failedCount, skippedCount, durationMs, tableRecreated, 0L);
+    }
+
+    public MaterializationResult(String tableId, int successCount, int failedCount,
+        int skippedCount, long durationMs, boolean tableRecreated, long totalRowsWritten) {
       this.tableId = tableId;
       this.successCount = successCount;
       this.failedCount = failedCount;
       this.skippedCount = skippedCount;
       this.durationMs = durationMs;
       this.tableRecreated = tableRecreated;
+      this.totalRowsWritten = totalRowsWritten;
     }
 
     public String getTableId() {
@@ -513,6 +581,10 @@ public class IcebergMaterializer {
      */
     public boolean isTableRecreated() {
       return tableRecreated;
+    }
+
+    public long getTotalRowsWritten() {
+      return totalRowsWritten;
     }
 
     @Override public String toString() {
@@ -552,8 +624,8 @@ public class IcebergMaterializer {
         long durationMs = System.currentTimeMillis() - startTime;
         LOGGER.info("Skipping materialization for '{}' - no source file changes since {} (watermark={})",
             config.getTargetTableId(),
-            new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
-                new java.util.Date(cached.completedAt)),
+            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
+                new Date(cached.completedAt)),
             cached.sourceFileWatermark);
         return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
       }
@@ -607,7 +679,7 @@ public class IcebergMaterializer {
     long durationMs = System.currentTimeMillis() - startTime;
     MaterializationResult result =
         new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount,
-            durationMs, tableWasRecreated);
+            durationMs, tableWasRecreated, totalRowsWritten);
 
     LOGGER.info("Materialization complete: {}", result);
 
@@ -660,11 +732,26 @@ public class IcebergMaterializer {
   private boolean processBatchWithRetry(MaterializationConfig config, Table table,
       Map<String, String> batch, Set<String> excludeAccessions) {
     int attempts = 0;
+    String checkpointPath = buildChunkProgressPath(config, batch);
 
     while (attempts < maxRetries) {
       attempts++;
+      int startChunkIndex = 0;
+      if (attempts > 1) {
+        // Re-read excluded accessions so the exclude set reflects anything already committed
+        // to Iceberg by a previous attempt (tracker self-heal picks these up on restart).
+        excludeAccessions = getExcludedAccessions(config, table, batch);
+        LOGGER.info("Retry attempt {}: refreshed exclude set to {} accessions for batch {}",
+            attempts, excludeAccessions.size(), batch);
+        // Read the chunk-progress checkpoint to resume mid-batch rather than from chunk 1.
+        startChunkIndex = readChunkProgress(checkpointPath);
+        if (startChunkIndex > 0) {
+          LOGGER.info("Retry attempt {}: resuming from chunk {} via checkpoint {}",
+              attempts, startChunkIndex, checkpointPath);
+        }
+      }
       try {
-        Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions);
+        Set<String> newAccessions = processBatch(config, table, batch, excludeAccessions, startChunkIndex, checkpointPath);
         String accessionCol = config.getAccessionColumn();
         String yearValue = batch.get("year");
 
@@ -682,6 +769,10 @@ public class IcebergMaterializer {
           LOGGER.info("Tracked {} newly materialized accessions for {}/year={}",
               newAccessions.size(), config.getTargetTableId(), yearValue);
         }
+
+        // Batch fully committed — remove the chunk-progress checkpoint so a fresh
+        // retry of this batch starts from chunk 0 (no stale resumption point).
+        clearChunkProgress(checkpointPath);
 
         // Self-heal: if DuckDB returned 0 new rows, ensure tracker has entries for
         // all source accessions. This handles the case where data exists in Iceberg
@@ -701,7 +792,7 @@ public class IcebergMaterializer {
         // Check for "No files found" - this means source data doesn't exist for this table/batch
         // This is expected when running a 10-K job but the table needs Form 4 or 8-K data
         if (message != null && message.contains("No files found")) {
-          LOGGER.debug("Batch {} has no source files, skipping (table may require different filing type)", batch);
+          LOGGER.warn("Batch {} has no source files, skipping (table may require different filing type)", batch);
           return true;  // Treat as success - no data to process is OK
         }
 
@@ -710,7 +801,7 @@ public class IcebergMaterializer {
 
         if (attempts < maxRetries) {
           try {
-            Thread.sleep(retryDelayMs * attempts); // Exponential backoff
+            Thread.sleep(retryDelayMs * (1L << (attempts - 1))); // 30s, 60s, 120s, 240s
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             return false;
@@ -773,9 +864,12 @@ public class IcebergMaterializer {
    * <p>When rowBatchSize > 0, uses row-level batching to prevent OOM for large tables.
    *
    * @param excludeAccessions Accession numbers to skip (already processed)
+   * @param startChunkIndex First chunk index to process (0 = start from beginning; >0 = resume)
+   * @param checkpointPath S3 path for the chunk-progress checkpoint file
    */
   private Set<String> processBatch(MaterializationConfig config, Table table,
-      Map<String, String> batch, Set<String> excludeAccessions) throws SQLException, IOException {
+      Map<String, String> batch, Set<String> excludeAccessions,
+      int startChunkIndex, String checkpointPath) throws SQLException, IOException {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
 
     Set<String> newAccessions = new HashSet<String>();
@@ -833,19 +927,34 @@ public class IcebergMaterializer {
         }
       }
 
-      // Create temp table for exclusions if we have many accessions (anti-join is faster than NOT IN)
-      if (excludeAccessions != null && excludeAccessions.size() > 100) {
-        createExclusionTempTable(conn, config.getAccessionColumn(), excludeAccessions);
-      }
+      // Try file-list chunking: avoids scanning 100k+ files via a single glob query.
+      // Falls back to glob-based processing when S3 LIST data is unavailable.
+      List<String> newFilePaths = getNewSourceFilePaths(
+          config.getSourcePattern(), year, config.getRowFilter(), excludeAccessions);
 
-      // Use row batching for large tables to prevent OOM
-      int rowBatchSize = config.getRowBatchSize();
-      if (rowBatchSize > 0) {
-        processWithRowBatchingToIceberg(config, conn, table, sourcePattern, batch,
-            partitionValues, typedPartitionFilter, rowBatchSize, excludeAccessions, newAccessions);
+      if (newFilePaths != null) {
+        if (newFilePaths.isEmpty()) {
+          LOGGER.info("File-list optimization: 0 new files for year={}, skipping batch", year);
+          return newAccessions;
+        }
+        LOGGER.info("File-list optimization: {} new files for year={} (chunk size={}, startChunk={})",
+            newFilePaths.size(), year, config.getFileChunkSize(), startChunkIndex);
+        processWithFileChunkingToIceberg(config, conn, table, newFilePaths,
+            partitionValues, typedPartitionFilter, newAccessions,
+            startChunkIndex, checkpointPath);
       } else {
-        processAllRowsToIceberg(config, conn, table, sourcePattern, batch,
-            partitionValues, typedPartitionFilter, excludeAccessions, newAccessions);
+        // Fall back to glob-based processing
+        if (excludeAccessions != null && excludeAccessions.size() > 100) {
+          createExclusionTempTable(conn, config.getAccessionColumn(), excludeAccessions);
+        }
+        int rowBatchSize = config.getRowBatchSize();
+        if (rowBatchSize > 0) {
+          processWithRowBatchingToIceberg(config, conn, table, sourcePattern, batch,
+              partitionValues, typedPartitionFilter, rowBatchSize, excludeAccessions, newAccessions);
+        } else {
+          processAllRowsToIceberg(config, conn, table, sourcePattern, batch,
+              partitionValues, typedPartitionFilter, excludeAccessions, newAccessions);
+        }
       }
     }
 
@@ -912,8 +1021,11 @@ public class IcebergMaterializer {
 
     // Set DuckDB memory limit to prevent OOM
     try (Statement memStmt = conn.createStatement()) {
-      memStmt.execute("SET memory_limit='2GB'");
-      memStmt.execute("SET temp_directory='/tmp/duckdb_temp'");
+      memStmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      String tempDir = warehousePath != null
+          ? warehousePath + "/.duckdb_tmp"
+          : System.getProperty("java.io.tmpdir");
+      memStmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
     }
 
     String accessionCol = config.getAccessionColumn();
@@ -995,27 +1107,323 @@ public class IcebergMaterializer {
   }
 
   /**
+   * Processes source files in explicit chunks to avoid full glob scans over 100k+ files.
+   * Each DuckDB query targets at most {@code config.getFileChunkSize()} files via
+   * {@code read_parquet(ARRAY[...])}, eliminating the need for LIMIT/OFFSET paging
+   * and the NOT EXISTS exclusion filter (files are pre-filtered before this method).
+   */
+  private void processWithFileChunkingToIceberg(MaterializationConfig config, Connection conn,
+      Table table, List<String> newFilePaths, Map<String, String> partitionValues,
+      Map<String, Object> typedPartitionFilter, Set<String> newAccessions,
+      int startChunkIndex, String checkpointPath)
+      throws SQLException, IOException {
+
+    int fileChunkSize = config.getFileChunkSize();
+    int totalFiles = newFilePaths.size();
+    int totalChunks = (totalFiles + fileChunkSize - 1) / fileChunkSize;
+    LOGGER.info("File chunking: {} files in {} chunks of {} for table {} (starting at chunk {})",
+        totalFiles, totalChunks, fileChunkSize, config.getTargetTableId(), startChunkIndex);
+
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
+    int chunkNum = 0;
+    long processedRows = 0;
+    long totalStartTime = System.currentTimeMillis();
+    String accessionCol = config.getAccessionColumn();
+    // Track accessions committed in this run to prevent cross-chunk duplicates when
+    // staging files have been regenerated and the same accession spans multiple files.
+    Set<String> committedInThisRun = new HashSet<String>();
+
+    for (int i = 0; i < totalFiles; i += fileChunkSize) {
+      chunkNum++;
+      if (chunkNum <= startChunkIndex) {
+        LOGGER.debug("File chunk {}/{}: skipping (already committed in previous attempt)", chunkNum, totalChunks);
+        continue;
+      }
+      List<String> chunk = newFilePaths.subList(i, Math.min(i + fileChunkSize, totalFiles));
+      String sql = buildSelectSqlForFileList(config, chunk);
+      LOGGER.info("File chunk {}/{}: querying {} files", chunkNum, totalChunks, chunk.size());
+
+      long chunkStart = System.currentTimeMillis();
+      List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, CHUNK_QUERY_TIMEOUT_SECONDS);
+      long chunkElapsed = System.currentTimeMillis() - chunkStart;
+
+      if (rows.isEmpty()) {
+        LOGGER.debug("File chunk {}: no rows returned", chunkNum);
+        continue;
+      }
+
+      // Remove rows for accessions already committed in an earlier chunk of this run.
+      if (!committedInThisRun.isEmpty() && accessionCol != null) {
+        Iterator<Map<String, Object>> it = rows.iterator();
+        int before = rows.size();
+        while (it.hasNext()) {
+          Object val = it.next().get(accessionCol);
+          if (val != null && committedInThisRun.contains(val.toString())) {
+            it.remove();
+          }
+        }
+        int removed = before - rows.size();
+        if (removed > 0) {
+          LOGGER.info("File chunk {}/{}: removed {} duplicate rows (accessions already committed this run)",
+              chunkNum, totalChunks, removed);
+        }
+        if (rows.isEmpty()) {
+          LOGGER.debug("File chunk {}: all rows duplicates, skipping", chunkNum);
+          continue;
+        }
+      }
+
+      for (Map<String, Object> row : rows) {
+        Object val = row.get(accessionCol);
+        if (val != null) {
+          String acc = val.toString();
+          newAccessions.add(acc);
+          committedInThisRun.add(acc);
+        }
+      }
+
+      LOGGER.info("File chunk {}/{} completed: {} rows in {}ms",
+          chunkNum, totalChunks, rows.size(), chunkElapsed);
+
+      org.apache.iceberg.DataFile dataFile = writer.writeRecords(rows, partitionValues);
+      if (dataFile != null) {
+        dataFiles.add(dataFile);
+      }
+      processedRows += rows.size();
+      rows.clear();
+
+      if (!dataFiles.isEmpty()) {
+        writer.commitDataFiles(dataFiles, typedPartitionFilter);
+        LOGGER.info("Chunk commit: {} Iceberg files at chunk {}/{}", dataFiles.size(), chunkNum, totalChunks);
+        dataFiles.clear();
+        dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
+        // Checkpoint after every commit so retries resume from the exact chunk rather than chunk 0.
+        writeChunkProgress(checkpointPath, chunkNum);
+      }
+    }
+
+    long totalElapsed = System.currentTimeMillis() - totalStartTime;
+    totalRowsWritten += processedRows;
+    LOGGER.info("File chunking completed: {}/{} chunks, {} rows in {}ms",
+        chunkNum, totalChunks, processedRows, totalElapsed);
+  }
+
+  /**
+   * Returns the S3 path for the chunk-progress checkpoint file for a given batch.
+   * Path: {@code <warehousePath>/chunk-progress/<tableId>/<batchKey>.json}
+   */
+  private String buildChunkProgressPath(MaterializationConfig config, Map<String, String> batch) {
+    List<String> sortedKeys = new ArrayList<String>(batch.keySet());
+    Collections.sort(sortedKeys);
+    List<String> parts = new ArrayList<String>(sortedKeys.size());
+    for (String k : sortedKeys) {
+      parts.add(k + "=" + batch.get(k));
+    }
+    String key = parts.isEmpty() ? "all" : join("_", parts);
+    return warehousePath + "/chunk-progress/" + config.getTargetTableId() + "/" + key + ".json";
+  }
+
+  private static String join(String sep, List<String> parts) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < parts.size(); i++) {
+      if (i > 0) {
+        sb.append(sep);
+      }
+      sb.append(parts.get(i));
+    }
+    return sb.toString();
+  }
+
+  /** Writes {@code {"lastCommittedChunk":N}} to the checkpoint path (1 S3 PUT). */
+  private void writeChunkProgress(String path, int lastCommittedChunk) {
+    if (storageProvider == null) {
+      return;
+    }
+    try {
+      byte[] content = ("{\"lastCommittedChunk\":" + lastCommittedChunk + "}")
+          .getBytes(StandardCharsets.UTF_8);
+      storageProvider.writeFile(path, content);
+      LOGGER.debug("Wrote chunk-progress checkpoint: lastCommittedChunk={} to {}", lastCommittedChunk, path);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write chunk-progress checkpoint to {}: {}", path, e.getMessage());
+    }
+  }
+
+  /**
+   * Reads the chunk-progress checkpoint and returns {@code lastCommittedChunk}, or 0 if absent.
+   * Returns 0 (start from beginning) on any read or parse failure.
+   */
+  private int readChunkProgress(String path) {
+    if (storageProvider == null) {
+      return 0;
+    }
+    try {
+      if (!storageProvider.exists(path)) {
+        return 0;
+      }
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(storageProvider.openInputStream(path), StandardCharsets.UTF_8))) {
+        String line = reader.readLine();
+        if (line == null) {
+          return 0;
+        }
+        // Parse {"lastCommittedChunk":N} — simple extraction, no JSON lib needed
+        int colon = line.indexOf(':');
+        int brace = line.lastIndexOf('}');
+        if (colon >= 0 && brace > colon) {
+          String numStr = line.substring(colon + 1, brace).trim();
+          return Integer.parseInt(numStr);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read chunk-progress checkpoint from {}: {} — starting from chunk 0",
+          path, e.getMessage());
+    }
+    return 0;
+  }
+
+  /** Deletes the chunk-progress checkpoint file after a fully successful batch. */
+  private void clearChunkProgress(String path) {
+    if (storageProvider == null) {
+      return;
+    }
+    try {
+      if (storageProvider.exists(path)) {
+        storageProvider.delete(path);
+        LOGGER.debug("Cleared chunk-progress checkpoint: {}", path);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to clear chunk-progress checkpoint {}: {}", path, e.getMessage());
+    }
+  }
+
+  /**
+   * Builds a SELECT SQL using an explicit file list ({@code read_parquet(ARRAY[...])})
+   * instead of a glob pattern. No LIMIT/OFFSET or NOT EXISTS needed — the file list is
+   * pre-filtered to only new files.
+   */
+  private String buildSelectSqlForFileList(MaterializationConfig config, List<String> filePaths) {
+    StringBuilder sql = new StringBuilder();
+    Map<String, String> computedCols = config.getComputedColumns();
+    if (computedCols == null || computedCols.isEmpty()) {
+      sql.append("SELECT * FROM ");
+    } else {
+      sql.append("SELECT *, ");
+      boolean first = true;
+      for (Map.Entry<String, String> entry : computedCols.entrySet()) {
+        if (!first) {
+          sql.append(", ");
+        }
+        sql.append(entry.getValue()).append(" AS ").append(entry.getKey());
+        first = false;
+      }
+      sql.append(" FROM ");
+    }
+
+    sql.append("read_parquet(ARRAY[");
+    for (int i = 0; i < filePaths.size(); i++) {
+      if (i > 0) {
+        sql.append(", ");
+      }
+      sql.append("'").append(filePaths.get(i)).append("'");
+    }
+    sql.append("], hive_partitioning=true, union_by_name=true)");
+
+    if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
+      sql.append(" WHERE ").append(config.getRowFilter());
+    }
+
+    // Deduplicate by accession within this chunk — staging files may contain duplicate
+    // copies of the same filing if the source fetch was retried or regenerated.
+    String accessionCol = config.getAccessionColumn();
+    if (accessionCol != null && !accessionCol.isEmpty()) {
+      sql.append(" QUALIFY ROW_NUMBER() OVER (PARTITION BY ")
+          .append(accessionCol).append(") = 1");
+    }
+
+    return sql.toString();
+  }
+
+  /**
    * Fetches rows from a SQL query into a list of maps.
    */
   private List<Map<String, Object>> fetchRows(Connection conn, String sql) throws SQLException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(sql)) {
-      java.sql.ResultSetMetaData meta = rs.getMetaData();
-      int colCount = meta.getColumnCount();
-      while (rs.next()) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        for (int i = 1; i <= colCount; i++) {
-          String colName = meta.getColumnName(i);
-          Object value = rs.getObject(i);
-          if (value != null) {
-            row.put(colName, value);
+    try (Statement stmt = conn.createStatement()) {
+      try (ResultSet rs = stmt.executeQuery(sql)) {
+        java.sql.ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+        while (rs.next()) {
+          Map<String, Object> row = new HashMap<String, Object>();
+          for (int i = 1; i <= colCount; i++) {
+            String colName = meta.getColumnName(i);
+            Object value = rs.getObject(i);
+            if (value != null) {
+              row.put(colName, value);
+            }
           }
+          rows.add(row);
         }
-        rows.add(row);
       }
     }
     return rows;
+  }
+
+  /**
+   * Executes fetchRows on a daemon thread with a hard Java-level timeout.
+   * DuckDB JDBC does not implement Statement.setQueryTimeout(), so R2 network stalls
+   * can block indefinitely. On timeout, the connection is closed to unblock the DuckDB
+   * thread, and a SQLException is thrown so the caller's retry logic can resume from
+   * the last tracker-flushed chunk.
+   */
+  private List<Map<String, Object>> fetchRowsWithTimeout(
+      final Connection conn, final String sql, final long timeoutSeconds) throws SQLException {
+    final AtomicReference<List<Map<String, Object>>> result =
+        new AtomicReference<List<Map<String, Object>>>();
+    final AtomicReference<SQLException> error = new AtomicReference<SQLException>();
+    final CountDownLatch latch = new CountDownLatch(1);
+
+    Thread worker = new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          result.set(fetchRows(conn, sql));
+        } catch (SQLException e) {
+          error.set(e);
+        } finally {
+          latch.countDown();
+        }
+      }
+    });
+    worker.setDaemon(true);
+    worker.setName("duckdb-chunk-query");
+    worker.start();
+
+    boolean completed;
+    try {
+      completed = latch.await(timeoutSeconds, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      try { conn.close(); } catch (Exception closeEx) {
+        LOGGER.debug("Failed to close DuckDB connection after interrupt: {}", closeEx.getMessage());
+      }
+      throw new SQLException("DuckDB chunk query interrupted");
+    }
+
+    if (!completed) {
+      LOGGER.warn("DuckDB chunk query timed out after {}s — closing connection to unblock",
+          timeoutSeconds);
+      try { conn.close(); } catch (Exception closeEx) {
+        LOGGER.debug("Failed to close DuckDB connection after timeout: {}", closeEx.getMessage());
+      }
+      throw new SQLException(
+          "DuckDB chunk query timed out after " + timeoutSeconds + "s (R2 network stall)");
+    }
+
+    if (error.get() != null) {
+      throw error.get();
+    }
+    return result.get();
   }
 
   /**
@@ -1322,8 +1730,14 @@ public class IcebergMaterializer {
       return allAccessions;
     }
 
-    // Filter accessions to only those from the specified CIKs
+    // Filter accessions to only those from the specified CIKs.
+    // Always include batch files (synthetic CIK "_BATCH_") because CIK cannot be pre-filtered
+    // from the filename alone — the row-level rowFilter will handle filtering inside the file.
     Set<String> filteredAccessions = new HashSet<String>();
+    Set<String> batchAccessions = cikToAccessions.get("_BATCH_");
+    if (batchAccessions != null) {
+      filteredAccessions.addAll(batchAccessions);
+    }
     for (String cik : filterCiks) {
       Set<String> accessions = cikToAccessions.get(cik);
       if (accessions != null) {
@@ -1341,6 +1755,64 @@ public class IcebergMaterializer {
       count += accessions.size();
     }
     return count;
+  }
+
+  /**
+   * Returns full S3 paths for source files that have NOT yet been materialized.
+   * Calls {@link #getFilteredSourceAccessions} to apply any CIK filter from rowFilter,
+   * then subtracts excludeAccessions, and looks up each accession's path from the cache.
+   *
+   * @return ordered list of S3 paths for new files, empty if all processed,
+   *         or null if S3 LIST data is unavailable (caller should fall back to glob)
+   */
+  private List<String> getNewSourceFilePaths(String sourcePattern, String year,
+      String rowFilter, Set<String> excludeAccessions) {
+    if (year == null) {
+      return null;
+    }
+
+    // Trigger S3 LIST (populates both sourceAccessionsCache and sourcePathsCache)
+    Set<String> sourceAccessions = getFilteredSourceAccessions(sourcePattern, year, rowFilter);
+    if (sourceAccessions == null) {
+      return null;
+    }
+
+    // Derive cache key to look up paths (same logic as getSourceAccessions)
+    String fileSuffix = "_metadata.parquet";
+    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    if (lastSlashIdx > 0) {
+      String filePattern = sourcePattern.substring(lastSlashIdx + 1);
+      int starIdx = filePattern.indexOf('*');
+      if (starIdx >= 0 && starIdx < filePattern.length() - 1) {
+        fileSuffix = filePattern.substring(starIdx + 1);
+      }
+    }
+    String cacheKey = year + ":" + fileSuffix;
+    Map<String, String> pathsMap = sourcePathsCache.get(cacheKey);
+    if (pathsMap == null) {
+      return null;
+    }
+
+    // Backward compat: pre-fix runs wrote "batch" as a single sentinel accession key to mean
+    // "all batch-style files for this year were processed." Honour that sentinel so years already
+    // tracked as done are not reprocessed. Batch-style accessions have a non-numeric first char;
+    // real SEC accessions always start with a digit (e.g. "0000320193-24-123456").
+    boolean legacyBatchDone = excludeAccessions != null && excludeAccessions.contains("batch");
+
+    List<String> newPaths = new ArrayList<String>();
+    for (String accession : sourceAccessions) {
+      boolean isBatchStyle = !accession.isEmpty() && !Character.isDigit(accession.charAt(0));
+      if (legacyBatchDone && isBatchStyle) {
+        continue; // Skip: legacy tracker sentinel covers all batch files for this year
+      }
+      if (excludeAccessions == null || !excludeAccessions.contains(accession)) {
+        String path = pathsMap.get(accession);
+        if (path != null) {
+          newPaths.add(path);
+        }
+      }
+    }
+    return newPaths;
   }
 
   /**
@@ -1414,11 +1886,17 @@ public class IcebergMaterializer {
       }
     }
 
+    // For multi-wildcard patterns like "*metadata*.parquet" (fileSuffix = "metadata*.parquet"),
+    // split into required substrings for sequential-contains matching instead of giving up.
+    // Single-wildcard patterns (fileSuffix has no "*") use the fast endsWith check.
+    final String[] suffixParts = fileSuffix.contains("*") ? fileSuffix.split("\\*", -1) : null;
+
     // Cache key includes year and file suffix
     String cacheKey = year + ":" + fileSuffix;
     if (sourceAccessionsCache.containsKey(cacheKey)) {
       return sourceAccessionsCache.get(cacheKey);
     }
+    Map<String, String> pathsMap = new HashMap<String, String>();
 
     if (storageProvider == null) {
       LOGGER.debug("No storage provider available, skipping source accession cache");
@@ -1446,26 +1924,62 @@ public class IcebergMaterializer {
       for (StorageProvider.FileEntry file : files) {
         String fileName = file.getName();
         // Only process files matching the table's suffix (e.g., _facts.parquet, _metadata.parquet)
-        if (!fileName.endsWith(fileSuffix)) {
+        if (suffixParts != null) {
+          // Multi-wildcard match: all parts must appear sequentially in the filename
+          boolean matches = true;
+          int searchFrom = 0;
+          for (String part : suffixParts) {
+            if (part.isEmpty()) {
+              continue;
+            }
+            int idx = fileName.indexOf(part, searchFrom);
+            if (idx < 0) {
+              matches = false;
+              break;
+            }
+            searchFrom = idx + part.length();
+          }
+          if (!matches) {
+            continue;
+          }
+        } else if (!fileName.endsWith(fileSuffix)) {
           continue;
         }
-        // Extract CIK and accession from filename
-        // Example: 0000001750_0001104659-22-081498_facts.parquet
-        //          ^CIK        ^accession              ^suffix
+        // Extract CIK and accession from filename.
+        // Per-CIK format:  0000001750_0001104659-22-081498_facts.parquet
+        //                  ^CIK (digits) ^accession              ^suffix
+        // Batch format:    metadata_batch_0005.parquet  (CIK prefix is non-numeric)
+        //                  → use the strip-suffix filename as the unique accession key
         int underscoreIdx = fileName.indexOf('_');
+        String cik;
+        String accession;
         if (underscoreIdx > 0) {
-          String cik = fileName.substring(0, underscoreIdx);
-          int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
-          if (secondUnderscoreIdx > 0) {
-            String accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
-            Set<String> accessions = cikToAccessions.get(cik);
-            if (accessions == null) {
-              accessions = new HashSet<String>();
-              cikToAccessions.put(cik, accessions);
+          String cikCandidate = fileName.substring(0, underscoreIdx);
+          boolean isNumericCik = !cikCandidate.isEmpty() && cikCandidate.chars().allMatch(Character::isDigit);
+          if (isNumericCik) {
+            // Per-CIK file: {CIK}_{accession}_{suffix}
+            int secondUnderscoreIdx = fileName.indexOf('_', underscoreIdx + 1);
+            if (secondUnderscoreIdx <= 0) {
+              continue;
             }
-            accessions.add(accession);
+            cik = cikCandidate;
+            accession = fileName.substring(underscoreIdx + 1, secondUnderscoreIdx);
+          } else {
+            // Batch file: use strip-suffix filename as accession key, "_BATCH_" as synthetic CIK group
+            cik = "_BATCH_";
+            int dotIdx = fileName.lastIndexOf('.');
+            accession = dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName;
           }
+        } else {
+          continue;
         }
+        Set<String> accessions = cikToAccessions.get(cik);
+        if (accessions == null) {
+          accessions = new HashSet<String>();
+          cikToAccessions.put(cik, accessions);
+        }
+        accessions.add(accession);
+        pathsMap.put(accession, basePath + fileName);
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -1474,6 +1988,7 @@ public class IcebergMaterializer {
 
       // Cache the result
       sourceAccessionsCache.put(cacheKey, cikToAccessions);
+      sourcePathsCache.put(cacheKey, pathsMap);
       return cikToAccessions;
 
     } catch (Exception e) {
@@ -1791,36 +2306,41 @@ public class IcebergMaterializer {
     String accessionCol = config.getAccessionColumn();
     String yearValue = batch.get("year");
 
-    // Step 1: Get accessions from tracker (cheap, local DuckDB)
-    Set<String> trackedAccessions = getTrackedAccessions(config.getTargetTableId(), yearValue);
-    excludeAccessions.addAll(trackedAccessions);
-    if (!trackedAccessions.isEmpty()) {
-      LOGGER.info("Found {} tracked accessions for {}/year={}, skipping S3 scan",
-          trackedAccessions.size(), config.getTargetTableId(), yearValue);
-    }
-
-    // Step 2: Self-healing - only scan Iceberg/S3 when tracker has no data for this partition
-    if (trackedAccessions.isEmpty() && table != null) {
-      Set<String> icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
-
-      // Add to tracker so we never scan S3 again for these accessions
-      for (String accession : icebergAccessions) {
-        Map<String, String> accessionKey = new LinkedHashMap<String, String>();
-        if (yearValue != null) {
-          accessionKey.put("year", yearValue);
+    // Iceberg is the source of truth. Scan it directly whenever the table is reachable.
+    // The tracker is a fallback for when Iceberg is unavailable — never an authority.
+    if (table != null) {
+      try {
+        Set<String> icebergAccessions =
+            getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
+        // Sync tracker from Iceberg so retries use the cheap path without a second S3 scan.
+        for (String accession : icebergAccessions) {
+          Map<String, String> accessionKey = new LinkedHashMap<String, String>();
+          if (yearValue != null) {
+            accessionKey.put("year", yearValue);
+          }
+          accessionKey.put(accessionCol, accession);
+          incrementalTracker.markProcessed(config.getTargetTableId(),
+              config.getSourceTableName(), accessionKey, config.getTargetTableId());
         }
-        accessionKey.put(accessionCol, accession);
-        incrementalTracker.markProcessed(config.getTargetTableId(),
-            config.getSourceTableName(), accessionKey, config.getTargetTableId());
-      }
-      excludeAccessions.addAll(icebergAccessions);
-
-      if (!icebergAccessions.isEmpty()) {
-        LOGGER.info("Self-healing: found {} accessions in Iceberg for {}/year={}, added to tracker",
+        LOGGER.info("Iceberg scan: {} committed accessions for {}/year={}",
             icebergAccessions.size(), config.getTargetTableId(), yearValue);
+        return icebergAccessions;
+      } catch (Exception e) {
+        // Iceberg unreachable — fall back to tracker to avoid re-processing known-committed data.
+        Set<String> trackedAccessions =
+            getTrackedAccessions(config.getTargetTableId(), yearValue);
+        LOGGER.warn("Iceberg scan failed for {}/year={}: {} — using {} tracker entries as fallback",
+            config.getTargetTableId(), yearValue, e.getMessage(), trackedAccessions.size());
+        return trackedAccessions;
       }
     }
 
+    // No Iceberg table exists yet — no committed accessions to exclude.
+    // The tracker may hold stale entries from a previous run; ignore them here so that
+    // a deleted-and-reset Iceberg table is rebuilt from scratch rather than skipping
+    // accessions that were "complete" in the old table.
+    LOGGER.info("No Iceberg table at {} — starting fresh (0 excluded accessions)",
+        icebergLocation);
     return excludeAccessions;
   }
 
@@ -1830,14 +2350,8 @@ public class IcebergMaterializer {
   private Set<String> getTrackedAccessions(String tableId, String yearValue) {
     Set<String> accessions = new HashSet<String>();
     try {
-      Set<Map<String, String>> allProcessed = incrementalTracker.getProcessedKeyValues(tableId);
-      for (Map<String, String> keyValues : allProcessed) {
-        if (yearValue != null) {
-          String entryYear = keyValues.get("year");
-          if (!yearValue.equals(entryYear)) {
-            continue;
-          }
-        }
+      Set<Map<String, String>> processed = incrementalTracker.getProcessedKeyValues(tableId, yearValue);
+      for (Map<String, String> keyValues : processed) {
         for (Map.Entry<String, String> entry : keyValues.entrySet()) {
           if (!"year".equals(entry.getKey())) {
             accessions.add(entry.getValue());
@@ -1860,7 +2374,7 @@ public class IcebergMaterializer {
 
     try (Connection conn = getDuckDBConnection(1)) {
       // Query Iceberg table for existing accessions
-      String sql = "SELECT DISTINCT " + accessionCol + " FROM iceberg_scan('" + icebergLocation + "')";
+      String sql = "SELECT DISTINCT " + accessionCol + " FROM iceberg_scan('" + icebergLocation + "', allow_moved_paths=true)";
       if (yearValue != null) {
         sql += " WHERE year = " + yearValue;
       }
@@ -1925,12 +2439,9 @@ public class IcebergMaterializer {
         globPattern = globPattern + "/**/*" + ext;
       }
 
-      // DuckDB glob() returns 'file' column; 'last_modified' only available for local files
-      // For S3 paths, we skip watermark optimization (always re-check)
       boolean isS3 = globPattern.startsWith("s3://") || globPattern.startsWith("s3a://");
       if (isS3) {
-        LOGGER.debug("S3 path detected, skipping watermark (not available): {}", globPattern);
-        return 0;  // No watermark for S3 - always check for changes
+        return getS3SourceFileWatermark(globPattern, ext);
       }
 
       String sql = "SELECT file, last_modified FROM glob('" + globPattern + "')";
@@ -1953,6 +2464,46 @@ public class IcebergMaterializer {
           sourcePattern, e.getMessage());
     }
 
+    return maxLastModified;
+  }
+
+  /**
+   * Computes the max lastModified watermark for S3 source files by listing objects
+   * under the non-wildcard base prefix of the source pattern.
+   *
+   * @param globPattern S3 glob pattern (e.g., "s3://bucket/prefix/year=*&#47;*.parquet")
+   * @param ext File extension to filter by (e.g., ".parquet")
+   * @return Max lastModified timestamp in milliseconds, or 0 on error
+   */
+  private long getS3SourceFileWatermark(String globPattern, String ext) {
+    // Extract the non-wildcard prefix to use as the S3 listing base path
+    String basePath = globPattern;
+    int wildcardIdx = basePath.indexOf('*');
+    if (wildcardIdx >= 0) {
+      basePath = basePath.substring(0, wildcardIdx);
+      int lastSlash = basePath.lastIndexOf('/');
+      if (lastSlash >= 0) {
+        basePath = basePath.substring(0, lastSlash + 1);
+      }
+    }
+    LOGGER.debug("Computing S3 source file watermark for base path: {}", basePath);
+    long maxLastModified = 0;
+    try {
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, true);
+      for (StorageProvider.FileEntry entry : files) {
+        if (!entry.isDirectory() && entry.getPath().endsWith(ext)) {
+          long lastMod = entry.getLastModified();
+          if (lastMod > maxLastModified) {
+            maxLastModified = lastMod;
+          }
+        }
+      }
+      LOGGER.debug("S3 source file watermark: {} ({} objects scanned, base: {})",
+          maxLastModified, files.size(), basePath);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to compute S3 source file watermark for {}: {}", basePath, e.getMessage());
+      return 0;
+    }
     return maxLastModified;
   }
 
@@ -2180,9 +2731,7 @@ public class IcebergMaterializer {
       stmt.execute("SET preserve_insertion_order=false");
       // Limit memory to avoid OOM on memory-constrained systems
       stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
-      if (warehousePath != null) {
-        stmt.execute("SET temp_directory='" + warehousePath + "/.duckdb_tmp'");
-      }
+      stmt.execute("SET temp_directory='" + DUCKDB_TEMP_DIR + "'");
 
       // Load extensions
       try {
@@ -2229,24 +2778,33 @@ public class IcebergMaterializer {
     try {
       stmt.execute("INSTALL httpfs");
       stmt.execute("LOAD httpfs");
+      // Reduce per-request timeout and retries to avoid silent stalls on R2 httpfs reads.
+      // Default (30s timeout × 4 attempts with exponential backoff) can stall for 10+ min per file.
+      stmt.execute("SET http_timeout=10000");
+      stmt.execute("SET http_retries=2");
+      stmt.execute("SET http_retry_wait_ms=500");
 
       String accessKey = s3Config.get("accessKeyId");
       String secretKey = s3Config.get("secretAccessKey");
       String endpoint = s3Config.get("endpoint");
-      String region = s3Config.get("region");
+      String region = s3Config.getOrDefault("region", "auto");
 
       if (accessKey != null && secretKey != null) {
-        stmt.execute("SET s3_access_key_id='" + accessKey + "'");
-        stmt.execute("SET s3_secret_access_key='" + secretKey + "'");
-      }
-      if (endpoint != null) {
-        stmt.execute("SET s3_endpoint='" + endpoint + "'");
-        stmt.execute("SET s3_url_style='path'");
-      }
-      if (region != null) {
-        stmt.execute("SET s3_region='" + region + "'");
-      } else {
-        stmt.execute("SET s3_region='auto'");
+        // Endpoint hostname only (no https:// prefix) as required by DuckDB CREATE SECRET
+        String endpointHost = endpoint != null ? endpoint.replaceFirst("^https?://", "") : null;
+
+        StringBuilder secret = new StringBuilder(
+            "CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
+        secret.append(", KEY_ID '").append(accessKey).append("'");
+        secret.append(", SECRET '").append(secretKey).append("'");
+        if (endpointHost != null) {
+          secret.append(", ENDPOINT '").append(endpointHost).append("'");
+          secret.append(", USE_SSL true");
+          secret.append(", URL_STYLE 'path'");
+        }
+        secret.append(", REGION '").append(region).append("'");
+        secret.append(")");
+        stmt.execute(secret.toString());
       }
     } catch (SQLException e) {
       LOGGER.debug("S3 configuration skipped: {}", e.getMessage());

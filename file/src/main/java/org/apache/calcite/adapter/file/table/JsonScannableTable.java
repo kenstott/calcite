@@ -18,6 +18,8 @@ package org.apache.calcite.adapter.file.table;
 
 import org.apache.calcite.DataContext;
 import org.apache.calcite.adapter.file.execution.linq4j.JsonEnumerator;
+import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
+import org.apache.calcite.adapter.file.format.json.SharedJsonData;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -57,6 +59,21 @@ public class JsonScannableTable extends JsonTable
    */
   public JsonScannableTable(Source source, Map<String, Object> options, String columnNameCasing) {
     super(source, options, columnNameCasing);
+  }
+
+  /**
+   * Creates a JsonScannableTable with options, column casing, and forced data type.
+   */
+  public JsonScannableTable(Source source, Map<String, Object> options, String columnNameCasing,
+      String forcedDataType) {
+    super(source, options, columnNameCasing, forcedDataType);
+  }
+
+  /**
+   * Creates a JsonScannableTable backed by shared JSON data at a specific path.
+   */
+  public JsonScannableTable(SharedJsonData sharedData, String jsonPath, JsonSearchConfig config) {
+    super(sharedData, jsonPath, config);
   }
 
   @Override public String toString() {

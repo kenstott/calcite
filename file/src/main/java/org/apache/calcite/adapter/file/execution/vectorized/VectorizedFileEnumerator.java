@@ -128,7 +128,10 @@ public class VectorizedFileEnumerator implements Enumerator<@Nullable Object[]> 
   private VectorSchemaRoot applyVectorizedOperations(VectorSchemaRoot input) {
     long startTime = System.nanoTime();
 
-    try (ColumnBatch columnBatch = new ColumnBatch(input)) {
+    try {
+      // Do not auto-close ColumnBatch: it wraps the input VectorSchemaRoot
+      // which is still needed by the caller after this method returns.
+      ColumnBatch columnBatch = new ColumnBatch(input);
       batchesProcessed++;
       totalRowsProcessed += columnBatch.getRowCount();
 
