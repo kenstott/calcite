@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,9 +26,13 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -65,7 +70,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * EtlPipeline pipeline = new EtlPipeline(config, storageProvider, "/data");
  * EtlResult result = pipeline.execute();
  *
- * System.out.println("Processed " + result.getTotalRows() + " rows");
  * }</pre>
  *
  * <h3>Error Handling</h3>
@@ -644,7 +648,7 @@ public class EtlPipeline {
         // Pre-query Iceberg for existing partitions to skip redundant regeneration.
         // If tracker says "not processed" but Iceberg already has the partition data,
         // mark combos as processed and skip them (avoids re-fetching + re-writing).
-        java.util.Set<Map<String, String>> existingIcebergPartitions =
+        Set<Map<String, String>> existingIcebergPartitions =
             java.util.Collections.emptySet();
         List<String> icebergPartitionColumns = Collections.emptyList();
         if (!forceReprocessAll && materializeConfig != null
@@ -719,7 +723,7 @@ public class EtlPipeline {
               && !unprocessedIndices.isEmpty()) {
             // Extract the Iceberg partition key from the first unprocessed combo
             Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
-            Map<String, String> icebergKey = new java.util.LinkedHashMap<String, String>();
+            Map<String, String> icebergKey = new LinkedHashMap<String, String>();
             for (String col : icebergPartitionColumns) {
               String val = sampleCombo.get(col);
               if (val != null) {
@@ -1277,58 +1281,78 @@ public class EtlPipeline {
     LOGGER.info("Response partitioning enabled with fields: {}", fieldMappings);
 
     // Check for year filtering
-    boolean hasYearFilter = partitionConfig.hasYearFilter();
-    String yearField = partitionConfig.getYearField();
+    final boolean hasYearFilter = partitionConfig.hasYearFilter();
+    final String yearField = partitionConfig.getYearField();
     if (hasYearFilter) {
       LOGGER.info("Year filter enabled: field={}, range={}-{}",
           yearField, partitionConfig.getYearStart(), partitionConfig.getYearEnd());
     }
 
-    // Collect all rows (with year filtering), let DuckDB PARTITION_BY handle partitioning
-    List<Map<String, Object>> allRows = new ArrayList<Map<String, Object>>();
-    int totalRows = 0;
-    int filteredRows = 0;
+    // Lazy year-filter iterator — streams rows directly into writeBatch without pre-buffering.
+    // writeBatch chunks at batchSize (default 10k) so the full dataset never lives in heap.
+    final int[] counts = {0, 0}; // [totalRows, filteredRows]
+    final Iterator<Map<String, Object>> source = data;
+    Iterator<Map<String, Object>> filtered = new Iterator<Map<String, Object>>() {
+      private Map<String, Object> pending = null;
+      private boolean fetched = false;
 
-    while (data.hasNext()) {
-      Map<String, Object> row = data.next();
-      totalRows++;
-
-      // Apply year filter if configured
-      if (hasYearFilter) {
-        Object yearValue = row.get(yearField);
-        if (!partitionConfig.isYearInRange(yearValue)) {
-          filteredRows++;
-          continue;  // Skip rows outside year range
+      private void prefetch() {
+        if (fetched) {
+          return;
+        }
+        fetched = true;
+        pending = null;
+        while (source.hasNext()) {
+          Map<String, Object> row = source.next();
+          counts[0]++;
+          if (hasYearFilter) {
+            Object val = row.get(yearField);
+            if (!partitionConfig.isYearInRange(val)) {
+              counts[1]++;
+              continue;
+            }
+          }
+          pending = row;
+          return;
         }
       }
 
-      allRows.add(row);
-    }
+      @Override public boolean hasNext() {
+        prefetch();
+        return pending != null;
+      }
 
-    if (filteredRows > 0) {
-      LOGGER.info("Filtered {} of {} rows by year range, writing {} rows in single batch",
-          filteredRows, totalRows, allRows.size());
-    } else {
-      LOGGER.info("Writing {} rows in single batch (DuckDB PARTITION_BY handles partitioning)",
-          allRows.size());
-    }
+      @Override public Map<String, Object> next() {
+        prefetch();
+        if (pending == null) {
+          throw new NoSuchElementException();
+        }
+        fetched = false;
+        Map<String, Object> result = pending;
+        pending = null;
+        return result;
+      }
+    };
 
-    if (allRows.isEmpty()) {
-      LOGGER.info("No rows to write after filtering");
-      // Mark as empty (0 rows) - will be requeried after TTL
+    if (!filtered.hasNext()) {
+      LOGGER.info("No rows to write after year filtering (total scanned: {})", counts[0]);
       tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, 0);
       return 0;
     }
 
-    // Write ALL rows in ONE batch - DuckDB's PARTITION_BY handles the physical partitioning
-    // This is O(1) COPY operations instead of O(partitions)
-    long writtenRows = writer.writeBatch(allRows.iterator(), urlVariables);
+    // Stream rows through writeBatch — DuckDB PARTITION_BY handles physical partitioning.
+    // writeBatch chunks internally so heap usage is bounded by batchSize, not dataset size.
+    long writtenRows = writer.writeBatch(filtered, urlVariables);
+
+    if (counts[1] > 0) {
+      LOGGER.info("Response partitioning: scanned={}, filtered={}, written={}",
+          counts[0], counts[1], writtenRows);
+    } else {
+      LOGGER.info("Response partitioning complete: {} rows written", writtenRows);
+    }
 
     // Track at URL dimension level (e.g., indicator), not every partition combination
     tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, writtenRows);
-
-    LOGGER.info("Response partitioning complete: {} rows written in single batch",
-        writtenRows);
 
     return writtenRows;
   }
@@ -1373,46 +1397,29 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
-    // For large datasets, pass the iterator directly to avoid OOM from buffering
-    // millions of rows. Only buffer when needed for response partitioning (which
-    // may need to re-scan data) or write lock contention.
-    // Serialize all writer and tracker operations to prevent concurrent DuckDB access
+    // Serialize all writer and tracker operations to prevent concurrent DuckDB access.
+    // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     synchronized (writeLock) {
       HttpSourceConfig sourceConfig = config.getSource();
       boolean hasResponsePartitioning = sourceConfig != null
           && sourceConfig.hasResponsePartitioning();
 
-      // Buffer data only when response partitioning needs it; otherwise stream directly
-      Iterator<Map<String, Object>> writeIter;
-      if (hasResponsePartitioning) {
-        List<Map<String, Object>> bufferedData = new ArrayList<Map<String, Object>>();
-        while (data.hasNext()) {
-          bufferedData.add(data.next());
-        }
-        LOGGER.debug("Buffered {} rows for response partitioning in batch {}",
-            bufferedData.size(), processedCount);
-        writeIter = bufferedData.iterator();
-      } else {
-        writeIter = data;
-      }
-
       long batchRows;
-      Iterator<Map<String, Object>> bufferedIter = writeIter;
       if (hasResponsePartitioning) {
         batchRows =
-            writeWithResponsePartitioning(bufferedIter, variables,
+            writeWithResponsePartitioning(data, variables,
             sourceConfig.getResponsePartitioning(),
             writer, dataWriter, incrementalTracker, pipelineName);
       } else {
         if (dataWriter != null) {
-          batchRows = dataWriter.write(config, bufferedIter, variables);
+          batchRows = dataWriter.write(config, data, variables);
           if (batchRows >= 0) {
             LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
           } else {
-            batchRows = writer.writeBatch(bufferedIter, variables);
+            batchRows = writer.writeBatch(data, variables);
           }
         } else {
-          batchRows = writer.writeBatch(bufferedIter, variables);
+          batchRows = writer.writeBatch(data, variables);
         }
         incrementalTracker.markProcessedWithRowCount(
             pipelineName, pipelineName, variables, null, batchRows);
@@ -1596,7 +1603,7 @@ public class EtlPipeline {
     Map<String, Object> catalogConfig = buildIcebergCatalogConfig(materializeConfig);
 
     // Query existing partitions from Iceberg table
-    java.util.Set<Map<String, String>> existingPartitions =
+    Set<Map<String, String>> existingPartitions =
         IcebergMaterializationWriter.getExistingPartitions(catalogConfig, targetTableId, partitionColumns);
 
     if (existingPartitions.isEmpty()) {
@@ -1607,14 +1614,14 @@ public class EtlPipeline {
 
     // Verify existing partitions are not stale - they should be a subset of expected combinations
     // Convert combinations to a set for efficient lookup
-    java.util.Set<Map<String, String>> expectedSet =
-        new java.util.HashSet<Map<String, String>>(combinations);
-    java.util.Set<Map<String, String>> stalePartitions =
-        new java.util.HashSet<Map<String, String>>();
+    Set<Map<String, String>> expectedSet =
+        new HashSet<Map<String, String>>(combinations);
+    Set<Map<String, String>> stalePartitions =
+        new HashSet<Map<String, String>>();
 
     for (Map<String, String> existing : existingPartitions) {
       // Extract only the partition columns we care about for comparison
-      Map<String, String> partitionOnly = new java.util.LinkedHashMap<String, String>();
+      Map<String, String> partitionOnly = new LinkedHashMap<String, String>();
       for (String col : partitionColumns) {
         String val = existing.get(col);
         if (val != null) {
@@ -1627,10 +1634,10 @@ public class EtlPipeline {
     }
 
     // Find partitions that ARE in expected set (can be rebuilt)
-    java.util.Set<Map<String, String>> rebuildable =
-        new java.util.HashSet<Map<String, String>>();
+    Set<Map<String, String>> rebuildable =
+        new HashSet<Map<String, String>>();
     for (Map<String, String> existing : existingPartitions) {
-      Map<String, String> partitionOnly = new java.util.LinkedHashMap<String, String>();
+      Map<String, String> partitionOnly = new LinkedHashMap<String, String>();
       for (String col : partitionColumns) {
         String val = existing.get(col);
         if (val != null) {
@@ -1678,7 +1685,7 @@ public class EtlPipeline {
    * Builds Iceberg catalog configuration from MaterializeConfig.
    */
   private Map<String, Object> buildIcebergCatalogConfig(MaterializeConfig materializeConfig) {
-    Map<String, Object> catalogConfig = new java.util.HashMap<String, Object>();
+    Map<String, Object> catalogConfig = new HashMap<String, Object>();
 
     MaterializeConfig.IcebergConfig icebergConfig = materializeConfig.getIceberg();
     if (icebergConfig != null) {
@@ -1704,23 +1711,19 @@ public class EtlPipeline {
         warehousePath = baseDirectory;
       }
       // Convert s3:// to s3a:// for Hadoop S3A FileSystem compatibility
-      if (warehousePath != null && warehousePath.startsWith("s3://")) {
-        warehousePath = "s3a://" + warehousePath.substring(5);
-      }
+      warehousePath = StorageProviderFactory.normalizeForHadoop(warehousePath);
       catalogConfig.put("warehousePath", warehousePath);
     } else {
       catalogConfig.put("catalog", "hadoop");
       String warehousePath = baseDirectory;
-      if (warehousePath != null && warehousePath.startsWith("s3://")) {
-        warehousePath = "s3a://" + warehousePath.substring(5);
-      }
+      warehousePath = StorageProviderFactory.normalizeForHadoop(warehousePath);
       catalogConfig.put("warehousePath", warehousePath);
     }
 
     // Add S3 credentials from storage provider
     Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
     if (s3Config != null && !s3Config.isEmpty()) {
-      Map<String, String> hadoopConfig = new java.util.HashMap<String, String>();
+      Map<String, String> hadoopConfig = new HashMap<String, String>();
       hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
 
       String accessKey = s3Config.get("accessKeyId");
@@ -1760,7 +1763,7 @@ public class EtlPipeline {
    * @return true if data files exist, false otherwise
    */
   private static Set<Integer> allIndicesSet(int size) {
-    Set<Integer> all = new java.util.HashSet<Integer>();
+    Set<Integer> all = new HashSet<Integer>();
     for (int i = 0; i < size; i++) {
       all.add(i);
     }
@@ -1850,7 +1853,7 @@ public class EtlPipeline {
       if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
         org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
             (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
-        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        Map<String, String> s3Config = s3Provider.getS3Config();
         if (s3Config != null) {
           // S3A FileSystem implementation - required for Hadoop to find the FS
           hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
@@ -1897,12 +1900,12 @@ public class EtlPipeline {
         // Schema validation if expected columns provided
         if (expectedColumns != null && !expectedColumns.isEmpty()) {
           org.apache.iceberg.Schema icebergSchema = table.schema();
-          java.util.Set<String> existingColumns = new java.util.HashSet<String>();
+          Set<String> existingColumns = new HashSet<String>();
           for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
             existingColumns.add(field.name().toLowerCase());
           }
 
-          java.util.Set<String> missingColumns = new java.util.HashSet<String>();
+          Set<String> missingColumns = new HashSet<String>();
           for (ColumnConfig col : expectedColumns) {
             String colName = col.getName().toLowerCase();
             if (!existingColumns.contains(colName)) {
@@ -1980,7 +1983,7 @@ public class EtlPipeline {
       if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
         org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
             (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
-        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        Map<String, String> s3Config = s3Provider.getS3Config();
         if (s3Config != null) {
           hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
           hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
@@ -2089,7 +2092,7 @@ public class EtlPipeline {
       if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
         org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
             (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
-        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        Map<String, String> s3Config = s3Provider.getS3Config();
         if (s3Config != null) {
           hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
           hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
