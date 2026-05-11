@@ -96,6 +96,11 @@ dimension_values:
     end: current
     dataLag: 0
 
+  all_fia_state_abbrs: &all_fia_state_abbrs
+    type: json_catalog
+    source: "/lands/fia-states.json"
+    path: "[*].state_abbr"
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -280,118 +285,72 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
-  # FOREST INVENTORY — USDA FIA state-level area, volume, and carbon stock
+  # FOREST INVENTORY — USDA FIA bulk COND CSV per state
   # ---------------------------------------------------------------------------
   - name: forest_inventory
-    pattern: "type=forest_inventory/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=forest_inventory/stateAbbr=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: stateAbbr
+          type: VARCHAR
     comment: >
-      USDA Forest Service Forest Inventory and Analysis (FIA) state-level estimates.
+      USDA Forest Service Forest Inventory and Analysis (FIA) state-level estimates
+      derived from bulk COND CSV files (apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv).
       One row per state × forest_type_group × ownership_class × inventory_year.
-      Includes forested land area, live tree volume, above-ground carbon stock, tree
-      density, and basal area. Joins to geo.states via state_fips and to
-      econ.bls_employment for forestry sector employment correlation.
+      Filtered to COND_STATUS_CD=1 (accessible forest land). Basal area is a
+      CONDPROP_UNADJ-weighted average of BALIVE. Joins to geo.states via state_fips.
 
     dimensions:
       type:
         - forest_inventory
-      year: *lands_year_range
-      stateCode:
-        - "01"  # Alabama
-        - "02"  # Alaska
-        - "04"  # Arizona
-        - "05"  # Arkansas
-        - "06"  # California
-        - "08"  # Colorado
-        - "09"  # Connecticut
-        - "10"  # Delaware
-        - "11"  # District of Columbia
-        - "12"  # Florida
-        - "13"  # Georgia
-        - "16"  # Idaho
-        - "17"  # Illinois
-        - "18"  # Indiana
-        - "19"  # Iowa
-        - "20"  # Kansas
-        - "21"  # Kentucky
-        - "22"  # Louisiana
-        - "23"  # Maine
-        - "24"  # Maryland
-        - "25"  # Massachusetts
-        - "26"  # Michigan
-        - "27"  # Minnesota
-        - "28"  # Mississippi
-        - "29"  # Missouri
-        - "30"  # Montana
-        - "31"  # Nebraska
-        - "32"  # Nevada
-        - "33"  # New Hampshire
-        - "34"  # New Jersey
-        - "35"  # New Mexico
-        - "36"  # New York
-        - "37"  # North Carolina
-        - "38"  # North Dakota
-        - "39"  # Ohio
-        - "40"  # Oklahoma
-        - "41"  # Oregon
-        - "42"  # Pennsylvania
-        - "44"  # Rhode Island
-        - "45"  # South Carolina
-        - "46"  # South Dakota
-        - "47"  # Tennessee
-        - "48"  # Texas
-        - "49"  # Utah
-        - "50"  # Vermont
-        - "51"  # Virginia
-        - "53"  # Washington
-        - "54"  # West Virginia
-        - "55"  # Wisconsin
-        - "56"  # Wyoming
+      stateAbbr: *all_fia_state_abbrs
 
     columns:
       - name: inventory_year
         type: integer
         nullable: false
-        comment: FIA estimation year (partition key)
+        comment: FIA inventory year (INVYR)
       - <<: *state_fips_column
         nullable: false
       - name: forest_type_group
         type: string
         nullable: true
-        comment: Forest type group (e.g., 'Oak-Hickory', 'Douglas-fir', 'Ponderosa pine')
+        comment: Forest type group name (e.g., 'Oak / hickory group', 'Douglas-fir group')
       - name: ownership_class
         type: string
         nullable: true
-        comment: National Forest / Other Federal / State / Private
+        comment: National Forest / Other Federal / State / Local / Private
       - name: land_area_acres
         type: double
         nullable: true
-        comment: Forested land area in acres
+        comment: Forested land area in acres (null — expansion factor not in COND)
       - name: live_volume_cuft
         type: double
         nullable: true
-        comment: Live tree volume (cubic feet)
+        comment: Live tree volume in cubic feet (null — tree-level data not in COND)
       - name: carbon_stock_tons
         type: double
         nullable: true
-        comment: Above-ground carbon stock (short tons)
+        comment: Above-ground carbon stock in short tons (null — tree-level data not in COND)
       - name: trees_per_acre
         type: double
         nullable: true
-        comment: Average tree density (trees per acre)
+        comment: Average tree density (null — tree-level data not in COND)
       - name: basal_area_sqft
         type: double
         nullable: true
-        comment: Basal area per acre (square feet; tree diameter proxy)
+        comment: CONDPROP_UNADJ-weighted average of BALIVE (sq ft per acre)
 
     source:
       type: http
-      url: "https://apps.fs.usda.gov/fiadb-api/fullreport?rselected=State+Code+and+Name&cselected=Forest+type+group&wc={stateCode}{year}&outputFormat=JSON&colFilter=0"
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{stateAbbr}_COND.csv"
       method: GET
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -403,9 +362,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=forest_inventory/year=*/"
+        pattern: "type=forest_inventory/stateAbbr=*/"
       partition:
-        columns: [type, year]
+        columns: [type, stateAbbr]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}"
         tableName: forest_inventory
@@ -413,8 +372,7 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [stateAbbr]
 
   # ---------------------------------------------------------------------------
   # NPS UNITS — National Park Service unit boundaries (static reference)
