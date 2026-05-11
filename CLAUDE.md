@@ -38,6 +38,12 @@ duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/file.parquet')" # check Du
 - [ ] No debug artifacts (System.out/err)
 - [ ] Commit message reflects actual changes
 
+## GovData Schema Rules
+7. **No Env Vars in Schema YAML** - Schema YAML files (`govdata/src/main/resources/**/*.yaml`) must never reference OS environment variables directly (e.g., `${GOVDATA_START_YEAR}`, `${GOVDATA_SINCE_YEAR}`, `${EDU_SCHEMA_NAME}`). Only two exceptions are allowed:
+   - `${GOVDATA_PARQUET_DIR}` — set by GovDataSchemaFactory from the model `directory` operand
+   - `${API_DATA_GOV}` — pending proper factory injection (tracked, do not add new ones of this type)
+   All runtime configuration must flow through model operands → GovDataSchemaFactory → system properties. Schema YAMLs consume factory-set properties only.
+
 ## Legacy Commands
 - **Cleanup debug code**: Remove System.out/err, temp tests, dead code, temp markdown
 - **Regression testing**: `CALCITE_FILE_ENGINE_TYPE=[engine] gtimeout 1800 ./gradlew :file:test --continue --console=plain`
