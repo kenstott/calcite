@@ -279,6 +279,92 @@ generate_sec_primary_model() {
 ENDJSON
 }
 
+# Generate a SEC reprocess model JSON targeting specific accessions.
+# Sets forceAccessions so filterAndSelfHeal bypasses tracker state for listed accessions.
+# Uses _ALL_EDGAR_FILERS so the full EDGAR index is loaded regardless of who filed.
+# Usage: generate_sec_reprocess_model <accessions_space_separated> <start_year> <end_year> <output_file>
+generate_sec_reprocess_model() {
+  local accessions_str=$1 start_year=$2 end_year=$3 output_file=$4
+
+  local acc_json
+  acc_json=$(printf '%s' "$accessions_str" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().split()))")
+
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": "_ALL_EDGAR_FILERS",
+      "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "DEF 14A", "3", "4", "5", "13F-HR", "13F-HR/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"],
+      "fetchStockPrices": false,
+      "forceAccessions": ${acc_json},
+      "startYear": ${start_year},
+      "endYear": ${end_year},
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
+# Generate a SEC chunks-backfill model JSON for a year range.
+# Identical to the primary model but sets chunksBackfill=true so filterAndSelfHeal
+# routes base-complete (no chunks) accessions to reprocessing instead of skipping them.
+# Usage: generate_sec_chunks_backfill_model <start_year> <end_year> <output_file>
+generate_sec_chunks_backfill_model() {
+  local start_year=$1 end_year=$2 output_file=$3
+  cat > "$output_file" <<ENDJSON
+{
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [{
+    "name": "sec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "sec",
+      "ciks": "_ALL_EDGAR_FILERS",
+      "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A"],
+      "fetchStockPrices": false,
+      "chunksBackfill": true,
+      "startYear": ${start_year},
+      "endYear": ${end_year},
+      "autoDownload": true,
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}
+ENDJSON
+}
+
 # Generate a SEC secondary model JSON (8-K, proxy, insider, 13F, 13D/G) for a year range
 # Usage: generate_sec_secondary_model <start_year> <end_year> <output_file>
 generate_sec_secondary_model() {
@@ -365,6 +451,10 @@ generate_single_schema_model() {
       ;;
     fedregister)
       operand_body="\"dataSource\": \"fedregister\",
+      ${_YEAR_RANGE}"
+      ;;
+    lands|public_lands)
+      operand_body="\"dataSource\": \"lands\",
       ${_YEAR_RANGE}"
       ;;
     *)

@@ -67,6 +67,41 @@ duckdb -c "SELECT COUNT(*) FROM read_parquet('/path/to/file.parquet')"
 duckdb -c "SELECT * FROM read_parquet('/path/cik=*/filing_type=*/year=*/*.parquet') LIMIT 5"
 ```
 
+## ☁️ CLOUDFLARE R2 / S3-COMPATIBLE CLI
+
+### `aws` CLI is NOT installed — use `rclone` instead
+
+The `aws` CLI is not present on this machine. `rclone` (v1.73.5, at `~/homebrew/bin/rclone`) is the
+S3-compatible CLI and is already configured with an `r2:` remote pointing to
+`govdata-tracker-v1`, `govdata-parquet-v1`, and `govdata-raw-v1`.
+
+### rclone equivalents for common aws s3 commands
+
+| aws s3 command | rclone equivalent |
+|---|---|
+| `aws s3 cp local.file s3://bucket/path/file` | `rclone copyto local.file r2:bucket/path/file` |
+| `aws s3 cp s3://bucket/path/file local.file` | `rclone copyto r2:bucket/path/file local.file` |
+| `aws s3 ls s3://bucket/prefix/` | `rclone ls r2:bucket/prefix/` |
+| `aws s3 rm s3://bucket/prefix/ --recursive` | `rclone purge r2:bucket/prefix/` |
+| `aws s3 sync local/ s3://bucket/prefix/` | `rclone sync local/ r2:bucket/prefix/` |
+
+**Key difference:** `rclone copyto` copies a single file to an exact destination path.
+`rclone copy` (without `to`) treats the destination as a directory — always use `copyto` for
+single-file uploads where the destination filename must be specified.
+
+### DQ result upload (in scripts)
+
+Scripts must use `rclone copyto`, not `aws s3 cp`. This is already done in `worker-dq-run.sh`.
+
+```bash
+rclone copyto "$RESULT_LOCAL" "r2:govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+```
+
+### DuckDB S3 reads still use `SET s3_*` credentials
+
+`rclone` is only for shell-level uploads/downloads. DuckDB's `iceberg_scan` and `read_parquet`
+use `SET s3_access_key_id`, `SET s3_secret_access_key`, and `SET s3_endpoint` directly.
+
 ## 🏢 GOVDATA ADAPTER
 
 ### Required Environment Variables
@@ -97,6 +132,45 @@ govdata/
 └── source=sec/
     └── cik=*/filing_type=*/year=*/
 ```
+
+### ETL Run Mode and Year Control
+
+Three env vars govern what years each ETL run processes. They are set in `govdata/.env.prod`
+and interpreted in `govdata/scripts/parallel/common.sh`.
+
+| Variable | Production value | Purpose |
+|---|---|---|
+| `GOVDATA_START_YEAR` | `2010` (default; `.env.prod` may override) | Earliest year for historical ETL; overridden per-schema (e.g. `SEC_START_YEAR=2019`) |
+| `GOVDATA_INCREMENTAL_START_YEAR` | `2026` | First year owned by the daily worker; daily mode starts here, historical mode caps at this year − 1 |
+| `GOVDATA_RUN_MODE` | `historical` or `daily` | Controls which year slice a worker processes (see below) |
+
+#### How `GOVDATA_RUN_MODE` changes the year range
+
+```
+historical mode → startYear=GOVDATA_START_YEAR, endYear=GOVDATA_INCREMENTAL_START_YEAR−1
+daily mode      → startYear=GOVDATA_INCREMENTAL_START_YEAR (no endYear cap)
+```
+
+In daily mode `common.sh` also overrides `GOVDATA_START_YEAR` to equal
+`GOVDATA_INCREMENTAL_START_YEAR`, so any schema YAML that reads `${GOVDATA_START_YEAR}` gets the
+incremental boundary automatically.
+
+#### Rebuild smoke-test rule — always truncate to 2025
+
+When running `--rebuild` (or any historical-mode re-run) to verify a new schema or fix, **always
+override the start year to 2025**, not the standard historical 2010:
+
+```bash
+# Correct: one year of data, fast, enough to validate schema correctness
+GOVDATA_START_YEAR=2025 ./run-pool.sh --schema <schema> historical
+
+# Wrong: full backfill from 2010; unnecessary for smoke validation
+./run-pool.sh --schema <schema> historical   # picks up GOVDATA_START_YEAR=2010 default
+```
+
+**Exception:** Schemas with data cadence > 1 year (e.g. decennial census, FIA forest inventory)
+may genuinely need a wider window to have any rows at 2025. Use judgement — but start with 2025
+and widen only if the table comes back empty.
 
 ### Building for ETL Deployment
 

@@ -5952,7 +5952,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
     for (Map<String, Object> data : mdaData) {
       String text = (String) data.get("paragraph_text");
-      if (text == null || text.length() <= 50) {
+      if (text == null || text.length() <= 10) {
         continue;
       }
 

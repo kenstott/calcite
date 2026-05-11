@@ -883,8 +883,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
             int selfHealThreads = Integer.parseInt(
                 System.getProperty("calcite.etl.selfheal.threads", "50"));
+            boolean chunksBackfill = Boolean.TRUE.equals(operand.get("chunksBackfill"));
+            Object forceAccObj = operand.get("forceAccessions");
+            Set<String> forceAccessions = new HashSet<String>();
+            if (forceAccObj instanceof List) {
+              for (Object acc : (List<?>) forceAccObj) {
+                if (acc instanceof String) {
+                  forceAccessions.add((String) acc);
+                }
+              }
+            }
+            if (!forceAccessions.isEmpty()) {
+              LOGGER.info("Force-reprocessing {} accession(s): {}", forceAccessions.size(),
+                  forceAccessions);
+            }
             List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)
-                ? cache.filterAndSelfHeal(allEntries, isVectorizedChunksEnabled(), selfHealThreads)
+                ? cache.filterAndSelfHeal(allEntries, isVectorizedChunksEnabled(), selfHealThreads,
+                    chunksBackfill, forceAccessions)
                 : allEntries;
             List<DocumentETLProcessor.AccessionRef> activeAccessions =
                 new ArrayList<DocumentETLProcessor.AccessionRef>();

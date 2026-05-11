@@ -447,6 +447,25 @@ public class SecFilingCache implements AutoCloseable {
       List<EdgarFullIndexCache.IndexEntry> candidates,
       boolean vectorizationEnabled,
       int selfHealThreads) {
+    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, false,
+        java.util.Collections.<String>emptySet());
+  }
+
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads,
+      boolean chunksBackfill) {
+    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, chunksBackfill,
+        java.util.Collections.<String>emptySet());
+  }
+
+  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+      List<EdgarFullIndexCache.IndexEntry> candidates,
+      boolean vectorizationEnabled,
+      int selfHealThreads,
+      boolean chunksBackfill,
+      java.util.Set<String> forceAccessions) {
 
     List<EdgarFullIndexCache.IndexEntry> toProcess =
         new ArrayList<EdgarFullIndexCache.IndexEntry>();
@@ -462,6 +481,14 @@ public class SecFilingCache implements AutoCloseable {
     int cntNoFiles = 0;
 
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (!forceAccessions.isEmpty() && forceAccessions.contains(ie.accession)) {
+        toProcess.add(ie);
+        continue;
+      }
+      if (!forceAccessions.isEmpty()) {
+        // Reprocess-only mode: skip all candidates not explicitly listed.
+        continue;
+      }
       if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
         // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
         // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
@@ -484,9 +511,10 @@ public class SecFilingCache implements AutoCloseable {
           cntTrackerComplete++;
           continue;
         }
-        // Base staging parquet exists; only chunks are missing. Skip — re-downloading from SEC
-        // just to add chunks would regenerate all staging parquet unnecessarily.
-        if (inv.isComplete(form, false)) {
+        // Base staging parquet exists; only chunks are missing.
+        // In normal mode: skip — re-downloading just for chunks is unnecessary.
+        // In chunksBackfill mode: reprocess so chunks get written.
+        if (inv.isComplete(form, false) && (!chunksBackfill || inv.isComplete(form, true))) {
           cntTrackerBaseComplete++;
           continue;
         }
