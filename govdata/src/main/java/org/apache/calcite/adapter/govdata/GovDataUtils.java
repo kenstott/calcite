@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -84,7 +85,10 @@ public final class GovDataUtils {
         return (Integer) year;
       }
     }
-    String envYear = System.getenv("GOVDATA_START_YEAR");
+    String envYear = System.getProperty("GOVDATA_START_YEAR");
+    if (envYear == null) {
+      envYear = System.getenv("GOVDATA_START_YEAR");
+    }
     if (envYear != null) {
       try {
         return Integer.parseInt(envYear);
@@ -105,7 +109,10 @@ public final class GovDataUtils {
         return (Integer) year;
       }
     }
-    String envYear = System.getenv("GOVDATA_END_YEAR");
+    String envYear = System.getProperty("GOVDATA_END_YEAR");
+    if (envYear == null) {
+      envYear = System.getenv("GOVDATA_END_YEAR");
+    }
     if (envYear != null) {
       try {
         return Integer.parseInt(envYear);
@@ -206,7 +213,7 @@ public final class GovDataUtils {
    */
   public static Map<String, String> loadTableComments(Class<?> clazz, String schemaResourceName) {
     List<Map<String, Object>> tables = loadTableDefinitions(clazz, schemaResourceName);
-    Map<String, String> comments = new java.util.HashMap<>();
+    Map<String, String> comments = new HashMap<>();
     for (Map<String, Object> table : tables) {
       String name = (String) table.get("name");
       String comment = (String) table.get("comment");
@@ -236,7 +243,7 @@ public final class GovDataUtils {
         if (columns == null) {
           return Collections.emptyMap();
         }
-        Map<String, String> comments = new java.util.HashMap<>();
+        Map<String, String> comments = new HashMap<>();
         for (Map<String, Object> column : columns) {
           String colName = (String) column.get("name");
           String colComment = (String) column.get("comment");
@@ -261,9 +268,9 @@ public final class GovDataUtils {
     if (matcher.find()) {
       String varName = matcher.group(1);
       String defaultValue = matcher.group(2);
-      String resolved = System.getenv(varName);
+      String resolved = System.getProperty(varName);
       if (resolved == null) {
-        resolved = System.getProperty(varName);
+        resolved = System.getenv(varName);
       }
       if (resolved == null) {
         resolved = defaultValue;

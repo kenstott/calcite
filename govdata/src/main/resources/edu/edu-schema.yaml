@@ -183,7 +183,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2015
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdDistrictsResponseTransformer"
@@ -191,7 +191,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
 
     materialize:
@@ -510,7 +510,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2013
+          start: "${GOVDATA_START_YEAR:2013}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.NaepScoresResponseTransformer"
@@ -739,7 +739,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2013
+          start: "${GOVDATA_START_YEAR:2013}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer"
@@ -1051,7 +1051,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2015
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer"
@@ -1059,7 +1059,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
         maxYear: 2022   # Urban Institute completions-cip-2 endpoint confirmed data through 2022
 
@@ -1291,7 +1291,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2015
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer"
@@ -1300,7 +1300,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
       fiscal_yy1:
         type: custom
@@ -1419,7 +1419,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2015
+          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer"
@@ -1427,7 +1427,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2015
+        start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
         maxYear: 2021   # Urban Institute academic-year-tuition endpoint only has data through 2021
 
@@ -1613,7 +1613,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2018
+          start: "${GOVDATA_START_YEAR:2018}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer"
@@ -1621,7 +1621,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2018
+        start: "${GOVDATA_START_YEAR:2018}"
         minYear: 2018
 
     materialize:
@@ -1740,7 +1740,7 @@ partitionedTables:
       incremental:
         yearParam: "year"
         yearRange:
-          start: 2018
+          start: "${GOVDATA_START_YEAR:2018}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer"
@@ -1748,7 +1748,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: 2018
+        start: "${GOVDATA_START_YEAR:2018}"
         minYear: 2018
 
     materialize:

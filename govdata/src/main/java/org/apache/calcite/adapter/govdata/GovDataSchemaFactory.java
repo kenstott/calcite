@@ -44,9 +44,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 
 /**
  * Government Data Schema Factory - Uber factory for government data sources.
@@ -203,13 +210,13 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
   // Track processed dependencies to avoid duplicates across factory instances
   // Static because Calcite creates new factory instances per schema
-  private static final java.util.Set<String> processedDependencies =
-      java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+  private static final Set<String> processedDependencies =
+      Collections.synchronizedSet(new HashSet<>());
 
   // Cache schemas that were created as dependencies so we can return them
   // when they are requested as main schemas (avoids double processing)
-  private static final java.util.Map<String, Schema> schemaCache =
-      java.util.Collections.synchronizedMap(new java.util.HashMap<>());
+  private static final Map<String, Schema> schemaCache =
+      Collections.synchronizedMap(new HashMap<>());
 
   /**
    * Get the sub-schema factory for the given data source.
@@ -361,7 +368,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Source storage (raw data cache)
     String cacheDirectory = resolveDirectory(operand, "cacheDirectory");
     if (cacheDirectory == null) {
-      cacheDirectory = System.getenv("GOVDATA_CACHE_DIR");
+      cacheDirectory = GovDataUtils.resolveEnvVar("${GOVDATA_CACHE_DIR}");
     }
     if (cacheDirectory != null) {
       if (cacheDirectory.startsWith("s3://")) {
@@ -401,7 +408,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (value instanceof String) {
       String str = (String) value;
       if (str.contains("${")) {
-        return org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(str);
+        return VariableResolver.resolveEnvVars(str);
       }
     }
     return value;
@@ -418,15 +425,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Resolve ${VAR:default} patterns
     if (directory.contains("${")) {
-      java.util.regex.Pattern pattern =
-          java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?}");
-      java.util.regex.Matcher matcher = pattern.matcher(directory);
+      Pattern pattern = Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?}");
+      Matcher matcher = pattern.matcher(directory);
       if (matcher.find()) {
         String varName = matcher.group(1);
         String defaultValue = matcher.group(2);
-        String resolvedValue = System.getenv(varName);
+        String resolvedValue = System.getProperty(varName);
         if (resolvedValue == null) {
-          resolvedValue = System.getProperty(varName);
+          resolvedValue = System.getenv(varName);
         }
         if (resolvedValue == null) {
           resolvedValue = defaultValue;
@@ -538,16 +544,19 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (startYearObj != null) {
       String startYear = String.valueOf(startYearObj);
       System.setProperty("GOVDATA_START_YEAR", startYear);
-      // Also set schema-specific properties (SEC_START_YEAR, etc.)
-      System.setProperty(dataSource.toUpperCase() + "_START_YEAR", startYear);
-      LOGGER.debug("Set GOVDATA_START_YEAR={}, {}_START_YEAR={}", startYear, dataSource.toUpperCase(), startYear);
+      if ("sec".equalsIgnoreCase(dataSource)) {
+        System.setProperty("SEC_START_YEAR", startYear);
+      }
+      LOGGER.debug("Set GOVDATA_START_YEAR={}", startYear);
     }
     Object endYearObj = operand.get("endYear");
     if (endYearObj != null) {
       String endYear = String.valueOf(endYearObj);
       System.setProperty("GOVDATA_END_YEAR", endYear);
-      System.setProperty(dataSource.toUpperCase() + "_END_YEAR", endYear);
-      LOGGER.debug("Set GOVDATA_END_YEAR={}, {}_END_YEAR={}", endYear, dataSource.toUpperCase(), endYear);
+      if ("sec".equalsIgnoreCase(dataSource)) {
+        System.setProperty("SEC_END_YEAR", endYear);
+      }
+      LOGGER.debug("Set GOVDATA_END_YEAR={}", endYear);
     }
 
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
