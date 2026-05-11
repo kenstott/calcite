@@ -89,7 +89,7 @@ schema_workers() {
     edu|education)           echo "71 72 73" ;;
     energy|eia)              echo "74 75 76 77" ;;
     patents|uspto)           echo "80 81" ;;
-    lands|public_lands)      echo "82 83" ;;
+    lands)      echo "82 83" ;;
     *)
       echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands" >&2
       exit 1 ;;
