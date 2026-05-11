@@ -27,16 +27,18 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 |--------------|------------|---------|-------|-------|-------|
 | weather      | 2026-05-11 | WARN    | 0     | 2     | See details below |
 | edu          | —          | PENDING | —     | —     | Rebuild running 2026-05-11; config fixed (ccd_schools/ipeds bulk CSV dims, naep dataLag) |
-| census       | —          | PENDING | —     | —     | Not yet run |
-| econ         | —          | PENDING | —     | —     | Not yet run |
-| crime        | —          | PENDING | —     | —     | Not yet run |
-| geo          | —          | PENDING | —     | —     | Not yet run |
-| fec          | —          | PENDING | —     | —     | Not yet run |
-| fedregister  | —          | PENDING | —     | —     | Not yet run |
+| census       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| econ         | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| crime        | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| geo          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| fec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| fedregister  | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | lands        | —          | PENDING | —     | —     | Rebuild running 2026-05-11 (historical) |
-| health       | —          | PENDING | —     | —     | Not yet run |
-| patents      | —          | PENDING | —     | —     | Not yet run |
-| ref          | —          | PENDING | —     | —     | Not yet run |
+| health       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| ref          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| cyber_threat | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
+| cyber_vuln   | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
 
 ---
 
