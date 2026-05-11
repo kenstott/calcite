@@ -39,12 +39,26 @@ load_env() {
   export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
 }
 
-# Resolve the govdata shadow JAR (fat JAR with all dependencies)
+# Resolve the govdata shadow JAR (fat JAR with all dependencies).
+# Override the default search path by setting GOVDATA_JAR to an explicit path,
+# e.g. when building from a worktree in parallel with production:
+#   export GOVDATA_JAR=/path/to/worktree/govdata/build/libs/calcite-govdata-*-all.jar
 resolve_classpath() {
   local jar
+  if [ -n "${GOVDATA_JAR:-}" ]; then
+    # Expand glob in case the caller used a wildcard
+    jar=$(echo $GOVDATA_JAR | head -1)
+    if [ ! -f "$jar" ]; then
+      echo "ERROR: GOVDATA_JAR set but file not found: $jar" >&2
+      exit 1
+    fi
+    echo "$jar"
+    return
+  fi
   jar=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
   if [ -z "$jar" ]; then
     echo "ERROR: Shadow JAR not found. Run: ./gradlew :govdata:shadowJar" >&2
+    echo "       Or set GOVDATA_JAR=/path/to/calcite-govdata-*-all.jar to use a worktree build." >&2
     exit 1
   fi
   echo "$jar"
