@@ -590,36 +590,45 @@ partitionedTables:
 
     columns:
       - name: fiscal_year
+        source: "Fiscal Year"
         type: integer
         nullable: false
         comment: Fiscal year of revenue collection (FY 2004–present)
       - name: land_class
+        source: "Land Class"
         type: string
         nullable: true
         comment: Federal / Native American / Federal Offshore
       - name: land_category
+        source: "Land Category"
         type: string
         nullable: true
         comment: Onshore / Offshore / Gulf of Mexico / Pacific
       - name: state_name
+        source: "State"
         type: string
         nullable: true
         comment: State name (e.g., 'Wyoming'); null for offshore rows
       - name: county_name
+        source: "County"
         type: string
         nullable: true
         comment: County name; null for offshore/tribal rows
       - <<: *county_fips_column
+        source: "FIPS Code"
         comment: 5-digit FIPS (null for offshore/tribal)
       - name: offshore_region
+        source: "Offshore Region"
         type: string
         nullable: true
         comment: Offshore region name (Gulf of Mexico, Pacific, etc.); null for onshore
       - name: revenue_type
+        source: "Revenue Type"
         type: string
         nullable: true
         comment: Royalties / Bonus / Rents / Other Revenues
       - name: mineral_lease_type
+        source: "Mineral Lease Type"
         type: string
         nullable: true
         comment: Oil & Gas / Coal / Geothermal / Hardrock / etc.
