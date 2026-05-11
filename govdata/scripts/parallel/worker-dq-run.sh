@@ -128,7 +128,7 @@ if $REBUILD; then
   [ -n "$REBUILD_START_YEAR" ] && export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
   if ! generate_single_schema_model "$SCHEMA" "$REBUILD_MODEL" 2>/dev/null; then
     log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
-    log_info "$WORKER_ID: --rebuild: supported schemas: econ, census, geo, crime, weather, fec, fedregister"
+    log_info "$WORKER_ID: --rebuild: supported schemas: econ, census, edu, geo, crime, weather, fec, fedregister, lands"
     exit 1
   fi
   run_etl "$REBUILD_MODEL" "$WORKER_ID"

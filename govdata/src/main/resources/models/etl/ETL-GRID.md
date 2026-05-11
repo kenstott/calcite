@@ -14,6 +14,12 @@
 | Census ACS | [ACS Data](https://www.census.gov/data/developers/data-sets/acs-1year.html) | 2005+ |
 | TIGER | [TIGER/Line](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) | 2007+ (shapefiles) |
 | HUD | [HUD Crosswalk](https://www.huduser.gov/portal/datasets/usps_crosswalk.html) | 2010+ |
+| USFS ArcGIS (FACTS) | [USFS EDW](https://apps.fs.usda.gov/arcx/rest/services/EDW/) | 2004+ (harvest activities) |
+| NPS IRMA | [NPS Stats](https://irmaservices.nps.gov/Stats/v1/) | 1904+ (most parks 1979+) |
+| NPS ArcGIS | [NPS Boundaries](https://services1.arcgis.com/fBc8EJBxQRMcHlei/) | Current snapshot |
+| BLM ArcGIS | [BLM Admin Units](https://gis.blm.gov/arcgis/rest/services/admin_boundaries/) | Current snapshot |
+| ONRR Revenue Data | [ONRR Downloads](https://revenuedata.onrr.gov/downloads/) | FY 2004+ (bulk CSV) |
+| FIA DataMart | [FIA API](https://apps.fs.usda.gov/fiadb-api/) | Annual estimates (1990+) |
 
 ---
 

@@ -176,7 +176,7 @@ partitionedTables:
           pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
-        maxRetries: 5
+        maxRetries: 2
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
@@ -366,35 +366,27 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://educationdata.urban.org/api/v1/schools/ccd/directory/{year}/"
+      url: "https://educationdata.urban.org/csv/ccd/schools_ccd_directory.csv"
       method: GET
       response:
-        format: json
-        dataPath: "results"
+        format: csv
         pagination:
-          type: PAGE
-          pageSize: 10000
-          pageParam: "page"
+          type: NONE
       rateLimit:
-        requestsPerSecond: 2.0
-        maxRetries: 5
-        retryOn: [429, 500, 503]
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [500, 503]
       rawCache:
         enabled: true
-      incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+      responsePartitioning:
+        fields:
+          year: "year"
+        yearFilter:
+          field: "year"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer"
-
-    dimensions:
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
-        minYear: 2015
 
     materialize:
       enabled: true
@@ -529,8 +521,8 @@ partitionedTables:
       year:
         type: list
         values: [2013, 2015, 2017, 2019, 2022, 2024]
-        minYear: "${GOVDATA_START_YEAR:2013}"
-        maxYear: 2024
+        minYear: 2013
+        dataLag: 2
       grade:
         - "4"
         - "8"
@@ -742,7 +734,7 @@ partitionedTables:
             crdc_topic: teachers-staff
       rateLimit:
         requestsPerSecond: 2.0
-        maxRetries: 5
+        maxRetries: 2
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
@@ -943,35 +935,27 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://educationdata.urban.org/api/v1/college-university/ipeds/directory/{year}/"
+      url: "https://educationdata.urban.org/csv/ipeds/colleges_ipeds_directory.csv"
       method: GET
       response:
-        format: json
-        dataPath: "results"
+        format: csv
         pagination:
-          type: PAGE
-          pageSize: 10000
-          pageParam: "page"
+          type: NONE
       rateLimit:
-        requestsPerSecond: 2.0
-        maxRetries: 5
-        retryOn: [429, 500, 503]
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [500, 503]
       rawCache:
         enabled: true
-      incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+      responsePartitioning:
+        fields:
+          year: "year"
+        yearFilter:
+          field: "year"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer"
-
-    dimensions:
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
-        minYear: 2015
 
     materialize:
       enabled: true
@@ -1063,7 +1047,7 @@ partitionedTables:
           pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
-        maxRetries: 5
+        maxRetries: 2
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
@@ -1433,7 +1417,7 @@ partitionedTables:
           pageParam: "page"
       rateLimit:
         requestsPerSecond: 2.0
-        maxRetries: 5
+        maxRetries: 2
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true

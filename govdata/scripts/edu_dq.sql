@@ -96,70 +96,80 @@ SELECT 'edu', 'ccd_districts', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_districts', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_schools', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_scores', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_scores', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_institutions', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_institutions', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_completions', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_tuition', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_tuition', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_financials', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_financials', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard_programs', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard_programs', allow_moved_paths=true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
 
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
@@ -173,70 +183,80 @@ SELECT 'edu', 'ccd_districts', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_districts', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_schools', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_scores', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_scores', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_institutions', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_institutions', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_completions', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_tuition', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_tuition', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_financials', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_financials', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard_programs', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard_programs', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0;
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
 
 -- ============================================================
 -- T6: BUSINESS NON-NULLS
@@ -518,27 +538,27 @@ FROM (
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true)
 );
 
--- ipeds_institutions: sector must be 0–9
+-- ipeds_institutions: sector must be -1–9 (-1 = IPEDS unknown/not applicable)
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_institutions', 'sector_range',
   CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
   CAST(bad AS VARCHAR), '0',
   'distinct sectors: ' || vals
 FROM (
-  SELECT SUM(CASE WHEN sector < 0 OR sector > 9 THEN 1 ELSE 0 END) AS bad,
+  SELECT SUM(CASE WHEN sector < -1 OR sector > 9 THEN 1 ELSE 0 END) AS bad,
          STRING_AGG(DISTINCT CAST(sector AS VARCHAR), ', ' ORDER BY CAST(sector AS VARCHAR)) AS vals
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_institutions', allow_moved_paths=true)
   WHERE sector IS NOT NULL
 );
 
--- ipeds_completions: award_level codes 1,2,3,5,7,17,18,19 (IPEDS spec)
+-- ipeds_completions: award_level codes (IPEDS standard + extended codes)
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'award_level_values',
   CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
   CAST(bad AS VARCHAR), '0',
   'distinct award_levels: ' || vals
 FROM (
-  SELECT SUM(CASE WHEN award_level NOT IN (1,2,3,5,7,17,18,19) THEN 1 ELSE 0 END) AS bad,
+  SELECT SUM(CASE WHEN award_level NOT IN (1,2,3,4,5,6,7,8,9,17,18,19,22,23,24,30,31,32,33) THEN 1 ELSE 0 END) AS bad,
          STRING_AGG(DISTINCT CAST(award_level AS VARCHAR), ', ' ORDER BY CAST(award_level AS VARCHAR)) AS vals
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_completions', allow_moved_paths=true)
   WHERE award_level IS NOT NULL

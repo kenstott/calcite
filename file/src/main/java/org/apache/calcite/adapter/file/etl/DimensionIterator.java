@@ -469,13 +469,20 @@ public class DimensionIterator {
   }
 
   /**
-   * Resolves a LIST type dimension, applying minYear/maxYear bounds if set.
+   * Resolves a LIST type dimension, applying minYear/maxYear/dataLag bounds if set.
    */
   private List<String> resolveList(DimensionConfig config) {
     List<String> values = config.getValues();
     Integer minYear = config.getMinYear();
     Integer maxYear = config.getMaxYear();
-    if (minYear == null && maxYear == null) {
+    Integer dataLag = config.getDataLag();
+    int effectiveMax = (maxYear != null) ? maxYear : Integer.MAX_VALUE;
+    if (dataLag != null && dataLag > 0) {
+      int lagYear = Calendar.getInstance().get(Calendar.YEAR) - dataLag;
+      effectiveMax = Math.min(effectiveMax, lagYear);
+    }
+    boolean hasFilter = minYear != null || effectiveMax != Integer.MAX_VALUE;
+    if (!hasFilter) {
       return values;
     }
     List<String> filtered = new ArrayList<String>();
@@ -487,9 +494,9 @@ public class DimensionIterator {
               config.getName(), year, minYear);
           continue;
         }
-        if (maxYear != null && year > maxYear) {
+        if (effectiveMax != Integer.MAX_VALUE && year > effectiveMax) {
           LOGGER.warn("List dimension '{}': value {} exceeds data ceiling {} — skipping",
-              config.getName(), year, maxYear);
+              config.getName(), year, effectiveMax);
           continue;
         }
         filtered.add(value);
