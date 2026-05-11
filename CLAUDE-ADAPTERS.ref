@@ -69,29 +69,47 @@ duckdb -c "SELECT * FROM read_parquet('/path/cik=*/filing_type=*/year=*/*.parque
 
 ## ☁️ CLOUDFLARE R2 / S3-COMPATIBLE CLI
 
-### `aws` CLI is NOT installed — use `rclone` instead
+### `aws` CLI is NOT installed — use `rclone` or `mc` instead
 
-The `aws` CLI is not present on this machine. `rclone` (v1.73.5, at `~/homebrew/bin/rclone`) is the
-S3-compatible CLI and is already configured with an `r2:` remote pointing to
-`govdata-tracker-v1`, `govdata-parquet-v1`, and `govdata-raw-v1`.
+The `aws` CLI is not present on this machine. Two S3-compatible CLIs are available:
+
+- **`rclone`** (v1.73.5, `~/homebrew/bin/rclone`) — configured with an `r2:` remote; used in
+  scripts for uploads/downloads. Does **not** read AWS env vars — uses its own config file.
+- **`mc`** (MinIO Client, `~/homebrew/bin/mc`) — configured with an `r2` alias pointing to the
+  same R2 endpoint. Does **not** read AWS env vars — uses `~/.mc/config.json`.
+
+Both tools use the credentials from `govdata/.env.prod`. Neither picks up `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` automatically.
 
 ### rclone equivalents for common aws s3 commands
 
-| aws s3 command | rclone equivalent |
-|---|---|
-| `aws s3 cp local.file s3://bucket/path/file` | `rclone copyto local.file r2:bucket/path/file` |
-| `aws s3 cp s3://bucket/path/file local.file` | `rclone copyto r2:bucket/path/file local.file` |
-| `aws s3 ls s3://bucket/prefix/` | `rclone ls r2:bucket/prefix/` |
-| `aws s3 rm s3://bucket/prefix/ --recursive` | `rclone purge r2:bucket/prefix/` |
-| `aws s3 sync local/ s3://bucket/prefix/` | `rclone sync local/ r2:bucket/prefix/` |
+| aws s3 command | rclone equivalent | mc equivalent |
+|---|---|---|
+| `aws s3 cp local.file s3://bucket/path/file` | `rclone copyto local.file r2:bucket/path/file` | `mc cp local.file r2/bucket/path/file` |
+| `aws s3 cp s3://bucket/path/file local.file` | `rclone copyto r2:bucket/path/file local.file` | `mc cp r2/bucket/path/file local.file` |
+| `aws s3 ls s3://bucket/prefix/` | `rclone ls r2:bucket/prefix/` | `mc ls r2/bucket/prefix/` |
+| `aws s3 rm s3://bucket/prefix/ --recursive` | `rclone purge r2:bucket/prefix/` | `mc rm --recursive --force r2/bucket/prefix/` |
+| `aws s3 sync local/ s3://bucket/prefix/` | `rclone sync local/ r2:bucket/prefix/` | `mc mirror local/ r2/bucket/prefix/` |
 
-**Key difference:** `rclone copyto` copies a single file to an exact destination path.
+**rclone note:** `rclone copyto` copies a single file to an exact destination path.
 `rclone copy` (without `to`) treats the destination as a directory — always use `copyto` for
 single-file uploads where the destination filename must be specified.
 
+**mc note:** `mc` uses slash-separated paths with the alias prefix (`r2/bucket/path`), not
+colon-separated like rclone (`r2:bucket/path`).
+
+### mc alias setup (one-time, already done)
+
+```bash
+mc alias set r2 https://21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com \
+  "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" --api S3v4
+```
+
+Alias is stored in `~/.mc/config.json`. Verify with `mc ls r2/`.
+
 ### DQ result upload (in scripts)
 
-Scripts must use `rclone copyto`, not `aws s3 cp`. This is already done in `worker-dq-run.sh`.
+Scripts use `rclone copyto`, not `aws s3 cp`. This is already done in `worker-dq-run.sh`.
 
 ```bash
 rclone copyto "$RESULT_LOCAL" "r2:govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
@@ -99,7 +117,7 @@ rclone copyto "$RESULT_LOCAL" "r2:govdata-tracker-v1/dq-results/schema=${SCHEMA}
 
 ### DuckDB S3 reads still use `SET s3_*` credentials
 
-`rclone` is only for shell-level uploads/downloads. DuckDB's `iceberg_scan` and `read_parquet`
+`rclone` and `mc` are shell-level tools only. DuckDB's `iceberg_scan` and `read_parquet`
 use `SET s3_access_key_id`, `SET s3_secret_access_key`, and `SET s3_endpoint` directly.
 
 ## 🏢 GOVDATA ADAPTER
