@@ -89,8 +89,9 @@ schema_workers() {
     edu|education)           echo "71 72 73" ;;
     energy|eia)              echo "74 75 76 77" ;;
     patents|uspto)           echo "80 81" ;;
+    lands|public_lands)      echo "82 83" ;;
     *)
-      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents" >&2
+      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands" >&2
       exit 1 ;;
   esac
 }
@@ -114,16 +115,16 @@ if [ $# -eq 0 ]; then
   echo "  $0 --force daily          — bypass all release-window checks (backfill/testing)"
   echo ""
   echo "  Named aliases:"
-  echo "  $0 all                    — all workers (1-41, 60-77, 80-81)"
-  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81)"
-  echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74,80)"
+  echo "  $0 all                    — all workers (1-41, 60-77, 80-83)"
+  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81,83)"
+  echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74,80,82)"
   echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
   echo ""
   echo "  Schema filter (combine with any alias or range):"
   echo "  $0 --schema energy daily  — run only the energy workers from the daily set"
   echo "  $0 --schema sec historical — run only the SEC workers from the historical set"
   echo "  Known schemas: sec, sec_secondary, stock, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, cyber, health, edu, energy, patents"
+  echo "                 ref, fec, fedregister, cyber, health, edu, energy, patents, lands"
   exit 1
 fi
 
@@ -134,20 +135,20 @@ for arg in "$@"; do
   IFS=',' read -ra parts <<< "$arg"
   for part in "${parts[@]}"; do
     if [ "$part" = "all" ]; then
-      # All workers — exactly what exists: 1-41, 60-77, 80-81
+      # All workers — exactly what exists: 1-41, 60-77, 80-83
       for i in $(seq 1 41); do queue+=("$i"); done
-      for i in $(seq 60 77) 80 81; do queue+=("$i"); done
+      for i in $(seq 60 77) 80 81 82 83; do queue+=("$i"); done
     elif [ "$part" = "historical" ]; then
       # All initial/backfill workers — run once on the ingest device.
-      # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77); use 'daily' for those.
+      # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77, 83); use 'daily' for those.
       export GOVDATA_RUN_MODE="historical"
       for i in $(seq 1 41); do queue+=("$i"); done
-      for i in 60 61 62 67 71 74 80; do queue+=("$i"); done
+      for i in 60 61 62 67 71 74 80 82; do queue+=("$i"); done
     elif [ "$part" = "daily" ]; then
       # All recurring workers — run this every day on the production server.
       # Workers skip rows already materialized; each handles its own data-lag / release window.
       export GOVDATA_RUN_MODE="daily"
-      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81; do queue+=("$i"); done
+      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81 83; do queue+=("$i"); done
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
     elif [ "$part" = "stock-quotes" ]; then
       # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
