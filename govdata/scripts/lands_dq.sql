@@ -194,28 +194,30 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/lands/ti
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: forest_inventory
--- NOTE: FIA DataMart API requires per-state EVALID parameter.
---       T1/T2 are warn-only until the source is redesigned.
+-- Source: FIA bulk COND CSV per state (apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv)
+-- Partitioned by stateAbbr (51 states + PR). Null columns (land_area_acres,
+-- live_volume_cuft, carbon_stock_tons, trees_per_acre) are intentional —
+-- expansion factors not available in COND table.
 -- ─────────────────────────────────────────────────────────────
 
--- T1: existence (warn if empty — FIA API not yet fully wired)
+-- T1: existence
 INSERT INTO dq_results
 SELECT 'lands', 'forest_inventory', 'T1_existence',
-  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
-  n, 0, 'FIA DataMart API requires per-state EVALID; 0 rows expected until redesign'
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true));
 
--- T2: row_count (warn-only)
+-- T2: row_count (51 states × ~500 groups avg = ~25000+ rows)
 INSERT INTO dq_results
 SELECT 'lands', 'forest_inventory', 'T2_row_count',
-  CASE WHEN n >= 500 THEN 'pass' ELSE 'warn' END,
-  n, 500, 'Expected 500+ forest inventory records once FIA source is redesigned'
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END,
+  n, 10000, 'Expected 10000+ rows (51 states × forest type × ownership × year aggregations)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true));
 
 -- T3: sample (no-op if empty)
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true) LIMIT 3;
 
--- T4-T7 only meaningful if rows exist; guarded by n > 0
+-- T4: null columns — exclude partition cols and intentionally-null metric cols
 INSERT INTO dq_results
 SELECT 'lands', 'forest_inventory', 'T4_all_null_cols',
   CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
@@ -227,7 +229,8 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'stateAbbr',
+        'land_area_acres', 'live_volume_cuft', 'carbon_stock_tons', 'trees_per_acre')
   )
 );
 
@@ -242,9 +245,31 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'stateAbbr')
   )
 );
+
+-- T6: state coverage (at least 40 distinct states)
+INSERT INTO dq_results
+SELECT 'lands', 'forest_inventory', 'T6_state_coverage',
+  CASE WHEN n >= 40 THEN 'pass' ELSE 'fail' END,
+  n, 40, 'Distinct state_fips values'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true));
+
+-- T7: inventory_year coverage (at least 10 distinct years)
+INSERT INTO dq_results
+SELECT 'lands', 'forest_inventory', 'T7_inventory_year_coverage',
+  CASE WHEN n >= 10 THEN 'pass' ELSE 'warn' END,
+  n, 10, 'Distinct inventory_year values'
+FROM (SELECT COUNT(DISTINCT inventory_year) AS n FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true));
+
+-- T7: basal_area_sqft positive where not null
+INSERT INTO dq_results
+SELECT 'lands', 'forest_inventory', 'T7_basal_area_positive',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'Rows with basal_area_sqft <= 0'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/lands/forest_inventory', allow_moved_paths := true)
+      WHERE basal_area_sqft IS NOT NULL AND basal_area_sqft <= 0);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: nps_units  (state_abbr instead of state_fips)
