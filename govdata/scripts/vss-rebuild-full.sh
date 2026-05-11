@@ -157,13 +157,10 @@ read -p "Upload to S3? [y/N] " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Uploading to S3..."
-    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-    aws s3 cp "$VSS_DB" s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb \
-        --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
+    rclone copyto "$VSS_DB" r2:govdata-parquet-v1/cache/vss/chunks_vss.duckdb
 
     echo "{\"rebuilt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"chunks\": $TOTAL_CHUNKS, \"years\": [$(echo $YEARS | tr '\n' ',' | sed 's/,$//')], \"embed_dim\": 384}" \
-        | aws s3 cp - s3://govdata-parquet-v1/cache/vss/metadata.json \
-        --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
+        | mc pipe r2/govdata-parquet-v1/cache/vss/metadata.json
 
     echo "Uploaded to s3://govdata-parquet-v1/cache/vss/"
 fi

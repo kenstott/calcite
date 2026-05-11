@@ -55,20 +55,12 @@ for acc in "${ACCESSIONS[@]}"; do
 done
 
 if $FORCE_DOWNLOAD; then
-  S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE:-}"
-  ENDPOINT_ARGS=""
-  if [ -n "$S3_ENDPOINT" ]; then
-    ENDPOINT_ARGS="--endpoint-url $S3_ENDPOINT"
-  fi
-
   log_info "$WORKER_ID --force-download: deleting raw EDGAR cache for ${#ACCESSIONS[@]} accession(s)"
   for acc in "${ACCESSIONS[@]}"; do
-    # The local EDGAR cache uses the filer CIK prefix as the directory name
     filer_cik="${acc:0:10}"
-    cache_path="${GOVDATA_CACHE_DIR}/sec/${filer_cik}/${acc}/"
+    cache_path="$(echo "${GOVDATA_CACHE_DIR}/sec/${filer_cik}/${acc}/" | sed 's|^s3://|r2:|')"
     log_info "  Deleting: $cache_path"
-    # shellcheck disable=SC2086
-    aws s3 rm "$cache_path" --recursive $ENDPOINT_ARGS 2>/dev/null || true
+    rclone purge "$cache_path" 2>/dev/null || true
   done
 fi
 

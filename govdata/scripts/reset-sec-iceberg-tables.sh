@@ -51,10 +51,11 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
-S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE:-}"
 TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
 
 ICEBERG_BASE="$S3_BUCKET/sec"
+# rclone uses r2: prefix instead of s3:// — convert once for all path operations
+RCLONE_ICEBERG_BASE="$(echo "$ICEBERG_BASE" | sed 's|^s3://|r2:|')"
 
 SEC_TABLES=(
     "filing_contexts"
@@ -65,11 +66,6 @@ SEC_TABLES=(
     "vectorized_chunks"
     "xbrl_relationships"
 )
-
-ENDPOINT_ARGS=""
-if [[ -n "$S3_ENDPOINT" ]]; then
-    ENDPOINT_ARGS="--endpoint-url $S3_ENDPOINT"
-fi
 
 echo "=============================================="
 echo "Reset All SEC Iceberg Tables"
@@ -90,8 +86,9 @@ for table in "${SEC_TABLES[@]}"; do
         echo "  [DRY RUN] Would delete: $iceberg_path"
     else
         echo "  Deleting $iceberg_path ..."
-        # shellcheck disable=SC2086
-        DELETED=$(aws s3 rm "$iceberg_path" --recursive $ENDPOINT_ARGS 2>&1 | grep -c "^delete:" || true)
+        rclone_path="${RCLONE_ICEBERG_BASE}/${table}"
+        DELETED=$(rclone ls "$rclone_path" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+        rclone purge "$rclone_path" 2>/dev/null || true
         echo "    Deleted $DELETED files"
     fi
 done

@@ -87,14 +87,6 @@ LOG_FILE="$RUN_DIR/dq_${TIMESTAMP}.log"
 
 S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
 
-S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE:-}"
-ENDPOINT_ARGS=""
-if [ -n "$S3_ENDPOINT" ]; then
-  # Strip https:// prefix if present — aws CLI needs bare hostname for --endpoint-url
-  ENDPOINT_URL="$S3_ENDPOINT"
-  [[ "$ENDPOINT_URL" != http* ]] && ENDPOINT_URL="https://${ENDPOINT_URL}"
-  ENDPOINT_ARGS="--endpoint-url $ENDPOINT_URL"
-fi
 
 # ── rebuild: teardown + ETL before DQ ────────────────────────────────────────
 if $REBUILD; then
@@ -156,8 +148,8 @@ if [ -n "${GOVDATA_PARQUET_DIR:-}" ]; then
 fi
 
 # Check for deprecated source= partition on S3
-deprecated_path="s3://govdata-parquet-v1/source=${SCHEMA}/"
-deprecated_check=$(aws s3 ls "$deprecated_path" $ENDPOINT_ARGS 2>/dev/null | head -1 || true)
+deprecated_path="r2:govdata-parquet-v1/source=${SCHEMA}/"
+deprecated_check=$(rclone ls "$deprecated_path" 2>/dev/null | head -1 || true)
 if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
 fi

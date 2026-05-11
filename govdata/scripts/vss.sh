@@ -122,14 +122,11 @@ EOSQL
 
     upload)
         echo "Uploading VSS database to R2..."
-        export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-        aws s3 cp "$VSS_DB" s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb \
-            --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
+        rclone copyto "$VSS_DB" r2:govdata-parquet-v1/cache/vss/chunks_vss.duckdb
 
         ROWS=$(duckdb "$VSS_DB" -c "SELECT COUNT(*) FROM chunks;" -noheader)
         echo "{\"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"rows\": $ROWS, \"embed_dim\": 384, \"model\": \"snowflake-arctic-embed-xs\"}" \
-            | aws s3 cp - s3://govdata-parquet-v1/cache/vss/metadata.json \
-            --endpoint-url "$AWS_ENDPOINT_OVERRIDE"
+            | mc pipe r2/govdata-parquet-v1/cache/vss/metadata.json
 
         echo "Uploaded to s3://govdata-parquet-v1/cache/vss/"
         ;;
@@ -150,6 +147,6 @@ EOSQL
         echo "  stats                 - Show loaded data statistics"
         echo ""
         echo "Client download:"
-        echo "  aws s3 cp s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb ./"
+        echo "  mc cp r2/govdata-parquet-v1/cache/vss/chunks_vss.duckdb ./"
         ;;
 esac
