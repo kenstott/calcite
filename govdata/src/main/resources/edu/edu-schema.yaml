@@ -6,7 +6,7 @@
 #   API_DATA_GOV — free at api.data.gov/signup
 # ============================================================================
 
-schemaName: "${EDU_SCHEMA_NAME:edu}"
+schemaName: "edu"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -181,10 +181,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdDistrictsResponseTransformer"
@@ -192,7 +191,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
+        start: 2015
         minYear: 2015
 
     materialize:
@@ -509,10 +508,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2013}"
+          start: 2013
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.NaepScoresResponseTransformer"
@@ -739,10 +737,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2013}"
+          start: 2013
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer"
@@ -1052,10 +1049,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer"
@@ -1063,7 +1059,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
+        start: 2015
         minYear: 2015
         maxYear: 2022   # Urban Institute completions-cip-2 endpoint confirmed data through 2022
 
@@ -1293,10 +1289,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer"
@@ -1305,7 +1300,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
+        start: 2015
         minYear: 2015
       fiscal_yy1:
         type: custom
@@ -1422,10 +1417,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
+          start: 2015
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer"
@@ -1433,7 +1427,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
+        start: 2015
         minYear: 2015
         maxYear: 2021   # Urban Institute academic-year-tuition endpoint only has data through 2021
 
@@ -1617,10 +1611,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2018}"
+          start: 2018
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer"
@@ -1628,7 +1621,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2018}"
+        start: 2018
         minYear: 2018
 
     materialize:
@@ -1745,10 +1738,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
         yearParam: "year"
         yearRange:
-          start: "${GOVDATA_START_YEAR:2018}"
+          start: 2018
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer"
@@ -1756,7 +1748,7 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2018}"
+        start: 2018
         minYear: 2018
 
     materialize:
@@ -2159,7 +2151,7 @@ constraints:
     primaryKey: [year, leaid]
     foreignKeys:
       - columns: [fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: states
         targetColumns: [state_fips]
         comment: Links district state to geographic state record
@@ -2172,7 +2164,7 @@ constraints:
         targetColumns: [leaid, year]
         comment: Links school to parent LEA district record
       - columns: [fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: states
         targetColumns: [state_fips]
         comment: Links school state to geographic state record
@@ -2181,7 +2173,7 @@ constraints:
     primaryKey: [year, jurisdiction, subject, grade, variable_type, subgroup_name]
     foreignKeys:
       - columns: [jurisdiction]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: states
         targetColumns: [state_fips]
         comment: Links NAEP state to geo.states; jurisdiction=0 (national aggregate) will not match
@@ -2202,12 +2194,12 @@ constraints:
     primaryKey: [year, unitid]
     foreignKeys:
       - columns: [fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: states
         targetColumns: [state_fips]
         comment: Links institution state to geographic state record
       - columns: [county_fips_str]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links institution county to geo.counties; county_fips_str is zero-padded by transformer
@@ -2244,7 +2236,7 @@ constraints:
         targetColumns: [unitid, year]
         comment: Links Scorecard institution to IPEDS directory via unitid
       - columns: [state]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetSchema: "geo"
         targetTable: states
         targetColumns: [state_abbr]
         comment: Links institution state to geographic state record
