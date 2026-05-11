@@ -388,12 +388,6 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer"
 
-    dimensions:
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
-        minYear: 2015
-
     materialize:
       enabled: true
       format: iceberg
@@ -527,8 +521,8 @@ partitionedTables:
       year:
         type: list
         values: [2013, 2015, 2017, 2019, 2022, 2024]
-        minYear: "${GOVDATA_START_YEAR:2013}"
-        maxYear: 2024
+        minYear: 2013
+        dataLag: 2
       grade:
         - "4"
         - "8"
@@ -962,12 +956,6 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer"
-
-    dimensions:
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
-        minYear: 2015
 
     materialize:
       enabled: true
