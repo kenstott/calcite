@@ -652,7 +652,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://revenuedata.doi.gov/downloads/revenue/federal-revenue-by-location.csv"
+      url: "https://revenuedata.doi.gov/downloads/revenue/federal-revenue-by-location-{year}.csv"
       method: GET
       response:
         format: csv
