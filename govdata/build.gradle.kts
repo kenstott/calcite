@@ -16,6 +16,28 @@
  */
 plugins {
     id("com.github.johnrengelman.shadow")
+    id("maven-publish")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("shadow") {
+            artifact(tasks["shadowJar"])
+            groupId = "org.apache.calcite"
+            artifactId = "calcite-govdata"
+            version = project.version.toString()
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/kenstott/calcite")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: ""
+            }
+        }
+    }
 }
 
 dependencies {
@@ -110,6 +132,10 @@ tasks.register<Exec>("cleanMacResourceForks") {
         "find '${layout.buildDirectory.get()}/test-results' " +
         "'${layout.buildDirectory.get()}/test-logs' " +
         "-name '._*' -delete 2>/dev/null; true")
+}
+
+tasks.named("compileJava") {
+    dependsOn("cleanTestLogs")
 }
 
 tasks.test {
