@@ -27,17 +27,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Delete existing package version (if any)
+      - name: Delete existing package (if any)
         run: |
-          VERSION=$(./gradlew :govdata:properties -q --console=plain | grep "^version:" | awk '{print $2}')
-          echo "Looking for existing version: $VERSION"
-          VERSION_ID=$(gh api "users/kenstott/packages/maven/org.apache.calcite.calcite-govdata/versions" \
-            --jq ".[] | select(.name == \"$VERSION\") | .id" 2>/dev/null || true)
-          if [ -n "$VERSION_ID" ]; then
-            gh api --method DELETE "users/kenstott/packages/maven/org.apache.calcite.calcite-govdata/versions/$VERSION_ID"
-            echo "Deleted version $VERSION (id: $VERSION_ID)"
+          COUNT=$(gh api "users/kenstott/packages/maven/org.apache.calcite.calcite-govdata/versions" \
+            --jq "length" 2>/dev/null || echo "0")
+          if [ "$COUNT" -gt "0" ]; then
+            echo "Deleting existing package ($COUNT version(s))"
+            gh api --method DELETE "users/kenstott/packages/maven/org.apache.calcite.calcite-govdata"
+            echo "Package deleted"
           else
-            echo "No existing version found, proceeding"
+            echo "No existing package found, proceeding"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
