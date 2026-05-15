@@ -4,26 +4,43 @@ The Government Data adapter provides unified access to various U.S. government d
 
 ## Supported Data Sources
 
-- **SEC (Securities and Exchange Commission)** - EDGAR filing data, company financials, insider trading
-- **Census (U.S. Census Bureau)** - Demographics, economic data *(coming soon)*
-- **IRS (Internal Revenue Service)** - Tax statistics, exempt organizations *(coming soon)*
-- **Treasury (U.S. Treasury)** - Economic indicators, debt data *(coming soon)*
+- **SEC** - EDGAR filings, company financials, insider trading, XBRL
+- **GEO** - Census geographies, TIGER shapefiles, counties, states, congressional districts
+- **ECON** - BEA GDP/income, FRED macroeconomic series, BLS wages, JOLTS
+- **ECON_REFERENCE** - BEA dimension reference tables (line codes, geographies)
+- **HEALTH** - FDA drugs/devices/recalls, CMS open payments, clinical trials, Medicaid
+- **FEC** - Campaign finance, candidates, PACs, donations
+- **CRIME** - FBI CDE offense rates, hate crimes, police employment
+- **CYBER_VULN** - NVD CVEs, CISA KEV catalog, CWE weakness taxonomy
+- **CYBER_THREAT** - MITRE ATT&CK, OWASP Top 10
+- **EDU** - NCES CCD schools and districts
+- **ENERGY** - EIA power plants, generation, capacity
+- **PATENTS** - USPTO PatentsView grants, inventors, assignees, CPC classes
+- **LANDS** - BLM public land surveys
+- **FEDREGISTER** - Federal Register rule postings
+- **REF** - Cross-schema reference tables (GLEIF, FIGI, ticker maps, geographies)
+- **WEATHER** - NOAA GHCND stations and observations
+- **CENSUS** - ACS demographic estimates
 
 ## Quick Start
 
-### Using JDBC URLs (Recommended)
+### Using JDBC URLs
 
 ```java
-// Connect to SEC data using ticker symbols (automatically converted to CIKs)
+// Single schema — SEC with downloading enabled
 String url = "jdbc:govdata:source=sec&ciks=AAPL,MSFT";
 Connection conn = DriverManager.getConnection(url);
 
-// Equivalent using actual CIK numbers
-// String url = "jdbc:govdata:source=sec&ciks=0000320193,0000789019";
+// Multiple schemas — read-only, no downloading (schema introspection)
+String url = "jdbc:govdata:source=sec,geo,econ,health,fec";
+Connection conn = DriverManager.getConnection(url);
 
-// Future: Connect to other government sources
-// String url = "jdbc:govdata:source=census&dataset=acs&geography=state";
+// Multiple schemas with explicit data directory (enables data queries too)
+String url = "jdbc:govdata:source=sec,geo,econ&dataDirectory=/Volumes/T9/gov-data";
 ```
+
+When `source` is a comma-delimited list, `autoDownload` is forced to `false` for all schemas
+and no ETL runs. `dataDirectory` defaults to `~/govdata` when omitted.
 
 #### Company Identifier Resolution
 
@@ -97,6 +114,97 @@ The GovData adapter automatically resolves company identifiers using the built-i
 
 // Mixed identifiers
 "ciks": ["AAPL", "MAGNIFICENT7", "0001018724"]  // Ticker + group + raw CIK
+```
+
+## Using the JDBC Driver from Python
+
+The fat JAR (`calcite-govdata-all.jar`) bundles the full Calcite stack including `GovDataDriver`.
+Python connects via [JayDeBeAPI](https://github.com/baztian/jaydebeapi) + JPype.
+
+### Build the fat JAR
+
+```bash
+./gradlew :govdata:shadowJar
+# Output: govdata/build/libs/calcite-govdata-all.jar
+```
+
+### Install Python dependencies
+
+```bash
+pip install jaydebeapi JPype1
+```
+
+### Schema introspection (all schemas, no downloading)
+
+```python
+import jaydebeapi
+
+conn = jaydebeapi.connect(
+    "org.apache.calcite.adapter.govdata.GovDataDriver",
+    "jdbc:govdata:source=sec,geo,econ,health,fec,crime,cyber_vuln,edu,energy,patents,ref,weather",
+    {},
+    "/path/to/calcite-govdata-all.jar"
+)
+
+cursor = conn.cursor()
+
+# List all tables across all schemas
+cursor.execute("""
+    SELECT table_schema, table_name
+    FROM information_schema.tables
+    ORDER BY table_schema, table_name
+""")
+for row in cursor.fetchall():
+    print(row)
+
+# List columns for a specific table
+cursor.execute("""
+    SELECT column_name, data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'SEC' AND table_name = 'FILING_METADATA'
+    ORDER BY ordinal_position
+""")
+for row in cursor.fetchall():
+    print(row)
+
+# Primary keys and foreign keys via JDBC metadata
+meta = conn.jconn.getMetaData()
+
+rs = meta.getPrimaryKeys(None, "SEC", "FILING_METADATA")
+while rs.next():
+    print("PK:", rs.getString("COLUMN_NAME"))
+
+rs = meta.getImportedKeys(None, "SEC", "FILING_METADATA")
+while rs.next():
+    print("FK:", rs.getString("FKCOLUMN_NAME"), "->",
+          rs.getString("PKTABLE_NAME") + "." + rs.getString("PKCOLUMN_NAME"))
+```
+
+### Constraints and views
+
+Constraints (primary keys, foreign keys) are defined in the schema YAML files and exposed
+through Calcite's `JDBC DatabaseMetaData` APIs (`getPrimaryKeys`, `getImportedKeys`,
+`getExportedKeys`). They are **not enforced** — the underlying data is Iceberg/Parquet — but
+they are visible to BI tools, IDEs, and query optimizers.
+
+SQL views defined in the YAML `views:` sections are registered as queryable objects and appear
+in `INFORMATION_SCHEMA.TABLES` with `TABLE_TYPE = 'VIEW'`.
+
+DuckDB's native catalog (`.duckdb` files) does **not** store constraints because DuckDB views
+do not support constraint definitions. Use the JDBC driver for full schema metadata.
+
+### Data queries (requires materialized Iceberg data in S3)
+
+```python
+conn = jaydebeapi.connect(
+    "org.apache.calcite.adapter.govdata.GovDataDriver",
+    "jdbc:govdata:source=sec,geo&dataDirectory=s3://govdata-parquet-v1",
+    {},
+    "/path/to/calcite-govdata-all.jar"
+)
+
+cursor = conn.cursor()
+cursor.execute("SELECT cik, filing_type, filing_date FROM sec.filing_metadata LIMIT 10")
 ```
 
 # SEC Data Source Usage

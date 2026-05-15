@@ -19,6 +19,8 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -34,19 +36,19 @@ import java.util.Properties;
  *
  * <p>Usage examples:
  * <pre>
- * // SEC data - specify data source and companies (tickers auto-convert to CIKs)
+ * // Single schema with downloading enabled
  * jdbc:govdata:source=sec&ciks=AAPL                    // Apple ticker → CIK 0000320193
  * jdbc:govdata:source=sec&ciks=AAPL,MSFT,GOOGL        // Multiple tickers
  * jdbc:govdata:source=sec&ciks=MAGNIFICENT7            // Predefined group → 7 CIKs
  * jdbc:govdata:source=sec&ciks=0000320193              // Raw CIK also supported
  *
+ * // Multiple schemas, read-only (autoDownload=false) — for schema introspection
+ * jdbc:govdata:source=sec,geo,econ&dataDirectory=/Volumes/T9/gov-data
+ * jdbc:govdata:source=sec,geo,econ,health,fec&dataDirectory=/Volumes/T9/gov-data
+ *
  * // Mixed identifiers and additional parameters
  * jdbc:govdata:source=sec&ciks=FAANG&startYear=2020&endYear=2023
  * jdbc:govdata:source=sec&ciks=AAPL,0001018724&dataDirectory=/Volumes/T9/gov-data
- *
- * // Future: Other government data sources
- * jdbc:govdata:source=census&dataset=acs&geography=state
- * jdbc:govdata:source=irs&forms=1040&year=2023
  * </pre>
  *
  * <p>Backward compatibility: Also handles legacy "jdbc:sec:" URLs by
@@ -91,14 +93,14 @@ public class GovDataDriver extends Driver {
       String paramString = url.substring(getConnectStringPrefix().length());
 
       // Check if dataSource is specified, default to SEC for backward compatibility
-      String dataSource = extractParameter(paramString, "source");
-      if (dataSource == null) {
-        dataSource = "sec";
+      String sourceParam = extractParameter(paramString, "source");
+      if (sourceParam == null) {
+        sourceParam = "sec";
         LOGGER.info("No data source specified, defaulting to 'sec'");
       }
 
-      // Create appropriate model based on data source
-      String modelPath = createModelFile(paramString, dataSource);
+      // Create model file — supports comma-delimited list of sources
+      String modelPath = createModelFile(paramString, sourceParam);
 
       // Set model path in connection properties
       govDataInfo.setProperty("model", modelPath);
@@ -131,89 +133,132 @@ public class GovDataDriver extends Driver {
   }
 
   /**
-   * Create appropriate model file based on data source and parameters.
+   * Create a Calcite model file for the given source parameter.
+   *
+   * <p>When {@code sourceParam} contains a single source that requires downloading (e.g. "sec"),
+   * the model enables autoDownload and passes through ciks/startYear/endYear.
+   *
+   * <p>When {@code sourceParam} is a comma-delimited list of sources, the model includes one
+   * schema entry per source with {@code autoDownload: false}. This is the read-only path
+   * used for schema introspection from external tools (e.g. Python via JayDeBeAPI).
    */
-  private String createModelFile(String paramString, String dataSource) throws IOException {
-    switch (dataSource.toLowerCase()) {
-      case "sec":
-      case "edgar":
-        return createSecModel(paramString);
-      case "census":
-        throw new UnsupportedOperationException("Census data source not yet implemented");
-      case "irs":
-        throw new UnsupportedOperationException("IRS data source not yet implemented");
-      case "treasury":
-        throw new UnsupportedOperationException("Treasury data source not yet implemented");
-      default:
-        throw new IllegalArgumentException("Unsupported data source: " + dataSource);
+  private String createModelFile(String paramString, String sourceParam) throws IOException {
+    String[] sources = sourceParam.split(",");
+    for (int i = 0; i < sources.length; i++) {
+      sources[i] = sources[i].trim();
     }
+
+    if (sources.length == 1) {
+      return createSingleSourceModel(paramString, sources[0]);
+    }
+    return createMultiSourceModel(paramString, sources);
   }
 
-  /**
-   * Create SEC model file from URL parameters.
-   */
-  private String createSecModel(String paramString) throws IOException {
-    // For now, create a simple temporary model that uses the GovData factory
-    // In a full implementation, this would parse URL parameters and create appropriate model
-
-    // Extract basic parameters
-    // Note: 'ciks' parameter accepts tickers (AAPL), groups (FAANG), or raw CIKs (0000320193)
-    // The CikRegistry automatically resolves all identifiers to 10-digit CIK format
+  private String createSingleSourceModel(String paramString, String dataSource)
+      throws IOException {
     String ciks = extractParameter(paramString, "ciks");
-    if (ciks == null) {
-      throw new IllegalArgumentException("SEC data source requires 'ciks' parameter (tickers, groups, or CIKs)");
-    }
-
     String startYear = extractParameter(paramString, "startYear");
     String endYear = extractParameter(paramString, "endYear");
-    String dataDirectory = extractParameter(paramString, "dataDirectory");
+    String dataDirectory = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
 
-    // Create temporary model file
-    File tempFile = File.createTempFile("govdata-sec-model", ".json");
+    // SEC requires ciks when autoDownload is intended; other single sources are read-only
+    boolean isSec = dataSource.equalsIgnoreCase("sec")
+        || dataSource.equalsIgnoreCase("edgar");
+    if (isSec && ciks == null) {
+      throw new IllegalArgumentException(
+          "SEC data source requires 'ciks' parameter (tickers, groups, or CIKs)");
+    }
+
+    boolean autoDownload = isSec && ciks != null;
+    String schemaName = dataSource.toUpperCase();
+    String directoryJson = dataDirectory != null
+        ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
+        : "";
+    String ciksJson = ciks != null ? "      \"ciks\": \"" + ciks + "\",\n" : "";
+    String startYearJson = startYear != null ? "      \"startYear\": " + startYear + ",\n" : "";
+    String endYearJson = endYear != null ? "      \"endYear\": " + endYear + ",\n" : "";
+
+    String modelJson = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"" + schemaName + "\",\n"
+        + "  \"schemas\": [{\n"
+        + "    \"name\": \"" + schemaName + "\",\n"
+        + "    \"type\": \"custom\",\n"
+        + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+        + "    \"operand\": {\n"
+        + "      \"dataSource\": \"" + dataSource.toLowerCase() + "\",\n"
+        + ciksJson
+        + startYearJson
+        + endYearJson
+        + "      \"autoDownload\": " + autoDownload + ",\n"
+        + "      \"testMode\": false,\n"
+        + "      \"ephemeralCache\": true" + directoryJson + "\n"
+        + "    }\n"
+        + "  }]\n"
+        + "}";
+
+    return writeTempModel("govdata-model", modelJson);
+  }
+
+  private String createMultiSourceModel(String paramString, String[] sources)
+      throws IOException {
+    String dataDirectory = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
+
+    List<String> schemaEntries = new ArrayList<String>();
+    for (String dataSource : sources) {
+      String schemaName = dataSource.toUpperCase();
+      String directoryJson = dataDirectory != null
+          ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
+          : "";
+      schemaEntries.add(
+          "  {\n"
+          + "    \"name\": \"" + schemaName + "\",\n"
+          + "    \"type\": \"custom\",\n"
+          + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+          + "    \"operand\": {\n"
+          + "      \"dataSource\": \"" + dataSource.toLowerCase() + "\",\n"
+          + "      \"autoDownload\": false,\n"
+          + "      \"testMode\": false,\n"
+          + "      \"ephemeralCache\": false" + directoryJson + "\n"
+          + "    }\n"
+          + "  }");
+    }
+
+    StringBuilder schemas = new StringBuilder();
+    for (int i = 0; i < schemaEntries.size(); i++) {
+      if (i > 0) {
+        schemas.append(",\n");
+      }
+      schemas.append(schemaEntries.get(i));
+    }
+
+    String modelJson = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"" + sources[0].toUpperCase() + "\",\n"
+        + "  \"schemas\": [\n"
+        + schemas.toString() + "\n"
+        + "  ]\n"
+        + "}";
+
+    LOGGER.info("Creating multi-source model with {} schemas (autoDownload=false): {}",
+        sources.length, java.util.Arrays.toString(sources));
+    return writeTempModel("govdata-multi-model", modelJson);
+  }
+
+  private String resolveDataDirectory(String explicit) {
+    if (explicit != null && !explicit.isEmpty()) {
+      return explicit;
+    }
+    return System.getProperty("user.home") + "/govdata";
+  }
+
+  private String writeTempModel(String prefix, String modelJson) throws IOException {
+    File tempFile = File.createTempFile(prefix, ".json");
     tempFile.deleteOnExit();
-
-    String modelJson =
-        String.format("{\n"
-  +
-        "  \"version\": \"1.0\",\n"
-  +
-        "  \"defaultSchema\": \"SEC\",\n"
-  +
-        "  \"schemas\": [{\n"
-  +
-        "    \"name\": \"SEC\",\n"
-  +
-        "    \"type\": \"custom\",\n"
-  +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
-  +
-        "    \"operand\": {\n"
-  +
-        "      \"dataSource\": \"sec\",\n"
-  +
-        "      \"ciks\": \"%s\"%s%s%s,\n"
-  +
-        "      \"autoDownload\": true,\n"
-  +
-        "      \"testMode\": false,\n"
-  +
-        "      \"ephemeralCache\": true\n"
-  +
-        "    }\n"
-  +
-        "  }]\n"
-  +
-        "}",
-        ciks,
-        startYear != null ? ",\n      \"startYear\": " + startYear : "",
-        endYear != null ? ",\n      \"endYear\": " + endYear : "",
-        dataDirectory != null ? ",\n      \"dataDirectory\": \"" + dataDirectory + "\"" : "");
-
     try (java.io.FileWriter writer = new java.io.FileWriter(tempFile)) {
       writer.write(modelJson);
     }
-
-    LOGGER.debug("Created temporary SEC model file: {}", tempFile.getAbsolutePath());
+    LOGGER.debug("Created temporary model file: {}", tempFile.getAbsolutePath());
     return tempFile.getAbsolutePath();
   }
 }
