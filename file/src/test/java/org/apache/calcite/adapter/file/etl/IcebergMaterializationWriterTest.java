@@ -30,14 +30,21 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -337,6 +344,70 @@ public class IcebergMaterializationWriterTest {
         Collections.<String, String>emptyMap());
 
     assertEquals(0, written, "Empty batch should return 0");
+  }
+
+  @Test public void testReplaceColumnExcludesRawSourceAndUsesExpression() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_replace");
+    warehouseDir.mkdirs();
+    writer = new IcebergMaterializationWriter(storageProvider,
+        warehouseDir.getAbsolutePath(), null);
+
+    // county_code is raw integer in source; replace: true wraps it with printf
+    ColumnConfig idCol = ColumnConfig.builder().name("id").type("INTEGER").build();
+    ColumnConfig countyCol = ColumnConfig.builder()
+        .name("county_code")
+        .type("VARCHAR")
+        .expression("printf('%05d', county_code)")
+        .replace(true)
+        .build();
+
+    MaterializeConfig config = buildIcebergConfig(warehouseDir, "replace_test",
+        Arrays.asList(idCol, countyCol),
+        Collections.<String>emptyList());
+
+    writer.initialize(config);
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("county_code", 73);
+
+    writer.writeBatch(Collections.singletonList(row).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+
+    String tableLocation = writer.getTableLocation();
+    assertNotNull(tableLocation, "Table location must be set after commit");
+
+    // Read back via DuckDB and verify replace semantics
+    String parquetGlob = tableLocation.replaceAll("^file:", "") + "/data/**/*.parquet";
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+      try (Statement stmt = conn.createStatement()) {
+
+        // Column county_code should be the padded string, not the raw integer
+        String valueQuery = "SELECT county_code FROM read_parquet('"
+            + parquetGlob.replace("'", "''") + "', union_by_name=true)";
+        try (ResultSet rs = stmt.executeQuery(valueQuery)) {
+          assertTrue(rs.next(), "Should have at least one row");
+          assertEquals("00073", rs.getString("county_code"),
+              "replace: true should produce padded string via printf expression");
+        }
+
+        // Schema should contain county_code exactly once (not raw int + derived varchar)
+        String describeQuery = "DESCRIBE SELECT * FROM read_parquet('"
+            + parquetGlob.replace("'", "''") + "', union_by_name=true)";
+        Set<String> columnNames = new HashSet<String>();
+        try (ResultSet rs = stmt.executeQuery(describeQuery)) {
+          while (rs.next()) {
+            columnNames.add(rs.getString("column_name").toLowerCase());
+          }
+        }
+        assertEquals(2, columnNames.size(), "Should have exactly id and county_code");
+        assertTrue(columnNames.contains("county_code"),
+            "county_code column must be present");
+        assertFalse(columnNames.contains("raw_county_code"),
+            "No raw duplicate column should exist");
+      }
+    }
   }
 
   // --- Helper methods ---

@@ -126,7 +126,7 @@ The SEC schema operates as a **declarative data pipeline** that:
 This means you get the benefits of:
 - **Automatic data acquisition** - No manual downloading or parsing
 - **Rich metadata** - Table and column comments for easy discovery
-- **Optimized execution** - Leverages DuckDB, Parquet, or Arrow engines via FileSchema
+- **Optimized execution** - Uses DuckDB, Parquet, or Arrow engines via FileSchema
 - **Cross-domain joins** - Foreign keys link to GEO and ECON schemas
 
 ## Tables
@@ -412,7 +412,7 @@ Additionally:
 - `filing_metadata.state_of_incorporation` → `geo.states.state_abbr`
 
 ### Complete Reference
-For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
+For the full relationship map including the ERD, cross-schema query examples, and FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
 
 ## Partitioning Strategy
 

@@ -10,6 +10,8 @@
 # --dry-run          Run DQ checks locally but do not upload results to S3
 # --rebuild          Tear down tracker entries, Iceberg data, and DQ results for the
 #                    schema, run the Calcite ETL to rebuild Iceberg tables, then DQ.
+#                    Raw API cache (r2:govdata-raw-v1) is preserved so large datasets
+#                    (e.g. IPEDS) can be rebuilt from cache without live API timeouts.
 # --start-year YYYY  Override GOVDATA_START_YEAR for the rebuild ETL (e.g. 2025 for smoke tests).
 #                    Ignored when --rebuild is not set. Use when the source data cadence is < 1 year
 #                    and a full historical rebuild is not needed.
@@ -110,9 +112,10 @@ if $REBUILD; then
   fi
 
   # 2. Delete Iceberg data and raw-parquet staging for this schema.
-  log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA"
+  # Raw cache (r2:govdata-raw-v1) is intentionally preserved — it is the source of truth
+  # for large datasets (e.g. IPEDS) that cannot be cold-fetched reliably from the live API.
+  log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
   rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
-  rclone purge "r2:govdata-raw-v1/$SCHEMA" 2>/dev/null || true
 
   # 3. Delete existing DQ results so the post-ETL run starts clean.
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"

@@ -472,7 +472,7 @@ generate_single_schema_model() {
       ${_YEAR_RANGE}"
       ;;
     edu)
-      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition"'
+      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","naep_achievement_levels","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition"'
       if [ -n "${API_DATA_GOV:-}" ]; then
         _EDU_TABLES="${_EDU_TABLES},\"college_scorecard\",\"college_scorecard_programs\""
       fi
@@ -705,9 +705,13 @@ get_heap_config() {
   num=$(echo "$worker_id" | grep -oE '[0-9]+' | head -1 || true)
 
   if [ -z "$num" ]; then
-    # Non-numeric worker IDs (e.g., worker-fix): use standard heap
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
+    # Named historical workers get large heap; unrecognized non-numeric IDs get standard heap
+    case "$worker_id" in
+      *edu*historical*|*edu*initial*)
+        _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
+      *)
+        _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+    esac
     return
   fi
 

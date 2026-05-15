@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.iceberg;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -124,8 +123,7 @@ public class IcebergTableWriterDeepCoverageTest2 {
 
   @Test void testThreeArgConstructor() {
     Table table = createSimpleTable("three_arg_test");
-    Configuration conf = new Configuration();
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, conf);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
     assertEquals(table, writer.getTable());
   }

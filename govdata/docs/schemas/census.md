@@ -2,7 +2,7 @@
 
 ## Overview
 
-The CENSUS schema provides access to U.S. Census Bureau demographic and population data including decennial census results, American Community Survey (ACS) estimates, population projections, and economic indicators. It supports comprehensive demographic analysis at national, state, county, and census tract levels.
+The CENSUS schema provides access to U.S. Census Bureau demographic and population data including decennial census results, American Community Survey (ACS) estimates, population projections, and economic indicators. It supports demographic analysis at national, state, county, and census tract levels.
 
 ## Entity Relationship Diagram
 

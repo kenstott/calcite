@@ -309,4 +309,59 @@ class ColumnConfigTest {
 
     assertEquals("year", config.buildSelectExpression());
   }
+
+  // --- replace: true ---
+
+  @Test void testReplaceDefaultFalse() {
+    ColumnConfig config = ColumnConfig.builder()
+        .name("county_code")
+        .build();
+
+    assertFalse(config.isReplace());
+  }
+
+  @Test void testBuilderReplaceTrue() {
+    ColumnConfig config = ColumnConfig.builder()
+        .name("county_code")
+        .expression("printf('%05d', county_code)")
+        .replace(true)
+        .build();
+
+    assertTrue(config.isReplace());
+    assertTrue(config.isComputed());
+  }
+
+  @Test void testFromMapReplaceTrue() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("name", "county_code");
+    map.put("type", "VARCHAR");
+    map.put("expression", "printf('%05d', county_code)");
+    map.put("replace", Boolean.TRUE);
+
+    ColumnConfig config = ColumnConfig.fromMap(map);
+    assertNotNull(config);
+    assertTrue(config.isReplace());
+    assertTrue(config.isComputed());
+  }
+
+  @Test void testFromMapReplaceDefaultFalseWhenAbsent() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("name", "county_code");
+    map.put("type", "VARCHAR");
+
+    ColumnConfig config = ColumnConfig.fromMap(map);
+    assertNotNull(config);
+    assertFalse(config.isReplace());
+  }
+
+  @Test void testFromMapReplaceFalseExplicit() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("name", "county_code");
+    map.put("type", "VARCHAR");
+    map.put("replace", Boolean.FALSE);
+
+    ColumnConfig config = ColumnConfig.fromMap(map);
+    assertNotNull(config);
+    assertFalse(config.isReplace());
+  }
 }

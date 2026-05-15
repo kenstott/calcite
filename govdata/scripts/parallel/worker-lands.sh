@@ -5,7 +5,7 @@
 #   worker-lands.sh <mode> [--force]
 #
 # Modes:
-#   historical  One-time backfill: all 7 lands tables from
+#   historical  One-time backfill: all 8 lands tables from
 #               GOVDATA_START_YEAR (default 2010) through
 #               GOVDATA_INCREMENTAL_START_YEAR - 1.
 #               Release-window checks are skipped — historical always runs in full.
@@ -105,6 +105,8 @@ case "$MODE" in
       '"timber_sales"' "$START" "$END"
     run_lands_model "lands-historical-inventory" \
       '"forest_inventory"' "$START" "$END"
+    run_lands_model "lands-historical-metrics" \
+      '"forest_metrics"' "$START" "$END"
     run_lands_model "lands-historical-visitation" \
       '"nps_visitation"' "$START" "$END"
     run_lands_model "lands-historical-revenues" \
@@ -133,6 +135,10 @@ case "$MODE" in
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "forest_inventory"; then
       run_lands_model "lands-daily-inventory" \
         '"forest_inventory"' "$START"
+    fi
+    if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "forest_metrics"; then
+      run_lands_model "lands-daily-metrics" \
+        '"forest_metrics"' "$START"
     fi
     # Monthly-cadence tables (ONRR data arrives ~3 months in arrears)
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "nps_visitation"; then

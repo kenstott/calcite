@@ -111,9 +111,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
 
   @Test
   void testConstructorWithHadoopConf() {
-    Configuration conf = new Configuration();
-    conf.set("fs.s3a.access.key", "test-key");
-    IcebergTableWriter w = new IcebergTableWriter(table, storageProvider, conf);
+    IcebergTableWriter w = new IcebergTableWriter(table, storageProvider);
     assertNotNull(w);
   }
 

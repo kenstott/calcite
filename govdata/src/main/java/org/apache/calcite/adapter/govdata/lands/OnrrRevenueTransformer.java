@@ -13,10 +13,14 @@ package org.apache.calcite.adapter.govdata.lands;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.io.StringWriter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,39 +68,54 @@ public class OnrrRevenueTransformer implements ResponseTransformer {
       return "[]";
     }
 
-    try {
-      JsonNode root = MAPPER.readTree(response);
-      ArrayNode result = MAPPER.createArrayNode();
-
-      JsonNode records = root.isArray() ? root : root.path("data");
-      if (!records.isArray()) {
-        LOGGER.warn("onrr_revenues: expected JSON array, got: {}", root.getNodeType());
+    try (JsonParser parser = MAPPER.getFactory().createParser(response)) {
+      JsonToken first = parser.nextToken();
+      if (first != JsonToken.START_ARRAY) {
+        LOGGER.warn("onrr_revenues: expected JSON array, got token: {}", first);
         return "[]";
       }
-
-      for (JsonNode record : records) {
-        ObjectNode row = MAPPER.createObjectNode();
-        row.put("fiscal_year", intFromText(textOrNull(record, "Fiscal Year")));
-        row.put("land_class", textOrNull(record, "Land Class"));
-        row.put("land_category", textOrNull(record, "Land Category"));
-        row.put("state_name", emptyToNull(textOrNull(record, "State")));
-        row.put("county_name", emptyToNull(textOrNull(record, "County")));
-        row.put("county_fips", emptyToNull(textOrNull(record, "FIPS Code")));
-        row.put("offshore_region", emptyToNull(textOrNull(record, "Offshore Region")));
-        row.put("revenue_type", textOrNull(record, "Revenue Type"));
-        row.put("mineral_lease_type", emptyToNull(textOrNull(record, "Mineral Lease Type")));
-        row.put("commodity", textOrNull(record, "Commodity"));
-        row.put("product", emptyToNull(textOrNull(record, "Product")));
-        row.put("revenue", doubleOrNull(record, "Revenue"));
-        result.add(row);
+      StringWriter sw = new StringWriter(1 << 16);
+      int count = 0;
+      try (JsonGenerator gen = MAPPER.getFactory().createGenerator(sw)) {
+        gen.writeStartArray();
+        while (parser.nextToken() == JsonToken.START_OBJECT) {
+          JsonNode record = MAPPER.readTree(parser);
+          ObjectNode row = MAPPER.createObjectNode();
+          row.put("fiscal_year", intFromText(textOrNull(record, "Fiscal Year")));
+          row.put("land_class", textOrNull(record, "Land Class"));
+          row.put("land_category", textOrNull(record, "Land Category"));
+          row.put("state_name", emptyToNull(textOrNull(record, "State")));
+          row.put("county_name", emptyToNull(textOrNull(record, "County")));
+          row.put("county_fips", padFips(emptyToNull(textOrNull(record, "FIPS Code"))));
+          row.put("offshore_region", emptyToNull(textOrNull(record, "Offshore Region")));
+          row.put("revenue_type", textOrNull(record, "Revenue Type"));
+          row.put("mineral_lease_type", emptyToNull(textOrNull(record, "Mineral Lease Type")));
+          row.put("commodity", textOrNull(record, "Commodity"));
+          row.put("product", emptyToNull(textOrNull(record, "Product")));
+          row.put("revenue", doubleOrNull(record, "Revenue"));
+          MAPPER.writeTree(gen, row);
+          count++;
+        }
+        gen.writeEndArray();
       }
-
-      LOGGER.debug("onrr_revenues: transformed {} records", result.size());
-      return MAPPER.writeValueAsString(result);
+      LOGGER.debug("onrr_revenues: transformed {} records", count);
+      return sw.toString();
     } catch (Exception e) {
       LOGGER.error("onrr_revenues: failed to transform ONRR response: {}", e.getMessage(), e);
       throw new RuntimeException("onrr_revenues transform failed", e);
     }
+  }
+
+  private String padFips(String fips) {
+    if (fips == null) {
+      return null;
+    }
+    // FIPS codes are 5-digit strings; source omits leading zero for single-digit state codes
+    String digits = fips.trim();
+    while (digits.length() < 5) {
+      digits = "0" + digits;
+    }
+    return digits;
   }
 
   private String textOrNull(JsonNode node, String field) {

@@ -44,6 +44,7 @@ FROM (
   UNION ALL SELECT 'ipeds_financials',       COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -67,6 +68,7 @@ FROM (
   UNION ALL SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_financials',       allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard',      allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   100       FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard_programs', allow_moved_paths=true)
+  UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels',   allow_moved_paths=true)
 );
 
 -- ============================================================
@@ -84,6 +86,7 @@ SELECT 'ipeds_tuition'            AS tbl, * FROM iceberg_scan('s3://govdata-parq
 SELECT 'ipeds_financials'         AS tbl, * FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
+SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
 -- T4: ALL-NULL COLUMNS
@@ -171,6 +174,14 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type');
 
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
 -- approx_unique <= 1 and not already 100% null = every non-null row has same value.
@@ -200,7 +211,8 @@ SELECT 'edu', 'naep_scores', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_scores', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  -- variable_type, subgroup_name, is_displayable are constant by design (variable=TOTAL, All students)
+  AND column_name NOT IN ('type', 'variable_type', 'subgroup_name', 'is_displayable');
 
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'all_same_value',
@@ -258,6 +270,15 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type');
 
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  -- variable_type, subgroup_name, is_displayable are constant by design (variable=TOTAL, All students)
+  AND column_name NOT IN ('type', 'variable_type', 'subgroup_name', 'is_displayable');
+
 -- ============================================================
 -- T6: BUSINESS NON-NULLS
 -- Primary key and business-critical columns declared nullable:false in schema YAML.
@@ -281,20 +302,18 @@ FROM (
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_districts', allow_moved_paths=true)
 );
 
--- ccd_schools PK: ncessch, leaid, year
+-- ccd_schools PK: ncessch, year (leaid excluded — BIE schools 9000* legitimately have no leaid)
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'pk_nulls',
-  CASE WHEN null_ncessch + null_leaid + null_year > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(null_ncessch + null_leaid + null_year AS VARCHAR), '0',
+  CASE WHEN null_ncessch + null_year > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(null_ncessch + null_year AS VARCHAR), '0',
   CONCAT_WS(', ',
     CASE WHEN null_ncessch > 0 THEN 'ncessch:' || null_ncessch ELSE NULL END,
-    CASE WHEN null_leaid   > 0 THEN 'leaid:'   || null_leaid   ELSE NULL END,
     CASE WHEN null_year    > 0 THEN 'year:'    || null_year    ELSE NULL END
   )
 FROM (
   SELECT
     SUM(CASE WHEN ncessch IS NULL THEN 1 ELSE 0 END) AS null_ncessch,
-    SUM(CASE WHEN leaid   IS NULL THEN 1 ELSE 0 END) AS null_leaid,
     SUM(CASE WHEN year    IS NULL THEN 1 ELSE 0 END) AS null_year
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_schools', allow_moved_paths=true)
 );
@@ -327,18 +346,25 @@ FROM (
 );
 
 -- crdc_schools PK: crdc_id, year, crdc_topic
+-- crdc_id = ncessch for all records; chronic-absenteeism endpoint historically omitted crdc_id.
+-- Transformer now backfills crdc_id from ncessch; existing data may have crdc_id null where ncessch
+-- is populated — those rows are identifiable and counted as warn, not fail.
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'pk_nulls',
-  CASE WHEN null_crdc_id + null_year + null_topic > 0 THEN 'fail' ELSE 'pass' END,
+  CASE WHEN unidentifiable + null_year + null_topic > 0 THEN 'fail'
+       WHEN null_crdc_id > 0 THEN 'warn'
+       ELSE 'pass' END,
   CAST(null_crdc_id + null_year + null_topic AS VARCHAR), '0',
   CONCAT_WS(', ',
-    CASE WHEN null_crdc_id > 0 THEN 'crdc_id:'    || null_crdc_id ELSE NULL END,
-    CASE WHEN null_year    > 0 THEN 'year:'        || null_year    ELSE NULL END,
-    CASE WHEN null_topic   > 0 THEN 'crdc_topic:'  || null_topic   ELSE NULL END
+    CASE WHEN null_crdc_id   > 0 THEN 'crdc_id (backfill needed):' || null_crdc_id ELSE NULL END,
+    CASE WHEN unidentifiable > 0 THEN 'crdc_id+ncessch both null:' || unidentifiable ELSE NULL END,
+    CASE WHEN null_year      > 0 THEN 'year:'        || null_year    ELSE NULL END,
+    CASE WHEN null_topic     > 0 THEN 'crdc_topic:'  || null_topic   ELSE NULL END
   )
 FROM (
   SELECT
-    SUM(CASE WHEN crdc_id    IS NULL THEN 1 ELSE 0 END) AS null_crdc_id,
+    SUM(CASE WHEN crdc_id IS NULL THEN 1 ELSE 0 END) AS null_crdc_id,
+    SUM(CASE WHEN crdc_id IS NULL AND ncessch IS NULL THEN 1 ELSE 0 END) AS unidentifiable,
     SUM(CASE WHEN year       IS NULL THEN 1 ELSE 0 END) AS null_year,
     SUM(CASE WHEN crdc_topic IS NULL THEN 1 ELSE 0 END) AS null_topic
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true)
@@ -360,32 +386,31 @@ FROM (
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_institutions', allow_moved_paths=true)
 );
 
--- ipeds_completions PK: unitid, year, cipcode, award_level, majornum, race, sex
+-- ipeds_completions PK: unitid, year, cipcode, majornum, race, sex
+-- award_level excluded — IPEDS aggregate/total rows use null award_level by convention
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'pk_nulls',
   CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
   CAST(total AS VARCHAR), '0',
   CONCAT_WS(', ',
-    CASE WHEN n1 > 0 THEN 'unitid:'      || n1 ELSE NULL END,
-    CASE WHEN n2 > 0 THEN 'year:'        || n2 ELSE NULL END,
-    CASE WHEN n3 > 0 THEN 'cipcode:'     || n3 ELSE NULL END,
-    CASE WHEN n4 > 0 THEN 'award_level:' || n4 ELSE NULL END,
-    CASE WHEN n5 > 0 THEN 'majornum:'    || n5 ELSE NULL END,
-    CASE WHEN n6 > 0 THEN 'race:'        || n6 ELSE NULL END,
-    CASE WHEN n7 > 0 THEN 'sex:'         || n7 ELSE NULL END
+    CASE WHEN n1 > 0 THEN 'unitid:'   || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'year:'     || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'cipcode:'  || n3 ELSE NULL END,
+    CASE WHEN n5 > 0 THEN 'majornum:' || n5 ELSE NULL END,
+    CASE WHEN n6 > 0 THEN 'race:'     || n6 ELSE NULL END,
+    CASE WHEN n7 > 0 THEN 'sex:'      || n7 ELSE NULL END
   )
 FROM (
   SELECT
-    SUM(CASE WHEN unitid      IS NULL THEN 1 ELSE 0 END) AS n1,
-    SUM(CASE WHEN year        IS NULL THEN 1 ELSE 0 END) AS n2,
-    SUM(CASE WHEN cipcode     IS NULL THEN 1 ELSE 0 END) AS n3,
-    SUM(CASE WHEN award_level IS NULL THEN 1 ELSE 0 END) AS n4,
-    SUM(CASE WHEN majornum    IS NULL THEN 1 ELSE 0 END) AS n5,
-    SUM(CASE WHEN race        IS NULL THEN 1 ELSE 0 END) AS n6,
-    SUM(CASE WHEN sex         IS NULL THEN 1 ELSE 0 END) AS n7,
+    SUM(CASE WHEN unitid   IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN year     IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN cipcode  IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN majornum IS NULL THEN 1 ELSE 0 END) AS n5,
+    SUM(CASE WHEN race     IS NULL THEN 1 ELSE 0 END) AS n6,
+    SUM(CASE WHEN sex      IS NULL THEN 1 ELSE 0 END) AS n7,
     SUM(CASE WHEN unitid IS NULL OR year IS NULL OR cipcode IS NULL
-                         OR award_level IS NULL OR majornum IS NULL
-                         OR race IS NULL OR sex IS NULL THEN 1 ELSE 0 END) AS total
+                         OR majornum IS NULL OR race IS NULL
+                         OR sex IS NULL THEN 1 ELSE 0 END) AS total
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ipeds_completions', allow_moved_paths=true)
 );
 
@@ -447,6 +472,35 @@ FROM (
     SUM(CASE WHEN id   IS NULL THEN 1 ELSE 0 END) AS null_id,
     SUM(CASE WHEN year IS NULL THEN 1 ELSE 0 END) AS null_year
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/college_scorecard', allow_moved_paths=true)
+);
+
+-- naep_achievement_levels PK: jurisdiction, year, subject, grade, variable_type, subgroup_name, level
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'jurisdiction:'   || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'year:'           || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'subject:'        || n3 ELSE NULL END,
+    CASE WHEN n4 > 0 THEN 'grade:'          || n4 ELSE NULL END,
+    CASE WHEN n5 > 0 THEN 'variable_type:'  || n5 ELSE NULL END,
+    CASE WHEN n6 > 0 THEN 'subgroup_name:'  || n6 ELSE NULL END,
+    CASE WHEN n7 > 0 THEN 'level:'          || n7 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN jurisdiction  IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN year          IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN subject       IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN grade         IS NULL THEN 1 ELSE 0 END) AS n4,
+    SUM(CASE WHEN variable_type IS NULL THEN 1 ELSE 0 END) AS n5,
+    SUM(CASE WHEN subgroup_name IS NULL THEN 1 ELSE 0 END) AS n6,
+    SUM(CASE WHEN level         IS NULL THEN 1 ELSE 0 END) AS n7,
+    SUM(CASE WHEN jurisdiction IS NULL OR year IS NULL OR subject IS NULL
+                              OR grade IS NULL OR variable_type IS NULL
+                              OR subgroup_name IS NULL OR level IS NULL THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true)
 );
 
 -- college_scorecard_programs PK: unit_id, year, cip_code, credential_level
@@ -514,6 +568,54 @@ FROM (
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_scores', allow_moved_paths=true)
 );
 
+-- naep_achievement_levels: level must be one of 4 known values
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'level_values',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct levels: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN level NOT IN ('below_basic','basic','proficient','advanced') THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT level, ', ' ORDER BY level) AS vals
+  FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true)
+);
+
+-- naep_achievement_levels: subject must be MAT or RED
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'subject_values',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct subjects: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN subject NOT IN ('MAT','RED') THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT subject, ', ' ORDER BY subject) AS vals
+  FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true)
+);
+
+-- naep_achievement_levels: grade must be 4 or 8
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'grade_values',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct grades: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN grade NOT IN (4, 8) THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT CAST(grade AS VARCHAR), ', ' ORDER BY CAST(grade AS VARCHAR)) AS vals
+  FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true)
+);
+
+-- naep_achievement_levels: year cadence {2013,2015,2017,2019,2022,2024}
+INSERT INTO dq_results
+SELECT 'edu', 'naep_achievement_levels', 'year_cadence',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct years: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN year NOT IN (2013,2015,2017,2019,2022,2024) THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT CAST(year AS VARCHAR), ', ' ORDER BY CAST(year AS VARCHAR)) AS vals
+  FROM iceberg_scan('s3://govdata-parquet-v1/edu/naep_achievement_levels', allow_moved_paths=true)
+);
+
 -- crdc_schools: crdc_topic must be one of 4 known values
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'crdc_topic_values',
@@ -526,14 +628,17 @@ FROM (
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true)
 );
 
--- crdc_schools: year cadence {2013,2015,2017,2020,2021}
+-- crdc_schools: year cadence {2013,2015,2017,2020,2021,2022}
+-- CRDC is biennial; Urban Institute API used start-year through 2017-18 (years 2013,2015,2017)
+-- then switched to end-year from 2019-20 onward (years 2020,2022).
+-- 2021 = 2020-21 survey cycle, published separately by OCR.
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'year_cadence',
   CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
   CAST(bad AS VARCHAR), '0',
   'distinct years: ' || vals
 FROM (
-  SELECT SUM(CASE WHEN year NOT IN (2013,2015,2017,2020,2021) THEN 1 ELSE 0 END) AS bad,
+  SELECT SUM(CASE WHEN year NOT IN (2013,2015,2017,2020,2021,2022) THEN 1 ELSE 0 END) AS bad,
          STRING_AGG(DISTINCT CAST(year AS VARCHAR), ', ' ORDER BY CAST(year AS VARCHAR)) AS vals
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/crdc_schools', allow_moved_paths=true)
 );
@@ -622,7 +727,7 @@ FROM (
   WHERE form_type IS NOT NULL
 );
 
--- ccd_districts: no negative enrollment
+-- ccd_districts: no negative enrollment (excludes NCES sentinels -1,-2,-3,-9 = missing/suppressed)
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_districts', 'negative_enrollment',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
@@ -630,10 +735,10 @@ SELECT 'edu', 'ccd_districts', 'negative_enrollment',
 FROM (
   SELECT SUM(CASE WHEN enrollment < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_districts', allow_moved_paths=true)
-  WHERE enrollment IS NOT NULL
+  WHERE enrollment IS NOT NULL AND enrollment NOT IN (-1, -2, -3, -9)
 );
 
--- ccd_schools: no negative enrollment
+-- ccd_schools: no negative enrollment (excludes NCES sentinels -1,-2,-3,-9 = missing/suppressed)
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'negative_enrollment',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
@@ -641,7 +746,7 @@ SELECT 'edu', 'ccd_schools', 'negative_enrollment',
 FROM (
   SELECT SUM(CASE WHEN enrollment < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_schools', allow_moved_paths=true)
-  WHERE enrollment IS NOT NULL
+  WHERE enrollment IS NOT NULL AND enrollment NOT IN (-1, -2, -3, -9)
 );
 
 -- ============================================================

@@ -78,7 +78,8 @@ public class GovDataDriver extends Driver {
       govDataInfo.putAll(info);
     }
 
-    // Set default lex and unquotedCasing if not specified
+    // ORACLE lex with TO_LOWER casing matches ingested lower-case table names.
+    // caseSensitive=false lets TO_LOWER-folded SQL identifiers match upper-case metadata tables.
     if (!govDataInfo.containsKey("lex")) {
       govDataInfo.setProperty("lex", "ORACLE");
       LOGGER.debug("Using default lex=ORACLE");
@@ -86,6 +87,10 @@ public class GovDataDriver extends Driver {
     if (!govDataInfo.containsKey("unquotedCasing")) {
       govDataInfo.setProperty("unquotedCasing", "TO_LOWER");
       LOGGER.debug("Using default unquotedCasing=TO_LOWER");
+    }
+    if (!govDataInfo.containsKey("caseSensitive")) {
+      govDataInfo.setProperty("caseSensitive", "false");
+      LOGGER.debug("Using default caseSensitive=false");
     }
 
     try {
@@ -105,9 +110,12 @@ public class GovDataDriver extends Driver {
       // Set model path in connection properties
       govDataInfo.setProperty("model", modelPath);
 
-      // Create standard Calcite connection with generated model
+      // Delegate to a fresh Calcite Driver instance.
+      // Cannot use super.connect() here: UnregisteredDriver.connect() calls
+      // this.acceptsURL() which checks for "jdbc:govdata:", so it would return
+      // null when given "jdbc:calcite:". A separate instance has the correct prefix.
       String calciteUrl = "jdbc:calcite:";
-      return super.connect(calciteUrl, govDataInfo);
+      return new Driver().connect(calciteUrl, govDataInfo);
 
     } catch (Exception e) {
       throw new SQLException("Failed to create government data connection: " + e.getMessage(), e);
@@ -208,7 +216,7 @@ public class GovDataDriver extends Driver {
     for (String dataSource : sources) {
       String schemaName = dataSource.toUpperCase();
       String directoryJson = dataDirectory != null
-          ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
+          ? ",\n      \"directory\": \"" + dataDirectory + "\""
           : "";
       schemaEntries.add(
           "  {\n"

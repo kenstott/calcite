@@ -236,10 +236,6 @@ public class FiaDatamartTransformer implements ResponseTransformer {
         row.put("state_fips", parts[1]);
         row.put("forest_type_group", parts[2].equals("null") ? (String) null : parts[2]);
         row.put("ownership_class", parts[3].equals("null") ? (String) null : parts[3]);
-        row.putNull("land_area_acres");
-        row.putNull("live_volume_cuft");
-        row.putNull("carbon_stock_tons");
-        row.putNull("trees_per_acre");
         if (acc[0] > 0.0) {
           row.put("basal_area_sqft", acc[1] / acc[0]);
         } else {

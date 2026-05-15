@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Configuration for a column in a materialized table.
@@ -55,6 +57,7 @@ public class ColumnConfig {
   private final String source;
   private final String expression;
   private final boolean required;
+  private final boolean replace;
 
   private ColumnConfig(Builder builder) {
     this.name = builder.name;
@@ -62,6 +65,7 @@ public class ColumnConfig {
     this.source = builder.source;
     this.expression = builder.expression;
     this.required = builder.required != null ? builder.required : true;
+    this.replace = builder.replace != null ? builder.replace : false;
   }
 
   /**
@@ -110,6 +114,15 @@ public class ColumnConfig {
   }
 
   /**
+   * Returns whether this column replaces the raw source column in-place.
+   * When true, the source column is excluded from the wildcard SELECT and the
+   * expression result appears under this column's name instead.
+   */
+  public boolean isReplace() {
+    return replace;
+  }
+
+  /**
    * Returns the effective source field name.
    * If source is specified, returns source; otherwise returns name.
    */
@@ -145,7 +158,7 @@ public class ColumnConfig {
    * @param sourceColumns List of source column names that should be qualified in expressions
    * @return SELECT clause fragment
    */
-  public String buildSelectExpression(String tableAlias, java.util.Set<String> sourceColumns) {
+  public String buildSelectExpression(String tableAlias, Set<String> sourceColumns) {
     return buildSelectExpression(tableAlias, sourceColumns, null);
   }
 
@@ -161,7 +174,7 @@ public class ColumnConfig {
    * @param partitionVariables Map of partition variable names to values for substitution
    * @return SELECT clause fragment
    */
-  public String buildSelectExpression(String tableAlias, java.util.Set<String> sourceColumns,
+  public String buildSelectExpression(String tableAlias, Set<String> sourceColumns,
       Map<String, String> partitionVariables) {
     if (isComputed()) {
       String expr = expression;
@@ -218,7 +231,7 @@ public class ColumnConfig {
    * @return Expression with qualified column references
    */
   private String qualifyColumnReferences(String expr, String tableAlias,
-      java.util.Set<String> columnNames) {
+      Set<String> columnNames) {
     if (columnNames == null || columnNames.isEmpty()) {
       return expr;
     }
@@ -263,6 +276,11 @@ public class ColumnConfig {
       builder.required((Boolean) requiredObj);
     }
 
+    Object replaceObj = map.get("replace");
+    if (replaceObj instanceof Boolean) {
+      builder.replace((Boolean) replaceObj);
+    }
+
     return builder.build();
   }
 
@@ -299,6 +317,7 @@ public class ColumnConfig {
     private String source;
     private String expression;
     private Boolean required;
+    private Boolean replace;
 
     public Builder name(String name) {
       this.name = name;
@@ -322,6 +341,11 @@ public class ColumnConfig {
 
     public Builder required(boolean required) {
       this.required = required;
+      return this;
+    }
+
+    public Builder replace(boolean replace) {
+      this.replace = replace;
       return this;
     }
 

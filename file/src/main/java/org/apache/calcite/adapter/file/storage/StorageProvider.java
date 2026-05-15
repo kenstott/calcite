@@ -757,6 +757,18 @@ public interface StorageProvider {
   }
 
   /**
+   * Returns true if {@code path} refers to a local filesystem path (not a cloud URI).
+   * Used for routing between local {@code FileInputStream} and a cloud StorageProvider.
+   */
+  static boolean isLocalPath(String path) {
+    return path != null
+        && !path.startsWith("s3://")
+        && !path.startsWith("s3a://")
+        && !path.startsWith("gs://")
+        && !path.startsWith("hdfs://");
+  }
+
+  /**
    * Normalizes a path to ensure proper S3/S3A URI format.
    *
    * <p>Hadoop's Path.toString() can return malformed URIs like "s3a:/bucket"

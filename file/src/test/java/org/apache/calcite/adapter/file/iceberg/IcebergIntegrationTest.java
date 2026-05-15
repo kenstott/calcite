@@ -764,10 +764,8 @@ public class IcebergIntegrationTest {
         catalogConfig, "custom_conf_int", schema,
         PartitionSpec.unpartitioned());
 
-    Configuration conf = new Configuration();
-    conf.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");
     IcebergTableWriter writer =
-        new IcebergTableWriter(table, storageProvider, conf);
+        new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
     Map<String, Object> row = new HashMap<String, Object>();

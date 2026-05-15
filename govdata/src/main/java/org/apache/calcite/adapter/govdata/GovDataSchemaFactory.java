@@ -172,6 +172,17 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       tracker.clearAllCompletions();
     }
 
+    // Check for forceReprocessTables - invalidates specific tables without touching others
+    @SuppressWarnings("unchecked")
+    List<String> forceReprocessTables =
+        (List<String>) operand.get("forceReprocessTables");
+    if (forceReprocessTables != null && !forceReprocessTables.isEmpty()) {
+      for (String tableName : forceReprocessTables) {
+        LOGGER.info("forceReprocessTables: Invalidating completion for '{}'", tableName);
+        tracker.invalidateTableCompletion(tableName);
+      }
+    }
+
     Map<String, Object> enrichedOperand = enrichOperand(operand, dataSource, name);
     enrichedOperand.put("operatingDirectory", operatingDirectory);
 

@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -398,5 +399,85 @@ public class MaterializeConfigTest {
     assertNull(MaterializeOutputConfig.fromMap(null));
     assertNull(MaterializePartitionConfig.fromMap(null));
     assertNull(ColumnConfig.fromMap(null));
+  }
+
+  @Test void testIcebergConfigIncrementalTtlDefaults() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("warehousePath", "/data/wh");
+    MaterializeConfig.IcebergConfig cfg = MaterializeConfig.IcebergConfig.fromMap(map);
+    assertEquals(0, cfg.getIncrementalTtlDays());
+    assertEquals(0L, cfg.getIncrementalTtlMillis());
+    assertNull(cfg.getReleaseWindow());
+  }
+
+  @Test void testIcebergConfigIncrementalTtlFromMap() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("warehousePath", "/data/wh");
+    map.put("incrementalTtlDays", 365);
+
+    Map<String, Object> rwMap = new HashMap<String, Object>();
+    rwMap.put("months", Arrays.asList(6, 7, 8, 9));
+    map.put("releaseWindow", rwMap);
+
+    MaterializeConfig.IcebergConfig cfg = MaterializeConfig.IcebergConfig.fromMap(map);
+    assertEquals(365, cfg.getIncrementalTtlDays());
+    assertEquals(365L * 24 * 60 * 60 * 1000L, cfg.getIncrementalTtlMillis());
+    assertNotNull(cfg.getReleaseWindow());
+    assertEquals(Arrays.asList(6, 7, 8, 9), cfg.getReleaseWindow().getMonths());
+    assertNull(cfg.getReleaseWindow().getYearParity());
+  }
+
+  @Test void testReleaseWindowNullMonthsAlwaysInWindow() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    // No months key — empty list means "any month"
+    MaterializeConfig.IcebergConfig.ReleaseWindowConfig rwc =
+        MaterializeConfig.IcebergConfig.ReleaseWindowConfig.fromMap(map);
+    assertNotNull(rwc);
+    assertTrue(rwc.isWithinWindow());
+  }
+
+  @Test void testReleaseWindowAllMonthsInWindow() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    // Include all 12 months — always in window
+    map.put("months", Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+    MaterializeConfig.IcebergConfig.ReleaseWindowConfig rwc =
+        MaterializeConfig.IcebergConfig.ReleaseWindowConfig.fromMap(map);
+    assertTrue(rwc.isWithinWindow());
+  }
+
+  @Test void testReleaseWindowYearParityOdd() {
+    Map<String, Object> oddMap = new HashMap<String, Object>();
+    oddMap.put("months", Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+    oddMap.put("yearParity", "odd");
+    MaterializeConfig.IcebergConfig.ReleaseWindowConfig oddCfg =
+        MaterializeConfig.IcebergConfig.ReleaseWindowConfig.fromMap(oddMap);
+
+    Map<String, Object> evenMap = new HashMap<String, Object>();
+    evenMap.put("months", Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+    evenMap.put("yearParity", "even");
+    MaterializeConfig.IcebergConfig.ReleaseWindowConfig evenCfg =
+        MaterializeConfig.IcebergConfig.ReleaseWindowConfig.fromMap(evenMap);
+
+    // Exactly one of odd/even must be in-window for any given year
+    assertNotEquals(oddCfg.isWithinWindow(), evenCfg.isWithinWindow());
+  }
+
+  @Test void testReleaseWindowFromMapNull() {
+    assertNull(MaterializeConfig.IcebergConfig.ReleaseWindowConfig.fromMap(null));
+  }
+
+  @Test void testIcebergConfigReleaseWindowYearParityRoundTrip() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("warehousePath", "/data/wh");
+    map.put("incrementalTtlDays", 180);
+    Map<String, Object> rwMap = new HashMap<String, Object>();
+    rwMap.put("months", Arrays.asList(3, 6, 9, 12));
+    rwMap.put("yearParity", "even");
+    map.put("releaseWindow", rwMap);
+
+    MaterializeConfig.IcebergConfig cfg = MaterializeConfig.IcebergConfig.fromMap(map);
+    assertEquals(180, cfg.getIncrementalTtlDays());
+    assertEquals("even", cfg.getReleaseWindow().getYearParity());
+    assertEquals(Arrays.asList(3, 6, 9, 12), cfg.getReleaseWindow().getMonths());
   }
 }

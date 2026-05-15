@@ -1107,6 +1107,28 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return null;
     }
 
+    // Pattern: printf('format', src."FIELD" | FIELD) - C-style string formatting
+    // DuckDB printf uses C-style format strings identical to Java String.format
+    java.util.regex.Pattern printfPattern =
+        java.util.regex.Pattern.compile(
+            "^\\s*printf\\s*\\(\\s*'([^']*)'\\s*,\\s*(?:src\\.\"?)?([A-Za-z0-9_]+)\"?\\s*\\)\\s*$",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher printfMatcher = printfPattern.matcher(expr);
+    if (printfMatcher.matches()) {
+      String format = printfMatcher.group(1);
+      String fieldName = printfMatcher.group(2);
+      Object fieldValue = getValueCaseInsensitive(row, fieldName);
+      if (fieldValue == null) {
+        return null;
+      }
+      try {
+        return String.format("%" + format.replaceAll("^%", ""), fieldValue);
+      } catch (java.util.IllegalFormatException e) {
+        LOGGER.debug("printf format error for '{}': {}", format, e.getMessage());
+        return null;
+      }
+    }
+
     // If expression cannot be evaluated, return null (like TRY_CAST behavior)
     LOGGER.debug("Cannot evaluate expression locally: {}", expr);
     return null;
@@ -1376,146 +1398,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup JSON file {}: {}", jsonPath, e.getMessage());
     }
-  }
-
-  /**
-   * Uses DuckDB to transform JSON to partitioned Parquet.
-   * Reuses a shared DuckDB connection across batches for efficiency.
-   */
-  private void transformWithDuckDB(String jsonPath, String stagingPath,
-      Map<String, String> partitionVariables) throws SQLException {
-    // Reuse connection for efficiency
-    if (sharedDuckDBConnection == null || sharedDuckDBConnection.isClosed()) {
-      sharedDuckDBConnection = createDuckDBConnection();
-    }
-
-    String sql = buildDuckDBSql(jsonPath, stagingPath, partitionVariables);
-    LOGGER.debug("Executing DuckDB SQL:\n{}", sql);
-
-    long startTime = System.currentTimeMillis();
-    try (Statement stmt = sharedDuckDBConnection.createStatement()) {
-      stmt.execute(sql);
-    }
-    long elapsed = System.currentTimeMillis() - startTime;
-    LOGGER.debug("DuckDB transformation completed in {}ms", elapsed);
-  }
-
-  /**
-   * Builds the DuckDB COPY SQL statement.
-   *
-   * <p>Partition variables (dimension values) are injected as literal columns
-   * in the SELECT clause if they're not already present in the source data.
-   * This allows Hive-style partitioning where partition values come from
-   * the ETL dimension iteration rather than the source data itself.
-   *
-   * <p>Uses a CTE (WITH clause) to first load JSON data, then SELECT from it.
-   * This resolves DuckDB's column reference ambiguity where computed expressions
-   * reference source columns that are also being selected (e.g., both selecting
-   * TableName and using SUBSTR(TableName, 1, 2) in the same SELECT).
-   */
-  private String buildDuckDBSql(String jsonPath, String stagingPath,
-      Map<String, String> partitionVariables) {
-    StringBuilder sql = new StringBuilder();
-    sql.append("COPY (\n");
-    sql.append("  SELECT ");
-
-    // Build select clause with qualified column references to avoid DuckDB ambiguity
-    List<ColumnConfig> columns = config.getColumns();
-    MaterializePartitionConfig partitionConfig = config.getPartition();
-
-    if (columns == null || columns.isEmpty()) {
-      sql.append("*");
-    } else {
-      // Build set of partition column names - these come from dimension iteration,
-      // not from source data, so they shouldn't be in sourceColumns
-      java.util.Set<String> partitionColumnNames = new java.util.HashSet<String>();
-      if (partitionConfig != null) {
-        partitionColumnNames.addAll(partitionConfig.getColumns());
-      }
-
-      // Build set of source column names (non-computed, non-partition, non-dimension columns)
-      // Columns that are in partitionVariables are dimension values injected from iteration,
-      // not from source data, so they shouldn't be in sourceColumns
-      java.util.Set<String> sourceColumns = new java.util.HashSet<String>();
-      java.util.Set<String> dimensionKeys = partitionVariables != null
-          ? partitionVariables.keySet() : java.util.Collections.<String>emptySet();
-      for (ColumnConfig col : columns) {
-        if (!col.isComputed()
-            && !partitionColumnNames.contains(col.getName())
-            && !dimensionKeys.contains(col.getName())) {
-          sourceColumns.add(col.getEffectiveSource());
-        }
-      }
-
-      // Build SELECT clause with qualified column references and partition variable substitution
-      StringBuilder selectClause = new StringBuilder();
-      for (ColumnConfig col : columns) {
-        if (selectClause.length() > 0) {
-          selectClause.append(", ");
-        }
-        selectClause.append(col.buildSelectExpression("src", sourceColumns, partitionVariables));
-      }
-      sql.append(selectClause);
-    }
-
-    // Add partition variables as literal columns for partition-only columns
-    // (columns that are in partition config but NOT in the regular column list).
-    // Columns that ARE in the column list are already handled by buildSelectExpression.
-    // Use case-insensitive matching since DuckDB/Iceberg treat columns as case-insensitive.
-    if (partitionConfig != null && partitionVariables != null && !partitionVariables.isEmpty()) {
-      // Build set of column names (lowercase) to check for duplicates
-      java.util.Set<String> columnNamesLower = new java.util.HashSet<String>();
-      if (columns != null) {
-        for (ColumnConfig col : columns) {
-          columnNamesLower.add(col.getName().toLowerCase(java.util.Locale.ROOT));
-        }
-      }
-
-      // Build map of partition column types from columnDefinitions
-      Map<String, String> partitionColTypes = new java.util.HashMap<String, String>();
-      if (partitionConfig.getColumnDefinitions() != null) {
-        for (MaterializePartitionConfig.ColumnDefinition colDef
-            : partitionConfig.getColumnDefinitions()) {
-          partitionColTypes.put(
-              colDef.getName().toLowerCase(java.util.Locale.ROOT), colDef.getType());
-        }
-      }
-
-      for (String partitionCol : partitionConfig.getColumns()) {
-        String partitionColLower = partitionCol.toLowerCase(java.util.Locale.ROOT);
-        // Only add if: has a value AND not already in column list (case-insensitive)
-        if (partitionVariables.containsKey(partitionCol)
-            && !columnNamesLower.contains(partitionColLower)) {
-          // Use the partition column type from config, defaulting to VARCHAR
-          String colType = partitionColTypes.get(partitionColLower);
-          String duckdbType = mapToDuckDBType(colType);
-          sql.append(", CAST('").append(escapeString(partitionVariables.get(partitionCol)))
-              .append("' AS ").append(duckdbType).append(") AS ").append(partitionCol);
-        }
-      }
-    }
-
-    sql.append("\n  FROM read_json('").append(escapeString(jsonPath)).append("') AS src\n");
-    sql.append(") TO '").append(escapeString(stagingPath)).append("'");
-    sql.append(" (FORMAT PARQUET");
-
-    // Add partition columns
-    if (partitionConfig != null && !partitionConfig.getColumns().isEmpty()) {
-      sql.append(", PARTITION_BY (");
-      List<String> partitionCols = partitionConfig.getColumns();
-      for (int i = 0; i < partitionCols.size(); i++) {
-        if (i > 0) {
-          sql.append(", ");
-        }
-        sql.append(partitionCols.get(i));
-      }
-      sql.append(")");
-    }
-
-    sql.append(", OVERWRITE_OR_IGNORE");
-    sql.append(");");
-
-    return sql.toString();
   }
 
   /**

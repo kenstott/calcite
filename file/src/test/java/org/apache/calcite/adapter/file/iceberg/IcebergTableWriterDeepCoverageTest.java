@@ -71,8 +71,7 @@ public class IcebergTableWriterDeepCoverageTest {
 
   @Test
   void testConstructorThreeArg() {
-    org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
-    IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage, conf);
+    IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
     assertNotNull(writer);
   }
 

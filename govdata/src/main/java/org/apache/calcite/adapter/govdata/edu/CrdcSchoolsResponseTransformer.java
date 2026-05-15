@@ -32,12 +32,22 @@ public class CrdcSchoolsResponseTransformer extends AbstractUrbanInstituteRespon
     if (topic != null) {
       row.put("crdc_topic", topic);
     }
+    // crdc_id = ncessch for all records; chronic-absenteeism endpoint omits crdc_id
+    if (row.get("crdc_id") == null && row.get("ncessch") != null) {
+      row.put("crdc_id", row.get("ncessch"));
+    }
   }
 
   @Override protected void augmentRecord(ObjectNode row, RequestContext context) {
     String topic = context.getDimensionValues().get("crdc_topic");
     if (topic != null) {
       row.put("crdc_topic", topic);
+    }
+    // crdc_id = ncessch for all records; chronic-absenteeism endpoint omits crdc_id
+    if (!row.has("crdc_id") || row.get("crdc_id").isNull()) {
+      if (row.has("ncessch") && !row.get("ncessch").isNull()) {
+        row.put("crdc_id", row.get("ncessch").asText());
+      }
     }
   }
 }

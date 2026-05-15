@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -506,6 +507,8 @@ public class MaterializeConfig {
     private final int compactionMinFiles;
     private final long compactionSmallFileSizeBytes;
     private final boolean overwritePartitions;
+    private final int incrementalTtlDays;
+    private final ReleaseWindowConfig releaseWindow;
 
     private IcebergConfig(IcebergConfigBuilder builder) {
       this.catalogType = builder.catalogType != null ? builder.catalogType : CatalogType.HADOOP;
@@ -531,6 +534,8 @@ public class MaterializeConfig {
       this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
           ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
       this.overwritePartitions = builder.overwritePartitions;
+      this.incrementalTtlDays = builder.incrementalTtlDays;
+      this.releaseWindow = builder.releaseWindow;
     }
 
     public CatalogType getCatalogType() {
@@ -591,6 +596,18 @@ public class MaterializeConfig {
 
     public boolean isOverwritePartitions() {
       return overwritePartitions;
+    }
+
+    public int getIncrementalTtlDays() {
+      return incrementalTtlDays;
+    }
+
+    public long getIncrementalTtlMillis() {
+      return incrementalTtlDays * 24L * 60L * 60L * 1000L;
+    }
+
+    public ReleaseWindowConfig getReleaseWindow() {
+      return releaseWindow;
     }
 
     public static IcebergConfigBuilder builder() {
@@ -692,6 +709,21 @@ public class MaterializeConfig {
         builder.overwritePartitions((Boolean) overwriteObj);
       }
 
+      Object ttlObj = map.get("incrementalTtlDays");
+      if (ttlObj instanceof Number) {
+        builder.incrementalTtlDays(((Number) ttlObj).intValue());
+      }
+
+      Object releaseWindowObj = map.get("releaseWindow");
+      if (releaseWindowObj instanceof Map) {
+        @SuppressWarnings("unchecked")
+        ReleaseWindowConfig rwc = ReleaseWindowConfig.fromMap(
+            (Map<String, Object>) releaseWindowObj);
+        if (rwc != null) {
+          builder.releaseWindow(rwc);
+        }
+      }
+
       return builder.build();
     }
 
@@ -729,6 +761,8 @@ public class MaterializeConfig {
       private int compactionMinFiles;
       private long compactionSmallFileSizeBytes;
       private boolean overwritePartitions;
+      private int incrementalTtlDays;
+      private ReleaseWindowConfig releaseWindow;
 
       public IcebergConfigBuilder catalogType(CatalogType catalogType) {
         this.catalogType = catalogType;
@@ -805,8 +839,90 @@ public class MaterializeConfig {
         return this;
       }
 
+      public IcebergConfigBuilder incrementalTtlDays(int incrementalTtlDays) {
+        this.incrementalTtlDays = incrementalTtlDays;
+        return this;
+      }
+
+      public IcebergConfigBuilder releaseWindow(ReleaseWindowConfig releaseWindow) {
+        this.releaseWindow = releaseWindow;
+        return this;
+      }
+
       public IcebergConfig build() {
         return new IcebergConfig(this);
+      }
+    }
+
+    /**
+     * Configuration for release-window gating of TTL-based re-ingestion.
+     *
+     * <p>When {@code incrementalTtlDays} is set, a partition whose tracker entry is older
+     * than the TTL is eligible for re-ingest. {@code ReleaseWindowConfig} further gates
+     * that re-ingest: it only fires when the current calendar month is in the allowed
+     * {@code months} list (and, optionally, the year has the right parity).
+     *
+     * <h3>YAML Example</h3>
+     * <pre>
+     * iceberg:
+     *   incrementalTtlDays: 365
+     *   releaseWindow:
+     *     months: [6, 7, 8, 9]
+     *     yearParity: odd   # optional: "odd", "even", or omit for any year
+     * </pre>
+     */
+    public static class ReleaseWindowConfig {
+      private final List<Integer> months;
+      private final String yearParity;
+
+      private ReleaseWindowConfig(List<Integer> months, String yearParity) {
+        this.months = months != null
+            ? Collections.unmodifiableList(new ArrayList<Integer>(months))
+            : Collections.<Integer>emptyList();
+        this.yearParity = yearParity;
+      }
+
+      public List<Integer> getMonths() {
+        return months;
+      }
+
+      public String getYearParity() {
+        return yearParity;
+      }
+
+      /** Returns true if today falls within this release window. */
+      public boolean isWithinWindow() {
+        LocalDate today = LocalDate.now();
+        int currentMonth = today.getMonthValue();
+        int currentYear = today.getYear();
+        if (!months.isEmpty() && !months.contains(currentMonth)) {
+          return false;
+        }
+        if ("odd".equalsIgnoreCase(yearParity) && currentYear % 2 == 0) {
+          return false;
+        }
+        if ("even".equalsIgnoreCase(yearParity) && currentYear % 2 != 0) {
+          return false;
+        }
+        return true;
+      }
+
+      @SuppressWarnings("unchecked")
+      public static ReleaseWindowConfig fromMap(Map<String, Object> map) {
+        if (map == null) {
+          return null;
+        }
+        List<Integer> months = new ArrayList<Integer>();
+        Object monthsObj = map.get("months");
+        if (monthsObj instanceof List) {
+          for (Object m : (List<?>) monthsObj) {
+            if (m instanceof Number) {
+              months.add(((Number) m).intValue());
+            }
+          }
+        }
+        String yearParity = (String) map.get("yearParity");
+        return new ReleaseWindowConfig(months, yearParity);
       }
     }
   }

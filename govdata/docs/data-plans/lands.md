@@ -131,10 +131,6 @@ volume, and carbon stock estimates.
 | state_fips | VARCHAR | FK to geo.states |
 | forest_type_group | VARCHAR | Forest type (Oak-Hickory, Douglas-fir, etc.) |
 | ownership_class | VARCHAR | National Forest / Other Federal / State / Private |
-| land_area_acres | DOUBLE | Forested land area in acres |
-| live_volume_cuft | DOUBLE | Live tree volume (cubic feet) |
-| carbon_stock_tons | DOUBLE | Above-ground carbon stock (short tons) |
-| trees_per_acre | DOUBLE | Average tree density |
 | basal_area_sqft | DOUBLE | Basal area per acre (tree diameter proxy) |
 
 > **Known limitation (2026):** The FIA DataMart `fullreport` endpoint requires a
@@ -143,6 +139,39 @@ volume, and carbon stock estimates.
 > an HTML error page, producing 0 rows. DQ checks T1 (row count) and T2 (coverage)
 > are downgraded to `warn` pending a redesign of the `FiaDatamartTransformer` to
 > iterate all 50 state codes per year. Tracked in `DQ-ISSUES.md`.
+
+---
+
+### `forest_metrics`
+
+USDA FIA tree-level metrics per state × forest type group × ownership class × inventory year.
+Joins to `forest_inventory` on the composite key `(state_fips, inventory_year, forest_type_group, ownership_class)`.
+All columns are CONDPROP_UNADJ-weighted averages across live trees (STATUSCD=1) in accessible
+forest conditions (COND_STATUS_CD=1).
+
+**Source:** USDA FIA DataMart — `{stateAbbr}_TREE.csv` (primary) + `{stateAbbr}_COND.csv` (secondary join)
+**Partition:** `stateAbbr` (one file per state covers all inventory years)
+**Auth:** None
+**Cadence:** Annual
+**Release window:** Months 6–9 (same as forest_inventory)
+**Transformer:** `FiaMetricsTransformer` (implements `StreamingResponseTransformer` — TREE CSV is streamed
+line-by-line to avoid OOM on large state files; COND CSV is loaded into a HashMap for the join)
+
+| Column | Type | Notes |
+|---|---|---|
+| inventory_year | INTEGER | FIA inventory year (INVYR); composite PK with state_fips, type groups |
+| state_fips | VARCHAR | 2-digit FIPS (FK to forest_inventory, geo.states) |
+| forest_type_group | VARCHAR | Resolved from FORTYPCD via type-group lookup table |
+| ownership_class | VARCHAR | National Forest / Other Federal / State / Local / Private |
+| trees_per_acre | DOUBLE | CONDPROP-weighted avg of TPA_UNADJ (live trees per acre) |
+| live_volume_cuft | DOUBLE | CONDPROP-weighted avg of TPA_UNADJ × VOLCFNET (cu ft per acre) |
+| carbon_stock_tons | DOUBLE | CONDPROP-weighted avg of TPA_UNADJ × CARBON_AG / 2000 (tons/acre) |
+
+> **Methodology note:** `TPA_UNADJ` is FIA's per-tree expansion factor representing trees per
+> acre. Multiplying by `CONDPROP_UNADJ` weights by the condition's fraction of plot area.
+> Dividing the weighted sums by `condprop_sum` gives a per-acre estimate aggregated to the
+> state × type group × ownership × year level. This is a CONDPROP approximation; proper
+> population-level FIA estimates require `EXPNS` or `POP_EVAL` tables (deferred).
 
 ---
 

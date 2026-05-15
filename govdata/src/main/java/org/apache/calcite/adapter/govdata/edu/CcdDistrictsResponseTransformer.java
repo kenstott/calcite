@@ -49,5 +49,15 @@ public class CcdDistrictsResponseTransformer extends AbstractUrbanInstituteRespo
             countyNode.asText(), row.path("leaid").asText("?"));
       }
     }
+
+    // agency_charter_indicator is never populated by the Urban Institute API.
+    // Derive from agency_type: type 7 = independent charter LEA per NCES CCD.
+    JsonNode chartNode = row.path("agency_charter_indicator");
+    if (chartNode.isMissingNode() || chartNode.isNull()) {
+      JsonNode agencyType = row.path("agency_type");
+      if (!agencyType.isMissingNode() && !agencyType.isNull()) {
+        row.put("agency_charter_indicator", agencyType.asInt() == 7 ? 1 : 0);
+      }
+    }
   }
 }

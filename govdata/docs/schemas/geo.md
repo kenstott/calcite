@@ -460,7 +460,7 @@ Foreign key: `tract_fips` → `census_tracts.tract_fips`
 - ECON: `county_qcew.area_fips` → `counties.county_fips`
 
 ### Complete Reference
-For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
+For the full relationship map including the ERD, cross-schema query examples, and FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
 
 ## Common Query Patterns
 

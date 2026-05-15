@@ -127,7 +127,7 @@ case "$MODE" in
       '"ccd_districts", "ccd_schools"' "$START" "$END"
 
     run_edu_model "edu-initial-assessments" \
-      '"naep_scores", "crdc_schools"' "$START" "$END"
+      '"naep_scores", "naep_achievement_levels", "crdc_schools"' "$START" "$END"
 
     run_edu_model "edu-initial-ipeds" \
       '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
@@ -175,7 +175,7 @@ case "$MODE" in
     export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
       run_edu_model "edu-biennial-naep" \
-        '"naep_scores"' "$START"
+        '"naep_scores", "naep_achievement_levels"' "$START"
     fi
 
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then

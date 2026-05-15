@@ -27,6 +27,7 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -520,13 +521,16 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
               }
             }
 
-            // Create table instance for schema introspection
-            currentTable =
-                new PartitionedParquetTable(newFiles, partitionInfo,
-                    engineConfig, columnTypes, null, null, constraintConfig, schemaName, tableName, storageProvider, config);
+            // Create table instance for schema introspection only when files exist.
+            // When empty, leave currentTable null so getRowType() builds from config columns.
+            if (!newFiles.isEmpty()) {
+              currentTable =
+                  new PartitionedParquetTable(newFiles, partitionInfo,
+                      engineConfig, columnTypes, null, null, constraintConfig, schemaName, tableName, storageProvider, config);
 
-            // Prime HLL statistics if the table supports it
-            primeHLLStatistics();
+              // Prime HLL statistics if the table supports it
+              primeHLLStatistics();
+            }
 
             lastDiscoveredFiles = newFiles;
             return;
@@ -534,8 +538,16 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
         }
       }
 
-      // Standard table path: Create PartitionedParquetTable
+      // Standard table path: Create PartitionedParquetTable only when files exist.
+      // When files are empty, leave currentTable null so getRowType() builds from config columns.
       if (!newFiles.equals(lastDiscoveredFiles)) {
+        if (newFiles.isEmpty()) {
+          // No files found — update baseline so we don't re-scan on every call,
+          // but leave currentTable null to enable config-based schema introspection.
+          lastDiscoveredFiles = newFiles;
+          LOGGER.info("No files for table '{}' - schema will be derived from config columns",
+              tableName);
+        } else {
         // Detect partitions based on configuration
         PartitionDetector.PartitionInfo partitionInfo = null;
         if (!newFiles.isEmpty()) {
@@ -623,6 +635,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
             LOGGER.debug("Could not create File object for notification (S3 path?): {}", newFiles.get(0));
           }
         }
+        } // end else (newFiles not empty)
       }
     } catch (Exception e) {
       LOGGER.error("Failed to recreate view/table for '{}': {}", tableName, e.getMessage(), e);
@@ -698,6 +711,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
         recreateViewWithNewFiles(matchingFiles);
         LOGGER.debug("Initial table definition created for '{}' with {} files", tableName, matchingFiles.size());
       } else {
+        // No files found. Leave currentTable as null so getRowType() builds from config columns.
         LOGGER.warn("No matching files found for table '{}' with pattern '{}'", tableName, pattern);
       }
     } catch (Exception e) {
@@ -794,7 +808,43 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       }
     }
 
+    if (currentTable == null) {
+      // No data files present — build type from YAML column definitions for schema introspection
+      if (config != null && config.getColumns() != null && !config.getColumns().isEmpty()) {
+        RelDataTypeFactory.Builder builder = typeFactory.builder();
+        for (PartitionedTableConfig.TableColumn col : config.getColumns()) {
+          SqlTypeName sqlType = yamlTypeToSqlType(col.getType());
+          RelDataType colType = typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(sqlType), col.isNullable());
+          builder.add(col.getName(), colType);
+        }
+        return builder.build();
+      }
+      // No config columns — return empty struct rather than NPE
+      return typeFactory.createStructType(
+          java.util.Collections.<RelDataType>emptyList(),
+          java.util.Collections.<String>emptyList());
+    }
+
     return currentTable.getRowType(typeFactory);
+  }
+
+  private SqlTypeName yamlTypeToSqlType(String yamlType) {
+    if (yamlType == null) {
+      return SqlTypeName.VARCHAR;
+    }
+    switch (yamlType.toLowerCase(java.util.Locale.ROOT)) {
+      case "string": return SqlTypeName.VARCHAR;
+      case "int": case "integer": return SqlTypeName.INTEGER;
+      case "long": case "bigint": return SqlTypeName.BIGINT;
+      case "double": return SqlTypeName.DOUBLE;
+      case "float": return SqlTypeName.FLOAT;
+      case "boolean": return SqlTypeName.BOOLEAN;
+      case "date": return SqlTypeName.DATE;
+      case "timestamp": return SqlTypeName.TIMESTAMP;
+      case "binary": case "bytes": return SqlTypeName.VARBINARY;
+      default: return SqlTypeName.VARCHAR;
+    }
   }
 
   @Override public Enumerable<Object[]> scan(DataContext root) {

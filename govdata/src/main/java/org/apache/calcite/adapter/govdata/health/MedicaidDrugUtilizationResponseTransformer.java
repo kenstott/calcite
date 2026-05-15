@@ -21,12 +21,23 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public class MedicaidDrugUtilizationResponseTransformer extends AbstractOpenFdaResponseTransformer {
 
+  private static String normalizeQuarter(String raw) {
+    if (raw == null) return null;
+    switch (raw.trim()) {
+      case "1": return "Q1";
+      case "2": return "Q2";
+      case "3": return "Q3";
+      case "4": return "Q4";
+      default:  return raw;
+    }
+  }
+
   @Override
   protected void flattenRecord(JsonNode record, ObjectNode row) {
     put(row, "state", text(record, "state"));
     put(row, "ndc", text(record, "ndc"));
     put(row, "year", text(record, "year"));
-    put(row, "quarter", text(record, "quarter"));
+    put(row, "quarter", normalizeQuarter(text(record, "quarter")));
     put(row, "utilization_type", text(record, "utilization_type"));
     put(row, "product_name", text(record, "product_name"));
     put(row, "labeler_code", text(record, "labeler_code"));

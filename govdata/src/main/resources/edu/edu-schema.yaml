@@ -122,10 +122,6 @@ partitionedTables:
         type: int
         nullable: true
         comment: English language learner students
-      - name: migrant_students
-        type: int
-        nullable: true
-        comment: Migrant program students
       - name: teachers_total_fte
         type: double
         nullable: true
@@ -456,30 +452,6 @@ partitionedTables:
         type: double
         nullable: true
         comment: Average NAEP scale score
-      - name: std_error
-        type: double
-        nullable: true
-        comment: Standard error of the mean score
-      - name: pct_below_basic
-        type: double
-        nullable: true
-        comment: Percentage of students below Basic proficiency
-      - name: pct_basic
-        type: double
-        nullable: true
-        comment: Percentage at Basic proficiency
-      - name: pct_proficient
-        type: double
-        nullable: true
-        comment: Percentage at Proficient
-      - name: pct_advanced
-        type: double
-        nullable: true
-        comment: Percentage at Advanced
-      - name: sample_size
-        type: int
-        nullable: true
-        comment: Number of students assessed
       - name: is_displayable
         type: int
         nullable: true
@@ -487,13 +459,13 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
+      url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=MN:MN&Year={year}"
       method: GET
       urlRules:
-        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=MN:MN&Year={year}"
           variableMatch:
             subscale: MRPCM
-        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP&stattype=MN:MN&Year={year}"
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=MN:MN&Year={year}"
           variableMatch:
             subscale: RRPCM
       response:
@@ -517,8 +489,8 @@ partitionedTables:
 
     dimensions:
       year:
-        type: list
-        values: [2013, 2015, 2017, 2019, 2022, 2024]
+        type: year_range
+        start: "${GOVDATA_START_YEAR:2013}"
         minYear: 2013
         dataLag: 2
       grade:
@@ -527,6 +499,152 @@ partitionedTables:
       subscale:
         - MRPCM
         - RRPCM
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
+        runCompaction: false
+
+  # ==========================================================================
+  # NAEP ACHIEVEMENT LEVELS — proficiency distribution from ALD stattype calls
+  # Source: api.nationsreportcard.gov GetAdhocData, stattype=ALD:BA/BC/PR/AD
+  # Same key structure as naep_scores; one row per key × level (4 levels each)
+  # Joins to naep_scores via (jurisdiction, year, subject, grade, variable_type, subgroup_name)
+  # ==========================================================================
+  - name: naep_achievement_levels
+    releaseWindow:
+      months: [1, 2, 3]
+      yearParity: odd
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      NAEP proficiency level distributions sourced from GetAdhocData ALD stattype calls.
+      One row per state × year × subject × grade × subgroup × level.
+      level values: below_basic, basic, proficient, advanced.
+      pct is the percentage of students at that level for the given key.
+      Joins to naep_scores via (jurisdiction, year, subject, grade, variable_type, subgroup_name).
+
+    columns:
+      - name: jurisdiction
+        type: int
+        nullable: false
+        comment: State FIPS code (0 = national aggregate) — PK component
+      - name: jurisdiction_name
+        type: string
+        nullable: true
+        comment: State name or "National"
+      - name: year
+        type: int
+        nullable: false
+        comment: Assessment year — PK component
+      - name: subject
+        type: string
+        nullable: false
+        comment: MAT=mathematics, RED=reading — PK component
+      - name: grade
+        type: int
+        nullable: false
+        comment: 4 or 8 — PK component
+      - name: variable_type
+        type: string
+        nullable: false
+        comment: Disaggregation type (TOTAL, Race/Ethnicity, Gender, NAEP Eligibility) — PK component
+      - name: subgroup_name
+        type: string
+        nullable: false
+        comment: Subgroup label (All students, Male, White, Black, etc.) — PK component
+      - name: level
+        type: string
+        nullable: false
+        comment: Proficiency level — PK component; below_basic, basic, proficient, advanced
+      - name: pct
+        type: double
+        nullable: true
+        comment: Percentage of students at this proficiency level
+      - name: is_displayable
+        type: int
+        nullable: true
+        comment: 1 if statistically displayable
+
+    source:
+      type: http
+      url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:BA&Year={year}"
+      method: GET
+      urlRules:
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:BA&Year={year}"
+          variableMatch:
+            subscale: MRPCM
+            level: BA
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:PR&Year={year}"
+          variableMatch:
+            subscale: MRPCM
+            level: PR
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=MAT&grade={grade}&subscale=MRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:AD&Year={year}"
+          variableMatch:
+            subscale: MRPCM
+            level: AD
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:BA&Year={year}"
+          variableMatch:
+            subscale: RRPCM
+            level: BA
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:PR&Year={year}"
+          variableMatch:
+            subscale: RRPCM
+            level: PR
+        - url: "https://www.nationsreportcard.gov/Dataservice/GetAdhocData.aspx?type=data&subject=RED&grade={grade}&subscale=RRPCM&variable=TOTAL&jurisdiction=NP,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY&stattype=ALD:AD&Year={year}"
+          variableMatch:
+            subscale: RRPCM
+            level: AD
+      response:
+        format: json
+        dataPath: "result"
+        pagination:
+          type: NONE
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 500, 503]
+        skipOn: [400]
+      rawCache:
+        enabled: true
+      incremental:
+        yearParam: "year"
+        yearRange:
+          start: "${GOVDATA_START_YEAR:2013}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.NaepAchievementLevelsResponseTransformer"
+
+    dimensions:
+      year:
+        type: year_range
+        start: "${GOVDATA_START_YEAR:2013}"
+        minYear: 2013
+        dataLag: 2
+      grade:
+        - "4"
+        - "8"
+      subscale:
+        - MRPCM
+        - RRPCM
+      level:
+        - BA
+        - PR
+        - AD
 
     materialize:
       enabled: true
@@ -570,8 +688,8 @@ partitionedTables:
     columns:
       - name: crdc_id
         type: string
-        nullable: false
-        comment: CRDC school identifier (equals ncessch for most records) — PK component
+        nullable: true
+        comment: CRDC school identifier (equals ncessch); chronic-absenteeism pre-2022 data may be null (backfilled by transformer going forward) — PK component
       - name: ncessch
         type: string
         nullable: true
@@ -746,15 +864,10 @@ partitionedTables:
 
     dimensions:
       year:
-        type: list
-        values:
-          - 2013
-          - 2015
-          - 2017
-          - 2020
-          - 2021
+        type: year_range
+        start: "${GOVDATA_START_YEAR:2013}"
         minYear: 2013
-        maxYear: 2021
+        dataLag: 2
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -1045,7 +1158,8 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 2
-        retryOn: [429, 500, 503]
+        retryOn: [429, 503]
+        skipOn: [500]
       rawCache:
         enabled: true
       incremental:
@@ -1061,7 +1175,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
-        maxYear: 2022   # Urban Institute completions-cip-2 endpoint confirmed data through 2022
+        dataLag: 3
 
     materialize:
       enabled: true
@@ -1263,10 +1377,6 @@ partitionedTables:
         type: double
         nullable: true
         comment: Long-term debt outstanding
-      - name: est_fte
-        type: int
-        nullable: true
-        comment: Estimated FTE enrollment (used for per-student ratio calculations)
 
     source:
       type: http
@@ -1533,7 +1643,7 @@ partitionedTables:
       - name: pell_grant_rate
         type: double
         nullable: true
-        comment: Share of students receiving Pell grants (latest.student.aid.pell_grant_rate)
+        comment: Share of students receiving Pell grants (latest.aid.pell_grant_rate)
       - name: completion_rate_4yr
         type: double
         nullable: true
@@ -1594,7 +1704,7 @@ partitionedTables:
       parameters:
         api_key: "${API_DATA_GOV}"
         per_page: "100"
-        fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,school.online_only,school.locale,latest.student.size,latest.student.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
+        fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,school.online_only,school.locale,latest.student.size,latest.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
       response:
         format: json
         dataPath: "results"
@@ -1814,12 +1924,7 @@ views:
         n.year,
         n.subject,
         n.grade,
-        n.avg_score,
-        n.std_error,
-        n.pct_below_basic,
-        n.pct_proficient,
-        n.pct_advanced,
-        n.sample_size
+        n.avg_score
       FROM naep_scores n
       WHERE n.variable_type = 'TOTAL'
         AND n.subgroup_name = 'All students'
@@ -2005,7 +2110,6 @@ views:
   - name: ipeds_financial_efficiency
     comment: >
       Institution-level financial efficiency ratios from IPEDS Finance survey.
-      All monetary ratios are per-FTE student (est_fte from finance form).
       tuition_dependency = net_tuition / total_revenue; a ratio > 0.70 signals
       heavy reliance on tuition. Form type is preserved so GASB/FASB institutions
       can be filtered or compared. One row per institution per fiscal year.
@@ -2020,17 +2124,12 @@ views:
         i.sector,
         i.inst_control,
         i.hbcu,
-        f.est_fte,
         f.rev_tuition_fees_net,
         f.rev_total_current,
         f.exp_instruc_total,
         f.endowment_end,
         f.net_position_end,
         f.rev_tuition_fees_net / NULLIF(f.rev_total_current, 0)            AS tuition_dependency_ratio,
-        f.exp_instruc_total / NULLIF(f.est_fte, 0)                         AS instruction_exp_per_fte,
-        f.rev_total_current / NULLIF(f.est_fte, 0)                         AS total_revenue_per_fte,
-        f.rev_tuition_fees_net / NULLIF(f.est_fte, 0)                      AS net_tuition_per_fte,
-        f.endowment_end / NULLIF(f.est_fte, 0)                             AS endowment_per_fte,
         f.exp_total_salaries / NULLIF(f.exp_total_current, 0)              AS salary_share_of_expenses,
         f.sch_total_student_aid / NULLIF(f.rev_tuition_fees_gross, 0)      AS institutional_discount_rate
       FROM ipeds_financials f
@@ -2050,9 +2149,6 @@ views:
         n.subject,
         n.grade,
         n.avg_score,
-        n.pct_proficient,
-        n.pct_advanced,
-        n.sample_size,
         d.total_enrollment,
         d.avg_pupil_teacher_ratio,
         d.avg_frpl_rate,
@@ -2128,18 +2224,43 @@ views:
         n.subject,
         n.grade,
         n.avg_score,
-        n.std_error,
-        n.pct_below_basic,
-        n.pct_basic,
-        n.pct_proficient,
-        n.pct_advanced,
-        n.sample_size,
         n.is_displayable
       FROM naep_scores n
       LEFT JOIN geo.states s
         ON n.jurisdiction = s.state_fips
       WHERE n.variable_type = 'TOTAL'
         AND n.subgroup_name = 'All students'
+
+  - name: naep_proficiency_summary
+    comment: >
+      NAEP mean scores with proficiency level distributions in a single pivot row.
+      Joins naep_scores to naep_achievement_levels via the full natural key.
+      Filters to all-student TOTAL subgroup. One row per state × year × subject × grade.
+      pct_* columns are null when achievement level data has not been ingested.
+    sql: >
+      SELECT
+        n.jurisdiction,
+        n.jurisdiction_name,
+        n.year,
+        n.subject,
+        n.grade,
+        n.avg_score,
+        MAX(CASE WHEN a.level = 'below_basic'  THEN a.pct END)              AS pct_below_basic,
+        MAX(CASE WHEN a.level = 'basic'         THEN a.pct END)              AS pct_basic,
+        MAX(CASE WHEN a.level = 'proficient'    THEN a.pct END)              AS pct_proficient,
+        MAX(CASE WHEN a.level = 'advanced'      THEN a.pct END)              AS pct_advanced
+      FROM naep_scores n
+      LEFT JOIN naep_achievement_levels a
+        ON  a.jurisdiction  = n.jurisdiction
+        AND a.year          = n.year
+        AND a.subject       = n.subject
+        AND a.grade         = n.grade
+        AND a.variable_type = n.variable_type
+        AND a.subgroup_name = n.subgroup_name
+      WHERE n.variable_type = 'TOTAL'
+        AND n.subgroup_name = 'All students'
+      GROUP BY
+        n.jurisdiction, n.jurisdiction_name, n.year, n.subject, n.grade, n.avg_score
 
 # ============================================================================
 # CONSTRAINTS
@@ -2177,6 +2298,14 @@ constraints:
         targetTable: states
         targetColumns: [state_fips]
         comment: Links NAEP state to geo.states; jurisdiction=0 (national aggregate) will not match
+
+  naep_achievement_levels:
+    primaryKey: [year, jurisdiction, subject, grade, variable_type, subgroup_name, level]
+    foreignKeys:
+      - columns: [jurisdiction, year, subject, grade, variable_type, subgroup_name]
+        targetTable: naep_scores
+        targetColumns: [jurisdiction, year, subject, grade, variable_type, subgroup_name]
+        comment: Links achievement level row to its corresponding mean score row
 
   crdc_schools:
     primaryKey: [year, crdc_topic, crdc_id]

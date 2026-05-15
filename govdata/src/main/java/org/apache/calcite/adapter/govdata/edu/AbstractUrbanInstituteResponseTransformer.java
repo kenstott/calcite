@@ -20,11 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.io.BufferedReader;
-import java.io.StringReader;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -53,20 +49,6 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
       return "[]";
     }
 
-    // Detect CSV vs JSON by first non-whitespace character.
-    // CSV bulk endpoints (/csv/*.csv) pass raw CSV; JSON API endpoints pass {"count":N,"results":[...]}.
-    char first = 0;
-    for (int i = 0; i < response.length(); i++) {
-      char c = response.charAt(i);
-      if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
-        first = c;
-        break;
-      }
-    }
-    if (first != '{' && first != '[') {
-      return transformCsv(response, context);
-    }
-
     try (JsonParser parser = MAPPER.getFactory().createParser(response)) {
       JsonToken token = parser.nextToken();
       if (token == JsonToken.START_ARRAY) {
@@ -89,83 +71,6 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
     }
   }
 
-  // Stream a CSV response (header row + data rows) to JSON array, applying augmentRecord per row.
-  // Uses JsonGenerator to write directly to StringWriter — only one ObjectNode held in memory at a time.
-  private String transformCsv(String response, RequestContext context) {
-    try {
-      StringWriter sw = new StringWriter(1 << 16);
-      int count = 0;
-      try (BufferedReader reader = new BufferedReader(new StringReader(response));
-          JsonGenerator gen = MAPPER.getFactory().createGenerator(sw)) {
-        String headerLine = reader.readLine();
-        if (headerLine == null) {
-          return "[]";
-        }
-        String[] headers = parseCsvLine(headerLine);
-        gen.writeStartArray();
-        String line;
-        while ((line = reader.readLine()) != null) {
-          if (line.trim().isEmpty()) {
-            continue;
-          }
-          String[] values = parseCsvLine(line);
-          ObjectNode row = MAPPER.createObjectNode();
-          for (int i = 0; i < headers.length; i++) {
-            String val = i < values.length ? values[i].trim() : "";
-            if (val.isEmpty()) {
-              row.putNull(headers[i]);
-            } else {
-              // Attempt numeric coercion so augmentRecord sees typed values (e.g. county_code as int)
-              try {
-                row.put(headers[i], Long.parseLong(val));
-              } catch (NumberFormatException e1) {
-                try {
-                  row.put(headers[i], Double.parseDouble(val));
-                } catch (NumberFormatException e2) {
-                  row.put(headers[i], val);
-                }
-              }
-            }
-          }
-          augmentRecord(row, context);
-          MAPPER.writeTree(gen, row);
-          count++;
-        }
-        gen.writeEndArray();
-      }
-      LOGGER.info("Urban Institute CSV: streamed {} records from {}", count, context.getUrl());
-      return sw.toString();
-    } catch (Exception e) {
-      LOGGER.error("Urban Institute: CSV transform failed for {}: {}", context.getUrl(), e.getMessage());
-      return "[]";
-    }
-  }
-
-  // RFC 4180-compatible CSV line parser (handles quoted fields and escaped quotes).
-  private static String[] parseCsvLine(String line) {
-    List<String> fields = new ArrayList<>();
-    StringBuilder current = new StringBuilder();
-    boolean inQuotes = false;
-    for (int i = 0; i < line.length(); i++) {
-      char c = line.charAt(i);
-      if (c == '"') {
-        if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
-          current.append('"');
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (c == ',' && !inQuotes) {
-        fields.add(current.toString());
-        current = new StringBuilder();
-      } else {
-        current.append(c);
-      }
-    }
-    fields.add(current.toString());
-    return fields.toArray(new String[0]);
-  }
-
   // Streams the already-opened START_ARRAY, emitting one record at a time.
   private String streamArray(JsonParser parser, RequestContext context) throws Exception {
     StringWriter sw = new StringWriter(1 << 16);
@@ -182,7 +87,11 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
   }
 
   @Override public void transformRecord(Map<String, Object> row, RequestContext context) {
-    // no-op: subclasses that need per-row augmentation must override this method
+    ObjectNode node = MAPPER.valueToTree(row);
+    augmentRecord(node, context);
+    row.clear();
+    node.fields().forEachRemaining(e ->
+        row.put(e.getKey(), MAPPER.convertValue(e.getValue(), Object.class)));
   }
 
   /**

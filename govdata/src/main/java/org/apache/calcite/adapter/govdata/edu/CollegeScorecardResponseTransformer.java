@@ -63,7 +63,7 @@ public class CollegeScorecardResponseTransformer implements ResponseTransformer 
     m.put("school.online_only",                                                 "online_only");
     m.put("school.locale",                                                      "locale");
     m.put("latest.student.size",                                                "size");
-    m.put("latest.student.aid.pell_grant_rate",                                 "pell_grant_rate");
+    m.put("latest.aid.pell_grant_rate",                                         "pell_grant_rate");
     m.put("latest.completion.completion_rate_4yr_150nt",                        "completion_rate_4yr");
     m.put("latest.completion.completion_rate_less_than_4yr_150nt",              "completion_rate_2yr");
     m.put("latest.student.retention_rate.four_year.full_time",                  "retention_rate_fulltime");

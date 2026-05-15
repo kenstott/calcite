@@ -65,6 +65,14 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
   // Keys are uppercase NCES codes; values are canonical schema column names.
   // Confirmed: F1B01, F2B01, F3B01 (tuition net), F1H01/02, F2H01/02 (endowment),
   //            F3G01/02 (endowment F3), F1C011, F2C01, F3C01 (instruction).
+  //
+  // NOTE: EFTEUG (FTE undergraduate enrollment) is from the EFIA 12-month enrollment
+  // survey, not the Finance forms — it does not appear in F1A/F2/F3 CSVs.
+  // est_fte will be null until a separate EFIA join is implemented.
+  //
+  // TODO: F2C and F3C sections may map to discounts/allowances rather than functional
+  // expenditures (F2E/F3E). Verify F2C01-F2C09 and F3C01-F3C09 against actual CSV
+  // before changing them, since they are not currently failing DQ checks.
   // ──────────────────────────────────────────────────────────────────────────
 
   private static final Map<String, String> F1A_MAP;
@@ -102,7 +110,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f1a.put("F1C091",   "exp_aux_ent_total");
     f1a.put("F1C101",   "exp_net_grant_aid_total");
     f1a.put("F1C141",   "exp_total_current");
-    f1a.put("F1C151",   "exp_total_salaries");
+    f1a.put("F1C192",   "exp_total_salaries");
     // Endowment (F1H section — confirmed)
     f1a.put("F1H01",    "endowment_beg");
     f1a.put("F1H02",    "endowment_end");
@@ -111,8 +119,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f1a.put("F1A02",    "liabilities");
     f1a.put("F1A19",    "net_position_end");
     f1a.put("F1A06",    "longterm_debt");
-    // FTE enrollment
-    f1a.put("EFTEUG",   "est_fte");
+    // est_fte (EFTEUG) is from EFIA enrollment survey, not this finance form — omitted
     F1A_MAP = Collections.unmodifiableMap(f1a);
 
     Map<String, String> f2 = new HashMap<String, String>();
@@ -142,7 +149,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f2.put("F2C08",     "exp_aux_ent_total");
     f2.put("F2C09",     "exp_net_grant_aid_total");
     f2.put("F2C19",     "exp_total_current");
-    f2.put("F2C20",     "exp_total_salaries");
+    f2.put("F2E132",    "exp_total_salaries");
     // Endowment (F2H section — confirmed)
     f2.put("F2H01",     "endowment_beg");
     f2.put("F2H02",     "endowment_end");
@@ -151,7 +158,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f2.put("F2A02",     "liabilities");
     f2.put("F2A19",     "net_position_end");
     f2.put("F2A06",     "longterm_debt");
-    f2.put("EFTEUG",    "est_fte");
+    // est_fte (EFTEUG) is from EFIA enrollment survey, not this finance form — omitted
     F2_MAP = Collections.unmodifiableMap(f2);
 
     Map<String, String> f3 = new HashMap<String, String>();
@@ -176,7 +183,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f3.put("F3C08",     "exp_aux_ent_total");
     f3.put("F3C09",     "exp_net_grant_aid_total");
     f3.put("F3C19",     "exp_total_current");
-    f3.put("F3C20",     "exp_total_salaries");
+    f3.put("F3E072",    "exp_total_salaries");
     // Endowment (F3G section — confirmed; F3 uses G not H)
     f3.put("F3G01",     "endowment_beg");
     f3.put("F3G02",     "endowment_end");
@@ -184,7 +191,7 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
     f3.put("F3A01",     "assets");
     f3.put("F3A02",     "liabilities");
     f3.put("F3A06",     "longterm_debt");
-    f3.put("EFTEUG",    "est_fte");
+    // est_fte (EFTEUG) is from EFIA enrollment survey, not this finance form — omitted
     F3_MAP = Collections.unmodifiableMap(f3);
   }
 
@@ -256,8 +263,8 @@ public class IpedsFinancialsResponseTransformer implements ResponseTransformer {
             continue;
           }
 
-          // unitid and est_fte are integers; everything else is double
-          if ("unitid".equals(canonical) || "est_fte".equals(canonical)) {
+          // unitid is an integer; everything else is double
+          if ("unitid".equals(canonical)) {
             try {
               row.put(canonical, Integer.parseInt(rawValue));
             } catch (NumberFormatException e) {

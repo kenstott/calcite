@@ -322,22 +322,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: National Forest / Other Federal / State / Local / Private
-      - name: land_area_acres
-        type: double
-        nullable: true
-        comment: Forested land area in acres (null — expansion factor not in COND)
-      - name: live_volume_cuft
-        type: double
-        nullable: true
-        comment: Live tree volume in cubic feet (null — tree-level data not in COND)
-      - name: carbon_stock_tons
-        type: double
-        nullable: true
-        comment: Above-ground carbon stock in short tons (null — tree-level data not in COND)
-      - name: trees_per_acre
-        type: double
-        nullable: true
-        comment: Average tree density (null — tree-level data not in COND)
       - name: basal_area_sqft
         type: double
         nullable: true
@@ -373,6 +357,97 @@ partitionedTables:
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
         batchPartitionColumns: [stateAbbr]
+        overwritePartitions: true
+        incrementalTtlDays: 365
+        releaseWindow:
+          months: [6, 7, 8, 9]
+
+  # ---------------------------------------------------------------------------
+  # FOREST METRICS — USDA FIA bulk TREE CSV per state (live-tree metrics)
+  # ---------------------------------------------------------------------------
+  - name: forest_metrics
+    pattern: "type=forest_metrics/stateAbbr=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: stateAbbr
+          type: VARCHAR
+    comment: >
+      USDA FIA tree-level metrics derived from bulk TREE CSV files joined to COND.
+      One row per state × forest_type_group × ownership_class × inventory_year.
+      Columns are CONDPROP_UNADJ-weighted averages across live trees (STATUSCD=1)
+      in accessible forest conditions (COND_STATUS_CD=1). Join to forest_inventory
+      on (state_fips, inventory_year, forest_type_group, ownership_class) for
+      combined basal area + volume + carbon analysis.
+      Source: apps.fs.usda.gov/fia/datamart/CSV/{state}_TREE.csv +
+              apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv
+
+    dimensions:
+      type:
+        - forest_metrics
+      stateAbbr: *all_fia_state_abbrs
+
+    columns:
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - <<: *state_fips_column
+        nullable: false
+      - name: forest_type_group
+        type: string
+        nullable: true
+        comment: Forest type group name (e.g., 'Oak / hickory group', 'Douglas-fir group')
+      - name: ownership_class
+        type: string
+        nullable: true
+        comment: National Forest / Other Federal / State / Local / Private
+      - name: trees_per_acre
+        type: double
+        nullable: true
+        comment: CONDPROP-weighted average of TPA_UNADJ across live trees (trees per acre)
+      - name: live_volume_cuft
+        type: double
+        nullable: true
+        comment: CONDPROP-weighted average live cubic-foot volume per acre (VOLCFNET × TPA_UNADJ)
+      - name: carbon_stock_tons
+        type: double
+        nullable: true
+        comment: CONDPROP-weighted average above-ground carbon stock, tons per acre (CARBON_AG × TPA_UNADJ / 2000)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{stateAbbr}_TREE.csv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaMetricsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=forest_metrics/stateAbbr=*/"
+      partition:
+        columns: [type, stateAbbr]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        tableName: forest_metrics
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [stateAbbr]
+        overwritePartitions: true
+        incrementalTtlDays: 365
+        releaseWindow:
+          months: [6, 7, 8, 9]
 
   # ---------------------------------------------------------------------------
   # NPS UNITS — National Park Service unit boundaries (static reference)
@@ -705,6 +780,13 @@ constraints:
         targetTable: states
         targetColumns: [state_fips]
 
+  forest_metrics:
+    primaryKey: [state_fips, inventory_year, forest_type_group, ownership_class]
+    foreignKeys:
+      - columns: [state_fips, inventory_year, forest_type_group, ownership_class]
+        targetTable: forest_inventory
+        targetColumns: [state_fips, inventory_year, forest_type_group, ownership_class]
+
   nps_units:
     primaryKey: [unit_code]
 
@@ -731,6 +813,30 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: lands_forest_condition_metrics
+    comment: >
+      Joins forest_inventory (basal area from COND CSV) with forest_metrics (live-tree
+      volume and carbon from TREE CSV) on the shared composite key. Provides a single
+      row per state × forest type group × ownership class × inventory year with all
+      five FIA-derived metrics. Use for carbon-stock trend analysis, timber-volume
+      benchmarking, and cross-schema joins to sec.filing_metadata or econ.fred_indicators.
+    sql: >
+      SELECT
+        fi.inventory_year,
+        fi.state_fips,
+        fi.forest_type_group,
+        fi.ownership_class,
+        fi.basal_area_sqft,
+        fm.trees_per_acre,
+        fm.live_volume_cuft,
+        fm.carbon_stock_tons
+      FROM forest_inventory fi
+      JOIN forest_metrics fm
+        ON fi.state_fips        = fm.state_fips
+       AND fi.inventory_year    = fm.inventory_year
+       AND fi.forest_type_group = fm.forest_type_group
+       AND fi.ownership_class   = fm.ownership_class
 
   - name: lands_timber_by_forest_state
     comment: >

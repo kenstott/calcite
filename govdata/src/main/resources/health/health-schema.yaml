@@ -5,7 +5,7 @@
 # ============================================================================
 
 schemaName: "${HEALTH_SCHEMA_NAME:health}"
-materializeDirectory: "${HEALTH_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/health}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Pharmaceutical safety and public health data. Phase 1 covers five openFDA
@@ -92,6 +92,7 @@ partitionedTables:
       parameters:
         api_key: "${HEALTH_FDA_API_KEY:}"
         limit: "1000"
+        search: "product_ndc:{ndc_prefix}*"
       response:
         format: json
         pagination:
@@ -110,6 +111,9 @@ partitionedTables:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaNdcResponseTransformer"
 
     dimensions:
+      # Shard on first 1-2 digits of product_ndc to stay under the openFDA 26k record cap.
+      # Digit 6 (32,543 records) is subdivided to 2-digit prefixes; all other digits fit in one shard.
+      ndc_prefix: ["0","1","2","3","4","5","60","61","62","63","64","65","66","67","68","69","7","8","9"]
       type:
         - fda_ndc_products
 
@@ -1045,14 +1049,14 @@ partitionedTables:
       url: "https://data.cms.gov/provider-data/api/1/datastore/query/xubh-q36u/0"
       method: GET
       parameters:
-        "$limit": "1500"
+        "limit": "1500"
       response:
         format: json
         pagination:
           type: OFFSET
           pageSize: 1500
-          limitParam: "$limit"
-          offsetParam: "$offset"
+          limitParam: "limit"
+          offsetParam: "offset"
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -1150,17 +1154,20 @@ partitionedTables:
 
     source:
       type: http
+      # Annual dataset; one UUID per year, all 4 quarters included.
+      # Catalog: GET https://data.medicaid.gov/api/1/metastore/schemas/dataset/items?limit=100&filter[theme]=State+Drug+Utilization
+      # 2023=d890d3a9  2024=61729e5a-7aa8-448c-8903-ba3e0cd0ea3c  2025=158a1baa-5506-400a-8ec3-97756f0b0536
       url: "https://data.medicaid.gov/api/1/datastore/query/${MEDICAID_DRUG_UTIL_DATASET_ID:d890d3a9-6b00-43fd-8b31-fcba4c8e2909}/0"
       method: GET
       parameters:
-        "$limit": "8000"
+        "limit": "8000"
       response:
         format: json
         pagination:
           type: OFFSET
           pageSize: 8000
-          limitParam: "$limit"
-          offsetParam: "$offset"
+          limitParam: "limit"
+          offsetParam: "offset"
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -1171,6 +1178,8 @@ partitionedTables:
         sinceYear: "${GOVDATA_SINCE_YEAR:}"
         sinceQuarter: "${MEDICAID_SINCE_QUARTER:}"
         untilYear: "${GOVDATA_UNTIL_YEAR:}"
+        # DKAN ignores $where; conditions[] syntax needed for server-side filtering (not yet supported).
+        # Without server-side filtering, all 5.3M records are fetched from the annual dataset.
         filterParam: "$where"
         yearField: "year"
         quarterField: "quarter"
@@ -1374,7 +1383,7 @@ partitionedTables:
       months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
     comment: >
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
-      to physicians. Streams CSV from Socrata. payment_type dimension selects
+      to physicians. Fetches JSON from DKAN API. payment_type dimension selects
       general vs research vs ownership payments.
     columns:
       - name: program_year
@@ -1429,22 +1438,25 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_GENERAL_ID:xv45-c34k}.csv"
+      # CMS bulk CSV downloads — direct from download.cms.gov, streamed in batches.
+      # PGYR2023 is the most recent full year as of 2026. Update path when CMS releases PGYR2024.
+      url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_GNRL_PGYR2023_P01232026_01102026.csv"
       method: GET
       response:
-        format: json
+        format: csv
+        hasHeader: true
         pagination:
           type: CSV_STREAM
-          pageSize: 2000
+          pageSize: 5000
       urlRules:
-        - url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_RESEARCH_ID:e635-ppb7}.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_RSRCH_PGYR2023_P01232026_01102026.csv"
           variableMatch:
             payment_type: research
-        - url: "https://openpaymentsdata.cms.gov/resource/${CMS_OPEN_PAYMENTS_OWNERSHIP_ID:hp93-kiya}.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_OWNRSHP_PGYR2023_P01232026_01102026.csv"
           variableMatch:
             payment_type: ownership
       rateLimit:
-        requestsPerSecond: 0.5
+        requestsPerSecond: 1.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:

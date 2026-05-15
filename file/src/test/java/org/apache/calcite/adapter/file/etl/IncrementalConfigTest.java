@@ -85,7 +85,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", "date", null, null);
 
-    String filter = cfg.buildFilterValue("2024-01-01", null, null);
+    String filter = cfg.buildFilterValue("2024-01-01", null, null, null, null);
     assertEquals("date >= '2024-01-01'", filter);
   }
 
@@ -93,7 +93,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", "weekendingdate", null, null);
 
-    String filter = cfg.buildFilterValue("2024-03-15", null, null);
+    String filter = cfg.buildFilterValue("2024-03-15", null, null, null, null);
     assertEquals("weekendingdate >= '2024-03-15'", filter);
   }
 
@@ -103,7 +103,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", null);
 
-    String filter = cfg.buildFilterValue(null, "2023", null);
+    String filter = cfg.buildFilterValue(null, "2023", null, null, null);
     assertEquals("year >= '2023'", filter);
   }
 
@@ -111,7 +111,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", "quarter");
 
-    String filter = cfg.buildFilterValue(null, "2023", "3");
+    String filter = cfg.buildFilterValue(null, "2023", "3", null, null);
     assertEquals("(year > '2023') OR (year = '2023' AND quarter >= '3')", filter);
   }
 
@@ -119,7 +119,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", "quarter");
 
-    String filter = cfg.buildFilterValue(null, "2024", "1");
+    String filter = cfg.buildFilterValue(null, "2024", "1", null, null);
     assertEquals("(year > '2024') OR (year = '2024' AND quarter >= '1')", filter);
   }
 
@@ -129,7 +129,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "lastUpdatePostDate.gte", null, null, null);
 
-    String filter = cfg.buildFilterValue("2024-06-01", null, null);
+    String filter = cfg.buildFilterValue("2024-06-01", null, null, null, null);
     assertEquals("2024-06-01", filter);
   }
 
@@ -139,21 +139,21 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", "date", null, null);
 
-    assertNull(cfg.buildFilterValue(null, null, null));
+    assertNull(cfg.buildFilterValue(null, null, null, null, null));
   }
 
   @Test void buildFilterValueReturnsNullWhenEmptyDate() {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", "date", null, null);
 
-    assertNull(cfg.buildFilterValue("", "", ""));
+    assertNull(cfg.buildFilterValue("", "", "", null, null));
   }
 
   @Test void buildFilterValueReturnsNullWhenYearEmpty() {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", "quarter");
 
-    assertNull(cfg.buildFilterValue(null, "", "3"));
+    assertNull(cfg.buildFilterValue(null, "", "3", null, null));
   }
 
   // ── buildFilterValue: unquoted numeric style ──────────────────────────────
@@ -162,7 +162,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", null, false);
 
-    String filter = cfg.buildFilterValue(null, "2023", null);
+    String filter = cfg.buildFilterValue(null, "2023", null, null, null);
     assertEquals("year >= 2023", filter);
   }
 
@@ -170,7 +170,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", null, "year", "quarter", false);
 
-    String filter = cfg.buildFilterValue(null, "2023", "3");
+    String filter = cfg.buildFilterValue(null, "2023", "3", null, null);
     assertEquals("(year > 2023) OR (year = 2023 AND quarter >= 3)", filter);
   }
 
@@ -178,7 +178,7 @@ class IncrementalConfigTest {
     HttpSourceConfig.IncrementalConfig cfg = new HttpSourceConfig.IncrementalConfig(
         null, null, null, "$where", "year", null, null, false);
 
-    String filter = cfg.buildFilterValue("2024", null, null);
+    String filter = cfg.buildFilterValue("2024", null, null, null, null);
     assertEquals("year >= 2024", filter);
   }
 
@@ -191,7 +191,7 @@ class IncrementalConfigTest {
 
     HttpSourceConfig.IncrementalConfig cfg = HttpSourceConfig.IncrementalConfig.fromMap(map);
 
-    assertEquals("year >= 2023", cfg.buildFilterValue(null, "2023", null));
+    assertEquals("year >= 2023", cfg.buildFilterValue(null, "2023", null, null, null));
   }
 
   @Test void fromMapQuoteValuesTrueByDefault() {
@@ -202,7 +202,7 @@ class IncrementalConfigTest {
 
     HttpSourceConfig.IncrementalConfig cfg = HttpSourceConfig.IncrementalConfig.fromMap(map);
 
-    assertEquals("year >= '2023'", cfg.buildFilterValue(null, "2023", null));
+    assertEquals("year >= '2023'", cfg.buildFilterValue(null, "2023", null, null, null));
   }
 
   // ── HttpSourceConfig round-trip via fromMap ────────────────────────────────

@@ -102,6 +102,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** In-memory cache of table completions for the duration of this tracker instance. */
   private final Map<String, CachedCompletion> completionCache =
       new ConcurrentHashMap<String, CachedCompletion>();
+  /** Tables whose latest completion state is "cleared" (explicitly reset, not just absent). */
+  private final Set<String> clearedTables =
+      Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   /** True after preloadAllCompletions has run (even if no markers found). */
   private volatile boolean completionsPreloaded;
   /**
@@ -1496,6 +1499,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           if (!"complete".equals(state)) {
             LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — latest state is '{}', not complete",
                 pipelineName, queryElapsed, state);
+            if ("cleared".equals(state)) {
+              clearedTables.add(pipelineName);
+            }
             return null;
           }
           String configHash = rs.getString("config_hash");
@@ -1538,18 +1544,23 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     LOGGER.info("Preloading all table completion markers from S3 (year={})...", COMPLETION_YEAR);
     String glob = bucketPath + "/year=" + COMPLETION_YEAR
         + "/source_key=_table_complete/*.parquet";
-    String sql = "SELECT table_name, config_hash, signature, row_count, as_of "
+    String sql = "SELECT table_name, config_hash, signature, row_count, as_of, state "
         + "FROM ("
         + "  SELECT table_name, config_hash, signature, row_count, as_of, state,"
         + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
         + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true)"
         + "  WHERE phase = 'table_completion'"
-        + ") WHERE rn = 1 AND state = 'complete'";
+        + ") WHERE rn = 1 AND state IN ('complete', 'cleared')";
     int count = 0;
     try (Statement stmt = getConnection().createStatement();
          ResultSet rs = stmt.executeQuery(sql)) {
       while (rs.next()) {
         String tableName = rs.getString("table_name");
+        String state = rs.getString("state");
+        if ("cleared".equals(state)) {
+          clearedTables.add(tableName);
+          continue;
+        }
         String configHash = rs.getString("config_hash");
         String signature = rs.getString("signature");
         long rowCount = rs.getLong("row_count");
@@ -1588,8 +1599,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   @Override public void invalidateTableCompletion(String pipelineName) {
     completionCache.remove(pipelineName);
+    clearedTables.add(pipelineName);
     writeState("_table_complete", pipelineName, "table_completion", "cleared",
         0, null, null, null);
+  }
+
+  @Override public boolean wasTableCleared(String pipelineName) {
+    return clearedTables.contains(pipelineName);
   }
 
   @Override public void clearAllCompletions() {

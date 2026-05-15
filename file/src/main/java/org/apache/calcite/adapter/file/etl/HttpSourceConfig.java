@@ -16,11 +16,14 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Configuration for HTTP data source.
@@ -1307,19 +1310,21 @@ public class HttpSourceConfig {
   public static class RateLimitConfig {
     private final int requestsPerSecond;
     private final int[] retryOn;
+    private final int[] skipOn;
     private final int maxRetries;
     private final long retryBackoffMs;
 
-    private RateLimitConfig(int requestsPerSecond, int[] retryOn, int maxRetries,
+    private RateLimitConfig(int requestsPerSecond, int[] retryOn, int[] skipOn, int maxRetries,
         long retryBackoffMs) {
       this.requestsPerSecond = requestsPerSecond;
       this.retryOn = retryOn;
+      this.skipOn = skipOn;
       this.maxRetries = maxRetries;
       this.retryBackoffMs = retryBackoffMs;
     }
 
     public static RateLimitConfig defaults() {
-      return new RateLimitConfig(10, new int[]{429, 503}, 3, 1000);
+      return new RateLimitConfig(10, new int[]{429, 503}, new int[0], 3, 1000);
     }
 
     public int getRequestsPerSecond() {
@@ -1328,6 +1333,11 @@ public class HttpSourceConfig {
 
     public int[] getRetryOn() {
       return retryOn;
+    }
+
+    /** HTTP status codes that should silently skip the batch (no failure counted). */
+    public int[] getSkipOn() {
+      return skipOn;
     }
 
     public int getMaxRetries() {
@@ -1352,11 +1362,21 @@ public class HttpSourceConfig {
 
       int[] retryOn = new int[]{429, 503};
       Object retryOnObj = map.get("retryOn");
-      if (retryOnObj instanceof java.util.List) {
-        java.util.List<?> list = (java.util.List<?>) retryOnObj;
+      if (retryOnObj instanceof List) {
+        List<?> list = (List<?>) retryOnObj;
         retryOn = new int[list.size()];
         for (int i = 0; i < list.size(); i++) {
           retryOn[i] = ((Number) list.get(i)).intValue();
+        }
+      }
+
+      int[] skipOn = new int[0];
+      Object skipOnObj = map.get("skipOn");
+      if (skipOnObj instanceof List) {
+        List<?> list = (List<?>) skipOnObj;
+        skipOn = new int[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+          skipOn[i] = ((Number) list.get(i)).intValue();
         }
       }
 
@@ -1372,7 +1392,7 @@ public class HttpSourceConfig {
         backoff = ((Number) backoffObj).longValue();
       }
 
-      return new RateLimitConfig(rps, retryOn, maxRetries, backoff);
+      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff);
     }
   }
 
@@ -1573,7 +1593,7 @@ public class HttpSourceConfig {
         } else if (endObj instanceof String) {
           String endStr = (String) endObj;
           if ("current".equalsIgnoreCase(endStr)) {
-            yearEnd = java.time.Year.now().getValue();
+            yearEnd = Year.now().getValue();
           } else {
             yearEnd = VariableResolver.resolveInteger(endStr);
           }
@@ -1696,27 +1716,27 @@ public class HttpSourceConfig {
    * }</pre>
    */
   public static class WideToNarrowConfig {
-    private final java.util.List<String> keyColumns;
+    private final List<String> keyColumns;
     private final String valueColumnPattern;
     private final String keyColumnName;
     private final String valueColumnName;
-    private final java.util.Set<String> skipValues;
-    private final java.util.Map<String, String> columnMapping;
+    private final Set<String> skipValues;
+    private final Map<String, String> columnMapping;
 
-    private WideToNarrowConfig(java.util.List<String> keyColumns, String valueColumnPattern,
-        String keyColumnName, String valueColumnName, java.util.Set<String> skipValues,
-        java.util.Map<String, String> columnMapping) {
+    private WideToNarrowConfig(List<String> keyColumns, String valueColumnPattern,
+        String keyColumnName, String valueColumnName, Set<String> skipValues,
+        Map<String, String> columnMapping) {
       this.keyColumns = keyColumns != null
-          ? Collections.unmodifiableList(new java.util.ArrayList<String>(keyColumns))
+          ? Collections.unmodifiableList(new ArrayList<String>(keyColumns))
           : Collections.<String>emptyList();
       this.valueColumnPattern = valueColumnPattern;
       this.keyColumnName = keyColumnName != null ? keyColumnName : "Key";
       this.valueColumnName = valueColumnName != null ? valueColumnName : "Value";
       this.skipValues = skipValues != null
-          ? Collections.unmodifiableSet(new java.util.HashSet<String>(skipValues))
+          ? Collections.unmodifiableSet(new HashSet<String>(skipValues))
           : Collections.<String>emptySet();
       this.columnMapping = columnMapping != null
-          ? Collections.unmodifiableMap(new java.util.LinkedHashMap<String, String>(columnMapping))
+          ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(columnMapping))
           : Collections.<String, String>emptyMap();
     }
 
@@ -1729,10 +1749,10 @@ public class HttpSourceConfig {
         return null;
       }
 
-      java.util.List<String> keyColumns = new java.util.ArrayList<String>();
+      List<String> keyColumns = new ArrayList<String>();
       Object keyColumnsObj = map.get("keyColumns");
-      if (keyColumnsObj instanceof java.util.List) {
-        for (Object item : (java.util.List<?>) keyColumnsObj) {
+      if (keyColumnsObj instanceof List) {
+        for (Object item : (List<?>) keyColumnsObj) {
           keyColumns.add(String.valueOf(item));
         }
       }
@@ -1745,16 +1765,16 @@ public class HttpSourceConfig {
       String keyColumnName = (String) map.get("keyColumnName");
       String valueColumnName = (String) map.get("valueColumnName");
 
-      java.util.Set<String> skipValues = new java.util.HashSet<String>();
+      Set<String> skipValues = new HashSet<String>();
       Object skipValuesObj = map.get("skipValues");
-      if (skipValuesObj instanceof java.util.List) {
-        for (Object item : (java.util.List<?>) skipValuesObj) {
+      if (skipValuesObj instanceof List) {
+        for (Object item : (List<?>) skipValuesObj) {
           skipValues.add(String.valueOf(item));
         }
       }
 
       // Parse columnMapping: source column name -> output column name
-      java.util.Map<String, String> columnMapping = new java.util.LinkedHashMap<String, String>();
+      Map<String, String> columnMapping = new LinkedHashMap<String, String>();
       Object columnMappingObj = map.get("columnMapping");
       if (columnMappingObj instanceof Map) {
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) columnMappingObj).entrySet()) {
@@ -1769,7 +1789,7 @@ public class HttpSourceConfig {
     /**
      * Returns the list of columns to keep as-is (not unpivoted).
      */
-    public java.util.List<String> getKeyColumns() {
+    public List<String> getKeyColumns() {
       return keyColumns;
     }
 
@@ -1806,7 +1826,7 @@ public class HttpSourceConfig {
      * Returns the set of values to skip during unpivot.
      * Empty values are always skipped regardless of this setting.
      */
-    public java.util.Set<String> getSkipValues() {
+    public Set<String> getSkipValues() {
       return skipValues;
     }
 
@@ -1840,7 +1860,7 @@ public class HttpSourceConfig {
      *
      * @return Immutable map of source column names to output column names
      */
-    public java.util.Map<String, String> getColumnMapping() {
+    public Map<String, String> getColumnMapping() {
       return columnMapping;
     }
 
@@ -1896,34 +1916,34 @@ public class HttpSourceConfig {
   public static class DocumentSourceConfig {
     private final String metadataUrl;
     private final String documentUrl;
-    private final java.util.List<String> documentTypes;
+    private final List<String> documentTypes;
     private final String extractionType;
     private final String documentConverter;
     private final String responseTransformer;
-    private final java.util.List<String> extractionStrategies;
-    private final java.util.List<String> itemFilter;
+    private final List<String> extractionStrategies;
+    private final List<String> itemFilter;
     private final EmbeddingConfig embeddingConfig;
     private final Integer startYear;
     private final Integer endYear;
 
     private DocumentSourceConfig(String metadataUrl, String documentUrl,
-        java.util.List<String> documentTypes, String extractionType,
+        List<String> documentTypes, String extractionType,
         String documentConverter, String responseTransformer,
-        java.util.List<String> extractionStrategies, java.util.List<String> itemFilter,
+        List<String> extractionStrategies, List<String> itemFilter,
         EmbeddingConfig embeddingConfig, Integer startYear, Integer endYear) {
       this.metadataUrl = metadataUrl;
       this.documentUrl = documentUrl;
       this.documentTypes = documentTypes != null
-          ? Collections.unmodifiableList(new java.util.ArrayList<String>(documentTypes))
+          ? Collections.unmodifiableList(new ArrayList<String>(documentTypes))
           : Collections.<String>emptyList();
       this.extractionType = extractionType;
       this.documentConverter = documentConverter;
       this.responseTransformer = responseTransformer;
       this.extractionStrategies = extractionStrategies != null
-          ? Collections.unmodifiableList(new java.util.ArrayList<String>(extractionStrategies))
+          ? Collections.unmodifiableList(new ArrayList<String>(extractionStrategies))
           : Collections.<String>emptyList();
       this.itemFilter = itemFilter != null
-          ? Collections.unmodifiableList(new java.util.ArrayList<String>(itemFilter))
+          ? Collections.unmodifiableList(new ArrayList<String>(itemFilter))
           : Collections.<String>emptyList();
       this.embeddingConfig = embeddingConfig;
       this.startYear = startYear;
@@ -1941,29 +1961,29 @@ public class HttpSourceConfig {
       String documentConverter = (String) map.get("documentConverter");
       String responseTransformer = (String) map.get("responseTransformer");
 
-      java.util.List<String> documentTypes = null;
+      List<String> documentTypes = null;
       Object docTypesObj = map.get("documentTypes");
-      if (docTypesObj instanceof java.util.List) {
-        documentTypes = new java.util.ArrayList<String>();
-        for (Object item : (java.util.List<?>) docTypesObj) {
+      if (docTypesObj instanceof List) {
+        documentTypes = new ArrayList<String>();
+        for (Object item : (List<?>) docTypesObj) {
           documentTypes.add(String.valueOf(item));
         }
       }
 
-      java.util.List<String> extractionStrategies = null;
+      List<String> extractionStrategies = null;
       Object strategiesObj = map.get("extractionStrategies");
-      if (strategiesObj instanceof java.util.List) {
-        extractionStrategies = new java.util.ArrayList<String>();
-        for (Object item : (java.util.List<?>) strategiesObj) {
+      if (strategiesObj instanceof List) {
+        extractionStrategies = new ArrayList<String>();
+        for (Object item : (List<?>) strategiesObj) {
           extractionStrategies.add(String.valueOf(item));
         }
       }
 
-      java.util.List<String> itemFilter = null;
+      List<String> itemFilter = null;
       Object filterObj = map.get("itemFilter");
-      if (filterObj instanceof java.util.List) {
-        itemFilter = new java.util.ArrayList<String>();
-        for (Object item : (java.util.List<?>) filterObj) {
+      if (filterObj instanceof List) {
+        itemFilter = new ArrayList<String>();
+        for (Object item : (List<?>) filterObj) {
           itemFilter.add(String.valueOf(item));
         }
       }
@@ -2011,7 +2031,7 @@ public class HttpSourceConfig {
      * Returns the list of document file patterns to process.
      * For example: ["*.xml", "*.htm", "*_htm.xml"]
      */
-    public java.util.List<String> getDocumentTypes() {
+    public List<String> getDocumentTypes() {
       return documentTypes;
     }
 
@@ -2043,7 +2063,7 @@ public class HttpSourceConfig {
      * Returns the list of extraction strategies for text extraction.
      * For MD&A: ["regex_item7", "direct_search", "html_element_specific", "aggressive_fallback"]
      */
-    public java.util.List<String> getExtractionStrategies() {
+    public List<String> getExtractionStrategies() {
       return extractionStrategies;
     }
 
@@ -2051,7 +2071,7 @@ public class HttpSourceConfig {
      * Returns the list of item filters for 8-K filings.
      * For example: ["2.02"] to filter for Item 2.02 (Results of Operations).
      */
-    public java.util.List<String> getItemFilter() {
+    public List<String> getItemFilter() {
       return itemFilter;
     }
 

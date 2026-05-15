@@ -662,6 +662,8 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("all_processed")).thenReturn(null);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
+    // Simulate data existing so the "no Iceberg data" fast-path does not force reprocess
+    when(mockStorage.isDirectory(anyString())).thenReturn(true);
     // Return empty set => all are already processed
     when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());

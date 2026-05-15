@@ -1,6 +1,6 @@
 # Schema Relationships Guide
 
-This document provides a comprehensive reference for all relationships between GovData schemas, including entity relationship diagrams and the complete table inventory.
+This document is the reference for all relationships between GovData schemas, including entity relationship diagrams and the complete table inventory.
 
 > **Quick Navigation**
 > - [Cross-Schema Overview](#cross-schema-overview-erd) - High-level view of schema interconnections
@@ -459,7 +459,7 @@ erDiagram
 
 ## ECON & ECON_REFERENCE Combined ERD
 
-The ECON schema contains 28 fact tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank. The ECON_REFERENCE schema contains 7 dimension tables providing lookups for industry codes, geography mappings, and data catalogs. Together they form a comprehensive star schema for economic analytics.
+The ECON schema contains 28 fact tables for economic indicators from BLS, BEA, Treasury, FRED, and World Bank. The ECON_REFERENCE schema contains 7 dimension tables providing lookups for industry codes, geography mappings, and data catalogs. Together they form a star schema for economic analytics.
 
 ### ECON Reference Dimension Tables (7 tables)
 

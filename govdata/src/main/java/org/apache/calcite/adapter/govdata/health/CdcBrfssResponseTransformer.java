@@ -30,7 +30,8 @@ public class CdcBrfssResponseTransformer implements ResponseTransformer {
   @Override
   public String transform(String response, RequestContext context) {
     try {
-      JsonNode root = MAPPER.readTree(response);
+      String json = response;
+      JsonNode root = MAPPER.readTree(json);
       ArrayNode out = MAPPER.createArrayNode();
 
       if (!root.isArray()) {
@@ -47,8 +48,8 @@ public class CdcBrfssResponseTransformer implements ResponseTransformer {
         put(row, "response", text(record, "response"));
         put(row, "pct", text(record, "data_value"));
         put(row, "sample_size", text(record, "sample_size"));
-        put(row, "break_out", text(record, "breakout"));
-        put(row, "break_out_category", text(record, "breakoutcategory"));
+        put(row, "break_out", text(record, "break_out"));
+        put(row, "break_out_category", text(record, "break_out_category"));
         put(row, "type", "cdc_brfss");
         out.add(row);
       }

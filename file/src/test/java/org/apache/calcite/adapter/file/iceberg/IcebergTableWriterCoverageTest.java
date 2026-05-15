@@ -94,9 +94,7 @@ public class IcebergTableWriterCoverageTest {
   @Test
   void testConstructorWithThreeArgs() {
     Table table = createSimpleTable("ctor_three");
-    org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
-    conf.set("fs.s3a.access.key", "test-key");
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, conf);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
     assertEquals(table, writer.getTable());
   }

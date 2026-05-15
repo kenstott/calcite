@@ -4,6 +4,11 @@
 
 The ECON schema provides unified access to economic indicators from multiple U.S. government sources including the Bureau of Labor Statistics (BLS), Federal Reserve Economic Data (FRED), Treasury Direct, Bureau of Economic Analysis (BEA), and World Bank.
 
+There are two data sources in this domain:
+
+- **`econ`** — fact tables: employment, wages, GDP, JOLTS, FRED indicators, Treasury rates, BEA regional, World Bank
+- **`econ_reference`** — dimension/lookup tables: BLS series codes, BLS geographic mappings, NAICS sector codes, NIPA table catalog, BEA Regional LineCode catalog, FRED series catalog. Must be loaded before `econ` in any model that uses enriched views.
+
 ## Entity Relationship Diagram
 
 ```mermaid
@@ -195,7 +200,7 @@ erDiagram
     reference_fred_series ||--o{ fred_indicators : "series = series_id"
 ```
 
-The schema includes comprehensive regional economic data covering 1,845 BLS data series across state, metro, and Census region geographic levels:
+The schema covers regional economic data across 1,845 BLS data series at state, metro, and Census region geographic levels:
 - Regional CPI (4 regions), Metro CPI (27 metros)
 - State Industry Employment (1,122 series), State Wages (51 series)
 - Metro Industry Employment (594 series), Metro Wages (27 series)
@@ -437,7 +442,7 @@ Foreign keys:
 | total_annual_wages | BIGINT | Total annual wages ($) |
 | annual_avg_wkly_wage | INTEGER | Average weekly wage ($) |
 
-**Coverage**: Comprehensive county-level data with industry and ownership breakdowns
+**Coverage**: County-level data with industry and ownership breakdowns
 
 **Data Source**: BLS QCEW flat files (CSV format, ~500MB per year) downloaded and converted to Parquet
 
@@ -690,7 +695,7 @@ Primary key: `(industry_code, year, quarter)`
 | unit | VARCHAR | Unit of measurement |
 | frequency | VARCHAR | Annual or Quarterly |
 
-**Coverage**: Comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.
+**Coverage**: Economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies.
 
 ---
 
@@ -745,7 +750,7 @@ Primary key: `(country_code, indicator_code, year)`
 - `county_wages.county_fips` → `geo.counties.county_fips` (links to county geographic data)
 
 ### Complete Reference
-For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
+For the full relationship map including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
 
 ## API Configuration
 
@@ -952,7 +957,7 @@ ORDER BY region_name, metric;
 
 #### Cross-Schema Regional Economic Dashboard
 ```sql
--- Comprehensive state economic profile
+-- Full state economic profile
 SELECT
     s.state_name,
     s.region,
@@ -1008,7 +1013,7 @@ ORDER BY f1.date;
 ## Performance Tips
 
 1. **Use Date Filters**: Always filter by date range to reduce data scanned
-2. **Leverage Partitioning**: Data is partitioned by year for efficient queries
+2. **Use Year Partitioning**: Data is partitioned by year for efficient queries
 3. **Cache Frequent Queries**: Economic data changes slowly, cache results
 4. **Join on Indexed Columns**: Use series_id and date columns for joins
 5. **Aggregate Wisely**: Pre-aggregate in subqueries before joining

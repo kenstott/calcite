@@ -16,10 +16,14 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.calcite.adapter.file.etl.DimensionConfig;
 
 /**
  * Interface for tracking incremental processing of alternate partitions.
@@ -230,6 +234,30 @@ public interface IncrementalTracker {
     return filterUnprocessedWithEmptyTtl(alternateName, sourceTable, allCombinations, emptyResultTtlMillis);
   }
 
+  /**
+   * Filters combinations treating ALL entries (including those with rows) as expired after the TTL.
+   *
+   * <p>Unlike {@link #filterUnprocessedWithEmptyTtl}, which only re-queues zero-row entries,
+   * this method re-queues any entry whose tracker timestamp is older than {@code successTtlMillis}.
+   * Use this for annual-cadence tables that need periodic full refresh within a release window.
+   *
+   * @param alternateName    The alternate partition name
+   * @param sourceTable      The source table name
+   * @param allCombinations  All dimension combinations to check
+   * @param successTtlMillis TTL in ms; entries older than this are treated as unprocessed
+   * @return Set of combination indices that need processing
+   */
+  default Set<Integer> filterUnprocessedWithSuccessTtl(String alternateName, String sourceTable,
+      List<Map<String, String>> allCombinations, long successTtlMillis) {
+    Set<Integer> result = new HashSet<>();
+    for (int i = 0; i < allCombinations.size(); i++) {
+      if (!isProcessedWithTtl(alternateName, sourceTable, allCombinations.get(i), successTtlMillis)) {
+        result.add(i);
+      }
+    }
+    return result;
+  }
+
   // ===== Table Completion Tracking =====
 
   /**
@@ -389,6 +417,14 @@ public interface IncrementalTracker {
   void invalidateTableCompletion(String pipelineName);
 
   /**
+   * Returns true if this table was explicitly cleared (not just absent).
+   * A cleared table should skip Phase 1.5 self-healing and force-reprocess all combinations.
+   */
+  default boolean wasTableCleared(String pipelineName) {
+    return false;
+  }
+
+  /**
    * Clears ALL completion tracking state, forcing a complete fresh start.
    *
    * <p>This method removes all entries from both:
@@ -413,16 +449,16 @@ public interface IncrementalTracker {
    * @return Config hash string for comparison
    */
   static String computeConfigHash(
-      Map<String, org.apache.calcite.adapter.file.etl.DimensionConfig> dimensions) {
+      Map<String, DimensionConfig> dimensions) {
     if (dimensions == null || dimensions.isEmpty()) {
       return "empty";
     }
     // Build hash from sorted dimension names and their key properties
     int hash = 0;
-    java.util.List<String> sortedKeys = new java.util.ArrayList<>(dimensions.keySet());
-    java.util.Collections.sort(sortedKeys);
+    List<String> sortedKeys = new ArrayList<>(dimensions.keySet());
+    Collections.sort(sortedKeys);
     for (String key : sortedKeys) {
-      org.apache.calcite.adapter.file.etl.DimensionConfig dim = dimensions.get(key);
+      DimensionConfig dim = dimensions.get(key);
       hash = 31 * hash + key.hashCode();
       hash = 31 * hash + (dim.getType() != null ? dim.getType().hashCode() : 0);
       hash = 31 * hash + (dim.getStart() != null ? dim.getStart().hashCode() : 0);
@@ -452,8 +488,8 @@ public interface IncrementalTracker {
     sb.append("count:").append(combinations.size());
     if (!combinations.isEmpty()) {
       Map<String, String> first = combinations.get(0);
-      java.util.List<String> keys = new java.util.ArrayList<>(first.keySet());
-      java.util.Collections.sort(keys);
+      List<String> keys = new ArrayList<>(first.keySet());
+      Collections.sort(keys);
       for (String key : keys) {
         sb.append("|").append(key);
       }
