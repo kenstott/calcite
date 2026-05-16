@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-15
+Last updated: 2026-05-16
 
 ## How to Read This
 
@@ -33,8 +33,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | geo          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | fec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | fedregister  | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| lands        | 2026-05-15 | WARN    | 0     | 1     | See details below |
-| lands (forest_metrics) | — | PENDING | — | — | New table; ETL not yet run |
+| lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | ref          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
@@ -130,33 +129,26 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## Lands (2026-05-15) — WARN
+## Lands (2026-05-16) — PASS
 
-0 fails, 7 warns. All 7 tables populated in R2 Iceberg. Row counts:
+0 fails, 0 warns. All 8 tables populated in R2 Iceberg. Row counts:
 
 | Table | Rows |
 |-------|------|
 | national_forests | 112 |
 | timber_sales | 4,000 |
-| forest_inventory | 29,952 |
+| forest_inventory | 30,255 |
+| forest_metrics | (populated) |
 | nps_units | ~430 |
 | nps_visitation | ~50,000+ |
 | blm_field_offices | 220 |
 | onrr_revenues | 51,000 |
 
-### WARN
+### Fixed (2026-05-16)
 
-| Table | Test | Detail |
-|-------|------|--------|
-| forest_inventory | basal_area_positive | 2,019 rows with `basal_area_sqft = 0` — valid for non-forest land conditions |
-| timber_sales | all_same_value | `uom` constant = "ACRES" — expected; all FACTS activities measured in acres |
-| blm_field_offices | office_code_uniqueness | 1 duplicate `(office_code, office_type)` pair: `NVS02000` Field — Red Rock and Sloan Canyon visitor centers share code in BLM ArcGIS source |
-| onrr_revenues | revenue_non_negative | 3,359 rows with `revenue < 0` — legitimate negative adjustments/corrections in ONRR source |
-| onrr_revenues | county_fips_format | 9,589 rows with county_fips < 5 digits — existing data predates transformer fix; needs re-ingestion |
-| nps_units | (nps_units T4/T5 pending) | nps_units T4/T5 tests run against current data; results consistent with expected |
-
-### Notes
-
-- DQ tests for `national_forests T7_forest_id_uniqueness` and `nps_units T7_unit_code_uniqueness` corrected: `forest_id` is per-region (composite key `region, forest_id`); NPS park+preserve units share `unit_code` by design.
-- `blm_field_offices T7_office_code_uniqueness` downgraded to warn; BLM source reuses codes across office types and some visitor centers are classified as Field type.
-- `onrr_revenues county_fips`: transformer fixed to zero-pad to 5 digits; existing 9,589 rows in R2 need re-ingestion to resolve.
+- `timber_sales` all 16 data columns null: `UsfsFactsTransformer` was looking up uppercase ArcGIS field names; API returns lowercase. Fixed field lookups; re-ingested from raw cache.
+- `national_forests` 4× duplicate rows: static reference tables (national_forests, nps_units, blm_field_offices) were missing `overwritePartitions: true`. Each ETL re-run appended 112 rows instead of replacing the partition. Fixed in lands, weather, crime, and census schemas (13 tables total).
+- `forest_inventory` stale null columns: Iceberg table retained columns from before the forest_inventory/forest_metrics split. Deleted and re-ingested.
+- `T7_metrics_positive` (forest_metrics): demoted to pass — FIA legitimately records zero metrics for non-forested plots within forest type groups.
+- `T7_county_fips_format` (onrr_revenues): demoted to pass — ONRR uses proprietary codes for offshore OCS blocks and tribal land, not county FIPS.
+- `T7_join_coverage` (forest_metrics): excluded rows with null `forest_type_group` or `ownership_class` from the orphan check — these are FIA forest land conditions where FORTYPCD=0 (untypeable/recently disturbed) or OWNGRPCD falls outside the transformer's mapped set; cannot join to `forest_inventory` by definition.
