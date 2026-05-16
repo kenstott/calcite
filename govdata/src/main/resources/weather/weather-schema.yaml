@@ -353,6 +353,7 @@ partitionedTables:
         tableName: nws_stations
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -451,6 +452,7 @@ partitionedTables:
         tableName: nws_alerts
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -1001,6 +1003,7 @@ partitionedTables:
         tableName: ghcnd_stations_with_county
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -1469,6 +1472,7 @@ partitionedTables:
         tableName: climate_normals_monthly
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 

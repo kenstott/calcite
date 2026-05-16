@@ -167,6 +167,7 @@ partitionedTables:
         tableName: national_forests
         catalogType: hadoop
         runCompaction: false
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # TIMBER HARVEST — USDA FS FACTS timber harvest activities (EDW_TimberHarvest_01)
@@ -518,6 +519,7 @@ partitionedTables:
         tableName: nps_units
         catalogType: hadoop
         runCompaction: false
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # NPS VISITATION — NPS IRMA monthly visitation statistics
@@ -652,6 +654,7 @@ partitionedTables:
         tableName: blm_field_offices
         catalogType: hadoop
         runCompaction: false
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # ONRR REVENUES — ONRR federal/tribal mineral royalties (bulk annual CSV)

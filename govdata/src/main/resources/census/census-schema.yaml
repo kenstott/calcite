@@ -3264,6 +3264,7 @@ partitionedTables:
         tableName: qwi_employment
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -3450,6 +3451,7 @@ partitionedTables:
         tableName: trade_exports
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -3524,6 +3526,7 @@ partitionedTables:
         tableName: trade_imports
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 

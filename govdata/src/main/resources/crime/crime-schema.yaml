@@ -304,6 +304,7 @@ partitionedTables:
         tableName: cde_agencies
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -935,6 +936,7 @@ partitionedTables:
         tableName: cde_trends
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -1112,6 +1114,7 @@ partitionedTables:
         tableName: bjs_nibrs_estimates
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
