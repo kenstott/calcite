@@ -32,22 +32,22 @@ import org.slf4j.LoggerFactory;
  *   "features": [
  *     {
  *       "attributes": {
- *         "FACTS_ID": "OR095000008",
- *         "SALE_NAME": "Desolation Salvage",
- *         "FY_COMPLETED": "2022",
- *         "FY_AWARDED": "2021",
- *         "ADMIN_FOREST_CODE": "0601",
- *         "ADMIN_FOREST_NAME": "Willamette National Forest",
- *         "ADMIN_DISTRICT_CODE": "0605",
- *         "ADMIN_DISTRICT_NAME": "McKenzie River Ranger District",
- *         "STATE_ABBR": "OR",
- *         "GIS_ACRES": 45.3,
- *         "ACTIVITY_CODE": "6101",
- *         "ACTIVITY_NAME": "Timber Sale Preparation",
- *         "TREATMENT_TYPE": "Salvage",
- *         "NBR_UNITS_ACCOMPLISHED": 450.0,
- *         "UOM": "CCF",
- *         "COST_PER_UOM": 85.0
+ *         "facts_id": "OR095000008",
+ *         "sale_name": "Desolation Salvage",
+ *         "fy_completed": "2022",
+ *         "fy_awarded": "2021",
+ *         "admin_forest_code": "0601",
+ *         "admin_forest_name": "Willamette National Forest",
+ *         "admin_district_code": "0605",
+ *         "admin_district_name": "McKenzie River Ranger District",
+ *         "state_abbr": "OR",
+ *         "gis_acres": 45.3,
+ *         "activity_code": "6101",
+ *         "activity_name": "Timber Sale Preparation",
+ *         "treatment_type": "Salvage",
+ *         "nbr_units_accomplished": 450.0,
+ *         "uom": "CCF",
+ *         "cost_per_uom": 85.0
  *       }
  *     }
  *   ]
@@ -84,22 +84,22 @@ public class UsfsFactsTransformer implements ResponseTransformer {
         }
 
         ObjectNode row = MAPPER.createObjectNode();
-        row.put("facts_id", textOrNull(attrs, "FACTS_ID"));
-        row.put("sale_name", textOrNull(attrs, "SALE_NAME"));
-        row.put("fy_completed", parseIntFromString(attrs, "FY_COMPLETED"));
-        row.put("fy_awarded", parseIntFromString(attrs, "FY_AWARDED"));
-        row.put("forest_code", textOrNull(attrs, "ADMIN_FOREST_CODE"));
-        row.put("forest_name", textOrNull(attrs, "ADMIN_FOREST_NAME"));
-        row.put("district_code", textOrNull(attrs, "ADMIN_DISTRICT_CODE"));
-        row.put("district_name", textOrNull(attrs, "ADMIN_DISTRICT_NAME"));
-        row.put("state_abbr", textOrNull(attrs, "STATE_ABBR"));
-        row.put("gis_acres", doubleOrNull(attrs, "GIS_ACRES"));
-        row.put("activity_code", textOrNull(attrs, "ACTIVITY_CODE"));
-        row.put("activity_name", textOrNull(attrs, "ACTIVITY_NAME"));
-        row.put("treatment_type", textOrNull(attrs, "TREATMENT_TYPE"));
-        row.put("units_accomplished", doubleOrNull(attrs, "NBR_UNITS_ACCOMPLISHED"));
-        row.put("uom", textOrNull(attrs, "UOM"));
-        row.put("cost_per_uom", doubleOrNull(attrs, "COST_PER_UOM"));
+        row.put("facts_id", textOrNull(attrs, "facts_id"));
+        row.put("sale_name", textOrNull(attrs, "sale_name"));
+        row.put("fy_completed", parseIntFromString(attrs, "fy_completed"));
+        row.put("fy_awarded", parseIntFromString(attrs, "fy_awarded"));
+        row.put("forest_code", textOrNull(attrs, "admin_forest_code"));
+        row.put("forest_name", textOrNull(attrs, "admin_forest_name"));
+        row.put("district_code", textOrNull(attrs, "admin_district_code"));
+        row.put("district_name", textOrNull(attrs, "admin_district_name"));
+        row.put("state_abbr", textOrNull(attrs, "state_abbr"));
+        row.put("gis_acres", doubleOrNull(attrs, "gis_acres"));
+        row.put("activity_code", textOrNull(attrs, "activity_code"));
+        row.put("activity_name", textOrNull(attrs, "activity_name"));
+        row.put("treatment_type", textOrNull(attrs, "treatment_type"));
+        row.put("units_accomplished", doubleOrNull(attrs, "nbr_units_accomplished"));
+        row.put("uom", textOrNull(attrs, "uom"));
+        row.put("cost_per_uom", doubleOrNull(attrs, "cost_per_uom"));
         result.add(row);
       }
 
