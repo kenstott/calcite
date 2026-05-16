@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.patents;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,7 @@ class PatentsAllTablesSmokeTest {
   private static String warehouse;
   private static String operatingDir;
   private static String cacheDir;
+  private static File tmpBase;
 
   @BeforeAll static void setup() throws Exception {
     assumeTrue("true".equalsIgnoreCase(TestEnvironmentLoader.getEnv("PATENTS_INTEGRATION_TESTS")),
@@ -89,7 +91,7 @@ class PatentsAllTablesSmokeTest {
 
     TestEnvironmentLoader.ensureLoaded();
 
-    File tmpBase = Files.createTempDirectory("patents_smoke_").toFile();
+    tmpBase = Files.createTempDirectory("patents_smoke_").toFile();
     warehouse = new File(tmpBase, "parquet").getAbsolutePath();
     operatingDir = new File(tmpBase, "op").getAbsolutePath();
     new File(operatingDir).mkdirs();
@@ -103,6 +105,22 @@ class PatentsAllTablesSmokeTest {
     LOG.info("Smoke year:    {}", SMOKE_YEAR);
     LOG.info("Warehouse:     {}", warehouse);
     LOG.info("Cache dir:     {}", cacheDir);
+  }
+
+  @AfterAll static void teardown() {
+    if (tmpBase != null && tmpBase.exists()) {
+      deleteRecursively(tmpBase);
+    }
+  }
+
+  private static void deleteRecursively(File f) {
+    File[] children = f.listFiles();
+    if (children != null) {
+      for (File child : children) {
+        deleteRecursively(child);
+      }
+    }
+    f.delete();
   }
 
   // ── patent_grants ────────────────────────────────────────────────────────────
