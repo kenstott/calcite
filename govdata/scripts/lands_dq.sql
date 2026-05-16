@@ -673,7 +673,7 @@ FROM (
 INSERT INTO dq_results
 SELECT 'lands', 'forest_metrics', 'T7_join_coverage',
   CASE WHEN orphans = 0 THEN 'pass' ELSE 'warn' END,
-  orphans, 0, 'forest_metrics fully-keyed rows with no matching forest_inventory row'
+  orphans, 0, 'forest_metrics rows with classified type+ownership and no matching forest_inventory row'
 FROM (
   SELECT COUNT(*) AS orphans
   FROM iceberg_scan('s3://govdata-parquet-v1/forest_metrics', allow_moved_paths := true) fm
