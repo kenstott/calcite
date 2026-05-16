@@ -169,19 +169,13 @@ public class GovDataDriver extends Driver {
     String endYear = extractParameter(paramString, "endYear");
     String dataDirectory = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
 
-    // SEC requires ciks when autoDownload is intended; other single sources are read-only
-    boolean isSec = dataSource.equalsIgnoreCase("sec")
-        || dataSource.equalsIgnoreCase("edgar");
-    if (isSec && ciks == null) {
-      throw new IllegalArgumentException(
-          "SEC data source requires 'ciks' parameter (tickers, groups, or CIKs)");
-    }
-
-    boolean autoDownload = isSec && ciks != null;
     String schemaName = dataSource.toUpperCase();
+    boolean isS3 = dataDirectory != null && dataDirectory.startsWith("s3://");
     String directoryJson = dataDirectory != null
         ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
         : "";
+    String s3ConfigJson = buildS3ConfigJson(dataDirectory);
+    String engineJson = isS3 ? "      \"executionEngine\": \"duckdb\",\n" : "";
     String ciksJson = ciks != null ? "      \"ciks\": \"" + ciks + "\",\n" : "";
     String startYearJson = startYear != null ? "      \"startYear\": " + startYear + ",\n" : "";
     String endYearJson = endYear != null ? "      \"endYear\": " + endYear + ",\n" : "";
@@ -198,9 +192,10 @@ public class GovDataDriver extends Driver {
         + ciksJson
         + startYearJson
         + endYearJson
-        + "      \"autoDownload\": " + autoDownload + ",\n"
+        + engineJson
+        + "      \"autoDownload\": false,\n"
         + "      \"testMode\": false,\n"
-        + "      \"ephemeralCache\": true" + directoryJson + "\n"
+        + "      \"ephemeralCache\": true" + directoryJson + s3ConfigJson + "\n"
         + "    }\n"
         + "  }]\n"
         + "}";
@@ -211,12 +206,16 @@ public class GovDataDriver extends Driver {
   private String createMultiSourceModel(String paramString, String[] sources)
       throws IOException {
     String dataDirectory = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
+    String s3ConfigJson = buildS3ConfigJson(dataDirectory);
+
+    boolean isS3 = dataDirectory != null && dataDirectory.startsWith("s3://");
+    String engineJson = isS3 ? "      \"executionEngine\": \"duckdb\",\n" : "";
 
     List<String> schemaEntries = new ArrayList<String>();
     for (String dataSource : sources) {
       String schemaName = dataSource.toUpperCase();
       String directoryJson = dataDirectory != null
-          ? ",\n      \"directory\": \"" + dataDirectory + "\""
+          ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
           : "";
       schemaEntries.add(
           "  {\n"
@@ -225,9 +224,10 @@ public class GovDataDriver extends Driver {
           + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
           + "    \"operand\": {\n"
           + "      \"dataSource\": \"" + dataSource.toLowerCase() + "\",\n"
+          + engineJson
           + "      \"autoDownload\": false,\n"
           + "      \"testMode\": false,\n"
-          + "      \"ephemeralCache\": false" + directoryJson + "\n"
+          + "      \"ephemeralCache\": false" + directoryJson + s3ConfigJson + "\n"
           + "    }\n"
           + "  }");
     }
@@ -253,11 +253,35 @@ public class GovDataDriver extends Driver {
     return writeTempModel("govdata-multi-model", modelJson);
   }
 
+  /**
+   * Builds an inline s3Config/storageConfig JSON fragment when the resolved directory is an
+   * S3 URI.  Uses ${VAR} references so GovDataSchemaFactory.resolveS3Config() resolves them
+   * at runtime — matching the model-r2.json pattern.
+   * Returns "" when the directory is not S3.
+   */
+  private String buildS3ConfigJson(String dataDirectory) {
+    if (dataDirectory == null || !dataDirectory.startsWith("s3://")) {
+      return "";
+    }
+
+    String credBlock = "        \"accessKeyId\": \"${AWS_ACCESS_KEY_ID}\","
+        + "\n        \"secretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\","
+        + "\n        \"endpoint\": \"${AWS_ENDPOINT_OVERRIDE}\","
+        + "\n        \"region\": \"${AWS_REGION}\"";
+
+    return ",\n      \"s3Config\": {\n" + credBlock + "\n      }"
+        + ",\n      \"storageConfig\": {\n" + credBlock + "\n      }";
+  }
+
   private String resolveDataDirectory(String explicit) {
     if (explicit != null && !explicit.isEmpty()) {
       return explicit;
     }
-    return System.getProperty("user.home") + "/govdata";
+    String envDir = System.getenv("GOVDATA_PARQUET_DIR");
+    if (envDir != null && !envDir.isEmpty()) {
+      return envDir;
+    }
+    return "s3://govdata-parquet-v1";
   }
 
   private String writeTempModel(String prefix, String modelJson) throws IOException {
