@@ -739,7 +739,12 @@ public class HttpSource implements DataSource {
       }
       try {
         if (cacheGenerator == null) {
-          tempCacheFile = File.createTempFile("http-raw-cache-", ".json");
+          File destParent = new File(rawCacheFilePath).getParentFile();
+          if (destParent != null) {
+            destParent.mkdirs();
+          }
+          tempCacheFile = File.createTempFile("http-raw-cache-", ".json", destParent);
+          tempCacheFile.deleteOnExit();
           tempCacheStream = new FileOutputStream(tempCacheFile);
           cacheGenerator = OBJECT_MAPPER.getFactory().createGenerator(tempCacheStream,
               com.fasterxml.jackson.core.JsonEncoding.UTF8);
