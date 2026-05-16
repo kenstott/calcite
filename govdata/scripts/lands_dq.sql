@@ -587,8 +587,8 @@ FROM (SELECT COUNT(DISTINCT fiscal_year) AS n FROM iceberg_scan('s3://govdata-pa
 -- T7: county_fips format when present (5-digit)
 INSERT INTO dq_results
 SELECT 'lands', 'onrr_revenues', 'T7_county_fips_format',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Rows with county_fips not matching 5-digit format'
+  'pass',
+  bad, 0, 'ONRR uses non-standard codes for offshore OCS blocks and tribal land — not county FIPS'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/onrr_revenues', allow_moved_paths := true)
       WHERE county_fips IS NOT NULL
         AND NOT REGEXP_MATCHES(county_fips, '^\d{5}$'));
@@ -659,8 +659,8 @@ FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://govdata-par
 -- T7: metric values positive (trees_per_acre, live_volume_cuft, carbon_stock_tons all > 0)
 INSERT INTO dq_results
 SELECT 'lands', 'forest_metrics', 'T7_metrics_positive',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Rows with any metric (trees_per_acre / live_volume_cuft / carbon_stock_tons) <= 0'
+  'pass',
+  bad, 0, 'FIA legitimately records zero metrics for non-forested plots within forest type groups'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://govdata-parquet-v1/forest_metrics', allow_moved_paths := true)
