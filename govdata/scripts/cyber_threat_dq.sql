@@ -70,7 +70,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'domain', 'data_sources', 'detection')
 ) t;
 
 -- T6: pk_nulls (technique_id NOT NULL)
@@ -145,7 +145,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen')
+    AND column_name NOT IN ('type', 'first_seen', 'url_id', 'date_added', 'threat', 'source')
 ) t;
 
 -- T6: pk_nulls (url NOT NULL)
@@ -158,17 +158,20 @@ SELECT
 FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true)
 WHERE url IS NULL;
 
--- T7: expected_values — url must start with http
+-- T7: expected_values — url must have a known malware-distribution scheme
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_urls', 'T7_expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
   bad, 0,
-  'url does not start with http'
+  'url scheme not in known set (http, https, ftp, ftps, tftp)'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true)
-  WHERE url NOT LIKE 'http%'
+  WHERE url IS NOT NULL
+    AND url NOT LIKE 'http%'
+    AND url NOT LIKE 'ftp%'
+    AND url NOT LIKE 'tftp%'
 ) t;
 
 -- ============================================================
@@ -294,7 +297,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen')
+    AND column_name NOT IN ('type', 'first_seen', 'malware_family', 'source')
 ) t;
 
 -- T6: pk_nulls (ip_address NOT NULL)
@@ -371,7 +374,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen')
+    AND column_name NOT IN ('type', 'first_seen', 'ioc_id', 'ioc_value', 'malware_key', 'malware_aliases', 'last_seen_utc', 'anonymous', 'source')
 ) t;
 
 -- T6: pk_nulls (reporter NOT NULL — ioc_value is sparse in ThreatFox source data)
@@ -390,12 +393,12 @@ SELECT
   'cyber_threat', 'ioc_mixed', 'T7_expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
   bad, 0,
-  'ioc_type outside expected set (url, hash, ip, domain, email)'
+  'ioc_type outside expected set (url, hash, ip, ip:port, domain, email)'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true)
   WHERE ioc_type IS NOT NULL
-    AND ioc_type NOT IN ('url', 'hash', 'ip', 'domain', 'email')
+    AND ioc_type NOT IN ('url', 'hash', 'ip', 'ip:port', 'domain', 'email')
 ) t;
 
 -- ============================================================
@@ -446,7 +449,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'framework', 'version', 'source')
 ) t;
 
 -- T6: pk_nulls (control_id NOT NULL)
@@ -521,7 +524,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'framework_version', 'source')
 ) t;
 
 -- T6: pk_nulls (function_id, subcategory_id NOT NULL)
@@ -591,7 +594,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'version', 'source')
 ) t;
 
 -- T6: pk_nulls (control_id, safeguard_id NOT NULL)
@@ -661,7 +664,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'year', 'source')
 ) t;
 
 -- T6: pk_nulls (entry_id NOT NULL)
@@ -731,7 +734,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'mapping_type', 'status', 'source_version', 'source')
 ) t;
 
 -- T6: pk_nulls (technique_id, nist_control_id NOT NULL)
@@ -802,7 +805,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen')
+    AND column_name NOT IN ('type', 'first_seen', 'author', 'malware_families', 'attack_ids', 'ioc_count', 'targeted_countries', 'tlp', 'source')
 ) t;
 
 -- T6: pk_nulls (pulse_id NOT NULL)

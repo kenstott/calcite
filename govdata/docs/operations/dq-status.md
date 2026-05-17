@@ -70,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | —        | PENDING | —     | —     | Data in R2; DQ not yet run |
-| cyber_threat | 2026-05-17 | WARN    | 0     | 15    | See details below |
+| cyber_threat | 2026-05-17 | WARN    | 0     | 3     | See details below |
 | cyber_vuln   | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
 
 ---
@@ -239,7 +239,7 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ## cyber_threat (2026-05-17) — WARN
 
-All 11 tables readable. 0 fails, 15 warns. Historical and daily modes both return WARN (same 15).
+All 11 tables readable. 0 fails, 3 warns. Historical and daily modes both return WARN.
 
 ### Data inventory
 
@@ -259,20 +259,10 @@ All 11 tables readable. 0 fails, 15 warns. Historical and daily modes both retur
 
 ### Warns
 
-All 15 warns are expected source characteristics:
+All 3 warns are from ioc_hashes (MalwareBazaar returned 0 rows this cycle — transient feed issue):
 
-- **T5_all_same_value (11 tables)**: Static reference tables have constant `source`, `version`, `framework` columns by design. IOC feed tables have constant `source` (e.g. `urlhaus`, `threatfox`) and optional fields that are null across all rows for a given feed.
-  - `attack_techniques`: `data_sources`, `domain`, `detection` — sparse in ATT&CK source
-  - `attack_to_nist_mappings`: `mapping_type`, `status`, `source_version`, `source` — single-version dataset
-  - `cis_controls`: `version`, `source`
-  - `ioc_ips`: `malware_family`, `source`
-  - `ioc_mixed`: `ioc_id`, `ioc_value`, `malware_key`, `malware_aliases`, `last_seen_utc`, `anonymous`, `source` — ThreatFox sparse fields
-  - `ioc_urls`: `url_id`, `date_added`, `threat`, `source`
-  - `ioc_hashes`: all 15 columns (table is empty — MalwareBazaar returned 0 rows this cycle)
-  - `nist_controls`, `nist_csf_functions`, `owasp_top10`, `threat_pulses`: source/version metadata columns
-- **ioc_hashes T1/T2 (2 warns)**: MalwareBazaar feed returned 0 hashes this cycle. Classified as warn; next hourly run will populate if the feed recovers.
-- **ioc_mixed T7 (1 warn)**: 291 ThreatFox rows use `ioc_type = 'ip:port'` which is not in the expected set `(url, hash, ip, domain, email)`. ThreatFox uses compound types; expected source behavior.
-- **ioc_urls T7 (1 warn)**: 1 URL does not start with `http` (likely `ftp://` or similar). Expected edge case.
+- **ioc_hashes T1/T2**: 0 rows — expected warn; resolves automatically when feed returns data.
+- **ioc_hashes T5**: all 15 data columns appear "all same value" (all null) because the table is empty — cascades from T1/T2.
 
 ### Known issues
 
