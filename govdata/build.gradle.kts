@@ -219,4 +219,4 @@ tasks.register<JavaExec>("etlRunner") {
     // Pass through any command line arguments
     // Usage: ./gradlew :govdata:etlRunner --args="--model path/to/model.json"
 }
-// publish trigger: GovDataDriver S3/DuckDB engine injection + Python test script
+// publish trigger: expose INFORMATION_SCHEMA via GovDataSchemaFactory
