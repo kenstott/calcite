@@ -168,6 +168,25 @@ log_info "$WORKER_ID: log: $LOG_FILE"
 
 DQ_EXIT=0
 {
+  # DuckDB 1.5.2+ disables Iceberg version guessing by default; enable it for our internal tables.
+  # DuckDB 1.5.2+ ignores SET s3_* for iceberg and auto-loads ~/.aws/credentials instead.
+  # CREATE SECRET overrides that and routes all S3/iceberg traffic to R2.
+  _r2_endpoint="${AWS_ENDPOINT_OVERRIDE:-21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com}"
+  _r2_endpoint="${_r2_endpoint#https://}"
+  cat <<_DUCKDB_PREAMBLE_
+SET unsafe_enable_version_guessing = true;
+SET http_timeout = 300000;
+SET http_retries = 3;
+CREATE OR REPLACE SECRET r2 (
+    TYPE s3,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    ENDPOINT '${_r2_endpoint}',
+    REGION 'auto',
+    URL_STYLE 'path'
+);
+_DUCKDB_PREAMBLE_
+
   # Substitute env vars referenced in the DQ SQL (credentials, endpoints)
   envsubst < "$DQ_SQL"
 

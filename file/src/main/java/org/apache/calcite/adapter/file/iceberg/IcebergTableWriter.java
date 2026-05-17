@@ -969,7 +969,7 @@ public class IcebergTableWriter {
         try {
           compactPartition(smallFiles, targetFileSizeBytes);
           compactedPartitions++;
-        } catch (Exception e) {
+        } catch (Throwable e) {
           LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
         }
       }

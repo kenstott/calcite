@@ -461,7 +461,8 @@ generate_single_schema_model() {
       ${_YEAR_RANGE}"
       ;;
     fec)
-      operand_body="\"dataSource\": \"fec\""
+      operand_body="\"dataSource\": \"fec\",
+      ${_YEAR_RANGE}"
       ;;
     fedregister)
       operand_body="\"dataSource\": \"fedregister\",
@@ -561,9 +562,32 @@ ENDJSON
 }
 
 # Generate a FEC (campaign finance) model JSON
-# Usage: generate_fec_model <output_file>
+# Usage: generate_fec_model <output_file> [start_year] [end_year] [force_tables_csv]
+#   start_year       Filters fec_election_cycles list to years >= start_year (via GOVDATA_START_YEAR).
+#                    Daily runs pass the current cycle year (e.g. 2026); historical omits or passes 2010.
+#   force_tables_csv Comma-separated table names to force re-ingest (forceReprocessTables operand).
 generate_fec_model() {
   local output_file=$1
+  local start_year=${2:-}
+  local end_year=${3:-}
+  local force_tables_csv=${4:-}
+
+  local start_year_json=""
+  [ -n "$start_year" ] && start_year_json="
+      \"startYear\": ${start_year},"
+
+  local end_year_json=""
+  [ -n "$end_year" ] && end_year_json="
+      \"endYear\": ${end_year},"
+
+  local force_tables_json=""
+  if [ -n "$force_tables_csv" ]; then
+    local tables_array
+    tables_array=$(echo "$force_tables_csv" | sed 's/,/","/g')
+    force_tables_json="
+      \"forceReprocessTables\": [\"${tables_array}\"],"
+  fi
+
   cat > "$output_file" <<ENDJSON
 {
   "version": "1.0",
@@ -575,7 +599,7 @@ generate_fec_model() {
     "operand": {
       "dataSource": "fec",
       "autoDownload": true,
-      "directory": "${GOVDATA_PARQUET_DIR}",
+      "directory": "${GOVDATA_PARQUET_DIR}",${start_year_json}${end_year_json}${force_tables_json}
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "trackerBackend": "s3",
       "trackerConfig": {

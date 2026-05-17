@@ -2,7 +2,7 @@
 """
 Validates the GovData fat JAR via JPype:
   - JDBC metadata: schemas, tables, columns, PKs, FKs
-  - SQL query through metadata.TABLES
+  - SQL query through metadata.TABLES (Calcite internal — INFORMATION_SCHEMA not available)
   - SQL query returning real data from sec.filing_metadata
 
 Usage:
@@ -129,6 +129,10 @@ print("  PASS")
 
 # ==============================================================================
 # Test 5 — SQL query via metadata.TABLES
+# NOTE: Calcite's govdata adapter does not expose INFORMATION_SCHEMA via SQL.
+# The standard approach (Tests 1-4) is to use JDBC DatabaseMetaData methods.
+# For SQL-based discovery, Calcite exposes a metadata virtual schema instead,
+# with camelCase column names (tableSchem, tableName) mirroring the JDBC API.
 # ==============================================================================
 
 print("\nTest 5: SQL query via metadata.TABLES ...")

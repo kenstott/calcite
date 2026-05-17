@@ -417,7 +417,7 @@ public class HttpSource implements DataSource {
       if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
           || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
           && responseTransformer == null) {
-        char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
+        char delimiter = resolveDelimiter(respConfig);
         return parseDelimitedResponseStreaming(cachePath, delimiter);
       }
       // For CSV/TSV with a per-record transformer, stream rows and apply transformer per-row

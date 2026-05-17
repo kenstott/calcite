@@ -28,7 +28,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fec}"
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/fec"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Federal Election Commission campaign finance data. Contains candidate and
@@ -53,6 +53,7 @@ dimension_templates:
     - "2020"
     - "2022"
     - "2024"
+    - "2026"
 
 # ============================================================================
 # BULK DOWNLOADS
@@ -62,52 +63,66 @@ bulkDownloads:
 
   # Candidates master file — all federal candidates
   fec_candidates:
-    cachePattern: "type=fec_bulk/year={year}/cn{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/cn{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cn{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Committees master file — all political committees
   fec_committees:
-    cachePattern: "type=fec_bulk/year={year}/cm{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/cm{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cm{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Candidate-Committee linkages
   fec_linkages:
-    cachePattern: "type=fec_bulk/year={year}/ccl{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/ccl{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/ccl{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Individual contributions (largest file, ~1-2GB per cycle)
   fec_individual:
-    cachePattern: "type=fec_bulk/year={year}/indiv{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/indiv{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/indiv{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Committee-to-candidate contributions
   fec_pas2:
-    cachePattern: "type=fec_bulk/year={year}/pas2{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/pas2{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/pas2{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Inter-committee transactions (other)
   fec_oth:
-    cachePattern: "type=fec_bulk/year={year}/oth{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/oth{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oth{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
   # Operating expenditures
   fec_oppexp:
-    cachePattern: "type=fec_bulk/year={year}/oppexp{yearSuffix}.zip"
+    cachePattern: "fec/type=fec_bulk/year={year}/oppexp{yearSuffix}.zip"
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oppexp{yearSuffix}.zip"
     dimensions:
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -334,7 +349,9 @@ partitionedTables:
     dimensions:
       type:
         - candidates
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -349,6 +366,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -465,7 +484,9 @@ partitionedTables:
     dimensions:
       type:
         - committees
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -480,6 +501,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -544,7 +567,9 @@ partitionedTables:
     dimensions:
       type:
         - candidate_committee_linkages
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -559,6 +584,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -695,7 +722,9 @@ partitionedTables:
     dimensions:
       type:
         - individual_contributions
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -710,12 +739,14 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
-        compactionMinFiles: 5
+        compactionMinFiles: 2000
 
     vectorize:
       enabled: true
@@ -854,7 +885,9 @@ partitionedTables:
     dimensions:
       type:
         - committee_contributions
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -869,6 +902,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1013,7 +1048,9 @@ partitionedTables:
     dimensions:
       type:
         - intercommittee_transactions
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1028,6 +1065,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1191,7 +1230,9 @@ partitionedTables:
     dimensions:
       type:
         - operating_expenditures
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1206,6 +1247,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1356,7 +1399,9 @@ partitionedTables:
     dimensions:
       type:
         - independent_expenditures
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1371,6 +1416,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1491,7 +1538,9 @@ partitionedTables:
     dimensions:
       type:
         - electioneering_communications
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1506,6 +1555,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1584,12 +1635,12 @@ partitionedTables:
         type: string
         nullable: true
         comment: Support/oppose indicator (S=support, O=oppose)
-        source: SUPPORT_OPPOSE_IND
+        source: COMMUNICATION_TP
       - name: communication_type
         type: string
         nullable: true
-        comment: Communication type
-        source: COMMUNICATION_TP
+        comment: Communication type code (24A, 24N, etc.)
+        source: TRANSACTION_TP
       - name: communication_class
         type: string
         nullable: true
@@ -1631,7 +1682,9 @@ partitionedTables:
     dimensions:
       type:
         - communication_costs
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1646,6 +1699,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -1823,7 +1878,9 @@ partitionedTables:
     dimensions:
       type:
         - candidate_summaries
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -1838,6 +1895,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -2031,7 +2090,9 @@ partitionedTables:
     dimensions:
       type:
         - committee_summaries
-      year: *fec_election_cycles
+      year:
+        values: *fec_election_cycles
+        minYear: "${GOVDATA_START_YEAR}"
 
     materialize:
       enabled: true
@@ -2046,6 +2107,8 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
+        overwritePartitions: true
+        incrementalTtlDays: 30
         batchPartitionColumns: [type, year]
         runMaintenance: true
         snapshotRetentionDays: 7
