@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.ModelLifecycleProcessor;
 import org.apache.calcite.adapter.file.SubSchemaFactory;
+import org.apache.calcite.adapter.file.metadata.InformationSchema;
+import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
@@ -214,6 +216,21 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Cache the main schema as well
     schemaCache.put(cacheKey, schema);
+
+    // Register standard metadata schemas on the parent (root) schema so that
+    // INFORMATION_SCHEMA and pg_catalog are available alongside data schemas.
+    // InformationSchema scans parentSchema lazily at query time, so all schemas
+    // will be visible even though some are added after this call returns.
+    if (parentSchema != null) {
+      if (parentSchema.subSchemas().get("information_schema") == null) {
+        parentSchema.add("information_schema", new InformationSchema(parentSchema, "CALCITE"));
+        LOGGER.info("GovDataSchemaFactory: Added information_schema to parent schema");
+      }
+      if (parentSchema.subSchemas().get("pg_catalog") == null) {
+        parentSchema.add("pg_catalog", new PostgresMetadataSchema(parentSchema, "CALCITE"));
+        LOGGER.info("GovDataSchemaFactory: Added pg_catalog to parent schema");
+      }
+    }
 
     LOGGER.info("Schema '{}' created successfully", name);
     return schema;

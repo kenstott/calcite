@@ -2,7 +2,7 @@
 """
 Validates the GovData fat JAR via JPype:
   - JDBC metadata: schemas, tables, columns, PKs, FKs
-  - SQL query through metadata.TABLES (Calcite internal — INFORMATION_SCHEMA not available)
+  - SQL query through INFORMATION_SCHEMA.TABLES
   - SQL query returning real data from sec.filing_metadata
 
 Usage:
@@ -128,30 +128,26 @@ print(f"  PKs: {pk_cols}")
 print("  PASS")
 
 # ==============================================================================
-# Test 5 — SQL query via metadata.TABLES
-# NOTE: Calcite's govdata adapter does not expose INFORMATION_SCHEMA via SQL.
-# The standard approach (Tests 1-4) is to use JDBC DatabaseMetaData methods.
-# For SQL-based discovery, Calcite exposes a metadata virtual schema instead,
-# with camelCase column names (tableSchem, tableName) mirroring the JDBC API.
+# Test 5 — SQL query via INFORMATION_SCHEMA.TABLES
 # ==============================================================================
 
-print("\nTest 5: SQL query via metadata.TABLES ...")
+print("\nTest 5: SQL query via INFORMATION_SCHEMA.TABLES ...")
 stmt = conn.createStatement()
 rs = stmt.executeQuery(
-    'SELECT "tableSchem", "tableName", "tableType" '
-    'FROM metadata."TABLES" '
-    "WHERE \"tableSchem\" = 'SEC' "
-    'ORDER BY "tableName" '
-    'FETCH FIRST 10 ROWS ONLY'
+    "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE "
+    "FROM information_schema.TABLES "
+    "WHERE TABLE_SCHEMA = 'SEC' "
+    "ORDER BY TABLE_NAME "
+    "FETCH FIRST 10 ROWS ONLY"
 )
 count = 0
 while rs.next():
-    print(f"  {str(rs.getString(1))}.{str(rs.getString(2)):35s} {str(rs.getString(3))}")
+    print(f"  {str(rs.getString('TABLE_SCHEMA'))}.{str(rs.getString('TABLE_NAME')):35s} {str(rs.getString('TABLE_TYPE'))}")
     count += 1
 rs.close()
 stmt.close()
 
-assert count > 0, "Expected rows from metadata.TABLES for SEC schema"
+assert count > 0, "Expected rows from INFORMATION_SCHEMA.TABLES for SEC schema"
 print("  PASS")
 
 # ==============================================================================
