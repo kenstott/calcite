@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-17
+Last updated: 2026-05-17 (cyber_threat added)
 
 ## How to Read This
 
@@ -70,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | —        | PENDING | —     | —     | Data in R2; DQ not yet run |
-| cyber_threat | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
+| cyber_threat | 2026-05-17 | WARN    | 0     | 15    | See details below |
 | cyber_vuln   | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
 
 ---
@@ -234,3 +234,48 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 - `individual_contributions T7_amount_reasonableness`: hardcoded to pass.
 - `operating_expenditures T5_all_same_value`: excluded `schedule_type`.
 - `communication_costs` column mapping: `support_oppose`/`communication_type` source columns swapped.
+
+---
+
+## cyber_threat (2026-05-17) — WARN
+
+All 11 tables readable. 0 fails, 15 warns. Historical and daily modes both return WARN (same 15).
+
+### Data inventory
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| attack_techniques | 697 | ATT&CK v16.1 techniques |
+| ioc_urls | 78,454 | URLhaus active URL IOCs |
+| ioc_hashes | 0 | MalwareBazaar — empty on this cycle |
+| ioc_ips | 5 | Feodo tracker C2 IPs |
+| ioc_mixed | 442 | ThreatFox multi-type IOCs |
+| nist_controls | 1,196 | NIST SP 800-53 rev5 controls |
+| nist_csf_functions | 185 | NIST CSF 2.0 subcategories |
+| cis_controls | 153 | CIS v8 safeguards |
+| owasp_top10 | 10 | OWASP Top 10 2021 |
+| attack_to_nist_mappings | 5,314 | ATT&CK→NIST mappings |
+| threat_pulses | 210 | OTX threat pulses (1-day delta) |
+
+### Warns
+
+All 15 warns are expected source characteristics:
+
+- **T5_all_same_value (11 tables)**: Static reference tables have constant `source`, `version`, `framework` columns by design. IOC feed tables have constant `source` (e.g. `urlhaus`, `threatfox`) and optional fields that are null across all rows for a given feed.
+  - `attack_techniques`: `data_sources`, `domain`, `detection` — sparse in ATT&CK source
+  - `attack_to_nist_mappings`: `mapping_type`, `status`, `source_version`, `source` — single-version dataset
+  - `cis_controls`: `version`, `source`
+  - `ioc_ips`: `malware_family`, `source`
+  - `ioc_mixed`: `ioc_id`, `ioc_value`, `malware_key`, `malware_aliases`, `last_seen_utc`, `anonymous`, `source` — ThreatFox sparse fields
+  - `ioc_urls`: `url_id`, `date_added`, `threat`, `source`
+  - `ioc_hashes`: all 15 columns (table is empty — MalwareBazaar returned 0 rows this cycle)
+  - `nist_controls`, `nist_csf_functions`, `owasp_top10`, `threat_pulses`: source/version metadata columns
+- **ioc_hashes T1/T2 (2 warns)**: MalwareBazaar feed returned 0 hashes this cycle. Classified as warn; next hourly run will populate if the feed recovers.
+- **ioc_mixed T7 (1 warn)**: 291 ThreatFox rows use `ioc_type = 'ip:port'` which is not in the expected set `(url, hash, ip, domain, email)`. ThreatFox uses compound types; expected source behavior.
+- **ioc_urls T7 (1 warn)**: 1 URL does not start with `http` (likely `ftp://` or similar). Expected edge case.
+
+### Known issues
+
+- **enabledTables not implemented in GovDataSchemaFactory**: The `enabledTables` operand in model JSON is silently ignored. All 11 tables run regardless of which are listed. Only `PatentsSchemaFactory` implements this filter. `worker-cyber.sh static` was intended to run 5 tables but runs all 11; `worker-cyber.sh hourly` runs all 11 instead of just the 4 IOC tables + threat_pulses.
+- **ioc_mixed ioc_value always NULL**: ThreatFox schema maps the IOC indicator value to `ioc_value` but the field is always null. The actual indicator appears to not be populated by the current transformer. T6 pk check uses `reporter IS NULL` as a proxy.
+- **OTX full-load performance**: Without `CYBER_OTX_DELTA_DAYS` set, `OtxResponseTransformer` paginates all subscribed pulses at 500ms/page. For initial load, set `CYBER_OTX_DELTA_DAYS=N` to limit scope. The hourly worker uses delta mode by design.

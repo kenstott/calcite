@@ -23,8 +23,8 @@
 #             OWASP Top 10, ATT&CK→NIST mappings). Use after a schema update.
 #
 # Required env vars (set in .env.prod or equivalent):
-#   CYBER_PARQUET_DIR       Local/S3 path for Parquet output
-#   CYBER_CACHE_DIR         Local/S3 path for raw download cache
+#   GOVDATA_PARQUET_DIR     Local/S3 path for Parquet output
+#   GOVDATA_CACHE_DIR       Local/S3 path for raw download cache
 #
 # Optional env vars:
 #   CYBER_NVD_API_KEY       NVD API key (higher rate limit; 5 req/30s vs 1 req/6s without)
@@ -58,6 +58,7 @@ mkdir -p "$MODEL_DIR"
 CYBER_VULN_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-vuln-schema.yaml"
 CYBER_THREAT_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-threat-schema.yaml"
 
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 run_cyber_model() {
@@ -80,9 +81,19 @@ run_cyber_model() {
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "${schema}",
-      "directory": "${CYBER_PARQUET_DIR}",
-      "cacheDirectory": "${CYBER_CACHE_DIR}",
+      "directory": "${GOVDATA_PARQUET_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "autoDownload": true,
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      },
+      "s3Config": {
+        "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
+      },
       "enabledTables": [${enabled_tables}]${extra_json}
     }
   }]
