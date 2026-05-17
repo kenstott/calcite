@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-17 (cyber_threat added)
+Last updated: 2026-05-17
 
 ## How to Read This
 
