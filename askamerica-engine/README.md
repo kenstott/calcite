@@ -39,6 +39,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `sec` | SEC EDGAR filings, financial statements, insider trades |
 | `geo` | US states, counties, ZIP codes, FIPS codes |
 | `econ` | BLS/BEA economic indicators, CPI, unemployment, GDP |
+| `econ_reference` | BLS area, industry, and occupation classification tables |
 | `census` | ACS 5-year estimates, decennial census |
 | `crime` | FBI UCR crime statistics by state and agency |
 | `weather` | NOAA GHCND daily observations (temperature, precipitation) |
@@ -49,6 +50,8 @@ jdbc:askamerica:source=fec,crime,weather
 | `energy` | EIA energy production and consumption |
 | `health` | CDC, CMS, and clinical trial data |
 | `edu` | NCES education statistics (IPEDS, CCD) |
+| `lands` | USDA/NPS/BLM public lands boundaries, forest inventory, mineral royalties |
+| `patents` | USPTO patent grants, inventors, assignees, trademarks |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
 
 ## DBeaver setup
