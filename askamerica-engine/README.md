@@ -9,9 +9,13 @@ Grab the latest JAR from [GitHub Releases](https://github.com/kenstott/calcite/r
 ```bash
 # Python (recommended)
 pip install 'askamerica[engine]'
+askamerica login
+
+# The engine JAR is downloaded automatically on first use.
+# To pre-download explicitly (CI, Docker, offline environments):
 askamerica install-engine
 
-# Or download directly
+# Or download the JAR directly (for JDBC clients)
 curl -L https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar -o askamerica-engine.jar
 ```
 
@@ -68,8 +72,9 @@ Install the package, download the JAR, and query:
 
 ```bash
 pip install 'askamerica[engine]'
-askamerica install-engine   # downloads JAR to ~/.askamerica/engine/
 askamerica login            # get your free API key
+# Engine JAR downloads automatically on first use (~80 MB, cached to ~/.askamerica/engine/)
+# To pre-download (CI/Docker): askamerica install-engine
 ```
 
 **One-liner — returns a pandas DataFrame:**
