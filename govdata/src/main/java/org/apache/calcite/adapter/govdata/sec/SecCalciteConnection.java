@@ -79,22 +79,7 @@ public class SecCalciteConnection {
         String modelPath = modelParts[0];
         String params = modelParts.length > 1 ? "?" + modelParts[1] : "";
 
-        // Check if it's an XBRL model file
-        File modelFile = new File(modelPath);
-        if (modelFile.exists() && modelFile.getName().contains("sec")) {
-          try {
-            // Check if preprocessing is needed
-            if (SecModelPreprocessor.needsPreprocessing(modelFile)) {
-              // Preprocess and convert to inline model
-              String preprocessed = SecModelPreprocessor.preprocessModelFile(modelFile);
-              String inlineUrl = parts[0] + "model=inline:" + preprocessed + params;
-              LOGGER.debug("Preprocessed XBRL model file: " + modelPath);
-              return inlineUrl;
-            }
-          } catch (IOException e) {
-            LOGGER.warn("Failed to preprocess model file: " + e.getMessage());
-          }
-        }
+        // SEC model preprocessing removed (SecModelPreprocessor deleted with SecDriver)
       }
     }
 
