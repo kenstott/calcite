@@ -476,7 +476,173 @@ except Exception as e:
 finally:
     conn2.close()
 
+# ── DBeaver / DataGrip introspection patterns ─────────────────────────────────
+
+conn3 = connect("jdbc:askamerica:source=geo")
+meta3 = conn3.getMetaData()
+
 # ══════════════════════════════════════════════════════════════════════════════
+print("\n── 25. getTables(null, null, '%', null) — all schemas at once ───────────")
+
+try:
+    rs = meta3.getTables(None, None, "%", None)
+    all_tables = []
+    while rs.next():
+        schem = rs.getString("TABLE_SCHEM")
+        tname = rs.getString("TABLE_NAME")
+        all_tables.append((str(schem) if schem is not None else None, str(tname)))
+    rs.close()
+    print(f"  total tables across all schemas: {len(all_tables)}")
+    check("getTables(null,null,'%',null) returns rows", len(all_tables) > 0)
+    check("geo tables included in bulk fetch",
+          any(s == "geo" for s, t in all_tables), str(all_tables[:3]))
+except Exception as e:
+    check("getTables(null,null,'%',null) does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 26. getColumns(null, null, '%', '%') — bulk column fetch ─────────────")
+
+try:
+    rs = meta3.getColumns(None, None, "%", "%")
+    bulk_cols = 0
+    while rs.next():
+        bulk_cols += 1
+    rs.close()
+    print(f"  total columns across all schemas: {bulk_cols}")
+    check("getColumns(null,null,'%','%') returns rows", bulk_cols > 0)
+except Exception as e:
+    check("getColumns(null,null,'%','%') does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 27. getBestRowIdentifier() ───────────────────────────────────────────")
+
+try:
+    DatabaseMetaData = jpype.JClass("java.sql.DatabaseMetaData")
+    rs = meta3.getBestRowIdentifier(None, "geo", "states",
+                                    DatabaseMetaData.bestRowSession, True)
+    bri = []
+    while rs.next():
+        col = rs.getString("COLUMN_NAME")
+        bri.append(str(col) if col is not None else None)
+    rs.close()
+    print(f"  bestRowIdentifier for geo.states: {bri}")
+    check("getBestRowIdentifier() does not throw", True)
+except Exception as e:
+    check("getBestRowIdentifier() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 28. getVersionColumns() ──────────────────────────────────────────────")
+
+try:
+    rs = meta3.getVersionColumns(None, "geo", "states")
+    vc = []
+    while rs.next():
+        col = rs.getString("COLUMN_NAME")
+        vc.append(str(col) if col is not None else None)
+    rs.close()
+    print(f"  versionColumns for geo.states: {vc}")
+    check("getVersionColumns() does not throw", True)
+except Exception as e:
+    check("getVersionColumns() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 29. getProcedures() / getFunctions() ─────────────────────────────────")
+
+try:
+    rs = meta3.getProcedures(None, None, "%")
+    procs = 0
+    while rs.next():
+        procs += 1
+    rs.close()
+    print(f"  procedures: {procs}")
+    check("getProcedures() does not throw", True)
+except Exception as e:
+    check("getProcedures() does not throw", False, str(e))
+
+try:
+    rs = meta3.getFunctions(None, None, "%")
+    funcs = 0
+    while rs.next():
+        funcs += 1
+    rs.close()
+    print(f"  functions: {funcs}")
+    check("getFunctions() does not throw", True)
+except Exception as e:
+    check("getFunctions() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 30. getSuperTypes() / getSuperTables() ───────────────────────────────")
+
+try:
+    rs = meta3.getSuperTypes(None, "geo", "%")
+    while rs.next():
+        pass
+    rs.close()
+    check("getSuperTypes() does not throw", True)
+except Exception as e:
+    check("getSuperTypes() does not throw", False, str(e))
+
+try:
+    rs = meta3.getSuperTables(None, "geo", "%")
+    while rs.next():
+        pass
+    rs.close()
+    check("getSuperTables() does not throw", True)
+except Exception as e:
+    check("getSuperTables() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 31. meta.getConnection() returns the connection ──────────────────────")
+
+try:
+    meta_conn = meta3.getConnection()
+    check("meta.getConnection() returns non-null", meta_conn is not None)
+except Exception as e:
+    check("meta.getConnection() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 32. connection.isValid() / getSchema() ───────────────────────────────")
+
+try:
+    valid = bool(conn3.isValid(5))
+    print(f"  isValid(5): {valid}")
+    check("connection.isValid(5) returns True", valid)
+except Exception as e:
+    check("connection.isValid() does not throw", False, str(e))
+
+try:
+    schema = conn3.getSchema()
+    print(f"  getSchema(): {schema}")
+    check("connection.getSchema() does not throw", True)
+    check("getSchema() returns lowercase value",
+          schema is None or str(schema) == str(schema).lower(),
+          f"got {schema}")
+except Exception as e:
+    check("connection.getSchema() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 33. supportsResultSetConcurrency() / supportsBatchUpdates() ──────────")
+
+try:
+    ResultSet = jpype.JClass("java.sql.ResultSet")
+    rsc = bool(meta3.supportsResultSetConcurrency(
+        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY))
+    print(f"  supportsResultSetConcurrency(FORWARD_ONLY, READ_ONLY): {rsc}")
+    check("supportsResultSetConcurrency() does not throw", True)
+except Exception as e:
+    check("supportsResultSetConcurrency() does not throw", False, str(e))
+
+try:
+    batch = bool(meta3.supportsBatchUpdates())
+    print(f"  supportsBatchUpdates(): {batch}")
+    check("supportsBatchUpdates() does not throw", True)
+except Exception as e:
+    check("supportsBatchUpdates() does not throw", False, str(e))
+
+conn3.close()
+
+# ══════════════════════════════════════════════════════════════════════════════
+TOTAL_GROUPS = 33
 print()
 if failures:
     print(f"\033[31m{len(failures)} test(s) FAILED:\033[0m")
@@ -484,4 +650,4 @@ if failures:
         print(f"  ✗ {f}")
     sys.exit(1)
 else:
-    print(f"\033[32mAll {24} test groups passed — JDBC metadata + PG-like behaviour confirmed.\033[0m")
+    print(f"\033[32mAll {TOTAL_GROUPS} test groups passed — JDBC metadata + DBeaver/DataGrip compatibility confirmed.\033[0m")
