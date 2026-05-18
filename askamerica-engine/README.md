@@ -61,18 +61,39 @@ jdbc:askamerica:source=fec,crime,weather
 
 ## Python (JPype)
 
+Install the Python package, download the JAR, and query in three steps:
+
+```bash
+pip install 'askamerica[engine]'
+askamerica install-engine   # downloads JAR to ~/.askamerica/engine/
+askamerica login            # get your free API key
+```
+
 ```python
+import askamerica as aa
+
+df = aa.query("SELECT company_name, filing_type, filing_date FROM sec.filing_metadata FETCH FIRST 5 ROWS ONLY")
+print(df)
+```
+
+Or use JPype directly with the installed JAR:
+
+```python
+from pathlib import Path
 import jpype
-import jpype.imports
 
-jpype.startJVM(classpath=["askamerica-engine.jar"])
-from java.sql import DriverManager
+jar = Path.home() / ".askamerica" / "engine" / "askamerica-engine.jar"
+jpype.startJVM(classpath=[str(jar)])
 
-conn = DriverManager.getConnection("jdbc:askamerica:source=geo")
-stmt = conn.createStatement()
-rs   = stmt.executeQuery("SELECT state_name, state_abbr FROM geo.states ORDER BY state_name")
+Driver = jpype.JClass("org.apache.calcite.adapter.askamerica.AskAmericaDriver")
+conn   = Driver().connect("jdbc:askamerica:source=sec", jpype.JClass("java.util.Properties")())
+stmt   = conn.createStatement()
+rs     = stmt.executeQuery(
+    "SELECT company_name, filing_type FROM sec.filing_metadata "
+    "ORDER BY filing_date DESC FETCH FIRST 5 ROWS ONLY"
+)
 while rs.next():
-    print(rs.getString("state_name"), rs.getString("state_abbr"))
+    print(rs.getString("company_name"), rs.getString("filing_type"))
 conn.close()
 ```
 
