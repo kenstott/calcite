@@ -21,13 +21,23 @@ import glob
 
 def find_jar():
     here = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(here)
-    pattern = os.path.join(project_root, "build", "libs", "calcite-govdata-*-all.jar")
-    matches = glob.glob(pattern)
-    if matches:
-        return sorted(matches)[-1]
+    calcite_root = os.path.dirname(os.path.dirname(here))
+
+    # Prefer the read-only askamerica-engine JAR (smaller, no ETL deps)
+    engine_pattern = os.path.join(calcite_root, "askamerica-engine", "build", "libs", "askamerica-engine*.jar")
+    engine_matches = [m for m in glob.glob(engine_pattern) if "-sources" not in m and "-javadoc" not in m]
+    if engine_matches:
+        return sorted(engine_matches)[-1]
+
+    # Fall back to the full govdata fat JAR
+    govdata_pattern = os.path.join(calcite_root, "govdata", "build", "libs", "calcite-govdata-*-all.jar")
+    govdata_matches = glob.glob(govdata_pattern)
+    if govdata_matches:
+        print("  (using full govdata JAR — run ./gradlew :askamerica-engine:shadowJar for the smaller read-only JAR)")
+        return sorted(govdata_matches)[-1]
+
     raise FileNotFoundError(
-        f"No fat JAR found at {pattern}. Run: ./gradlew :govdata:shadowJar"
+        f"No JAR found. Run: ./gradlew :askamerica-engine:shadowJar"
     )
 
 jar_path = sys.argv[1] if len(sys.argv) > 1 else find_jar()
