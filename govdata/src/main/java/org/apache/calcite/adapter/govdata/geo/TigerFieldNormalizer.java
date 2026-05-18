@@ -115,11 +115,12 @@ public class TigerFieldNormalizer {
     // ================================================================================
     // 2010: UACE10, NAME10, UATYP10 (U=Urbanized Area, C=Urban Cluster)
     // 2020: UACE20, NAME20, UATYP20 (legacy field, may be blank for 2020+ data)
+    // 2024+: UA20 shapefiles use plain UACE (no vintage suffix)
     // Note: 2020 Census eliminated distinction between UA and UC
     // ================================================================================
     TableFieldConfig urbanAreas = new TableFieldConfig("urban_areas");
     urbanAreas.addField("uace",
-        Arrays.asList("UACE20", "UACE10", "GEOID"),
+        Arrays.asList("UACE20", "UACE10", "UACE", "GEOID"),
         "Urban area code");
     urbanAreas.addField("name",
         Arrays.asList("NAME20", "NAME10", "NAME"),
@@ -162,14 +163,16 @@ public class TigerFieldNormalizer {
     // ================================================================================
     // VOTING DISTRICTS
     // ================================================================================
-    // 2010 (available in TIGER2012): GEOID10, VTD10, STATEFP10, COUNTYFP10, NAME10
-    // 2020 (available in TIGER2020PL): GEOID20, VTD20, STATEFP20, COUNTYFP20, NAME20
+    // 2010 (available in TIGER2012): VTDI10, VTD10, STATEFP10, COUNTYFP10, NAME10
+    //   GEOID10 = STATEFP10+COUNTYFP10+VTDI10 (may be empty in some files)
+    // 2020 (available in TIGER2020PL): VTDI20, STATEFP20, COUNTYFP20, NAME20
+    //   GEOID20 = STATEFP20+COUNTYFP20+VTDI20 (may be empty in some files)
     // Note: Different URL patterns between vintages (handled by TigerDataProvider)
     // ================================================================================
     TableFieldConfig votingDistricts = new TableFieldConfig("voting_districts");
     votingDistricts.addField("vtd_code",
-        Arrays.asList("GEOID20", "GEOID10", "GEOID"),
-        "Voting district code (state + county + VTD)");
+        Arrays.asList("VTDI20", "VTD20", "VTDI10", "VTD10", "GEOID20", "GEOID10", "GEOID"),
+        "Voting district identifier (VTD code within county)");
     votingDistricts.addField("state_fips",
         Arrays.asList("STATEFP20", "STATEFP10", "STATEFP"),
         "2-digit state FIPS code");
@@ -186,6 +189,27 @@ public class TigerFieldNormalizer {
         Arrays.asList("AWATER20", "AWATER10", "AWATER"),
         "Water area in square meters");
     configs.put("voting_districts", votingDistricts);
+
+    // ================================================================================
+    // TRIBAL AREAS (AIANNH — American Indian/Alaska Native/Native Hawaiian Areas)
+    // ================================================================================
+    // All years: AIANNHCE (5-digit AIANNH census code), GEOID = AIANNHCE (same value)
+    // GEOID is present but may be empty in some AIANNH shapefiles; use AIANNHCE directly
+    // ================================================================================
+    TableFieldConfig tribalAreas = new TableFieldConfig("tribal_areas");
+    tribalAreas.addField("aiannhce",
+        Arrays.asList("AIANNHCE", "GEOID"),
+        "5-digit AIANNH census code");
+    tribalAreas.addField("name",
+        Arrays.asList("NAME", "NAMELSAD"),
+        "AIANNH area name");
+    tribalAreas.addField("land_area",
+        Arrays.asList("ALAND"),
+        "Land area in square meters");
+    tribalAreas.addField("water_area",
+        Arrays.asList("AWATER"),
+        "Water area in square meters");
+    configs.put("tribal_areas", tribalAreas);
 
     TABLE_CONFIGS = Collections.unmodifiableMap(configs);
   }

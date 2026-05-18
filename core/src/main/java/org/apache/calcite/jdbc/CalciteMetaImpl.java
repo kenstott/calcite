@@ -842,6 +842,8 @@ public class CalciteMetaImpl extends MetaImpl {
   /** Metadata describing a Calcite table. */
   public static class CalciteMetaTable extends MetaTable {
     private final Table calciteTable;
+    /** Shadows {@link MetaTable#remarks} so Avatica's reflection reads the comment. */
+    public final String remarks;
 
     /**
      *  Creates a CalciteMetaTable.
@@ -856,6 +858,9 @@ public class CalciteMetaImpl extends MetaImpl {
       super(tableCat, tableSchem, tableName,
           calciteTable.getJdbcTableType().jdbcName);
       this.calciteTable = requireNonNull(calciteTable, "calciteTable");
+      this.remarks = calciteTable instanceof org.apache.calcite.schema.CommentableTable
+          ? ((org.apache.calcite.schema.CommentableTable) calciteTable).getTableComment()
+          : null;
     }
 
     /**

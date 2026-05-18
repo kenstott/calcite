@@ -4174,7 +4174,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // If warehousePath not specified at table level, build from baseDirectory + schemaName
     // This is the default convention used by the ETL pipeline
     if (warehousePath == null && baseDirectory != null) {
-      warehousePath = baseDirectory + "/" + name;
+      String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
+      warehousePath = baseDirectory + "/" + schemaSegment;
       LOGGER.debug("Using default warehouse path for table '{}': {}", tableName, warehousePath);
     }
     if (warehousePath == null) {

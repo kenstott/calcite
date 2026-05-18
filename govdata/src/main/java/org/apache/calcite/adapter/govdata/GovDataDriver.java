@@ -173,7 +173,7 @@ public class GovDataDriver extends Driver {
     String schemaName = dataSource.toLowerCase();
     boolean isS3 = dataDirectory != null && dataDirectory.startsWith("s3://");
     String directoryJson = dataDirectory != null
-        ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
+        ? ",\n      \"directory\": \"" + dataDirectory + "\""
         : "";
     String s3ConfigJson = buildS3ConfigJson(dataDirectory);
     String engineJson = isS3 ? "      \"executionEngine\": \"duckdb\",\n" : "";
@@ -216,7 +216,7 @@ public class GovDataDriver extends Driver {
     for (String dataSource : sources) {
       String schemaName = dataSource.toLowerCase();
       String directoryJson = dataDirectory != null
-          ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
+          ? ",\n      \"directory\": \"" + dataDirectory + "\""
           : "";
       schemaEntries.add(
           "  {\n"

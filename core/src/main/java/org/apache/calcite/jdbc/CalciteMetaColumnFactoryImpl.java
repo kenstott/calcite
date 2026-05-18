@@ -17,6 +17,7 @@
 package org.apache.calcite.jdbc;
 
 import org.apache.calcite.avatica.MetaImpl.MetaColumn;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.Table;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -47,7 +48,10 @@ public class CalciteMetaColumnFactoryImpl
       Integer charOctetLength,
       int ordinalPosition,
       String isNullable) {
-    return new MetaColumn(
+    String comment = table instanceof CommentableTable
+        ? ((CommentableTable) table).getColumnComment(columnName)
+        : null;
+    return new MetaColumnWithRemarks(
         tableCat,
         tableSchem,
         tableName,
@@ -60,10 +64,39 @@ public class CalciteMetaColumnFactoryImpl
         nullable,
         charOctetLength,
         ordinalPosition,
-        isNullable);
+        isNullable,
+        comment);
   }
 
   @Override public Class<? extends MetaColumn> getMetaColumnClass() {
-    return MetaColumn.class;
+    return MetaColumnWithRemarks.class;
+  }
+
+  /** MetaColumn subclass that shadows {@link MetaColumn#remarks} so that
+   * Avatica's reflection-based result set reads the column comment. */
+  public static final class MetaColumnWithRemarks extends MetaColumn {
+    /** Shadows {@link MetaColumn#remarks}. */
+    public final String remarks;
+
+    public MetaColumnWithRemarks(
+        String tableCat,
+        String tableSchem,
+        String tableName,
+        String columnName,
+        int dataType,
+        String typeName,
+        Integer columnSize,
+        @Nullable Integer decimalDigits,
+        int numPrecRadix,
+        int nullable,
+        Integer charOctetLength,
+        int ordinalPosition,
+        String isNullable,
+        @Nullable String remarks) {
+      super(tableCat, tableSchem, tableName, columnName, dataType, typeName,
+          columnSize, decimalDigits, numPrecRadix, nullable, charOctetLength,
+          ordinalPosition, isNullable);
+      this.remarks = remarks;
+    }
   }
 }

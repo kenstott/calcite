@@ -554,14 +554,17 @@ public class TigerDataProvider implements DataProvider {
       };
 
     case "tribal_areas":
+      // Uses TigerFieldNormalizer: AIANNHCE is the correct field; GEOID in AIANNH files is the same
+      // value but may be empty. All years use consistent field names (no vintage suffix).
+      final TigerFieldNormalizer tribalNormalizer = TigerFieldNormalizer.forTable("tribal_areas", year);
       return feature -> {
         Geometry geom = (Geometry) feature.getAttribute("_GEOMETRY_");
         return new Object[]{
-            getAttrString(feature, "GEOID"),
-            getAttrString(feature, "NAME"),
+            tribalNormalizer.getStringField(feature, "aiannhce"),
+            tribalNormalizer.getStringField(feature, "name"),
             getAttrString(feature, "NAMELSAD"),
-            getAttrDouble(feature, "ALAND"),
-            getAttrDouble(feature, "AWATER"),
+            tribalNormalizer.getDoubleField(feature, "land_area"),
+            tribalNormalizer.getDoubleField(feature, "water_area"),
             geom != null ? geom.toText() : null
         };
       };

@@ -638,11 +638,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Rewrite FK schema names if declaredSchemaName differs from actual schema name
-    // This allows YAML files to use canonical names (e.g., "econ") while model.json uses "ECON"
-    // Default: lowercase of actual schema name (standard YAML convention)
+    // Uses the literal schema name from YAML; by convention YAML uses lowercase.
     String declaredSchemaName = (String) operand.get("declaredSchemaName");
     if (declaredSchemaName == null) {
-      declaredSchemaName = name.toLowerCase(java.util.Locale.ROOT);
+      declaredSchemaName = name;
     }
     if (constraintsToPass != null && !declaredSchemaName.equalsIgnoreCase(name)) {
       constraintsToPass = rewriteForeignKeySchemaNames(constraintsToPass, declaredSchemaName, name);
@@ -1410,10 +1409,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       return;
     }
 
-    // Extract declared schema name for rewriting (default: lowercase of actual schema name)
+    // Extract declared schema name for rewriting; by convention YAML uses lowercase.
     String declaredSchemaName = (String) operand.get("declaredSchemaName");
     if (declaredSchemaName == null) {
-      declaredSchemaName = schemaName.toLowerCase(java.util.Locale.ROOT);
+      declaredSchemaName = schemaName;
     }
 
     int viewCount = 0;

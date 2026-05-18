@@ -209,7 +209,14 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   @Override public Set<String> getTableNames() {
-    Set<String> tableNames = super.getTableNames();
+    Set<String> tableNames = new java.util.LinkedHashSet<>(super.getTableNames());
+    // Always include tables defined in FileSchema YAML regardless of DuckDB view state.
+    // This ensures JDBC metadata (getTables/getColumns) works even when iceberg views
+    // haven't been created yet (e.g., first connection before ETL runs).
+    if (fileSchema != null) {
+      tableNames.addAll(fileSchema.tables()
+          .getNames(org.apache.calcite.schema.lookup.LikePattern.any()));
+    }
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;
   }
@@ -258,6 +265,18 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
             return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
           }
         }
+      }
+    }
+    // Table not in DuckDB catalog — fall back to FileSchema definition.
+    // This allows JDBC metadata to describe tables even when DuckDB views aren't created yet.
+    if (table == null && fileSchema != null) {
+      Table fsTable = fileSchema.tables().get(name);
+      if (fsTable == null) {
+        fsTable = fileSchema.tables().get(name.toLowerCase());
+      }
+      if (fsTable != null) {
+        LOGGER.info("Table '{}' not in DuckDB catalog — returning FileSchema table for metadata", name);
+        return fsTable;
       }
     }
     return table;

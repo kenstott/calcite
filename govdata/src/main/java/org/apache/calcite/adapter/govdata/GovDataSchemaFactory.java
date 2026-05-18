@@ -585,7 +585,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private Map<String, Object> enrichOperand(Map<String, Object> operand,
       String dataSource, String schemaName) {
     Map<String, Object> enriched = new HashMap<>(operand);
-    enriched.put("canonicalSchemaName", dataSource.toLowerCase());
+    enriched.put("canonicalSchemaName", dataSource);
     enriched.put("actualSchemaName", schemaName);
     return enriched;
   }
