@@ -143,15 +143,12 @@ jobs:
           path: askamerica-engine/build/jpackage/${{ matrix.artifact_glob }}
           retention-days: 30
 
-  # ── Publish to GitHub Packages (Maven) ───────────────────────────────────
+  # ── Publish to Maven Central (Sonatype Central Portal) ───────────────────
   publish:
-    name: Publish to GitHub Packages
+    name: Publish to Maven Central
     runs-on: ubuntu-latest
     needs: [jar, test]
     if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -171,23 +168,98 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
-      - name: Publish driver-base to GitHub Packages
-        run: ./gradlew :driver-base:publishAllPublicationsToGitHubPackagesRepository --no-daemon
+      - name: Generate POM
+        run: |
+          ./gradlew :askamerica-engine:generatePomFileForAskamericaEnginePublication \
+            --no-daemon \
+            -PreleaseVersion=${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
 
-      - name: Publish askamerica-engine to GitHub Packages
-        run: ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository --no-daemon
+      - name: Build Maven Central bundle
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
+          GPG_KEY_ID:       ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE:   ${{ secrets.GPG_PASSPHRASE }}
+          VERSION:          ${{ steps.version.outputs.version }}
+          GROUP_ID:         io.askamerica
+          ARTIFACT_ID:      askamerica-engine
+        run: |
+          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+          BUNDLE_DIR="bundle/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
+          mkdir -p "$BUNDLE_DIR"
+
+          JAR="askamerica-engine/build/libs/askamerica-engine.jar"
+          POM=$(find askamerica-engine/build/publications -name "*.xml" | head -1)
+
+          # JAR
+          cp "$JAR" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar"
+          # POM
+          cp "$POM" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom"
+
+          # Minimal sources and javadoc JARs (required by Central)
+          echo "Sources: ${ARTIFACT_ID} ${VERSION}" > /tmp/placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
+
+          # GPG sign all four artifacts
+          for f in \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+          do
+            if [ -n "$GPG_PASSPHRASE" ]; then
+              gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            else
+              gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            fi
+            md5sum  "$f" | awk '{print $1}' > "${f}.md5"
+            sha1sum "$f" | awk '{print $1}' > "${f}.sha1"
+          done
+
+          # Create bundle ZIP
+          (cd bundle && zip -r "../askamerica-engine-bundle.zip" .)
+          echo "Bundle: $(du -sh askamerica-engine-bundle.zip | cut -f1)"
+
+      - name: Upload to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          VERSION:           ${{ steps.version.outputs.version }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
+            -H "Authorization: Bearer ${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" \
+            -H "Accept: application/json" \
+            -F "bundle=@askamerica-engine-bundle.zip;type=application/zip" \
+            -F "name=askamerica-engine-${VERSION}" \
+            -F "publishingType=AUTOMATIC")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Response ($HTTP_CODE): $BODY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Maven Central upload failed"
+            exit 1
+          fi
 
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:

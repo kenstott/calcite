@@ -93,13 +93,19 @@ tasks.shadowJar {
 //     <version>VERSION</version>
 //   </dependency>
 
+// Version is set by -Pversion=X.Y.Z from CI (tag engine-vX.Y.Z → X.Y.Z).
+// Falls back to project.version with SNAPSHOT stripped for local builds.
+val publishVersion: String =
+    (project.findProperty("releaseVersion") as String?
+        ?: project.version.toString().replace("-SNAPSHOT", ""))
+        .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
+
 publishing {
     publications {
         create<MavenPublication>("askamericaEngine") {
-            groupId = "io.askamerica"
+            groupId    = "io.askamerica"
             artifactId = "askamerica-engine"
-            version = project.version.toString().replace("-SNAPSHOT", "")
-                .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
+            version    = publishVersion
 
             artifact(tasks.shadowJar) {
                 classifier = ""
@@ -115,6 +121,18 @@ publishing {
                         url.set("https://www.apache.org/licenses/LICENSE-2.0")
                     }
                 }
+                developers {
+                    developer {
+                        id.set("kenstott")
+                        name.set("Kenneth Stott")
+                        email.set("kennethstott@gmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/kenstott/calcite.git")
+                    developerConnection.set("scm:git:ssh://github.com/kenstott/calcite.git")
+                    url.set("https://github.com/kenstott/calcite")
+                }
             }
         }
     }
@@ -122,7 +140,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/kenstott/calcite")
+            url  = uri("https://maven.pkg.github.com/kenstott/calcite")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
                 password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
