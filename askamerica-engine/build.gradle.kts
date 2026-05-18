@@ -38,9 +38,10 @@ tasks.shadowJar {
     exclude("META-INF/*.RSA")
 
     // ── ETL-only govdata packages ──────────────────────────────────────────
+    // govdata/etl is pure ETL orchestration — safe to exclude
     exclude("org/apache/calcite/adapter/govdata/etl/**")
-    exclude("org/apache/calcite/adapter/file/etl/**")
-    exclude("org/apache/calcite/adapter/file/refresh/**")
+    // file/etl and file/refresh contain classes referenced by schema factories
+    // at connection time — keep them to avoid NoClassDefFoundError at query time
 
     // ── ETL-only third-party libraries ─────────────────────────────────────
 
@@ -75,8 +76,7 @@ tasks.shadowJar {
     exclude("org/apache/parquet/avro/**")
     exclude("org/apache/parquet/hadoop/codec/**")
 
-    // HTTP client (ETL downloads only)
-    exclude("org/apache/http/**")
+    // HTTP client — keep; needed at query time for schema initialization
 
     // No main class — this is a pure JDBC driver JAR loaded via JPype or classpath
 }

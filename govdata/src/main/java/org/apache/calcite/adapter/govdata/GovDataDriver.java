@@ -169,7 +169,7 @@ public class GovDataDriver extends Driver {
     String endYear = extractParameter(paramString, "endYear");
     String dataDirectory = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
 
-    String schemaName = dataSource.toUpperCase();
+    String schemaName = dataSource.toLowerCase();
     boolean isS3 = dataDirectory != null && dataDirectory.startsWith("s3://");
     String directoryJson = dataDirectory != null
         ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
@@ -213,7 +213,7 @@ public class GovDataDriver extends Driver {
 
     List<String> schemaEntries = new ArrayList<String>();
     for (String dataSource : sources) {
-      String schemaName = dataSource.toUpperCase();
+      String schemaName = dataSource.toLowerCase();
       String directoryJson = dataDirectory != null
           ? ",\n      \"directory\": \"" + dataDirectory + "/" + dataSource.toLowerCase() + "\""
           : "";
@@ -242,7 +242,7 @@ public class GovDataDriver extends Driver {
 
     String modelJson = "{\n"
         + "  \"version\": \"1.0\",\n"
-        + "  \"defaultSchema\": \"" + sources[0].toUpperCase() + "\",\n"
+        + "  \"defaultSchema\": \"" + sources[0].toLowerCase() + "\",\n"
         + "  \"schemas\": [\n"
         + schemas.toString() + "\n"
         + "  ]\n"
