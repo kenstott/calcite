@@ -56,12 +56,10 @@ jobs:
           retention-days: 30
 
   # ── JDBC driver test suite ───────────────────────────────────────────────
-  # TODO: re-enable once fec/geo data confirmed on R2 from CI runners
   test:
     name: JDBC driver tests
     runs-on: ubuntu-latest
     needs: jar
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +91,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY:   ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_OVERRIDE:   ${{ secrets.AWS_ENDPOINT_OVERRIDE }}
           AWS_REGION:              auto
+          GOVDATA_PARQUET_DIR:     ${{ secrets.GOVDATA_PARQUET_DIR }}
 
   # ── Native installers (per-platform, bundled JRE) ─────────────────────────
   installer:
