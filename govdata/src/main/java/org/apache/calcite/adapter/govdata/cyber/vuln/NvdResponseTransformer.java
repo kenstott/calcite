@@ -136,7 +136,7 @@ public class NvdResponseTransformer implements ResponseTransformer {
       JsonNode data = v31.path("cvssData");
       row.put("cvss_v31_score", doubleOrNull(data, "baseScore"));
       row.put("cvss_v31_vector", textOrNull(data, "vectorString"));
-      row.put("cvss_v31_severity", textOrNull(v31, "baseSeverity"));
+      row.put("cvss_v31_severity", textOrNull(data, "baseSeverity"));
     } else {
       // Try V30
       JsonNode v30 = firstMetric(metrics, "cvssMetricV30");
@@ -144,7 +144,7 @@ public class NvdResponseTransformer implements ResponseTransformer {
         JsonNode data = v30.path("cvssData");
         row.put("cvss_v31_score", doubleOrNull(data, "baseScore"));
         row.put("cvss_v31_vector", textOrNull(data, "vectorString"));
-        row.put("cvss_v31_severity", textOrNull(v30, "baseSeverity"));
+        row.put("cvss_v31_severity", textOrNull(data, "baseSeverity"));
       } else {
         row.putNull("cvss_v31_score");
         row.putNull("cvss_v31_vector");

@@ -97,7 +97,12 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
     }
 
     LOGGER.info("GithubSA: returning {} vuln_cross_refs rows", allRows.size());
-    return allRows.toString();
+    try {
+      return MAPPER.writeValueAsString(allRows);
+    } catch (Exception e) {
+      LOGGER.error("GithubSA: failed to serialize rows: {}", e.getMessage());
+      throw new RuntimeException("Failed to serialize GitHub SA rows", e);
+    }
   }
 
   /**

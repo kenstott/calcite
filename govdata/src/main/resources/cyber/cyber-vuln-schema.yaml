@@ -204,7 +204,7 @@ partitionedTables:
         requestsPerSecond: 0.167
         maxRetries: 3
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdResponseTransformer"
@@ -270,7 +270,7 @@ partitionedTables:
         requestsPerSecond: 0.167
         maxRetries: 3
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdVulnCwesResponseTransformer"

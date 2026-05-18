@@ -636,8 +636,12 @@ public class HttpSource implements DataSource {
           }
         } else {
           offset += pageSize;
-          // Stop if partial page OR we've fetched all records reported by the API
-          if (pageData.size() < pageSize || (totalCount >= 0 && offset >= totalCount)) {
+          // When the API reports a total count, use it as the sole termination signal.
+          // When no count is available, fall back to partial-page detection.
+          boolean reachedEnd = totalCount >= 0
+              ? offset >= totalCount
+              : pageData.size() < pageSize;
+          if (reachedEnd) {
             hasMore = false;
             writeMergedCache();
           }

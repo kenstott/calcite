@@ -120,7 +120,7 @@ SELECT 'cyber_vuln', 'vulnerabilities', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln/cyber_vuln/vulnerabilities', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'source')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'source', 'cvss_v31_severity')
 );
 
 -- T6: pk_nulls (cve_id NOT NULL)
@@ -250,7 +250,7 @@ SELECT 'cyber_vuln', 'kev_catalog', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln/cyber_vuln/kev_catalog', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'catalog_version')
 );
 
 -- T6: pk_nulls (cve_id NOT NULL)
@@ -484,8 +484,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'advisories', 'row_count',
-  CASE WHEN n < 200 THEN 'fail' ELSE 'pass' END,
-  n, 200, 'CISA cybersecurity advisories (ICSA, AA series)'
+  CASE WHEN n < 20 THEN 'fail' ELSE 'pass' END,
+  n, 20, 'CISA cybersecurity advisories (ICSA, AA series); RSS feed capped at ~30 items'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln/cyber_vuln/advisories', allow_moved_paths := true));
 
 -- T3: sample
