@@ -177,7 +177,13 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
-      - name: Publish to GitHub Packages
+      - name: Publish driver-base to GitHub Packages
+        run: ./gradlew :driver-base:publishAllPublicationsToGitHubPackagesRepository --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Publish askamerica-engine to GitHub Packages
         run: ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
