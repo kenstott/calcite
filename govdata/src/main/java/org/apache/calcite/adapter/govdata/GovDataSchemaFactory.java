@@ -193,8 +193,30 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         .incrementalTracker(tracker)
         .addSchema(name, factory, enrichedOperand);
 
-    // Run ETL for all schemas
-    ModelLifecycleProcessor.ProcessResult result = processorBuilder.build().process();
+    // Run ETL for all schemas; retry once with refreshed R2 credentials on S3 auth failure
+    ModelLifecycleProcessor.ProcessResult result;
+    try {
+      result = processorBuilder.build().process();
+    } catch (RuntimeException ex) {
+      if (!isS3AuthFailure(ex)) {
+        throw ex;
+      }
+      LOGGER.warn("S3 auth failure — refreshing R2 credentials and retrying once");
+      String apiKey = System.getenv("ASKAMERICA_API_KEY");
+      try {
+        Map<String, String> freshCreds = R2CredentialProvider.refresh(apiKey);
+        Map<String, Object> retryOperand = new HashMap<>(operand);
+        updateS3Credentials(retryOperand, freshCreds);
+        initializeStorageProviders(retryOperand);
+      } catch (java.io.IOException refreshEx) {
+        throw new RuntimeException("S3 auth failure and credential refresh failed", refreshEx);
+      }
+      result = processorBuilder
+          .sourceStorage(sourceStorage)
+          .materializedStorage(materializedStorage)
+          .build()
+          .process();
+    }
 
     // Cache dependency schemas so they can be returned if requested later
     for (String depDataSource : factory.getDependencies()) {
@@ -427,6 +449,50 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       resolved.put(entry.getKey(), resolveEnvVar(entry.getValue()));
     }
     return resolved;
+  }
+
+  /**
+   * Walks the cause chain looking for an S3 auth failure (HTTP 401/403 or known error codes).
+   */
+  private static boolean isS3AuthFailure(Throwable t) {
+    Throwable cause = t;
+    while (cause != null) {
+      if (cause instanceof com.amazonaws.AmazonServiceException) {
+        com.amazonaws.AmazonServiceException ase = (com.amazonaws.AmazonServiceException) cause;
+        int status = ase.getStatusCode();
+        String code = ase.getErrorCode();
+        if (status == 401 || status == 403) {
+          return true;
+        }
+        if ("InvalidAccessKeyId".equals(code)
+            || "SignatureDoesNotMatch".equals(code)
+            || "InvalidSecurity".equals(code)
+            || "AccessDenied".equals(code)) {
+          return true;
+        }
+      }
+      cause = cause.getCause();
+    }
+    return false;
+  }
+
+  /**
+   * Overwrites the s3Config / storageConfig entries in the operand map with fresh credentials.
+   */
+  @SuppressWarnings("unchecked")
+  private static void updateS3Credentials(Map<String, Object> operand,
+      Map<String, String> creds) {
+    for (String key : new String[]{"s3Config", "storageConfig"}) {
+      Object existing = operand.get(key);
+      Map<String, Object> cfg = existing instanceof Map
+          ? new HashMap<>((Map<String, Object>) existing)
+          : new HashMap<>();
+      cfg.put("accessKeyId",     creds.get("accessKeyId"));
+      cfg.put("secretAccessKey", creds.get("secretAccessKey"));
+      cfg.put("endpoint",        creds.get("endpoint"));
+      cfg.put("region",          creds.get("region"));
+      operand.put(key, cfg);
+    }
   }
 
   /**

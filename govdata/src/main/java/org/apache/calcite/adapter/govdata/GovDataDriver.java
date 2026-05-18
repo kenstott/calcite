@@ -21,6 +21,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -264,10 +265,11 @@ public class GovDataDriver extends Driver {
       return "";
     }
 
-    String credBlock = "        \"accessKeyId\": \"${AWS_ACCESS_KEY_ID}\","
-        + "\n        \"secretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\","
-        + "\n        \"endpoint\": \"${AWS_ENDPOINT_OVERRIDE}\","
-        + "\n        \"region\": \"${AWS_REGION:auto}\"";
+    Map<String, String> creds = R2CredentialProvider.resolve();
+    String credBlock = "        \"accessKeyId\": \"" + creds.get("accessKeyId") + "\","
+        + "\n        \"secretAccessKey\": \"" + creds.get("secretAccessKey") + "\","
+        + "\n        \"endpoint\": \"" + creds.get("endpoint") + "\","
+        + "\n        \"region\": \"" + creds.get("region") + "\"";
 
     return ",\n      \"s3Config\": {\n" + credBlock + "\n      }"
         + ",\n      \"storageConfig\": {\n" + credBlock + "\n      }";
