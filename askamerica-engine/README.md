@@ -59,15 +59,17 @@ jdbc:askamerica:source=fec,crime,weather
 4. **Driver class:** `org.apache.calcite.adapter.askamerica.AskAmericaDriver`
 5. No username or password required for most schemas
 
-## Python (JPype)
+## Python
 
-Install the Python package, download the JAR, and query in three steps:
+Install the package, download the JAR, and query:
 
 ```bash
 pip install 'askamerica[engine]'
 askamerica install-engine   # downloads JAR to ~/.askamerica/engine/
 askamerica login            # get your free API key
 ```
+
+**One-liner — returns a pandas DataFrame:**
 
 ```python
 import askamerica as aa
@@ -76,18 +78,14 @@ df = aa.query("SELECT company_name, filing_type, filing_date FROM sec.filing_met
 print(df)
 ```
 
-Or use JPype directly, letting the `askamerica` package resolve the JAR path:
+**Raw JDBC connection — for metadata, prepared statements, or custom URLs:**
 
 ```python
-import jpype
-from askamerica.engine import get_engine_jar  # resolves ~/.askamerica/engine/ or $ASKAMERICA_ENGINE_JAR
+import askamerica as aa
 
-jpype.startJVM(classpath=[get_engine_jar()])
-
-Driver = jpype.JClass("org.apache.calcite.adapter.askamerica.AskAmericaDriver")
-conn   = Driver().connect("jdbc:askamerica:source=sec", jpype.JClass("java.util.Properties")())
-stmt   = conn.createStatement()
-rs     = stmt.executeQuery(
+conn = aa.connect()   # JVM and JAR managed internally — no JPype import needed
+stmt = conn.createStatement()
+rs   = stmt.executeQuery(
     "SELECT company_name, filing_type FROM sec.filing_metadata "
     "ORDER BY filing_date DESC FETCH FIRST 5 ROWS ONLY"
 )
@@ -95,8 +93,6 @@ while rs.next():
     print(rs.getString("company_name"), rs.getString("filing_type"))
 conn.close()
 ```
-
-`get_engine_jar()` checks `$ASKAMERICA_ENGINE_JAR` first, then falls back to `~/.askamerica/engine/askamerica-engine.jar` (the default `install-engine` location), and raises a clear error if neither exists.
 
 ## Sample queries
 
