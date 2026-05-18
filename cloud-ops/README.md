@@ -8,7 +8,7 @@ Build the shadow JAR from this repo:
 
 ```bash
 ./gradlew :cloud-ops:shadowJar
-# Output: cloud-ops/build/libs/calcite-cloud-ops-*-all.jar
+# Output: cloud-ops/build/libs/sih-cloudops-*.jar
 ```
 
 ## Connect
@@ -71,7 +71,7 @@ jdbc:cloudops:azure.tenantId=xxx;azure.clientId=xxx;azure.clientSecret=xxx;azure
 
 1. **New Connection → JDBC**
 2. **JDBC URL:** `jdbc:cloudops:azure.tenantId=xxx;azure.clientId=xxx;azure.clientSecret=xxx;azure.subscriptionIds=sub1`
-3. **Driver JAR:** add `calcite-cloud-ops-*-all.jar`
+3. **Driver JAR:** add `sih-cloudops-*.jar`
 4. **Driver class:** `org.apache.calcite.adapter.ops.CloudOpsDriver`
 
 ## Available tables

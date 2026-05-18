@@ -8,7 +8,7 @@ Build the shadow JAR from this repo:
 
 ```bash
 ./gradlew :file:shadowJar
-# Output: file/build/libs/calcite-file-*-all.jar
+# Output: file/build/libs/sih-aperio-*.jar
 ```
 
 ## Connect
@@ -84,7 +84,7 @@ jdbc:aperio:model=/path/to/model.json
 
 1. **New Connection → JDBC**
 2. **JDBC URL:** `jdbc:aperio:/path/to/your/data`
-3. **Driver JAR:** add `calcite-file-*-all.jar`
+3. **Driver JAR:** add `sih-aperio-*.jar`
 4. **Driver class:** `org.apache.calcite.adapter.file.AperioDriver`
 
 ## Sample queries

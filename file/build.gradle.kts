@@ -19,6 +19,7 @@ import com.github.vlsi.gradle.ide.dsl.taskTriggers
 
 plugins {
     id("com.github.vlsi.ide")
+    id("com.github.johnrengelman.shadow")
 }
 
 dependencies {
@@ -204,4 +205,12 @@ tasks.register("printTestClasspath") {
     doLast {
         println(sourceSets.test.get().runtimeClasspath.asPath)
     }
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("sih-aperio")
+    archiveClassifier.set("")
+    isZip64 = true
+    mergeServiceFiles()
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }

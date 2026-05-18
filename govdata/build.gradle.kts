@@ -187,8 +187,8 @@ tasks.test {
 
 // Shadow JAR configuration for fat JDBC driver (includes govdata + file adapters)
 tasks.shadowJar {
-    archiveBaseName.set("calcite-govdata")
-    archiveClassifier.set("all")
+    archiveBaseName.set("sih-govdata")
+    archiveClassifier.set("")
     mergeServiceFiles()
 
     // Enable zip64 for large JARs

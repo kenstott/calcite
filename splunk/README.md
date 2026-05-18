@@ -8,7 +8,7 @@ Build the shadow JAR from this repo:
 
 ```bash
 ./gradlew :splunk:shadowJar
-# Output: splunk/build/libs/calcite-splunk-*-all.jar
+# Output: splunk/build/libs/sih-splunk-*.jar
 ```
 
 ## Connect
@@ -59,7 +59,7 @@ jdbc:splunk:
 
 1. **New Connection → JDBC**
 2. **JDBC URL:** `jdbc:splunk:url=https://localhost:8089;user=admin;password=changeme`
-3. **Driver JAR:** add `calcite-splunk-*-all.jar`
+3. **Driver JAR:** add `sih-splunk-*.jar`
 4. **Driver class:** `org.apache.calcite.adapter.splunk.SplunkDriver`
 
 ## Sample queries

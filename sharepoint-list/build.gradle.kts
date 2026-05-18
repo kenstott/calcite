@@ -19,6 +19,7 @@ import com.github.vlsi.gradle.ide.dsl.taskTriggers
 
 plugins {
     id("com.github.vlsi.ide")
+    id("com.github.johnrengelman.shadow")
 }
 
 dependencies {
@@ -84,4 +85,12 @@ ide {
     }
 
     generatedSource(annotationProcessorMain)
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("sih-sharepoint")
+    archiveClassifier.set("")
+    isZip64 = true
+    mergeServiceFiles()
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }

@@ -16,6 +16,7 @@
  */
 
 apply plugin: 'java-library'
+apply plugin: 'com.github.johnrengelman.shadow'
 
 dependencies {
     implementation project(':core')
@@ -151,10 +152,18 @@ task allTests(type: Test) {
     useJUnitPlatform()
     maxHeapSize = '4g'
     systemProperty 'java.awt.headless', 'true'
-    
+
     // Separate test reports
     reports {
         html.outputLocation = layout.buildDirectory.dir('reports/tests/all')
         junitXml.outputLocation = layout.buildDirectory.dir('test-results/all')
     }
+}
+
+shadowJar {
+    archiveBaseName = 'sih-cloudops'
+    archiveClassifier = ''
+    zip64 = true
+    mergeServiceFiles()
+    exclude('META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
 }

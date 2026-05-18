@@ -8,7 +8,7 @@ Build the shadow JAR from this repo:
 
 ```bash
 ./gradlew :sharepoint-list:shadowJar
-# Output: sharepoint-list/build/libs/calcite-sharepoint-list-*-all.jar
+# Output: sharepoint-list/build/libs/sih-sharepoint-*.jar
 ```
 
 ## Connect
@@ -49,7 +49,7 @@ jdbc:sharepoint:siteUrl=https://contoso.sharepoint.com/sites/mysite;authType=DEV
 
 1. **New Connection → JDBC**
 2. **JDBC URL:** `jdbc:sharepoint:siteUrl=https://contoso.sharepoint.com/sites/mysite;authType=CLIENT_CREDENTIALS;clientId=...;clientSecret=...;tenantId=...`
-3. **Driver JAR:** add `calcite-sharepoint-list-*-all.jar`
+3. **Driver JAR:** add `sih-sharepoint-*.jar`
 4. **Driver class:** `org.apache.calcite.adapter.sharepoint.SharePointListDriver`
 
 ## Sample queries

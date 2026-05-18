@@ -8,7 +8,7 @@ Build the shadow JAR from this repo:
 
 ```bash
 ./gradlew :govdata:shadowJar
-# Output: govdata/build/libs/calcite-govdata-*-all.jar
+# Output: govdata/build/libs/sih-govdata-*.jar
 ```
 
 Or use the pre-built AskAmerica engine JAR (includes this driver):
@@ -57,7 +57,7 @@ jdbc:govdata:source=fec,crime,weather
 
 1. **New Connection → JDBC**
 2. **JDBC URL:** `jdbc:govdata:source=geo,sec`
-3. **Driver JAR:** add `calcite-govdata-*-all.jar`
+3. **Driver JAR:** add `sih-govdata-*.jar`
 4. **Driver class:** `org.apache.calcite.adapter.govdata.GovDataDriver`
 5. No username or password required for most schemas
 
