@@ -176,10 +176,9 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
@@ -242,10 +241,9 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
@@ -322,6 +320,9 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
+        releaseWindow:
+          months: [1, 2, 3]
 
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: naics_sectors
@@ -375,6 +376,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
 
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
@@ -475,10 +477,11 @@ partitionedTables:
         stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 180
+        releaseWindow:
+          months: [7, 8, 9]
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: regional_linecodes
@@ -711,6 +714,9 @@ partitionedTables:
         incrementalKeys: [tablename]
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 180
+        releaseWindow:
+          months: [7, 8, 9]
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
@@ -848,6 +854,7 @@ partitionedTables:
         incrementalKeys: [category]
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 30
 
 
 # ============================================================================

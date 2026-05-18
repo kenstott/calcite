@@ -90,8 +90,9 @@ schema_workers() {
     energy|eia)              echo "74 75 76 77" ;;
     patents|uspto)           echo "80 81" ;;
     lands)      echo "82 83" ;;
+    econ_reference|econ-reference) echo "84" ;;
     *)
-      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands" >&2
+      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands, econ_reference" >&2
       exit 1 ;;
   esac
 }
@@ -116,7 +117,7 @@ if [ $# -eq 0 ]; then
   echo ""
   echo "  Named aliases:"
   echo "  $0 all                    — all workers (1-41, 60-77, 80-83)"
-  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81,83)"
+  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81,83-84)"
   echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74,80,82)"
   echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
   echo ""
@@ -137,7 +138,7 @@ for arg in "$@"; do
     if [ "$part" = "all" ]; then
       # All workers — exactly what exists: 1-41, 60-77, 80-83
       for i in $(seq 1 41); do queue+=("$i"); done
-      for i in $(seq 60 77) 80 81 82 83; do queue+=("$i"); done
+      for i in $(seq 60 77) 80 81 82 83 84; do queue+=("$i"); done
     elif [ "$part" = "historical" ]; then
       # All initial/backfill workers — run once on the ingest device.
       # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77, 83); use 'daily' for those.
@@ -148,7 +149,7 @@ for arg in "$@"; do
       # All recurring workers — run this every day on the production server.
       # Workers skip rows already materialized; each handles its own data-lag / release window.
       export GOVDATA_RUN_MODE="daily"
-      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81 83; do queue+=("$i"); done
+      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81 83 84; do queue+=("$i"); done
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
     elif [ "$part" = "stock-quotes" ]; then
       # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.

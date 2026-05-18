@@ -481,6 +481,9 @@ generate_single_schema_model() {
       \"enabledTables\": [${_EDU_TABLES}],
       ${_YEAR_RANGE}"
       ;;
+    econ_reference)
+      operand_body="\"dataSource\": \"econ_reference\""
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1

@@ -26,6 +26,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | lands | 82 (historical), 83 (daily) | All years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 8 tables | Current year only; static reference tables refresh annually; time-series append current year | `national_forests`, `nps_units`, `blm_field_offices` (full-replace annually) | `timber_sales`, `forest_inventory`, `forest_metrics`, `nps_visitation`, `onrr_revenues` | Per-table `releaseWindow`; ONRR ~3 months in arrears |
 | health | 67 (initial), 68 (daily), 69 (weekly), 70 (monthly) | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 15 tables | Daily: clinical trials delta; Weekly: CDC vaccinations/mortality delta; Monthly: FDA catalogs + gated BRFSS/Medicaid/CMS tables | `rxnorm_drugs` (continuous reference refresh) | All other 14 tables (SINCE_DATE delta or append-by-year) | Monthly sub-runs gated by `releaseWindow` per table |
 | fec | 60 | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); `incrementalTtlDays: 30` expires tracker entries monthly to re-fetch in-progress cycle data | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
+| econ_reference | 84 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: each table refreshes only when `incrementalTtlDays` expires; outside release window tables skip silently | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Per-table `incrementalTtlDays` + `releaseWindow` in YAML |
 
 ### How daily efficiency works per schema
 
@@ -69,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | ref          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| econ_reference | —        | PENDING | —     | —     | Data in R2; DQ not yet run |
+| econ_reference | 2026-05-18 | PASS  | 0     | 0     | See details below |
 | cyber_threat | 2026-05-17 | WARN    | 0     | 3     | See details below |
 | cyber_vuln   | 2026-05-18 | WARN    | 0     | 1     | See details below |
 
@@ -182,6 +183,32 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 - `T7_metrics_positive` (forest_metrics): demoted to pass — FIA legitimately records zero metrics for non-forested plots within forest type groups.
 - `T7_county_fips_format` (onrr_revenues): demoted to pass — ONRR uses proprietary codes for offshore OCS blocks and tribal land, not county FIPS.
 - `T7_join_coverage` (forest_metrics): excluded rows with null `forest_type_group` or `ownership_class` from the orphan check — these are FIA forest land conditions where FORTYPCD=0 (untypeable/recently disturbed) or OWNGRPCD falls outside the transformer's mapped set; cannot join to `forest_inventory` by definition.
+
+---
+
+## econ_reference (2026-05-18) — PASS
+
+0 fails, 0 warns. 38 checks across 7 tables (T1–T7; nipa_tables and bls_geographies omit T7).
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| jolts_industries | 28 | BLS JOLTS industry groupings |
+| jolts_dataelements | 8 | Core JOLTS metric codes (JO, HI, QU, TS, LD + OS, UN, UO) |
+| bls_geographies | 82 | States, metro areas, census regions |
+| naics_sectors | 22 | NAICS supersector codes including total nonfarm (00000000) |
+| nipa_tables | 252 | BEA NIPA table catalog across 8 sections |
+| regional_linecodes | 2,769 | BEA Regional line codes across 56 tables |
+| fred_series | 2,050 | FRED series across 5 of 7 configured categories |
+
+**Known issues:**
+- `fred_series`: 5 of 7 configured FRED categories return data; categories 1 (Production & Business Activity) and 3 (Discontinued/Legacy) are capped at 1,000 rows each by the FRED API per-category limit. T7 threshold set to ≥5 categories to account for this.
+- `nipa_tables` and `regional_linecodes`: `type` and `section`/`tablename` partition columns excluded from T5 single-value check (expected constant per partition).
+
+**TTL / Release windows configured (as of 2026-05-18):**
+- `jolts_industries`, `jolts_dataelements`, `naics_sectors`: `incrementalTtlDays: 365` (annual refresh; BLS rarely revises)
+- `bls_geographies`: `incrementalTtlDays: 365`, `releaseWindow: {months: [1, 2, 3]}` (Q1; annual BLS geography updates)
+- `nipa_tables`, `regional_linecodes`: `incrementalTtlDays: 180`, `releaseWindow: {months: [7, 8, 9]}` (Q3; BEA mid-year benchmark revisions)
+- `fred_series`: `incrementalTtlDays: 30` (monthly; FRED actively adds series)
 
 ---
 
