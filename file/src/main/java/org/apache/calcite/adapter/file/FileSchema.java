@@ -3867,6 +3867,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Check if this is a DuckDB+Hive refreshable table that should use lazy initialization
         boolean useLazyInit = shouldUseLazyInitialization(config);
 
+        // Determine up front whether this table uses iceberg format (needed later to decide
+        // whether empty matchingFiles is intentional vs. a missing-data condition)
+        Map<String, Object> materializeConfig = config.getMaterialize();
+        boolean isIcebergFormat = materializeConfig != null && "iceberg".equals(materializeConfig.get("format"));
+
         // Find all files matching the pattern (skip for lazy-initialized tables)
         List<String> matchingFiles;
         if (useLazyInit) {
@@ -3883,9 +3888,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           } else {
             // Iceberg tables don't use the staging pattern for reads — skip file enumeration
             // and let discoverExistingIcebergTable locate the catalog instead
-            Map<String, Object> mat = config.getMaterialize();
-            boolean isIcebergFormat = mat != null && "iceberg".equals(mat.get("format"));
-
             if (isIcebergFormat) {
               LOGGER.info("Table '{}' uses format=iceberg — skipping staging pattern enumeration", config.getName());
               matchingFiles = java.util.Collections.emptyList();
@@ -4087,6 +4089,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String firstFile = matchingFiles.get(0);
             partitionSource = Sources.of(firstFile);
             LOGGER.info("Recording metadata for partitioned table '{}' using first file: {}", config.getName(), firstFile);
+          } else if (isIcebergFormat) {
+            // Iceberg tables intentionally have no staging files — call discoverExistingIcebergTable
+            // directly to register the ICEBERG_PARQUET conversion record so DuckDB can create
+            // iceberg_scan views. No partitionSource needed.
+            LOGGER.info("Table '{}' is iceberg format with no staging files — running iceberg discovery directly", config.getName());
+            if (conversionMetadata != null) {
+              discoverExistingIcebergTable(config.getName(), partTableConfig);
+            } else {
+              LOGGER.warn("Table '{}' is iceberg format but conversionMetadata is null — cannot discover", config.getName());
+            }
+            continue;
           } else {
             LOGGER.warn("No matching files found for partitioned table '{}', skipping metadata recording", config.getName());
             continue; // Skip to next table
