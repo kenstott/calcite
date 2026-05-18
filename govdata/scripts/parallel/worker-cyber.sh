@@ -70,6 +70,9 @@ run_cyber_model() {
   local extra_json=""
   [ -n "$extra_operands" ] && extra_json=",
       ${extra_operands}"
+  local fresh_start_json=""
+  [ "${FORCE:-false}" = "true" ] && fresh_start_json=',
+      "freshStart": true'
 
   cat > "$model_file" <<ENDJSON
 {
@@ -94,7 +97,7 @@ run_cyber_model() {
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
         "endpoint": "\${AWS_ENDPOINT_OVERRIDE}"
       },
-      "enabledTables": [${enabled_tables}]${extra_json}
+      "enabledTables": [${enabled_tables}]${extra_json}${fresh_start_json}
     }
   }]
 }
@@ -109,9 +112,9 @@ ENDJSON
 case "$MODE" in
 
   initial)
-    # Full NVD catalog download (no nvdDeltaDays → fetches all ~350k CVEs)
+    # Full NVD catalog + KEV + CWE + junction tables
     run_cyber_model "cyber_vuln" "vuln-full" \
-      '"vulnerabilities", "kev_catalog", "cwe_catalog"'
+      '"vulnerabilities", "vulnerability_cwes", "kev_catalog", "kev_cwes", "cwe_catalog"'
 
     # Static standards: fetch once; change only when NIST/CIS/OWASP publish new versions
     run_cyber_model "cyber_threat" "threat-static" \

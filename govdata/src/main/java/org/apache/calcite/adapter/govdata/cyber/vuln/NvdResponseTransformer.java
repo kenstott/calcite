@@ -21,49 +21,26 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Transforms NVD CVE 2.0 API responses into flat rows, handling pagination.
+ * Transforms one page of NVD CVE 2.0 API response into flat rows.
  *
- * <p>The NVD API returns pages of up to 2,000 CVEs. This transformer fetches all
- * subsequent pages and streams rows incrementally to avoid accumulating the full
- * dataset in heap. Only one page's Jackson tree is live at a time.
+ * <p>Pagination is driven by the file adapter's built-in OFFSET pagination
+ * (configured in cyber-vuln-schema.yaml: type=OFFSET, limitParam=resultsPerPage,
+ * offsetParam=startIndex, pageSize=2000, countPath=totalResults).
+ * This transformer is called once per page.
  *
  * <p>CVSS priority: V3.1 preferred, V3.0 fallback, then V2.0. V4.0 stored as
  * additional columns when present.
- *
- * <p>Input: first-page response from
- * {@code https://services.nvd.nist.gov/rest/json/cves/2.0}
- * <pre>
- * {
- *   "resultsPerPage": 2000,
- *   "startIndex": 0,
- *   "totalResults": 347000,
- *   "vulnerabilities": [
- *     { "cve": { "id": "CVE-2021-44228", ... } },
- *     ...
- *   ]
- * }
- * </pre>
  */
 public class NvdResponseTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NvdResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-
-  private static final int PAGE_SIZE = 2000;
-  private static final int TIMEOUT_MS = 60_000;
-  private static final String NVD_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
-  /** Delay between pagination requests to stay within NVD rate limits (6 req/30s with key). */
-  private static final long RATE_DELAY_MS = 600L;
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -80,45 +57,19 @@ public class NvdResponseTransformer implements ResponseTransformer {
         throw new RuntimeException("NVD API error: " + msg);
       }
 
-      int totalResults = root.path("totalResults").asInt(0);
       int startIndex = root.path("startIndex").asInt(0);
-      int resultsPerPage = root.path("resultsPerPage").asInt(PAGE_SIZE);
+      int totalResults = root.path("totalResults").asInt(0);
 
-      LOGGER.info("NVD: totalResults={} startIndex={} resultsPerPage={}",
-          totalResults, startIndex, resultsPerPage);
-
-      ByteArrayOutputStream baos = new ByteArrayOutputStream(16 * 1024 * 1024);
+      ByteArrayOutputStream baos = new ByteArrayOutputStream(4 * 1024 * 1024);
       JsonGenerator gen = MAPPER.getFactory().createGenerator(baos);
       gen.writeStartArray();
-
       int[] rowCount = {0};
       writePage(root, gen, rowCount);
-
-      // Fetch remaining pages; each page's tree is GC-eligible after writePage returns
-      String apiKey = context.getHeaders().get("apiKey");
-      int nextStart = startIndex + resultsPerPage;
-      while (nextStart < totalResults) {
-        String pageResponse = fetchPage(nextStart, context, apiKey);
-        if (pageResponse == null) {
-          LOGGER.warn("NVD: pagination stopped at startIndex={}", nextStart);
-          break;
-        }
-        JsonNode pageRoot = MAPPER.readTree(pageResponse);
-        int fetched = pageRoot.path("resultsPerPage").asInt(PAGE_SIZE);
-        writePage(pageRoot, gen, rowCount);
-        nextStart += fetched;
-
-        if (rowCount[0] % 10000 == 0) {
-          LOGGER.info("NVD: wrote {} rows so far (total={})", rowCount[0], totalResults);
-        }
-
-        sleepQuietly(RATE_DELAY_MS);
-      }
-
       gen.writeEndArray();
       gen.close();
 
-      LOGGER.info("NVD: returning {} CVE rows (totalResults={})", rowCount[0], totalResults);
+      LOGGER.info("NVD: {} CVE rows from page startIndex={} (total={})",
+          rowCount[0], startIndex, totalResults);
       return baos.toString(StandardCharsets.UTF_8.name());
 
     } catch (RuntimeException e) {
@@ -261,60 +212,6 @@ public class NvdResponseTransformer implements ResponseTransformer {
     return sb.toString();
   }
 
-  private String fetchPage(int startIndex, RequestContext context, String apiKey) {
-    try {
-      // Reconstruct URL with pagination params
-      StringBuilder url = new StringBuilder(NVD_BASE_URL);
-      url.append("?startIndex=").append(startIndex);
-      url.append("&resultsPerPage=").append(PAGE_SIZE);
-
-      // Preserve any original query parameters except startIndex/resultsPerPage
-      for (java.util.Map.Entry<String, String> entry : context.getParameters().entrySet()) {
-        String key = entry.getKey();
-        if (!"startIndex".equals(key) && !"resultsPerPage".equals(key)) {
-          url.append("&").append(key).append("=").append(entry.getValue());
-        }
-      }
-
-      HttpURLConnection conn =
-          (HttpURLConnection) URI.create(url.toString()).toURL().openConnection();
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(TIMEOUT_MS);
-      conn.setReadTimeout(TIMEOUT_MS);
-      conn.setRequestProperty("Accept", "application/json");
-      if (apiKey != null && !apiKey.isEmpty()) {
-        conn.setRequestProperty("apiKey", apiKey);
-      }
-
-      int status = conn.getResponseCode();
-      if (status == 403 || status == 429) {
-        LOGGER.warn("NVD: rate limit ({}) at startIndex={}, sleeping 30s", status, startIndex);
-        sleepQuietly(30_000L);
-        conn.disconnect();
-        return fetchPage(startIndex, context, apiKey);
-      }
-      if (status != 200) {
-        LOGGER.warn("NVD: HTTP {} fetching startIndex={}", status, startIndex);
-        return null;
-      }
-
-      BufferedReader reader =
-          new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line);
-      }
-      reader.close();
-      conn.disconnect();
-      return sb.toString();
-
-    } catch (Exception e) {
-      LOGGER.warn("NVD: error fetching startIndex={}: {}", startIndex, e.getMessage());
-      return null;
-    }
-  }
-
   private static String textOrNull(JsonNode node, String field) {
     JsonNode v = node.get(field);
     if (v == null || v.isNull() || v.isMissingNode()) {
@@ -330,13 +227,5 @@ public class NvdResponseTransformer implements ResponseTransformer {
       return null;
     }
     return v.asDouble();
-  }
-
-  private static void sleepQuietly(long ms) {
-    try {
-      Thread.sleep(ms);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 }

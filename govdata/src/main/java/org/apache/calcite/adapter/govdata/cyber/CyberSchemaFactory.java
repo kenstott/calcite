@@ -17,16 +17,16 @@ import org.apache.calcite.adapter.govdata.cyber.threat.CyberThreatCacheManifest;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevDownloader;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CweDownloader;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CyberVulnCacheManifest;
-import org.apache.calcite.adapter.govdata.cyber.vuln.NvdDownloader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Shared sub-schema factory for both {@code cyber_vuln} and {@code cyber_threat}.
@@ -55,6 +55,16 @@ import java.util.Map;
  */
 public class CyberSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CyberSchemaFactory.class);
+
+  private static final List<String> ALL_VULN_TABLES = Collections.unmodifiableList(Arrays.asList(
+      "cwe_catalog", "vulnerabilities", "vulnerability_cwes",
+      "kev_catalog", "kev_cwes", "osv_vulnerabilities",
+      "vuln_cross_refs", "advisories"));
+
+  private static final List<String> ALL_THREAT_TABLES = Collections.unmodifiableList(Arrays.asList(
+      "attack_techniques", "ioc_urls", "ioc_hashes", "ioc_ips", "ioc_mixed",
+      "nist_controls", "nist_csf_functions", "cis_controls", "owasp_top10",
+      "attack_to_nist_mappings", "threat_pulses", "active_threat_intel"));
 
   private final String dataSource;
 
@@ -124,26 +134,28 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
     }
     String vulnDir = sp.resolvePath(directory, "vuln");
 
+    @SuppressWarnings("unchecked")
+    List<String> enabledList = (List<String>) operand.get("enabledTables");
+    final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
+        ? Collections.emptySet() : new HashSet<>(enabledList);
+
     try {
-      LOGGER.info("Cyber vuln autoDownload: starting CWE catalog download");
-      new CweDownloader(sp, vulnDir).download();
-      LOGGER.info("Cyber vuln autoDownload: starting CISA KEV download");
-      new CisaKevDownloader(sp, vulnDir).download();
-
-      Object deltaDaysObj = operand.get("nvdDeltaDays");
-      int nvdDeltaDays = (deltaDaysObj instanceof Number)
-          ? ((Number) deltaDaysObj).intValue() : 0;
-
-      if (nvdDeltaDays > 0) {
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
-        String endDate = LocalDateTime.now().format(fmt);
-        String startDate = LocalDateTime.now().minusDays(nvdDeltaDays).format(fmt);
-        LOGGER.info("Cyber vuln autoDownload: starting NVD delta download ({} days)", nvdDeltaDays);
-        new NvdDownloader(sp, vulnDir, nvdApiKey, startDate, endDate).download();
+      if (enabled.isEmpty() || enabled.contains("cwe_catalog")) {
+        LOGGER.info("Cyber vuln autoDownload: starting CWE catalog download");
+        new CweDownloader(sp, vulnDir).download();
       } else {
-        LOGGER.info("Cyber vuln autoDownload: starting NVD full catalog download");
-        new NvdDownloader(sp, vulnDir, nvdApiKey).download();
+        LOGGER.info("Cyber vuln autoDownload: cwe_catalog not in enabledTables — skipping");
       }
+
+      if (enabled.isEmpty() || enabled.contains("kev_catalog")) {
+        LOGGER.info("Cyber vuln autoDownload: starting CISA KEV download");
+        new CisaKevDownloader(sp, vulnDir).download();
+      } else {
+        LOGGER.info("Cyber vuln autoDownload: kev_catalog not in enabledTables — skipping");
+      }
+
+      // NVD (vulnerabilities + vulnerability_cwes) is fetched by the ETL pipeline via
+      // the file adapter's built-in OFFSET pagination — no autoDownload needed here.
 
       LOGGER.info("Cyber vuln autoDownload: all downloads complete");
     } catch (Exception e) {
@@ -154,18 +166,50 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
 
   private void configureVulnHooks(FileSchemaBuilder builder, Map<String, Object> operand,
       String nvdApiKey, String githubToken) {
-    builder.isEnabled("osv_vulnerabilities", ctx -> {
-      String ecosystems = System.getenv("CYBER_OSV_ECOSYSTEMS");
-      return ecosystems != null && !ecosystems.isEmpty();
-    });
+    @SuppressWarnings("unchecked")
+    List<String> enabledList = (List<String>) operand.get("enabledTables");
+    final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
+        ? Collections.emptySet() : new HashSet<>(enabledList);
 
-    builder.isEnabled("github_security_advisories", ctx -> githubToken != null && !githubToken.isEmpty());
+    for (final String table : ALL_VULN_TABLES) {
+      if ("osv_vulnerabilities".equals(table) || "advisories".equals(table)) {
+        continue; // handled separately below with compound checks
+      }
+      builder.isEnabled(table, ctx -> enabled.isEmpty() || enabled.contains(table));
+    }
+
+    builder.isEnabled("osv_vulnerabilities", ctx ->
+        enabled.isEmpty() || enabled.contains("osv_vulnerabilities"));
+
+    builder.isEnabled("advisories", ctx -> {
+      if (!enabled.isEmpty() && !enabled.contains("advisories")) return false;
+      return githubToken != null && !githubToken.isEmpty();
+    });
   }
 
   private void configureThreatHooks(FileSchemaBuilder builder, Map<String, Object> operand,
       String threatfoxKey, String otxKey) {
-    builder.isEnabled("ioc_mixed", ctx -> threatfoxKey != null && !threatfoxKey.isEmpty());
-    builder.isEnabled("threat_pulses", ctx -> otxKey != null && !otxKey.isEmpty());
+    @SuppressWarnings("unchecked")
+    List<String> enabledList = (List<String>) operand.get("enabledTables");
+    final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
+        ? Collections.emptySet() : new HashSet<>(enabledList);
+
+    for (final String table : ALL_THREAT_TABLES) {
+      if ("ioc_mixed".equals(table) || "threat_pulses".equals(table)) {
+        continue; // handled separately below with compound checks
+      }
+      builder.isEnabled(table, ctx -> enabled.isEmpty() || enabled.contains(table));
+    }
+
+    builder.isEnabled("ioc_mixed", ctx -> {
+      if (!enabled.isEmpty() && !enabled.contains("ioc_mixed")) return false;
+      return threatfoxKey != null && !threatfoxKey.isEmpty();
+    });
+
+    builder.isEnabled("threat_pulses", ctx -> {
+      if (!enabled.isEmpty() && !enabled.contains("threat_pulses")) return false;
+      return otxKey != null && !otxKey.isEmpty();
+    });
   }
 
   /**

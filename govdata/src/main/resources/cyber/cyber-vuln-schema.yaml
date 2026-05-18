@@ -105,11 +105,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # VULNERABILITIES — NVD CVE 2.0 canonical records
@@ -189,6 +194,12 @@ partitionedTables:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
         format: json
+        pagination:
+          type: OFFSET
+          limitParam: resultsPerPage
+          offsetParam: startIndex
+          pageSize: 2000
+          countPath: totalResults
       rateLimit:
         requestsPerSecond: 0.167
         maxRetries: 3
@@ -204,11 +215,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # VULNERABILITY_CWES — NVD CVE→CWE junction, materialized at ingest
@@ -244,6 +260,12 @@ partitionedTables:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
         format: json
+        pagination:
+          type: OFFSET
+          limitParam: resultsPerPage
+          offsetParam: startIndex
+          pageSize: 2000
+          countPath: totalResults
       rateLimit:
         requestsPerSecond: 0.167
         maxRetries: 3
@@ -259,11 +281,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # CISA KEV CATALOG — Known Exploited Vulnerabilities
@@ -354,11 +381,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # KEV_CWES — CISA KEV CVE→CWE junction, materialized at ingest
@@ -408,11 +440,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # OSV VULNERABILITIES — Open Source Vulnerabilities per-ecosystem records
@@ -512,11 +549,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # VULN CROSS REFS — CVE to external identifier mappings
@@ -579,11 +621,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
   # ==========================================================================
   # ADVISORIES — CISA cybersecurity advisories
@@ -658,11 +705,16 @@ partitionedTables:
 
     materialize:
       enabled: true
-      format: parquet
+      format: iceberg
+      output:
+        pattern: ""
       partition:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: false
 
 # ============================================================================
 # CONSTRAINTS

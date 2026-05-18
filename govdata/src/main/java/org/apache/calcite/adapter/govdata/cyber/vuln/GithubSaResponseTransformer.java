@@ -74,37 +74,22 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
     ArrayNode allRows = MAPPER.createArrayNode();
 
     try {
-      // First page is passed as response
-      if (response != null && !response.trim().isEmpty()) {
-        String cursor = processPage(response, allRows);
-        // If cursor is non-null, there are more pages
-        while (cursor != null) {
+      // The HTTP source sends a POST with no body; GitHub rejects it. Ignore the initial
+      // response entirely and self-fetch all pages using the GraphQL cursor API.
+      String cursor = null;
+      do {
+        if (cursor != null) {
           sleepQuietly(RATE_DELAY_MS);
-          String pageResponse = fetchPage(token, cursor);
-          if (pageResponse == null) {
-            break;
-          }
-          cursor = processPage(pageResponse, allRows);
-
-          if (allRows.size() % 1000 == 0 && allRows.size() > 0) {
-            LOGGER.info("GithubSA: accumulated {} cross-refs", allRows.size());
-          }
         }
-      } else {
-        // No initial response — fetch first page ourselves
-        String pageResponse = fetchPage(token, null);
-        if (pageResponse != null) {
-          String cursor = processPage(pageResponse, allRows);
-          while (cursor != null) {
-            sleepQuietly(RATE_DELAY_MS);
-            pageResponse = fetchPage(token, cursor);
-            if (pageResponse == null) {
-              break;
-            }
-            cursor = processPage(pageResponse, allRows);
-          }
+        String pageResponse = fetchPage(token, cursor);
+        if (pageResponse == null) {
+          break;
         }
-      }
+        cursor = processPage(pageResponse, allRows);
+        if (allRows.size() % 1000 == 0 && allRows.size() > 0) {
+          LOGGER.info("GithubSA: accumulated {} cross-refs", allRows.size());
+        }
+      } while (cursor != null);
     } catch (Exception e) {
       LOGGER.error("GithubSA: failed: {}", e.getMessage());
       throw new RuntimeException("Failed to process GitHub Security Advisories: " + e.getMessage(),
