@@ -267,7 +267,7 @@ public class GovDataDriver extends Driver {
     String credBlock = "        \"accessKeyId\": \"${AWS_ACCESS_KEY_ID}\","
         + "\n        \"secretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\","
         + "\n        \"endpoint\": \"${AWS_ENDPOINT_OVERRIDE}\","
-        + "\n        \"region\": \"${AWS_REGION}\"";
+        + "\n        \"region\": \"${AWS_REGION:auto}\"";
 
     return ",\n      \"s3Config\": {\n" + credBlock + "\n      }"
         + ",\n      \"storageConfig\": {\n" + credBlock + "\n      }";
