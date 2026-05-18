@@ -117,8 +117,8 @@ publishing {
                 url.set("https://github.com/kenstott/calcite")
                 licenses {
                     license {
-                        name.set("Apache License, Version 2.0")
-                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                        name.set("Business Source License 1.1")
+                        url.set("https://github.com/kenstott/calcite/blob/main/LICENSE-BSL.txt")
                     }
                 }
                 developers {

@@ -191,8 +191,8 @@ jobs:
             <url>https://github.com/kenstott/calcite</url>
             <licenses>
               <license>
-                <name>Apache License, Version 2.0</name>
-                <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+                <name>Business Source License 1.1</name>
+                <url>https://github.com/kenstott/calcite/blob/main/LICENSE-BSL.txt</url>
               </license>
             </licenses>
             <developers>
