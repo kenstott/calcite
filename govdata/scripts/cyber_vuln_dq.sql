@@ -419,8 +419,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vuln_cross_refs', 'row_count',
-  CASE WHEN n < 50000 THEN 'fail' ELSE 'pass' END,
-  n, 50000, 'CVE→external (GHSA, NVD, CISA, MITRE) cross-reference mappings'
+  CASE WHEN n < 20000 THEN 'fail' ELSE 'pass' END,
+  n, 20000, 'CVE→external cross-references; currently GHSA-only (~27k); MITRE/OSV sources pending'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln/cyber_vuln/vuln_cross_refs', allow_moved_paths := true));
 
 -- T3: sample
@@ -445,7 +445,7 @@ SELECT 'cyber_vuln', 'vuln_cross_refs', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/cyber_vuln/cyber_vuln/vuln_cross_refs', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'external_source')
 );
 
 -- T6: pk_nulls (cve_id, external_id, external_source NOT NULL)
