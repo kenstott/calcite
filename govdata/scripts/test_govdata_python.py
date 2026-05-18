@@ -42,17 +42,17 @@ jar_path = sys.argv[1] if len(sys.argv) > 1 else find_jar()
 harness = DriverTestHarness(
     jar_path         = jar_path,
     driver_class     = "org.apache.calcite.adapter.askamerica.AskAmericaDriver",
-    url              = "jdbc:askamerica:source=geo",
+    url              = "jdbc:askamerica:source=fec",
     expected_product = "AskAmerica",
     expected_driver  = "AskAmerica JDBC Driver",
     expected_url_prefix = "jdbc:askamerica:",
-    test_schema      = "geo",
-    test_table       = "states",
-    test_columns     = ["state_fips", "state_name", "state_abbr"],
-    test_query       = ("select state_name, state_abbr, state_fips from geo.states "
-                        "order by state_name fetch first 3 rows only"),
-    test_param_col   = "state_abbr",
-    test_param_val   = "CA",
+    test_schema      = "fec",
+    test_table       = "candidates",
+    test_columns     = ["candidate_id", "candidate_name", "party"],
+    test_query       = ("select candidate_id, candidate_name, party from fec.candidates "
+                        "order by candidate_name fetch first 3 rows only"),
+    test_param_col   = "party",
+    test_param_val   = "DEM",
 )
 
 harness.run_all()
