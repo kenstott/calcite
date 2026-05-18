@@ -297,8 +297,18 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
+      - name: Determine version
+        id: ghver
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Publish to GitHub Packages
-        run: ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository --no-daemon
+        run: |
+          ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository \
+            --no-daemon \
+            -PreleaseVersion=${{ steps.ghver.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
