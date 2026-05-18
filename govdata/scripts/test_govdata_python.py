@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-PG-like behaviour verification for the govdata JDBC driver.
+Full JDBC DatabaseMetaData + PG-like behaviour verification for the govdata driver.
 
-Tests that identifiers behave like PostgreSQL:
-  - Metadata (getSchemas/getTables/getColumns) returns lowercase names
-  - Unquoted lowercase SQL resolves correctly
-  - Unquoted UPPERCASE SQL resolves correctly (case-insensitive)
-  - information_schema queries work in both lower and upper case
+Covers every major DatabaseMetaData call a client (BI tool, LLM, ORM) would make:
+  getCatalogs, getSchemas, getTableTypes, getTables, getColumns,
+  getPrimaryKeys, getImportedKeys, getExportedKeys, getIndexInfo,
+  getTypeInfo, getDatabaseProductName, getDriverName/Version,
+  supportsTransactions, getMaxConnections, and SQL execution in all cases.
 
 Usage:
   python scripts/test_govdata_python.py [path/to/askamerica-engine*.jar]
@@ -59,6 +59,7 @@ except Exception:
 
 PASS = "\033[32mPASS\033[0m"
 FAIL = "\033[31mFAIL\033[0m"
+SKIP = "\033[33mSKIP\033[0m"
 failures = []
 
 def check(label, condition, detail=""):
@@ -68,7 +69,18 @@ def check(label, condition, detail=""):
         print(f"  {FAIL}  {label}" + (f" — {detail}" if detail else ""))
         failures.append(label)
 
-def connect(url="jdbc:govdata:source=sec,geo"):
+def skip(label, reason=""):
+    print(f"  {SKIP}  {label}" + (f" — {reason}" if reason else ""))
+
+def rs_to_list(rs, col):
+    rows = []
+    while rs.next():
+        v = rs.getString(col)
+        rows.append(str(v) if v is not None else None)
+    rs.close()
+    return rows
+
+def connect(url="jdbc:govdata:source=geo"):
     GovDataDriver = jpype.JClass("org.apache.calcite.adapter.govdata.GovDataDriver")
     props = jpype.JClass("java.util.Properties")()
     conn = GovDataDriver().connect(url, props)
@@ -94,7 +106,33 @@ conn = connect("jdbc:govdata:source=geo")
 meta = conn.getMetaData()
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("── 1. Schema metadata is lowercase ──────────────────────────────────────")
+print("── 1. Driver identity (getDatabaseProductName / getDriverName) ───────────")
+
+try:
+    product = str(meta.getDatabaseProductName())
+    driver  = str(meta.getDriverName())
+    version = str(meta.getDriverVersion())
+    print(f"  product={product}  driver={driver}  version={version}")
+    check("getDatabaseProductName() returns a non-empty string", len(product) > 0)
+    check("getDriverName() returns a non-empty string",          len(driver) > 0)
+    check("getDriverVersion() returns a non-empty string",       len(version) > 0)
+except Exception as e:
+    check("getDatabaseProductName/DriverName/Version", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 2. getCatalogs() ─────────────────────────────────────────────────────")
+
+try:
+    cats = rs_to_list(meta.getCatalogs(), "TABLE_CAT")
+    print(f"  catalogs: {cats}")
+    check("getCatalogs() does not throw", True)
+    # Calcite returns one empty-string catalog or none — both are valid
+    check("getCatalogs() returns a list (empty or populated)", isinstance(cats, list))
+except Exception as e:
+    check("getCatalogs() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 3. getSchemas() — names are lowercase ────────────────────────────────")
 
 rs = meta.getSchemas()
 schemas = []
@@ -103,12 +141,40 @@ while rs.next():
 rs.close()
 
 print(f"  schemas: {schemas}")
-check("GEO schema name is lowercase 'geo'",   "geo" in schemas,   f"got {schemas}")
+check("geo schema is lowercase 'geo'",    "geo" in schemas,  f"got {schemas}")
 check("No uppercase schema names",
-      all(s == s.lower() for s in schemas),   f"uppercase found: {[s for s in schemas if s != s.lower()]}")
+      all(s == s.lower() for s in schemas),
+      f"uppercase: {[s for s in schemas if s != s.lower()]}")
+check("information_schema present",       "information_schema" in schemas)
+check("pg_catalog present",               "pg_catalog" in schemas)
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 2. Table metadata is lowercase ───────────────────────────────────────")
+print("\n── 4. getSchemas(catalog, schemaPattern) — filtered ─────────────────────")
+
+try:
+    rs = meta.getSchemas(None, "geo")
+    filtered = []
+    while rs.next():
+        filtered.append(str(rs.getString("TABLE_SCHEM")))
+    rs.close()
+    print(f"  getSchemas(null, 'geo'): {filtered}")
+    check("getSchemas(null, 'geo') returns ['geo']", filtered == ["geo"], f"got {filtered}")
+except Exception as e:
+    check("getSchemas(null, 'geo') does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 5. getTableTypes() ───────────────────────────────────────────────────")
+
+try:
+    types = rs_to_list(meta.getTableTypes(), "TABLE_TYPE")
+    print(f"  table types: {types}")
+    check("getTableTypes() returns at least one type", len(types) > 0)
+    check("TABLE type present", "TABLE" in types or any("TABLE" in (t or "") for t in types))
+except Exception as e:
+    check("getTableTypes() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 6. getTables() — names are lowercase ─────────────────────────────────")
 
 rs = meta.getTables(None, "geo", "%", None)
 tables = []
@@ -117,13 +183,31 @@ while rs.next():
 rs.close()
 
 print(f"  geo tables (first 5): {tables[:5]}")
-check("Tables present in geo",         len(tables) > 0)
+check("getTables() returns rows",          len(tables) > 0)
 check("Table names are lowercase",
-      all(t == t.lower() for t in tables), f"uppercase: {[t for t in tables if t != t.lower()]}")
-check("states present",                "states" in tables)
+      all(t == t.lower() for t in tables),
+      f"uppercase: {[t for t in tables if t != t.lower()]}")
+check("'states' table present",            "states" in tables)
+check("'counties' table present",          "counties" in tables)
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 3. Column metadata is lowercase ──────────────────────────────────────")
+print("\n── 7. getTables() — pattern matching ────────────────────────────────────")
+
+try:
+    rs = meta.getTables(None, "geo", "state%", None)
+    pattern_tables = []
+    while rs.next():
+        pattern_tables.append(str(rs.getString("TABLE_NAME")))
+    rs.close()
+    print(f"  getTables(geo, 'state%'): {pattern_tables}")
+    check("getTables with 'state%' pattern returns matches", len(pattern_tables) > 0)
+    check("All matches start with 'state'", all(t.startswith("state") for t in pattern_tables),
+          str(pattern_tables))
+except Exception as e:
+    check("getTables() pattern matching does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 8. getColumns() — names are lowercase ────────────────────────────────")
 
 rs = meta.getColumns(None, "geo", "states", "%")
 cols = []
@@ -131,13 +215,125 @@ while rs.next():
     cols.append(str(rs.getString("COLUMN_NAME")))
 rs.close()
 
-print(f"  states columns (first 5): {cols[:5]}")
-check("Columns present",           len(cols) > 0)
+print(f"  states columns: {cols}")
+check("getColumns() returns rows",         len(cols) > 0)
 check("Column names are lowercase",
-      all(c == c.lower() for c in cols), f"uppercase: {[c for c in cols if c != c.lower()]}")
+      all(c == c.lower() for c in cols),
+      f"uppercase: {[c for c in cols if c != c.lower()]}")
+check("'state_name' column present",       "state_name" in cols)
+check("'state_abbr' column present",       "state_abbr" in cols)
+check("'state_fips' column present",       "state_fips" in cols)
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 4. Lowercase SQL resolves correctly ──────────────────────────────────")
+print("\n── 9. getColumns() — TYPE_NAME populated ────────────────────────────────")
+
+try:
+    rs = meta.getColumns(None, "geo", "states", "%")
+    col_types = {}
+    while rs.next():
+        col_types[str(rs.getString("COLUMN_NAME"))] = str(rs.getString("TYPE_NAME"))
+    rs.close()
+    print(f"  column types (first 5): {dict(list(col_types.items())[:5])}")
+    check("TYPE_NAME is non-null for all columns",
+          all(v not in (None, "null", "None") for v in col_types.values()),
+          str({k: v for k, v in col_types.items() if v in (None, "null", "None")}))
+except Exception as e:
+    check("getColumns() TYPE_NAME populated", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 10. getPrimaryKeys() ─────────────────────────────────────────────────")
+
+try:
+    rs = meta.getPrimaryKeys(None, "geo", "states")
+    pks = []
+    while rs.next():
+        pks.append(str(rs.getString("COLUMN_NAME")))
+    rs.close()
+    print(f"  states primary keys: {pks}")
+    # Calcite may return empty for views/parquet tables — not an error
+    check("getPrimaryKeys() does not throw", True)
+    check("getPrimaryKeys() returns a list", isinstance(pks, list))
+except Exception as e:
+    check("getPrimaryKeys() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 11. getImportedKeys() ────────────────────────────────────────────────")
+
+try:
+    rs = meta.getImportedKeys(None, "geo", "states")
+    fks = []
+    while rs.next():
+        fks.append(str(rs.getString("FK_NAME")))
+    rs.close()
+    print(f"  states imported keys (FK): {fks}")
+    check("getImportedKeys() does not throw", True)
+except Exception as e:
+    check("getImportedKeys() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 12. getExportedKeys() ────────────────────────────────────────────────")
+
+try:
+    rs = meta.getExportedKeys(None, "geo", "states")
+    eks = []
+    while rs.next():
+        eks.append(str(rs.getString("FK_NAME")))
+    rs.close()
+    print(f"  states exported keys: {eks}")
+    check("getExportedKeys() does not throw", True)
+except Exception as e:
+    check("getExportedKeys() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 13. getIndexInfo() ───────────────────────────────────────────────────")
+
+try:
+    rs = meta.getIndexInfo(None, "geo", "states", False, True)
+    idxs = []
+    while rs.next():
+        idx_name = rs.getString("INDEX_NAME")
+        idxs.append(str(idx_name) if idx_name is not None else None)
+    rs.close()
+    print(f"  states indexes: {idxs}")
+    check("getIndexInfo() does not throw", True)
+except Exception as e:
+    check("getIndexInfo() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 14. getTypeInfo() ────────────────────────────────────────────────────")
+
+try:
+    rs = meta.getTypeInfo()
+    type_names = []
+    while rs.next():
+        type_names.append(str(rs.getString("TYPE_NAME")))
+    rs.close()
+    print(f"  type info ({len(type_names)} types, first 5): {type_names[:5]}")
+    check("getTypeInfo() returns at least one type", len(type_names) > 0)
+except Exception as e:
+    check("getTypeInfo() does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 15. Driver capability flags ──────────────────────────────────────────")
+
+try:
+    check("supportsTransactions() does not throw",
+          meta.supportsTransactions() in (True, False))
+    check("isReadOnly() does not throw",
+          conn.isReadOnly() in (True, False))
+    max_conn = int(meta.getMaxConnections())
+    print(f"  getMaxConnections(): {max_conn}")
+    check("getMaxConnections() returns non-negative int", max_conn >= 0)
+    url = str(meta.getURL())
+    print(f"  getURL(): {url}")
+    # GovDataDriver wraps Calcite internally; the underlying connection reports jdbc:calcite:
+    check("getURL() starts with 'jdbc:govdata' or 'jdbc:calcite'",
+          url.startswith("jdbc:govdata") or url.startswith("jdbc:calcite"))
+except Exception as e:
+    check("Driver capability flags do not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 16. Lowercase SQL ────────────────────────────────────────────────────")
 
 try:
     rows = query_rows(conn,
@@ -153,77 +349,136 @@ except Exception as e:
     check("lowercase geo.states query returns rows", False, str(e))
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 5. UPPERCASE SQL resolves correctly (case-insensitive) ───────────────")
+print("\n── 17. UPPERCASE SQL (case-insensitive) ─────────────────────────────────")
 
 try:
-    rows_upper = query_rows(conn,
+    rows = query_rows(conn,
         "SELECT STATE_NAME, STATE_ABBR, STATE_FIPS FROM GEO.STATES "
         "ORDER BY STATE_NAME FETCH FIRST 3 ROWS ONLY")
-    check("UPPERCASE GEO.STATES query returns rows", len(rows_upper) > 0)
-    for r in rows_upper:
-        print(f"    {r.get('state_fips',''):<6} {r.get('state_abbr',''):<4} {r.get('state_name','')}")
+    check("UPPERCASE GEO.STATES query returns rows", len(rows) > 0)
 except Exception as e:
     check("UPPERCASE GEO.STATES query returns rows", False, str(e))
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 6. Mixed-case SQL resolves correctly ─────────────────────────────────")
+print("\n── 18. Mixed-case SQL ───────────────────────────────────────────────────")
 
 try:
-    rows_mixed = query_rows(conn,
+    rows = query_rows(conn,
         "Select State_Name, State_Abbr From Geo.States "
         "Order By State_Name Fetch First 3 Rows Only")
-    check("Mixed-case Geo.States query returns rows", len(rows_mixed) > 0)
+    check("Mixed-case Geo.States query returns rows", len(rows) > 0)
 except Exception as e:
     check("Mixed-case Geo.States query returns rows", False, str(e))
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 7. information_schema.tables — lowercase ─────────────────────────────")
+print("\n── 19. PreparedStatement with parameters ────────────────────────────────")
 
 try:
-    rows_is = query_rows(conn,
+    ps = conn.prepareStatement(
+        "select state_name, state_abbr from geo.states where state_abbr = ? fetch first 1 row only")
+    ps.setString(1, "CA")
+    rs = ps.executeQuery()
+    ps_rows = []
+    while rs.next():
+        ps_rows.append(str(rs.getString("state_name")))
+    rs.close()
+    ps.close()
+    print(f"  PreparedStatement(state_abbr='CA'): {ps_rows}")
+    check("PreparedStatement returns rows",      len(ps_rows) > 0)
+    check("PreparedStatement result is California",
+          any("California" in r for r in ps_rows), str(ps_rows))
+except Exception as e:
+    check("PreparedStatement does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 20. ResultSetMetaData — column labels and types ──────────────────────")
+
+try:
+    stmt = conn.createStatement()
+    rs = stmt.executeQuery(
+        "select state_name, state_abbr, state_fips from geo.states fetch first 1 row only")
+    rsmeta = rs.getMetaData()
+    col_count = int(rsmeta.getColumnCount())
+    labels = [str(rsmeta.getColumnLabel(i+1)) for i in range(col_count)]
+    types  = [str(rsmeta.getColumnTypeName(i+1)) for i in range(col_count)]
+    rs.close()
+    stmt.close()
+    print(f"  labels: {labels}")
+    print(f"  types:  {types}")
+    check("getColumnCount() == 3",              col_count == 3, f"got {col_count}")
+    check("Column labels are lowercase",
+          all(l == l.lower() for l in labels),  str(labels))
+    check("getColumnTypeName() non-empty",
+          all(len(t) > 0 for t in types),       str(types))
+except Exception as e:
+    check("ResultSetMetaData does not throw", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 21. information_schema.tables — lowercase ────────────────────────────")
+
+try:
+    rows = query_rows(conn,
         "select table_schema, table_name from information_schema.tables "
         "where table_schema = 'geo' order by table_name fetch first 5 rows only")
-    check("information_schema.tables (lowercase) returns rows", len(rows_is) > 0)
+    check("information_schema.tables (lowercase) returns rows", len(rows) > 0)
     check("table_schema values are lowercase",
-          all(r.get('table_schema','').islower() for r in rows_is),
-          str([r.get('table_schema') for r in rows_is]))
-    for r in rows_is:
+          all(r.get('table_schema','').islower() for r in rows),
+          str([r.get('table_schema') for r in rows]))
+    for r in rows:
         print(f"    {r.get('table_schema','')}.{r.get('table_name','')}")
 except Exception as e:
     check("information_schema.tables (lowercase) returns rows", False, str(e))
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 8. INFORMATION_SCHEMA.TABLES — uppercase ─────────────────────────────")
+print("\n── 22. INFORMATION_SCHEMA.TABLES — uppercase ────────────────────────────")
 
 try:
-    rows_IS = query_rows(conn,
+    rows = query_rows(conn,
         "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
         "WHERE TABLE_SCHEMA = 'geo' ORDER BY TABLE_NAME FETCH FIRST 5 ROWS ONLY")
-    check("INFORMATION_SCHEMA.TABLES (uppercase) returns rows", len(rows_IS) > 0)
+    check("INFORMATION_SCHEMA.TABLES (uppercase) returns rows", len(rows) > 0)
 except Exception as e:
     check("INFORMATION_SCHEMA.TABLES (uppercase) returns rows", False, str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n── 23. information_schema.columns ───────────────────────────────────────")
+
+try:
+    rows = query_rows(conn,
+        "select column_name, data_type from information_schema.columns "
+        "where table_schema = 'geo' and table_name = 'states' "
+        "order by column_name fetch first 5 rows only")
+    check("information_schema.columns returns rows", len(rows) > 0)
+    check("column_name values are lowercase",
+          all(r.get('column_name','').islower() for r in rows),
+          str([r.get('column_name') for r in rows]))
+    for r in rows:
+        print(f"    {r.get('column_name',''):<20} {r.get('data_type','')}")
+except Exception as e:
+    check("information_schema.columns returns rows", False, str(e))
 
 conn.close()
 
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── 9. Cross-schema join (geo + counties within geo) ─────────────────────")
+print("\n── 24. Cross-schema join ────────────────────────────────────────────────")
 
 conn2 = connect("jdbc:govdata:source=geo")
 try:
-    rows_join = query_rows(conn2,
-        "select s.state_name, c.county_name, c.state_fips "
+    rows = query_rows(conn2,
+        "select s.state_name, c.county_name "
         "from geo.states s "
         "join geo.counties c on s.state_fips = c.state_fips "
         "where s.state_abbr = 'CA' "
         "order by c.county_name fetch first 3 rows only")
-    check("Intra-schema geo join returns rows", len(rows_join) > 0)
-    for r in rows_join:
+    check("Intra-schema geo join returns rows", len(rows) > 0)
+    for r in rows:
         print(f"    {r.get('state_name',''):<15} {r.get('county_name','')}")
 except Exception as e:
     check("Intra-schema geo join returns rows", False, str(e))
 finally:
     conn2.close()
 
+# ══════════════════════════════════════════════════════════════════════════════
 print()
 if failures:
     print(f"\033[31m{len(failures)} test(s) FAILED:\033[0m")
@@ -231,4 +486,4 @@ if failures:
         print(f"  ✗ {f}")
     sys.exit(1)
 else:
-    print(f"\033[32mAll tests passed — PG-like identifier behaviour confirmed.\033[0m")
+    print(f"\033[32mAll {24} test groups passed — JDBC metadata + PG-like behaviour confirmed.\033[0m")
