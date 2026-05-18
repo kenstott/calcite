@@ -76,14 +76,13 @@ df = aa.query("SELECT company_name, filing_type, filing_date FROM sec.filing_met
 print(df)
 ```
 
-Or use JPype directly with the installed JAR:
+Or use JPype directly, letting the `askamerica` package resolve the JAR path:
 
 ```python
-from pathlib import Path
 import jpype
+from askamerica.engine import get_engine_jar  # resolves ~/.askamerica/engine/ or $ASKAMERICA_ENGINE_JAR
 
-jar = Path.home() / ".askamerica" / "engine" / "askamerica-engine.jar"
-jpype.startJVM(classpath=[str(jar)])
+jpype.startJVM(classpath=[get_engine_jar()])
 
 Driver = jpype.JClass("org.apache.calcite.adapter.askamerica.AskAmericaDriver")
 conn   = Driver().connect("jdbc:askamerica:source=sec", jpype.JClass("java.util.Properties")())
@@ -96,6 +95,8 @@ while rs.next():
     print(rs.getString("company_name"), rs.getString("filing_type"))
 conn.close()
 ```
+
+`get_engine_jar()` checks `$ASKAMERICA_ENGINE_JAR` first, then falls back to `~/.askamerica/engine/askamerica-engine.jar` (the default `install-engine` location), and raises a clear error if neither exists.
 
 ## Sample queries
 
