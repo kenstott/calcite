@@ -152,12 +152,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         String depOperatingDir = establishOperatingDirectory(depDataSource, null);
         IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource, operand);
         SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
-        Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource.toUpperCase());
+        Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource);
 
         processorBuilder
             .operatingDirectory(depOperatingDir)
             .incrementalTracker(depTracker)
-            .addSchema(depDataSource.toUpperCase(), depFactory, depOperand);
+            .addSchema(depDataSource, depFactory, depOperand);
 
         processedDependencies.add(depDataSource);
       }
@@ -198,11 +198,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Cache dependency schemas so they can be returned if requested later
     for (String depDataSource : factory.getDependencies()) {
-      String depSchemaName = depDataSource.toUpperCase();
+      String depSchemaName = depDataSource.toLowerCase();
       Schema depSchema = result.getSchema(depSchemaName);
       if (depSchema != null) {
-        schemaCache.put(depDataSource.toLowerCase(), depSchema);
-        LOGGER.debug("Cached dependency schema '{}' (key={})", depSchemaName, depDataSource.toLowerCase());
+        schemaCache.put(depSchemaName, depSchema);
+        LOGGER.debug("Cached dependency schema '{}'", depSchemaName);
       }
     }
 
