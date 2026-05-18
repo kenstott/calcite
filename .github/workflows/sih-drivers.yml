@@ -1,0 +1,140 @@
+name: Simple Is Hard Drivers
+
+on:
+  push:
+    tags:
+      - 'sih-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  # ── Build all five sih-* shadow JARs ────────────────────────────────────────
+  build:
+    name: Build JARs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build shadow JARs
+        run: |
+          ./gradlew \
+            :govdata:shadowJar \
+            :splunk:shadowJar \
+            :sharepoint-list:shadowJar \
+            :file:shadowJar \
+            :cloud-ops:shadowJar \
+            --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect and rename JARs
+        run: |
+          mkdir -p release-assets
+
+          # Find each sih-* JAR and copy to release-assets with a stable name
+          for module_jar in \
+            "govdata/build/libs/sih-govdata*.jar:sih-govdata.jar" \
+            "splunk/build/libs/sih-splunk*.jar:sih-splunk.jar" \
+            "sharepoint-list/build/libs/sih-sharepoint*.jar:sih-sharepoint.jar" \
+            "file/build/libs/sih-aperio*.jar:sih-aperio.jar" \
+            "cloud-ops/build/libs/sih-cloudops*.jar:sih-cloudops.jar"
+          do
+            glob="${module_jar%%:*}"
+            dest="${module_jar##*:}"
+            src=$(ls $glob 2>/dev/null | head -1)
+            if [ -n "$src" ]; then
+              cp "$src" "release-assets/$dest"
+              echo "$dest: $(du -sh release-assets/$dest | cut -f1)"
+            else
+              echo "WARNING: no JAR found matching $glob"
+            fi
+          done
+
+      - name: Upload JARs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sih-driver-jars
+          path: release-assets/
+          retention-days: 30
+
+  # ── GitHub Release ───────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download JARs
+        uses: actions/download-artifact@v4
+        with:
+          name: sih-driver-jars
+          path: release-assets/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Simple Is Hard Drivers ${{ github.ref_name }}
+          body: |
+            ## Simple Is Hard JDBC Drivers
+
+            Five JDBC drivers for querying Splunk, SharePoint, government data, file systems, and multi-cloud infrastructure using standard SQL.
+
+            ---
+
+            ### Drivers
+
+            | JAR | JDBC URL prefix | Driver class |
+            |-----|-----------------|-------------|
+            | `sih-govdata.jar` | `jdbc:govdata:source=sec,geo,...` | `org.apache.calcite.adapter.govdata.GovDataDriver` |
+            | `sih-splunk.jar` | `jdbc:splunk:url=https://...` | `org.apache.calcite.adapter.splunk.SplunkDriver` |
+            | `sih-sharepoint.jar` | `jdbc:sharepoint:siteUrl=https://...` | `org.apache.calcite.adapter.sharepoint.SharePointListDriver` |
+            | `sih-aperio.jar` | `jdbc:aperio:/path/to/data` | `org.apache.calcite.adapter.file.AperioDriver` |
+            | `sih-cloudops.jar` | `jdbc:cloudops:azure.tenantId=...` | `org.apache.calcite.adapter.ops.CloudOpsDriver` |
+
+            ---
+
+            ### DBeaver / DataGrip setup
+
+            1. Download the JAR for the driver you need
+            2. **New Connection → JDBC**
+            3. Add the JAR and enter the driver class and JDBC URL from the table above
+            4. See each driver's README for full connection parameters
+
+            ### GovData quick start
+
+            ```python
+            import jpype, jpype.imports
+            jpype.startJVM(classpath=["sih-govdata.jar"])
+            from java.sql import DriverManager
+            conn = DriverManager.getConnection("jdbc:govdata:source=geo")
+            rs   = conn.createStatement().executeQuery(
+                       "SELECT state_name, state_abbr FROM geo.states ORDER BY state_name")
+            while rs.next():
+                print(rs.getString(1), rs.getString(2))
+            ```
+          files: release-assets/*.jar
+          draft: false
+          prerelease: false
