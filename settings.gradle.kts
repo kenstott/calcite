@@ -92,6 +92,7 @@ include(
     "splunk",
     "testkit",
     "ubenchmark",
+    "driver-base",
     "govdata",
     "askamerica-engine"
 )

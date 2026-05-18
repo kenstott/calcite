@@ -20,6 +20,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":driver-base"))
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
 }
