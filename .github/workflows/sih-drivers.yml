@@ -145,7 +145,7 @@ jobs:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           VERSION: ${{ steps.version.outputs.version }}
-          GROUP_ID: com.kenstott.components
+          GROUP_ID: io.simpleishard
         run: |
           GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
           mkdir -p bundles
@@ -303,7 +303,7 @@ jobs:
 
             Five JDBC drivers for querying Splunk, SharePoint, government data, file systems, and multi-cloud infrastructure using standard SQL.
 
-            Also published to Maven Central under `com.kenstott.components`.
+            Also published to Maven Central under `io.simpleishard`.
 
             ---
 
@@ -311,11 +311,11 @@ jobs:
 
             | JAR | Maven artifact | JDBC URL prefix |
             |-----|---------------|-----------------|
-            | `sih-govdata.jar` | `com.kenstott.components:sih-govdata` | `jdbc:govdata:source=sec,geo,...` |
-            | `sih-splunk.jar` | `com.kenstott.components:sih-splunk` | `jdbc:splunk:url=https://...` |
-            | `sih-sharepoint.jar` | `com.kenstott.components:sih-sharepoint` | `jdbc:sharepoint:siteUrl=https://...` |
-            | `sih-aperio.jar` | `com.kenstott.components:sih-aperio` | `jdbc:aperio:/path/to/data` |
-            | `sih-cloudops.jar` | `com.kenstott.components:sih-cloudops` | `jdbc:cloudops:azure.tenantId=...` |
+            | `sih-govdata.jar` | `io.simpleishard:sih-govdata` | `jdbc:govdata:source=sec,geo,...` |
+            | `sih-splunk.jar` | `io.simpleishard:sih-splunk` | `jdbc:splunk:url=https://...` |
+            | `sih-sharepoint.jar` | `io.simpleishard:sih-sharepoint` | `jdbc:sharepoint:siteUrl=https://...` |
+            | `sih-aperio.jar` | `io.simpleishard:sih-aperio` | `jdbc:aperio:/path/to/data` |
+            | `sih-cloudops.jar` | `io.simpleishard:sih-cloudops` | `jdbc:cloudops:azure.tenantId=...` |
 
             ---
 
@@ -323,14 +323,14 @@ jobs:
 
             ```xml
             <dependency>
-              <groupId>com.kenstott.components</groupId>
+              <groupId>io.simpleishard</groupId>
               <artifactId>sih-govdata</artifactId>
               <version>${{ steps.version.outputs.version }}</version>
             </dependency>
             ```
 
             ```kotlin
-            implementation("com.kenstott.components:sih-govdata:${{ steps.version.outputs.version }}")
+            implementation("io.simpleishard:sih-govdata:${{ steps.version.outputs.version }}")
             ```
 
             ### DBeaver / DataGrip
