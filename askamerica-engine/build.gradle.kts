@@ -10,6 +10,7 @@
  */
 plugins {
     id("com.github.johnrengelman.shadow")
+    `maven-publish`
 }
 
 description = "AskAmerica MCP server — query US government data from Claude Desktop"
@@ -79,6 +80,54 @@ tasks.shadowJar {
     // HTTP client — keep; needed at query time for schema initialization
 
     // No main class — this is a pure JDBC driver JAR loaded via JPype or classpath
+}
+
+// ─── Maven publishing (GitHub Packages) ──────────────────────────────────────
+// Publishes the shadow JAR to https://maven.pkg.github.com/kenstott/calcite
+// so Maven/Gradle users can pull it without downloading from GitHub Releases.
+//
+//   <dependency>
+//     <groupId>io.askamerica</groupId>
+//     <artifactId>askamerica-engine</artifactId>
+//     <version>VERSION</version>
+//   </dependency>
+
+publishing {
+    publications {
+        create<MavenPublication>("askamericaEngine") {
+            groupId = "io.askamerica"
+            artifactId = "askamerica-engine"
+            version = project.version.toString().replace("-SNAPSHOT", "")
+                .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
+
+            artifact(tasks.shadowJar) {
+                classifier = ""
+            }
+
+            pom {
+                name.set("AskAmerica Engine")
+                description.set("JDBC driver for querying 15 US government datasets via Apache Calcite")
+                url.set("https://github.com/kenstott/calcite")
+                licenses {
+                    license {
+                        name.set("Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                    }
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/kenstott/calcite")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
+                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
+            }
+        }
+    }
 }
 
 // ─── jpackage task ───────────────────────────────────────────────────────────
