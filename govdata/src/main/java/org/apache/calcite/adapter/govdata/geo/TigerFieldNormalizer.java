@@ -143,8 +143,8 @@ public class TigerFieldNormalizer {
     // ================================================================================
     TableFieldConfig pumas = new TableFieldConfig("pumas");
     pumas.addField("puma_code",
-        Arrays.asList("GEOID20", "GEOID10", "GEOID"),
-        "PUMA geographic identifier");
+        Arrays.asList("PUMACE20", "PUMACE10", "PUMACE"),
+        "5-digit PUMA code (unique within state)");
     pumas.addField("state_fips",
         Arrays.asList("STATEFP20", "STATEFP10", "STATEFP"),
         "2-digit state FIPS code");

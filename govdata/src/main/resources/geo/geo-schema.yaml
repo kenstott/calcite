@@ -202,6 +202,11 @@ materializationDefaults:
     compactionSmallFileSizeBytes: 10485760  # 10MB - files under this are "small"
     runMaintenance: true
     snapshotRetentionDays: 7
+    # TIGER data published ~September of following year; HUD crosswalk quarterly with ~3-year lag.
+    # 365-day TTL prevents redundant re-fetches after a successful annual ingest.
+    incrementalTtlDays: 365
+    releaseWindow:
+      months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]  # geo runs year-round; no narrow window
 
 # ============================================================================
 # TIGER BOUNDARY TABLES

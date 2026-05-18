@@ -165,19 +165,33 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.federalregister.gov/v1/documents.json?conditions[type][]={doc_type}&conditions[publication_date][gte]={year}-01-01&conditions[publication_date][lte]={year}-12-31&per_page=1000&page=1&fields[]=document_number&fields[]=title&fields[]=type&fields[]=abstract&fields[]=publication_date&fields[]=effective_on&fields[]=action&fields[]=agencies&fields[]=cfr_references&fields[]=regulation_id_numbers&fields[]=significant&fields[]=docket_ids&fields[]=president&fields[]=signing_date&fields[]=full_text_xml_url&fields[]=body_html_url"
+      url: "https://api.federalregister.gov/v1/documents.json?conditions[type][]={doc_type}&conditions[publication_date][gte]={year}-01-01&conditions[publication_date][lte]={year}-12-31&fields[]=document_number&fields[]=title&fields[]=type&fields[]=abstract&fields[]=publication_date&fields[]=effective_on&fields[]=action&fields[]=agencies&fields[]=cfr_references&fields[]=regulation_id_numbers&fields[]=significant&fields[]=docket_ids&fields[]=president&fields[]=signing_date&fields[]=full_text_xml_url&fields[]=body_html_url"
       method: GET
       response:
         format: json
+        pagination:
+          type: PAGE
+          pageParam: page
+          limitParam: per_page
+          pageSize: 1000
+          countPath: count
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503, 504]
         maxRetries: 5
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterDocumentsTransformer"
+
+    iceberg:
+      catalogType: hadoop
+      batchPartitionColumns: [doc_type, year]
+      incrementalKeys: [year]
+      runMaintenance: true
+      snapshotRetentionDays: 7
+      incrementalTtlDays: 30
 
     materialize:
       format: iceberg
@@ -242,6 +256,14 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterAgenciesTransformer"
+
+    iceberg:
+      catalogType: hadoop
+      runMaintenance: true
+      snapshotRetentionDays: 7
+      incrementalTtlDays: 90
+      releaseWindow:
+        months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     materialize:
       format: iceberg

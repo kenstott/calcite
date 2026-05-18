@@ -211,8 +211,10 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [type]
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -281,8 +283,10 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [type]
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -387,8 +391,10 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [type]
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

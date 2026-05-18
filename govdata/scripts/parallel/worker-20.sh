@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# Worker 20: Geographic Data (TIGER, HUD)
+# Worker 20: Geographic Data (TIGER, HUD, USDA, Gazetteer, Watersheds)
+# Schedule: daily (each table gates itself via incrementalTtlDays + releaseWindow)
+# Heap: 4 GB min / 6 GB max (TIGER shapefiles need extra heap for geometry parsing)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
-load_env
-
-WORKER_ID="worker-20"
-MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
-mkdir -p "$MODEL_DIR"
-
-generate_single_schema_model "geo" "$MODEL_DIR/geo.json"
-run_etl "$MODEL_DIR/geo.json" "$WORKER_ID"
-
-log_info "$WORKER_ID complete"
+source "$SCRIPT_DIR/common.sh"; load_env
+"$SCRIPT_DIR/worker-geo.sh"

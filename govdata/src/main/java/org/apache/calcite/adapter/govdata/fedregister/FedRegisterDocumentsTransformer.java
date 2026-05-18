@@ -21,49 +21,25 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Transforms Federal Register document API responses into flat rows.
+ * Normalizes a single Federal Register API page response into flat rows.
  *
- * <p>The Federal Register API is paginated (max 1000 results/page). This transformer
- * handles pagination by fetching all subsequent pages using the {@code next_page_url}
- * field returned in each response, accumulating all results before returning.
+ * <p>Pagination is handled by the pipeline's PAGE-type PaginatedIterator using
+ * {@code per_page} / {@code page} params and {@code count} for termination.
+ * This transformer is called once per page and must not perform its own HTTP fetches.
  *
- * <p>Input: first-page JSON from
- * {@code https://api.federalregister.gov/v1/documents.json?...&page=1}
- * <pre>
- * {
- *   "count": 85234,
- *   "total_pages": 86,
- *   "next_page_url": "https://...&page=2",
- *   "results": [{document}, ...]
- * }
- * </pre>
- *
- * <p>Output: flat JSON array of normalized document rows suitable for parquet materialization.
- *
- * <p>Complex fields (agencies, cfr_references, docket_ids) are stored as JSON strings
- * for flexibility. Agency names/slugs are also denormalized to plain comma-separated
- * strings for simpler SQL filtering without json_extract.
+ * <p>Complex fields (agencies, cfr_references, docket_ids) are stored as JSON strings.
+ * Agency names and slugs are also denormalized to comma-separated strings for simpler
+ * SQL filtering without json_extract.
  */
 public class FedRegisterDocumentsTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(FedRegisterDocumentsTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-
-  /** Max pages to fetch per dimension (safety cap: 1000 pages × 1000/page = 1M docs). */
-  private static final int MAX_PAGES = 1000;
-
-  /** Connect/read timeout for pagination HTTP calls (ms). */
-  private static final int TIMEOUT_MS = 30_000;
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -72,60 +48,22 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
     }
 
     String docType = context.getDimensionValues().get("doc_type");
-    String year = context.getDimensionValues().get("year");
 
     try {
       JsonNode root = MAPPER.readTree(response);
-
-      int totalPages = root.path("total_pages").asInt(1);
-      int totalCount = root.path("count").asInt(0);
-
-      LOGGER.info("FedRegister Documents: doc_type={} year={} total={} pages={}",
-          docType, year, totalCount, totalPages);
-
-      ArrayNode allResults = MAPPER.createArrayNode();
-
-      // Collect first page results
-      addResults(root, allResults, docType);
-
-      // Fetch remaining pages via next_page_url
-      String nextPageUrl = getTextOrNull(root, "next_page_url");
-      int pagesLoaded = 1;
-
-      while (nextPageUrl != null && !nextPageUrl.isEmpty() && pagesLoaded < MAX_PAGES) {
-        String pageResponse = fetchUrl(nextPageUrl);
-        if (pageResponse == null) {
-          LOGGER.warn("FedRegister Documents: failed to fetch page {}, stopping pagination",
-              pagesLoaded + 1);
-          break;
-        }
-
-        JsonNode pageRoot = MAPPER.readTree(pageResponse);
-        addResults(pageRoot, allResults, docType);
-        nextPageUrl = getTextOrNull(pageRoot, "next_page_url");
-        pagesLoaded++;
-
-        if (pagesLoaded % 10 == 0) {
-          LOGGER.debug("FedRegister Documents: doc_type={} year={} loaded {} pages, {} rows so far",
-              docType, year, pagesLoaded, allResults.size());
-        }
-      }
-
-      LOGGER.info("FedRegister Documents: doc_type={} year={} — {} rows from {} pages",
-          docType, year, allResults.size(), pagesLoaded);
-
-      return allResults.toString();
+      ArrayNode results = MAPPER.createArrayNode();
+      addResults(root, results, docType);
+      return results.toString();
 
     } catch (Exception e) {
-      LOGGER.error("FedRegister Documents: failed to parse response for doc_type={} year={}: {}",
-          docType, year, e.getMessage());
+      LOGGER.error("FedRegister Documents: failed to parse response for doc_type={}: {}",
+          docType, e.getMessage());
       return "[]";
     }
   }
 
   /**
-   * Extracts and normalizes document records from a single page response,
-   * appending them to the accumulator array.
+   * Extracts and normalizes document records from a single page response.
    */
   private void addResults(JsonNode pageRoot, ArrayNode accumulator, String docType) {
     JsonNode results = pageRoot.path("results");
@@ -185,8 +123,7 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
 
   /**
    * Extracts agency names and slugs from the nested agencies array,
-   * producing both comma-separated strings (for easy SQL filtering) and
-   * a full JSON representation for detailed queries.
+   * producing comma-separated strings and a full JSON representation.
    */
   private void extractAgencies(JsonNode doc, ObjectNode row) {
     JsonNode agencies = doc.path("agencies");
@@ -212,62 +149,6 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
 
     row.put("agency_names", names.isEmpty() ? null : join(names, ", "));
     row.put("agency_slugs", slugs.isEmpty() ? null : join(slugs, ","));
-  }
-
-  /**
-   * Fetches a URL and returns the response body as a string.
-   * Uses a simple HttpURLConnection with timeout to avoid heavy dependencies.
-   * Returns null on any error.
-   */
-  private String fetchUrl(String urlString) {
-    try {
-      HttpURLConnection conn = (HttpURLConnection) URI.create(urlString).toURL().openConnection();
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(TIMEOUT_MS);
-      conn.setReadTimeout(TIMEOUT_MS);
-      conn.setRequestProperty("User-Agent", "govdata-calcite-adapter/1.0");
-      conn.setRequestProperty("Accept", "application/json");
-
-      int status = conn.getResponseCode();
-      if (status == 429) {
-        // Rate limited — wait 2 seconds and retry once
-        LOGGER.warn("FedRegister Documents: rate limited (429), waiting 2s before retry");
-        Thread.sleep(2000);
-        conn.disconnect();
-        conn = (HttpURLConnection) URI.create(urlString).toURL().openConnection();
-        conn.setRequestMethod("GET");
-        conn.setConnectTimeout(TIMEOUT_MS);
-        conn.setReadTimeout(TIMEOUT_MS);
-        conn.setRequestProperty("User-Agent", "govdata-calcite-adapter/1.0");
-        conn.setRequestProperty("Accept", "application/json");
-        status = conn.getResponseCode();
-      }
-
-      if (status != 200) {
-        LOGGER.warn("FedRegister Documents: HTTP {} for {}", status, urlString);
-        return null;
-      }
-
-      BufferedReader reader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line);
-      }
-      reader.close();
-      conn.disconnect();
-
-      return sb.toString();
-
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      LOGGER.warn("FedRegister Documents: interrupted while fetching {}", urlString);
-      return null;
-    } catch (Exception e) {
-      LOGGER.warn("FedRegister Documents: error fetching {}: {}", urlString, e.getMessage());
-      return null;
-    }
   }
 
   private static String getTextOrNull(JsonNode node, String field) {

@@ -27,6 +27,9 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | health | 67 (initial), 68 (daily), 69 (weekly), 70 (monthly) | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 15 tables | Daily: clinical trials delta; Weekly: CDC vaccinations/mortality delta; Monthly: FDA catalogs + gated BRFSS/Medicaid/CMS tables | `rxnorm_drugs` (continuous reference refresh) | All other 14 tables (SINCE_DATE delta or append-by-year) | Monthly sub-runs gated by `releaseWindow` per table |
 | fec | 60 | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); `incrementalTtlDays: 30` expires tracker entries monthly to re-fetch in-progress cycle data | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
 | econ_reference | 84 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: each table refreshes only when `incrementalTtlDays` expires; outside release window tables skip silently | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Per-table `incrementalTtlDays` + `releaseWindow` in YAML |
+| geo | 20 | Same as daily (single-mode worker; no historical/daily split) | TTL-gated: `incrementalTtlDays: 365` in `materializationDefaults`; re-fetches only after 1 year. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
+| fedregister | 61 | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` all 4 doc_types × all years; `fr_agencies` static registry | Current year only; `fr_documents` re-fetched monthly (`incrementalTtlDays: 30`); `fr_agencies` re-fetched quarterly (`incrementalTtlDays: 90`) | `fr_agencies` (static agency registry; no year dimension) | `fr_documents` (year-partitioned; `batchPartitionColumns: [doc_type, year]`) | None — all months allowed for both tables |
+| ref | 41 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: `incrementalTtlDays: 365` on all 3 tables; daily run resolves latest GLEIF golden copy URL then skips if TTL not expired. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set | All 3 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
 
 ### How daily efficiency works per schema
 
@@ -61,13 +64,13 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | census       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ         | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | crime        | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| geo          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| geo          | 2026-05-18 | FAIL    | 3     | 12    | See details below |
 | fec          | 2026-05-17 | WARN    | 0     | 6     | See details below |
-| fedregister  | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| fedregister  | 2026-05-18 | FAIL    | 2     | 0     | No data in R2; ingestion not yet run — see details below |
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| ref          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| ref          | 2026-05-18 | FAIL    | 2     | 9     | See details below |
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | 2026-05-18 | PASS  | 0     | 0     | See details below |
@@ -209,6 +212,143 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 - `bls_geographies`: `incrementalTtlDays: 365`, `releaseWindow: {months: [1, 2, 3]}` (Q1; annual BLS geography updates)
 - `nipa_tables`, `regional_linecodes`: `incrementalTtlDays: 180`, `releaseWindow: {months: [7, 8, 9]}` (Q3; BEA mid-year benchmark revisions)
 - `fred_series`: `incrementalTtlDays: 30` (monthly; FRED actively adds series)
+
+---
+
+## ref (2026-05-18) — FAIL
+
+2 fails, 9 warns, 15 pass. 26 checks across 3 tables (T1–T7).
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| gleif_entities | 200 | GLEIF golden copy truncated — full file is ~3.2M records; initial ingestion used batchSize limit |
+| gleif_cik_mapping | 118,517 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
+| figi_instruments | 0 | Conditionally enabled (requires `OPENFIGI_API_KEY`); not configured in this environment |
+
+**Failures:**
+- `gleif_entities T2_row_count`: 200 rows, threshold 1,000,000. The initial ingestion used batchSize=50000 but the golden copy ZIP download was truncated at 200 rows. Full re-ingestion (`worker-41.sh --force`) is required.
+- `gleif_cik_mapping T7_lei_format`: 8 records have float-formatted LEIs (e.g. `9.598002014000574E19`) — the CSV parser treated large-integer LEI codes as floating-point numbers during ingestion. This is a parsing bug in the GLEIF CSV reader.
+
+**Warnings:**
+- `figi_instruments T1_existence`, `T2_row_count`, `T5_all_same_value`: Table is empty (demoted to warn; table is conditionally enabled via `OPENFIGI_API_KEY`).
+- `gleif_cik_mapping T6_pk_cik_nulls`: 82 records have a non-null LEI but null CIK — GLEIF entities registered with SEC (RA000602) that have not yet been assigned a CIK. Known source characteristic.
+- `gleif_cik_mapping T7_cik_format`: 3 non-numeric CIK values (source data characteristic from GLEIF).
+- `gleif_cik_mapping T7_lei_uniqueness`: 1 LEI maps to more than one CIK row (shared LEI across related entities).
+- `gleif_entities T4_all_null_cols`, `T5_all_same_value`: `registration_authority_id` and `registration_authority_entity_id` are 100% null in the 200-row sample (all records have no authority link); expected to have values once full golden copy is loaded.
+- `gleif_entities T7_entity_status_values`: 2 records with entity_status outside the known GLEIF status code set.
+
+**TTL configured (as of 2026-05-18):**
+- All 3 tables: `incrementalTtlDays: 365`, `overwritePartitions: true` (full replace on each annual refresh).
+
+---
+
+## fedregister (2026-05-18) — FAIL
+
+DQ script ran but all iceberg_scan calls failed — `fr_documents` and `fr_agencies` tables do not yet exist in R2. Ingestion has not been run.
+
+| Table | Test | Status | Detail |
+|-------|------|--------|--------|
+| fr_documents | T1_existence | FAIL | iceberg_scan path not found (table not ingested) |
+| fr_agencies | T1_existence | FAIL | iceberg_scan path not found (table not ingested) |
+
+**Action required:** Run `./run-pool.sh --schema fedregister historical` to ingest full history (2010–present), then re-run DQ.
+
+**Expected post-ingestion counts:**
+- `fr_documents`: ~850,000+ rows (4 doc_types × ~16 years × ~85k docs/year)
+- `fr_agencies`: ~400+ rows (complete Federal Register agency registry)
+
+**TTL / Release windows configured (as of 2026-05-18):**
+- `fr_documents`: `incrementalTtlDays: 30`; `batchPartitionColumns: [doc_type, year]`, `incrementalKeys: [year]`
+- `fr_agencies`: `incrementalTtlDays: 90`; static reference, no year dimension
+
+---
+
+## geo (2026-05-18) — FAIL
+
+3 fails, 12 warns, 58 passes. 29 of 32 tables readable. Row counts below are totals across all ingested years.
+
+### Row counts (total across all years)
+
+| Table | Total Rows | Notes |
+|-------|-----------|-------|
+| states | 7,920 | 51 states/territories × ~22 years |
+| counties | 413,832 | ~3,141 counties × 23 years |
+| places | 938,641 | ~40,000 places × 23 years |
+| zctas | 1,382,076 | ~33,000 ZCTAs × 23 years (excludes 2011) |
+| census_tracts | 4,943,619 | ~73,000 tracts × 22 years |
+| block_groups | 10,836,495 | ~217,000 block groups × 22 years |
+| cbsa | 28,216 | ~938 CBSAs × 23 years |
+| congressional_districts | 864 | 864 district-year combinations (2023 vintage only) |
+| school_districts | 135,290 | ~13,500 districts × 23 years |
+| state_legislative_lower | 25,163 | ~5,000 districts × 23 years |
+| state_legislative_upper | 5,780 | ~1,200 districts × 23 years |
+| county_subdivisions | 352,390 | ~35,000 subdivisions × 23 years |
+| tribal_areas | 13,471 | ~580 areas × 23 years |
+| urban_areas | 5,288 | ~660 areas × 22 years (excl. 2011) |
+| pumas | 7,366 | ~2,300 PUMAs × 3 years (2020, 2024, 2025) |
+| voting_districts | 395,174 | 2012 + 2020 vintages |
+| zip_county_crosswalk | 1,461,184 | ~46,000 ZIP-county pairs × 23 years (HUD) |
+| zip_cbsa_crosswalk | 1,307,320 | ~41,000 ZIP-CBSA pairs × 23 years |
+| tract_zip_crosswalk | 4,642,814 | ~144,000 tract-ZIP pairs × 23 years |
+| zip_tract_crosswalk | 4,642,814 | ~144,000 ZIP-tract pairs × 23 years |
+| zip_cd_crosswalk | 1,277,244 | ~39,000 ZIP-CD pairs × 23 years |
+| county_zip_crosswalk | 1,461,184 | ~46,000 county-ZIP pairs × 23 years |
+| cd_zip_crosswalk | 1,277,244 | ~39,000 CD-ZIP pairs × 23 years |
+| rural_urban_continuum | 25,880 | ~3,235 counties × ~8 classification years |
+| ruca_codes | 684,224 | ~84,000 tracts × ~8 classification years |
+| gazetteer_counties | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
+| gazetteer_places | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
+| gazetteer_zctas | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
+| watersheds_huc2 | 704 | 44 HUC2 × 16 years (static USGS WBD) |
+| watersheds_huc4 | 3,520 | 220 HUC4 × 16 years |
+| watersheds_huc8 | 10,560 | 660 HUC8 × 16 years |
+| watersheds_huc12 | 21,120 | 1,320 HUC12 × 16 years |
+
+### FAIL
+
+All 3 fails are expected existence failures — tables were deleted from R2 to remove year=2025 ghost partitions. Pending re-ingestion via `worker-20.sh`.
+
+| Table | Test | Detail |
+|-------|------|--------|
+| gazetteer_counties | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
+| gazetteer_places | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
+| gazetteer_zctas | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
+
+**Root cause for gazetteer ghost partitions:** Census Gazetteer files for 2025 have not been published yet (typically released with TIGER in late 2025/early 2026). The ETL pipeline ingested 2025 with null attribute columns and valid geometry. Year=2025 ghost partitions deleted from all three Gazetteer tables; full Iceberg table directories removed so metadata is clean. Re-ingest will rebuild 2012–2024 data.
+
+### WARN
+
+| Table | Test | Detail |
+|-------|------|--------|
+| pumas | T6 pk_nulls | `puma_code` null for all years — `TigerFieldNormalizer` mapped `puma_code → GEOID20/GEOID10` (wrong); fixed to `PUMACE20/PUMACE10`; pending re-ingest |
+| tribal_areas | T6 pk_nulls | `aiannhce` null for all years — `TigerDataProvider` reads `GEOID` but TIGER AIANNH shapefile field is `AIANNHCE`; pending TigerDataProvider fix + re-ingest |
+| urban_areas | T6 pk_nulls | `uace` null in 2024–2025 — `UACE20` field not found in 2024+ TIGER UA shapefile; field may have changed to plain `UACE`; pending TigerFieldNormalizer fix + re-ingest |
+| voting_districts | T6 pk_nulls | `vtd_code` null for all years — `TigerFieldNormalizer` maps to `GEOID20/GEOID10` but these not resolving in VTD shapefile; pending fix + re-ingest |
+| rural_urban_continuum | T6 pk_nulls | 4 rows/year with null `rucc_code` — unclassified territories and newly-created county equivalents; source characteristic |
+| watersheds_huc2 | T7 expected_values | 704 rows (all) have `area_sq_km = 0` — `WatershedDataProvider` does not map `areasqkm` field from USGS WBD GDB |
+| watersheds_huc4 | T7 expected_values | 3,520 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
+| watersheds_huc8 | T7 expected_values | 10,560 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
+| watersheds_huc12 | T7 expected_values | 21,120 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
+| gazetteer_counties | T2 row_count | 0 rows (table deleted); pending re-ingest |
+| gazetteer_places | T2 row_count | 0 rows (table deleted); pending re-ingest |
+| gazetteer_zctas | T2 row_count | 0 rows (table deleted); pending re-ingest |
+
+### Known issues requiring code fixes (then re-ingest)
+
+| Component | Bug | Required Fix |
+|-----------|-----|-------------|
+| `TigerFieldNormalizer` | `pumas.puma_code` mapped to `GEOID20/GEOID10` | Fixed to `PUMACE20/PUMACE10` ✓; re-ingest pumas |
+| `TigerDataProvider` | `tribal_areas` mapper reads `GEOID` for `aiannhce` | Change to `AIANNHCE` |
+| `TigerFieldNormalizer` | `urban_areas.uace` → `UACE20/UACE10`; 2024+ changed field | Add plain `UACE` as fallback |
+| `TigerFieldNormalizer` | `voting_districts.vtd_code` → `GEOID20/GEOID10` not resolving | Investigate VTD shapefile field structure |
+| `WatershedDataProvider` | `area_sq_km` always 0 | Map `areasqkm` GDB attribute to column |
+
+### TIGER 2010 vintage note
+
+TIGER/Line 2010 annual shapefiles use `{field}10`-suffixed column names (`GEOID10`, `STATEFP10`, etc.) for boundary tables. `TigerDataProvider` hardcodes the non-suffixed names; all year=2010 attribute columns ingest as null. The DQ T6 pk_nulls checks exclude `year='2010'` to avoid false failures. Fixing requires extending `TigerFieldNormalizer` to all TIGER boundary tables and re-ingesting year=2010.
+
+**TTL / Release windows configured (as of 2026-05-18):**
+- All tables: `incrementalTtlDays: 365` (annual TIGER release cycle), `releaseWindow: all months` (via `materializationDefaults.iceberg`)
 
 ---
 

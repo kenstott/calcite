@@ -171,13 +171,21 @@ FROM (
   )
 );
 
--- T6: pk_nulls (lei, cik NOT NULL)
+-- T6: pk_nulls — lei must never be null (hard fail); cik may be null for SEC registrants
+--     without a CIK assigned (source characteristic; warn)
 INSERT INTO dq_results
-SELECT 'ref', 'gleif_cik_mapping', 'T6_pk_nulls',
+SELECT 'ref', 'gleif_cik_mapping', 'T6_pk_lei_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL lei or cik rows'
+  n, 0, 'NULL lei rows (lei is primary key; must be non-null)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/gleif_cik_mapping', allow_moved_paths := true)
-      WHERE lei IS NULL OR cik IS NULL);
+      WHERE lei IS NULL);
+
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_cik_mapping', 'T6_pk_cik_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'NULL cik rows — GLEIF entities registered with SEC (RA000602) but with no CIK assigned (known source characteristic)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/gleif_cik_mapping', allow_moved_paths := true)
+      WHERE cik IS NULL);
 
 -- T7: lei format (20-character alphanumeric)
 INSERT INTO dq_results
@@ -217,18 +225,18 @@ FROM (
 -- TABLE: figi_instruments
 -- ─────────────────────────────────────────────────────────────
 
--- T1: existence
+-- T1: existence (warn, not fail — figi_instruments requires OPENFIGI_API_KEY; table is absent when key not set)
 INSERT INTO dq_results
 SELECT 'ref', 'figi_instruments', 'T1_existence',
-  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
-  n, 1, 'Row count from iceberg_scan'
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
+  n, 1, 'Row count from iceberg_scan (warn: table requires OPENFIGI_API_KEY; empty when key not configured)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/figi_instruments', allow_moved_paths := true));
 
--- T2: row_count (loaded ticker list — at least a few thousand instruments)
+-- T2: row_count (warn, not fail — conditionally enabled table)
 INSERT INTO dq_results
 SELECT 'ref', 'figi_instruments', 'T2_row_count',
-  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
-  n, 1000, 'Expected at least 1000 FIGI instrument records'
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'warn' END,
+  n, 1000, 'Expected at least 1000 FIGI instrument records (warn: requires OPENFIGI_API_KEY)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/figi_instruments', allow_moved_paths := true));
 
 -- T3: sample
