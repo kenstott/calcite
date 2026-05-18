@@ -71,7 +71,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | —        | PENDING | —     | —     | Data in R2; DQ not yet run |
 | cyber_threat | 2026-05-17 | WARN    | 0     | 3     | See details below |
-| cyber_vuln   | —          | NO DATA | —     | —     | No Iceberg data in R2; ETL not yet run |
+| cyber_vuln   | 2026-05-18 | WARN    | 0     | 1     | See details below |
 
 ---
 
@@ -269,3 +269,31 @@ All 3 warns are from ioc_hashes (MalwareBazaar returned 0 rows this cycle — tr
 - **enabledTables not implemented in GovDataSchemaFactory**: The `enabledTables` operand in model JSON is silently ignored. All 11 tables run regardless of which are listed. Only `PatentsSchemaFactory` implements this filter. `worker-cyber.sh static` was intended to run 5 tables but runs all 11; `worker-cyber.sh hourly` runs all 11 instead of just the 4 IOC tables + threat_pulses.
 - **ioc_mixed ioc_value always NULL**: ThreatFox schema maps the IOC indicator value to `ioc_value` but the field is always null. The actual indicator appears to not be populated by the current transformer. T6 pk check uses `reporter IS NULL` as a proxy.
 - **OTX full-load performance**: Without `CYBER_OTX_DELTA_DAYS` set, `OtxResponseTransformer` paginates all subscribed pulses at 500ms/page. For initial load, set `CYBER_OTX_DELTA_DAYS=N` to limit scope. The hourly worker uses delta mode by design.
+
+---
+
+## cyber_vuln (2026-05-18) — WARN
+
+All 8 tables readable. 0 fails, 1 warn.
+
+### Data inventory
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| vulnerabilities | 351,376 | Full NVD CVE 2.0 catalog (all published CVEs) |
+| vulnerability_cwes | 345,531 | NVD CWE associations (one row per cve_id, cwe_id pair) |
+| kev_catalog | 1,592 | CISA Known Exploited Vulnerabilities |
+| kev_cwes | 1,522 | CWE associations for KEV entries |
+| cwe_catalog | 969 | MITRE CWE definitions |
+| osv_vulnerabilities | 261,976 | OSV entries (PyPI, npm, Go, Maven, etc.) |
+| vuln_cross_refs | 26,973 | CVE→GHSA cross-references (GHSA source only; MITRE/OSV pending) |
+| advisories | 30 | CISA cybersecurity advisories (RSS feed cap ~30 items) |
+
+### Warn
+
+- **advisories expected_values**: 6 of 30 advisory IDs do not match the `AA*`/`ICSA-*` pattern. These are legitimate CISA blog posts and guidance documents (e.g., "CISA Adds One Known Exploited Vulnerability to Catalog", "Software Bill of Materials for AI") that appear alongside technical advisories in the RSS feed. Not a data error.
+
+### Known issues
+
+- **vuln_cross_refs GHSA-only**: The `vuln_cross_refs` table is populated only by `GithubSaResponseTransformer`. MITRE CVE daily delta ZIPs and OSV alias cross-refs are described in the schema but not yet implemented. Once added, `external_source` will have multiple distinct values.
+- **cvss_v31_severity null for old CVEs**: CVEs published before CVSS v3 have no `cvss_v31_score` or `cvss_v31_severity`. This is expected — roughly 40% of the NVD catalog predates CVSS v3.
