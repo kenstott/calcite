@@ -80,11 +80,11 @@ def rs_to_list(rs, col):
     rs.close()
     return rows
 
-def connect(url="jdbc:govdata:source=geo"):
-    GovDataDriver = jpype.JClass("org.apache.calcite.adapter.govdata.GovDataDriver")
+def connect(url="jdbc:askamerica:source=geo"):
+    AskAmericaDriver = jpype.JClass("org.apache.calcite.adapter.askamerica.AskAmericaDriver")
     props = jpype.JClass("java.util.Properties")()
-    conn = GovDataDriver().connect(url, props)
-    assert conn is not None, f"driver.connect() returned null for: {url}"
+    conn = AskAmericaDriver().connect(url, props)
+    assert conn is not None, f"AskAmericaDriver.connect() returned null for: {url}"
     return conn
 
 def query_rows(conn, sql):
@@ -102,7 +102,7 @@ def query_rows(conn, sql):
 
 # ── Connection ─────────────────────────────────────────────────────────────────
 
-conn = connect("jdbc:govdata:source=geo")
+conn = connect("jdbc:askamerica:source=geo")
 meta = conn.getMetaData()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -113,8 +113,8 @@ try:
     driver  = str(meta.getDriverName())
     version = str(meta.getDriverVersion())
     print(f"  product={product}  driver={driver}  version={version}")
-    check("getDatabaseProductName() returns a non-empty string", len(product) > 0)
-    check("getDriverName() returns a non-empty string",          len(driver) > 0)
+    check("getDatabaseProductName() == 'AskAmerica'", product == "AskAmerica", f"got {product}")
+    check("getDriverName() == 'AskAmerica JDBC Driver'", driver == "AskAmerica JDBC Driver", f"got {driver}")
     check("getDriverVersion() returns a non-empty string",       len(version) > 0)
 except Exception as e:
     check("getDatabaseProductName/DriverName/Version", False, str(e))
@@ -326,9 +326,7 @@ try:
     check("getMaxConnections() returns non-negative int", max_conn >= 0)
     url = str(meta.getURL())
     print(f"  getURL(): {url}")
-    # GovDataDriver wraps Calcite internally; the underlying connection reports jdbc:calcite:
-    check("getURL() starts with 'jdbc:govdata' or 'jdbc:calcite'",
-          url.startswith("jdbc:govdata") or url.startswith("jdbc:calcite"))
+    check("getURL() starts with 'jdbc:askamerica:'", url.startswith("jdbc:askamerica:"))
 except Exception as e:
     check("Driver capability flags do not throw", False, str(e))
 
@@ -462,7 +460,7 @@ conn.close()
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n── 24. Cross-schema join ────────────────────────────────────────────────")
 
-conn2 = connect("jdbc:govdata:source=geo")
+conn2 = connect("jdbc:askamerica:source=geo")
 try:
     rows = query_rows(conn2,
         "select s.state_name, c.county_name "

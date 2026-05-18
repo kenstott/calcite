@@ -55,11 +55,48 @@ jobs:
           path: askamerica-engine/build/libs/askamerica-engine.jar
           retention-days: 30
 
+  # ── JDBC driver test suite ───────────────────────────────────────────────
+  test:
+    name: JDBC driver tests
+    runs-on: ubuntu-latest
+    needs: jar
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Install jpype1
+        run: pip install jpype1
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-engine-jar
+          path: askamerica-engine/build/libs/
+
+      - name: Run JDBC driver tests
+        run: python3 govdata/scripts/test_govdata_python.py askamerica-engine/build/libs/askamerica-engine.jar
+        env:
+          AWS_ACCESS_KEY_ID:       ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY:   ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_OVERRIDE:   ${{ secrets.AWS_ENDPOINT_OVERRIDE }}
+          AWS_REGION:              auto
+
   # ── Native installers (per-platform, bundled JRE) ─────────────────────────
   installer:
     name: Build installer — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: jar
+    needs: [jar, test]
     strategy:
       matrix:
         include:
@@ -110,7 +147,7 @@ jobs:
   publish:
     name: Publish to GitHub Packages
     runs-on: ubuntu-latest
-    needs: jar
+    needs: [jar, test]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: read
