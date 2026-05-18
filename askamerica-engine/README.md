@@ -1,37 +1,35 @@
-# GovData JDBC Driver
+# AskAmerica JDBC Driver
 
-Query 15 US government datasets — SEC filings, census data, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
+Query 15 US government datasets — SEC filings, census, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
 
 ## Download
 
-Build the shadow JAR from this repo:
+Grab the latest JAR from [GitHub Releases](https://github.com/kenstott/calcite/releases):
 
 ```bash
-./gradlew :govdata:shadowJar
-# Output: govdata/build/libs/calcite-govdata-*-all.jar
-```
+# Python (recommended)
+pip install 'askamerica[engine]'
+askamerica install-engine
 
-Or use the pre-built AskAmerica engine JAR (includes this driver):
-
-```bash
-./gradlew :askamerica-engine:shadowJar
+# Or download directly
+curl -L https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar -o askamerica-engine.jar
 ```
 
 ## Connect
 
 **JDBC URL format:**
 ```
-jdbc:govdata:source=<schema>[,<schema2>,...]
+jdbc:askamerica:source=<schema>[,<schema2>,...]
 ```
 
-**Driver class:** `org.apache.calcite.adapter.govdata.GovDataDriver`
+**Driver class:** `org.apache.calcite.adapter.askamerica.AskAmericaDriver`
 
 ### Quick examples
 
 ```
-jdbc:govdata:source=geo
-jdbc:govdata:source=sec,geo,econ
-jdbc:govdata:source=fec,crime,weather
+jdbc:askamerica:source=geo
+jdbc:askamerica:source=sec,geo,econ
+jdbc:askamerica:source=fec,crime,weather
 ```
 
 ## Available schemas
@@ -56,39 +54,49 @@ jdbc:govdata:source=fec,crime,weather
 ## DBeaver setup
 
 1. **New Connection → JDBC**
-2. **JDBC URL:** `jdbc:govdata:source=geo,sec`
-3. **Driver JAR:** add `calcite-govdata-*-all.jar`
-4. **Driver class:** `org.apache.calcite.adapter.govdata.GovDataDriver`
+2. **JDBC URL:** `jdbc:askamerica:source=geo,sec`
+3. **Driver JAR:** add `askamerica-engine.jar`
+4. **Driver class:** `org.apache.calcite.adapter.askamerica.AskAmericaDriver`
 5. No username or password required for most schemas
+
+## Python (JPype)
+
+```python
+import jpype
+import jpype.imports
+
+jpype.startJVM(classpath=["askamerica-engine.jar"])
+from java.sql import DriverManager
+
+conn = DriverManager.getConnection("jdbc:askamerica:source=geo")
+stmt = conn.createStatement()
+rs   = stmt.executeQuery("SELECT state_name, state_abbr FROM geo.states ORDER BY state_name")
+while rs.next():
+    print(rs.getString("state_name"), rs.getString("state_abbr"))
+conn.close()
+```
 
 ## Sample queries
 
 ```sql
--- Top revenue companies from SEC filings
+-- Top 10 revenue companies from SEC filings
 SELECT company_name, value_dollars
 FROM sec.financial_facts
 WHERE canonical_name = 'Revenue'
 ORDER BY value_dollars DESC
 FETCH FIRST 10 ROWS ONLY;
 
--- State-level unemployment
-SELECT area_name, year, period, value AS unemployment_rate
-FROM econ.bls_series
-WHERE series_id LIKE 'LAUS%' AND measure_code = '03'
-ORDER BY year DESC, period DESC;
+-- State population from census
+SELECT state_name, estimate AS population
+FROM census.acs_b
+JOIN geo.states USING (state_fips)
+WHERE variable = 'B01001_001E' AND year = 2022;
 
 -- Recent federal cybersecurity vulnerabilities
 SELECT cve_id, vendor_project, product, date_added
 FROM cyber_threat.kev_catalog
 ORDER BY date_added DESC
 FETCH FIRST 20 ROWS ONLY;
-
--- Campaign contributions by state
-SELECT contributor_state, SUM(transaction_amt) AS total
-FROM fec.contributions
-WHERE election_yr = 2024
-GROUP BY contributor_state
-ORDER BY total DESC;
 ```
 
 ## Environment variables (optional)
@@ -102,11 +110,3 @@ Some schemas require API keys for higher rate limits:
 | `CENSUS_API_KEY` | `census` | Census API key |
 | `EIA_API_KEY` | `energy` | EIA API key |
 | `NVD_API_KEY` | `cyber_vuln` | NVD higher rate limit |
-
-## Data directory
-
-By default, downloaded data is cached to `$GOVDATA_PARQUET_DIR`. Set this to a persistent directory for faster subsequent queries:
-
-```bash
-export GOVDATA_PARQUET_DIR=/data/govdata
-```
