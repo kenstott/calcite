@@ -12,9 +12,9 @@ on:
         default: '1.0.0'
 
 jobs:
-  # ── Build all five sih-* shadow JARs ────────────────────────────────────────
+  # ── Build and sign all five sih-* shadow JARs ────────────────────────────────
   build:
-    name: Build JARs
+    name: Build and sign JARs
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +35,11 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', 'gradle.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Import GPG key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
       - name: Build shadow JARs
         run: |
           ./gradlew \
@@ -47,28 +52,56 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Collect and rename JARs
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#sih-v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION"
+
+      - name: Collect, rename, and sign JARs
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p release-assets
 
-          # Find each sih-* JAR and copy to release-assets with a stable name
-          for module_jar in \
-            "govdata/build/libs/sih-govdata*.jar:sih-govdata.jar" \
-            "splunk/build/libs/sih-splunk*.jar:sih-splunk.jar" \
-            "sharepoint-list/build/libs/sih-sharepoint*.jar:sih-sharepoint.jar" \
-            "file/build/libs/sih-aperio*.jar:sih-aperio.jar" \
-            "cloud-ops/build/libs/sih-cloudops*.jar:sih-cloudops.jar"
-          do
-            glob="${module_jar%%:*}"
-            dest="${module_jar##*:}"
-            src=$(ls $glob 2>/dev/null | head -1)
-            if [ -n "$src" ]; then
-              cp "$src" "release-assets/$dest"
-              echo "$dest: $(du -sh release-assets/$dest | cut -f1)"
+          declare -A MODULES=(
+            ["govdata"]="sih-govdata"
+            ["splunk"]="sih-splunk"
+            ["sharepoint-list"]="sih-sharepoint"
+            ["file"]="sih-aperio"
+            ["cloud-ops"]="sih-cloudops"
+          )
+
+          for module in "${!MODULES[@]}"; do
+            artifact="${MODULES[$module]}"
+            src=$(ls ${module}/build/libs/${artifact}*.jar 2>/dev/null | grep -v sources | grep -v javadoc | head -1)
+            if [ -z "$src" ]; then
+              echo "ERROR: no JAR found for $module"
+              exit 1
+            fi
+            dest="release-assets/${artifact}-${VERSION}.jar"
+            cp "$src" "$dest"
+            echo "$artifact: $(du -sh $dest | cut -f1)"
+
+            # GPG sign
+            if [ -n "$GPG_PASSPHRASE" ]; then
+              gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                --local-user "$GPG_KEY_ID" --armor --detach-sign "$dest"
             else
-              echo "WARNING: no JAR found matching $glob"
+              gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$dest"
             fi
           done
+
+          echo "Signed artifacts:"
+          ls -lh release-assets/
 
       - name: Upload JARs artifact
         uses: actions/upload-artifact@v4
@@ -77,11 +110,172 @@ jobs:
           path: release-assets/
           retention-days: 30
 
+  # ── Publish to Maven Central (Sonatype Central Portal) ───────────────────────
+  publish:
+    name: Publish to Maven Central
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+      - name: Download JARs
+        uses: actions/download-artifact@v4
+        with:
+          name: sih-driver-jars
+          path: release-assets/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#sih-v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build Maven Central bundles
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          VERSION: ${{ steps.version.outputs.version }}
+          GROUP_ID: com.kenstott.components
+        run: |
+          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+          mkdir -p bundles
+
+          declare -A ARTIFACTS=(
+            ["sih-govdata"]="GovData JDBC Driver"
+            ["sih-splunk"]="Splunk JDBC Driver"
+            ["sih-sharepoint"]="SharePoint List JDBC Driver"
+            ["sih-aperio"]="Aperio File JDBC Driver"
+            ["sih-cloudops"]="Cloud Ops JDBC Driver"
+          )
+
+          for artifact in "${!ARTIFACTS[@]}"; do
+            desc="${ARTIFACTS[$artifact]}"
+            jar_src="release-assets/${artifact}-${VERSION}.jar"
+
+            bundle_dir="bundle_${artifact}/${GROUP_PATH}/${artifact}/${VERSION}"
+            mkdir -p "$bundle_dir"
+
+            # Copy JAR
+            cp "$jar_src" "${bundle_dir}/${artifact}-${VERSION}.jar"
+
+            # Create minimal empty sources JAR (required by Central)
+            echo "Sources for ${artifact} ${VERSION}" > /tmp/placeholder.txt
+            jar cf "${bundle_dir}/${artifact}-${VERSION}-sources.jar" -C /tmp placeholder.txt
+
+            # Create minimal empty javadoc JAR (required by Central)
+            jar cf "${bundle_dir}/${artifact}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
+
+            # Generate POM
+            cat > "${bundle_dir}/${artifact}-${VERSION}.pom" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>${GROUP_ID}</groupId>
+            <artifactId>${artifact}</artifactId>
+            <version>${VERSION}</version>
+            <packaging>jar</packaging>
+            <name>${desc}</name>
+            <description>${desc} — Simple Is Hard</description>
+            <url>https://github.com/kenstott/calcite</url>
+            <licenses>
+              <license>
+                <name>Business Source License 1.1</name>
+                <url>https://github.com/kenstott/calcite/blob/main/LICENSE-BSL.txt</url>
+              </license>
+            </licenses>
+            <developers>
+              <developer>
+                <id>kenstott</id>
+                <name>Kenneth Stott</name>
+                <email>kennethstott@gmail.com</email>
+              </developer>
+            </developers>
+            <scm>
+              <connection>scm:git:git://github.com/kenstott/calcite.git</connection>
+              <developerConnection>scm:git:ssh://github.com/kenstott/calcite.git</developerConnection>
+              <url>https://github.com/kenstott/calcite</url>
+            </scm>
+          </project>
+          EOF
+
+            # Sign all four files
+            for f in \
+              "${bundle_dir}/${artifact}-${VERSION}.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}-sources.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}-javadoc.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}.pom"
+            do
+              if [ -n "$GPG_PASSPHRASE" ]; then
+                gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                  --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+              else
+                gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+              fi
+            done
+
+            # Generate checksums
+            for f in \
+              "${bundle_dir}/${artifact}-${VERSION}.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}-sources.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}-javadoc.jar" \
+              "${bundle_dir}/${artifact}-${VERSION}.pom"
+            do
+              md5sum "$f" | awk '{print $1}' > "${f}.md5"
+              sha1sum "$f" | awk '{print $1}' > "${f}.sha1"
+            done
+
+            # Create bundle ZIP
+            (cd "bundle_${artifact}" && zip -r "../bundles/${artifact}-bundle.zip" .)
+            echo "Created bundle: bundles/${artifact}-bundle.zip ($(du -sh bundles/${artifact}-bundle.zip | cut -f1))"
+          done
+
+      - name: Upload to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
+
+          for bundle in bundles/*-bundle.zip; do
+            artifact=$(basename "$bundle" -bundle.zip)
+            echo "Uploading $artifact..."
+
+            RESPONSE=$(curl -s -w "\n%{http_code}" \
+              -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
+              -H "Authorization: Bearer ${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" \
+              -H "Accept: application/json" \
+              -F "bundle=@${bundle};type=application/zip" \
+              -F "name=${artifact}-${VERSION}" \
+              -F "publishingType=AUTOMATIC")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+
+            echo "Response ($HTTP_CODE): $BODY"
+            if [ "$HTTP_CODE" -ge 400 ]; then
+              echo "ERROR: Upload failed for $artifact"
+              exit 1
+            fi
+          done
+
   # ── GitHub Release ───────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, publish]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -93,48 +287,55 @@ jobs:
           name: sih-driver-jars
           path: release-assets/
 
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#sih-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           name: Simple Is Hard Drivers ${{ github.ref_name }}
           body: |
-            ## Simple Is Hard JDBC Drivers
+            ## Simple Is Hard JDBC Drivers ${{ steps.version.outputs.version }}
 
             Five JDBC drivers for querying Splunk, SharePoint, government data, file systems, and multi-cloud infrastructure using standard SQL.
+
+            Also published to Maven Central under `com.kenstott.components`.
 
             ---
 
             ### Drivers
 
-            | JAR | JDBC URL prefix | Driver class |
-            |-----|-----------------|-------------|
-            | `sih-govdata.jar` | `jdbc:govdata:source=sec,geo,...` | `org.apache.calcite.adapter.govdata.GovDataDriver` |
-            | `sih-splunk.jar` | `jdbc:splunk:url=https://...` | `org.apache.calcite.adapter.splunk.SplunkDriver` |
-            | `sih-sharepoint.jar` | `jdbc:sharepoint:siteUrl=https://...` | `org.apache.calcite.adapter.sharepoint.SharePointListDriver` |
-            | `sih-aperio.jar` | `jdbc:aperio:/path/to/data` | `org.apache.calcite.adapter.file.AperioDriver` |
-            | `sih-cloudops.jar` | `jdbc:cloudops:azure.tenantId=...` | `org.apache.calcite.adapter.ops.CloudOpsDriver` |
+            | JAR | Maven artifact | JDBC URL prefix |
+            |-----|---------------|-----------------|
+            | `sih-govdata.jar` | `com.kenstott.components:sih-govdata` | `jdbc:govdata:source=sec,geo,...` |
+            | `sih-splunk.jar` | `com.kenstott.components:sih-splunk` | `jdbc:splunk:url=https://...` |
+            | `sih-sharepoint.jar` | `com.kenstott.components:sih-sharepoint` | `jdbc:sharepoint:siteUrl=https://...` |
+            | `sih-aperio.jar` | `com.kenstott.components:sih-aperio` | `jdbc:aperio:/path/to/data` |
+            | `sih-cloudops.jar` | `com.kenstott.components:sih-cloudops` | `jdbc:cloudops:azure.tenantId=...` |
 
             ---
 
-            ### DBeaver / DataGrip setup
+            ### Maven / Gradle
 
-            1. Download the JAR for the driver you need
-            2. **New Connection → JDBC**
-            3. Add the JAR and enter the driver class and JDBC URL from the table above
-            4. See each driver's README for full connection parameters
-
-            ### GovData quick start
-
-            ```python
-            import jpype, jpype.imports
-            jpype.startJVM(classpath=["sih-govdata.jar"])
-            from java.sql import DriverManager
-            conn = DriverManager.getConnection("jdbc:govdata:source=geo")
-            rs   = conn.createStatement().executeQuery(
-                       "SELECT state_name, state_abbr FROM geo.states ORDER BY state_name")
-            while rs.next():
-                print(rs.getString(1), rs.getString(2))
+            ```xml
+            <dependency>
+              <groupId>com.kenstott.components</groupId>
+              <artifactId>sih-govdata</artifactId>
+              <version>${{ steps.version.outputs.version }}</version>
+            </dependency>
             ```
+
+            ```kotlin
+            implementation("com.kenstott.components:sih-govdata:${{ steps.version.outputs.version }}")
+            ```
+
+            ### DBeaver / DataGrip
+
+            Download the JAR, add it via **New Connection → JDBC**, and enter the driver class from the table above.
           files: release-assets/*.jar
           draft: false
           prerelease: false
