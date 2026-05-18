@@ -255,7 +255,7 @@ jobs:
 
             RESPONSE=$(curl -s -w "\n%{http_code}" \
               -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-              -H "Authorization: Bearer ${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" \
+              -H "Authorization: Bearer ${AUTH}" \
               -H "Accept: application/json" \
               -F "bundle=@${bundle};type=application/zip" \
               -F "name=${artifact}-${VERSION}" \

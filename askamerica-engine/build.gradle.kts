@@ -103,7 +103,7 @@ val publishVersion: String =
 publishing {
     publications {
         create<MavenPublication>("askamericaEngine") {
-            groupId    = "io.askamerica"
+            groupId    = "ai.askamerica"
             artifactId = "askamerica-engine"
             version    = publishVersion
 

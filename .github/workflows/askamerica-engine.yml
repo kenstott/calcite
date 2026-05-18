@@ -197,7 +197,7 @@ jobs:
           GPG_KEY_ID:       ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE:   ${{ secrets.GPG_PASSPHRASE }}
           VERSION:          ${{ steps.version.outputs.version }}
-          GROUP_ID:         io.askamerica
+          GROUP_ID:         ai.askamerica
           ARTIFACT_ID:      askamerica-engine
         run: |
           GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
@@ -244,9 +244,10 @@ jobs:
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           VERSION:           ${{ steps.version.outputs.version }}
         run: |
+          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-            -H "Authorization: Bearer ${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" \
+            -H "Authorization: Bearer ${AUTH}" \
             -H "Accept: application/json" \
             -F "bundle=@askamerica-engine-bundle.zip;type=application/zip" \
             -F "name=askamerica-engine-${VERSION}" \
