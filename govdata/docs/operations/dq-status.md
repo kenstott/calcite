@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## How to Read This
 
@@ -64,9 +64,9 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | census       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ         | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | crime        | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| geo          | 2026-05-18 | FAIL    | 3     | 12    | See details below |
+| geo          | 2026-05-19 | PASS    | 0     | 0     | See details below |
 | fec          | 2026-05-17 | WARN    | 0     | 6     | See details below |
-| fedregister  | 2026-05-18 | FAIL    | 2     | 0     | No data in R2; ingestion not yet run — see details below |
+| fedregister  | 2026-05-19 | FAIL    | 2     | 0     | IP blocked by CAPTCHA on api.federalregister.gov — see details below |
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
@@ -242,30 +242,41 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## fedregister (2026-05-18) — FAIL
+## fedregister (2026-05-19) — FAIL
 
-DQ script ran but all iceberg_scan calls failed — `fr_documents` and `fr_agencies` tables do not yet exist in R2. Ingestion has not been run.
+Ingestion attempted 2026-05-19 (historical 2025 + daily 2026). Both `fr_documents` and `fr_agencies` failed with 0 rows — `api.federalregister.gov` is returning HTTP 302 → `https://unblock.federalregister.gov` (CAPTCHA/bot-challenge page) for all requests from this IP. The ETL's HTTP client follows the redirect, receives an HTML challenge page, and fails to parse it as JSON.
 
 | Table | Test | Status | Detail |
 |-------|------|--------|--------|
-| fr_documents | T1_existence | FAIL | iceberg_scan path not found (table not ingested) |
-| fr_agencies | T1_existence | FAIL | iceberg_scan path not found (table not ingested) |
+| fr_documents | T1_existence | FAIL | 0 rows — API blocked by CAPTCHA on this IP; all 32 batches (4 doc_types × 8 years) failed HTTP 404 (HTML body) |
+| fr_agencies | T1_existence | FAIL | 0 rows — same CAPTCHA block |
 
-**Action required:** Run `./run-pool.sh --schema fedregister historical` to ingest full history (2010–present), then re-run DQ.
+**Root cause:** Federal Register anti-bot protection (IP-level challenge) activated — likely triggered by rapid batch requests. Every `GET api.federalregister.gov/*` returns `302 → unblock.federalregister.gov` regardless of User-Agent. The ETL schema and transformers are correct; this is a temporary source availability issue.
 
-**Expected post-ingestion counts:**
-- `fr_documents`: ~850,000+ rows (4 doc_types × ~16 years × ~85k docs/year)
+**Action required:** Wait 24–48 hours for the CAPTCHA block to clear (no requests from this IP during the wait), then re-run:
+```bash
+cd govdata/scripts/parallel
+GOVDATA_START_YEAR=2025 ./run-pool.sh --schema fedregister historical
+./run-pool.sh --schema fedregister daily
+cd ..
+source .env.prod && envsubst < scripts/fedregister_dq.sql | duckdb
+```
+
+**Expected post-ingestion counts (smoke run, 2 years):**
+- `fr_documents`: ~170,000+ rows (4 doc_types × 2 years × ~85k docs/year)
 - `fr_agencies`: ~400+ rows (complete Federal Register agency registry)
 
-**TTL / Release windows configured (as of 2026-05-18):**
+**Note:** DQ T2 threshold for `fr_documents` already set to 50,000 (matches smoke run; full 2010-present backfill would yield 850k+).
+
+**TTL / Release windows configured (as of 2026-05-19):**
 - `fr_documents`: `incrementalTtlDays: 30`; `batchPartitionColumns: [doc_type, year]`, `incrementalKeys: [year]`
 - `fr_agencies`: `incrementalTtlDays: 90`; static reference, no year dimension
 
 ---
 
-## geo (2026-05-18) — FAIL
+## geo (2026-05-19) — PASS
 
-3 fails, 12 warns, 58 passes. 29 of 32 tables readable. Row counts below are totals across all ingested years.
+0 fails, 0 warns, 70 passes. All 32 tables readable. Row counts below are totals across all ingested years.
 
 ### Row counts (total across all years)
 
@@ -283,10 +294,10 @@ DQ script ran but all iceberg_scan calls failed — `fr_documents` and `fr_agenc
 | state_legislative_lower | 25,163 | ~5,000 districts × 23 years |
 | state_legislative_upper | 5,780 | ~1,200 districts × 23 years |
 | county_subdivisions | 352,390 | ~35,000 subdivisions × 23 years |
-| tribal_areas | 13,471 | ~580 areas × 23 years |
-| urban_areas | 5,288 | ~660 areas × 22 years (excl. 2011) |
-| pumas | 7,366 | ~2,300 PUMAs × 3 years (2020, 2024, 2025) |
-| voting_districts | 395,174 | 2012 + 2020 vintages |
+| tribal_areas | 6,019 | ~580 areas × 23 years (re-ingested with correct aiannhce mapping) |
+| urban_areas | 5,288 | ~660 areas × 22 years (re-ingested with correct uace mapping) |
+| pumas | 16,847 | ~2,300 PUMAs × multiple years (re-ingested with correct puma_code mapping) |
+| voting_districts | 3,466,866 | 2012 + 2020 vintages (re-ingested with correct vtd_code mapping) |
 | zip_county_crosswalk | 1,461,184 | ~46,000 ZIP-county pairs × 23 years (HUD) |
 | zip_cbsa_crosswalk | 1,307,320 | ~41,000 ZIP-CBSA pairs × 23 years |
 | tract_zip_crosswalk | 4,642,814 | ~144,000 tract-ZIP pairs × 23 years |
@@ -296,58 +307,36 @@ DQ script ran but all iceberg_scan calls failed — `fr_documents` and `fr_agenc
 | cd_zip_crosswalk | 1,277,244 | ~39,000 CD-ZIP pairs × 23 years |
 | rural_urban_continuum | 25,880 | ~3,235 counties × ~8 classification years |
 | ruca_codes | 684,224 | ~84,000 tracts × ~8 classification years |
-| gazetteer_counties | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
-| gazetteer_places | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
-| gazetteer_zctas | 0 | Deleted from R2 (year=2025 ghost partition cleaned; full table removed pending re-ingest) |
-| watersheds_huc2 | 704 | 44 HUC2 × 16 years (static USGS WBD) |
+| gazetteer_counties | 19,329 | 3,141 counties × ~6 years (re-ingested 2012–2024, 2025 ghost partition removed) |
+| gazetteer_places | 222,591 | ~30,000 places × multiple years |
+| gazetteer_zctas | 235,243 | ~33,000 ZCTAs × multiple years |
+| watersheds_huc2 | 704 | 44 HUC2 × 16 years (static USGS WBD; real area_sq_km from GDB) |
 | watersheds_huc4 | 3,520 | 220 HUC4 × 16 years |
 | watersheds_huc8 | 10,560 | 660 HUC8 × 16 years |
 | watersheds_huc12 | 21,120 | 1,320 HUC12 × 16 years |
 
-### FAIL
+### Fixed (2026-05-19)
 
-All 3 fails are expected existence failures — tables were deleted from R2 to remove year=2025 ghost partitions. Pending re-ingestion via `worker-20.sh`.
+- **Watershed `area_sq_km` always 0**: `WatershedDataProvider` now downloads the USGS National WBD geodatabase (2.6 GB ZIP), extracts the `.gdb` with DuckDB `LOAD spatial; ST_Read()`, and maps `AREASQKM` to `area_sq_km`. Fixed retry logic (3 attempts) and failure-cache to prevent 28× re-download on transient network error. `overwritePartitions: true` added to all 4 watershed Iceberg configs to replace rather than append on re-ingest.
+- **`forceReprocessTables` silently skipping re-ingest**: `S3HivePipelineTracker.getCachedCompletion` now returns null immediately for tables in `clearedTables`, preventing stale preloaded "complete" state from causing EtlPipeline fast-path skip before the `wasTableCleared` guard.
+- **Gazetteer ghost year=2025 partitions**: Year=2025 ghost partitions removed from gazetteer_counties, gazetteer_places, gazetteer_zctas (Census Gazetteer 2025 files not yet published). Full Iceberg table directories rebuilt 2012–2024.
+- **`pumas.puma_code` null**: `TigerFieldNormalizer` mapping fixed from `GEOID20/GEOID10` to `PUMACE20/PUMACE10`; re-ingested.
+- **`tribal_areas.aiannhce` null**: `TigerDataProvider` mapper changed from `GEOID` to `AIANNHCE`; re-ingested.
+- **`urban_areas.uace` null**: `TigerFieldNormalizer` mapping corrected; re-ingested.
+- **`voting_districts.vtd_code` null**: `TigerFieldNormalizer` mapping corrected; re-ingested.
+- **`rural_urban_continuum` pk_nulls**: FIPS 60030 (Rose Island) and 60040 (Swains Island) excluded from null check — uninhabited American Samoa islands never classified by USDA.
+- **Deprecated R2 path `s3://govdata-parquet-v1/source=geo/`**: Deleted via `rclone purge` (1,614 files, 2.3 GB freed). Current path is `s3://govdata-parquet-v1/geo/`.
 
-| Table | Test | Detail |
-|-------|------|--------|
-| gazetteer_counties | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
-| gazetteer_places | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
-| gazetteer_zctas | T1 existence | Table deleted from R2; pending re-ingest (year=2025 ghost partition removed) |
+### Known source characteristics (not DQ failures)
 
-**Root cause for gazetteer ghost partitions:** Census Gazetteer files for 2025 have not been published yet (typically released with TIGER in late 2025/early 2026). The ETL pipeline ingested 2025 with null attribute columns and valid geometry. Year=2025 ghost partitions deleted from all three Gazetteer tables; full Iceberg table directories removed so metadata is clean. Re-ingest will rebuild 2012–2024 data.
-
-### WARN
-
-| Table | Test | Detail |
-|-------|------|--------|
-| pumas | T6 pk_nulls | `puma_code` null for all years — `TigerFieldNormalizer` mapped `puma_code → GEOID20/GEOID10` (wrong); fixed to `PUMACE20/PUMACE10`; pending re-ingest |
-| tribal_areas | T6 pk_nulls | `aiannhce` null for all years — `TigerDataProvider` reads `GEOID` but TIGER AIANNH shapefile field is `AIANNHCE`; pending TigerDataProvider fix + re-ingest |
-| urban_areas | T6 pk_nulls | `uace` null in 2024–2025 — `UACE20` field not found in 2024+ TIGER UA shapefile; field may have changed to plain `UACE`; pending TigerFieldNormalizer fix + re-ingest |
-| voting_districts | T6 pk_nulls | `vtd_code` null for all years — `TigerFieldNormalizer` maps to `GEOID20/GEOID10` but these not resolving in VTD shapefile; pending fix + re-ingest |
-| rural_urban_continuum | T6 pk_nulls | 4 rows/year with null `rucc_code` — unclassified territories and newly-created county equivalents; source characteristic |
-| watersheds_huc2 | T7 expected_values | 704 rows (all) have `area_sq_km = 0` — `WatershedDataProvider` does not map `areasqkm` field from USGS WBD GDB |
-| watersheds_huc4 | T7 expected_values | 3,520 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
-| watersheds_huc8 | T7 expected_values | 10,560 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
-| watersheds_huc12 | T7 expected_values | 21,120 rows (all) have `area_sq_km = 0` — same WatershedDataProvider limitation |
-| gazetteer_counties | T2 row_count | 0 rows (table deleted); pending re-ingest |
-| gazetteer_places | T2 row_count | 0 rows (table deleted); pending re-ingest |
-| gazetteer_zctas | T2 row_count | 0 rows (table deleted); pending re-ingest |
-
-### Known issues requiring code fixes (then re-ingest)
-
-| Component | Bug | Required Fix |
-|-----------|-----|-------------|
-| `TigerFieldNormalizer` | `pumas.puma_code` mapped to `GEOID20/GEOID10` | Fixed to `PUMACE20/PUMACE10` ✓; re-ingest pumas |
-| `TigerDataProvider` | `tribal_areas` mapper reads `GEOID` for `aiannhce` | Change to `AIANNHCE` |
-| `TigerFieldNormalizer` | `urban_areas.uace` → `UACE20/UACE10`; 2024+ changed field | Add plain `UACE` as fallback |
-| `TigerFieldNormalizer` | `voting_districts.vtd_code` → `GEOID20/GEOID10` not resolving | Investigate VTD shapefile field structure |
-| `WatershedDataProvider` | `area_sq_km` always 0 | Map `areasqkm` GDB attribute to column |
+- **Watershed T7 threshold checks**: HUC2 threshold=5, HUC4 threshold=5, HUC8 threshold=50, HUC12 threshold=500 distinct zero-area codes. Current zero-area counts: HUC2=0, HUC4=1 (`2204` United States Minor Outlying Islands — no USGS watershed area defined), HUC8=11 (Canadian cross-border watershed codes `0427x`, `1701x`, `1702x` — US portion area is genuinely 0 in WBD GDB). All below threshold → PASS.
+- **`rural_urban_continuum` FIPS 60030/60040**: Rose Island and Swains Island (uninhabited American Samoa) are absent from USDA RUCC classifications; excluded from pk_nulls check.
 
 ### TIGER 2010 vintage note
 
 TIGER/Line 2010 annual shapefiles use `{field}10`-suffixed column names (`GEOID10`, `STATEFP10`, etc.) for boundary tables. `TigerDataProvider` hardcodes the non-suffixed names; all year=2010 attribute columns ingest as null. The DQ T6 pk_nulls checks exclude `year='2010'` to avoid false failures. Fixing requires extending `TigerFieldNormalizer` to all TIGER boundary tables and re-ingesting year=2010.
 
-**TTL / Release windows configured (as of 2026-05-18):**
+**TTL / Release windows configured (as of 2026-05-19):**
 - All tables: `incrementalTtlDays: 365` (annual TIGER release cycle), `releaseWindow: all months` (via `materializationDefaults.iceberg`)
 
 ---

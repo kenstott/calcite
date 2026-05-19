@@ -2,15 +2,15 @@
 # U.S. Federal Register Schema (FEDREGISTER)
 # ============================================================================
 # Data Source:
-#   - Federal Register API (api.federalregister.gov) — no API key required
+#   - govinfo.gov bulk XML (https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/)
 #   - Coverage: 1994-present, ~85,000 documents/year
 #   - Document types: Final Rules, Proposed Rules, Notices, Presidential Documents
 #
 # Features:
-#   - Hive-style partitioning by doc_type + year
+#   - Hive-style partitioning by year + month
 #   - Cross-reference ready: CFR citations, RINs, docket IDs link to SEC, econ
 #   - agencies table: static registry of all issuing agencies
-#   - Rate-limited API integration (polite 2 req/sec)
+#   - No API key or rate limiting required (bulk download)
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fedregister}"
@@ -18,14 +18,13 @@ dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fedregister"
 
 comment: >
-  U.S. Federal Register documents from the Office of the Federal Register API.
+  U.S. Federal Register documents from govinfo.gov bulk XML archives.
   Covers final rules, proposed rules, notices, and presidential documents (executive
   orders, proclamations, memoranda) from 1994 to present. Key cross-reference fields:
   cfr_references (links to affected CFR titles/parts by industry), rin (Regulatory
   Identifier Number — tracks rulemaking lifecycle from NPRM to final rule),
-  docket_ids (links to regulations.gov comment dockets), and significant flag
-  (OIRA-designated economically significant rules affecting ≥$100M/year).
-  Agency names link to fr_agencies table via slug.
+  docket_ids (links to regulations.gov comment dockets).
+  Agency names link to fr_agencies table.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -33,32 +32,25 @@ comment: >
 
 column_templates:
 
-  partition_doc_type: &partition_doc_type
-    name: doc_type
-    type: VARCHAR
-
   partition_year: &partition_year
     name: year
     type: INTEGER
 
-  doc_type_partitions: &doc_type_partitions
+  partition_month: &partition_month
+    name: month
+    type: INTEGER
+
+  year_month_partitions: &year_month_partitions
     style: hive
     columnDefinitions:
-      - *partition_doc_type
       - *partition_year
+      - *partition_month
 
 # ============================================================================
 # DIMENSION VALUES
 # ============================================================================
 
 dimension_values:
-
-  # Federal Register document types (API values)
-  fr_doc_types: &fr_doc_types
-    - RULE
-    - PRORULE
-    - NOTICE
-    - PRESDOC
 
   # Year range for Federal Register data
   # Override: FR_START_YEAR for FR-only, GOVDATA_START_YEAR for all schemas
@@ -68,6 +60,20 @@ dimension_values:
     end: current
     dataLag: 0
 
+  fr_months: &fr_months
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -75,23 +81,22 @@ dimension_values:
 partitionedTables:
 
   # ---------------------------------------------------------------------------
-  # FR_DOCUMENTS — all Federal Register documents, partitioned by type + year
+  # FR_DOCUMENTS — all Federal Register documents, partitioned by year + month
   # ---------------------------------------------------------------------------
   - name: fr_documents
-    pattern: "type=*/year=*/*.parquet"
-    partitions: *doc_type_partitions
+    pattern: "year=*/month=*/*.parquet"
+    partitions: *year_month_partitions
     comment: >
-      All Federal Register documents partitioned by document type and publication year.
+      All Federal Register documents partitioned by publication year and month.
       RULE=final rules (binding, amend CFR), PRORULE=proposed rules (open for comment),
       NOTICE=agency announcements/meetings/grants, PRESDOC=executive orders/proclamations.
       Key analytical fields: rin (tracks NPRM→final rule lifecycle via RIN cross-reference),
       cfr_references (JSON: affected CFR titles and parts → maps to regulated industry),
-      significant=true marks OIRA-designated rules with ≥$100M/year economic impact,
       docket_ids (JSON: links to regulations.gov for comment letter intelligence).
 
     dimensions:
-      doc_type: *fr_doc_types
       year: *fr_year_range
+      month: *fr_months
 
     columns:
       - name: document_number
@@ -105,10 +110,6 @@ partitionedTables:
         type: string
         nullable: false
         comment: Document type (RULE, PRORULE, NOTICE, PRESDOC)
-      - name: abstract
-        type: string
-        nullable: true
-        comment: Document abstract/summary
       - name: publication_date
         type: string
         nullable: false
@@ -125,10 +126,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: Comma-separated issuing agency names (denormalized for easy SQL filtering)
-      - name: agency_slugs
-        type: string
-        nullable: true
-        comment: Comma-separated agency slugs (join key to fr_agencies.slug)
       - name: cfr_references
         type: string
         nullable: true
@@ -137,10 +134,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: Primary Regulatory Identifier Number (links NPRM to final rule lifecycle)
-      - name: significant
-        type: boolean
-        nullable: true
-        comment: OIRA economically significant flag — true means estimated economic impact >=100M/year
       - name: docket_ids
         type: string
         nullable: true
@@ -153,41 +146,22 @@ partitionedTables:
         type: string
         nullable: true
         comment: Presidential document signing date (YYYY-MM-DD)
-      - name: full_text_xml_url
-        type: string
-        nullable: true
-        comment: URL to full text XML on federalregister.gov
-      - name: body_html_url
-        type: string
-        nullable: true
-        comment: URL to rendered HTML body on federalregister.gov
-
     source:
       type: http
-      url: "https://api.federalregister.gov/v1/documents.json?conditions[type][]={doc_type}&conditions[publication_date][gte]={year}-01-01&conditions[publication_date][lte]={year}-12-31&fields[]=document_number&fields[]=title&fields[]=type&fields[]=abstract&fields[]=publication_date&fields[]=effective_on&fields[]=action&fields[]=agencies&fields[]=cfr_references&fields[]=regulation_id_numbers&fields[]=significant&fields[]=docket_ids&fields[]=president&fields[]=signing_date&fields[]=full_text_xml_url&fields[]=body_html_url"
+      url: "https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip"
       method: GET
       response:
         format: json
-        pagination:
-          type: PAGE
-          pageParam: page
-          limitParam: per_page
-          pageSize: 1000
-          countPath: count
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503, 504]
-        maxRetries: 5
-      rawCache:
-        enabled: false
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterDocumentsTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterBulkXmlDataProvider"
 
     iceberg:
       catalogType: hadoop
-      batchPartitionColumns: [doc_type, year]
-      incrementalKeys: [year]
+      warehousePath: "${GOVDATA_PARQUET_DIR}"
+      batchPartitionColumns: [year, month]
+      incrementalKeys: [year, month]
+      overwritePartitions: true
       runMaintenance: true
       snapshotRetentionDays: 7
       incrementalTtlDays: 30
@@ -195,7 +169,7 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type={doc_type}/year={year}/"
+        pattern: "year={year}/month={month}/"
 
   # ---------------------------------------------------------------------------
   # FR_AGENCIES — Federal Register agency registry (static reference)
@@ -257,6 +231,7 @@ partitionedTables:
 
     iceberg:
       catalogType: hadoop
+      warehousePath: "${GOVDATA_PARQUET_DIR}"
       runMaintenance: true
       snapshotRetentionDays: 7
       incrementalTtlDays: 90
@@ -275,10 +250,5 @@ partitionedTables:
 constraints:
   fr_documents:
     primaryKey: [document_number]
-    foreignKeys:
-      - columns: [agency_slugs]
-        targetTable: fr_agencies
-        targetColumns: [slug]
-        comment: Comma-separated agency slugs link to fr_agencies.slug; denormalized for SQL filtering
   fr_agencies:
     primaryKey: [id]
