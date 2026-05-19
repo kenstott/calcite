@@ -84,19 +84,37 @@ public class WatershedDataProvider implements DataProvider {
       }
     }
 
-    // Download and extract WBD data
-    try {
-      Map<String, List<Map<String, Object>>> allData = downloadAndExtractWbd();
-      cachedData = allData;
-      cacheTimestamp = System.currentTimeMillis();
+    // Download and extract WBD data — retry up to 3 times on transient failures
+    Exception lastError = null;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        Map<String, List<Map<String, Object>>> allData = downloadAndExtractWbd();
+        cachedData = allData;
+        cacheTimestamp = System.currentTimeMillis();
 
-      List<Map<String, Object>> data = allData.get(hucLevel);
-      if (data != null) {
-        LOGGER.info("Extracted {} HUC{} watershed records", data.size(), hucLevel);
-        return data.iterator();
+        List<Map<String, Object>> data = allData.get(hucLevel);
+        if (data != null) {
+          LOGGER.info("Extracted {} HUC{} watershed records", data.size(), hucLevel);
+          return data.iterator();
+        }
+        break;
+      } catch (Exception e) {
+        lastError = e;
+        LOGGER.warn("WBD download/extract attempt {}/3 failed: {}", attempt, e.getMessage());
       }
-    } catch (Exception e) {
-      LOGGER.error("Failed to download/extract WBD data: {}", e.getMessage(), e);
+    }
+
+    if (lastError != null) {
+      LOGGER.error("Failed to download/extract WBD data after 3 attempts: {}",
+          lastError.getMessage(), lastError);
+      // Populate cache with empty data so subsequent batches skip re-download
+      Map<String, List<Map<String, Object>>> empty = new HashMap<>();
+      empty.put("2", new ArrayList<Map<String, Object>>());
+      empty.put("4", new ArrayList<Map<String, Object>>());
+      empty.put("8", new ArrayList<Map<String, Object>>());
+      empty.put("12", new ArrayList<Map<String, Object>>());
+      cachedData = empty;
+      cacheTimestamp = System.currentTimeMillis();
     }
 
     return Collections.emptyIterator();
