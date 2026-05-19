@@ -175,8 +175,8 @@ DQ_EXIT=0
   _r2_endpoint="${_r2_endpoint#https://}"
   cat <<_DUCKDB_PREAMBLE_
 SET unsafe_enable_version_guessing = true;
-SET http_timeout = 300000;
-SET http_retries = 3;
+SET http_timeout = 60000;
+SET http_retries = 1;
 CREATE OR REPLACE SECRET r2 (
     TYPE s3,
     KEY_ID '${AWS_ACCESS_KEY_ID}',
