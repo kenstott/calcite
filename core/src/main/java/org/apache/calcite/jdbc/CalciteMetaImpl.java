@@ -36,14 +36,17 @@ import org.apache.calcite.linq4j.Queryable;
 import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.linq4j.function.Predicate1;
+import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactoryImpl;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.runtime.FlatLists;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractTableQueryable;
 import org.apache.calcite.schema.impl.MaterializedViewTable;
@@ -59,8 +62,10 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.util.Holder;
+import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
+import org.apache.calcite.util.mapping.IntPair;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -78,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -154,6 +160,20 @@ public class CalciteMetaImpl extends MetaImpl {
   /** The columns returned by {@link DatabaseMetaData#getTableTypes()}. */
   public static final List<String> TABLE_TYPE_COLUMNS =
       ImmutableList.of("TABLE_TYPE");
+
+  /** The columns returned by {@link DatabaseMetaData#getPrimaryKeys}. */
+  public static final List<String> PRIMARY_KEY_COLUMNS =
+      ImmutableList.of("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME",
+          "COLUMN_NAME", "KEY_SEQ", "PK_NAME");
+
+  /** The columns returned by {@link DatabaseMetaData#getImportedKeys},
+   * {@link DatabaseMetaData#getExportedKeys}, and
+   * {@link DatabaseMetaData#getCrossReference}. */
+  public static final List<String> FOREIGN_KEY_COLUMNS =
+      ImmutableList.of("PKTABLE_CAT", "PKTABLE_SCHEM", "PKTABLE_NAME",
+          "PKCOLUMN_NAME", "FKTABLE_CAT", "FKTABLE_SCHEM", "FKTABLE_NAME",
+          "FKCOLUMN_NAME", "KEY_SEQ", "UPDATE_RULE", "DELETE_RULE",
+          "FK_NAME", "PK_NAME", "DEFERRABILITY");
 
   /** The columns returned by {@link DatabaseMetaData#getTypeInfo()}. */
   public static final List<String> TYPE_INFO_COLUMNS =
@@ -594,6 +614,182 @@ public class CalciteMetaImpl extends MetaImpl {
         .where(v1 -> functionNameMatcher.apply(v1.functionName));
   }
 
+  @Override public MetaResultSet getPrimaryKeys(ConnectionHandle ch,
+      String catalog, String schemaName, String tableName) {
+    final CalciteConnectionImpl conn = getConnection();
+    final String cat;
+    try {
+      cat = conn.getCatalog();
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+    final List<MetaPrimaryKeyRow> rows = new ArrayList<>();
+    for (Map.Entry<String, CalciteSchema> entry
+        : conn.rootSchema.getSubSchemaMap().entrySet()) {
+      final CalciteSchema schema = entry.getValue();
+      if (schemaName != null
+          && !schemaName.equalsIgnoreCase(schema.getName())) {
+        continue;
+      }
+      for (String tblName : schema.getTableNames(LikePattern.any())) {
+        if (tableName != null
+            && !tableName.equalsIgnoreCase(tblName)) {
+          continue;
+        }
+        final CalciteSchema.TableEntry te = schema.getTable(tblName, false);
+        if (te == null) {
+          continue;
+        }
+        final Statistic stat = te.getTable().getStatistic();
+        if (stat == null) {
+          continue;
+        }
+        final List<ImmutableBitSet> keys = stat.getKeys();
+        if (keys == null || keys.isEmpty()) {
+          continue;
+        }
+        final List<RelDataTypeField> fields =
+            te.getTable().getRowType(conn.typeFactory).getFieldList();
+        final ImmutableBitSet pkBits = keys.get(0);
+        final String pkName = "PK_" + tblName.toUpperCase(Locale.ROOT);
+        short seq = 1;
+        for (int colIdx : pkBits) {
+          if (colIdx < fields.size()) {
+            rows.add(new MetaPrimaryKeyRow(cat, schema.getName(), tblName,
+                fields.get(colIdx).getName(), seq++, pkName));
+          }
+        }
+      }
+    }
+    return createResultSet(Linq4j.asEnumerable(rows),
+        MetaPrimaryKeyRow.class, PRIMARY_KEY_COLUMNS);
+  }
+
+  @Override public MetaResultSet getImportedKeys(ConnectionHandle ch,
+      String catalog, String schemaName, String tableName) {
+    return foreignKeyResultSet(catalog, schemaName, tableName, false);
+  }
+
+  @Override public MetaResultSet getExportedKeys(ConnectionHandle ch,
+      String catalog, String schemaName, String tableName) {
+    return foreignKeyResultSet(catalog, schemaName, tableName, true);
+  }
+
+  /** Builds the result set for {@link #getImportedKeys} and {@link #getExportedKeys}.
+   * When {@code exported} is false, filters by the FK source table;
+   * when true, filters by the FK target table. */
+  private MetaResultSet foreignKeyResultSet(String catalog, String schemaName,
+      String tableName, boolean exported) {
+    final CalciteConnectionImpl conn = getConnection();
+    final String cat;
+    try {
+      cat = conn.getCatalog();
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+    final List<MetaForeignKeyRow> rows = new ArrayList<>();
+    for (Map.Entry<String, CalciteSchema> entry
+        : conn.rootSchema.getSubSchemaMap().entrySet()) {
+      final CalciteSchema schema = entry.getValue();
+      // For imported keys, filter source schema. For exported, scan all.
+      if (!exported && schemaName != null
+          && !schemaName.equalsIgnoreCase(schema.getName())) {
+        continue;
+      }
+      for (String tblName : schema.getTableNames(LikePattern.any())) {
+        // For imported keys, filter source table name.
+        if (!exported && tableName != null
+            && !tableName.equalsIgnoreCase(tblName)) {
+          continue;
+        }
+        final CalciteSchema.TableEntry te = schema.getTable(tblName, false);
+        if (te == null) {
+          continue;
+        }
+        final Statistic stat = te.getTable().getStatistic();
+        if (stat == null) {
+          continue;
+        }
+        final List<RelReferentialConstraint> fks = stat.getReferentialConstraints();
+        if (fks == null || fks.isEmpty()) {
+          continue;
+        }
+        final List<RelDataTypeField> srcFields =
+            te.getTable().getRowType(conn.typeFactory).getFieldList();
+        int fkIdx = 0;
+        for (RelReferentialConstraint fk : fks) {
+          final List<String> tgt = fk.getTargetQualifiedName();
+          final String tgtSchema = tgt.size() >= 2 ? tgt.get(tgt.size() - 2) : null;
+          final String tgtTable  = tgt.size() >= 1 ? tgt.get(tgt.size() - 1) : null;
+          // For exported keys, filter by target schema/table.
+          if (exported) {
+            if (tableName != null && !tableName.equalsIgnoreCase(tgtTable)) {
+              fkIdx++;
+              continue;
+            }
+            if (schemaName != null && !schemaName.equalsIgnoreCase(tgtSchema)) {
+              fkIdx++;
+              continue;
+            }
+          }
+          final List<RelDataTypeField> tgtFields =
+              resolveTableFields(conn, tgtSchema, tgtTable);
+          final String fkName = "FK_" + tblName.toUpperCase(Locale.ROOT)
+              + "_" + fkIdx;
+          final String pkName = tgtTable != null
+              ? "PK_" + tgtTable.toUpperCase(Locale.ROOT) : null;
+          short seq = 1;
+          for (IntPair pair : fk.getColumnPairs()) {
+            final String srcCol = pair.source < srcFields.size()
+                ? srcFields.get(pair.source).getName() : null;
+            final String tgtCol = pair.target < tgtFields.size()
+                ? tgtFields.get(pair.target).getName() : null;
+            if (srcCol != null && tgtCol != null) {
+              rows.add(new MetaForeignKeyRow(
+                  cat, tgtSchema, tgtTable, tgtCol,
+                  cat, schema.getName(), tblName, srcCol,
+                  seq,
+                  (short) DatabaseMetaData.importedKeyNoAction,
+                  (short) DatabaseMetaData.importedKeyNoAction,
+                  fkName, pkName,
+                  (short) DatabaseMetaData.importedKeyInitiallyImmediate));
+            }
+            seq++;
+          }
+          fkIdx++;
+        }
+      }
+    }
+    return createResultSet(Linq4j.asEnumerable(rows),
+        MetaForeignKeyRow.class, FOREIGN_KEY_COLUMNS);
+  }
+
+  private List<RelDataTypeField> resolveTableFields(CalciteConnectionImpl conn,
+      @Nullable String schemaName, @Nullable String tableName) {
+    if (tableName == null) {
+      return ImmutableList.of();
+    }
+    if (schemaName != null) {
+      final CalciteSchema targetSchema =
+          conn.rootSchema.getSubSchema(schemaName, false);
+      if (targetSchema != null) {
+        final CalciteSchema.TableEntry te =
+            targetSchema.getTable(tableName, false);
+        if (te != null) {
+          return te.getTable().getRowType(conn.typeFactory).getFieldList();
+        }
+      }
+    }
+    // Fall back: search all sub-schemas
+    for (CalciteSchema s : conn.rootSchema.getSubSchemaMap().values()) {
+      final CalciteSchema.TableEntry te = s.getTable(tableName, false);
+      if (te != null) {
+        return te.getTable().getRowType(conn.typeFactory).getFieldList();
+      }
+    }
+    return ImmutableList.of();
+  }
+
   @Override public Iterable<Object> createIterable(StatementHandle handle, QueryState state,
       Signature signature, @Nullable List<TypedValue> parameterValues, @Nullable Frame firstFrame) {
     // Drop QueryState
@@ -837,6 +1033,68 @@ public class CalciteMetaImpl extends MetaImpl {
 
   @Override public void rollback(ConnectionHandle ch) {
     throw new UnsupportedOperationException();
+  }
+
+  /** Row returned by {@link DatabaseMetaData#getPrimaryKeys}. */
+  public static class MetaPrimaryKeyRow {
+    public final String tableCat;
+    public final String tableSchem;
+    public final String tableName;
+    public final String columnName;
+    public final short keySeq;
+    public final String pkName;
+
+    public MetaPrimaryKeyRow(String tableCat, String tableSchem,
+        String tableName, String columnName, short keySeq, String pkName) {
+      this.tableCat   = tableCat;
+      this.tableSchem = tableSchem;
+      this.tableName  = tableName;
+      this.columnName = columnName;
+      this.keySeq     = keySeq;
+      this.pkName     = pkName;
+    }
+  }
+
+  /** Row returned by {@link DatabaseMetaData#getImportedKeys},
+   * {@link DatabaseMetaData#getExportedKeys}, and
+   * {@link DatabaseMetaData#getCrossReference}. */
+  public static class MetaForeignKeyRow {
+    public final String pktableCat;
+    public final String pktableSchem;
+    public final String pktableName;
+    public final String pkcolumnName;
+    public final String fktableCat;
+    public final String fktableSchem;
+    public final String fktableName;
+    public final String fkcolumnName;
+    public final short keySeq;
+    public final short updateRule;
+    public final short deleteRule;
+    public final String fkName;
+    public final String pkName;
+    public final short deferrability;
+
+    public MetaForeignKeyRow(String pktableCat, String pktableSchem,
+        String pktableName, String pkcolumnName,
+        String fktableCat, String fktableSchem,
+        String fktableName, String fkcolumnName,
+        short keySeq, short updateRule, short deleteRule,
+        String fkName, String pkName, short deferrability) {
+      this.pktableCat   = pktableCat;
+      this.pktableSchem = pktableSchem;
+      this.pktableName  = pktableName;
+      this.pkcolumnName = pkcolumnName;
+      this.fktableCat   = fktableCat;
+      this.fktableSchem = fktableSchem;
+      this.fktableName  = fktableName;
+      this.fkcolumnName = fkcolumnName;
+      this.keySeq       = keySeq;
+      this.updateRule   = updateRule;
+      this.deleteRule   = deleteRule;
+      this.fkName       = fkName;
+      this.pkName       = pkName;
+      this.deferrability = deferrability;
+    }
   }
 
   /** Metadata describing a Calcite table. */
