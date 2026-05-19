@@ -197,8 +197,9 @@ public class GazetteerDataProvider implements DataProvider {
         return result;
       }
 
-      // Parse tab-delimited header
-      String[] headers = headerLine.split("\t");
+      // Auto-detect delimiter: Census switched from tab to pipe in 2025
+      String delimiter = headerLine.contains("|") ? "\\|" : "\t";
+      String[] headers = headerLine.split(delimiter);
       for (int i = 0; i < headers.length; i++) {
         headers[i] = headers[i].trim();
       }
@@ -209,7 +210,7 @@ public class GazetteerDataProvider implements DataProvider {
           continue;
         }
 
-        String[] values = line.split("\t", -1);
+        String[] values = line.split(delimiter, -1);
         Map<String, Object> record = transformRecord(headers, values, tableName, year);
         if (record != null) {
           result.add(record);

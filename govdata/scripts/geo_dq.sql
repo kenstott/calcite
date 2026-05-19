@@ -100,11 +100,11 @@ WITH counts AS (
   UNION ALL
   SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/geo/ruca_codes',              allow_moved_paths := true) LIMIT 1))
   UNION ALL
-  SELECT 'gazetteer_counties',              0
+  SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_counties',  allow_moved_paths := true) LIMIT 1))
   UNION ALL
-  SELECT 'gazetteer_places',                0
+  SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_places',    allow_moved_paths := true) LIMIT 1))
   UNION ALL
-  SELECT 'gazetteer_zctas',                 0
+  SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_zctas',     allow_moved_paths := true) LIMIT 1))
   UNION ALL
   SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc2',         allow_moved_paths := true) LIMIT 1))
   UNION ALL
@@ -180,11 +180,11 @@ WITH counts AS (
   UNION ALL
   SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM iceberg_scan('s3://govdata-parquet-v1/geo/ruca_codes',              allow_moved_paths := true)),      70000
   UNION ALL
-  SELECT 'gazetteer_counties',              0,    3000
+  SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_counties',  allow_moved_paths := true)),   3000
   UNION ALL
-  SELECT 'gazetteer_places',                0,    25000
+  SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_places',    allow_moved_paths := true)),   25000
   UNION ALL
-  SELECT 'gazetteer_zctas',                 0,    30000
+  SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_zctas',     allow_moved_paths := true)),   30000
   UNION ALL
   SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc2',         allow_moved_paths := true)),      20
   UNION ALL
@@ -442,8 +442,29 @@ HAVING SUM(CASE WHEN county_fips IS NULL OR state_fips IS NULL OR rucc_code IS N
 
 -- ruca_codes: all columns are nullable — skip T6
 
--- gazetteer_counties / gazetteer_places / gazetteer_zctas T6: skipped — tables pending re-ingestion
--- (year=2025 ghost partitions removed; full table directories deleted from R2)
+-- gazetteer_counties: county_fips, state_fips
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_counties', 'pk_nulls', 'fail',
+  SUM(CASE WHEN county_fips IS NULL OR state_fips IS NULL THEN 1 ELSE 0 END)::VARCHAR,
+  '0', 'nulls found in non-nullable columns: county_fips, state_fips'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_counties', allow_moved_paths := true)
+HAVING SUM(CASE WHEN county_fips IS NULL OR state_fips IS NULL THEN 1 ELSE 0 END) > 0;
+
+-- gazetteer_places: place_fips, state_fips
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_places', 'pk_nulls', 'fail',
+  SUM(CASE WHEN place_fips IS NULL OR state_fips IS NULL THEN 1 ELSE 0 END)::VARCHAR,
+  '0', 'nulls found in non-nullable columns: place_fips, state_fips'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_places', allow_moved_paths := true)
+HAVING SUM(CASE WHEN place_fips IS NULL OR state_fips IS NULL THEN 1 ELSE 0 END) > 0;
+
+-- gazetteer_zctas: zcta
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_zctas', 'pk_nulls', 'fail',
+  SUM(CASE WHEN zcta IS NULL THEN 1 ELSE 0 END)::VARCHAR,
+  '0', 'nulls found in non-nullable column: zcta'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_zctas', allow_moved_paths := true)
+HAVING SUM(CASE WHEN zcta IS NULL THEN 1 ELSE 0 END) > 0;
 
 -- watersheds_huc2: huc2
 INSERT INTO dq_results
@@ -540,7 +561,37 @@ FROM iceberg_scan('s3://govdata-parquet-v1/geo/ruca_codes', allow_moved_paths :=
 WHERE primary_ruca IS NOT NULL AND (primary_ruca < 1 OR primary_ruca > 10)
 HAVING COUNT(*) > 0;
 
--- gazetteer_counties: T7 skipped — table deleted from R2 (year=2025 ghost partition); pending re-ingestion
+-- gazetteer_counties: county_fips should be 5 chars
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_counties', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'county_fips has length != 5: malformed FIPS code'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_counties', allow_moved_paths := true)
+WHERE county_fips IS NOT NULL AND LENGTH(county_fips) != 5
+HAVING COUNT(*) > 0;
+
+-- gazetteer_counties: state_fips should be 2 chars
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_counties', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'state_fips has length != 2 in gazetteer_counties: malformed FIPS code'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_counties', allow_moved_paths := true)
+WHERE state_fips IS NOT NULL AND LENGTH(state_fips) != 2
+HAVING COUNT(*) > 0;
+
+-- gazetteer_places: place_fips should be 7 chars
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_places', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'place_fips has length != 7: malformed FIPS code'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_places', allow_moved_paths := true)
+WHERE place_fips IS NOT NULL AND LENGTH(place_fips) != 7
+HAVING COUNT(*) > 0;
+
+-- gazetteer_zctas: zcta should be 5 chars
+INSERT INTO dq_results
+SELECT 'geo', 'gazetteer_zctas', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'zcta has length != 5: malformed ZIP code'
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_zctas', allow_moved_paths := true)
+WHERE zcta IS NOT NULL AND LENGTH(zcta) != 5
+HAVING COUNT(*) > 0;
 
 -- watersheds: area_sq_km is stored as 0.0 in current ingest — USGS WBD GDB area field
 -- is not populated by WatershedDataProvider (geometry-based area calculation not implemented).

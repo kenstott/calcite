@@ -140,6 +140,23 @@ public class TigerDataProvider implements DataProvider {
       return result.iterator();
 
     } catch (IOException e) {
+      // 404 means no data exists for this partition (e.g. voting_districts only has
+      // census vintages 2012 and 2020 — all other years are legitimately absent).
+      if (e.getMessage() != null && e.getMessage().startsWith("HTTP 404")) {
+        LOGGER.info("No data for table {} year={} state={} (HTTP 404 — skipping partition)",
+            tableName, year, stateFips);
+        if (tempDir != null) {
+          try {
+            Files.walk(tempDir)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+          } catch (IOException cleanupError) {
+            LOGGER.debug("Failed to cleanup temp directory: {}", cleanupError.getMessage());
+          }
+        }
+        return new ArrayList<Map<String, Object>>().iterator();
+      }
       if (tempDir != null) {
         try {
           Files.walk(tempDir)
@@ -291,9 +308,26 @@ public class TigerDataProvider implements DataProvider {
       if (stateFips == null) {
         return null;
       }
-      // PUMA directory and suffix both have vintage indicator (PUMA10 for 2010, PUMA20 for 2020+)
-      String pumaSuffix = (yearInt == 2010) ? "puma10" : "puma20";
-      String pumaDir = (yearInt == 2010) ? "PUMA10" : "PUMA20";
+      // PUMA URL pattern depends on census vintage:
+      //   2010:      TIGER2010/PUMA10/2010/tl_2010_{fips}_puma10.zip  (2010 census, special path)
+      //   2012-2021: TIGER{year}/PUMA/tl_{year}_{fips}_puma10.zip     (2010-census vintage)
+      //   2022-2023: TIGER{year}/PUMA/tl_{year}_{fips}_puma20.zip     (2020-census vintage, same dir)
+      //   2024+:     TIGER{year}/PUMA20/tl_{year}_{fips}_puma20.zip   (2020-census vintage, new dir)
+      String pumaSuffix;
+      String pumaDir;
+      if (yearInt == 2010) {
+        pumaSuffix = "puma10";
+        pumaDir = "PUMA10";
+      } else if (yearInt <= 2021) {
+        pumaSuffix = "puma10";
+        pumaDir = "PUMA";
+      } else if (yearInt <= 2023) {
+        pumaSuffix = "puma20";
+        pumaDir = "PUMA";
+      } else {
+        pumaSuffix = "puma20";
+        pumaDir = "PUMA20";
+      }
       return String.format("%s/%s/%s%s/tl_%s_%s_%s.zip",
           TIGER_BASE_URL, tigerPath, pumaDir, subdir2010, year, stateFips, pumaSuffix);
 
@@ -320,6 +354,34 @@ public class TigerDataProvider implements DataProvider {
   }
 
   private void downloadFile(String urlString, File outputFile) throws IOException {
+    // Retry up to 3 times on HTTP 403 (transient rate-limiting from Census Bureau servers)
+    int maxRetries = 3;
+    int[] retryDelaysMs = {5000, 15000, 30000};
+    IOException lastException = null;
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        downloadFileOnce(urlString, outputFile);
+        return;
+      } catch (IOException e) {
+        if (e.getMessage() != null && e.getMessage().startsWith("HTTP 403") && attempt < maxRetries) {
+          lastException = e;
+          LOGGER.warn("HTTP 403 from Census server for {} — retrying in {}ms (attempt {}/{})",
+              urlString, retryDelaysMs[attempt], attempt + 1, maxRetries);
+          try {
+            Thread.sleep(retryDelaysMs[attempt]);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw e;
+          }
+        } else {
+          throw e;
+        }
+      }
+    }
+    throw lastException;
+  }
+
+  private void downloadFileOnce(String urlString, File outputFile) throws IOException {
     URI uri = URI.create(urlString);
     URL url = uri.toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();

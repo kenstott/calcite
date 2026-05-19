@@ -450,7 +450,7 @@ generate_single_schema_model() {
     geo)
       operand_body="\"dataSource\": \"geo\",
       \"enabledSources\": [\"tiger\", \"hud\"],
-      \"tigerYear\": 2024"
+      ${_YEAR_RANGE}"
       ;;
     crime)
       operand_body="\"dataSource\": \"crime\",
