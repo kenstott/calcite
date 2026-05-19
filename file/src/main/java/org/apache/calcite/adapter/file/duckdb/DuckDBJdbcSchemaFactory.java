@@ -400,8 +400,11 @@ public class DuckDBJdbcSchemaFactory {
             // vss: Vector similarity search for embeddings
             // fts: Full-text search
             // spatial: Geospatial functions
-            String[] extensions = {"httpfs", "iceberg", "vss", "fts", "spatial"};
-            for (String ext : extensions) {
+            boolean isWin = System.getProperty("os.name", "").toLowerCase().contains("win");
+            String[] baseExts = {"httpfs", "iceberg", "vss", "fts", "spatial"};
+            String[] allExts = isWin ? baseExts
+                : new String[]{"httpfs", "iceberg", "vss", "fts", "spatial", "cache_httpfs"};
+            for (String ext : allExts) {
               try {
                 stmt.execute("LOAD " + ext);
               } catch (SQLException e) {
@@ -768,11 +771,17 @@ public class DuckDBJdbcSchemaFactory {
    * @param conn DuckDB connection to load extensions into
    */
   private static void loadQueryExtensions(Connection conn) {
-    String[][] extensions = {
-        {"spatial", ""},  // Spatial extension: PostGIS-compatible spatial functions, ST_Point, ST_Contains, ST_Intersects
-        {"vss", ""},      // Vector Similarity Search: HNSW indexes for approximate nearest neighbor
-        {"fts", ""}       // Full-Text Search: BM25 ranking and keyword search
-    };
+    boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+
+    List<String[]> extList = new ArrayList<>();
+    extList.add(new String[]{"spatial", ""});   // Geospatial: ST_Point, ST_Contains, ST_Intersects
+    extList.add(new String[]{"vss", ""});       // Vector Similarity Search: HNSW approximate nearest neighbor
+    extList.add(new String[]{"fts", ""});       // Full-Text Search: BM25 ranking and keyword search
+    // cache_httpfs: macOS/Linux only (WSL reports os.name="Linux" so it is included)
+    if (!isWindows) {
+      extList.add(new String[]{"cache_httpfs", "FROM community"});
+    }
+    String[][] extensions = extList.toArray(new String[0][]);
 
     LOGGER.info("Loading query-time DuckDB extensions for optimization...");
     for (String[] ext : extensions) {
@@ -794,7 +803,45 @@ public class DuckDBJdbcSchemaFactory {
         // Graceful degradation - continue even if extension fails to load
       }
     }
+
+    configureCacheHttpfs(conn);
+
     LOGGER.info("Query extension loading complete");
+  }
+
+  /**
+   * Configures cache_httpfs with a persistent cache directory that survives process restarts.
+   * Skipped silently if cache_httpfs was not loaded (network unavailable, test env, etc.).
+   *
+   * Cache directory priority:
+   * 1. System property {@code duckdb.cache_httpfs.directory}
+   * 2. {@code {user.home}/.aperio/.duckdb_httpfs_cache}
+   */
+  private static void configureCacheHttpfs(Connection conn) {
+    if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+      return;
+    }
+
+    String cacheDir = System.getProperty("duckdb.cache_httpfs.directory");
+    if (cacheDir == null || cacheDir.isEmpty()) {
+      cacheDir = System.getProperty("user.home") + File.separator
+          + ".aperio" + File.separator + ".duckdb_httpfs_cache";
+    }
+
+    // Always create the directory first — harmless if the extension didn't load
+    File dir = new File(cacheDir);
+    if (!dir.exists()) {
+      dir.mkdirs();
+    }
+
+    // Apply the directory setting; fails silently if extension is not loaded
+    try {
+      conn.createStatement().execute(
+          "SET cache_httpfs_cache_directory='" + cacheDir.replace("'", "''") + "'");
+      LOGGER.info("cache_httpfs persistent cache directory: {}", cacheDir);
+    } catch (Exception e) {
+      LOGGER.debug("Could not configure cache_httpfs cache directory: {}", e.getMessage());
+    }
   }
 
   /**
