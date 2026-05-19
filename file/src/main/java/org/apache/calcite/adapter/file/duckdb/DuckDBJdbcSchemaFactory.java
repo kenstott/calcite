@@ -412,6 +412,24 @@ public class DuckDBJdbcSchemaFactory {
                 LOGGER.debug("Could not load extension {} on new connection: {}", ext, e.getMessage());
               }
             }
+
+            // Exclude Iceberg metadata files from caching — they are mutable (updated on
+            // every ETL run) so caching them would hide new data until cache expiry.
+            // Parquet data files have immutable unique paths and are safe to cache.
+            if (!isWin) {
+              String[] exclusions = {
+                  ".*\\.metadata\\.json$",       // Iceberg snapshot metadata
+                  ".*version-hint\\.text$",      // Iceberg current-version pointer
+                  ".*/metadata/[^/]+\\.avro$"    // Iceberg manifest and manifest-list files
+              };
+              for (String regex : exclusions) {
+                try (Statement excl = conn.createStatement()) {
+                  excl.execute("SELECT cache_httpfs_add_exclusion_regex('" + regex + "')");
+                } catch (SQLException e) {
+                  LOGGER.debug("Could not add cache_httpfs exclusion '{}': {}", regex, e.getMessage());
+                }
+              }
+            }
           }
           return conn;
         }
@@ -834,13 +852,13 @@ public class DuckDBJdbcSchemaFactory {
       dir.mkdirs();
     }
 
-    // Apply the directory setting; fails silently if extension is not loaded
+    // Apply settings; each fails silently if extension is not loaded
     try {
       conn.createStatement().execute(
           "SET cache_httpfs_cache_directory='" + cacheDir.replace("'", "''") + "'");
       LOGGER.info("cache_httpfs persistent cache directory: {}", cacheDir);
     } catch (Exception e) {
-      LOGGER.debug("Could not configure cache_httpfs cache directory: {}", e.getMessage());
+      LOGGER.debug("Could not configure cache_httpfs: {}", e.getMessage());
     }
   }
 

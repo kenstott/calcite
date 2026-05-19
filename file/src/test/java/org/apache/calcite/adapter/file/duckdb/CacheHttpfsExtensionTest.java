@@ -150,6 +150,32 @@ public class CacheHttpfsExtensionTest {
     }
   }
 
+  /**
+   * Iceberg metadata paths must be excluded from caching so ETL updates are
+   * visible immediately without waiting for cache expiry.
+   */
+  @SuppressWarnings("deprecation")
+  @Test
+  public void testIcebergMetadataExcludedFromCache() throws Exception {
+    createCsvFile("items.csv", "id,name\n1,apple\n2,banana\n");
+
+    try (Connection calciteConn = createDuckDBConnection()) {
+      calciteConn.createStatement().executeQuery("SELECT COUNT(*) FROM files.items").close();
+
+      CalciteConnection cc = calciteConn.unwrap(CalciteConnection.class);
+      SchemaPlus filesSchema = cc.getRootSchema().getSubSchema("files");
+      JdbcSchema jdbcSchema = filesSchema.unwrap(JdbcSchema.class);
+      try (Connection duckConn = jdbcSchema.getDataSource().getConnection();
+           Statement stmt = duckConn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT COUNT(*) FROM cache_httpfs_list_exclusion_regex()")) {
+        assertTrue(rs.next());
+        assertTrue(rs.getInt(1) >= 3,
+            "At least 3 Iceberg metadata exclusion regexes should be registered");
+      }
+    }
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────────
 
   private Connection createDuckDBConnection() throws Exception {
