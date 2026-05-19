@@ -74,7 +74,12 @@ public class McpServer {
             return;
         }
 
-        // Redirect all logging away from stdout — MCP requires clean JSON on stdout only.
+        // Capture the real stdout before any framework can write to it, then
+        // replace System.out with stderr so all logging goes there instead.
+        // MCP JSON is written exclusively to the saved mcpOut stream.
+        PrintStream mcpOut = System.out;
+        System.setOut(System.err);
+
         log = System.err;
         suppressFrameworkLogging();
 
@@ -84,7 +89,7 @@ public class McpServer {
 
         BufferedReader in = new BufferedReader(
             new InputStreamReader(System.in, "UTF-8"));
-        PrintStream out = new PrintStream(System.out, true, "UTF-8");
+        PrintStream out = mcpOut;
 
         String line;
         while ((line = in.readLine()) != null) {
@@ -341,6 +346,44 @@ public class McpServer {
     private static void suppressFrameworkLogging() {
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error");
         System.setProperty("log4j.rootLogger", "ERROR");
+
+        // Logback ignores the above properties — configure it via reflection.
+        // Must run before initConnection() to suppress Hadoop/Calcite WARN spam
+        // that would otherwise contaminate stdout (the MCP JSON channel).
+        try {
+            Class<?> contextClass = Class.forName("ch.qos.logback.classic.LoggerContext");
+            Class<?> levelClass   = Class.forName("ch.qos.logback.classic.Level");
+            Object context = org.slf4j.LoggerFactory.getILoggerFactory();
+            if (!contextClass.isInstance(context)) {
+                return;
+            }
+            Object errorLevel = levelClass.getField("ERROR").get(null);
+
+            // Set root logger to ERROR.
+            Object rootLogger = contextClass.getMethod("getLogger", String.class)
+                .invoke(context, "ROOT");
+            rootLogger.getClass().getMethod("setLevel", levelClass)
+                .invoke(rootLogger, errorLevel);
+
+            // Re-point every ConsoleAppender to System.err.
+            java.util.List<?> loggers = (java.util.List<?>)
+                contextClass.getMethod("getLoggerList").invoke(context);
+            Class<?> consoleAppenderClass =
+                Class.forName("ch.qos.logback.core.ConsoleAppender");
+            for (Object logger : loggers) {
+                java.util.Iterator<?> it = (java.util.Iterator<?>)
+                    logger.getClass().getMethod("iteratorForAppenders").invoke(logger);
+                while (it != null && it.hasNext()) {
+                    Object appender = it.next();
+                    if (consoleAppenderClass.isInstance(appender)) {
+                        appender.getClass().getMethod("setTarget", String.class)
+                            .invoke(appender, "System.err");
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Logback not on classpath or reflection failed — nothing to do.
+        }
     }
 
     private static ObjectNode result(JsonNode id, ObjectNode body) {
