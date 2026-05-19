@@ -172,14 +172,17 @@ tasks.register<Exec>("jpackage") {
 
     val jpackageTool = "${System.getProperty("java.home")}/bin/jpackage"
     val os = System.getProperty("os.name").lowercase()
+    val isMac = os.contains("mac")
     val packageType = when {
-        os.contains("mac")  -> "dmg"
-        os.contains("win")  -> "msi"
-        else                -> "deb"
+        isMac            -> "pkg"
+        os.contains("win") -> "msi"
+        else             -> "deb"
     }
     val version = project.version.toString().replace("-SNAPSHOT", "")
         .replace("[^0-9.]".toRegex(), "")
         .ifEmpty { "1.0.0" }
+
+    val macResourceDir = project.file("src/packaging/mac").absolutePath
 
     commandLine(
         jpackageTool,
@@ -194,8 +197,9 @@ tasks.register<Exec>("jpackage") {
         "--dest",              jpackageDir.get().asFile.absolutePath,
         "--java-options",      "-Xms256m -Xmx2g",
         "--java-options",      "-Dfile.encoding=UTF-8",
-        // macOS-specific: sign if ASKAMERICA_SIGN_IDENTITY is set
-        *(if (os.contains("mac") && System.getenv("ASKAMERICA_SIGN_IDENTITY") != null)
+        // macOS-specific options
+        *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
+        *(if (isMac && System.getenv("ASKAMERICA_SIGN_IDENTITY") != null)
             arrayOf("--mac-sign", "--mac-signing-key-user-name", System.getenv("ASKAMERICA_SIGN_IDENTITY"))
           else emptyArray())
     )

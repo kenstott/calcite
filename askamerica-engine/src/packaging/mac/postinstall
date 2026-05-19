@@ -1,0 +1,4 @@
+#!/bin/bash
+# Open the setup wizard after installation so the user can enter their API key.
+open -a "AskAmerica MCP"
+exit 0
