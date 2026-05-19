@@ -125,6 +125,14 @@ ORDER BY date_added DESC
 FETCH FIRST 20 ROWS ONLY;
 ```
 
+## Performance
+
+Remote parquet reads from R2/S3 are cached to a local disk cache that survives process restarts. On the first query after a cold start, data is fetched over the network; subsequent queries against the same data are served from the local cache.
+
+**Cache location:** `~/.aperio/.duckdb_httpfs_cache/` (override with the `duckdb.cache_httpfs.directory` JVM system property)
+
+**Platform support:** macOS and Linux. Windows users can get the same caching by running the Linux version under WSL — install WSL, then use the `.deb` installer or the JAR directly via `java -jar askamerica-engine.jar --mcp`.
+
 ## Environment variables (optional)
 
 Some schemas require API keys for higher rate limits:
