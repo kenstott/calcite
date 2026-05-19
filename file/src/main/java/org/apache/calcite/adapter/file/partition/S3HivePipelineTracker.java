@@ -1472,6 +1472,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   @Override public CachedCompletion getCachedCompletion(String pipelineName) {
+    // Table was explicitly invalidated — treat as not complete regardless of cache state.
+    // invalidateTableCompletion writes "cleared" asynchronously; this guards against
+    // preloadAllCompletions reading stale "complete" state from S3 before the flush arrives.
+    if (clearedTables.contains(pipelineName)) {
+      return null;
+    }
+
     // Check in-memory cache first
     CachedCompletion memoryCached = completionCache.get(pipelineName);
     if (memoryCached != null) {
