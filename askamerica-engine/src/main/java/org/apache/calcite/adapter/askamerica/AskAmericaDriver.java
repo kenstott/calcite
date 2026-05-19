@@ -13,7 +13,10 @@ package org.apache.calcite.adapter.askamerica;
 import org.apache.calcite.adapter.driver.BaseDriverWrapper;
 import org.apache.calcite.adapter.govdata.GovDataDriver;
 
+import java.sql.Connection;
 import java.sql.Driver;
+import java.sql.SQLException;
+import java.util.Properties;
 
 /**
  * JDBC driver for the AskAmerica engine.
@@ -41,4 +44,16 @@ public class AskAmericaDriver extends BaseDriverWrapper {
     @Override protected String productName() { return "AskAmerica"; }
     @Override protected String driverName()  { return "AskAmerica JDBC Driver"; }
     @Override protected Driver innerDriver() { return INNER; }
+
+    @Override public Connection connect(String url, Properties info) throws SQLException {
+        // AskAmerica JDBC connections use ~/.askamerica (not ~/.govdata set by GovDataDriver).
+        // Set before delegating so GovDataDriver's own check finds it already set.
+        if (System.getProperty("govdata.operating.dir.base") == null) {
+            String home = System.getProperty("user.home");
+            if (home != null && !home.isEmpty()) {
+                System.setProperty("govdata.operating.dir.base", home + "/.askamerica");
+            }
+        }
+        return super.connect(url, info);
+    }
 }

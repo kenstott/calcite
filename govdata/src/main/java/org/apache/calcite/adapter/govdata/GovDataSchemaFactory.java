@@ -554,13 +554,20 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       return opDir;
     }
 
-    String workingDir = System.getProperty("user.dir");
-    if ("/".equals(workingDir) || workingDir == null || workingDir.isEmpty()) {
-      LOGGER.warn("Working directory is root or invalid, falling back to temp directory");
-      workingDir = System.getProperty("java.io.tmpdir");
+    // govdata.operating.dir.base can be set by JDBC drivers to pin the base to a stable
+    // location (e.g. ~/.askamerica) regardless of the process working directory.
+    // ETL/DQ processes that don't set this property continue to use user.dir/.aperio.
+    String base = System.getProperty("govdata.operating.dir.base");
+    if (base == null || base.isEmpty()) {
+      String workingDir = System.getProperty("user.dir");
+      if ("/".equals(workingDir) || workingDir == null || workingDir.isEmpty()) {
+        LOGGER.warn("Working directory is root or invalid, falling back to temp directory");
+        workingDir = System.getProperty("java.io.tmpdir");
+      }
+      base = workingDir + "/.aperio";
     }
 
-    String operatingDirectory = workingDir + "/.aperio/" + dataSource.toLowerCase();
+    String operatingDirectory = base + "/" + dataSource.toLowerCase();
     File opDir = new File(operatingDirectory);
     if (!opDir.exists()) {
       opDir.mkdirs();

@@ -73,6 +73,16 @@ public class GovDataDriver extends Driver {
 
     LOGGER.info("Connecting to government data source: {}", url);
 
+    // JDBC connections pin the operating directory to ~/.govdata (stable regardless of cwd).
+    // ETL/DQ processes don't go through this driver and continue to use user.dir/.aperio.
+    // AskAmericaDriver overrides this to ~/.askamerica before calling connect().
+    if (System.getProperty("govdata.operating.dir.base") == null) {
+      String home = System.getProperty("user.home");
+      if (home != null && !home.isEmpty()) {
+        System.setProperty("govdata.operating.dir.base", home + "/.govdata");
+      }
+    }
+
     // Apply GovData-specific defaults
     Properties govDataInfo = new Properties();
     if (info != null) {
