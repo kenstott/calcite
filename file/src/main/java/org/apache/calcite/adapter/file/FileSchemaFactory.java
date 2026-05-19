@@ -673,8 +673,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Create internal FileSchema for DuckDB processing
       // Pass null for File parameters - all file access goes through StorageProvider with directoryPath
       // Pass canonicalSchemaName for consistent .aperio directory naming (e.g., "econ" vs "ECON")
+      // Pass null for views — this FileSchema uses PARQUET engine config (for conversions).
+      // SQL views from the YAML are registered directly in DuckDB via DuckDBPendingViews,
+      // not as ViewTable entries in FileSchema (ViewTable has null protoRowType → NPE).
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 

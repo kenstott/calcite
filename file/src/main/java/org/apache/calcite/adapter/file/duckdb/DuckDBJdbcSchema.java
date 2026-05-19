@@ -217,8 +217,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       tableNames.addAll(fileSchema.tables()
           .getNames(org.apache.calcite.schema.lookup.LikePattern.any()));
     }
-    // Exclude SQL views (YAML views: section) — they are queryable but hidden from
-    // JDBC metadata so DBeaver/DataGrip only see real data tables.
+    // Exclude SQL views (YAML views: section) — queryable but hidden from JDBC metadata.
+    // Covers views in DuckDB catalog when their cross-schema deps are available.
     if (catalogPath != null) {
       tableNames.removeIf(n -> DuckDBPendingViews.isSqlView(catalogPath, schemaName, n));
     }

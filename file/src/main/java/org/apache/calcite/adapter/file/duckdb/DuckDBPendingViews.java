@@ -142,12 +142,13 @@ public final class DuckDBPendingViews {
               try (Statement stmt = conn.createStatement()) {
                 stmt.execute(sql);
               }
-              // Validate that the view is actually describable — cross-schema refs to
-              // schemas not loaded in this session will create the view but fail DESCRIBE.
-              // Drop such views silently so they don't appear in JDBC metadata.
+              // Validate by actually executing the view (SELECT … LIMIT 0).
+              // DESCRIBE passes even when cross-schema refs are unavailable (DuckDB defers
+              // resolution), but a real execution will fail.  Drop unexecutable views so
+              // they never appear in JDBC metadata.
               try (Statement validateStmt = conn.createStatement()) {
                 validateStmt.execute(String.format(
-                    "DESCRIBE \"%s\".\"%s\"", pv.duckdbSchema, pv.viewName));
+                    "SELECT * FROM \"%s\".\"%s\" LIMIT 0", pv.duckdbSchema, pv.viewName));
               } catch (SQLException validateEx) {
                 try (Statement dropStmt = conn.createStatement()) {
                   dropStmt.execute(String.format(
