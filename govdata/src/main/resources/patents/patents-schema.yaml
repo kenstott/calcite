@@ -62,7 +62,6 @@ column_templates:
   patent_id_column: &patent_id_column
     name: patent_id
     type: string
-    nullable: false
     comment: USPTO patent number (e.g., 10123456)
 
   state_fips_column: &state_fips_column
@@ -605,7 +604,6 @@ partitionedTables:
     columns:
       - name: serial_no
         type: string
-        nullable: false
         comment: USPTO trademark serial number (primary key)
       - name: registration_no
         type: string
@@ -705,3 +703,74 @@ partitionedTables:
         tableName: trademark_applications
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+  patent_grants:
+    primaryKey: [patent_id]
+  patent_assignees:
+    primaryKey: [patent_id, assignee_sequence]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links assignee row to parent patent grant
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links assignee location to geographic state
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links assignee location to geographic county
+  patent_inventors:
+    primaryKey: [patent_id, inventor_sequence]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links inventor row to parent patent grant
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links inventor location to geographic state
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links inventor location to geographic county
+  patent_cpc_classes:
+    primaryKey: [patent_id, cpc_sequence]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links CPC classification row to parent patent grant
+  patent_claims:
+    primaryKey: [patent_id, claim_sequence]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links claim row to parent patent grant
+  patent_summaries:
+    primaryKey: [patent_id]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links summary row to parent patent grant
+  trademark_applications:
+    primaryKey: [serial_no]
+    foreignKeys:
+      - columns: [applicant_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: Links applicant state (2-letter code, not FIPS) to geographic state

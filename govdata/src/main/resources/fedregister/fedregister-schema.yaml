@@ -96,7 +96,6 @@ partitionedTables:
     columns:
       - name: document_number
         type: string
-        nullable: false
         comment: Federal Register document number (e.g., 2026-07234)
       - name: title
         type: string
@@ -221,7 +220,6 @@ partitionedTables:
     columns:
       - name: id
         type: integer
-        nullable: false
         comment: Agency numeric ID
       - name: name
         type: string
@@ -269,3 +267,18 @@ partitionedTables:
       format: iceberg
       output:
         pattern: "type=agencies/"
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+  fr_documents:
+    primaryKey: [document_number]
+    foreignKeys:
+      - columns: [agency_slugs]
+        targetTable: fr_agencies
+        targetColumns: [slug]
+        comment: Comma-separated agency slugs link to fr_agencies.slug; denormalized for SQL filtering
+  fr_agencies:
+    primaryKey: [id]
