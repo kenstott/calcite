@@ -163,7 +163,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: national_forests
         catalogType: hadoop
         runCompaction: false
@@ -276,7 +276,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: timber_sales
         catalogType: hadoop
         runCompaction: true
@@ -351,7 +351,7 @@ partitionedTables:
       partition:
         columns: [type, stateAbbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_inventory
         catalogType: hadoop
         runCompaction: true
@@ -438,7 +438,7 @@ partitionedTables:
       partition:
         columns: [type, stateAbbr]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_metrics
         catalogType: hadoop
         runCompaction: true
@@ -515,7 +515,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: nps_units
         catalogType: hadoop
         runCompaction: false
@@ -584,7 +584,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: nps_visitation
         catalogType: hadoop
         runCompaction: true
@@ -650,7 +650,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: blm_field_offices
         catalogType: hadoop
         runCompaction: false
@@ -752,7 +752,7 @@ partitionedTables:
       partition:
         columns: [type]
       iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}"
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: onrr_revenues
         catalogType: hadoop
         runCompaction: true

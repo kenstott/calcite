@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:weather}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/weather"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   U.S. weather, climate, and air quality data from NWS (weather.gov), NOAA Climate

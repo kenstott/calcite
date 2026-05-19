@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:econ}"
 dataLagYears: 2
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/econ"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS),

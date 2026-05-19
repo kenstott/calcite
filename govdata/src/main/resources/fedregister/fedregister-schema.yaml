@@ -15,7 +15,7 @@
 
 schemaName: "${SCHEMA_NAME:fedregister}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/fedregister"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   U.S. Federal Register documents from govinfo.gov bulk XML archives.
@@ -158,7 +158,7 @@ partitionedTables:
 
     iceberg:
       catalogType: hadoop
-      warehousePath: "${GOVDATA_PARQUET_DIR}"
+      warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
       batchPartitionColumns: [year, month]
       incrementalKeys: [year, month]
       overwritePartitions: true
@@ -231,7 +231,7 @@ partitionedTables:
 
     iceberg:
       catalogType: hadoop
-      warehousePath: "${GOVDATA_PARQUET_DIR}"
+      warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
       runMaintenance: true
       snapshotRetentionDays: 7
       incrementalTtlDays: 90

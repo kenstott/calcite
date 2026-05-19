@@ -14,7 +14,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:econ_reference}"
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/econ_reference"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Reference and dimension tables for U.S. economic data. Contains lookup tables

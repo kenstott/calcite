@@ -14,7 +14,7 @@
 
 schemaName: "${SCHEMA_NAME:census}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/census"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   U.S. Census Bureau demographic and population data including American Community Survey (ACS)

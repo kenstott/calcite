@@ -16,7 +16,7 @@
 
 schemaName: "${SCHEMA_NAME:crime}"
 dataLagYears: 1
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/crime"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Comprehensive U.S. crime and public safety data from FBI Crime Data Explorer (CDE) and

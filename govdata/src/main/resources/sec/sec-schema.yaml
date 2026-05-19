@@ -17,7 +17,7 @@
 
 schemaName: "${SCHEMA_NAME:sec}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/sec"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"
 
 comment: >

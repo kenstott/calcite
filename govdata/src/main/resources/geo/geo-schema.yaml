@@ -14,7 +14,7 @@
 
 schemaName: "${SCHEMA_NAME:geo}"
 dataLagYears: 0
-materializeDirectory: "${GOVDATA_PARQUET_DIR}/geo"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"
 
 comment: >
