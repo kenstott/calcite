@@ -729,7 +729,7 @@ public class TigerDataProvider implements DataProvider {
       return new String[]{"ua_code", "ua_name", "ua_type",
           "land_area", "water_area", "geometry"};
     case "pumas":
-      return new String[]{"puma_fips", "state_fips", "puma_name",
+      return new String[]{"puma_code", "state_fips", "puma_name",
           "land_area", "water_area", "geometry"};
     case "voting_districts":
       return new String[]{"vtd_fips", "state_fips", "county_fips", "vtd_name",

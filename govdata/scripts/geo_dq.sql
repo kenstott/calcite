@@ -354,12 +354,12 @@ FROM iceberg_scan('s3://govdata-parquet-v1/geo/urban_areas', allow_moved_paths :
 WHERE year >= '2011'
 HAVING SUM(CASE WHEN uace IS NULL THEN 1 ELSE 0 END) > 0;
 
--- pumas: puma_code null due to PUMACE10/PUMACE20 mapping bug (fixed in TigerFieldNormalizer);
--- demoted to warn pending re-ingestion
+-- pumas: puma_code — column name mismatch fixed (TigerDataProvider used 'puma_fips' key instead
+-- of 'puma_code'); re-ingest required to populate. Demoted to warn until re-ingest completes.
 INSERT INTO dq_results
 SELECT 'geo', 'pumas', 'pk_nulls', 'warn',
   SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'puma_code null — PUMACE field mapping corrected in TigerFieldNormalizer; pending re-ingest'
+  '0', 'puma_code null — column name mismatch fixed in TigerDataProvider; pending re-ingest'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/pumas', allow_moved_paths := true)
 HAVING SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END) > 0;
 

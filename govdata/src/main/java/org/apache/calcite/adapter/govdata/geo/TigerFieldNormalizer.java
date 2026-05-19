@@ -153,10 +153,10 @@ public class TigerFieldNormalizer {
         Arrays.asList("NAMELSAD20", "NAMELSAD10", "NAMELSAD"),
         "PUMA name with legal/statistical area description");
     pumas.addField("land_area",
-        Arrays.asList("ALAND20", "ALAND"),
+        Arrays.asList("ALAND20", "ALAND10", "ALAND"),
         "Land area in square meters");
     pumas.addField("water_area",
-        Arrays.asList("AWATER20", "AWATER"),
+        Arrays.asList("AWATER20", "AWATER10", "AWATER"),
         "Water area in square meters");
     configs.put("pumas", pumas);
 
