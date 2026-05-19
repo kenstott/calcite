@@ -332,44 +332,40 @@ FROM iceberg_scan('s3://govdata-parquet-v1/geo/county_subdivisions', allow_moved
 WHERE year >= '2011'
 HAVING SUM(CASE WHEN cousub_fips IS NULL OR state_fips IS NULL OR county_fips IS NULL THEN 1 ELSE 0 END) > 0;
 
--- tribal_areas: aiannhce
--- Demoted to warn: TigerDataProvider reads GEOID for AIANNH code but TIGER AIANNH shapefile
--- uses AIANNHCE; all rows are null. Requires TigerDataProvider fix + re-ingest.
+-- tribal_areas: aiannhce — column name mismatch fixed (TigerDataProvider used 'aiannh_fips' key);
+-- pending re-ingest. Demoted to warn until re-ingest completes.
 INSERT INTO dq_results
 SELECT 'geo', 'tribal_areas', 'pk_nulls', 'warn',
   SUM(CASE WHEN aiannhce IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'aiannhce null — TigerDataProvider reads GEOID; TIGER AIANNH uses AIANNHCE; pending fix + re-ingest'
+  '0', 'aiannhce null — column name mismatch fixed in TigerDataProvider; pending re-ingest'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/tribal_areas', allow_moved_paths := true)
 WHERE year >= '2011'
 HAVING SUM(CASE WHEN aiannhce IS NULL THEN 1 ELSE 0 END) > 0;
 
--- urban_areas: uace
--- Demoted to warn: TigerFieldNormalizer maps uace to UACE20/UACE10; 2024+ TIGER UA shapefile
--- may use plain UACE or different field. Requires TigerFieldNormalizer fix + re-ingest for 2024+.
+-- urban_areas: uace — column name mismatch fixed (TigerDataProvider used 'ua_code' key);
+-- pending re-ingest. Demoted to warn until re-ingest completes.
 INSERT INTO dq_results
 SELECT 'geo', 'urban_areas', 'pk_nulls', 'warn',
   SUM(CASE WHEN uace IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'uace null in 2024+ — TIGER UA shapefile field name change; pending TigerFieldNormalizer fix + re-ingest'
+  '0', 'uace null — column name mismatch fixed in TigerDataProvider; pending re-ingest'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/urban_areas', allow_moved_paths := true)
 WHERE year >= '2011'
 HAVING SUM(CASE WHEN uace IS NULL THEN 1 ELSE 0 END) > 0;
 
--- pumas: puma_code — column name mismatch fixed (TigerDataProvider used 'puma_fips' key instead
--- of 'puma_code'); re-ingest required to populate. Demoted to warn until re-ingest completes.
+-- pumas: puma_code
 INSERT INTO dq_results
-SELECT 'geo', 'pumas', 'pk_nulls', 'warn',
+SELECT 'geo', 'pumas', 'pk_nulls',
+  CASE WHEN SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END) = 0 THEN 'pass' ELSE 'fail' END,
   SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'puma_code null — column name mismatch fixed in TigerDataProvider; pending re-ingest'
-FROM iceberg_scan('s3://govdata-parquet-v1/geo/pumas', allow_moved_paths := true)
-HAVING SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END) > 0;
+  '0', CASE WHEN SUM(CASE WHEN puma_code IS NULL THEN 1 ELSE 0 END) = 0 THEN 'ok' ELSE 'nulls found in puma_code' END
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/pumas', allow_moved_paths := true);
 
--- voting_districts: vtd_code, state_fips, county_fips
--- Demoted to warn: TigerFieldNormalizer maps vtd_code to GEOID20/GEOID10/GEOID but VTD shapefiles
--- may not expose GEOID in those field names. Requires TigerFieldNormalizer fix + re-ingest.
+-- voting_districts: vtd_code — column name mismatch fixed (TigerDataProvider used 'vtd_fips' key);
+-- pending re-ingest. Demoted to warn until re-ingest completes.
 INSERT INTO dq_results
 SELECT 'geo', 'voting_districts', 'pk_nulls', 'warn',
   SUM(CASE WHEN vtd_code IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'vtd_code null — TigerFieldNormalizer GEOID field not resolving in VTD shapefile; pending fix + re-ingest'
+  '0', 'vtd_code null — column name mismatch fixed in TigerDataProvider; pending re-ingest'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/voting_districts', allow_moved_paths := true)
 WHERE year >= '2011'
 HAVING SUM(CASE WHEN vtd_code IS NULL THEN 1 ELSE 0 END) > 0;

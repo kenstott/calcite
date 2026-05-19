@@ -714,25 +714,25 @@ public class TigerDataProvider implements DataProvider {
       return new String[]{"sd_lea", "state_fips", "sd_name", "sd_type",
           "land_area", "water_area", "geometry"};
     case "state_legislative_lower":
-      return new String[]{"sldl_fips", "state_fips", "sldl_name",
+      return new String[]{"sldl_fips", "state_fips", "district_name",
           "land_area", "water_area", "geometry"};
     case "state_legislative_upper":
-      return new String[]{"sldu_fips", "state_fips", "sldu_name",
+      return new String[]{"sldu_fips", "state_fips", "district_name",
           "land_area", "water_area", "geometry"};
     case "county_subdivisions":
       return new String[]{"cousub_fips", "state_fips", "county_fips", "cousub_name", "cousub_type",
           "land_area", "water_area", "geometry"};
     case "tribal_areas":
-      return new String[]{"aiannh_fips", "aiannh_name", "aiannh_type",
+      return new String[]{"aiannhce", "name", "namelsad",
           "land_area", "water_area", "geometry"};
     case "urban_areas":
-      return new String[]{"ua_code", "ua_name", "ua_type",
+      return new String[]{"uace", "name", "urban_type",
           "land_area", "water_area", "geometry"};
     case "pumas":
       return new String[]{"puma_code", "state_fips", "puma_name",
           "land_area", "water_area", "geometry"};
     case "voting_districts":
-      return new String[]{"vtd_fips", "state_fips", "county_fips", "vtd_name",
+      return new String[]{"vtd_code", "state_fips", "county_fips", "vtd_name",
           "land_area", "water_area", "geometry"};
     default:
       return new String[]{"geometry"};
