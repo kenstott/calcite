@@ -427,14 +427,20 @@ FROM iceberg_scan('s3://govdata-parquet-v1/geo/cd_zip_crosswalk', allow_moved_pa
 HAVING SUM(CASE WHEN cd_fips IS NULL OR zip IS NULL THEN 1 ELSE 0 END) > 0;
 
 -- rural_urban_continuum: county_fips, state_fips, rucc_code
--- Demoted to warn: ~4 counties/year have no RUCC classification (unincorporated territories
--- and newly-created county equivalents; source characteristic, not an ingest error)
+-- FIPS 60030 (Rose Island) and 60040 (Swains Island) are uninhabited American Samoa islands
+-- that USDA has never classified — excluded from the null check.
 INSERT INTO dq_results
-SELECT 'geo', 'rural_urban_continuum', 'pk_nulls', 'warn',
-  SUM(CASE WHEN county_fips IS NULL OR state_fips IS NULL OR rucc_code IS NULL THEN 1 ELSE 0 END)::VARCHAR,
-  '0', 'rucc_code null for ~4 counties/year — unclassified territories; source characteristic'
-FROM iceberg_scan('s3://govdata-parquet-v1/geo/rural_urban_continuum', allow_moved_paths := true)
-HAVING SUM(CASE WHEN county_fips IS NULL OR state_fips IS NULL OR rucc_code IS NULL THEN 1 ELSE 0 END) > 0;
+SELECT 'geo', 'rural_urban_continuum', 'pk_nulls',
+  CASE WHEN SUM(CASE WHEN (county_fips IS NULL OR state_fips IS NULL OR rucc_code IS NULL)
+                         AND county_fips NOT IN ('60030', '60040') THEN 1 ELSE 0 END) = 0
+       THEN 'pass' ELSE 'fail' END,
+  SUM(CASE WHEN (county_fips IS NULL OR state_fips IS NULL OR rucc_code IS NULL)
+               AND county_fips NOT IN ('60030', '60040') THEN 1 ELSE 0 END)::VARCHAR,
+  '0',
+  CASE WHEN SUM(CASE WHEN (county_fips IS NULL OR state_fips IS NULL OR rucc_code IS NULL)
+                         AND county_fips NOT IN ('60030', '60040') THEN 1 ELSE 0 END) = 0
+       THEN 'ok' ELSE 'unexpected null in county_fips, state_fips, or rucc_code' END
+FROM iceberg_scan('s3://govdata-parquet-v1/geo/rural_urban_continuum', allow_moved_paths := true);
 
 -- ruca_codes: all columns are nullable — skip T6
 
@@ -589,33 +595,31 @@ FROM iceberg_scan('s3://govdata-parquet-v1/geo/gazetteer_zctas', allow_moved_pat
 WHERE zcta IS NOT NULL AND LENGTH(zcta) != 5
 HAVING COUNT(*) > 0;
 
--- watersheds: area_sq_km is stored as 0.0 in current ingest — USGS WBD GDB area field
--- is not populated by WatershedDataProvider (geometry-based area calculation not implemented).
--- Demoted to warn: expected source characteristic, not a pipeline failure.
+-- watersheds: area_sq_km must be non-zero — read from AREASQKM in the USGS WBD GDB via ST_Read()
 INSERT INTO dq_results
-SELECT 'geo', 'watersheds_huc2', 'expected_values', 'warn',
-  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — WBD GDB area field not populated by WatershedDataProvider'
+SELECT 'geo', 'watersheds_huc2', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — AREASQKM not read from WBD GDB'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc2', allow_moved_paths := true)
 WHERE area_sq_km IS NOT NULL AND area_sq_km = 0
 HAVING COUNT(*) > 0;
 
 INSERT INTO dq_results
-SELECT 'geo', 'watersheds_huc4', 'expected_values', 'warn',
-  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — WBD GDB area field not populated by WatershedDataProvider'
+SELECT 'geo', 'watersheds_huc4', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — AREASQKM not read from WBD GDB'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc4', allow_moved_paths := true)
 WHERE area_sq_km IS NOT NULL AND area_sq_km = 0
 HAVING COUNT(*) > 0;
 
 INSERT INTO dq_results
-SELECT 'geo', 'watersheds_huc8', 'expected_values', 'warn',
-  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — WBD GDB area field not populated by WatershedDataProvider'
+SELECT 'geo', 'watersheds_huc8', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — AREASQKM not read from WBD GDB'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc8', allow_moved_paths := true)
 WHERE area_sq_km IS NOT NULL AND area_sq_km = 0
 HAVING COUNT(*) > 0;
 
 INSERT INTO dq_results
-SELECT 'geo', 'watersheds_huc12', 'expected_values', 'warn',
-  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — WBD GDB area field not populated by WatershedDataProvider'
+SELECT 'geo', 'watersheds_huc12', 'expected_values', 'fail',
+  COUNT(*)::VARCHAR, '0', 'area_sq_km is 0 — AREASQKM not read from WBD GDB'
 FROM iceberg_scan('s3://govdata-parquet-v1/geo/watersheds_huc12', allow_moved_paths := true)
 WHERE area_sq_km IS NOT NULL AND area_sq_km = 0
 HAVING COUNT(*) > 0;

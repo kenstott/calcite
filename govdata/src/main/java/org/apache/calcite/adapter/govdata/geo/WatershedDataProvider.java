@@ -17,10 +17,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -169,73 +171,162 @@ public class WatershedDataProvider implements DataProvider {
   private void extractAndParseGdb(Path zipFile, Path tempDir,
       Map<String, List<Map<String, Object>>> result) throws IOException {
 
-    // The WBD GDB is complex - for now, generate placeholder records
-    // A full implementation would use GDAL/OGR or DuckDB spatial
-    LOGGER.warn("Full GDB parsing not implemented - generating placeholder watershed data");
+    Path gdbDir = extractGdbFromZip(zipFile, tempDir);
+    if (gdbDir == null) {
+      LOGGER.error("No .gdb directory found in WBD ZIP — cannot parse watershed data");
+      return;
+    }
+    LOGGER.info("Extracted GDB to: {}", gdbDir);
 
-    // Generate representative HUC2 regions (22 major basins)
-    String[] huc2Codes = {
-        "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
-        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"
-    };
-    String[] huc2Names = {
-        "New England Region", "Mid Atlantic Region", "South Atlantic-Gulf Region",
-        "Great Lakes Region", "Ohio Region", "Tennessee Region", "Upper Mississippi Region",
-        "Lower Mississippi Region", "Souris-Red-Rainy Region", "Missouri Region",
-        "Arkansas-White-Red Region", "Texas-Gulf Region", "Rio Grande Region",
-        "Upper Colorado Region", "Lower Colorado Region", "Great Basin Region",
-        "Pacific Northwest Region", "California Region", "Alaska Region",
-        "Hawaii Region", "Caribbean Region", "Pacific Islands Region"
+    // layer name, result key, HUC field name (lowercase in output record)
+    String[][] levels = {
+        {"WBDHU2",  "2",  "huc2"},
+        {"WBDHU4",  "4",  "huc4"},
+        {"WBDHU8",  "8",  "huc8"},
+        {"WBDHU12", "12", "huc12"}
     };
 
-    for (int i = 0; i < huc2Codes.length; i++) {
-      Map<String, Object> record = new HashMap<>();
-      record.put("huc2", huc2Codes[i]);
-      record.put("name", huc2Names[i]);
-      record.put("area_sq_km", 0.0); // Placeholder
-      record.put("geometry", null);
-      result.get("2").add(record);
+    for (String[] level : levels) {
+      String layer    = level[0];
+      String key      = level[1];
+      String hucField = level[2];
+      List<Map<String, Object>> records = queryHucLevel(gdbDir, layer, hucField);
+      result.get(key).addAll(records);
+      LOGGER.info("Parsed {} {} records from WBD GDB", records.size(), layer);
+    }
+  }
 
-      // Generate some HUC4 subregions for each HUC2
-      for (int j = 1; j <= 5; j++) {
-        String huc4 = huc2Codes[i] + String.format("%02d", j);
-        Map<String, Object> huc4Record = new HashMap<>();
-        huc4Record.put("huc4", huc4);
-        huc4Record.put("huc2", huc2Codes[i]);
-        huc4Record.put("name", huc2Names[i] + " Subregion " + j);
-        huc4Record.put("area_sq_km", 0.0);
-        huc4Record.put("geometry", null);
-        result.get("4").add(huc4Record);
+  private List<Map<String, Object>> queryHucLevel(Path gdbDir, String layer,
+      String hucField) throws IOException {
 
-        // Generate HUC8 subbasins
-        for (int k = 1; k <= 3; k++) {
-          String huc8 = huc4 + String.format("%02d%02d", k, 1);
-          Map<String, Object> huc8Record = new HashMap<>();
-          huc8Record.put("huc8", huc8);
-          huc8Record.put("huc4", huc4);
-          huc8Record.put("name", "Subbasin " + huc8);
-          huc8Record.put("area_sq_km", 0.0);
-          huc8Record.put("geometry", null);
-          result.get("8").add(huc8Record);
+    String hucFieldUpper = hucField.toUpperCase();
+    Path outFile = gdbDir.getParent().resolve("wbd_" + hucField + ".tsv");
 
-          // Generate HUC12 subwatersheds
-          for (int l = 1; l <= 2; l++) {
-            String huc12 = huc8 + String.format("%04d", l);
-            Map<String, Object> huc12Record = new HashMap<>();
-            huc12Record.put("huc12", huc12);
-            huc12Record.put("huc8", huc8);
-            huc12Record.put("name", "Subwatershed " + huc12);
-            huc12Record.put("area_sq_km", 0.0);
-            huc12Record.put("geometry", null);
-            result.get("12").add(huc12Record);
-          }
-        }
+    String gdbPath = gdbDir.toAbsolutePath().toString().replace("'", "\\'");
+    String outPath = outFile.toAbsolutePath().toString().replace("'", "\\'");
+
+    String sql = String.format(
+        "LOAD spatial; "
+        + "COPY (SELECT lower(%s) AS huc_code, name, areasqkm "
+        + "FROM ST_Read('%s', layer='%s')) "
+        + "TO '%s' (FORMAT CSV, DELIMITER '\t', HEADER);",
+        hucFieldUpper, gdbPath, layer, outPath);
+
+    ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
+    pb.environment().put("HOME", System.getProperty("user.home"));
+    pb.redirectErrorStream(true);
+    Process proc = pb.start();
+
+    StringBuilder procOutput = new StringBuilder();
+    try (BufferedReader br = new BufferedReader(
+        new InputStreamReader(proc.getInputStream()))) {
+      String line;
+      while ((line = br.readLine()) != null) {
+        procOutput.append(line).append('\n');
       }
     }
 
-    LOGGER.info("Generated placeholder watershed records: HUC2={}, HUC4={}, HUC8={}, HUC12={}",
-        result.get("2").size(), result.get("4").size(),
-        result.get("8").size(), result.get("12").size());
+    int exitCode;
+    try {
+      exitCode = proc.waitFor();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("DuckDB interrupted while querying " + layer, e);
+    }
+
+    if (exitCode != 0) {
+      LOGGER.error("DuckDB failed for layer {} (exit {}): {}", layer, exitCode, procOutput);
+      return new ArrayList<>();
+    }
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    if (!Files.exists(outFile)) {
+      return records;
+    }
+
+    try (BufferedReader br = new BufferedReader(
+        new InputStreamReader(Files.newInputStream(outFile)))) {
+      br.readLine(); // skip TSV header
+      String line;
+      while ((line = br.readLine()) != null) {
+        String[] parts = line.split("\t", 3);
+        if (parts.length < 3) {
+          continue;
+        }
+        String hucCode = parts[0].trim();
+        String name    = parts[1].trim();
+        double areaSqKm = 0.0;
+        try {
+          areaSqKm = Double.parseDouble(parts[2].trim());
+        } catch (NumberFormatException e) {
+          LOGGER.debug("Invalid areasqkm for {}: {}", hucCode, parts[2]);
+        }
+
+        Map<String, Object> record = new HashMap<>();
+        record.put(hucField, hucCode);
+        if ("huc4".equals(hucField) && hucCode.length() >= 2) {
+          record.put("huc2", hucCode.substring(0, 2));
+        } else if ("huc8".equals(hucField) && hucCode.length() >= 4) {
+          record.put("huc4", hucCode.substring(0, 4));
+        } else if ("huc12".equals(hucField) && hucCode.length() >= 8) {
+          record.put("huc8", hucCode.substring(0, 8));
+        }
+        record.put("name", name);
+        record.put("area_sq_km", areaSqKm);
+        record.put("geometry", null);
+        records.add(record);
+      }
+    }
+
+    Files.deleteIfExists(outFile);
+    return records;
+  }
+
+  private Path extractGdbFromZip(Path zipFile, Path tempDir) throws IOException {
+    Path gdbDir = null;
+    String gdbPrefix = null;
+
+    try (ZipInputStream zis = new ZipInputStream(
+        new BufferedInputStream(Files.newInputStream(zipFile)))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName();
+        int gdbIdx = name.indexOf(".gdb");
+        if (gdbIdx < 0) {
+          zis.closeEntry();
+          continue;
+        }
+
+        // Determine the prefix before the .gdb segment on the first GDB entry
+        if (gdbPrefix == null) {
+          String upToGdb = name.substring(0, gdbIdx + 4);
+          int lastSlash  = upToGdb.lastIndexOf('/');
+          String gdbSegment  = upToGdb.substring(lastSlash + 1);
+          gdbPrefix = upToGdb.substring(0, lastSlash + 1);
+          gdbDir = tempDir.resolve(gdbSegment);
+          Files.createDirectories(gdbDir);
+        }
+
+        // Strip prefix so the path is relative to tempDir
+        String relative = name.substring(gdbPrefix.length());
+        Path entryPath  = tempDir.resolve(relative);
+
+        if (entry.isDirectory()) {
+          Files.createDirectories(entryPath);
+        } else {
+          Files.createDirectories(entryPath.getParent());
+          try (FileOutputStream out = new FileOutputStream(entryPath.toFile())) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = zis.read(buf)) != -1) {
+              out.write(buf, 0, n);
+            }
+          }
+        }
+        zis.closeEntry();
+      }
+    }
+    return gdbDir;
   }
 
   private void deleteDirectory(File dir) {
