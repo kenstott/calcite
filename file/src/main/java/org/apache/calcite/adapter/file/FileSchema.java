@@ -2149,8 +2149,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Now process views and materialized views (they must come AFTER tables)
-    // Process views first
-    if (views != null) {
+    // Process views first.
+    // Skip ViewTable registration for DUCKDB engine — DuckDBJdbcSchemaFactory registers
+    // these in DuckDB directly via DuckDBPendingViews.  A ViewTable with null rowType
+    // NPEs when CalciteMetaImpl tries to enumerate columns, so we must not add them here.
+    boolean isDuckDb = engineConfig != null
+        && engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.DUCKDB;
+    if (views != null && !isDuckDb) {
       for (Map<String, Object> view : views) {
         String viewName = (String) view.get("name");
         String sql = (String) view.get("sql");
@@ -2158,18 +2163,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         if (viewName != null && sql != null) {
           try {
             LOGGER.debug("Creating view: {}", viewName);
-            // Create a ViewTable using Calcite's built-in ViewTable class
-            // The ViewTable will expand the SQL query during query planning
             org.apache.calcite.schema.impl.ViewTable viewTable =
                 new org.apache.calcite.schema.impl.ViewTable(
-                    Object.class,           // element type
-                    null,                   // row type proto (inferred from SQL)
-                    sql,                    // view SQL
-                    java.util.Collections.singletonList(name), // schema path
-                    null);                  // view path (optional)
-
-            // Register the view using explicit viewName without casing transformation
-            // (same as materialized views)
+                    Object.class,
+                    null,
+                    sql,
+                    java.util.Collections.singletonList(name),
+                    null);
             builder.put(viewName, viewTable);
             LOGGER.debug("Successfully registered view: {}", viewName);
           } catch (Exception e) {

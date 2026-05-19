@@ -51,6 +51,14 @@ public final class DuckDBPendingViews {
   /** Databases whose views have already been flushed. */
   private static final Set<String> FLUSHED = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Tracks SQL view names (from YAML views: section) per database path.
+   * Key: dbPath, Value: set of "duckdbSchema.viewName" strings.
+   * These are excluded from JDBC metadata (getTables) but remain queryable.
+   */
+  private static final ConcurrentHashMap<String, Set<String>> SQL_VIEW_NAMES =
+      new ConcurrentHashMap<>();
+
   private DuckDBPendingViews() {}
 
   /** A single deferred view definition. */
@@ -73,6 +81,24 @@ public final class DuckDBPendingViews {
   static void enqueue(String dbPath, String duckdbSchema, String viewName, String viewSql) {
     PENDING.computeIfAbsent(dbPath, k -> new CopyOnWriteArrayList<>())
         .add(new PendingView(duckdbSchema, viewName, viewSql));
+  }
+
+  /**
+   * Records a SQL view name (from YAML views: section) for a database path.
+   * These views are excluded from JDBC metadata (getTables) but remain queryable.
+   */
+  static void trackSqlView(String dbPath, String duckdbSchema, String viewName) {
+    SQL_VIEW_NAMES.computeIfAbsent(dbPath, k -> ConcurrentHashMap.newKeySet())
+        .add(duckdbSchema + "." + viewName);
+  }
+
+  /**
+   * Returns true if the given name is a SQL view (from YAML views: section)
+   * rather than a data table (iceberg_scan/parquet_scan wrapper).
+   */
+  static boolean isSqlView(String dbPath, String duckdbSchema, String viewName) {
+    Set<String> names = SQL_VIEW_NAMES.get(dbPath);
+    return names != null && names.contains(duckdbSchema + "." + viewName);
   }
 
   /**
@@ -116,6 +142,23 @@ public final class DuckDBPendingViews {
               try (Statement stmt = conn.createStatement()) {
                 stmt.execute(sql);
               }
+              // Validate that the view is actually describable — cross-schema refs to
+              // schemas not loaded in this session will create the view but fail DESCRIBE.
+              // Drop such views silently so they don't appear in JDBC metadata.
+              try (Statement validateStmt = conn.createStatement()) {
+                validateStmt.execute(String.format(
+                    "DESCRIBE \"%s\".\"%s\"", pv.duckdbSchema, pv.viewName));
+              } catch (SQLException validateEx) {
+                try (Statement dropStmt = conn.createStatement()) {
+                  dropStmt.execute(String.format(
+                      "DROP VIEW IF EXISTS \"%s\".\"%s\"", pv.duckdbSchema, pv.viewName));
+                } catch (SQLException ignored) {
+                  // best-effort drop
+                }
+                LOGGER.info("Dropped inaccessible view {}.{} (cross-schema ref unavailable): {}",
+                    pv.duckdbSchema, pv.viewName, firstLine(validateEx.getMessage()));
+                continue;
+              }
               LOGGER.info("✅ Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
             } catch (SQLException e) {
               if (isDependencyError(e)) {
@@ -157,6 +200,7 @@ public final class DuckDBPendingViews {
   static void reset(String dbPath) {
     FLUSHED.remove(dbPath);
     PENDING.remove(dbPath);
+    SQL_VIEW_NAMES.remove(dbPath);
   }
 
   private static boolean isDependencyError(SQLException e) {

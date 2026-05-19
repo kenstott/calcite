@@ -1598,6 +1598,7 @@ public class DuckDBJdbcSchemaFactory {
       // Enqueue for deferred creation — views may reference cross-schema tables that don't exist yet
       if (dbPath != null) {
         DuckDBPendingViews.enqueue(dbPath, duckdbSchema, viewName, rewrittenViewDef);
+        DuckDBPendingViews.trackSqlView(dbPath, duckdbSchema, viewName);
         LOGGER.debug("Enqueued deferred view: {}.{}", duckdbSchema, viewName);
         enqueueCount++;
       } else {
