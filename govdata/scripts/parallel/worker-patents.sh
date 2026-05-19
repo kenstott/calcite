@@ -54,7 +54,7 @@ run_patents_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
   local model_file="$MODEL_DIR/${model_name}.json"
-  local parquet_dir="${PATENTS_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}/patents}"
+  local parquet_dir="${GOVDATA_PARQUET_DIR}"
   local cache_dir="${GOVDATA_CACHE_DIR}/patents"
   local end_year_json=""
   [ -n "$end_year" ] && end_year_json=",

@@ -28,7 +28,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | fec | 60 | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); `incrementalTtlDays: 30` expires tracker entries monthly to re-fetch in-progress cycle data | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
 | econ_reference | 84 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: each table refreshes only when `incrementalTtlDays` expires; outside release window tables skip silently | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Per-table `incrementalTtlDays` + `releaseWindow` in YAML |
 | geo | 20 | Same as daily (single-mode worker; no historical/daily split) | TTL-gated: `incrementalTtlDays: 365` in `materializationDefaults`; re-fetches only after 1 year. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
-| fedregister | 61 | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` all 4 doc_types × all years; `fr_agencies` static registry | Current year only; `fr_documents` re-fetched monthly (`incrementalTtlDays: 30`); `fr_agencies` re-fetched quarterly (`incrementalTtlDays: 90`) | `fr_agencies` (static agency registry; no year dimension) | `fr_documents` (year-partitioned; `batchPartitionColumns: [doc_type, year]`) | None — all months allowed for both tables |
+| fedregister | 61 | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` partitioned by year × month (96 batches per 8-year range) | Current year only; `fr_documents` re-fetched monthly (`incrementalTtlDays: 30`) | None | `fr_documents` (year+month-partitioned; `batchPartitionColumns: [year, month]`) | None |
 | ref | 41 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: `incrementalTtlDays: 365` on all 3 tables; daily run resolves latest GLEIF golden copy URL then skips if TTL not expired. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set | All 3 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
 
 ### How daily efficiency works per schema
@@ -66,7 +66,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | crime        | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | geo          | 2026-05-19 | PASS    | 0     | 0     | See details below |
 | fec          | 2026-05-17 | WARN    | 0     | 6     | See details below |
-| fedregister  | 2026-05-19 | FAIL    | 2     | 0     | IP blocked by CAPTCHA on api.federalregister.gov — see details below |
+| fedregister  | 2026-05-19 | PASS    | 0     | 0     | See details below |
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
@@ -242,35 +242,24 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## fedregister (2026-05-19) — FAIL
+## fedregister (2026-05-19) — PASS
 
-Ingestion attempted 2026-05-19 (historical 2025 + daily 2026). Both `fr_documents` and `fr_agencies` failed with 0 rows — `api.federalregister.gov` is returning HTTP 302 → `https://unblock.federalregister.gov` (CAPTCHA/bot-challenge page) for all requests from this IP. The ETL's HTTP client follows the redirect, receives an HTML challenge page, and fails to parse it as JSON.
+Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip`). Historical run covers 2019–2026, 96 batches (8 years × 12 months). Schema reduced to `fr_documents` only — `fr_agencies` removed (source `api.federalregister.gov` is CAPTCHA-blocked and not intended to be sourced).
 
 | Table | Test | Status | Detail |
 |-------|------|--------|--------|
-| fr_documents | T1_existence | FAIL | 0 rows — API blocked by CAPTCHA on this IP; all 32 batches (4 doc_types × 8 years) failed HTTP 404 (HTML body) |
-| fr_agencies | T1_existence | FAIL | 0 rows — same CAPTCHA block |
-
-**Root cause:** Federal Register anti-bot protection (IP-level challenge) activated — likely triggered by rapid batch requests. Every `GET api.federalregister.gov/*` returns `302 → unblock.federalregister.gov` regardless of User-Agent. The ETL schema and transformers are correct; this is a temporary source availability issue.
-
-**Action required:** Wait 24–48 hours for the CAPTCHA block to clear (no requests from this IP during the wait), then re-run:
-```bash
-cd govdata/scripts/parallel
-GOVDATA_START_YEAR=2025 ./run-pool.sh --schema fedregister historical
-./run-pool.sh --schema fedregister daily
-cd ..
-source .env.prod && envsubst < scripts/fedregister_dq.sql | duckdb
-```
-
-**Expected post-ingestion counts (smoke run, 2 years):**
-- `fr_documents`: ~170,000+ rows (4 doc_types × 2 years × ~85k docs/year)
-- `fr_agencies`: ~400+ rows (complete Federal Register agency registry)
-
-**Note:** DQ T2 threshold for `fr_documents` already set to 50,000 (matches smoke run; full 2010-present backfill would yield 850k+).
+| fr_documents | T1_existence | PASS | 202,473 rows |
+| fr_documents | T2_row_count | PASS | 202,473 ≥ 150,000 (2019–2026 threshold) |
+| fr_documents | T4_all_null_cols | PASS | No fully-null columns |
+| fr_documents | T5_all_same_value | PASS | No single-value columns |
+| fr_documents | T6_pk_nulls | PASS | No null document_number/doc_type/publication_date |
+| fr_documents | T7_doc_type_coverage | PASS | All 4 doc types present (RULE, PRORULE, NOTICE, PRESDOC) |
+| fr_documents | T7_doc_type_values | PASS | No invalid doc_type values |
+| fr_documents | T7_document_number_format | PASS | All document numbers match YYYY-NNNNN |
+| fr_documents | T7_publication_date_format | PASS | All dates match YYYY-MM-DD |
 
 **TTL / Release windows configured (as of 2026-05-19):**
-- `fr_documents`: `incrementalTtlDays: 30`; `batchPartitionColumns: [doc_type, year]`, `incrementalKeys: [year]`
-- `fr_agencies`: `incrementalTtlDays: 90`; static reference, no year dimension
+- `fr_documents`: `incrementalTtlDays: 30`; `batchPartitionColumns: [year, month]`, `incrementalKeys: [year, month]`
 
 ---
 

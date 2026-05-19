@@ -4,11 +4,17 @@
 --         patent_claims, patent_summaries, trademark_applications
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year' for all tables.
+-- Both workers verified: historical (2025) and daily (2026).
+
+INSTALL iceberg; LOAD iceberg;
+INSTALL httpfs;  LOAD httpfs;
 
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
 SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
 SET s3_endpoint='21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com';
 SET s3_region='auto';
+SET s3_url_style='path';
+SET unsafe_enable_version_guessing=true;
 
 CREATE TEMP TABLE dq_results (
   schema   VARCHAR,
@@ -24,6 +30,9 @@ CREATE TEMP TABLE dq_results (
 -- TABLE: patent_grants
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'patent_grants', 'T1_existence',
@@ -37,6 +46,20 @@ SELECT 'patents', 'patent_grants', 'T2_row_count',
   CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
   n, 50000, 'Expected at least 50000 patent grant records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true));
+
+-- T2b: historical coverage (historical worker writes 2025)
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true));
+
+-- T2c: daily coverage (daily worker writes 2026)
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true) LIMIT 3;
@@ -98,16 +121,19 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
       WHERE patent_date IS NOT NULL
         AND NOT REGEXP_MATCHES(patent_date, '^\d{4}-\d{2}-\d{2}$'));
 
--- T7: distinct grant years present (at least 1 year of coverage)
+-- T7: distinct grant years present (at least 2: 2025 and 2026)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_grants', 'T7_grant_year_coverage',
-  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
-  n, 1, 'Distinct grant_year values'
+  CASE WHEN n >= 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct grant_year values (expect >= 2: 2025 historical + 2026 daily)'
 FROM (SELECT COUNT(DISTINCT grant_year) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_assignees
 -- ─────────────────────────────────────────────────────────────
+
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_assignees', allow_moved_paths := true) LIMIT 1;
 
 -- T1: existence
 INSERT INTO dq_results
@@ -122,6 +148,20 @@ SELECT 'patents', 'patent_assignees', 'T2_row_count',
   CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
   n, 50000, 'Expected at least 50000 patent assignee records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_assignees', allow_moved_paths := true));
+
+-- T2b: historical coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_assignees', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_assignees', allow_moved_paths := true));
+
+-- T2c: daily coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_assignees', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_assignees', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_assignees', allow_moved_paths := true) LIMIT 3;
@@ -189,6 +229,9 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
 -- TABLE: patent_inventors
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_inventors', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'patent_inventors', 'T1_existence',
@@ -202,6 +245,20 @@ SELECT 'patents', 'patent_inventors', 'T2_row_count',
   CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
   n, 100000, 'Expected at least 100000 patent inventor records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_inventors', allow_moved_paths := true));
+
+-- T2b: historical coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_inventors', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_inventors', allow_moved_paths := true));
+
+-- T2c: daily coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_inventors', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_inventors', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_inventors', allow_moved_paths := true) LIMIT 3;
@@ -267,6 +324,9 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
 -- TABLE: patent_cpc_classes
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_cpc_classes', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'patent_cpc_classes', 'T1_existence',
@@ -280,6 +340,20 @@ SELECT 'patents', 'patent_cpc_classes', 'T2_row_count',
   CASE WHEN n >= 200000 THEN 'pass' ELSE 'fail' END,
   n, 200000, 'Expected at least 200000 patent CPC classification records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_cpc_classes', allow_moved_paths := true));
+
+-- T2b: historical coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_cpc_classes', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_cpc_classes', allow_moved_paths := true));
+
+-- T2c: daily coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_cpc_classes', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_cpc_classes', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_cpc_classes', allow_moved_paths := true) LIMIT 3;
@@ -352,6 +426,9 @@ FROM (SELECT COUNT(DISTINCT cpc_section) AS n FROM iceberg_scan('s3://govdata-pa
 -- TABLE: patent_claims
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_claims', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T1_existence',
@@ -366,13 +443,27 @@ SELECT 'patents', 'patent_claims', 'T2_row_count',
   n, 200000, 'Expected at least 200000 patent claim records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_claims', allow_moved_paths := true));
 
+-- T2b: historical coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_claims', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_claims', allow_moved_paths := true));
+
+-- T2c: daily coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_claims', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_claims', allow_moved_paths := true));
+
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_claims', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T4_all_null_cols',
-  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
   cnt, 0,
   CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
 FROM (
@@ -388,7 +479,7 @@ FROM (
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T5_all_same_value',
-  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
   cnt, 0,
   CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
 FROM (
@@ -429,6 +520,9 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
 -- TABLE: patent_summaries
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_summaries', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'patent_summaries', 'T1_existence',
@@ -442,6 +536,20 @@ SELECT 'patents', 'patent_summaries', 'T2_row_count',
   CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
   n, 50000, 'Expected at least 50000 patent summary records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_summaries', allow_moved_paths := true));
+
+-- T2b: historical coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_summaries', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_summaries', allow_moved_paths := true));
+
+-- T2c: daily coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_summaries', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_summaries', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_summaries', allow_moved_paths := true) LIMIT 3;
@@ -508,6 +616,9 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
 -- TABLE: trademark_applications
 -- ─────────────────────────────────────────────────────────────
 
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/trademark_applications', allow_moved_paths := true) LIMIT 1;
+
 -- T1: existence
 INSERT INTO dq_results
 SELECT 'patents', 'trademark_applications', 'T1_existence',
@@ -521,6 +632,20 @@ SELECT 'patents', 'trademark_applications', 'T2_row_count',
   CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
   n, 50000, 'Expected at least 50000 trademark application records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/trademark_applications', allow_moved_paths := true));
+
+-- T2b: historical coverage (application_year <= 2025 from historical worker)
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_applications', 'T2b_historical_coverage',
+  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
+  min_year, 2025, 'MIN(application_year) must be <= 2025 (historical worker)'
+FROM (SELECT MIN(application_year) AS min_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/trademark_applications', allow_moved_paths := true));
+
+-- T2c: daily coverage (application_year >= 2026 from daily worker)
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_applications', 'T2c_daily_coverage',
+  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
+  max_year, 2026, 'MAX(application_year) must be >= 2026 (daily worker)'
+FROM (SELECT MAX(application_year) AS max_year FROM iceberg_scan('s3://govdata-parquet-v1/patents/trademark_applications', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/patents/trademark_applications', allow_moved_paths := true) LIMIT 3;

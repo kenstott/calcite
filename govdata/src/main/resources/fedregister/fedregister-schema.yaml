@@ -24,7 +24,6 @@ comment: >
   cfr_references (links to affected CFR titles/parts by industry), rin (Regulatory
   Identifier Number — tracks rulemaking lifecycle from NPRM to final rule),
   docket_ids (links to regulations.gov comment dockets).
-  Agency names link to fr_agencies table.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -138,10 +137,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: JSON array of docket identifiers (links to regulations.gov comment dockets)
-      - name: president
-        type: string
-        nullable: true
-        comment: Signing president (presidential documents only)
       - name: signing_date
         type: string
         nullable: true
@@ -171,78 +166,6 @@ partitionedTables:
       output:
         pattern: "year={year}/month={month}/"
 
-  # ---------------------------------------------------------------------------
-  # FR_AGENCIES — Federal Register agency registry (static reference)
-  # ---------------------------------------------------------------------------
-  - name: fr_agencies
-    pattern: "type=agencies/*.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-    comment: >
-      Complete registry of all Federal Register issuing agencies. The slug field
-      is the stable join key — use it to join fr_documents.agency_slugs against
-      fr_agencies.slug. parent_id links sub-agencies to their parent agency.
-      Updated infrequently (agencies change rarely); refreshed on each full reload.
-
-    dimensions:
-      type:
-        - agencies
-
-    columns:
-      - name: id
-        type: integer
-        comment: Agency numeric ID
-      - name: name
-        type: string
-        nullable: false
-        comment: Full agency name
-      - name: short_name
-        type: string
-        nullable: true
-        comment: Agency short name or abbreviation
-      - name: slug
-        type: string
-        nullable: false
-        comment: URL-safe agency identifier (stable join key)
-      - name: url
-        type: string
-        nullable: true
-        comment: Agency URL on federalregister.gov
-      - name: parent_id
-        type: integer
-        nullable: true
-        comment: Parent agency ID (null for top-level agencies)
-
-    source:
-      type: http
-      url: "https://api.federalregister.gov/v1/agencies.json"
-      method: GET
-      response:
-        format: json
-      rateLimit:
-        requestsPerSecond: 2.0
-        maxRetries: 3
-
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterAgenciesTransformer"
-
-    iceberg:
-      catalogType: hadoop
-      warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
-      runMaintenance: true
-      snapshotRetentionDays: 7
-      incrementalTtlDays: 90
-      releaseWindow:
-        months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-    materialize:
-      format: iceberg
-      output:
-        pattern: "type=agencies/"
-
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -250,5 +173,3 @@ partitionedTables:
 constraints:
   fr_documents:
     primaryKey: [document_number]
-  fr_agencies:
-    primaryKey: [id]

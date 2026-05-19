@@ -67,7 +67,30 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     if (storageProvider == null) {
       synchronized (this) {
         if (storageProvider == null) {
-          storageProvider = StorageProviderFactory.createForGovDataCache();
+          String cacheDir = StorageProviderFactory.getGovDataCacheDir();
+          if (cacheDir != null && cacheDir.startsWith("s3://")) {
+            // S3 cache — build provider from process environment credentials.
+            Map<String, Object> s3Config = new HashMap<String, Object>();
+            String keyId = System.getenv("AWS_ACCESS_KEY_ID");
+            String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
+            String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+            String region = System.getenv("AWS_REGION");
+            if (keyId != null && !keyId.isEmpty()) {
+              s3Config.put("accessKeyId", keyId);
+            }
+            if (secret != null && !secret.isEmpty()) {
+              s3Config.put("secretAccessKey", secret);
+            }
+            if (endpoint != null && !endpoint.isEmpty()) {
+              s3Config.put("endpoint", endpoint);
+            }
+            s3Config.put("region", (region != null && !region.isEmpty()) ? region : "auto");
+            s3Config.put("directory", cacheDir);
+            storageProvider = StorageProviderFactory.createFromType("s3", s3Config);
+            LOGGER.info("Patents transformer: using S3 cache storage at {}", cacheDir);
+          } else {
+            storageProvider = StorageProviderFactory.createForGovDataCache();
+          }
         }
       }
     }

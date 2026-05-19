@@ -37,7 +37,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:patents}"
-materializeDirectory: "${PATENTS_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/patents}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   USPTO patent grant and trademark application data from PatentsView bulk downloads
@@ -109,7 +109,7 @@ column_templates:
       - *partition_year
 
   patents_iceberg_common: &patents_iceberg_common
-    warehousePath: "${PATENTS_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/patents}"
+    warehousePath: "${GOVDATA_PARQUET_DIR}/patents"
     catalogType: hadoop
     runCompaction: true
     compactionTargetFileSizeBytes: 134217728

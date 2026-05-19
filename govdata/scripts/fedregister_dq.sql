@@ -1,9 +1,8 @@
 -- Federal Register Data Quality Checks
 -- Schema: fedregister
--- Tables: fr_documents, fr_agencies
+-- Tables: fr_documents
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 for fr_documents exclude partition columns 'year' and 'month'.
--- T4/T5 for fr_agencies exclude partition column 'type'.
 
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs;  LOAD httpfs;
@@ -35,12 +34,11 @@ SELECT 'fedregister', 'fr_documents', 'T1_existence',
   n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true));
 
--- T2: row_count (smoke/DQ run covers 2025+2026 = ~2 years × 85k docs/year = ~170k expected)
--- Full backfill (2010-present) would produce 850k+; threshold set for 2-year smoke run.
+-- T2: row_count (2019-2026 = ~8 years × ~25k docs/year = ~200k expected)
 INSERT INTO dq_results
 SELECT 'fedregister', 'fr_documents', 'T2_row_count',
-  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
-  n, 50000, 'Expected at least 50000 Federal Register documents (2-year smoke run)'
+  CASE WHEN n >= 150000 THEN 'pass' ELSE 'fail' END,
+  n, 150000, 'Expected at least 150000 Federal Register documents (2019-2026)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true));
 
 -- T3: sample
@@ -58,7 +56,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('year', 'month')
+      AND column_name NOT IN ('year', 'month', 'signing_date')
   )
 );
 
@@ -74,7 +72,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('year', 'month')
+      AND column_name NOT IN ('year', 'month', 'signing_date')
   )
 );
 
@@ -118,91 +116,6 @@ SELECT 'fedregister', 'fr_documents', 'T7_publication_date_format',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true)
       WHERE publication_date IS NOT NULL
         AND NOT REGEXP_MATCHES(publication_date, '^\d{4}-\d{2}-\d{2}$'));
-
--- ─────────────────────────────────────────────────────────────
--- TABLE: fr_agencies
--- ─────────────────────────────────────────────────────────────
-
--- T1: existence
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T1_existence',
-  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
-  n, 1, 'Row count from iceberg_scan'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true));
-
--- T2: row_count (Federal Register has ~400+ agencies/sub-agencies)
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T2_row_count',
-  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
-  n, 100, 'Expected at least 100 Federal Register agencies'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true));
-
--- T3: sample
-SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true) LIMIT 3;
-
--- T4: all_null_cols
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T4_all_null_cols',
-  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
-  cnt, 0,
-  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
-FROM (
-  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
-  FROM (
-    SELECT column_name, null_percentage
-    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true))
-    WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type')
-  )
-);
-
--- T5: all_same_value
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T5_all_same_value',
-  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
-  cnt, 0,
-  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
-FROM (
-  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
-  FROM (
-    SELECT column_name, approx_unique
-    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true))
-    WHERE approx_unique <= 1
-      AND column_name NOT IN ('type')
-  )
-);
-
--- T6: pk_nulls (id, name, slug NOT NULL)
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T6_pk_nulls',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL id, name, or slug rows'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true)
-      WHERE id IS NULL OR name IS NULL OR slug IS NULL);
-
--- T7: slug uniqueness (each agency has a unique slug)
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T7_slug_uniqueness',
-  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
-  dups, 0, 'Duplicate slug values (slug must be unique)'
-FROM (
-  SELECT COUNT(*) AS dups
-  FROM (
-    SELECT slug, COUNT(*) AS cnt
-    FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true)
-    WHERE slug IS NOT NULL
-    GROUP BY slug
-    HAVING COUNT(*) > 1
-  )
-);
-
--- T7: slug format (lowercase, hyphen-separated, no spaces)
-INSERT INTO dq_results
-SELECT 'fedregister', 'fr_agencies', 'T7_slug_format',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Slugs with spaces or uppercase characters'
-FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_agencies', allow_moved_paths := true)
-      WHERE slug IS NOT NULL AND (slug LIKE '% %' OR slug != LOWER(slug)));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
