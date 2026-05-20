@@ -384,6 +384,7 @@ jobs:
         run: |
           ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository \
             --no-daemon \
+            --info \
             -PreleaseVersion=${{ steps.ghver.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
