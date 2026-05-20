@@ -108,9 +108,10 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
     LOGGER.info("TrademarkApplications: {} serial_nos for year {}", serialNos.size(), yearStr);
 
     final Map<String, Map<String, String>> owners = readCsvAsLookupForKeys(
-        ownerFile, "serial_no", serialNos, "party_name", "party_type", "state", "country");
+        ownerFile, "serial_no", serialNos,
+        "own_name", "own_type_cd", "own_addr_state_cd", "own_addr_country_cd");
     final Map<String, Set<String>> intlClasses =
-        readCsvMultiValueForKeys(intlClassFile, "serial_no", serialNos, "international_code");
+        readCsvMultiValueForKeys(intlClassFile, "serial_no", serialNos, "intl_class_cd");
     final Map<String, String> statements =
         readCsvSingleValueForKeys(statementFile, "serial_no", serialNos, "statement_text");
 
@@ -169,13 +170,13 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
             row.put("renewal_dt", strVal(csvField(parts, hdr, "renewal_dt")));
             row.put("std_char_claim_in", strVal(csvField(parts, hdr, "std_char_claim_in")));
             row.put("applicant_name",
-                strVal(owner != null ? owner.get("party_name") : null));
+                strVal(owner != null ? owner.get("own_name") : null));
             row.put("applicant_type",
-                strVal(owner != null ? owner.get("party_type") : null));
+                strVal(owner != null ? owner.get("own_type_cd") : null));
             row.put("applicant_state",
-                strVal(owner != null ? owner.get("state") : null));
+                strVal(owner != null ? owner.get("own_addr_state_cd") : null));
             row.put("applicant_country",
-                strVal(owner != null ? owner.get("country") : null));
+                strVal(owner != null ? owner.get("own_addr_country_cd") : null));
             row.put("goods_services_class",
                 strVal(classes != null && !classes.isEmpty()
                     ? String.join(",", classes) : null));

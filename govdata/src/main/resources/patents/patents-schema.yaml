@@ -138,11 +138,13 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
 
-  # Trademark applications: data available from 1870; cap at GOVDATA_START_YEAR
+  # Trademark applications: USPTO TRCFECO2 snapshots are published annually, not quarterly.
+  # Available snapshots: 2021 (filing year 2020), 2022 (2021), 2023 (2022).
+  # Cap hardcoded to 2022 — update when USPTO publishes snapshot 2024+.
   trademark_years: &trademark_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2025}"
-    end: "${GOVDATA_END_YEAR:current}"
+    start: 2020
+    end: 2022
     dataLag: 1
 
 # ============================================================================
