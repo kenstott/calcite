@@ -358,6 +358,20 @@ jobs:
           VERSION="${VERSION#engine-v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Delete existing version from GitHub Packages (if any)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ghver.outputs.version }}
+        run: |
+          VERSION_ID=$(gh api "/user/packages/maven/ai.askamerica.askamerica-engine/versions" \
+            --jq ".[] | select(.name == \"$VERSION\") | .id" 2>/dev/null || true)
+          if [ -n "$VERSION_ID" ]; then
+            echo "Deleting existing version $VERSION (ID: $VERSION_ID)"
+            gh api -X DELETE "/user/packages/maven/ai.askamerica.askamerica-engine/versions/$VERSION_ID"
+          else
+            echo "No existing version $VERSION in GitHub Packages"
+          fi
+
       - name: Publish to GitHub Packages
         run: |
           ./gradlew :askamerica-engine:publishAllPublicationsToGitHubPackagesRepository \
