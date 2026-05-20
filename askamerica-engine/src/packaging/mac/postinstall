@@ -13,10 +13,11 @@ else
   echo "AskAmerica MCP: engine download failed — app will show an error on first launch" >&2
 fi
 
-# Launch setup wizard as the logged-in user (postinstall runs as root)
+# Launch setup wizard as the logged-in user (postinstall runs as root).
+# Use full path — Launch Services may not have indexed the app yet.
 LOGGED_IN_USER=$(stat -f "%Su" /dev/console 2>/dev/null || true)
 if [ -n "$LOGGED_IN_USER" ] && [ "$LOGGED_IN_USER" != "root" ]; then
-  sudo -u "$LOGGED_IN_USER" open -a "AskAmerica MCP" &
+  sudo -u "$LOGGED_IN_USER" open "/Applications/AskAmerica MCP.app" &
 fi
 
 exit 0
