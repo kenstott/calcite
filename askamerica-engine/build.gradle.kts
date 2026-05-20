@@ -190,7 +190,7 @@ tasks.register<Exec>("jpackage") {
     val macResourceDir = project.file("src/packaging/mac").absolutePath
     val prebuiltJar = project.findProperty("prebuiltJar") as String?
     val mainJarName = if (prebuiltJar != null) {
-        java.io.File(prebuiltJar).name
+        prebuiltJar.substringAfterLast('/').substringAfterLast('\\')
     } else {
         tasks.shadowJar.get().archiveFileName.get()
     }
