@@ -1558,7 +1558,10 @@ public class HttpSource implements DataSource {
 
     if (format == HttpSourceConfig.BodyFormat.JSON) {
       try {
-        return OBJECT_MAPPER.writeValueAsString(resolvedBody);
+        Object toSerialize = config.isBodyWrapArray()
+            ? java.util.Collections.singletonList(resolvedBody)
+            : resolvedBody;
+        return OBJECT_MAPPER.writeValueAsString(toSerialize);
       } catch (Exception e) {
         throw new RuntimeException("Failed to serialize body to JSON: " + e.getMessage(), e);
       }
@@ -2329,6 +2332,11 @@ public class HttpSource implements DataSource {
    */
   private Object parseValue(String value) {
     if (value == null || value.isEmpty()) {
+      return null;
+    }
+
+    // Treat common CSV null markers as SQL NULL
+    if ("NULL".equalsIgnoreCase(value) || "NA".equals(value) || "N/A".equals(value)) {
       return null;
     }
 

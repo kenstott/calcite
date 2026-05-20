@@ -29,7 +29,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | econ_reference | 84 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: each table refreshes only when `incrementalTtlDays` expires; outside release window tables skip silently | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Per-table `incrementalTtlDays` + `releaseWindow` in YAML |
 | geo | 20 | Same as daily (single-mode worker; no historical/daily split) | TTL-gated: `incrementalTtlDays: 365` in `materializationDefaults`; re-fetches only after 1 year. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
 | fedregister | 61 | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` partitioned by year × month (96 batches per 8-year range) | Current year only; `fr_documents` re-fetched monthly (`incrementalTtlDays: 30`) | None | `fr_documents` (year+month-partitioned; `batchPartitionColumns: [year, month]`) | None |
-| ref | 41 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: `incrementalTtlDays: 365` on all 3 tables; daily run resolves latest GLEIF golden copy URL then skips if TTL not expired. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set | All 3 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
+| ref | 41 | Same as daily (single-mode worker; no historical/initial split) | TTL-gated: GLEIF tables `incrementalTtlDays: 365`, `sec_company_tickers` monthly (30d), `figi_instruments` annual (365d). `figi_instruments` only runs when `OPENFIGI_API_KEY` is set; uses `FigiDataProvider` to batch 100 tickers/request (~104 requests, 6 min vs 7 hr per-ticker approach) | All 4 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
 
 ### How daily efficiency works per schema
 
@@ -70,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | 2026-05-19 | WARN    | 0     | 9     | See details below |
-| ref          | 2026-05-20 | WARN    | 0     | 6     | See details below |
+| ref          | 2026-05-20 | WARN    | 0     | 1     | See details below |
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | 2026-05-18 | PASS  | 0     | 0     | See details below |
@@ -217,25 +217,28 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ## ref (2026-05-20) — WARN
 
-0 fails, 6 warns, 20 pass. 26 checks across 3 tables (T1–T7).
+0 fails, 1 warn, 31 pass. 32 checks across 4 tables (T1–T7).
 
 | Table | Rows | Notes |
 |-------|------|-------|
 | gleif_entities | 3,313,968 | Full GLEIF golden copy (~3.2M global LEI records) |
 | gleif_cik_mapping | 121,474 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
-| figi_instruments | 0 | Conditionally enabled (requires `OPENFIGI_API_KEY`); not configured in this environment |
+| sec_company_tickers | 10,354 | Active US exchange-listed SEC filers from EDGAR company_tickers.json |
+| figi_instruments | 184,221 | OpenFIGI instruments for 9,290 of 10,354 SEC tickers (1,064 tickers had no FIGI match) |
 
 **Warnings:**
-- `figi_instruments T1_existence`, `T2_row_count`, `T5_all_same_value`: Table is empty (demoted to warn; requires `OPENFIGI_API_KEY`).
-- `gleif_cik_mapping T6_pk_cik_nulls`: 82 records have a non-null LEI but null CIK — GLEIF entities registered with SEC (RA000602) that have not yet been assigned a CIK. Known source characteristic.
-- `gleif_cik_mapping T7_cik_format`: 3 non-numeric CIK values (source data characteristic from GLEIF).
-- `gleif_entities T7_entity_status_values`: 8,892 records with entity_status outside the known GLEIF status code set. Likely newer GLEIF status codes not yet in the DQ allowlist; source data is valid.
+- `gleif_cik_mapping T7_cik_format`: 3 GLEIF data entry errors — one entry has `"File number: 2429466"` label text instead of just the CIK digits; two WisdomTree fund series have SEC series IDs (`S000043385`, `S000052357`) instead of the parent trust's CIK. These are errors in GLEIF's self-reported registrations.
 
-**Fix applied (2026-05-20):**
+**Fixes applied (2026-05-20):**
 - `HttpSource.parseValue`: only attempts `Double.parseDouble` when the value contains a decimal point (`.`). Previously, integer strings overflowing `Long` (e.g. all-digit 20-char LEIs like `13250000000000000000`) and alphanumeric IDs containing `E` (e.g. `300300E1000345000084`) were incorrectly coerced to `Double`, producing precision-lossy or `Infinity` values. Fix eliminates 13,946 bad LEI values in gleif_entities and 9 in gleif_cik_mapping.
+- `HttpSource.parseValue`: GLEIF CSV `"NULL"` literal is now mapped to SQL NULL. Eliminates 8,892 `entity_status` rows stored as the string `"NULL"` — `T7_entity_status_values` now passes.
+- `HttpSourceConfig`/`HttpSource`: added `bodyWrapArray` flag. OpenFIGI `/v3/mapping` requires a JSON array body (`[{...}]`). Previously the body was sent as a bare object, causing HTTP 400 on every request. Fix wraps the body map in a singleton list before JSON serialization.
+- `FigiDataProvider`: replaces per-ticker HttpSource calls (10,354 requests, ~7 hours) with batched DataProvider (100 tickers/request, 104 requests, ~6 minutes). Tickers sourced from `sec_company_tickers` Iceberg table via DuckDB.
+- `sec_company_tickers`: new table sourcing ~10,354 active US exchange-listed companies from SEC EDGAR `company_tickers.json`. Feeds `figi_instruments` via `FigiDataProvider`.
 
 **TTL configured (as of 2026-05-20):**
-- All 3 tables: `incrementalTtlDays: 365`, `overwritePartitions: true` (full replace on each annual refresh).
+- `gleif_entities`, `gleif_cik_mapping`, `figi_instruments`: `incrementalTtlDays: 365`, `overwritePartitions: true` (full replace on each annual refresh).
+- `sec_company_tickers`: `incrementalTtlDays: 30`, `overwritePartitions: true` (monthly refresh to catch new listings).
 
 ---
 

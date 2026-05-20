@@ -119,6 +119,7 @@ public class HttpSourceConfig {
   private final Map<String, String> parameters;
   private final Map<String, String> headers;
   private final Map<String, Object> body;
+  private final boolean bodyWrapArray;
   private final BodyFormat bodyFormat;
   private final BatchConfig batching;
   private final AuthConfig auth;
@@ -175,6 +176,7 @@ public class HttpSourceConfig {
     this.body = builder.body != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, Object>(builder.body))
         : Collections.<String, Object>emptyMap();
+    this.bodyWrapArray = builder.bodyWrapArray;
     this.bodyFormat = builder.bodyFormat != null ? builder.bodyFormat : BodyFormat.JSON;
     this.batching = builder.batching;
     this.auth = builder.auth != null ? builder.auth : AuthConfig.none();
@@ -287,6 +289,10 @@ public class HttpSourceConfig {
    */
   public Map<String, Object> getBody() {
     return body;
+  }
+
+  public boolean isBodyWrapArray() {
+    return bodyWrapArray;
   }
 
   /**
@@ -546,6 +552,12 @@ public class HttpSourceConfig {
         bodyMap.put(String.valueOf(e.getKey()), e.getValue());
       }
       builder.body(bodyMap);
+    }
+
+    // Parse bodyWrapArray (wraps the body map in a JSON array for APIs like OpenFIGI)
+    Object bodyWrapArrayObj = map.get("bodyWrapArray");
+    if (Boolean.TRUE.equals(bodyWrapArrayObj)) {
+      builder.bodyWrapArray(true);
     }
 
     // Parse body format (defaults to JSON)
@@ -2250,6 +2262,7 @@ public class HttpSourceConfig {
     private Map<String, String> headers;
     private Map<String, Object> body;
     private BodyFormat bodyFormat;
+    private boolean bodyWrapArray;
     private BatchConfig batching;
     private AuthConfig auth;
     private ResponseConfig response;
@@ -2296,6 +2309,11 @@ public class HttpSourceConfig {
 
     public Builder bodyFormat(BodyFormat bodyFormat) {
       this.bodyFormat = bodyFormat;
+      return this;
+    }
+
+    public Builder bodyWrapArray(boolean bodyWrapArray) {
+      this.bodyWrapArray = bodyWrapArray;
       return this;
     }
 

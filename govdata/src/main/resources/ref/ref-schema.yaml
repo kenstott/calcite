@@ -292,6 +292,82 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ==========================================================================
+  # SEC COMPANY TICKERS — Active US exchange-listed SEC filers
+  # ==========================================================================
+  - name: sec_company_tickers
+    pattern: "type=sec_company_tickers.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      SEC EDGAR company ticker mapping. Contains ~10,000 active US exchange-listed
+      companies with their SEC CIK and ticker symbol. Sourced from the SEC EDGAR
+      company_tickers.json file (updated daily). Feeds the ticker dimension for
+      figi_instruments — enables the full chain LEI → CIK → ticker → FIGI within
+      the ref schema with no dependency on other schemas.
+      Source: https://www.sec.gov/files/company_tickers.json
+
+    columns:
+      - name: cik
+        type: string
+        nullable: false
+        comment: SEC Central Index Key (plain numeric string, matches gleif_cik_mapping.cik)
+      - name: ticker
+        type: string
+        nullable: false
+        comment: Exchange ticker symbol
+      - name: title
+        type: string
+        nullable: true
+        comment: Company name as registered with SEC
+
+    source:
+      type: http
+      url: "https://www.sec.gov/files/company_tickers.json"
+      method: GET
+      headers:
+        User-Agent: "govdata-etl kennethstott@gmail.com"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.2
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ref.SecCompanyTickersTransformer"
+
+    dimensions:
+      type:
+        - sec_company_tickers
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        incrementalTtlDays: 30
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
   # FIGI INSTRUMENTS — OpenFIGI instrument identifiers
   # ==========================================================================
   - name: figi_instruments
@@ -360,8 +436,9 @@ partitionedTables:
         Content-Type: "application/json"
         X-OPENFIGI-APIKEY: "${OPENFIGI_API_KEY:}"
       body:
-        - idType: "TICKER"
-          idValue: "{ticker}"
+        idType: "TICKER"
+        idValue: "{ticker}"
+      bodyWrapArray: true
       response:
         format: json
       rateLimit:
@@ -371,7 +448,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.ref.FigiResponseTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.ref.FigiDataProvider"
 
     dimensions:
       type:
@@ -426,6 +503,9 @@ constraints:
         targetTable: filings
         targetColumns: [cik]
 
+  sec_company_tickers:
+    primaryKey: [type, cik]
+
   figi_instruments:
     primaryKey: [type, figi]
 
@@ -438,8 +518,9 @@ views:
   - name: ticker_instrument_map
     comment: >
       Connects OpenFIGI instruments to SEC filers via shared ticker symbol.
-      One row per ticker+figi — enables instrument-to-company resolution and
-      cross-referencing FIGI, CIK, and company name for equity analysis.
+      One row per ticker+figi combination — enables instrument-to-company resolution
+      and cross-referencing FIGI, CIK, and company name for equity analysis.
+      Self-contained within the ref schema; no dependency on other schemas.
     sql: >
       SELECT
         fi.ticker,
@@ -448,11 +529,8 @@ views:
         fi.exchange_code,
         fi.market_sector,
         fi.security_type,
-        fm.cik,
-        fm.company_name,
-        COUNT(DISTINCT fm.accession_number) AS sec_filings_count
+        sct.cik,
+        sct.title        AS company_name
       FROM figi_instruments fi
-      LEFT JOIN "sec"."filing_metadata" fm ON fi.ticker = fm.ticker
+      LEFT JOIN sec_company_tickers sct ON fi.ticker = sct.ticker
       WHERE fi.ticker IS NOT NULL
-      GROUP BY fi.ticker, fi.figi, fi.name, fi.exchange_code,
-               fi.market_sector, fi.security_type, fm.cik, fm.company_name

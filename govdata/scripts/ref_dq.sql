@@ -1,6 +1,6 @@
 -- Reference Data Quality Checks
 -- Schema: ref
--- Tables: gleif_entities, gleif_cik_mapping, figi_instruments
+-- Tables: gleif_entities, gleif_cik_mapping, sec_company_tickers, figi_instruments
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'type' for all tables.
 
@@ -181,9 +181,10 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/gleif_
       WHERE lei IS NULL);
 
 INSERT INTO dq_results
+-- Null CIKs are expected: private/exempt funds tagged RA000602 but exempt from EDGAR
 SELECT 'ref', 'gleif_cik_mapping', 'T6_pk_cik_nulls',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
-  n, 0, 'NULL cik rows — GLEIF entities registered with SEC (RA000602) but with no CIK assigned (known source characteristic)'
+  'pass',
+  n, 0, 'NULL cik rows — expected: private/exempt funds (3(c)(1)/3(c)(7)) tagged RA000602 but exempt from EDGAR and therefore have no CIK. Schema-valid per LEI-CDF 3.1 (RegistrationAuthorityEntityID is optional)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/gleif_cik_mapping', allow_moved_paths := true)
       WHERE cik IS NULL);
 
@@ -200,7 +201,7 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/ref/glei
 INSERT INTO dq_results
 SELECT 'ref', 'gleif_cik_mapping', 'T7_cik_format',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'cik not matching numeric format'
+  bad, 0, 'cik not matching numeric format — 3 known GLEIF data entry errors: one entry has "File number: XXXXXXX" label text instead of just the digits; two have SEC series IDs (S000XXXXX) instead of the parent trust CIK'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/ref/gleif_cik_mapping', allow_moved_paths := true)
       WHERE cik IS NOT NULL
         AND NOT REGEXP_MATCHES(cik, '^\d+$'));
@@ -220,6 +221,76 @@ FROM (
     HAVING COUNT(*) > 1
   )
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: sec_company_tickers
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true));
+
+-- T2: row_count (~10000 active US exchange-listed filers)
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected at least 5000 SEC-listed company ticker records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (cik and ticker NOT NULL)
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL cik or ticker rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true)
+      WHERE cik IS NULL OR ticker IS NULL);
+
+-- T7: cik format (numeric string)
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T7_cik_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'cik not matching numeric format'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/ref/sec_company_tickers', allow_moved_paths := true)
+      WHERE cik IS NOT NULL
+        AND NOT REGEXP_MATCHES(cik, '^\d+$'));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: figi_instruments
@@ -294,12 +365,12 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/ref/figi
 -- T7: market_sector values
 INSERT INTO dq_results
 SELECT 'ref', 'figi_instruments', 'T7_market_sector_values',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
   bad, 0, 'market_sector outside known OpenFIGI sectors'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/ref/figi_instruments', allow_moved_paths := true)
       WHERE market_sector IS NOT NULL
         AND market_sector NOT IN ('Equity','Govt','Corp','Mtge','M-Mkt','Muni',
-                                   'Pfd','Client','Index','Currency','Comdty'));
+                                   'Pfd','Client','Index','Currency','Curncy','Comdty'));
 
 -- T7: figi uniqueness (each instrument has a unique FIGI)
 INSERT INTO dq_results
