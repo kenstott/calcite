@@ -188,6 +188,12 @@ tasks.register<Exec>("jpackage") {
         .ifEmpty { "1.0.0" }
 
     val macResourceDir = project.file("src/packaging/mac").absolutePath
+    val prebuiltJar = project.findProperty("prebuiltJar") as String?
+    val mainJarName = if (prebuiltJar != null) {
+        java.io.File(prebuiltJar).name
+    } else {
+        tasks.shadowJar.get().archiveFileName.get()
+    }
 
     commandLine(
         jpackageTool,
@@ -198,7 +204,7 @@ tasks.register<Exec>("jpackage") {
         "--vendor",            "AskAmerica",
         "--description",       "AskAmerica MCP — query US government data from Claude",
         "--input",             jpackageInputDir.get().asFile.absolutePath,
-        "--main-jar",          tasks.shadowJar.get().archiveFileName.get(),
+        "--main-jar",          mainJarName,
         "--main-class",        "org.apache.calcite.adapter.askamerica.McpServer",
         "--dest",              jpackageDir.get().asFile.absolutePath,
         "--java-options",      "-Xms256m -Xmx2g",
