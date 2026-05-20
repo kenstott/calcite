@@ -51,8 +51,6 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
           out.putNull("state_abbr");
         }
 
-        out.putNull("state_fips");
-
         String stateDesc = getString(row, "locationDescription", "stateDescription");
         if (stateDesc != null) {
           out.put("state_description", stateDesc);

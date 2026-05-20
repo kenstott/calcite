@@ -43,8 +43,6 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
           out.putNull("state_abbr");
         }
 
-        out.putNull("state_fips");
-
         String stateName = getString(row, "stateDescription", "locationDescription");
         if (stateName != null) {
           out.put("state_name", stateName);

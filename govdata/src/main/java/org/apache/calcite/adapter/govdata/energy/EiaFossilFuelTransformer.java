@@ -58,8 +58,6 @@ public class EiaFossilFuelTransformer extends EiaV2Transformer implements Respon
           out.putNull("state_abbr");
         }
 
-        out.putNull("state_fips");
-
         String productName = getString(row, "product-name");
         out.put("fuel_type", deriveFuelType(productName));
 

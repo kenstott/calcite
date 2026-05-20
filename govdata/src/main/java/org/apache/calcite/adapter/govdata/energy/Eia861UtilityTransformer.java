@@ -65,6 +65,8 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
     boolean salesIsXls = false;
     byte[] utilityBytes = null;
     boolean utilityIsXls = false;
+    byte[] operationalBytes = null;
+    boolean operationalIsXls = false;
 
     ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
     try {
@@ -81,6 +83,9 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
         } else if (lower.contains("utility_data") && (isXlsx || isXls)) {
           utilityBytes = readZipEntry(zis);
           utilityIsXls = isXls;
+        } else if (lower.contains("operational_data") && (isXlsx || isXls)) {
+          operationalBytes = readZipEntry(zis);
+          operationalIsXls = isXls;
         }
         zis.closeEntry();
       }
@@ -104,9 +109,20 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       }
     }
 
+    // Parse operational data (summer/winter peak demand, net generation) if available
+    Map<String, Map<String, Double>> operationalLookup = new HashMap<>();
+    if (operationalBytes != null) {
+      Workbook opWb = openWorkbook(operationalBytes, operationalIsXls);
+      try {
+        operationalLookup = parseOperationalData(opWb, year);
+      } finally {
+        opWb.close();
+      }
+    }
+
     Workbook salesWb = openWorkbook(salesBytes, salesIsXls);
     try {
-      return parseSalesSheet(salesWb, utilityLookup, year);
+      return parseSalesSheet(salesWb, utilityLookup, operationalLookup, year);
     } finally {
       salesWb.close();
     }
@@ -191,7 +207,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
   }
 
   private String parseSalesSheet(Workbook wb, Map<String, Map<String, String>> utilityLookup,
-      int year) {
+      Map<String, Map<String, Double>> operationalLookup, int year) {
     Sheet sheet = wb.getSheet("Sales_Ult_Cust");
     if (sheet == null) {
       sheet = wb.getSheet("States");
@@ -303,11 +319,91 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
         }
       }
 
+      // Enrich from Operational_Data sheet (summer/winter peak demand, net generation)
+      if (utilId != null && !utilId.isEmpty() && operationalLookup.containsKey(utilId)) {
+        Map<String, Double> opData = operationalLookup.get(utilId);
+        for (Map.Entry<String, Double> opEntry : opData.entrySet()) {
+          String opCol = opEntry.getKey();
+          if (!out.has(opCol) || out.get(opCol).isNull()) {
+            out.put(opCol, opEntry.getValue());
+          }
+        }
+      }
+
       result.add(out);
     }
 
     LOGGER.debug("EIA-861: parsed {} sales records for year {}", result.size(), year);
     return result.toString();
+  }
+
+  private Map<String, Map<String, Double>> parseOperationalData(Workbook wb, int year) {
+    Map<String, Map<String, Double>> result = new HashMap<>();
+    Sheet sheet = wb.getSheet("Operational_Data");
+    if (sheet == null) {
+      for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+        String name = wb.getSheetName(i).toLowerCase();
+        if (name.contains("operational")) {
+          sheet = wb.getSheetAt(i);
+          break;
+        }
+      }
+    }
+    if (sheet == null) {
+      LOGGER.warn("EIA-861: Operational_Data sheet not found for year {}", year);
+      return result;
+    }
+
+    List<String> rawHeaders = buildCompositeHeaders(sheet, 3);
+    List<String> schemaColumns = new ArrayList<String>();
+    for (String raw : rawHeaders) {
+      schemaColumns.add(mapToSchemaColumn(raw));
+    }
+
+    int utilIdCol = -1;
+    for (int i = 0; i < schemaColumns.size(); i++) {
+      if ("utility_id".equals(schemaColumns.get(i))) {
+        utilIdCol = i;
+        break;
+      }
+    }
+    if (utilIdCol < 0) {
+      LOGGER.warn("EIA-861: Operational_Data has no utility_id column for year {}", year);
+      return result;
+    }
+
+    for (int r = 3; r <= sheet.getLastRowNum(); r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+      String utilId = cellString(row.getCell(utilIdCol));
+      if (utilId == null || utilId.trim().isEmpty()) {
+        continue;
+      }
+      utilId = utilId.trim();
+
+      Map<String, Double> data = new HashMap<>();
+      for (int c = 0; c < schemaColumns.size(); c++) {
+        String col = schemaColumns.get(c);
+        if ("summer_peak_demand_mw".equals(col) || "winter_peak_demand_mw".equals(col)
+            || "net_generation_mwh".equals(col)) {
+          String val = cellString(row.getCell(c));
+          if (val != null && !val.trim().isEmpty()) {
+            try {
+              data.put(col, Double.parseDouble(val.replace(",", "").trim()));
+            } catch (NumberFormatException e) {
+              // non-numeric cell — skip
+            }
+          }
+        }
+      }
+      if (!data.isEmpty()) {
+        result.put(utilId, data);
+      }
+    }
+    LOGGER.debug("EIA-861: parsed {} operational records for year {}", result.size(), year);
+    return result;
   }
 
   /**
@@ -334,13 +430,9 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
     if (h.contains("utility name")) {
       return "utility_name";
     }
-    if ((h.equals("state") || h.endsWith("_state") || h.endsWith(" state")
-        || h.contains("state abbr") || h.contains("state abbreviation"))
-        && !h.contains("fips")) {
+    if (h.equals("state") || h.endsWith("_state") || h.endsWith(" state")
+        || h.contains("state abbr") || h.contains("state abbreviation")) {
       return "state_abbr";
-    }
-    if (h.contains("fips") && h.contains("state")) {
-      return "state_fips";
     }
     if (h.contains("ownership") || h.contains("entity type") || h.contains("ownership type")) {
       return "entity_type";
@@ -569,6 +661,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
 
   @Override
   protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
-    return parseSalesSheet(workbook, new HashMap<String, Map<String, String>>(), 0);
+    return parseSalesSheet(workbook, new HashMap<String, Map<String, String>>(),
+        new HashMap<String, Map<String, Double>>(), 0);
   }
 }

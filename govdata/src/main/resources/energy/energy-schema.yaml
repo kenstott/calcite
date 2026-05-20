@@ -15,7 +15,7 @@
 #       - Coal mine production and demographics (MinesProdYearly)
 #
 # Features:
-#   - Cross-references with geo.states via state_fips
+#   - Cross-references with geo.states via state_abbr
 #   - Hive-style partitioning for efficient querying
 #   - Rate-limited EIA API integration (10 req/sec)
 #   - OFFSET pagination for EIA API v2 endpoints
@@ -31,7 +31,7 @@ comment: >
   prices, utility operations, power plant inventory, generator capacity changes, fossil
   fuel production, state energy consumption, natural gas storage, petroleum stocks, crude
   oil imports, refinery operations, and coal mine production. All state-level tables join
-  with geo.states via state_fips. EIA API tables use OFFSET pagination against v2 endpoints.
+  with geo.states via state_abbr. EIA API tables use OFFSET pagination against v2 endpoints.
   Bulk tables (EIA-860, EIA-861, EIA-860M, EIA-814) use TEXT format with transformers that
   download, extract, and parse XLSX/ZIP archives.
 
@@ -46,12 +46,6 @@ column_templates:
     type: string
     nullable: true
     comment: 2-letter state abbreviation (e.g., 'CA')
-
-  state_fips_column: &state_fips_column
-    name: state_fips
-    type: string
-    nullable: true
-    comment: 2-digit state FIPS code (e.g., '06')
 
   state_description_column: &state_description_column
     name: state_description
@@ -195,7 +189,7 @@ partitionedTables:
       (thousand MWh), total fuel consumption (MMBtu), fuel consumption for electricity
       generation (MMBtu), cost per MMBtu, sulfur content, and ash content. Broken down
       by state, energy source, and sector. One row per state + energy source + sector +
-      year-month. Cross-references geo.states via state_fips.
+      year-month. Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -212,7 +206,6 @@ partitionedTables:
         nullable: false
         comment: Calendar month (1-12) of the generation period
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - <<: *state_description_column
       - name: energy_source_code
         type: string
@@ -299,7 +292,7 @@ partitionedTables:
       EIA API v2 retail electricity sales data. Annual (and optionally monthly) average
       price (cents/kWh), revenue (million dollars), sales (million kWh), and customer
       counts by state and sector. One row per state + sector + year (+ month if available).
-      Cross-references geo.states via state_fips.
+      Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -316,7 +309,6 @@ partitionedTables:
         nullable: true
         comment: Calendar month (1-12), null for annual aggregates
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - <<: *state_description_column
       - name: sector_code
         type: string
@@ -389,7 +381,7 @@ partitionedTables:
       service type, customer counts and sales by sector (residential, commercial, industrial,
       transportation), revenue, peak demand, and net generation. One row per utility + year.
       The transformer downloads and parses the annual ZIP archive of XLSX files from EIA.
-      Cross-references geo.states via state_fips.
+      Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -414,7 +406,6 @@ partitionedTables:
         nullable: true
         comment: Entity type code (e.g., 'C', 'I', 'M', 'S', 'F', 'G', 'P', 'Q', 'W')
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: ba_code
         type: string
         nullable: true
@@ -548,7 +539,7 @@ partitionedTables:
       prime mover, energy sources, capacity (nameplate, summer, winter, minimum load),
       ownership type, operating status, operating and retirement dates, and energy storage
       flag. Transformer downloads and parses the annual ZIP archive from EIA.
-      Cross-references geo.states via state_fips; joins eia_utility_annual via utility_id.
+      Cross-references geo.states via state_abbr; joins eia_utility_annual via utility_id.
 
     dimensions:
       type:
@@ -581,7 +572,6 @@ partitionedTables:
         nullable: true
         comment: Utility company name
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: county_name
         type: string
         nullable: true
@@ -730,7 +720,7 @@ partitionedTables:
       winter, energy storage). One row per generator change record per snapshot. The
       December file provides the most complete annual picture; prior months may be fetched
       for intra-year pipeline analysis. Transformer parses the XLSX directly.
-      Cross-references geo.states via state_fips; joins eia_power_plants via plant_id.
+      Cross-references geo.states via state_abbr; joins eia_power_plants via plant_id.
 
     dimensions:
       type:
@@ -779,7 +769,6 @@ partitionedTables:
         nullable: true
         comment: Entity name
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: county_name
         type: string
         nullable: true
@@ -855,7 +844,7 @@ partitionedTables:
       also fetches the EIA natural gas production summary endpoint internally and unions
       both series into the output, so each partition contains both crude oil and natural
       gas rows distinguished by the fuel_type column. One row per EIA area + fuel type +
-      process + year-month. Cross-references geo.states via state_fips.
+      process + year-month. Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -876,7 +865,6 @@ partitionedTables:
         nullable: true
         comment: EIA area/region code (may be state abbreviation or PADD code)
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: fuel_type
         type: string
         nullable: false
@@ -952,7 +940,7 @@ partitionedTables:
       encodes fuel, sector, and metric in a compact 5-character string. The transformer
       decodes MSN values and maps them to human-readable sector, fuel_type, units,
       consumption_bbtu, expenditure_million, and price_per_mmbtu columns where applicable.
-      One row per state + MSN + year. Cross-references geo.states via state_fips.
+      One row per state + MSN + year. Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -965,7 +953,6 @@ partitionedTables:
         nullable: false
         comment: Calendar year
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: state_name
         type: string
         nullable: true
@@ -1248,7 +1235,7 @@ partitionedTables:
       2-digit year and m is 1-based month digit) and unions them into a single partition.
       One row per import transaction per month (importer + origin country + entry port +
       receiving refinery). Includes API gravity, sulfur content, and volume in thousand
-      barrels. Cross-references geo.states via state_fips (refinery state).
+      barrels. Cross-references geo.states via state_abbr (refinery state).
 
     dimensions:
       type:
@@ -1312,10 +1299,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: 2-letter state abbreviation of the receiving refinery
-      - name: refinery_state_fips
-        type: string
-        nullable: true
-        comment: State FIPS code of the receiving refinery
       - name: api_gravity
         type: double
         nullable: true
@@ -1457,7 +1440,7 @@ partitionedTables:
       geographic location (lat/lon, county, state), mine type and status, production
       volume in short tons, employee count, annual hours, labor productivity, and
       average seam height (underground mines). The transformer filters by the requested
-      year dimension. Cross-references geo.states via state_fips.
+      year dimension. Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -1486,7 +1469,6 @@ partitionedTables:
         nullable: true
         comment: Mine operator company name
       - <<: *state_abbr_column
-      - <<: *state_fips_column
       - name: county_fips
         type: string
         nullable: true
@@ -1519,10 +1501,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: Mine status (e.g., 'Active', 'Temporarily Idled', 'Abandoned')
-      - name: coal_type
-        type: string
-        nullable: true
-        comment: Coal type (Bituminous, Anthracite, Lignite, Subbituminous)
       - name: production_short_tons
         type: double
         nullable: true
@@ -1576,34 +1554,34 @@ constraints:
   eia_electricity_generation:
     primaryKey: [state_abbr, energy_source_code, sector_code, generation_year, generation_month]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_electricity_prices:
     primaryKey: [state_abbr, sector_code, price_year, price_month]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_utility_annual:
     primaryKey: [utility_id, report_year]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_power_plants:
     primaryKey: [plant_id, generator_id, report_year]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
       - columns: [utility_id]
         targetTable: eia_utility_annual
         targetColumns: [utility_id]
@@ -1611,10 +1589,10 @@ constraints:
   eia_capacity_changes:
     primaryKey: [plant_id, generator_id, snapshot_year, snapshot_month, change_type]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
       - columns: [plant_id]
         targetTable: eia_power_plants
         targetColumns: [plant_id]
@@ -1622,18 +1600,18 @@ constraints:
   eia_fossil_fuel_production:
     primaryKey: [eia_area_code, fuel_type, process_code, production_year, production_month]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_state_energy_consumption:
     primaryKey: [state_abbr, msn, consumption_year]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_natural_gas_storage:
     primaryKey: [eia_region_code, storage_type_code, report_date]
@@ -1644,10 +1622,10 @@ constraints:
   eia_crude_oil_imports:
     primaryKey: [importer_name, origin_country_code, refinery_site_id, rpt_period]
     foreignKeys:
-      - columns: [refinery_state_fips]
+      - columns: [refinery_state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
   eia_refinery_operations:
     primaryKey: [eia_area_code, series_id, report_year, report_month]
@@ -1655,10 +1633,10 @@ constraints:
   eia_coal_mines:
     primaryKey: [mine_id, subunit_code, report_year]
     foreignKeys:
-      - columns: [state_fips]
+      - columns: [state_abbr]
         targetSchema: geo
         targetTable: states
-        targetColumns: [state_fips]
+        targetColumns: [state_abbr]
 
 # ============================================================================
 # VIEWS
@@ -1676,7 +1654,6 @@ views:
     sql: >
       SELECT
         g.state_abbr,
-        g.state_fips,
         MAX(g.state_description)                                           AS state_name,
         g.generation_year,
         SUM(g.generation_thousand_mwh)                                     AS total_gen_thousand_mwh,
@@ -1709,7 +1686,7 @@ views:
           ELSE NULL
         END                                                                AS fossil_pct
       FROM eia_electricity_generation g
-      GROUP BY g.state_abbr, g.state_fips, g.generation_year
+      GROUP BY g.state_abbr, g.generation_year
 
   - name: utility_scorecard
     comment: >
@@ -1724,7 +1701,6 @@ views:
         u.utility_name,
         u.entity_type,
         u.state_abbr,
-        u.state_fips,
         u.nerc_region,
         u.customers_total,
         u.sales_total_mwh,
@@ -1755,7 +1731,6 @@ views:
     sql: >
       SELECT
         c.state_abbr,
-        c.state_fips,
         c.change_year,
         c.change_month,
         c.technology,
@@ -1782,7 +1757,7 @@ views:
       FROM eia_capacity_changes c
       WHERE c.change_type IN ('Planned Addition', 'Planned Retirement', 'New Unit', 'Retirement')
       GROUP BY
-        c.state_abbr, c.state_fips, c.change_year, c.change_month,
+        c.state_abbr, c.change_year, c.change_month,
         c.technology, c.energy_source_code,
         CASE
           WHEN c.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG')
@@ -1849,7 +1824,6 @@ views:
     sql: >
       SELECT
         p.state_abbr,
-        p.state_fips,
         MAX(p.state_description)                                           AS state_name,
         p.price_year                                                       AS report_year,
         p.avg_price_cents_kwh                                              AS residential_price_cents_kwh,
@@ -1869,7 +1843,7 @@ views:
         AND c.msn = 'TETCB'
       WHERE p.sector_code = 'RES'
         AND p.price_month IS NULL
-      GROUP BY p.state_abbr, p.state_fips, p.price_year, p.avg_price_cents_kwh,
+      GROUP BY p.state_abbr, p.price_year, p.avg_price_cents_kwh,
                p.sales_million_kwh, p.customers, c.consumption_bbtu, c.expenditure_million
 
   - name: refinery_utilization_summary

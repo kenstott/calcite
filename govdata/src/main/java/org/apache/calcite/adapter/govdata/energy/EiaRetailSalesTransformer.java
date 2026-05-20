@@ -50,8 +50,6 @@ public class EiaRetailSalesTransformer extends EiaV2Transformer implements Respo
           out.putNull("state_abbr");
         }
 
-        out.putNull("state_fips");
-
         String stateDesc = getString(row, "stateDescription", "locationDescription");
         if (stateDesc != null) {
           out.put("state_description", stateDesc);

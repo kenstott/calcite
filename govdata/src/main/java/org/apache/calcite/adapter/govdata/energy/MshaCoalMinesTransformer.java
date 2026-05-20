@@ -156,8 +156,6 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
           out.putNull("mine_status");
           out.putNull("avg_mine_height_inches");
         }
-        out.putNull("coal_type"); // not directly available in MSHA files
-
         result.add(out);
       }
 
