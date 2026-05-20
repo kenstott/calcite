@@ -2339,11 +2339,17 @@ public class HttpSource implements DataSource {
       // Not an integer
     }
 
-    // Try double
-    try {
-      return Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      // Not a double
+    // Only try double for values that contain a decimal point.
+    // Strings without '.' that overflow Long are identifiers (e.g. all-digit LEI codes
+    // like "13250000000000000000", or alphanumeric IDs like "300300E1000345000084" that
+    // look like scientific notation but are not). Calling Double.parseDouble on these
+    // silently loses precision or produces "Infinity".
+    if (value.indexOf('.') >= 0) {
+      try {
+        return Double.parseDouble(value);
+      } catch (NumberFormatException e) {
+        // Not a double
+      }
     }
 
     // Return as string

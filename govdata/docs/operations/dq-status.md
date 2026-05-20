@@ -70,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
 | patents      | 2026-05-19 | WARN    | 0     | 9     | See details below |
-| ref          | 2026-05-18 | FAIL    | 2     | 9     | See details below |
+| ref          | 2026-05-20 | WARN    | 0     | 6     | See details below |
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | econ_reference | 2026-05-18 | PASS  | 0     | 0     | See details below |
@@ -215,29 +215,26 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## ref (2026-05-18) — FAIL
+## ref (2026-05-20) — WARN
 
-2 fails, 9 warns, 15 pass. 26 checks across 3 tables (T1–T7).
+0 fails, 6 warns, 20 pass. 26 checks across 3 tables (T1–T7).
 
 | Table | Rows | Notes |
 |-------|------|-------|
-| gleif_entities | 200 | GLEIF golden copy truncated — full file is ~3.2M records; initial ingestion used batchSize limit |
-| gleif_cik_mapping | 118,517 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
+| gleif_entities | 3,313,968 | Full GLEIF golden copy (~3.2M global LEI records) |
+| gleif_cik_mapping | 121,474 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
 | figi_instruments | 0 | Conditionally enabled (requires `OPENFIGI_API_KEY`); not configured in this environment |
 
-**Failures:**
-- `gleif_entities T2_row_count`: 200 rows, threshold 1,000,000. The initial ingestion used batchSize=50000 but the golden copy ZIP download was truncated at 200 rows. Full re-ingestion (`worker-41.sh --force`) is required.
-- `gleif_cik_mapping T7_lei_format`: 8 records have float-formatted LEIs (e.g. `9.598002014000574E19`) — the CSV parser treated large-integer LEI codes as floating-point numbers during ingestion. This is a parsing bug in the GLEIF CSV reader.
-
 **Warnings:**
-- `figi_instruments T1_existence`, `T2_row_count`, `T5_all_same_value`: Table is empty (demoted to warn; table is conditionally enabled via `OPENFIGI_API_KEY`).
+- `figi_instruments T1_existence`, `T2_row_count`, `T5_all_same_value`: Table is empty (demoted to warn; requires `OPENFIGI_API_KEY`).
 - `gleif_cik_mapping T6_pk_cik_nulls`: 82 records have a non-null LEI but null CIK — GLEIF entities registered with SEC (RA000602) that have not yet been assigned a CIK. Known source characteristic.
 - `gleif_cik_mapping T7_cik_format`: 3 non-numeric CIK values (source data characteristic from GLEIF).
-- `gleif_cik_mapping T7_lei_uniqueness`: 1 LEI maps to more than one CIK row (shared LEI across related entities).
-- `gleif_entities T4_all_null_cols`, `T5_all_same_value`: `registration_authority_id` and `registration_authority_entity_id` are 100% null in the 200-row sample (all records have no authority link); expected to have values once full golden copy is loaded.
-- `gleif_entities T7_entity_status_values`: 2 records with entity_status outside the known GLEIF status code set.
+- `gleif_entities T7_entity_status_values`: 8,892 records with entity_status outside the known GLEIF status code set. Likely newer GLEIF status codes not yet in the DQ allowlist; source data is valid.
 
-**TTL configured (as of 2026-05-18):**
+**Fix applied (2026-05-20):**
+- `HttpSource.parseValue`: only attempts `Double.parseDouble` when the value contains a decimal point (`.`). Previously, integer strings overflowing `Long` (e.g. all-digit 20-char LEIs like `13250000000000000000`) and alphanumeric IDs containing `E` (e.g. `300300E1000345000084`) were incorrectly coerced to `Double`, producing precision-lossy or `Infinity` values. Fix eliminates 13,946 bad LEI values in gleif_entities and 9 in gleif_cik_mapping.
+
+**TTL configured (as of 2026-05-20):**
 - All 3 tables: `incrementalTtlDays: 365`, `overwritePartitions: true` (full replace on each annual refresh).
 
 ---
