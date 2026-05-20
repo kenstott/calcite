@@ -368,7 +368,7 @@ jobs:
 
       - name: Delete existing version from GitHub Packages (if any)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PACKAGES_PAT }}
           VERSION: ${{ steps.ghver.outputs.version }}
         run: |
           VERSION_ID=$(gh api "/user/packages/maven/ai.askamerica.askamerica-engine/versions" \
