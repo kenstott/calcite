@@ -9,14 +9,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 
-# Load base credentials from govdata/.env.prod, then parallel overrides
+# Load base credentials from govdata/.env.prod, then parallel overrides.
+# Caller-exported variables take precedence: if GOVDATA_START_YEAR or
+# GOVDATA_CACHE_DIR are already set in the calling environment, .env.prod
+# will NOT override them.  This allows per-run overrides like:
+#   GOVDATA_START_YEAR=2025 GOVDATA_CACHE_DIR=/tmp/cache ./run-pool.sh ...
 load_env() {
   local env_prod="$GOVDATA_ROOT/.env.prod"
   if [ -f "$env_prod" ]; then
+    # Capture any caller-exported overrides before .env.prod stomps them
+    local _pre_start_year="${GOVDATA_START_YEAR+set}"
+    local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
+    local _saved_start_year="${GOVDATA_START_YEAR:-}"
+    local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
+
     set -a
     # shellcheck disable=SC1090
     source "$env_prod"
     set +a
+
+    # Restore caller-provided overrides
+    [ "${_pre_start_year}" = "set" ] && export GOVDATA_START_YEAR="$_saved_start_year"
+    [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
