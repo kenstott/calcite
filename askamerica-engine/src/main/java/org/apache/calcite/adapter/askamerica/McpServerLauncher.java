@@ -7,6 +7,12 @@
  * the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.askamerica;
 
@@ -30,8 +36,8 @@ import java.util.Arrays;
  */
 public class McpServerLauncher {
     public static void main(String[] args) throws Exception {
-        File launcherJar = new File(
-            McpServerLauncher.class.getProtectionDomain()
+        File launcherJar =
+            new File(McpServerLauncher.class.getProtectionDomain()
                 .getCodeSource().getLocation().toURI());
         File engineJar = new File(launcherJar.getParentFile(), "askamerica-engine.jar");
         if (!engineJar.exists()) {
@@ -39,22 +45,22 @@ public class McpServerLauncher {
             System.err.println("Reinstall AskAmerica MCP to trigger engine download.");
             System.exit(1);
         }
-        URLClassLoader loader = new URLClassLoader(
-            new URL[]{engineJar.toURI().toURL()},
+        URLClassLoader loader =
+            new URLClassLoader(new URL[]{engineJar.toURI().toURL()},
             Thread.currentThread().getContextClassLoader());
 
         boolean mcpMode = Arrays.asList(args).contains("--mcp");
 
         if (mcpMode) {
-            Class<?> cls = Class.forName(
-                "org.apache.calcite.adapter.askamerica.McpServer", true, loader);
+            Class<?> cls =
+                Class.forName("org.apache.calcite.adapter.askamerica.McpServer", true, loader);
             Method main = cls.getMethod("main", String[].class);
             main.invoke(null, (Object) args);
         } else {
             // Launched from dock or Applications — show setup wizard.
             // SetupWindow uses EXIT_ON_CLOSE so the AWT EDT keeps the JVM alive.
-            Class<?> cls = Class.forName(
-                "org.apache.calcite.adapter.askamerica.SetupWindow", true, loader);
+            Class<?> cls =
+                Class.forName("org.apache.calcite.adapter.askamerica.SetupWindow", true, loader);
             Object instance = cls.getDeclaredConstructor().newInstance();
             Method show = cls.getMethod("show");
             show.invoke(instance);
