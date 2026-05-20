@@ -46,6 +46,10 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       }
     }
 
+    // EIA moved 2024+ data out of /archive/zip/ to /zip/
+    if (year >= 2024) {
+      url = url.replace("/archive/zip/", "/zip/");
+    }
     try {
       byte[] zipBytes = downloadBytes(url);
       return parseEia861Zip(zipBytes, year);
