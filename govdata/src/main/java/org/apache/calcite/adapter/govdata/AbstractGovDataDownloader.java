@@ -420,6 +420,20 @@ public abstract class AbstractGovDataDownloader {
     return years;
   }
 
+  protected static List<String> applyDimensionOrder(List<String> values,
+      Map<String, Object> dimConfig) {
+    if (dimConfig == null || values == null) {
+      return values;
+    }
+    Object order = dimConfig.get("order");
+    if ("desc".equalsIgnoreCase(order instanceof String ? (String) order : null)) {
+      List<String> reversed = new ArrayList<>(values);
+      java.util.Collections.reverse(reversed);
+      return reversed;
+    }
+    return values;
+  }
+
   /**
    * Represents a single dimension of iteration with variable name and values.
    * Used for multidimensional iteration over download/conversion operations.
@@ -4301,7 +4315,8 @@ public abstract class AbstractGovDataDownloader {
               effectiveEndYear = Math.min(this.endYear, maxYear);
             }
 
-            List<String> years = yearRange(effectiveStartYear, effectiveEndYear);
+            List<String> years = applyDimensionOrder(
+                yearRange(effectiveStartYear, effectiveEndYear), dimConfig);
             LOGGER.debug("Dimension '{}' for table {} computed as yearRange: {}-{} ({} values)",
                 dimensionName, tableName, effectiveStartYear, effectiveEndYear, years.size());
             return years;
@@ -4312,7 +4327,8 @@ public abstract class AbstractGovDataDownloader {
             String source = (String) dimConfig.get("source");
             if (source != null) {
               Map<String, Object> apiSet = extractApiSet(tableName, source);
-              List<String> values = new ArrayList<>(apiSet.keySet());
+              List<String> values = applyDimensionOrder(
+                  new ArrayList<>(apiSet.keySet()), dimConfig);
               LOGGER.debug("Dimension '{}' for table {} loaded from API set '{}': {} values",
                   dimensionName, tableName, source, values.size());
               return values;
@@ -4323,7 +4339,8 @@ public abstract class AbstractGovDataDownloader {
             // Reference an API list from download config
             String source = (String) dimConfig.get("source");
             if (source != null) {
-              List<String> values = extractApiList(tableName, source);
+              List<String> values = applyDimensionOrder(
+                  extractApiList(tableName, source), dimConfig);
               LOGGER.debug("Dimension '{}' for table {} loaded from API list '{}': {} values",
                   dimensionName, tableName, source, values.size());
               return values;
