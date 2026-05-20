@@ -7,12 +7,17 @@
  * the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.askamerica;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.formdev.flatlaf.FlatDarkLaf;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -24,14 +29,11 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -67,9 +69,7 @@ public class SetupWindow {
 
     public void show() {
         try {
-            FlatDarkLaf.setup();
-            UIManager.put("Panel.background", BG);
-            UIManager.put("OptionPane.background", BG);
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignored) {
         }
 
@@ -98,8 +98,7 @@ public class SetupWindow {
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         frame.setLocation(
             (screen.width  - frame.getWidth())  / 2,
-            (screen.height - frame.getHeight()) / 2
-        );
+            (screen.height - frame.getHeight()) / 2);
 
         frame.setVisible(true);
     }
@@ -156,10 +155,10 @@ public class SetupWindow {
         apiKeyField.setBackground(CARD);
         apiKeyField.setForeground(TEXT);
         apiKeyField.setCaretColor(AMBER);
-        apiKeyField.setBorder(BorderFactory.createCompoundBorder(
+        apiKeyField.setBorder(
+            BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER),
-            BorderFactory.createEmptyBorder(8, 10, 8, 10)
-        ));
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         apiKeyField.setEchoChar((char) 0); // show text
         apiKeyField.setPreferredSize(new Dimension(400, 36));
         c.gridy = 1; c.insets = new Insets(0, 0, 20, 0);
@@ -197,11 +196,10 @@ public class SetupWindow {
         p.setBackground(BG);
         p.setBorder(BorderFactory.createEmptyBorder(24, 0, 0, 0));
 
-        JTextArea desc = new JTextArea(
-            "After configuring, restart Claude Desktop. "
+        JTextArea desc =
+            new JTextArea("After configuring, restart Claude Desktop. "
             + "AskAmerica will appear as a connected tool.\n\n"
-            + "Tools: list_schemas · list_tables · describe_table · query"
-        );
+            + "Tools: list_schemas · list_tables · describe_table · query");
         desc.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         desc.setForeground(DIM);
         desc.setBackground(BG);
