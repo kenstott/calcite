@@ -20,7 +20,11 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.ServiceLoader;
 
 /**
  * Thin launcher entry point for the jpackage app bundle.
@@ -48,6 +52,16 @@ public class McpServerLauncher {
         URLClassLoader loader =
             new URLClassLoader(new URL[]{engineJar.toURI().toURL()},
             Thread.currentThread().getContextClassLoader());
+
+        // Java 9+ DriverManager uses the system classloader for ServiceLoader, so JDBC
+        // drivers bundled in the engine JAR (DuckDB, etc.) are never auto-registered.
+        // Load them explicitly here so DriverManager.getConnection() can find them.
+        for (Driver driver : ServiceLoader.load(Driver.class, loader)) {
+            try {
+                DriverManager.registerDriver(driver);
+            } catch (SQLException ignored) {
+            }
+        }
 
         boolean mcpMode = Arrays.asList(args).contains("--mcp");
 
