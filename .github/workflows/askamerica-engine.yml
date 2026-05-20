@@ -102,7 +102,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            artifact_glob: "*.pkg"
+            artifact_glob: "*.dmg"
           - os: ubuntu-latest
             artifact_glob: "*.deb"
           - os: windows-latest
@@ -189,14 +189,14 @@ jobs:
             echo "No notarization credentials configured — skipping"
             exit 0
           fi
-          PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
-          echo "Notarizing $PKG"
-          xcrun notarytool submit "$PKG" \
+          DMG=$(find askamerica-engine/build/jpackage -name "*.dmg" | head -1)
+          echo "Notarizing $DMG"
+          xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
             --password "$APPLE_NOTARYTOOL_PASSWORD" \
             --team-id "$APPLE_NOTARYTOOL_TEAM_ID" \
             --wait
-          xcrun stapler staple "$PKG"
+          xcrun stapler staple "$DMG"
           echo "Notarization and stapling complete"
 
       - name: Upload installer artifact
@@ -454,11 +454,11 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS    | `AskAmerica MCP-*.pkg` |
+            | macOS    | `AskAmerica MCP-*.dmg` |
             | Linux    | `askamerica-mcp_*.deb` |
             | Windows  | `AskAmerica MCP-*.msi` |
 
-            **macOS:** Double-click the `.pkg` — the installer wizard runs, installs the app, then opens the setup window automatically so you can enter your API key.
+            **macOS:** Double-click the `.dmg`, drag AskAmerica MCP to Applications, then open it to enter your API key.
             **Linux:** `sudo dpkg -i askamerica-mcp_*.deb`, then run `askamerica-mcp` to configure.
             **Windows:** Double-click the `.msi`, then open AskAmerica MCP from the Start Menu to configure.
           files: release-assets/**/*

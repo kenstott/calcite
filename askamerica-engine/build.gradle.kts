@@ -174,7 +174,7 @@ tasks.register<Exec>("jpackage") {
     val os = System.getProperty("os.name").lowercase()
     val isMac = os.contains("mac")
     val packageType = when {
-        isMac            -> "pkg"
+        isMac            -> "dmg"
         os.contains("win") -> "msi"
         else             -> "deb"
     }
