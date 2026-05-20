@@ -179,12 +179,21 @@ jobs:
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
 
-      - name: Sign PKG with Developer ID Installer (macOS only)
+      - name: Create PKG from app-image (macOS only)
         if: matrix.os == 'macos-latest'
         env:
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
         run: |
-          PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
+          APP=$(find askamerica-engine/build/jpackage -name "*.app" -maxdepth 1 | head -1)
+          VERSION=$(defaults read "$APP/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo "1.0.0")
+          PKG="askamerica-engine/build/jpackage/AskAmerica-MCP-${VERSION}.pkg"
+          pkgbuild \
+            --component "$APP" \
+            --install-location /Applications \
+            --scripts askamerica-engine/src/packaging/mac \
+            --version "$VERSION" \
+            "$PKG"
+          echo "Created: $PKG"
           KEYCHAIN="${ASKAMERICA_SIGN_KEYCHAIN:-}"
           INSTALLER_ID=""
           if [ -n "$KEYCHAIN" ]; then
