@@ -157,13 +157,18 @@ jobs:
             -S apple-tool:,apple:,codesign: \
             -s -k "" build.keychain
           rm /tmp/signing.p12
-          security find-identity -v build.keychain
+          SIGN_ID=$(security find-identity -v -p codesigning build.keychain \
+            | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "ASKAMERICA_SIGN_IDENTITY=$SIGN_ID" >> "$GITHUB_ENV"
+          echo "ASKAMERICA_SIGN_KEYCHAIN=$HOME/Library/Keychains/build.keychain-db" >> "$GITHUB_ENV"
+          echo "Signing identity: $SIGN_ID"
 
       - name: Build jpackage installer
         run: ./gradlew :askamerica-engine:jpackage --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ASKAMERICA_SIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID }}
+          ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
+          ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
 
       - name: Notarize and staple PKG (macOS only)
         if: matrix.os == 'macos-latest'

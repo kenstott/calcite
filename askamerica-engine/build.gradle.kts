@@ -199,8 +199,12 @@ tasks.register<Exec>("jpackage") {
         "--java-options",      "-Dfile.encoding=UTF-8",
         // macOS-specific options
         *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
-        *(if (isMac && System.getenv("ASKAMERICA_SIGN_IDENTITY") != null)
-            arrayOf("--mac-sign", "--mac-signing-key-user-name", System.getenv("ASKAMERICA_SIGN_IDENTITY"))
+        *(if (isMac && !System.getenv("ASKAMERICA_SIGN_IDENTITY").isNullOrEmpty())
+            arrayOf("--mac-sign",
+                    "--mac-signing-key-user-name", System.getenv("ASKAMERICA_SIGN_IDENTITY"))
+          else emptyArray()),
+        *(if (isMac && !System.getenv("ASKAMERICA_SIGN_KEYCHAIN").isNullOrEmpty())
+            arrayOf("--mac-signing-keychain", System.getenv("ASKAMERICA_SIGN_KEYCHAIN"))
           else emptyArray())
     )
 
