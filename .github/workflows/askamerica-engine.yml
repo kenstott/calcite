@@ -186,13 +186,16 @@ jobs:
           cp "$JAR" "$WORK_DIR/original.jar"
           cd "$WORK_DIR"
           jar xf original.jar
-          find . \( -name "*.dylib" -o -name "*.jnilib" \) | while read f; do
-            codesign --force \
-              --sign "$ASKAMERICA_SIGN_IDENTITY" \
-              --keychain "$ASKAMERICA_SIGN_KEYCHAIN" \
-              --timestamp \
-              --options runtime \
-              "$f" 2>&1 && echo "Signed: $f" || echo "Skipped (incompatible): $f"
+          rm original.jar
+          find . -type f | while read f; do
+            if file "$f" | grep -q "Mach-O"; then
+              codesign --force \
+                --sign "$ASKAMERICA_SIGN_IDENTITY" \
+                --keychain "$ASKAMERICA_SIGN_KEYCHAIN" \
+                --timestamp \
+                --options runtime \
+                "$f" 2>&1 && echo "Signed: $f" || echo "Skipped (incompatible): $f"
+            fi
           done
           jar cf "$JAR" .
           echo "Repacked JAR with signed native libraries"
