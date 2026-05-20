@@ -163,6 +163,14 @@ jobs:
           echo "ASKAMERICA_SIGN_KEYCHAIN=$HOME/Library/Keychains/build.keychain-db" >> "$GITHUB_ENV"
           echo "Signing identity: $SIGN_ID"
 
+      - name: Unlock keychain before jpackage (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          if [ -f "$HOME/Library/Keychains/build.keychain-db" ]; then
+            security unlock-keychain -p "" build.keychain
+            security set-keychain-settings -t 7200 build.keychain
+          fi
+
       - name: Build jpackage installer
         run: ./gradlew :askamerica-engine:jpackage --no-daemon
         env:
