@@ -19,8 +19,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -126,12 +130,13 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   // ── Download and cache ─────────────────────────────────────────────────────
 
   /**
-   * Downloads a ZIP from {@code url}, streams the first TSV/TXT entry directly to
+   * Downloads a ZIP from {@code url}, extracts the first TSV/TXT entry to
    * {@code destPath} via the storage provider, and returns the path.
    * Re-uses cached file if valid.
    *
-   * <p>Streams HTTP → ZipInputStream → StorageProvider with no intermediate buffering,
-   * allowing arbitrarily large files (the full-dump files exceed 2–8 GB uncompressed).
+   * <p>Downloads the ZIP to a local temp file first, then streams the extracted entry
+   * to the storage provider. This two-phase approach avoids HTTP idle-timeout failures
+   * that occur when interleaved S3 multipart uploads stall the HTTP read loop.
    */
   protected String downloadAndCacheTsv(String url, String destPath) throws IOException {
     if (isCacheValid(destPath)) {
@@ -145,10 +150,8 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   }
 
   /**
-   * Streams an HTTP ZIP response, locates the first entry whose name ends with one of
-   * {@code extensions}, and writes it to {@code destPath} via the storage provider.
-   *
-   * <p>No intermediate byte[] or String buffer is used; memory footprint is O(buffer_size).
+   * Downloads a ZIP from {@code url} to a local temp file, then writes the first matching
+   * entry to {@code destPath} via the storage provider.
    */
   protected void extractZipEntryToFile(String url, String destPath, String... extensions)
       throws IOException {
@@ -156,60 +159,83 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   }
 
   /**
-   * Streams an HTTP ZIP response with optional request headers (e.g., API key), locates the
-   * first entry whose name ends with one of {@code extensions}, and writes it to {@code destPath}
-   * via the storage provider. Detects WAF/HTML responses and throws a descriptive IOException.
+   * Downloads a ZIP from {@code url} (with optional request headers) to a local temp file,
+   * then writes the first entry whose name ends with one of {@code extensions} to
+   * {@code destPath} via the storage provider.
+   *
+   * <p>Downloads to disk first so that the HTTP response is fully consumed before the
+   * S3 multipart upload begins — avoids ZLIB EOF failures caused by the HTTP server
+   * closing idle connections while we wait for S3 part uploads to complete.
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-    conn.setReadTimeout(READ_TIMEOUT_MS);
-    conn.setRequestProperty("User-Agent", "GovData/1.0");
-    if (requestHeaders != null) {
-      for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
-        conn.setRequestProperty(h.getKey(), h.getValue());
-      }
-    }
-    int status = conn.getResponseCode();
-    if (status != 200) {
-      throw new IOException("HTTP " + status + " from " + url);
-    }
-    String contentType = conn.getContentType();
-    if (contentType != null && contentType.contains("text/html")) {
-      throw new IOException(
-          "Expected ZIP but got HTML response from: " + url
-          + " — source may be WAF-blocked or unavailable");
-    }
-    ZipInputStream zis = new ZipInputStream(conn.getInputStream());
+    File tempZip = File.createTempFile("patents-zip-", ".zip");
     try {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        String name = entry.getName().toLowerCase();
-        boolean matches = false;
-        for (String ext : extensions) {
-          if (name.endsWith(ext)) {
-            matches = true;
-            break;
-          }
+      // Phase 1: download the ZIP completely to a local temp file
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(READ_TIMEOUT_MS);
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      if (requestHeaders != null) {
+        for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
+          conn.setRequestProperty(h.getKey(), h.getValue());
         }
-        if (matches) {
-          // Wrap in non-closing stream so writeFile doesn't close the ZipInputStream
-          final ZipInputStream finalZis = zis;
-          java.io.InputStream nonClosingEntry = new java.io.FilterInputStream(finalZis) {
-            @Override public void close() {
-              // intentionally empty — caller closes the ZipInputStream
-            }
-          };
-          storageProvider().writeFile(destPath, nonClosingEntry);
-          return;
-        }
-        zis.closeEntry();
       }
+      int status = conn.getResponseCode();
+      if (status != 200) {
+        throw new IOException("HTTP " + status + " from " + url);
+      }
+      String contentType = conn.getContentType();
+      if (contentType != null && contentType.contains("text/html")) {
+        throw new IOException(
+            "Expected ZIP but got HTML response from: " + url
+            + " — source may be WAF-blocked or unavailable");
+      }
+      long contentLength = conn.getContentLengthLong();
+      LOGGER.info("Patents: downloading {} ({} bytes) to temp file",
+          url.substring(url.lastIndexOf('/') + 1), contentLength);
+      byte[] buf = new byte[64 * 1024];
+      try (java.io.InputStream httpIn = conn.getInputStream();
+           OutputStream tmpOut = new FileOutputStream(tempZip)) {
+        int n;
+        while ((n = httpIn.read(buf)) >= 0) {
+          tmpOut.write(buf, 0, n);
+        }
+      }
+      LOGGER.info("Patents: download complete, temp file size={}", tempZip.length());
+
+      // Phase 2: stream from temp file to storage provider
+      ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip));
+      try {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          String name = entry.getName().toLowerCase();
+          boolean matches = false;
+          for (String ext : extensions) {
+            if (name.endsWith(ext)) {
+              matches = true;
+              break;
+            }
+          }
+          if (matches) {
+            final ZipInputStream finalZis = zis;
+            java.io.InputStream nonClosingEntry = new java.io.FilterInputStream(finalZis) {
+              @Override public void close() { }
+            };
+            storageProvider().writeFile(destPath, nonClosingEntry);
+            return;
+          }
+          zis.closeEntry();
+        }
+      } finally {
+        zis.close();
+      }
+      throw new IOException("No matching entry found in ZIP from: " + url);
     } finally {
-      zis.close();
+      if (tempZip.exists() && !tempZip.delete()) {
+        LOGGER.warn("Patents: failed to delete temp file: {}", tempZip.getAbsolutePath());
+      }
     }
-    throw new IOException("No matching entry found in ZIP from: " + url);
   }
 
   // ── TSV parsing ────────────────────────────────────────────────────────────
