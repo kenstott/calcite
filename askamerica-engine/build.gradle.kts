@@ -160,8 +160,13 @@ val jpackageDir = layout.buildDirectory.dir("jpackage")
 val jpackageInputDir = layout.buildDirectory.dir("jpackage-input")
 
 tasks.register<Copy>("prepareJpackageInput") {
-    dependsOn(tasks.shadowJar)
-    from(tasks.shadowJar.get().archiveFile)
+    val prebuiltJar = project.findProperty("prebuiltJar") as String?
+    if (prebuiltJar != null) {
+        from(prebuiltJar)
+    } else {
+        dependsOn(tasks.shadowJar)
+        from(tasks.shadowJar.get().archiveFile)
+    }
     into(jpackageInputDir)
 }
 
