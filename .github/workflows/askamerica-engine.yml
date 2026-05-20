@@ -198,6 +198,7 @@ jobs:
           echo "Repacked JAR with signed native libraries"
 
       - name: Build jpackage installer
+        shell: bash
         run: |
           PREBUILT_JAR="$GITHUB_WORKSPACE/askamerica-engine/build/libs/askamerica-engine.jar"
           ./gradlew :askamerica-engine:jpackage --no-daemon \
