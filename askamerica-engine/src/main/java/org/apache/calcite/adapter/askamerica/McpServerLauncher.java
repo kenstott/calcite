@@ -14,6 +14,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Arrays;
 
 /**
  * Thin launcher entry point for the jpackage app bundle.
@@ -21,6 +22,9 @@ import java.net.URLClassLoader;
  * The PKG installer is small — it bundles only the JRE and this launcher.
  * The postinstall script downloads askamerica-engine.jar from GitHub Releases
  * and places it alongside this launcher in Contents/app/.
+ *
+ * --mcp flag (passed by Claude Desktop via mcpServers config): run as MCP server.
+ * No flag (launched from dock/Applications): show the first-run setup wizard.
  *
  * Enterprise deployments can set ASKAMERICA_ENGINE_URL to a private mirror.
  */
@@ -38,9 +42,22 @@ public class McpServerLauncher {
         URLClassLoader loader = new URLClassLoader(
             new URL[]{engineJar.toURI().toURL()},
             Thread.currentThread().getContextClassLoader());
-        Class<?> cls = Class.forName(
-            "org.apache.calcite.adapter.askamerica.McpServer", true, loader);
-        Method main = cls.getMethod("main", String[].class);
-        main.invoke(null, (Object) args);
+
+        boolean mcpMode = Arrays.asList(args).contains("--mcp");
+
+        if (mcpMode) {
+            Class<?> cls = Class.forName(
+                "org.apache.calcite.adapter.askamerica.McpServer", true, loader);
+            Method main = cls.getMethod("main", String[].class);
+            main.invoke(null, (Object) args);
+        } else {
+            // Launched from dock or Applications — show setup wizard.
+            // SetupWindow uses EXIT_ON_CLOSE so the AWT EDT keeps the JVM alive.
+            Class<?> cls = Class.forName(
+                "org.apache.calcite.adapter.askamerica.SetupWindow", true, loader);
+            Object instance = cls.getDeclaredConstructor().newInstance();
+            Method show = cls.getMethod("show");
+            show.invoke(instance);
+        }
     }
 }
