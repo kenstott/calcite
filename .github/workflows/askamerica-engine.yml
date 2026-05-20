@@ -102,7 +102,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            artifact_glob: "*.dmg"
+            artifact_glob: "*.pkg"
           - os: ubuntu-latest
             artifact_glob: "*.deb"
           - os: windows-latest
@@ -171,45 +171,37 @@ jobs:
             security set-keychain-settings -t 7200 build.keychain
           fi
 
-      - name: Sign native libraries in JAR (macOS only)
-        if: matrix.os == 'macos-latest'
-        env:
-          ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
-          ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
-        run: |
-          if [ -z "$ASKAMERICA_SIGN_IDENTITY" ]; then
-            echo "No signing identity — skipping native library signing"
-            exit 0
-          fi
-          JAR="$GITHUB_WORKSPACE/askamerica-engine/build/libs/askamerica-engine.jar"
-          WORK_DIR=$(mktemp -d)
-          cp "$JAR" "$WORK_DIR/original.jar"
-          cd "$WORK_DIR"
-          jar xf original.jar
-          rm original.jar
-          find . -type f | while read f; do
-            if file "$f" | grep -q "Mach-O"; then
-              codesign --force \
-                --sign "$ASKAMERICA_SIGN_IDENTITY" \
-                --keychain "$ASKAMERICA_SIGN_KEYCHAIN" \
-                --timestamp \
-                --options runtime \
-                "$f" 2>&1 && echo "Signed: $f" || echo "Skipped (incompatible): $f"
-            fi
-          done
-          jar cf "$JAR" .
-          echo "Repacked JAR with signed native libraries"
-
       - name: Build jpackage installer
         shell: bash
-        run: |
-          PREBUILT_JAR="$GITHUB_WORKSPACE/askamerica-engine/build/libs/askamerica-engine.jar"
-          ./gradlew :askamerica-engine:jpackage --no-daemon \
-            -PprebuiltJar="$PREBUILT_JAR"
+        run: ./gradlew :askamerica-engine:jpackage --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
+
+      - name: Sign PKG with Developer ID Installer (macOS only)
+        if: matrix.os == 'macos-latest'
+        env:
+          ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
+        run: |
+          PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
+          KEYCHAIN="${ASKAMERICA_SIGN_KEYCHAIN:-}"
+          INSTALLER_ID=""
+          if [ -n "$KEYCHAIN" ]; then
+            INSTALLER_ID=$(security find-identity -v "$KEYCHAIN" 2>/dev/null \
+              | grep "Developer ID Installer" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          fi
+          if [ -z "$INSTALLER_ID" ]; then
+            INSTALLER_ID=$(security find-identity -v 2>/dev/null \
+              | grep "Developer ID Installer" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          fi
+          if [ -n "$INSTALLER_ID" ]; then
+            echo "Signing PKG with: $INSTALLER_ID"
+            productsign --sign "$INSTALLER_ID" "$PKG" "${PKG%.pkg}-signed.pkg"
+            mv "${PKG%.pkg}-signed.pkg" "$PKG"
+          else
+            echo "No Developer ID Installer cert — PKG will be unsigned"
+          fi
 
       - name: Notarize and staple PKG (macOS only)
         if: matrix.os == 'macos-latest'
@@ -222,14 +214,14 @@ jobs:
             echo "No notarization credentials configured — skipping"
             exit 0
           fi
-          DMG=$(find askamerica-engine/build/jpackage -name "*.dmg" | head -1)
-          echo "Notarizing $DMG"
-          xcrun notarytool submit "$DMG" \
+          PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
+          echo "Notarizing $PKG"
+          xcrun notarytool submit "$PKG" \
             --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
             --password "$APPLE_NOTARYTOOL_PASSWORD" \
             --team-id "$APPLE_NOTARYTOOL_TEAM_ID" \
             --wait
-          xcrun stapler staple "$DMG"
+          xcrun stapler staple "$PKG"
           echo "Notarization and stapling complete"
 
       - name: Upload installer artifact

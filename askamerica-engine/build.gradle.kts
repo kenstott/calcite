@@ -159,14 +159,22 @@ publishing {
 val jpackageDir = layout.buildDirectory.dir("jpackage")
 val jpackageInputDir = layout.buildDirectory.dir("jpackage-input")
 
-tasks.register<Copy>("prepareJpackageInput") {
-    val prebuiltJar = project.findProperty("prebuiltJar") as String?
-    if (prebuiltJar != null) {
-        from(prebuiltJar)
-    } else {
-        dependsOn(tasks.shadowJar)
-        from(tasks.shadowJar.get().archiveFile)
+// Thin launcher JAR — only McpServerLauncher; the fat engine JAR is downloaded by postinstall
+val launcherJar by tasks.registering(Jar::class) {
+    archiveBaseName.set("askamerica-launcher")
+    archiveClassifier.set("")
+    from(sourceSets.main.get().output) {
+        include("**/McpServerLauncher.class")
     }
+    manifest {
+        attributes["Main-Class"] = "org.apache.calcite.adapter.askamerica.McpServerLauncher"
+    }
+    dependsOn(tasks.compileJava)
+}
+
+tasks.register<Copy>("prepareJpackageInput") {
+    dependsOn(launcherJar)
+    from(launcherJar.get().archiveFile)
     into(jpackageInputDir)
 }
 
@@ -179,7 +187,7 @@ tasks.register<Exec>("jpackage") {
     val os = System.getProperty("os.name").lowercase()
     val isMac = os.contains("mac")
     val packageType = when {
-        isMac            -> "dmg"
+        isMac            -> "pkg"
         os.contains("win") -> "msi"
         else             -> "deb"
     }
@@ -188,24 +196,17 @@ tasks.register<Exec>("jpackage") {
         .ifEmpty { "1.0.0" }
 
     val macResourceDir = project.file("src/packaging/mac").absolutePath
-    val prebuiltJar = project.findProperty("prebuiltJar") as String?
-    val mainJarName = if (prebuiltJar != null) {
-        prebuiltJar.substringAfterLast('/').substringAfterLast('\\')
-    } else {
-        tasks.shadowJar.get().archiveFileName.get()
-    }
 
     commandLine(
         jpackageTool,
-        "--verbose",
         "--type",              packageType,
         "--name",              "AskAmerica MCP",
         "--app-version",       version,
         "--vendor",            "AskAmerica",
         "--description",       "AskAmerica MCP — query US government data from Claude",
         "--input",             jpackageInputDir.get().asFile.absolutePath,
-        "--main-jar",          mainJarName,
-        "--main-class",        "org.apache.calcite.adapter.askamerica.McpServer",
+        "--main-jar",          launcherJar.get().archiveFileName.get(),
+        "--main-class",        "org.apache.calcite.adapter.askamerica.McpServerLauncher",
         "--dest",              jpackageDir.get().asFile.absolutePath,
         "--java-options",      "-Xms256m -Xmx2g",
         "--java-options",      "-Dfile.encoding=UTF-8",
