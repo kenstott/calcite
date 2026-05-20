@@ -171,6 +171,32 @@ jobs:
             security set-keychain-settings -t 7200 build.keychain
           fi
 
+      - name: Sign native libraries in JAR (macOS only)
+        if: matrix.os == 'macos-latest'
+        env:
+          ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
+          ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
+        run: |
+          if [ -z "$ASKAMERICA_SIGN_IDENTITY" ]; then
+            echo "No signing identity — skipping native library signing"
+            exit 0
+          fi
+          JAR="$GITHUB_WORKSPACE/askamerica-engine/build/libs/askamerica-engine.jar"
+          WORK_DIR=$(mktemp -d)
+          cp "$JAR" "$WORK_DIR/original.jar"
+          cd "$WORK_DIR"
+          jar xf original.jar
+          find . \( -name "*.dylib" -o -name "*.jnilib" \) | while read f; do
+            codesign --force \
+              --sign "$ASKAMERICA_SIGN_IDENTITY" \
+              --keychain "$ASKAMERICA_SIGN_KEYCHAIN" \
+              --timestamp \
+              --options runtime \
+              "$f" 2>&1 && echo "Signed: $f" || echo "Skipped (incompatible): $f"
+          done
+          jar cf "$JAR" .
+          echo "Repacked JAR with signed native libraries"
+
       - name: Build jpackage installer
         run: ./gradlew :askamerica-engine:jpackage --no-daemon
         env:
