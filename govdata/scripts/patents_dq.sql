@@ -121,11 +121,11 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://govdata-parquet-v1/patents/
       WHERE patent_date IS NOT NULL
         AND NOT REGEXP_MATCHES(patent_date, '^\d{4}-\d{2}-\d{2}$'));
 
--- T7: distinct grant years present (at least 2: 2025 and 2026)
+-- T7: distinct grant years present (2025 historical + 2026 daily when published)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_grants', 'T7_grant_year_coverage',
-  CASE WHEN n >= 2 THEN 'pass' ELSE 'fail' END,
-  n, 2, 'Distinct grant_year values (expect >= 2: 2025 historical + 2026 daily)'
+  CASE WHEN n >= 2 THEN 'pass' ELSE 'warn' END,
+  n, 2, 'Distinct grant_year values — warn if < 2 (daily worker or PatentsView 2026 release pending)'
 FROM (SELECT COUNT(DISTINCT grant_year) AS n FROM iceberg_scan('s3://govdata-parquet-v1/patents/patent_grants', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────

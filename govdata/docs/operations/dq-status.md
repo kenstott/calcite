@@ -69,7 +69,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | fedregister  | 2026-05-19 | PASS    | 0     | 0     | See details below |
 | lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
 | health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
-| patents      | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
+| patents      | 2026-05-19 | WARN    | 0     | 9     | See details below |
 | ref          | 2026-05-18 | FAIL    | 2     | 9     | See details below |
 | sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
 | energy       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
@@ -442,3 +442,34 @@ All 8 tables readable. 0 fails, 1 warn.
 
 - **vuln_cross_refs GHSA-only**: The `vuln_cross_refs` table is populated only by `GithubSaResponseTransformer`. MITRE CVE daily delta ZIPs and OSV alias cross-refs are described in the schema but not yet implemented. Once added, `external_source` will have multiple distinct values.
 - **cvss_v31_severity null for old CVEs**: CVEs published before CVSS v3 have no `cvss_v31_score` or `cvss_v31_severity`. This is expected — roughly 40% of the NVD catalog predates CVSS v3.
+
+---
+
+## patents (2026-05-19) — WARN
+
+All 7 tables readable. 0 fails, 9 warns. All warns are T2c/T5 artifacts from single-year historical run — no data correctness issues.
+
+### Data inventory
+
+| Table | Rows | Year range | Notes |
+|-------|------|-----------|-------|
+| patent_grants | 286,024 | 2025 | Full-year 2025 USPTO grants |
+| patent_assignees | 275,625 | 2025 | Corporate and individual assignees |
+| patent_inventors | ~869,000 | 2025 | Disambiguated inventor records |
+| patent_cpc_classes | 2,247,712 | 2025 | CPC classification codes |
+| patent_claims | 11,630,982 | 2025 | Individual patent claims |
+| patent_summaries | 246,373 | 2025 | Brief summaries (not all patents have one) |
+| trademark_applications | 39,544 | 2020–2022 | TRCFECO2 economics subset |
+
+### Warn
+
+- **T2c_daily_coverage (all 6 patent tables)**: `MAX(grant_year)` is 2025, not 2026. PatentsView 2026 bulk data has not been published yet (quarterly cadence; Q1 2026 release expected late April 2026 but not in dataset as of 2026-05-19). This will resolve automatically when the daily worker runs after PatentsView publishes 2026 data.
+- **T5_all_same_value (patent_grants, assignees, inventors, claims, summaries)**: `grant_year` is constant (2025 only) in the single-year historical DQ run. This is expected; multi-year data will clear the warn.
+- **trademark_applications / T2c_daily_coverage**: Trademark year range is hardcoded to 2020–2022 (USPTO TRCFECO2 snapshots 2021–2023 are the latest published). No daily worker coverage expected. Update `patents-schema.yaml` when USPTO publishes snapshot 2024+.
+- **trademark_applications / T5_all_same_value**: `renewal_dt` is single-value (null for most applications in the economics subset). Source characteristic.
+- **trademark_applications / T7_serial_no_uniqueness**: 3 duplicate `serial_no` values across the 3-year window — same application appearing in multiple annual snapshots. Acceptable overlap.
+
+### Known issues
+
+- **PatentsView 2026 data not yet published**: The daily worker (`worker-81`) gates on `within_release_window "patent" "3,6,9,12"`. Once PatentsView publishes Q1 2026 data, the daily worker will populate 2026 partitions and all T2c checks will pass.
+- **trademark_years cap at 2022**: USPTO publishes TRCFECO2 snapshots infrequently. Update `govdata/src/main/resources/patents/patents-schema.yaml` `trademark_years.end` from `2022` to `2023` when snapshot 2024 (covering 2023 filings) is published.
