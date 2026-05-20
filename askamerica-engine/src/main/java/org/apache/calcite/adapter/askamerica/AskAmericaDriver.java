@@ -46,12 +46,19 @@ public class AskAmericaDriver extends BaseDriverWrapper {
     @Override protected Driver innerDriver() { return INNER; }
 
     @Override public Connection connect(String url, Properties info) throws SQLException {
-        // AskAmerica JDBC connections use ~/.askamerica (not ~/.govdata set by GovDataDriver).
-        // Set before delegating so GovDataDriver's own check finds it already set.
+        // AskAmerica JDBC connections use ~/.askamerica for both operating state and cache.
+        // Set before delegating so GovDataDriver's own checks find them already set.
         if (System.getProperty("govdata.operating.dir.base") == null) {
             String home = System.getProperty("user.home");
             if (home != null && !home.isEmpty()) {
                 System.setProperty("govdata.operating.dir.base", home + "/.askamerica");
+            }
+        }
+        if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
+            String home = System.getProperty("user.home");
+            if (home != null && !home.isEmpty()) {
+                System.setProperty("duckdb.cache_httpfs.directory",
+                    home + "/.askamerica/.duckdb_httpfs_cache");
             }
         }
         return super.connect(url, info);

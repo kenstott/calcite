@@ -833,7 +833,7 @@ public class DuckDBJdbcSchemaFactory {
    *
    * Cache directory priority:
    * 1. System property {@code duckdb.cache_httpfs.directory}
-   * 2. {@code {user.home}/.askamerica/.duckdb_httpfs_cache}
+   * 2. {@code {user.home}/.aperio/.duckdb_httpfs_cache}
    */
   private static void configureCacheHttpfs(Connection conn) {
     if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
@@ -843,7 +843,7 @@ public class DuckDBJdbcSchemaFactory {
     String cacheDir = System.getProperty("duckdb.cache_httpfs.directory");
     if (cacheDir == null || cacheDir.isEmpty()) {
       cacheDir = System.getProperty("user.home") + File.separator
-          + ".askamerica" + File.separator + ".duckdb_httpfs_cache";
+          + ".aperio" + File.separator + ".duckdb_httpfs_cache";
     }
 
     // Always create the directory first — harmless if the extension didn't load
