@@ -164,11 +164,14 @@ public class SetupWindow {
         c.gridy = 1; c.insets = new Insets(0, 0, 20, 0);
         p.add(apiKeyField, c);
 
-        // Configure button
+        // Configure button — use BasicButtonUI so setBackground(AMBER) is respected
+        // on macOS Aqua L&F, which otherwise paints buttons natively and ignores fill.
         configureBtn = new JButton("Configure Claude Desktop");
+        configureBtn.setUI(new javax.swing.plaf.basic.BasicButtonUI());
         configureBtn.setBackground(AMBER);
         configureBtn.setForeground(new Color(0x0A0A0A));
         configureBtn.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        configureBtn.setOpaque(true);
         configureBtn.setFocusPainted(false);
         configureBtn.setBorderPainted(false);
         configureBtn.setPreferredSize(new Dimension(400, 40));
