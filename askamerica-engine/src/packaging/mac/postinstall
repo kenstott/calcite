@@ -1,18 +1,22 @@
 #!/bin/bash
-set -e
 
 APP_DIR="/Applications/AskAmerica MCP.app/Contents/app"
 ENGINE_JAR="$APP_DIR/askamerica-engine.jar"
 ENGINE_URL="${ASKAMERICA_ENGINE_URL:-https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar}"
 
-echo "Downloading AskAmerica engine from $ENGINE_URL..."
-curl -fL --progress-bar "$ENGINE_URL" -o "$ENGINE_JAR"
-chmod 644 "$ENGINE_JAR"
+echo "AskAmerica MCP: downloading engine from $ENGINE_URL"
+if curl -fsSL --connect-timeout 30 --max-time 600 \
+    "$ENGINE_URL" -o "$ENGINE_JAR"; then
+  chmod 644 "$ENGINE_JAR"
+  echo "AskAmerica MCP: engine download complete"
+else
+  echo "AskAmerica MCP: engine download failed — app will show an error on first launch" >&2
+fi
 
 # Launch setup wizard as the logged-in user (postinstall runs as root)
 LOGGED_IN_USER=$(stat -f "%Su" /dev/console 2>/dev/null || true)
 if [ -n "$LOGGED_IN_USER" ] && [ "$LOGGED_IN_USER" != "root" ]; then
-    sudo -u "$LOGGED_IN_USER" open -a "AskAmerica MCP" &
+  sudo -u "$LOGGED_IN_USER" open -a "AskAmerica MCP" &
 fi
 
 exit 0
