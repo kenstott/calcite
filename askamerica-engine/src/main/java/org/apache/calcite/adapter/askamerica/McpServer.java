@@ -190,7 +190,10 @@ public class McpServer {
             + "fedregister, cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
             + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference. "
             + "Call list_tables(schema) before querying. "
-            + "Use FETCH FIRST N ROWS ONLY to limit results.");
+            + "When exploring or testing a query add FETCH FIRST N ROWS ONLY. "
+            + "For analytical or aggregation queries omit the row limit so all "
+            + "matching rows are processed. The limit parameter caps the rows "
+            + "returned to the client (default 500, max 5000).");
         return result(id, body);
     }
 
@@ -225,7 +228,8 @@ public class McpServer {
         queryProps.set(
             "sql", prop("string",
             "PostgreSQL-compatible SQL. Reference tables as schema.table "
-            + "(e.g. sec.filing_metadata). Always include FETCH FIRST N ROWS ONLY."));
+            + "(e.g. sec.filing_metadata). Add FETCH FIRST N ROWS ONLY when "
+            + "exploring; omit for analytical or aggregation queries."));
         queryProps.set(
             "limit", prop("integer",
             "Max rows to return (default 500, max 5000)."));
