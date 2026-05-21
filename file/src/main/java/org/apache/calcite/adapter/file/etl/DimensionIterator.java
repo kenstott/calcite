@@ -161,12 +161,37 @@ public class DimensionIterator {
     }
 
     // Use context-aware expansion if there are CUSTOM dimensions
+    List<Map<String, String>> combinations;
     if (hasCustomDimensions && dimensionResolver != null) {
-      return expandWithContext(dimensions);
+      combinations = expandWithContext(dimensions);
+    } else {
+      combinations = expandStandard(dimensions);
     }
 
-    // Standard expansion for non-custom dimensions
-    return expandStandard(dimensions);
+    // For every YEAR_RANGE dimension inject effective_year = year - dataLag into each combination.
+    // When dataLag=0, effective_year equals year (no distinction). When dataLag>0, effective_year
+    // is the actual data year; the iteration variable year is the publish year.
+    // URL templates use ${effective_year} for APIs that take the data year (most schemas).
+    // The Iceberg writer uses effective_year as the year partition key.
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      DimensionConfig config = entry.getValue();
+      if (config.getType() != DimensionType.YEAR_RANGE) {
+        continue;
+      }
+      int dataLag = config.getDataLag() != null ? config.getDataLag() : 0;
+      for (Map<String, String> combo : combinations) {
+        String yearVal = combo.get(entry.getKey());
+        if (yearVal != null) {
+          try {
+            combo.put("effective_year", String.valueOf(Integer.parseInt(yearVal) - dataLag));
+          } catch (NumberFormatException e) {
+            // non-numeric year value; skip companion injection
+          }
+        }
+      }
+    }
+
+    return combinations;
   }
 
   /**
@@ -540,11 +565,14 @@ public class DimensionIterator {
 
   /**
    * Resolves a YEAR_RANGE type dimension.
-   * Supports "current" as the end value, resolving to current year.
-   * Supports dataLag to exclude recent years (e.g., dataLag=1 means data through current-1).
    *
-   * <p>The dataLag is always computed from the current year, then the effective end
-   * is the minimum of the lag-adjusted year and the configured end year.
+   * <p>Iterates over publish years. The {@code effective_year} companion (publish year - dataLag)
+   * is injected into each combination by {@link #expand} after resolution.
+   *
+   * <p>End cap: the latest valid publish year is derived from {@code current_year - dataLag}
+   * (the effective year floor) plus {@code dataLag}, which equals {@code current_year} adjusted
+   * for {@code releaseMonth}. This ensures the URL template parameter {@code ${effective_year}}
+   * never exceeds the latest available data year.
    */
   private List<String> resolveYearRange(DimensionConfig config) {
     Integer start = config.getStart();
@@ -558,35 +586,31 @@ public class DimensionIterator {
     }
 
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+    int lag = dataLag != null ? dataLag : 0;
 
-    // Compute lag year from current year (always from current, not from configured end)
-    int lagYear = currentYear;
-    if (dataLag != null && dataLag > 0) {
-      lagYear = currentYear - dataLag;
-      LOGGER.debug("Year range dimension '{}' lag year computed as {} (currentYear={}, dataLag={})",
-          config.getName(), lagYear, currentYear, dataLag);
-    }
-
-    // Apply release month adjustment to lag year
-    // This handles cases where data for year Y is released mid-year in year Y+1
+    // Compute the latest effective year (data availability ceiling).
+    // releaseMonth adjusts for sources that publish mid-year.
+    int latestEffectiveYear = currentYear - lag;
     Integer releaseMonth = config.getReleaseMonth();
     if (releaseMonth != null && releaseMonth >= 1 && releaseMonth <= 12) {
-      int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1; // 1-based
+      int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1;
       if (currentMonth < releaseMonth) {
-        lagYear = lagYear - 1;
-        LOGGER.debug("Year range dimension '{}' adjusted lag year to {} (before releaseMonth={})",
-            config.getName(), lagYear, releaseMonth);
+        latestEffectiveYear = latestEffectiveYear - 1;
+        LOGGER.debug("Year range dimension '{}' adjusted for releaseMonth={}: latestEffectiveYear={}",
+            config.getName(), releaseMonth, latestEffectiveYear);
       }
     }
 
-    // Resolve configured end year (null means "current")
-    int configuredEnd = (end != null) ? end : currentYear;
-    LOGGER.debug("Year range dimension '{}' configured end: {}", config.getName(), configuredEnd);
+    // Publish year end cap: latest publish year whose effective year is available.
+    // latestEffectiveYear + lag = currentYear (adjusted for releaseMonth).
+    int publishYearEndCap = latestEffectiveYear + lag;
 
-    // Effective end is the minimum of lag year and configured end
-    int effectiveEnd = Math.min(lagYear, configuredEnd);
-    LOGGER.debug("Year range dimension '{}' effective end: {} (min of lagYear={}, configuredEnd={})",
-        config.getName(), effectiveEnd, lagYear, configuredEnd);
+    // Respect any explicit configured end (null means current publish year).
+    int configuredEnd = (end != null) ? end : publishYearEndCap;
+    int effectiveEnd = Math.min(publishYearEndCap, configuredEnd);
+
+    LOGGER.debug("Year range dimension '{}': publishYearEndCap={}, configuredEnd={}, effectiveEnd={}",
+        config.getName(), publishYearEndCap, configuredEnd, effectiveEnd);
 
     if (step == null || step == 0) {
       step = 1;

@@ -82,6 +82,8 @@ public class DimensionConfig {
   private final List<Integer> excludeYears;
   private final Integer minYear;
   private final Integer maxYear;
+  private final String effectiveYearField;
+  private final String effectiveMonthField;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -105,6 +107,8 @@ public class DimensionConfig {
         : Collections.<Integer>emptyList();
     this.minYear = builder.minYear;
     this.maxYear = builder.maxYear;
+    this.effectiveYearField = builder.effectiveYearField;
+    this.effectiveMonthField = builder.effectiveMonthField;
   }
 
   /**
@@ -186,6 +190,23 @@ public class DimensionConfig {
    */
   public Integer getMaxYear() {
     return maxYear;
+  }
+
+  /**
+   * Returns the output column name whose value overrides the {@code year} partition key per row.
+   * When set, the writer reads this column from each row and uses it as the Iceberg {@code year}
+   * partition value instead of the {@code effective_year} companion from the dimension context.
+   * The column is typically a SQL computed column (e.g., {@code EXTRACT(YEAR FROM survey_date)}).
+   */
+  public String getEffectiveYearField() {
+    return effectiveYearField;
+  }
+
+  /**
+   * Returns the output column name whose value overrides the {@code month} partition key per row.
+   */
+  public String getEffectiveMonthField() {
+    return effectiveMonthField;
   }
 
   /**
@@ -436,6 +457,17 @@ public class DimensionConfig {
       }
     }
 
+    // Parse effective year/month field names (column names whose row values override partition key)
+    Object effectiveYearFieldObj = map.get("effectiveYearField");
+    if (effectiveYearFieldObj instanceof String) {
+      builder.effectiveYearField((String) effectiveYearFieldObj);
+    }
+
+    Object effectiveMonthFieldObj = map.get("effectiveMonthField");
+    if (effectiveMonthFieldObj instanceof String) {
+      builder.effectiveMonthField((String) effectiveMonthFieldObj);
+    }
+
     // Parse custom properties (for CUSTOM type dimensions)
     // Properties are stored as-is; variable resolution happens at runtime
     Object propsObj = map.get("properties");
@@ -549,6 +581,8 @@ public class DimensionConfig {
     private List<Integer> excludeYears;
     private Integer minYear;
     private Integer maxYear;
+    private String effectiveYearField;
+    private String effectiveMonthField;
 
     public Builder name(String name) {
       this.name = name;
@@ -622,6 +656,16 @@ public class DimensionConfig {
 
     public Builder maxYear(Integer maxYear) {
       this.maxYear = maxYear;
+      return this;
+    }
+
+    public Builder effectiveYearField(String effectiveYearField) {
+      this.effectiveYearField = effectiveYearField;
+      return this;
+    }
+
+    public Builder effectiveMonthField(String effectiveMonthField) {
+      this.effectiveMonthField = effectiveMonthField;
       return this;
     }
 

@@ -694,6 +694,21 @@ public class EtlPipeline {
       writer.initialize(materializeConfig);
       LOGGER.info("Initialized {} writer for table {}", format, tableName);
 
+      // Wire per-row effective year/month fields from dimension config into Iceberg writer.
+      if (writer instanceof IcebergMaterializationWriter) {
+        IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
+        if (config.getDimensions() != null) {
+          for (DimensionConfig dimConfig : config.getDimensions().values()) {
+            if (dimConfig.getEffectiveYearField() != null) {
+              icebergWriter.setEffectiveYearField(dimConfig.getEffectiveYearField());
+            }
+            if (dimConfig.getEffectiveMonthField() != null) {
+              icebergWriter.setEffectiveMonthField(dimConfig.getEffectiveMonthField());
+            }
+          }
+        }
+      }
+
       // Phase 5: Process unprocessed dimension combinations
       LOGGER.info("Phase 5: Processing {} unprocessed batches (of {} total)", neededCount, totalBatches);
       if (progressListener != null) {

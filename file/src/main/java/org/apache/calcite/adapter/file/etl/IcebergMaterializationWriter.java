@@ -142,6 +142,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private java.util.Set<String> icebergPartitionColumns = java.util.Collections.emptySet();
   private boolean overwritePartitions = false;
 
+  /** Column name in output rows whose value overrides the {@code year} partition key per row. */
+  private String effectiveYearField;
+  /** Column name in output rows whose value overrides the {@code month} partition key per row. */
+  private String effectiveMonthField;
+
   /**
    * Represents a staged batch ready for commit.
    */
@@ -665,6 +670,49 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * This reduces the number of Iceberg metadata operations from O(batches) to O(1).
    */
   private void processBatch(List<Map<String, Object>> rows,
+      Map<String, String> partitionVariables) throws IOException, SQLException {
+
+    // Apply effective_year companion as the year partition value.
+    // DimensionIterator always injects effective_year = publish_year - dataLag.
+    // For dataLag=0, effective_year equals year (no change). For lagged schemas this
+    // ensures the Iceberg year partition stores the data year, not the publish year.
+    Map<String, String> resolvedVars = partitionVariables;
+    String effectiveYearVal = partitionVariables.get("effective_year");
+    if (effectiveYearVal != null) {
+      resolvedVars = new LinkedHashMap<String, String>(partitionVariables);
+      resolvedVars.put("year", effectiveYearVal);
+    }
+
+    // When effectiveYearField is declared, fan rows by their per-row effective year value.
+    // A single API response may contain rows spanning multiple effective years.
+    if (effectiveYearField != null) {
+      Map<String, List<Map<String, Object>>> byYear =
+          new LinkedHashMap<String, List<Map<String, Object>>>();
+      for (Map<String, Object> row : rows) {
+        Object val = getValueCaseInsensitive(row, effectiveYearField);
+        String rowYear = val != null ? String.valueOf(val) : resolvedVars.get("year");
+        if (rowYear == null) {
+          rowYear = partitionVariables.get("year");
+        }
+        List<Map<String, Object>> group = byYear.get(rowYear);
+        if (group == null) {
+          group = new ArrayList<Map<String, Object>>();
+          byYear.put(rowYear, group);
+        }
+        group.add(row);
+      }
+      for (Map.Entry<String, List<Map<String, Object>>> entry : byYear.entrySet()) {
+        Map<String, String> rowVars = new LinkedHashMap<String, String>(resolvedVars);
+        rowVars.put("year", entry.getKey());
+        processBatchPartition(entry.getValue(), rowVars);
+      }
+      return;
+    }
+
+    processBatchPartition(rows, resolvedVars);
+  }
+
+  private void processBatchPartition(List<Map<String, Object>> rows,
       Map<String, String> partitionVariables) throws IOException, SQLException {
 
     // Transform rows: map source field names to target column names
@@ -1715,6 +1763,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return MaterializeConfig.Format.ICEBERG;
   }
 
+  /**
+   * Sets the output column name whose value overrides the {@code year} partition key per row.
+   * Called by EtlPipeline after initialization when any YEAR_RANGE dimension declares
+   * {@code effectiveYearField}.
+   */
+  public void setEffectiveYearField(String effectiveYearField) {
+    this.effectiveYearField = effectiveYearField;
+  }
+
+  /**
+   * Sets the output column name whose value overrides the {@code month} partition key per row.
+   */
+  public void setEffectiveMonthField(String effectiveMonthField) {
+    this.effectiveMonthField = effectiveMonthField;
+  }
+
   @Override public String getTableLocation() {
     if (table != null) {
       // Return the Iceberg table location (e.g., s3://bucket/warehouse/table_name)
@@ -1737,12 +1801,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     try {
       LOGGER.debug("Storing ETL properties in Iceberg table: configHash={}, signature={}, rows={}",
           configHash, dimensionSignature, rowCount);
-      table.updateProperties()
+      String nowIso = java.time.Instant.now().toString();
+      org.apache.iceberg.UpdateProperties update = table.updateProperties()
           .set("etl.config-hash", configHash)
           .set("etl.signature", dimensionSignature)
           .set("etl.row-count", String.valueOf(rowCount))
           .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
-          .commit();
+          .set("etl.last_run_ts", nowIso);
+      if (rowCount > 0) {
+        update.set("etl.last_rows_written_ts", nowIso);
+      }
+      update.commit();
       LOGGER.info("Stored ETL properties in Iceberg table: configHash={}, signature={}",
           configHash, dimensionSignature);
     } catch (Exception e) {
