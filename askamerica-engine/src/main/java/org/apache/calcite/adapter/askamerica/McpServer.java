@@ -160,6 +160,11 @@ public class McpServer {
             }
         } catch (Exception e) {
             log.println("[askamerica-mcp] Handler error: " + e.getMessage());
+            Throwable cause = e.getCause();
+            while (cause != null) {
+                log.println("[askamerica-mcp]   caused by: " + cause.getMessage());
+                cause = cause.getCause();
+            }
             return errorResponse(id, -32603, e.getMessage());
         }
     }
@@ -259,27 +264,47 @@ public class McpServer {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
 
+        long t0 = System.currentTimeMillis();
         String text;
         switch (name) {
             case "list_schemas":
+                log.println("[askamerica-mcp] tool=list_schemas");
                 text = listSchemas();
                 break;
-            case "list_tables":
-                text = listTables(args.path("schema").asText());
+            case "list_tables": {
+                String schema = args.path("schema").asText();
+                log.println("[askamerica-mcp] tool=list_tables schema=" + schema);
+                text = listTables(schema);
                 break;
-            case "describe_table":
-                text =
-                    describeTable(args.path("schema").asText(),
-                    args.path("table").asText());
+            }
+            case "describe_table": {
+                String schema = args.path("schema").asText();
+                String table  = args.path("table").asText();
+                log.println("[askamerica-mcp] tool=describe_table schema=" + schema
+                    + " table=" + table);
+                text = describeTable(schema, table);
                 break;
-            case "query":
+            }
+            case "query": {
                 int limit = args.has("limit")
                     ? Math.min(Math.max(1, args.get("limit").asInt()), MAX_LIMIT)
                     : DEFAULT_LIMIT;
-                text = query(args.path("sql").asText(), limit);
+                String sql = args.path("sql").asText();
+                log.println("[askamerica-mcp] tool=query sql=" + sql);
+                text = query(sql, limit);
                 break;
+            }
             default:
                 return errorResponse(id, -32602, "Unknown tool: " + name);
+        }
+
+        long ms = System.currentTimeMillis() - t0;
+        // text is a JSON array string; count commas at depth-1 to approximate rows
+        int rows = text.startsWith("[{") ? countRows(text) : -1;
+        if (rows >= 0) {
+            log.println("[askamerica-mcp] tool=" + name + " rows=" + rows + " ms=" + ms);
+        } else {
+            log.println("[askamerica-mcp] tool=" + name + " ms=" + ms);
         }
 
         ArrayNode content = MAPPER.createArrayNode();
@@ -292,6 +317,14 @@ public class McpServer {
         body.set("content", content);
         body.put("isError", false);
         return result(id, body);
+    }
+
+    private static int countRows(String json) {
+        try {
+            return MAPPER.readTree(json).size();
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     // ── Tool implementations ──────────────────────────────────────────────────
