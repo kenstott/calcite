@@ -31,18 +31,13 @@ import org.apache.calcite.sql.SqlDialect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.sql.Connection;
-
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
@@ -150,8 +145,8 @@ public class ClickHouseJdbcSchemaFactory {
         if (dataDir == null) {
           // Default data directory
           File workingDir = new File(System.getProperty("user.dir"));
-          dataDir = new File(new File(workingDir, ".aperio"),
-              ".clickhouse" + File.separator + schemaName).getAbsolutePath();
+          dataDir =
+              new File(new File(workingDir, ".aperio"), ".clickhouse" + File.separator + schemaName).getAbsolutePath();
         }
         poolKey = dataDir;
 
@@ -184,18 +179,18 @@ public class ClickHouseJdbcSchemaFactory {
 
         // Start clickhouse-local with HTTP interface
         LOGGER.info("Starting clickhouse-local on port {} with data dir: {}", port, dataDir);
-        ProcessBuilder pb = new ProcessBuilder(
-            binaryPath,
+        ProcessBuilder pb =
+            new ProcessBuilder(binaryPath,
             "--http_port", String.valueOf(port),
             "--path", dataDir,
-            "--log-level", "warning"
-        );
+            "--log-level", "warning");
         pb.redirectErrorStream(true);
         localProcess = pb.start();
 
         // Register shutdown hook for cleanup
         final Process processRef = localProcess;
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Runtime.getRuntime().addShutdownHook(
+            new Thread(() -> {
           if (processRef.isAlive()) {
             LOGGER.info("Shutdown hook: destroying clickhouse-local process");
             processRef.destroy();
@@ -210,8 +205,8 @@ public class ClickHouseJdbcSchemaFactory {
 
       } else {
         // Server mode: connect to existing ClickHouse server
-        jdbcUrl = String.format("jdbc:clickhouse://%s:%s/%s",
-            config.getHost(), config.getPort(), config.getDatabase());
+        jdbcUrl =
+            String.format("jdbc:clickhouse://%s:%s/%s", config.getHost(), config.getPort(), config.getDatabase());
         poolKey = jdbcUrl;
 
         // Check if we already have a connection for this server
@@ -255,8 +250,8 @@ public class ClickHouseJdbcSchemaFactory {
 
       // Create DataSource for new connections - use schemaName as the database
       // so that JDBC metadata queries find the views created in the schema's database
-      final String finalJdbcUrl = String.format("jdbc:clickhouse://%s:%s/%s",
-          config.getHost(), config.getPort(), schemaName);
+      final String finalJdbcUrl =
+          String.format("jdbc:clickhouse://%s:%s/%s", config.getHost(), config.getPort(), schemaName);
       DataSource dataSource = new DataSource() {
         @Override public Connection getConnection() throws SQLException {
           return clickhouseDriver.connect(finalJdbcUrl, new java.util.Properties());
@@ -421,8 +416,8 @@ public class ClickHouseJdbcSchemaFactory {
             icebergPath = directoryPath + "/" + clickhouseSchema + "/" + tableName;
           }
 
-          String viewSql = ClickHouseDialect.INSTANCE.createIcebergViewSql(
-              clickhouseSchema, tableName, icebergPath);
+          String viewSql =
+              ClickHouseDialect.INSTANCE.createIcebergViewSql(clickhouseSchema, tableName, icebergPath);
           LOGGER.info("Creating ClickHouse Iceberg view: {}", viewSql);
           conn.createStatement().execute(viewSql);
           viewCount++;
@@ -433,8 +428,8 @@ public class ClickHouseJdbcSchemaFactory {
           String parquetPath = resolveParquetPath(record);
 
           if (parquetPath != null) {
-            String viewSql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-                clickhouseSchema, tableName, parquetPath, false);
+            String viewSql =
+                ClickHouseDialect.INSTANCE.createParquetViewSql(clickhouseSchema, tableName, parquetPath, false);
             LOGGER.info("Creating ClickHouse Parquet view for '{}': {}", tableName, viewSql);
             conn.createStatement().execute(viewSql);
             viewCount++;
@@ -511,8 +506,8 @@ public class ClickHouseJdbcSchemaFactory {
       }
 
       try {
-        String viewSql = String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS %s",
-            clickhouseSchema, viewName, viewDef);
+        String viewSql =
+            String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS %s", clickhouseSchema, viewName, viewDef);
         LOGGER.info("Creating SQL view in ClickHouse: {}.{}", clickhouseSchema, viewName);
         conn.createStatement().execute(viewSql);
       } catch (SQLException e) {

@@ -159,7 +159,8 @@ public class EtlPipelineDeepCoverageTest5 {
           }
           return all;
         });
-    when(tracker.filterUnprocessedWithEmptyTtl(
+    when(
+        tracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong()))
         .thenAnswer(inv -> {
           List<?> combos = inv.getArgument(2);
@@ -211,11 +212,11 @@ public class EtlPipelineDeepCoverageTest5 {
       when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
           .thenReturn(data1.iterator())
           .thenReturn(data2.iterator());
-      EtlPipelineConfig config = createHttpConfig("par_std",
-          singleRangeDimension("y", 2020, 2021),
+      EtlPipelineConfig config =
+          createHttpConfig("par_std", singleRangeDimension("y", 2020, 2021),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
       // Should complete without errors using parallel mode
@@ -240,11 +241,11 @@ public class EtlPipelineDeepCoverageTest5 {
           .thenReturn(Collections.singletonList(row("id", "1")).iterator())
           .thenThrow(new IOException("HTTP 404 Not Found"))
           .thenReturn(Collections.singletonList(row("id", "3")).iterator());
-      EtlPipelineConfig config = createHttpConfig("par_err",
-          singleRangeDimension("y", 2020, 2022),
+      EtlPipelineConfig config =
+          createHttpConfig("par_err", singleRangeDimension("y", 2020, 2022),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
       // Parallel mode catches errors, so pipeline still completes
@@ -267,11 +268,11 @@ public class EtlPipelineDeepCoverageTest5 {
       when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
           .thenThrow(new IOException("HTTP 404 Not Found"))
           .thenThrow(new IOException("HTTP 404 Not Found"));
-      EtlPipelineConfig config = createHttpConfig("par_skip",
-          singleRangeDimension("y", 2020, 2021),
+      EtlPipelineConfig config =
+          createHttpConfig("par_skip", singleRangeDimension("y", 2020, 2021),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
     } finally {
@@ -297,11 +298,11 @@ public class EtlPipelineDeepCoverageTest5 {
           new EtlPipelineConfig.ErrorHandlingConfig.Builder()
               .apiErrorAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN)
               .build();
-      EtlPipelineConfig config = createHttpConfig("par_warn",
-          singleRangeDimension("y", 2020, 2021),
+      EtlPipelineConfig config =
+          createHttpConfig("par_warn", singleRangeDimension("y", 2020, 2021),
           MaterializeConfig.Format.PARQUET, null, null, eh);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
     } finally {
@@ -323,11 +324,11 @@ public class EtlPipelineDeepCoverageTest5 {
       when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
           .thenThrow(new IOException("HTTP 401 Unauthorized"))
           .thenThrow(new IOException("HTTP 401 Unauthorized"));
-      EtlPipelineConfig config = createHttpConfig("par_fail",
-          singleRangeDimension("y", 2020, 2021),
+      EtlPipelineConfig config =
+          createHttpConfig("par_fail", singleRangeDimension("y", 2020, 2021),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
       // FAIL action in parallel mode logs but doesn't abort other threads
@@ -348,12 +349,12 @@ public class EtlPipelineDeepCoverageTest5 {
     IncrementalTracker tracker = mockTracker();
     MaterializationWriter w = mock(MaterializationWriter.class);
     when(w.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(2L);
-    EtlPipelineConfig config = createHttpConfig("t_rp_all",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning",
-        Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
+    EtlPipelineConfig config =
+        createHttpConfig("t_rp_all", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
         MaterializationWriter.class, DataWriter.class, IncrementalTracker.class, String.class);
     m.setAccessible(true);
     Map<String, Object> rpMap = new HashMap<String, Object>();
@@ -363,8 +364,8 @@ public class EtlPipelineDeepCoverageTest5 {
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(row("id", "1", "year", "2020"));
     data.add(row("id", "2", "year", "2021"));
-    long rows = (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(),
-        rp, w, null, tracker, "t_rp_all");
+    long rows =
+        (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(), rp, w, null, tracker, "t_rp_all");
     // Writer.writeBatch is called with all rows since no year filter
     assertEquals(2L, rows);
     verify(w).writeBatch(any(Iterator.class), any(Map.class));
@@ -373,12 +374,12 @@ public class EtlPipelineDeepCoverageTest5 {
   @Test void testWriteWithResponsePartitioning_withYearFilterFiltersAll() throws Exception {
     IncrementalTracker tracker = mockTracker();
     MaterializationWriter w = mock(MaterializationWriter.class);
-    EtlPipelineConfig config = createHttpConfig("t_rp_empty",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning",
-        Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
+    EtlPipelineConfig config =
+        createHttpConfig("t_rp_empty", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
         MaterializationWriter.class, DataWriter.class, IncrementalTracker.class, String.class);
     m.setAccessible(true);
     Map<String, Object> rpMap = new HashMap<String, Object>();
@@ -391,8 +392,8 @@ public class EtlPipelineDeepCoverageTest5 {
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(row("id", "1", "year", "2020"));
     data.add(row("id", "2", "year", "2021"));
-    long rows = (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(),
-        rp, w, null, tracker, "t_rp_empty");
+    long rows =
+        (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(), rp, w, null, tracker, "t_rp_empty");
     assertEquals(0L, rows);
     // Empty result should still mark as processed with 0 rows
     verify(tracker).markProcessedWithRowCount(
@@ -403,12 +404,12 @@ public class EtlPipelineDeepCoverageTest5 {
     IncrementalTracker tracker = mockTracker();
     MaterializationWriter w = mock(MaterializationWriter.class);
     when(w.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
-    EtlPipelineConfig config = createHttpConfig("t_rp_noyr",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning",
-        Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
+    EtlPipelineConfig config =
+        createHttpConfig("t_rp_noyr", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
         MaterializationWriter.class, DataWriter.class, IncrementalTracker.class, String.class);
     m.setAccessible(true);
     Map<String, Object> rpMap = new HashMap<String, Object>();
@@ -422,8 +423,8 @@ public class EtlPipelineDeepCoverageTest5 {
     data.add(row("id", "3", "year", "2022"));
     data.add(row("id", "4", "year", "2023"));
     data.add(row("id", "5", "year", "2024"));
-    long rows = (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(),
-        rp, w, null, tracker, "t_rp_noyr");
+    long rows =
+        (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(), rp, w, null, tracker, "t_rp_noyr");
     assertEquals(5L, rows);
     verify(tracker).markProcessedWithRowCount(
         eq("t_rp_noyr"), eq("t_rp_noyr"), any(Map.class), any(), eq(5L));
@@ -458,14 +459,14 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build())
             .format(MaterializeConfig.Format.PARQUET).build())
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
         int.class, int.class, String.class);
     m.setAccessible(true);
-    long rows = (long) m.invoke(pipeline, config, new HashMap<String, String>(),
-        ds, w, 1, 1, "rp_batch");
+    long rows =
+        (long) m.invoke(pipeline, config, new HashMap<String, String>(), ds, w, 1, 1, "rp_batch");
     // Response partitioning buffers then writes
     assertTrue(rows >= 0);
   }
@@ -480,16 +481,16 @@ public class EtlPipelineDeepCoverageTest5 {
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(row("id", "1"));
     when(ds.fetch(any(Map.class))).thenReturn(data.iterator());
-    EtlPipelineConfig config = createHttpConfig("dw_batch",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, dw);
-    Method m = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
+    EtlPipelineConfig config =
+        createHttpConfig("dw_batch", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, dw);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
         int.class, int.class, String.class);
     m.setAccessible(true);
-    long rows = (long) m.invoke(pipeline, config, new HashMap<String, String>(),
-        ds, w, 1, 1, "dw_batch");
+    long rows =
+        (long) m.invoke(pipeline, config, new HashMap<String, String>(), ds, w, 1, 1, "dw_batch");
     assertEquals(7L, rows);
     verify(dw).write(any(EtlPipelineConfig.class), any(Iterator.class), any(Map.class));
   }
@@ -502,16 +503,16 @@ public class EtlPipelineDeepCoverageTest5 {
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(row("id", "1"));
     when(ds.fetch(any(Map.class))).thenReturn(data.iterator());
-    EtlPipelineConfig config = createHttpConfig("no_dw_batch",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString(),
-        null, tracker, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
+    EtlPipelineConfig config =
+        createHttpConfig("no_dw_batch", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage(), tempDir.toString(), null, tracker, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class, MaterializationWriter.class,
         int.class, int.class, String.class);
     m.setAccessible(true);
-    long rows = (long) m.invoke(pipeline, config, new HashMap<String, String>(),
-        ds, w, 1, 1, "no_dw_batch");
+    long rows =
+        (long) m.invoke(pipeline, config, new HashMap<String, String>(), ds, w, 1, 1, "no_dw_batch");
     assertEquals(3L, rows);
     verify(w).writeBatch(any(Iterator.class), any(Map.class));
     verify(tracker).markProcessedWithRowCount(
@@ -528,17 +529,18 @@ public class EtlPipelineDeepCoverageTest5 {
     when(sp.isDirectory(anyString())).thenReturn(true);
     when(tracker.isTableComplete(eq("ice_zero"), anyString())).thenReturn(true);
     // Return no unprocessed after invalidation
-    when(tracker.filterUnprocessedWithEmptyTtl(
+    when(
+        tracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong()))
         .thenReturn(Collections.<Integer>emptySet());
     // Iceberg format but readRowCountFromIceberg will return 0 (no actual Iceberg table)
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .emptyResultTtlDays(7).build();
-    EtlPipelineConfig config = createHttpConfig("ice_zero",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("ice_zero", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult result = pipeline.execute();
     // rowCount==0 with TTL > 0 should invalidate then proceed
     verify(tracker).invalidateTableCompletion("ice_zero");
@@ -555,11 +557,11 @@ public class EtlPipelineDeepCoverageTest5 {
     // (the options null check: options != null, then checks emptyResultTtlMillis > 0)
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .emptyResultTtlDays(0).build();
-    EtlPipelineConfig config = createHttpConfig("ice_skip",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("ice_skip", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult result = pipeline.execute();
     // With TTL=0 and rowCount=0, the else branch is used: skipped
     assertTrue(result.isSkippedEntirePipeline()
@@ -575,11 +577,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("ice_rows",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("ice_rows", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // The isTableComplete path finds rowCount=0 (no real Iceberg table).
     // The default emptyResultTtlDays (7) causes the pipeline to invalidate
@@ -601,11 +603,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("mismatch_zero",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("mismatch_zero", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // Should proceed to dimension expansion, not skip
     assertFalse(result.isSkippedEntirePipeline());
@@ -621,11 +623,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("mismatch_nodata",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("mismatch_nodata", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // Config hash mismatch with rows but data gone -> falls through to expand
     assertFalse(result.isSkippedEntirePipeline());
@@ -644,11 +646,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("cold_no_data",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("cold_no_data", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // No data exists, so no recovery, proceed with ETL
     assertFalse(result.isSkippedEntirePipeline());
@@ -665,11 +667,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("cold_data",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("cold_data", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // readRowCountFromIceberg returns 0 (no real table), so proceeds to normal
     assertNotNull(result);
@@ -686,11 +688,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("cold_cols",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("cold_cols", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, cols);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -716,8 +718,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -732,8 +734,8 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    List<ColumnConfig> cols = Collections.singletonList(
-        ColumnConfig.builder().name("id").type("VARCHAR").build());
+    List<ColumnConfig> cols =
+        Collections.singletonList(ColumnConfig.builder().name("id").type("VARCHAR").build());
     // materialize has no name, no targetTableId, no columns
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
@@ -746,8 +748,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .materialize(mc)
         .columns(cols)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -758,8 +760,8 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    List<ColumnConfig> matCols = Collections.singletonList(
-        ColumnConfig.builder().name("code").type("VARCHAR").build());
+    List<ColumnConfig> matCols =
+        Collections.singletonList(ColumnConfig.builder().name("code").type("VARCHAR").build());
     // materialize already has name and columns
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
@@ -773,8 +775,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -786,8 +788,8 @@ public class EtlPipelineDeepCoverageTest5 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
     // materialize has targetTableId but no columns
-    List<ColumnConfig> configCols = Collections.singletonList(
-        ColumnConfig.builder().name("id").type("VARCHAR").build());
+    List<ColumnConfig> configCols =
+        Collections.singletonList(ColumnConfig.builder().name("id").type("VARCHAR").build());
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.PARQUET)
@@ -800,8 +802,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .materialize(mc)
         .columns(configCols)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -816,11 +818,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("ice_path",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("ice_path", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, "/data/warehouse",
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, "/data/warehouse", null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // Iceberg format does not append table name to base directory
     assertNotNull(result);
@@ -832,12 +834,12 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("tbl_trail",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("tbl_trail", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
     // Base directory ends with / - different code path
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString() + "/",
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString() + "/", null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -849,11 +851,11 @@ public class EtlPipelineDeepCoverageTest5 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
     // Pipeline name is non-empty but test if code handles empty name scenario
-    EtlPipelineConfig config = createHttpConfig("p",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("p", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -884,10 +886,10 @@ public class EtlPipelineDeepCoverageTest5 {
     Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
     dims.put("y", DimensionConfig.builder()
         .name("y").type(DimensionType.RANGE).start(2000).end(2011).build());
-    EtlPipelineConfig config = createHttpConfig("gc_test", dims,
-        MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipelineConfig config =
+        createHttpConfig("gc_test", dims, MaterializeConfig.Format.PARQUET, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     // GC should have been triggered at batch 10
@@ -915,10 +917,10 @@ public class EtlPipelineDeepCoverageTest5 {
       Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
       dims.put("y", DimensionConfig.builder()
           .name("y").type(DimensionType.RANGE).start(2020).end(2025).build());
-      EtlPipelineConfig config = createHttpConfig("abort_retry", dims,
-          MaterializeConfig.Format.PARQUET, null, null, eh);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipelineConfig config =
+          createHttpConfig("abort_retry", dims, MaterializeConfig.Format.PARQUET, null, null, eh);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       // Should abort after 3 consecutive failures
       assertTrue(result.isFailed());
@@ -943,11 +945,11 @@ public class EtlPipelineDeepCoverageTest5 {
       DataProvider prov = mock(DataProvider.class);
       when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
           .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-      EtlPipelineConfig config = createHttpConfig("env_test",
-          singleRangeDimension("y", 2020, 2020),
+      EtlPipelineConfig config =
+          createHttpConfig("env_test", singleRangeDimension("y", 2020, 2020),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
     } finally {
@@ -971,13 +973,13 @@ public class EtlPipelineDeepCoverageTest5 {
     partial.add(0);
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(partial);
-    EtlPipelineConfig config = createHttpConfig("rebuild_partial",
-        singleRangeDimension("y", 2020, 2021),
+    EtlPipelineConfig config =
+        createHttpConfig("rebuild_partial", singleRangeDimension("y", 2020, 2021),
         MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
-    Method m = EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg",
-        String.class, EtlPipelineConfig.class, List.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg", String.class, EtlPipelineConfig.class, List.class);
     m.setAccessible(true);
     List<Map<String, String>> combos = new ArrayList<Map<String, String>>();
     Map<String, String> c1 = new HashMap<String, String>();
@@ -1011,10 +1013,10 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
-    Method m = EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg",
-        String.class, EtlPipelineConfig.class, List.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg", String.class, EtlPipelineConfig.class, List.class);
     m.setAccessible(true);
     List<Map<String, String>> combos = new ArrayList<Map<String, String>>();
     Map<String, String> c1 = new HashMap<String, String>();
@@ -1044,10 +1046,10 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
-    Method m = EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg",
-        String.class, EtlPipelineConfig.class, List.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg", String.class, EtlPipelineConfig.class, List.class);
     m.setAccessible(true);
     List<Map<String, String>> combos = new ArrayList<Map<String, String>>();
     Map<String, String> c1 = new HashMap<String, String>();
@@ -1079,10 +1081,10 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
-    Method m = EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg",
-        String.class, EtlPipelineConfig.class, List.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg", String.class, EtlPipelineConfig.class, List.class);
     m.setAccessible(true);
     List<Map<String, String>> combos = new ArrayList<Map<String, String>>();
     Map<String, String> c1 = new HashMap<String, String>();
@@ -1102,10 +1104,10 @@ public class EtlPipelineDeepCoverageTest5 {
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(all);
     // Build a valid config with materialize for the pipeline constructor
-    EtlPipelineConfig pipelineConfig = createHttpConfig("rebuild_null_mat",
-        singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline = new EtlPipeline(pipelineConfig, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipelineConfig pipelineConfig =
+        createHttpConfig("rebuild_null_mat", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline =
+        new EtlPipeline(pipelineConfig, sp, tempDir.toString(), null, tracker);
     // Build a config with null materialize (enabled=false bypasses materialize requirement)
     // to test the rebuildCacheFromIceberg null-materialize branch
     EtlPipelineConfig configWithNullMat = EtlPipelineConfig.builder()
@@ -1114,8 +1116,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .source(HttpSourceConfig.builder().url("http://x").build())
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .build();
-    Method m = EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg",
-        String.class, EtlPipelineConfig.class, List.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("rebuildCacheFromIceberg", String.class, EtlPipelineConfig.class, List.class);
     m.setAccessible(true);
     List<Map<String, String>> combos = new ArrayList<Map<String, String>>();
     Map<String, String> c1 = new HashMap<String, String>();
@@ -1147,10 +1149,10 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build()).build())
         .build();
     // Use the constructor that accepts sourceStorageProvider
-    EtlPipeline pipeline = new EtlPipeline(config, sp, sourceSp, tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null);
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, sourceSp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     m.setAccessible(true);
     DataSource ds = (DataSource) m.invoke(pipeline, config);
     assertNotNull(ds);
@@ -1168,10 +1170,10 @@ public class EtlPipelineDeepCoverageTest5 {
         .materialize(MaterializeConfig.builder()
             .output(MaterializeOutputConfig.builder().build()).build())
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, sp, tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null, "/op/dir");
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     m.setAccessible(true);
     DataSource ds = (DataSource) m.invoke(pipeline, config);
     assertNotNull(ds);
@@ -1189,8 +1191,8 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     m.setAccessible(true);
     DataSource ds = (DataSource) m.invoke(pipeline, config);
     assertNotNull(ds);
@@ -1220,8 +1222,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }
@@ -1233,11 +1235,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("heal_parq",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("heal_parq", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     // Phase 1.5 only runs for Iceberg format
@@ -1253,11 +1255,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("ds_close",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("ds_close", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     // DataSource.close() is called on non-null data sources after processing
@@ -1273,11 +1275,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenThrow(new RuntimeException("fatal"));
-    EtlPipelineConfig config = createHttpConfig("writer_close_err",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("writer_close_err", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertTrue(result.isFailed());
     // Writer close exception (if any) is handled gracefully
@@ -1294,11 +1296,11 @@ public class EtlPipelineDeepCoverageTest5 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator())
         .thenReturn(Collections.singletonList(row("id", "2")).iterator());
-    EtlPipelineConfig config = createHttpConfig("mark_complete",
-        singleRangeDimension("y", 2020, 2021),
+    EtlPipelineConfig config =
+        createHttpConfig("mark_complete", singleRangeDimension("y", 2020, 2021),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     if (!result.isFailed() && result.getFailedBatches() == 0 && result.getErrors().isEmpty()) {
       verify(tracker).markTableCompleteWithConfig(eq("mark_complete"),
@@ -1317,11 +1319,11 @@ public class EtlPipelineDeepCoverageTest5 {
         new EtlPipelineConfig.ErrorHandlingConfig.Builder()
             .apiErrorAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN)
             .build();
-    EtlPipelineConfig config = createHttpConfig("no_complete",
-        singleRangeDimension("y", 2020, 2021),
+    EtlPipelineConfig config =
+        createHttpConfig("no_complete", singleRangeDimension("y", 2020, 2021),
         MaterializeConfig.Format.PARQUET, null, null, eh);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     if (result.getFailedBatches() > 0) {
       verify(tracker, never()).markTableCompleteWithConfig(eq("no_complete"),
@@ -1339,11 +1341,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
-    EtlPipelineConfig config = createHttpConfig("meta_test",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("meta_test", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     assertNotNull(result.getPipelineName());
@@ -1370,8 +1372,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult result = pipeline.execute();
     assertTrue(result.isSkipped());
   }
@@ -1398,8 +1400,8 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build())
             .build())
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // Should handle disabled materialize gracefully
     assertNotNull(result);
@@ -1417,11 +1419,11 @@ public class EtlPipelineDeepCoverageTest5 {
         .thenReturn(Collections.singletonList(row("id", "1")).iterator())
         .thenReturn(Collections.singletonList(row("id", "2")).iterator());
     EtlPipeline.ProgressListener listener = mock(EtlPipeline.ProgressListener.class);
-    EtlPipelineConfig config = createHttpConfig("pl_all",
-        singleRangeDimension("y", 2020, 2021),
+    EtlPipelineConfig config =
+        createHttpConfig("pl_all", singleRangeDimension("y", 2020, 2021),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        listener, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), listener, tracker, prov, null);
     pipeline.execute();
     verify(listener).onPhaseStart(eq("dimension_expansion"), eq(2));
     verify(listener).onPhaseComplete(eq("dimension_expansion"), eq(2));
@@ -1437,11 +1439,11 @@ public class EtlPipelineDeepCoverageTest5 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenThrow(new IOException("HTTP 404 Not Found"));
     EtlPipeline.ProgressListener listener = mock(EtlPipeline.ProgressListener.class);
-    EtlPipelineConfig config = createHttpConfig("pl_err",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("pl_err", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        listener, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), listener, tracker, prov, null);
     pipeline.execute();
     verify(listener).onBatchComplete(eq(1), eq(1), eq(0), any(IOException.class));
   }
@@ -1452,8 +1454,8 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testReadRowCountFromIceberg_singleArgDelegatesToTwoArg() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("read_cnt",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("read_cnt", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     Method m = EtlPipeline.class.getDeclaredMethod("readRowCountFromIceberg", String.class);
     m.setAccessible(true);
@@ -1467,11 +1469,11 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testStoreEtlPropertiesToIceberg_nonExistentTable() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("store_props",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("store_props", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("storeEtlPropertiesToIceberg",
-        String.class, String.class, String.class, long.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("storeEtlPropertiesToIceberg", String.class, String.class, String.class, long.class);
     m.setAccessible(true);
     // Should not throw - gracefully handles missing table
     m.invoke(pipeline, tempDir.toString() + "/no_table", "hash", "sig", 42L);
@@ -1483,11 +1485,11 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testReadEtlPropertiesFromIceberg_nonExistentPath() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("read_props",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("read_props", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("readEtlPropertiesFromIceberg",
-        String.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("readEtlPropertiesFromIceberg", String.class);
     m.setAccessible(true);
     Object result = m.invoke(pipeline, "/nonexistent/path/table");
     assertNull(result);
@@ -1556,10 +1558,10 @@ public class EtlPipelineDeepCoverageTest5 {
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
     // Two dimensions: y (2020-2021) x q (1-2) = 4 combinations
     Map<String, DimensionConfig> dims = multiRangeDimension("y", 2020, 2021, "q", 1, 2);
-    EtlPipelineConfig config = createHttpConfig("multi_dim", dims,
-        MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipelineConfig config =
+        createHttpConfig("multi_dim", dims, MaterializeConfig.Format.PARQUET, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     assertEquals(4, result.getSuccessfulBatches());
@@ -1619,10 +1621,10 @@ public class EtlPipelineDeepCoverageTest5 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator())
         .thenReturn(Collections.singletonList(row("id", "2")).iterator());
-    EtlPipelineConfig config = createHttpConfig("force_all", dims,
-        MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipelineConfig config =
+        createHttpConfig("force_all", dims, MaterializeConfig.Format.PARQUET, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     verify(tracker).invalidateTableCompletion("force_all");
@@ -1651,8 +1653,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2020))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     // Uses MaterializeOptionsConfig.defaults().getEmptyResultTtlMillis()
     assertNotNull(result);
@@ -1684,8 +1686,8 @@ public class EtlPipelineDeepCoverageTest5 {
         .dimensions(singleRangeDimension("y", 2020, 2021))
         .materialize(mc)
         .build();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
     // Phase 1.5 found 1 of 2 unprocessed, reused in Phase 2
@@ -1697,15 +1699,15 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testDetermineErrorAction_http429CustomTransientAction() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("err_429",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("err_429", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     EtlPipelineConfig.ErrorHandlingConfig eh =
         new EtlPipelineConfig.ErrorHandlingConfig.Builder()
             .transientErrorAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.FAIL)
             .build();
-    Method m = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
     Object result = m.invoke(pipeline, new IOException("HTTP 429 Rate Limited"), eh);
     assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.FAIL, result);
@@ -1713,15 +1715,15 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testDetermineErrorAction_http503CustomTransientAction() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("err_503",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("err_503", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     EtlPipelineConfig.ErrorHandlingConfig eh =
         new EtlPipelineConfig.ErrorHandlingConfig.Builder()
             .transientErrorAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP)
             .build();
-    Method m = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
     Object result = m.invoke(pipeline, new IOException("HTTP 503 Unavailable"), eh);
     assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
@@ -1729,15 +1731,15 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testDetermineErrorAction_http404CustomNotFoundAction() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("err_404",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("err_404", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     EtlPipelineConfig.ErrorHandlingConfig eh =
         new EtlPipelineConfig.ErrorHandlingConfig.Builder()
             .notFoundAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN)
             .build();
-    Method m = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
     Object result = m.invoke(pipeline, new IOException("HTTP 404 Not Found"), eh);
     assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, result);
@@ -1745,15 +1747,15 @@ public class EtlPipelineDeepCoverageTest5 {
 
   @Test void testDetermineErrorAction_authError401CustomAction() throws Exception {
     StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("err_401",
-        singleRangeDimension("y", 2020, 2020));
+    EtlPipelineConfig config =
+        createHttpConfig("err_401", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     EtlPipelineConfig.ErrorHandlingConfig eh =
         new EtlPipelineConfig.ErrorHandlingConfig.Builder()
             .authErrorAction(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP)
             .build();
-    Method m = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
     Object result = m.invoke(pipeline, new IOException("HTTP 401 Unauthorized"), eh);
     assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
@@ -1773,11 +1775,11 @@ public class EtlPipelineDeepCoverageTest5 {
       when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
           .thenReturn(Collections.singletonList(row("id", "1")).iterator());
       // Only 1 batch - should use sequential even though threads > 1
-      EtlPipelineConfig config = createHttpConfig("par_single",
-          singleRangeDimension("y", 2020, 2020),
+      EtlPipelineConfig config =
+          createHttpConfig("par_single", singleRangeDimension("y", 2020, 2020),
           MaterializeConfig.Format.PARQUET, null, null);
-      EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-          null, tracker, prov, null);
+      EtlPipeline pipeline =
+          new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
       EtlResult result = pipeline.execute();
       assertNotNull(result);
       assertEquals(1, result.getSuccessfulBatches());
@@ -1818,11 +1820,11 @@ public class EtlPipelineDeepCoverageTest5 {
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenThrow(new RuntimeException("Unexpected runtime error"));
-    EtlPipelineConfig config = createHttpConfig("outer_catch",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("outer_catch", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker, prov, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
     assertTrue(result.isFailed());
     assertNotNull(result.getFailureMessage());
@@ -1843,10 +1845,10 @@ public class EtlPipelineDeepCoverageTest5 {
     // 0 rows, but no options configured
     when(tracker.getCachedCompletion("zero_no_opts"))
         .thenReturn(new IncrementalTracker.CachedCompletion(hash, "sig", 0));
-    EtlPipelineConfig config = createHttpConfig("zero_no_opts", dims,
-        MaterializeConfig.Format.ICEBERG, null, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipelineConfig config =
+        createHttpConfig("zero_no_opts", dims, MaterializeConfig.Format.ICEBERG, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult result = pipeline.execute();
     // No options -> materializeConfig.getOptions() is null -> goes to else (non-zero path)
     assertTrue(result.isSkippedEntirePipeline());
@@ -1865,11 +1867,11 @@ public class EtlPipelineDeepCoverageTest5 {
     // With emptyResultTtlDays=0, TTL millis=0 -> goes to else -> skipped
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .emptyResultTtlDays(0).build();
-    EtlPipelineConfig config = createHttpConfig("parq_no_ice",
-        singleRangeDimension("y", 2020, 2020),
+    EtlPipelineConfig config =
+        createHttpConfig("parq_no_ice", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, opts, null);
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, tracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult result = pipeline.execute();
     assertNotNull(result);
   }

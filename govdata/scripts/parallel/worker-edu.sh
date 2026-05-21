@@ -1,49 +1,19 @@
 #!/usr/bin/env bash
-# Education ETL worker — parameterized by MODE.
 #
-# Usage:
-#   worker-edu.sh <mode> [--force]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Modes:
-#   initial   One-time setup: all 10 edu tables, full historical year range.
-#             Run once before any recurring cadence workers.
-#             K-12 history back to 1987 (CCD), higher-ed to 1986 (IPEDS).
-#             Release-window checks are skipped — initial always runs in full.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-#   annual    Annual cadence: CCD districts/schools, IPEDS (institutions,
-#             completions, financials, tuition), and College Scorecard.
-#             Each sub-run is individually gated to its known release window:
-#               CCD districts/schools        — months 7–8   (July, August)
-#               College Scorecard            — month  10    (October)
-#               IPEDS institutions/compl/tui — month  11    (November)
-#               IPEDS financials             — month   1    (January)
-#             Sub-runs outside their window are skipped instantly; others proceed.
-#             Pass --force to bypass all window checks (useful for backfill/testing).
-#             Optional: EDU_CCD_SINCE_YEAR, EDU_IPEDS_SINCE_YEAR,
-#                       EDU_IPEDS_FINANCE_SINCE_YEAR, EDU_SCORECARD_SINCE_YEAR
-#
-#   biennial  Biennial cadence: NAEP assessments and CRDC civil rights data.
-#             Each sub-run is gated to its release window:
-#               NAEP assessments             — months 1–3   (Jan–Mar; odd years only)
-#               CRDC civil rights data       — months 10–12 (Oct–Dec; even years only)
-#             Safe to run every year — sub-runs outside their window skip instantly.
-#             Pass --force to bypass all window checks.
-#             Optional: EDU_NAEP_SINCE_YEAR, EDU_CRDC_SINCE_YEAR
-#
-# Required env vars (set in .env.prod or equivalent):
-#   EDU_PARQUET_DIR         Local/S3 path for Parquet output
-#                           (falls back to ${GOVDATA_PARQUET_DIR}/edu)
-#   EDU_CACHE_DIR           Local/S3 path for raw download cache
-#                           (falls back to ${GOVDATA_CACHE_DIR}/edu)
-#
-# Optional env vars:
-#   EDU_CCD_SINCE_YEAR           4-digit year — load CCD districts/schools from this year
-#   EDU_NAEP_SINCE_YEAR          4-digit year — load NAEP scores from this year
-#   EDU_CRDC_SINCE_YEAR          4-digit year — load CRDC civil rights data from this year
-#   EDU_IPEDS_SINCE_YEAR         4-digit year — load IPEDS directory/completions/tuition from this year
-#   EDU_IPEDS_FINANCE_SINCE_YEAR 4-digit year — load IPEDS financials from this year
-#   EDU_SCORECARD_SINCE_YEAR     4-digit year — load College Scorecard tables from this year
-#   API_DATA_GOV                 api.data.gov key (required for College Scorecard tables)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -euo pipefail
 

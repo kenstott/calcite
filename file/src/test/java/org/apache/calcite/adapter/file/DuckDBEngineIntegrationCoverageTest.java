@@ -215,8 +215,8 @@ public class DuckDBEngineIntegrationCoverageTest {
       throws Exception {
     File parquetFile = new File(dir, fileName);
     // Build a SELECT that generates the desired number of rows
-    String sql = String.format(
-        "COPY (SELECT "
+    String sql =
+        String.format("COPY (SELECT "
         + "CAST(i AS INTEGER) AS id, "
         + "'name_' || CAST(i AS VARCHAR) AS name, "
         + "CAST(i AS DOUBLE) * 1.5 AS val "
@@ -242,8 +242,8 @@ public class DuckDBEngineIntegrationCoverageTest {
    */
   private void createCustomParquet(String fileName, String selectSql) throws Exception {
     File parquetFile = new File(tempDir.toFile(), fileName);
-    String sql = String.format("COPY (%s) TO '%s' (FORMAT PARQUET)",
-        selectSql, parquetFile.getAbsolutePath());
+    String sql =
+        String.format("COPY (%s) TO '%s' (FORMAT PARQUET)", selectSql, parquetFile.getAbsolutePath());
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process process = pb.start();
@@ -292,8 +292,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "product_id,product_name,price\n1,Widget,9.99\n2,Gadget,19.99\n3,Gizmo,4.99\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT product_name FROM test.products WHERE price > 5.0 ORDER BY product_name")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT product_name FROM test.products WHERE price > 5.0 ORDER BY product_name")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(2, rows.size());
         assertEquals("Gadget", rows.get(0)[0]);
@@ -307,8 +307,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "region,amount\nNorth,100\nSouth,200\nNorth,150\nSouth,250\nEast,300\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT region, COUNT(*) AS cnt FROM test.sales GROUP BY region ORDER BY region")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT region, COUNT(*) AS cnt FROM test.sales GROUP BY region ORDER BY region")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("East", rows.get(0)[0]);
@@ -339,8 +339,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "name,age,city\nAlice,30,NYC\nBob,25,LA\nCharlie,35,NYC\nDiana,28,LA\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT name FROM test.people WHERE city = 'NYC' AND age > 31")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT name FROM test.people WHERE city = 'NYC' AND age > 31")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(1, rows.size());
         assertEquals("Charlie", rows.get(0)[0]);
@@ -352,8 +352,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("colors.csv", "name,code\nred,R\ngreen,G\nblue,B\nyellow,Y\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT name FROM test.colors WHERE code = 'R' OR code = 'B' ORDER BY name")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT name FROM test.colors WHERE code = 'R' OR code = 'B' ORDER BY name")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(2, rows.size());
         assertEquals("blue", rows.get(0)[0]);
@@ -367,8 +367,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "customer,amount\nA,100\nB,200\nA,300\nB,50\nC,400\nA,200\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT customer, SUM(CAST(amount AS INTEGER)) AS total "
+           ResultSet rs =
+               stmt.executeQuery("SELECT customer, SUM(CAST(amount AS INTEGER)) AS total "
                + "FROM test.orders GROUP BY customer HAVING SUM(CAST(amount AS INTEGER)) > 300 "
                + "ORDER BY customer")) {
         List<String[]> rows = collectRows(rs);
@@ -387,8 +387,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("data.parquet", 10);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.data")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.data")) {
         assertTrue(rs.next());
         assertEquals(10, rs.getLong("cnt"));
       }
@@ -399,8 +399,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("filter_data.parquet", 50);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.filter_data WHERE id <= 10")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.filter_data WHERE id <= 10")) {
         assertTrue(rs.next());
         assertEquals(10, rs.getLong("cnt"));
       }
@@ -411,8 +411,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("sorted.parquet", 30);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT id, name FROM test.sorted ORDER BY id DESC FETCH FIRST 5 ROWS ONLY")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT id, name FROM test.sorted ORDER BY id DESC FETCH FIRST 5 ROWS ONLY")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(5, rows.size());
         assertEquals("30", rows.get(0)[0]);
@@ -426,8 +426,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // "val" not "value" (value is reserved in Oracle lex)
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT id, val FROM test.doubles WHERE val > 20.0 ORDER BY id")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT id, val FROM test.doubles WHERE val > 20.0 ORDER BY id")) {
         List<String[]> rows = collectRows(rs);
         assertTrue(rows.size() > 0, "Should have rows with val > 20.0");
         for (String[] row : rows) {
@@ -561,8 +561,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("count_test.parquet", 42);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.count_test")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.count_test")) {
         assertTrue(rs.next());
         assertEquals(42, rs.getLong("cnt"));
       }
@@ -573,8 +573,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("amounts.csv", "item,amount\nA,10\nB,20\nC,30\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT SUM(CAST(amount AS INTEGER)) AS total FROM test.amounts")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT SUM(CAST(amount AS INTEGER)) AS total FROM test.amounts")) {
         assertTrue(rs.next());
         assertEquals(60, rs.getInt("total"));
       }
@@ -585,8 +585,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("minmax.parquet", 100);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT MIN(id) AS min_id, MAX(id) AS max_id FROM test.minmax")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT MIN(id) AS min_id, MAX(id) AS max_id FROM test.minmax")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("min_id"));
         assertEquals(100, rs.getInt("max_id"));
@@ -598,8 +598,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("scores.csv", "student,score\nA,80\nB,90\nC,100\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT AVG(CAST(score AS DOUBLE)) AS avg_score FROM test.scores")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT AVG(CAST(score AS DOUBLE)) AS avg_score FROM test.scores")) {
         assertTrue(rs.next());
         double avg = rs.getDouble("avg_score");
         assertTrue(avg > 89.0 && avg < 91.0,
@@ -612,8 +612,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("tags.csv", "item,tag\n1,A\n2,B\n3,A\n4,C\n5,B\n6,A\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(DISTINCT tag) AS distinct_tags FROM test.tags")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(DISTINCT tag) AS distinct_tags FROM test.tags")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("distinct_tags"));
       }
@@ -625,8 +625,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // Use MOD() instead of % (% not allowed in Oracle lex)
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT MOD(id, 3) AS grp, SUM(val) AS total "
+           ResultSet rs =
+               stmt.executeQuery("SELECT MOD(id, 3) AS grp, SUM(val) AS total "
                + "FROM test.grouped_sums GROUP BY MOD(id, 3) ORDER BY grp")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
@@ -643,8 +643,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("staff.csv", "emp_id,emp_name,dept_id\n1,Alice,10\n2,Bob,20\n3,Charlie,10\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT s.emp_name, d.dept_name "
+           ResultSet rs =
+               stmt.executeQuery("SELECT s.emp_name, d.dept_name "
                + "FROM test.staff s "
                + "JOIN test.departments d ON s.dept_id = d.dept_id "
                + "ORDER BY s.emp_name")) {
@@ -663,8 +663,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("left_b.csv", "id,val_b\n1,P\n3,Q\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT a.id, a.val_a, b.val_b "
+           ResultSet rs =
+               stmt.executeQuery("SELECT a.id, a.val_a, b.val_b "
                + "FROM test.left_a a "
                + "LEFT JOIN test.left_b b ON a.id = b.id "
                + "ORDER BY a.id")) {
@@ -687,8 +687,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         + "SELECT 3, 'C', 300");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT f.id, l.description, f.amount "
+           ResultSet rs =
+               stmt.executeQuery("SELECT f.id, l.description, f.amount "
                + "FROM test.facts f "
                + "JOIN test.lookup l ON f.code = l.code "
                + "ORDER BY f.id")) {
@@ -706,8 +706,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "emp_id,emp_name,manager_id\n1,CEO,\n2,VP,1\n3,Dir,2\n4,Mgr,3\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT e.emp_name AS employee, m.emp_name AS manager "
+           ResultSet rs =
+               stmt.executeQuery("SELECT e.emp_name AS employee, m.emp_name AS manager "
                + "FROM test.hierarchy e "
                + "JOIN test.hierarchy m ON e.manager_id = m.emp_id "
                + "ORDER BY e.emp_id")) {
@@ -985,8 +985,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         + "{\"id\":3,\"label\":\"third\"}]");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.records")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.records")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getLong("cnt"));
       }
@@ -998,8 +998,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "[{\"id\":1,\"info\":{\"city\":\"NYC\"}},{\"id\":2,\"info\":{\"city\":\"LA\"}}]");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.nested_json")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.nested_json")) {
         assertTrue(rs.next());
         assertTrue(rs.getLong("cnt") > 0, "JSON with nested objects should be queryable");
       }
@@ -1011,8 +1011,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "[{\"id\":1,\"tags\":[\"a\",\"b\"]},{\"id\":2,\"tags\":[\"c\"]}]");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.arrays")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.arrays")) {
         assertTrue(rs.next());
         assertTrue(rs.getLong("cnt") > 0, "JSON with array fields should be queryable");
       }
@@ -1104,8 +1104,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Verify the base table is accessible
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.agg_src")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.agg_src")) {
         assertTrue(rs.next());
         assertEquals(4, rs.getLong("cnt"));
       }
@@ -1226,8 +1226,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // "val" not "value" (value is reserved in Oracle lex)
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT MIN(id) AS min_id, MAX(id) AS max_id, "
+           ResultSet rs =
+               stmt.executeQuery("SELECT MIN(id) AS min_id, MAX(id) AS max_id, "
                + "COUNT(*) AS cnt, SUM(val) AS total_val "
                + "FROM test.big_agg")) {
         assertTrue(rs.next());
@@ -1243,8 +1243,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("big_filter.parquet", 200);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.big_filter WHERE id BETWEEN 50 AND 150")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.big_filter WHERE id BETWEEN 50 AND 150")) {
         assertTrue(rs.next());
         assertEquals(101, rs.getLong("cnt"));
       }
@@ -1256,8 +1256,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // Use MOD() instead of % (% not allowed in Oracle lex)
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT MOD(id, 10) AS bucket, COUNT(*) AS cnt "
+           ResultSet rs =
+               stmt.executeQuery("SELECT MOD(id, 10) AS bucket, COUNT(*) AS cnt "
                + "FROM test.big_group GROUP BY MOD(id, 10) ORDER BY bucket")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(10, rows.size());
@@ -1276,8 +1276,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("dups.csv", "color\nred\nblue\nred\ngreen\nblue\nred\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT DISTINCT color FROM test.dups ORDER BY color")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT DISTINCT color FROM test.dups ORDER BY color")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("blue", rows.get(0)[0]);
@@ -1292,8 +1292,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("inner_t.csv", "id\n1\n3\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT val FROM test.outer_t WHERE id IN ("
+           ResultSet rs =
+               stmt.executeQuery("SELECT val FROM test.outer_t WHERE id IN ("
                + "SELECT CAST(id AS INTEGER) FROM test.inner_t"
                + ") ORDER BY val")) {
         List<String[]> rows = collectRows(rs);
@@ -1309,8 +1309,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("union_b.csv", "item\nCherry\nDate\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT item FROM test.union_a "
+           ResultSet rs =
+               stmt.executeQuery("SELECT item FROM test.union_a "
                + "UNION ALL "
                + "SELECT item FROM test.union_b "
                + "ORDER BY item")) {
@@ -1328,8 +1328,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("case_data.csv", "score\n85\n55\n70\n95\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT CASE "
+           ResultSet rs =
+               stmt.executeQuery("SELECT CASE "
                + "  WHEN CAST(score AS INTEGER) >= 90 THEN 'A' "
                + "  WHEN CAST(score AS INTEGER) >= 70 THEN 'B' "
                + "  ELSE 'C' END AS grade "
@@ -1359,8 +1359,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("names.csv", "name\nAlice\nAlbert\nBob\nAlexander\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT name FROM test.names WHERE name LIKE 'Al%' ORDER BY name")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT name FROM test.names WHERE name LIKE 'Al%' ORDER BY name")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("Albert", rows.get(0)[0]);
@@ -1374,8 +1374,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("desc_order.csv", "num\n3\n1\n4\n1\n5\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT CAST(num AS INTEGER) AS n FROM test.desc_order ORDER BY n DESC")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT CAST(num AS INTEGER) AS n FROM test.desc_order ORDER BY n DESC")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(5, rows.size());
         assertEquals("5", rows.get(0)[0]);
@@ -1388,8 +1388,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("paged.parquet", 50);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT id FROM test.paged ORDER BY id "
+           ResultSet rs =
+               stmt.executeQuery("SELECT id FROM test.paged ORDER BY id "
                + "OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(5, rows.size());
@@ -1404,8 +1404,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("xj_b.csv", "digit\n1\n2\n3\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.xj_a CROSS JOIN test.xj_b")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.xj_a CROSS JOIN test.xj_b")) {
         assertTrue(rs.next());
         assertEquals(6, rs.getLong("cnt"));  // 2 * 3
       }
@@ -1419,8 +1419,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         + "SELECT 'hey', 'there'");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT greeting, target FROM test.strings ORDER BY greeting")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT greeting, target FROM test.strings ORDER BY greeting")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("good", rows.get(0)[0]);
@@ -1445,8 +1445,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // Use "val" not "value" (value is reserved in Oracle lex)
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt, SUM(val) AS total, "
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt, SUM(val) AS total, "
                + "AVG(val) AS avg_val, MIN(val) AS min_val, MAX(val) AS max_val "
                + "FROM test.multi_agg")) {
         assertTrue(rs.next());
@@ -1463,8 +1463,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("ref_tbl.csv", "id\n1\n3\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT m.id FROM test.main_tbl m WHERE EXISTS ("
+           ResultSet rs =
+               stmt.executeQuery("SELECT m.id FROM test.main_tbl m WHERE EXISTS ("
                + "SELECT 1 FROM test.ref_tbl r WHERE r.id = m.id"
                + ") ORDER BY m.id")) {
         List<String[]> rows = collectRows(rs);
@@ -1479,8 +1479,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("nested_sub.parquet", 20);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM ("
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM ("
                + "  SELECT id FROM test.nested_sub WHERE id > 10"
                + ") sub")) {
         assertTrue(rs.next());
@@ -1494,8 +1494,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       // "result" is reserved in Oracle lex, use "res" alias
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COALESCE(a, b) AS res FROM test.coalesce_data ORDER BY res")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COALESCE(a, b) AS res FROM test.coalesce_data ORDER BY res")) {
         List<String[]> rows = collectRows(rs);
         assertTrue(rows.size() >= 2, "COALESCE should produce results");
       }
@@ -1506,8 +1506,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("concat_data.csv", "first,last\nJohn,Doe\nJane,Smith\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT first || ' ' || last AS full_name "
+           ResultSet rs =
+               stmt.executeQuery("SELECT first || ' ' || last AS full_name "
                + "FROM test.concat_data ORDER BY full_name")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(2, rows.size());
@@ -1521,8 +1521,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("cast_data.csv", "str_num\n42\n73\n100\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT SUM(CAST(str_num AS INTEGER)) AS total FROM test.cast_data")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT SUM(CAST(str_num AS INTEGER)) AS total FROM test.cast_data")) {
         assertTrue(rs.next());
         assertEquals(215, rs.getInt("total"));
       }
@@ -1531,8 +1531,8 @@ public class DuckDBEngineIntegrationCoverageTest {
 
   @Test void testCustomSchemaName() throws Exception {
     createCsv("data.csv", "x\n1\n2\n");
-    try (Connection conn = createDuckDBConnectionWithSchema("myschema",
-        tempDir.toString(), Collections.<String, Object>emptyMap())) {
+    try (Connection conn =
+        createDuckDBConnectionWithSchema("myschema", tempDir.toString(), Collections.<String, Object>emptyMap())) {
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS cnt FROM myschema.data")) {
         assertTrue(rs.next());
@@ -1546,8 +1546,8 @@ public class DuckDBEngineIntegrationCoverageTest {
         "region,product,sales\nN,A,10\nN,B,20\nS,A,30\nS,B,40\nN,A,15\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT region, product, SUM(CAST(sales AS INTEGER)) AS total "
+           ResultSet rs =
+               stmt.executeQuery("SELECT region, product, SUM(CAST(sales AS INTEGER)) AS total "
                + "FROM test.multi_grp GROUP BY region, product ORDER BY region, product")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(4, rows.size());
@@ -1562,8 +1562,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("between_data.parquet", 100);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.between_data "
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.between_data "
                + "WHERE id BETWEEN 20 AND 30")) {
         assertTrue(rs.next());
         assertEquals(11, rs.getLong("cnt"));
@@ -1575,8 +1575,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("notin_data.csv", "val\nA\nB\nC\nD\nE\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT val FROM test.notin_data WHERE val NOT IN ('B', 'D') ORDER BY val")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT val FROM test.notin_data WHERE val NOT IN ('B', 'D') ORDER BY val")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("A", rows.get(0)[0]);
@@ -1590,8 +1590,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("nullable.csv", "a,b\n1,x\n2,\n3,z\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT a FROM test.nullable WHERE b IS NULL OR b = ''")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT a FROM test.nullable WHERE b IS NULL OR b = ''")) {
         List<String[]> rows = collectRows(rs);
         assertTrue(rows.size() >= 1, "Should find rows with null/empty b");
       }
@@ -1683,11 +1683,12 @@ public class DuckDBEngineIntegrationCoverageTest {
       longVal.append("abcdefghij");
     }
     String bigString = longVal.toString();
-    createCsv("long_str.csv", "data\n" + bigString + "\nshort\n");
+    createCsv("long_str.csv", "data\n"
+  + bigString + "\nshort\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT data FROM test.long_str ORDER BY data")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT data FROM test.long_str ORDER BY data")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(2, rows.size());
         assertEquals(500, rows.get(0)[0].length());
@@ -1698,13 +1699,14 @@ public class DuckDBEngineIntegrationCoverageTest {
   @Test void testSchemaWithManyTables() throws Exception {
     // Create 10 CSV files to test schema discovery with many tables
     for (int i = 0; i < 10; i++) {
-      createCsv("table_" + i + ".csv", "x\n" + i + "\n");
+      createCsv("table_" + i + ".csv", "x\n"
+  + i + "\n");
     }
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement()) {
         for (int i = 0; i < 10; i++) {
-          try (ResultSet rs = stmt.executeQuery(
-              "SELECT x FROM test.table_" + i)) {
+          try (ResultSet rs =
+              stmt.executeQuery("SELECT x FROM test.table_" + i)) {
             assertTrue(rs.next(), "table_" + i + " should be queryable");
             assertEquals(String.valueOf(i), rs.getString("x"));
           }
@@ -1743,8 +1745,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createParquetViaDuckDB("double_agg.parquet", 10);
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT SUM(val) AS s, AVG(val) AS a FROM test.double_agg")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT SUM(val) AS s, AVG(val) AS a FROM test.double_agg")) {
         assertTrue(rs.next());
         assertTrue(rs.getDouble("s") > 0, "SUM of doubles should be positive");
         assertTrue(rs.getDouble("a") > 0, "AVG of doubles should be positive");
@@ -1756,8 +1758,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("single_col.csv", "only_col\nrow1\nrow2\nrow3\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT only_col FROM test.single_col ORDER BY only_col")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT only_col FROM test.single_col ORDER BY only_col")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(3, rows.size());
         assertEquals("row1", rows.get(0)[0]);
@@ -1775,8 +1777,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("hundred_rows.csv", sb.toString());
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM test.hundred_rows")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM test.hundred_rows")) {
         assertTrue(rs.next());
         assertEquals(100, rs.getLong("cnt"));
       }
@@ -1801,8 +1803,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     createCsv("alias_test.csv", "x,y\n10,20\n30,40\n");
     try (Connection conn = createDuckDBConnection(tempDir.toString())) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT t.x AS col_x, t.y AS col_y "
+           ResultSet rs =
+               stmt.executeQuery("SELECT t.x AS col_x, t.y AS col_y "
                + "FROM test.alias_test t ORDER BY col_x")) {
         List<String[]> rows = collectRows(rs);
         assertEquals(2, rows.size());

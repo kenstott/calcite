@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,7 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -541,8 +539,8 @@ public class EtlPipelineIntegrationCoverageTest {
   @Test void testPipelineConstructorWithTracker() {
     EtlPipelineConfig config = httpConfig("ctor_trk", rangeDimension("y", 2020, 2020));
     StorageProvider sp = localStorage();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, IncrementalTracker.NOOP);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, IncrementalTracker.NOOP);
     assertNotNull(pipeline);
   }
 
@@ -552,8 +550,8 @@ public class EtlPipelineIntegrationCoverageTest {
     CountingDataWriter writer = new CountingDataWriter();
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(row("a", "1"));
-    EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
     assertNotNull(pipeline);
   }
 
@@ -561,8 +559,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("ctor_src", rangeDimension("y", 2020, 2020));
     StorageProvider sp = localStorage();
     StorageProvider srcSp = localStorage();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, srcSp, tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, srcSp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
     assertNotNull(pipeline);
   }
 
@@ -570,8 +568,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("ctor_opdir", rangeDimension("y", 2020, 2020));
     StorageProvider sp = localStorage();
     String opDir = tempDir.resolve("opdir").toString();
-    EtlPipeline pipeline = new EtlPipeline(config, sp, null, tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null, opDir);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, opDir);
     assertNotNull(pipeline);
   }
 
@@ -590,8 +588,8 @@ public class EtlPipelineIntegrationCoverageTest {
     CountingDataWriter writer = new CountingDataWriter();
     TrackingProgressListener listener = new TrackingProgressListener();
 
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        listener, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), listener, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
 
     EtlResult result = pipeline.execute();
 
@@ -627,8 +625,8 @@ public class EtlPipelineIntegrationCoverageTest {
     data.add(row("k", "v"));
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
 
     EtlResult result = pipeline.execute();
 
@@ -648,8 +646,8 @@ public class EtlPipelineIntegrationCoverageTest {
     data.add(row("region", "X", "count", "100"));
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
 
     EtlResult result = pipeline.execute();
 
@@ -678,8 +676,8 @@ public class EtlPipelineIntegrationCoverageTest {
     data.add(row("k", "v"));
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
 
     EtlResult result = pipeline.execute();
 
@@ -697,8 +695,8 @@ public class EtlPipelineIntegrationCoverageTest {
     DataProvider nullProvider = DataProvider.DEFAULT; // returns null
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, nullProvider, writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, nullProvider, writer);
 
     // This will fail because HTTP source tries to connect
     EtlResult result = pipeline.execute();
@@ -712,8 +710,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("fail_dp", dims);
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, failingDataProvider("HTTP 404 Not Found"), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, failingDataProvider("HTTP 404 Not Found"), writer);
 
     EtlResult result = pipeline.execute();
     // With default error handling (SKIP for 404), should not throw
@@ -739,8 +737,8 @@ public class EtlPipelineIntegrationCoverageTest {
         .build();
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, failingDataProvider("HTTP 401 Unauthorized"), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, failingDataProvider("HTTP 401 Unauthorized"), writer);
 
     // Auth FAIL action causes the pipeline to throw
     EtlResult result = pipeline.execute();
@@ -752,8 +750,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("transient", dims);
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, failingDataProvider("HTTP 429 Too Many Requests"), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, failingDataProvider("HTTP 429 Too Many Requests"), writer);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -766,8 +764,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("server_err", dims);
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, failingDataProvider("HTTP 500 Internal Server Error"), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, failingDataProvider("HTTP 500 Internal Server Error"), writer);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -783,8 +781,8 @@ public class EtlPipelineIntegrationCoverageTest {
 
     // The pass-through writer returns -1, so pipeline tries the built-in MaterializationWriter.
     // This will fail because no real writer is configured, but it exercises the fallback code path
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), passThroughWriter());
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), passThroughWriter());
 
     EtlResult result = pipeline.execute();
     // This should fail since the built-in MaterializationWriter is not properly set up
@@ -807,8 +805,8 @@ public class EtlPipelineIntegrationCoverageTest {
         .build();
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, null, writer);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -830,8 +828,8 @@ public class EtlPipelineIntegrationCoverageTest {
         .build();
 
     // No dataWriter - document source should log warning and return 0 rows
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -851,8 +849,8 @@ public class EtlPipelineIntegrationCoverageTest {
     data.add(row("k", "v2"));
 
     CountingDataWriter writer = new CountingDataWriter();
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, fixedDataProvider(data), writer);
 
     EtlResult result = pipeline.execute();
 
@@ -916,8 +914,8 @@ public class EtlPipelineIntegrationCoverageTest {
   @Test void testDetermineErrorActionAllCodes() throws Exception {
     EtlPipelineConfig config = httpConfig("err_act", rangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig defaults = EtlPipelineConfig.ErrorHandlingConfig.defaults();
@@ -960,11 +958,11 @@ public class EtlPipelineIntegrationCoverageTest {
   @Test void testVerifyDataExistsNoMaterialize() throws Exception {
     // Config with no materialize should return true
     EtlPipelineConfig config = hooksOnlyConfig("no_mat");
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
 
-    Method m = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     m.setAccessible(true);
     Boolean result = (Boolean) m.invoke(pipeline, "no_mat", config);
     assertTrue(result);
@@ -976,15 +974,15 @@ public class EtlPipelineIntegrationCoverageTest {
     Files.createDirectories(dataDir);
     Files.write(dataDir.resolve("part-0.parquet"), new byte[]{1, 2, 3});
 
-    EtlPipelineConfig config = httpConfig("test_table", null,
-        MaterializeConfig.Format.PARQUET, null);
+    EtlPipelineConfig config =
+        httpConfig("test_table", null, MaterializeConfig.Format.PARQUET, null);
 
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(),
-        tempDir.resolve("verify_parquet").toString(),
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.resolve("verify_parquet").toString(),
         null, IncrementalTracker.NOOP, null, null);
 
-    Method m = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     m.setAccessible(true);
     Boolean result = (Boolean) m.invoke(pipeline, "test_table", config);
     // Result depends on the directory check
@@ -1869,8 +1867,8 @@ public class EtlPipelineIntegrationCoverageTest {
     assertTrue(combos.get(0).isEmpty());
 
     // Same for empty map
-    List<Map<String, String>> combos2 = iterator.expand(
-        new LinkedHashMap<String, DimensionConfig>());
+    List<Map<String, String>> combos2 =
+        iterator.expand(new LinkedHashMap<String, DimensionConfig>());
     assertNotNull(combos2);
     assertEquals(1, combos2.size());
     assertTrue(combos2.get(0).isEmpty());
@@ -2041,8 +2039,8 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("abort_test", dims);
 
     // All batches fail
-    EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString(),
-        null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, localStorage(), tempDir.toString(), null, IncrementalTracker.NOOP,
         failingDataProvider("HTTP 500 Server Error"), new CountingDataWriter());
 
     EtlResult result = pipeline.execute();
@@ -2059,11 +2057,11 @@ public class EtlPipelineIntegrationCoverageTest {
   @Test void testVerifyDataExistsNullStorage() throws Exception {
     EtlPipelineConfig config = httpConfig("no_storage", rangeDimension("y", 2020, 2020));
     // Use null storageProvider
-    EtlPipeline pipeline = new EtlPipeline(config, null, tempDir.toString(),
-        null, IncrementalTracker.NOOP, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
 
-    Method m = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     m.setAccessible(true);
     Boolean result = (Boolean) m.invoke(pipeline, "no_storage", config);
     // Null storage provider should return true (can't verify)
@@ -2075,14 +2073,14 @@ public class EtlPipelineIntegrationCoverageTest {
   // =========================================================================
 
   @Test void testDataProviderDefault() throws IOException {
-    Iterator<Map<String, Object>> result = DataProvider.DEFAULT.fetch(
-        httpConfig("t", null), Collections.<String, String>emptyMap());
+    Iterator<Map<String, Object>> result =
+        DataProvider.DEFAULT.fetch(httpConfig("t", null), Collections.<String, String>emptyMap());
     assertNull(result);
   }
 
   @Test void testDataWriterDefault() throws IOException {
-    long result = DataWriter.DEFAULT.write(
-        httpConfig("t", null), Collections.<Map<String, Object>>emptyList().iterator(),
+    long result =
+        DataWriter.DEFAULT.write(httpConfig("t", null), Collections.<Map<String, Object>>emptyList().iterator(),
         Collections.<String, String>emptyMap());
     assertEquals(-1, result);
   }

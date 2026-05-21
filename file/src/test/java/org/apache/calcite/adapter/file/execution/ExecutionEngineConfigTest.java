@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +39,7 @@ public class ExecutionEngineConfigTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ExecutionEngineConfigTest.class);
 
-  @Test
-  public void testDefaultConstructorUsesDefaults() {
+  @Test public void testDefaultConstructorUsesDefaults() {
     ExecutionEngineConfig config = new ExecutionEngineConfig();
     assertNotNull(config.getEngineType());
     assertEquals(ExecutionEngineConfig.DEFAULT_BATCH_SIZE, config.getBatchSize());
@@ -53,8 +51,7 @@ public class ExecutionEngineConfigTest {
     LOGGER.debug("Default config engine type: {}", config.getEngineType());
   }
 
-  @Test
-  public void testTwoArgConstructorSetsEngineAndBatchSize() {
+  @Test public void testTwoArgConstructorSetsEngineAndBatchSize() {
     ExecutionEngineConfig config = new ExecutionEngineConfig("linq4j", 4096);
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.LINQ4J, config.getEngineType());
     assertEquals(4096, config.getBatchSize());
@@ -63,8 +60,7 @@ public class ExecutionEngineConfigTest {
     assertFalse(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testThreeArgConstructorSetsMaterializedViewPath() {
+  @Test public void testThreeArgConstructorSetsMaterializedViewPath() {
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("parquet", 2048, "/tmp/views");
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.PARQUET, config.getEngineType());
@@ -73,8 +69,7 @@ public class ExecutionEngineConfigTest {
     assertTrue(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testFourArgConstructorSetsMemoryThreshold() {
+  @Test public void testFourArgConstructorSetsMemoryThreshold() {
     long customMemory = 128L * 1024 * 1024;
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("arrow", 1024, customMemory, "/tmp/views");
@@ -85,8 +80,7 @@ public class ExecutionEngineConfigTest {
     assertTrue(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testFiveArgConstructorSetsDuckDBConfig() {
+  @Test public void testFiveArgConstructorSetsDuckDBConfig() {
     DuckDBConfig duckdbConfig = new DuckDBConfig();
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("duckdb", 2048,
@@ -96,8 +90,7 @@ public class ExecutionEngineConfigTest {
     assertFalse(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testSixArgConstructorSetsParquetCacheDirectory() {
+  @Test public void testSixArgConstructorSetsParquetCacheDirectory() {
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("parquet", 2048,
             ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD,
@@ -107,8 +100,7 @@ public class ExecutionEngineConfigTest {
     assertTrue(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testNullMaterializedViewPathSetsUseCustomStoragePathFalse() {
+  @Test public void testNullMaterializedViewPathSetsUseCustomStoragePathFalse() {
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("parquet", 2048,
             ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD, null);
@@ -116,16 +108,14 @@ public class ExecutionEngineConfigTest {
     assertFalse(config.hasCustomStoragePath());
   }
 
-  @Test
-  public void testNullDuckDBConfigCreatesDefault() {
+  @Test public void testNullDuckDBConfigCreatesDefault() {
     ExecutionEngineConfig config =
         new ExecutionEngineConfig("duckdb", 2048,
             ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD, null, null);
     assertNotNull(config.getDuckDBConfig());
   }
 
-  @Test
-  public void testParseAllValidEngineTypes() {
+  @Test public void testParseAllValidEngineTypes() {
     String[] engines = ExecutionEngineConfig.getAvailableEngineTypes();
     for (String engine : engines) {
       ExecutionEngineConfig config = new ExecutionEngineConfig(engine, 2048);
@@ -135,8 +125,7 @@ public class ExecutionEngineConfigTest {
     }
   }
 
-  @Test
-  public void testParseEngineTypeIsCaseInsensitive() {
+  @Test public void testParseEngineTypeIsCaseInsensitive() {
     ExecutionEngineConfig lower = new ExecutionEngineConfig("duckdb", 2048);
     ExecutionEngineConfig upper = new ExecutionEngineConfig("DUCKDB", 2048);
     ExecutionEngineConfig mixed = new ExecutionEngineConfig("DuckDB", 2048);
@@ -144,14 +133,12 @@ public class ExecutionEngineConfigTest {
     assertEquals(lower.getEngineType(), mixed.getEngineType());
   }
 
-  @Test
-  public void testInvalidEngineTypeThrowsIllegalArgument() {
+  @Test public void testInvalidEngineTypeThrowsIllegalArgument() {
     assertThrows(IllegalArgumentException.class,
         () -> new ExecutionEngineConfig("invalid_engine", 2048));
   }
 
-  @Test
-  public void testInvalidEngineTypeExceptionContainsValidOptions() {
+  @Test public void testInvalidEngineTypeExceptionContainsValidOptions() {
     try {
       new ExecutionEngineConfig("nonexistent", 2048);
     } catch (IllegalArgumentException e) {
@@ -163,8 +150,7 @@ public class ExecutionEngineConfigTest {
     }
   }
 
-  @Test
-  public void testGetAvailableEngineTypes() {
+  @Test public void testGetAvailableEngineTypes() {
     String[] types = ExecutionEngineConfig.getAvailableEngineTypes();
     assertNotNull(types);
     assertTrue(types.length >= 4,
@@ -188,24 +174,20 @@ public class ExecutionEngineConfigTest {
     assertTrue(hasLinq4j, "Should include linq4j");
   }
 
-  @Test
-  public void testDefaultBatchSize() {
+  @Test public void testDefaultBatchSize() {
     assertEquals(2048, ExecutionEngineConfig.DEFAULT_BATCH_SIZE);
   }
 
-  @Test
-  public void testDefaultMemoryThreshold() {
+  @Test public void testDefaultMemoryThreshold() {
     assertEquals(64L * 1024 * 1024, ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD);
   }
 
-  @Test
-  public void testDefaultExecutionEngine() {
+  @Test public void testDefaultExecutionEngine() {
     assertNotNull(ExecutionEngineConfig.DEFAULT_EXECUTION_ENGINE);
     assertEquals("parquet", ExecutionEngineConfig.DEFAULT_EXECUTION_ENGINE);
   }
 
-  @Test
-  public void testAllEngineTypeEnumValues() {
+  @Test public void testAllEngineTypeEnumValues() {
     ExecutionEngineConfig.ExecutionEngineType[] values =
         ExecutionEngineConfig.ExecutionEngineType.values();
     assertTrue(values.length >= 8,
@@ -222,27 +204,23 @@ public class ExecutionEngineConfigTest {
     assertNotNull(ExecutionEngineConfig.ExecutionEngineType.valueOf("CLICKHOUSE"));
   }
 
-  @Test
-  public void testVectorizedEngineConfig() {
+  @Test public void testVectorizedEngineConfig() {
     ExecutionEngineConfig config = new ExecutionEngineConfig("vectorized", 512);
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.VECTORIZED, config.getEngineType());
     assertEquals(512, config.getBatchSize());
   }
 
-  @Test
-  public void testTrinoEngineConfig() {
+  @Test public void testTrinoEngineConfig() {
     ExecutionEngineConfig config = new ExecutionEngineConfig("trino", 8192);
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.TRINO, config.getEngineType());
   }
 
-  @Test
-  public void testSparkEngineConfig() {
+  @Test public void testSparkEngineConfig() {
     ExecutionEngineConfig config = new ExecutionEngineConfig("spark", 4096);
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.SPARK, config.getEngineType());
   }
 
-  @Test
-  public void testClickhouseEngineConfig() {
+  @Test public void testClickhouseEngineConfig() {
     ExecutionEngineConfig config = new ExecutionEngineConfig("clickhouse", 4096);
     assertEquals(ExecutionEngineConfig.ExecutionEngineType.CLICKHOUSE, config.getEngineType());
   }

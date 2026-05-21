@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# Economic Reference Data ETL worker.
 #
-# Single-mode: runs all 7 reference tables (jolts_industries, jolts_dataelements,
-# bls_geographies, naics_sectors, nipa_tables, regional_linecodes, fred_series).
-# Release windows and TTL are defined per-table in econ-reference-schema.yaml —
-# each table gates its own refresh without a mode parameter.
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Usage:
-#   worker-econ-reference.sh [--force]
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Required env vars (set in .env.prod or equivalent):
-#   GOVDATA_PARQUET_DIR     Local/S3 path for Parquet output
-#   GOVDATA_CACHE_DIR       Local/S3 path for raw download cache
-#
-# Optional env vars:
-#   BEA_API_KEY             BEA API key (required for nipa_tables, regional_linecodes)
-#   FRED_API_KEY            FRED API key (required for fred_series)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -euo pipefail
 

@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-import org.apache.calcite.adapter.file.statistics.HLLSketchCache;
 import org.apache.calcite.adapter.file.statistics.HyperLogLogSketch;
 import org.apache.calcite.adapter.file.statistics.StatisticsCache;
 import org.apache.calcite.jdbc.CalciteConnection;

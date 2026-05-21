@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,8 +61,8 @@ class FileSourceTest {
   }
 
   @Test void testReadExcelFile() throws IOException {
-    Path xlsxFile = createTestExcel("test.xlsx", "Sheet1",
-        new String[]{"id", "name", "year"},
+    Path xlsxFile =
+        createTestExcel("test.xlsx", "Sheet1", new String[]{"id", "name", "year"},
         new Object[][]{
             {1L, "Alice", 2020L},
             {2L, "Bob", 2021L},
@@ -108,8 +107,8 @@ class FileSourceTest {
   }
 
   @Test void testReadExcelMissingSheet() throws IOException {
-    Path xlsxFile = createTestExcel("test.xlsx", "Sheet1",
-        new String[]{"col1"}, new Object[][]{{1L}});
+    Path xlsxFile =
+        createTestExcel("test.xlsx", "Sheet1", new String[]{"col1"}, new Object[][]{{1L}});
 
     FileSourceConfig config = FileSourceConfig.builder()
         .path(xlsxFile.toString())
@@ -207,8 +206,8 @@ class FileSourceTest {
   }
 
   @Test void testAutoDetectFormatXlsx() throws IOException {
-    Path xlsxFile = createTestExcel("auto.xlsx", "Sheet1",
-        new String[]{"col1"}, new Object[][]{{1L}});
+    Path xlsxFile =
+        createTestExcel("auto.xlsx", "Sheet1", new String[]{"col1"}, new Object[][]{{1L}});
 
     FileSourceConfig config = FileSourceConfig.builder()
         .path(xlsxFile.toString())

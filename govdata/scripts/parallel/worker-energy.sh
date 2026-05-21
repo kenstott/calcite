@@ -1,33 +1,19 @@
 #!/usr/bin/env bash
-# Energy ETL worker — parameterized by MODE.
 #
-# Usage:
-#   worker-energy.sh <mode> [--force]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Modes:
-#   initial   One-time backfill: all 11 energy tables from GOVDATA_START_YEAR (default 2010).
-#             Run once on first setup before enabling recurring cadence workers.
-#             Release-window checks are skipped — initial always runs in full.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-#   weekly    Weekly cadence: natural gas storage + petroleum stocks.
-#             Both series are published weekly by EIA. Window checks are applied;
-#             pass --force to bypass.
-#
-#   monthly   Monthly cadence: electricity generation, electricity prices,
-#             capacity changes, fossil fuel production, refinery operations,
-#             crude oil imports.
-#
-#   annual    Annual cadence: utility survey (EIA-861), power plant inventory (EIA-860),
-#             state energy consumption (SEDS), coal mines (MSHA).
-#
-# Required env vars (set in .env.prod or equivalent):
-#   GOVDATA_PARQUET_DIR     Root Parquet directory (energy data lands in energy subdir)
-#   GOVDATA_CACHE_DIR       Root cache directory
-#   GOVDATA_START_YEAR      Historical start year for all modes (default 2010)
-#
-# Optional env vars:
-#   ENERGY_EIA_API_KEY      EIA API key for higher rate limits (recommended; free at eia.gov/opendata)
-#   ENERGY_BULK_TESTS       Set to "true" to enable the utility_scorecard view run after annual load
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -euo pipefail
 

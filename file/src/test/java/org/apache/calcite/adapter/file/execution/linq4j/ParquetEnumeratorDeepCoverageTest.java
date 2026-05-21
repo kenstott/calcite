@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,8 +48,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for detectFileFormat
   // ====================================================================
 
-  @Test
-  void testDetectFileFormatCsv() throws Exception {
+  @Test void testDetectFileFormatCsv() throws Exception {
     Path csvFile = tempDir.resolve("test.csv");
     Files.write(csvFile, Collections.singletonList("a,b,c"));
     Source source = Sources.of(csvFile.toFile());
@@ -58,8 +56,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // Verify it initialized as CSV (streaming format)
       assertNotNull(enumerator);
@@ -68,8 +66,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testDetectFileFormatJson() throws Exception {
+  @Test void testDetectFileFormatJson() throws Exception {
     Path jsonFile = tempDir.resolve("test.json");
     Files.write(jsonFile, Collections.singletonList("[{\"a\":1}]"));
     Source source = Sources.of(jsonFile.toFile());
@@ -101,8 +98,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testDetectFileFormatYaml() throws Exception {
+  @Test void testDetectFileFormatYaml() throws Exception {
     Path yamlFile = tempDir.resolve("test.yaml");
     Files.write(yamlFile, Collections.singletonList("key: value"));
     Source source = Sources.of(yamlFile.toFile());
@@ -133,8 +129,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testDetectFileFormatYml() throws Exception {
+  @Test void testDetectFileFormatYml() throws Exception {
     Path ymlFile = tempDir.resolve("test.yml");
     Files.write(ymlFile, Collections.singletonList("key: value"));
     Source source = Sources.of(ymlFile.toFile());
@@ -169,8 +164,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for constructors (various parameter combinations)
   // ====================================================================
 
-  @Test
-  void testConstructorWithBatchSize() throws Exception {
+  @Test void testConstructorWithBatchSize() throws Exception {
     Path csvFile = tempDir.resolve("batch_test.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -178,8 +172,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected, 500);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected, 500);
     try {
       assertNotNull(enumerator);
     } finally {
@@ -187,8 +181,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testConstructorWithColumnNameCasing() throws Exception {
+  @Test void testConstructorWithColumnNameCasing() throws Exception {
     Path csvFile = tempDir.resolve("casing_test.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -196,8 +189,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected, "TO_LOWER");
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected, "TO_LOWER");
     try {
       assertNotNull(enumerator);
     } finally {
@@ -205,8 +198,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testConstructorWithBatchSizeAndCasing() throws Exception {
+  @Test void testConstructorWithBatchSizeAndCasing() throws Exception {
     Path csvFile = tempDir.resolve("both_test.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -214,8 +206,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected, 100, "TO_UPPER");
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected, 100, "TO_UPPER");
     try {
       assertNotNull(enumerator);
     } finally {
@@ -223,8 +215,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testConstructorWithMemoryThreshold() throws Exception {
+  @Test void testConstructorWithMemoryThreshold() throws Exception {
     Path csvFile = tempDir.resolve("memory_test.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -232,8 +223,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected, 100, 1024 * 1024);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected, 100, 1024 * 1024);
     try {
       assertNotNull(enumerator);
     } finally {
@@ -241,8 +232,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testConstructorFullParams() throws Exception {
+  @Test void testConstructorFullParams() throws Exception {
     Path csvFile = tempDir.resolve("full_test.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -250,8 +240,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected, 100, 1024 * 1024, "UNCHANGED");
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected, 100, 1024 * 1024, "UNCHANGED");
     try {
       assertNotNull(enumerator);
     } finally {
@@ -263,8 +253,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for getMemoryUsage
   // ====================================================================
 
-  @Test
-  void testGetMemoryUsageBeforeMoveNext() throws Exception {
+  @Test void testGetMemoryUsageBeforeMoveNext() throws Exception {
     Path csvFile = tempDir.resolve("mem_usage.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -272,8 +261,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // Before loading any batch, memory should be 0
       assertEquals(0, enumerator.getMemoryUsage());
@@ -286,8 +275,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for getEstimatedTotalSize
   // ====================================================================
 
-  @Test
-  void testGetEstimatedTotalSizeUnknown() throws Exception {
+  @Test void testGetEstimatedTotalSizeUnknown() throws Exception {
     Path csvFile = tempDir.resolve("est_size.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -295,8 +283,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // Unknown before processing
       assertEquals(-1, enumerator.getEstimatedTotalSize());
@@ -309,8 +297,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for getTotalSpillSize
   // ====================================================================
 
-  @Test
-  void testGetTotalSpillSizeNoSpills() throws Exception {
+  @Test void testGetTotalSpillSizeNoSpills() throws Exception {
     Path csvFile = tempDir.resolve("no_spills.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -318,8 +305,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       assertEquals(0, enumerator.getTotalSpillSize());
     } finally {
@@ -331,8 +318,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for cleanupOldSpillFiles
   // ====================================================================
 
-  @Test
-  void testCleanupOldSpillFilesNoSpills() throws Exception {
+  @Test void testCleanupOldSpillFilesNoSpills() throws Exception {
     Path csvFile = tempDir.resolve("cleanup_spills.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -340,8 +326,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // Should not throw when there are no spill files
       enumerator.cleanupOldSpillFiles(5);
@@ -354,8 +340,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for getStreamingStats
   // ====================================================================
 
-  @Test
-  void testGetStreamingStats() throws Exception {
+  @Test void testGetStreamingStats() throws Exception {
     Path csvFile = tempDir.resolve("stats.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -363,8 +348,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       ParquetEnumerator.StreamingStats stats = enumerator.getStreamingStats();
       assertNotNull(stats);
@@ -379,42 +364,38 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for StreamingStats
   // ====================================================================
 
-  @Test
-  void testStreamingStatsSpillRatio() {
-    ParquetEnumerator.StreamingStats stats = new ParquetEnumerator.StreamingStats(
-        5, 10, 1024, 100, true, 3, 5000);
+  @Test void testStreamingStatsSpillRatio() {
+    ParquetEnumerator.StreamingStats stats =
+        new ParquetEnumerator.StreamingStats(5, 10, 1024, 100, true, 3, 5000);
     assertEquals(0.3, stats.getSpillRatio(), 0.01);
   }
 
-  @Test
-  void testStreamingStatsSpillRatioZeroBatches() {
-    ParquetEnumerator.StreamingStats stats = new ParquetEnumerator.StreamingStats(
-        0, 0, 0, 0, false, 0, 0);
+  @Test void testStreamingStatsSpillRatioZeroBatches() {
+    ParquetEnumerator.StreamingStats stats =
+        new ParquetEnumerator.StreamingStats(0, 0, 0, 0, false, 0, 0);
     assertEquals(0.0, stats.getSpillRatio(), 0.01);
   }
 
-  @Test
-  void testStreamingStatsSpillSizeFormatted() {
+  @Test void testStreamingStatsSpillSizeFormatted() {
     // Bytes
-    ParquetEnumerator.StreamingStats bytesStats = new ParquetEnumerator.StreamingStats(
-        1, 1, 0, 0, true, 0, 500);
+    ParquetEnumerator.StreamingStats bytesStats =
+        new ParquetEnumerator.StreamingStats(1, 1, 0, 0, true, 0, 500);
     assertEquals("500B", bytesStats.getSpillSizeFormatted());
 
     // Kilobytes
-    ParquetEnumerator.StreamingStats kbStats = new ParquetEnumerator.StreamingStats(
-        1, 1, 0, 0, true, 0, 5000);
+    ParquetEnumerator.StreamingStats kbStats =
+        new ParquetEnumerator.StreamingStats(1, 1, 0, 0, true, 0, 5000);
     assertEquals("4KB", kbStats.getSpillSizeFormatted());
 
     // Megabytes
-    ParquetEnumerator.StreamingStats mbStats = new ParquetEnumerator.StreamingStats(
-        1, 1, 0, 0, true, 0, 5 * 1024 * 1024);
+    ParquetEnumerator.StreamingStats mbStats =
+        new ParquetEnumerator.StreamingStats(1, 1, 0, 0, true, 0, 5 * 1024 * 1024);
     assertEquals("5MB", mbStats.getSpillSizeFormatted());
   }
 
-  @Test
-  void testStreamingStatsToString() {
-    ParquetEnumerator.StreamingStats stats = new ParquetEnumerator.StreamingStats(
-        5, 10, 1024 * 1024, 100, true, 3, 5000);
+  @Test void testStreamingStatsToString() {
+    ParquetEnumerator.StreamingStats stats =
+        new ParquetEnumerator.StreamingStats(5, 10, 1024 * 1024, 100, true, 3, 5000);
     String str = stats.toString();
     assertNotNull(str);
     assertTrue(str.contains("batches=5/10"));
@@ -427,8 +408,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for ColumnStats
   // ====================================================================
 
-  @Test
-  void testColumnStatsEmpty() throws Exception {
+  @Test void testColumnStatsEmpty() throws Exception {
     Path csvFile = tempDir.resolve("colstats.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -436,8 +416,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // Before loading data
       ParquetEnumerator.ColumnStats stats = enumerator.getColumnStats(0);
@@ -450,8 +430,7 @@ public class ParquetEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testColumnStatsOutOfBounds() throws Exception {
+  @Test void testColumnStatsOutOfBounds() throws Exception {
     Path csvFile = tempDir.resolve("colstats_oob.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -459,8 +438,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       ParquetEnumerator.ColumnStats stats = enumerator.getColumnStats(999);
       assertEquals(0, stats.nullCount);
@@ -473,8 +452,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for columnSum
   // ====================================================================
 
-  @Test
-  void testColumnSumBeforeLoad() throws Exception {
+  @Test void testColumnSumBeforeLoad() throws Exception {
     Path csvFile = tempDir.resolve("colsum.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -482,8 +460,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       assertEquals(0.0, enumerator.columnSum(0), 0.001);
       assertEquals(0.0, enumerator.columnSum(999), 0.001);
@@ -496,8 +474,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for reset
   // ====================================================================
 
-  @Test
-  void testReset() throws Exception {
+  @Test void testReset() throws Exception {
     Path csvFile = tempDir.resolve("reset.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -505,8 +482,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       enumerator.reset();
       assertEquals(0, enumerator.getMemoryUsage());
@@ -519,8 +496,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for current before moveNext
   // ====================================================================
 
-  @Test
-  void testCurrentBeforeMoveNext() throws Exception {
+  @Test void testCurrentBeforeMoveNext() throws Exception {
     Path csvFile = tempDir.resolve("current.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -528,8 +504,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       // current() before moveNext should return null
       assertNull(enumerator.current());
@@ -542,8 +518,7 @@ public class ParquetEnumeratorDeepCoverageTest {
   // Tests for cancel flag
   // ====================================================================
 
-  @Test
-  void testCancelFlag() throws Exception {
+  @Test void testCancelFlag() throws Exception {
     Path csvFile = tempDir.resolve("cancel.csv");
     Files.write(csvFile, Collections.singletonList("a,b"));
     Source source = Sources.of(csvFile.toFile());
@@ -551,8 +526,8 @@ public class ParquetEnumeratorDeepCoverageTest {
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     int[] projected = new int[]{0};
 
-    ParquetEnumerator<?> enumerator = new ParquetEnumerator<Object>(
-        source, cancel, fieldTypes, projected);
+    ParquetEnumerator<?> enumerator =
+        new ParquetEnumerator<Object>(source, cancel, fieldTypes, projected);
     try {
       assertFalse(enumerator.moveNext());
     } finally {

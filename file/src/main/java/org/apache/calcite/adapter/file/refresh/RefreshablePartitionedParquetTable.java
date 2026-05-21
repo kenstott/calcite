@@ -814,8 +814,8 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
         RelDataTypeFactory.Builder builder = typeFactory.builder();
         for (PartitionedTableConfig.TableColumn col : config.getColumns()) {
           SqlTypeName sqlType = yamlTypeToSqlType(col.getType());
-          RelDataType colType = typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(sqlType), col.isNullable());
+          RelDataType colType =
+              typeFactory.createTypeWithNullability(typeFactory.createSqlType(sqlType), col.isNullable());
           builder.add(col.getName(), colType);
         }
         return builder.build();

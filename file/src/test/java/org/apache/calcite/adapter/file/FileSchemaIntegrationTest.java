@@ -116,8 +116,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("shop", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM shop.products ORDER BY product_id")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM shop.products ORDER BY product_id")) {
         assertTrue(rs.next());
         assertEquals("1", rs.getString("product_id"));
         assertEquals("Widget", rs.getString("product_name"));
@@ -142,8 +142,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("sales", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM sales.orders WHERE status = 'completed'")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM sales.orders WHERE status = 'completed'")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -163,8 +163,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("data", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT region, COUNT(*) AS cnt FROM data.metrics GROUP BY region ORDER BY region")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT region, COUNT(*) AS cnt FROM data.metrics GROUP BY region ORDER BY region")) {
         assertTrue(rs.next());
         assertEquals("East", rs.getString("region"));
         assertEquals(2, rs.getInt("cnt"));
@@ -186,8 +186,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("geo", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM geo.cities ORDER BY city")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM geo.cities ORDER BY city")) {
         assertTrue(rs.next());
         assertEquals("Chicago", rs.getString("city"));
         assertTrue(rs.next());
@@ -208,8 +208,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("ev", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM ev.events")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM ev.events")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -280,8 +280,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("blank_schema", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM blank_schema.blank_data")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM blank_schema.blank_data")) {
         assertFalse(rs.next(), "Empty CSV should have no data rows");
         ResultSetMetaData meta = rs.getMetaData();
         assertTrue(meta.getColumnCount() >= 3,
@@ -300,8 +300,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("special_data", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM special_data.special")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM special_data.special")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -314,8 +314,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
         "id,name\n"
         + "1,Test\n");
 
-    String model = buildTestModel("casing_test", dir.getAbsolutePath(),
-        "tableNameCasing", "LOWER");
+    String model =
+        buildTestModel("casing_test", dir.getAbsolutePath(), "tableNameCasing", "LOWER");
 
     try (Connection conn = connect(model)) {
       DatabaseMetaData meta = conn.getMetaData();
@@ -377,8 +377,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("meta_test", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM meta_test.typed_data LIMIT 1")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM meta_test.typed_data LIMIT 1")) {
         ResultSetMetaData meta = rs.getMetaData();
         assertTrue(meta.getColumnCount() >= 4,
             "Should have at least 4 columns");
@@ -398,8 +398,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("nested_data", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM nested_data.nested")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM nested_data.nested")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
@@ -422,8 +422,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("company", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT s.emp_name, d.dept_name "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT s.emp_name, d.dept_name "
           + "FROM company.staff s "
           + "JOIN company.departments d ON s.dept_id = d.dept_id "
           + "ORDER BY s.emp_name")) {
@@ -453,8 +453,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("school", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT student, COUNT(*) AS subjects "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT student, COUNT(*) AS subjects "
           + "FROM school.scores "
           + "GROUP BY student "
           + "HAVING COUNT(*) > 1 "
@@ -478,8 +478,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("prim", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM prim.simple ORDER BY a")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM prim.simple ORDER BY a")) {
         assertTrue(rs.next());
         assertEquals("x", rs.getString("b"));
         assertTrue(rs.next());
@@ -517,8 +517,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM flat.deep")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM flat.deep")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
@@ -536,14 +536,14 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("big_schema", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM big_schema.big_data")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM big_schema.big_data")) {
         assertTrue(rs.next());
         assertEquals(500, rs.getInt("cnt"));
       }
 
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT category, COUNT(*) AS cnt FROM big_schema.big_data GROUP BY category ORDER BY category")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT category, COUNT(*) AS cnt FROM big_schema.big_data GROUP BY category ORDER BY category")) {
         assertTrue(rs.next());
         assertEquals("A", rs.getString("category"));
         assertEquals(100, rs.getInt("cnt"));
@@ -616,8 +616,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("rank_data", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT name FROM rank_data.ranked ORDER BY score DESC LIMIT 3")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT name FROM rank_data.ranked ORDER BY score DESC LIMIT 3")) {
         // Note: score is VARCHAR without type inference, but ORDER BY still works
         assertTrue(rs.next());
         assertNotNull(rs.getString("name"));
@@ -637,8 +637,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("dedup", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT DISTINCT category FROM dedup.dupes ORDER BY category")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT DISTINCT category FROM dedup.dupes ORDER BY category")) {
         assertTrue(rs.next());
         assertEquals("A", rs.getString("category"));
         assertTrue(rs.next());
@@ -661,8 +661,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("union_test", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT id, name FROM union_test.table_a "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT id, name FROM union_test.table_a "
           + "UNION ALL "
           + "SELECT id, name FROM union_test.table_b "
           + "ORDER BY id")) {
@@ -687,8 +687,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("mixed_schema", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM mixed_schema.mixed ORDER BY id")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM mixed_schema.mixed ORDER BY id")) {
         assertTrue(rs.next());
         assertNotNull(rs.getString("id"));
         assertEquals("text", rs.getString("value"));
@@ -708,8 +708,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildModel("null_test", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM null_test.nulls")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM null_test.nulls")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -720,8 +720,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
     File dir = tempDir.toFile();
     writeCsv(dir, "data.csv", "id,val\n1,test\n");
 
-    String model = buildTestModel("commented", dir.getAbsolutePath(),
-        "comment", "Test schema with comment");
+    String model =
+        buildTestModel("commented", dir.getAbsolutePath(), "comment", "Test schema with comment");
 
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement()) {
@@ -756,7 +756,8 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
       header.append("col_").append(i);
       row.append("val_").append(i);
     }
-    writeCsv(dir, "wide.csv", header.toString() + "\n" + row.toString() + "\n");
+    writeCsv(dir, "wide.csv", header.toString() + "\n"
+  + row.toString() + "\n");
 
     try (Connection conn = connect(buildModel("wide_test", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {

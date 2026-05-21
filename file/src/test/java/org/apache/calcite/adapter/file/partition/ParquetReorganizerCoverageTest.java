@@ -1080,7 +1080,8 @@ class ParquetReorganizerCoverageTest {
     IncrementalTracker noop = IncrementalTracker.NOOP;
 
     assertFalse(noop.isProcessed("alt", "src", Collections.<String, String>emptyMap()));
-    assertFalse(noop.isProcessedWithTtl("alt", "src",
+    assertFalse(
+        noop.isProcessedWithTtl("alt", "src",
         Collections.<String, String>emptyMap(), 1000));
     assertTrue(noop.getProcessedKeyValues("alt").isEmpty());
     assertFalse(noop.isTableComplete("pipeline", "sig"));
@@ -1094,8 +1095,8 @@ class ParquetReorganizerCoverageTest {
     noop.clearAllCompletions();
 
     // filterUnprocessed should return all indices
-    List<Map<String, String>> combos = Arrays.asList(
-        Collections.<String, String>singletonMap("year", "2020"),
+    List<Map<String, String>> combos =
+        Arrays.asList(Collections.<String, String>singletonMap("year", "2020"),
         Collections.<String, String>singletonMap("year", "2021"));
     Set<Integer> unprocessed = noop.filterUnprocessed("alt", "src", combos);
     assertEquals(2, unprocessed.size());

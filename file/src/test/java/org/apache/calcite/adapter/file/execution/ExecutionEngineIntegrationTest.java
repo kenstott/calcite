@@ -47,7 +47,6 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -134,8 +133,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("csv_filt", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM csv_filt.filtered WHERE status = 'active'")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM csv_filt.filtered WHERE status = 'active'")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -155,8 +154,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("csv_agg", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT dept, COUNT(*) AS cnt FROM csv_agg.agg_data GROUP BY dept ORDER BY dept")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT dept, COUNT(*) AS cnt FROM csv_agg.agg_data GROUP BY dept ORDER BY dept")) {
         assertTrue(rs.next());
         assertEquals("eng", rs.getString("dept"));
         assertEquals(3, rs.getInt("cnt"));
@@ -181,8 +180,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("csv_large", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM csv_large.large_csv")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM csv_large.large_csv")) {
         assertTrue(rs.next());
         assertEquals(2000, rs.getInt("cnt"));
       }
@@ -200,8 +199,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("csv_null", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM csv_null.with_nulls")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM csv_null.with_nulls")) {
         assertTrue(rs.next());
         assertEquals(4, rs.getInt("cnt"));
       }
@@ -219,8 +218,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("json_enum", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM json_enum.json_basic ORDER BY key")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM json_enum.json_basic ORDER BY key")) {
         assertTrue(rs.next());
         assertEquals("a", rs.getString("key"));
         assertTrue(rs.next());
@@ -240,8 +239,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("json_nested", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM json_nested.nested")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM json_nested.nested")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
@@ -256,8 +255,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("json_arr", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM json_arr.with_arrays")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM json_arr.with_arrays")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
@@ -272,8 +271,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("json_mix", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM json_mix.mixed_types ORDER BY str_field")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT * FROM json_mix.mixed_types ORDER BY str_field")) {
         assertTrue(rs.next());
         assertEquals("hello", rs.getString("str_field"));
         assertTrue(rs.next());
@@ -299,8 +298,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("json_large", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM json_large.large_json")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM json_large.large_json")) {
         assertTrue(rs.next());
         assertEquals(500, rs.getInt("cnt"));
       }
@@ -337,8 +336,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("pq_enum", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT city, country FROM pq_enum.cities ORDER BY city")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT city, country FROM pq_enum.cities ORDER BY city")) {
         assertTrue(rs.next());
         assertEquals("Berlin", rs.getString("city"));
         assertEquals("DE", rs.getString("country"));
@@ -374,8 +373,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("pq_filt", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT category, COUNT(*) AS cnt "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT category, COUNT(*) AS cnt "
           + "FROM pq_filt.products "
           + "GROUP BY category "
           + "ORDER BY category")) {
@@ -450,13 +449,13 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("pq_large", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM pq_large.big_data")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM pq_large.big_data")) {
         assertTrue(rs.next());
         assertEquals(5000, rs.getInt("cnt"));
       }
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT group_name, COUNT(*) AS cnt "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT group_name, COUNT(*) AS cnt "
           + "FROM pq_large.big_data "
           + "GROUP BY group_name "
           + "ORDER BY group_name")) {
@@ -502,8 +501,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("pq_null", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM pq_null.nullable")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM pq_null.nullable")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -542,8 +541,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("cross_eng", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT r.region_name, COUNT(*) AS cnt "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT r.region_name, COUNT(*) AS cnt "
           + "FROM cross_eng.facts f "
           + "JOIN cross_eng.regions r ON f.region_id = CAST(r.region_id AS INTEGER) "
           + "GROUP BY r.region_name "
@@ -583,13 +582,13 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
     try (Connection conn = connect(buildTestModel("union_eng", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
       // Query each individually
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM union_eng.json_source")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM union_eng.json_source")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM union_eng.pq_source")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM union_eng.pq_source")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("cnt"));
       }
@@ -639,8 +638,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("tsv_test", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM tsv_test.tab_data")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM tsv_test.tab_data")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
@@ -656,8 +655,8 @@ public class ExecutionEngineIntegrationTest extends BaseFileTest {
         + "3,Doohickey,A\n");
 
     try (Connection conn = connect(buildTestModel("prep", dir.getAbsolutePath()));
-         java.sql.PreparedStatement pstmt = conn.prepareStatement(
-             "SELECT * FROM prep.prepared WHERE category = ?")) {
+         java.sql.PreparedStatement pstmt =
+             conn.prepareStatement("SELECT * FROM prep.prepared WHERE category = ?")) {
       pstmt.setString(1, "A");
       try (ResultSet rs = pstmt.executeQuery()) {
         int count = 0;

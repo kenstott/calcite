@@ -35,7 +35,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,8 +74,7 @@ public class ColumnBatchTest {
 
   // --- ColumnBatch basic tests ---
 
-  @Test
-  public void testEmptyBatch() {
+  @Test public void testEmptyBatch() {
     VectorSchemaRoot root = createIntBatch(0);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertEquals(0, batch.getRowCount());
@@ -84,8 +82,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetColumnCountWithMultipleColumns() {
+  @Test public void testGetColumnCountWithMultipleColumns() {
     VectorSchemaRoot root = createMixedBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertEquals(5, batch.getColumnCount());
@@ -93,8 +90,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetIntColumnOutOfBoundsThrows() {
+  @Test public void testGetIntColumnOutOfBoundsThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IndexOutOfBoundsException.class,
@@ -102,8 +98,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetIntColumnOnNonIntThrows() {
+  @Test public void testGetIntColumnOnNonIntThrows() {
     VectorSchemaRoot root = createDoubleBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -111,8 +106,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetLongColumnOutOfBoundsThrows() {
+  @Test public void testGetLongColumnOutOfBoundsThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IndexOutOfBoundsException.class,
@@ -120,8 +114,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetLongColumnOnNonLongThrows() {
+  @Test public void testGetLongColumnOnNonLongThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -129,8 +122,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetDoubleColumnOutOfBoundsThrows() {
+  @Test public void testGetDoubleColumnOutOfBoundsThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IndexOutOfBoundsException.class,
@@ -138,8 +130,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetDoubleColumnOnNonDoubleThrows() {
+  @Test public void testGetDoubleColumnOnNonDoubleThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -147,8 +138,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetBooleanColumnOutOfBoundsThrows() {
+  @Test public void testGetBooleanColumnOutOfBoundsThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IndexOutOfBoundsException.class,
@@ -156,8 +146,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetBooleanColumnOnNonBooleanThrows() {
+  @Test public void testGetBooleanColumnOnNonBooleanThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -165,8 +154,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetStringColumnOutOfBoundsThrows() {
+  @Test public void testGetStringColumnOutOfBoundsThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IndexOutOfBoundsException.class,
@@ -174,8 +162,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetStringColumnOnNonStringThrows() {
+  @Test public void testGetStringColumnOnNonStringThrows() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -185,8 +172,7 @@ public class ColumnBatchTest {
 
   // --- IntColumnReader tests ---
 
-  @Test
-  public void testIntColumnReaderGetAndIsNull() {
+  @Test public void testIntColumnReaderGetAndIsNull() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -200,8 +186,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderSum() {
+  @Test public void testIntColumnReaderSum() {
     VectorSchemaRoot root = createIntBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -210,8 +195,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderSumWithNulls() {
+  @Test public void testIntColumnReaderSumWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -220,8 +204,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderSumZeroCopy() {
+  @Test public void testIntColumnReaderSumZeroCopy() {
     VectorSchemaRoot root = createIntBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -232,14 +215,13 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderFilter() {
+  @Test public void testIntColumnReaderFilter() {
     VectorSchemaRoot root = createIntBatch(10);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
       // Filter for values > 5
-      boolean[] selection = reader.filter(
-          new java.util.function.Predicate<Integer>() {
+      boolean[] selection =
+          reader.filter(new java.util.function.Predicate<Integer>() {
             @Override public boolean test(Integer value) {
               return value > 5;
             }
@@ -254,13 +236,12 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderFilterWithNulls() {
+  @Test public void testIntColumnReaderFilterWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
-      boolean[] selection = reader.filter(
-          new java.util.function.Predicate<Integer>() {
+      boolean[] selection =
+          reader.filter(new java.util.function.Predicate<Integer>() {
             @Override public boolean test(Integer value) {
               return value > 2;
             }
@@ -274,8 +255,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderGetValues() {
+  @Test public void testIntColumnReaderGetValues() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -284,8 +264,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderGetValuesWithNulls() {
+  @Test public void testIntColumnReaderGetValuesWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -299,8 +278,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderGetDataBuffer() {
+  @Test public void testIntColumnReaderGetDataBuffer() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -308,8 +286,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnReaderGetValidityBuffer() {
+  @Test public void testIntColumnReaderGetValidityBuffer() {
     VectorSchemaRoot root = createIntBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.IntColumnReader reader = batch.getIntColumn(0);
@@ -319,8 +296,7 @@ public class ColumnBatchTest {
 
   // --- LongColumnReader tests ---
 
-  @Test
-  public void testLongColumnReaderGetAndIsNull() {
+  @Test public void testLongColumnReaderGetAndIsNull() {
     VectorSchemaRoot root = createLongBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.LongColumnReader reader = batch.getLongColumn(0);
@@ -331,8 +307,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testLongColumnReaderSum() {
+  @Test public void testLongColumnReaderSum() {
     VectorSchemaRoot root = createLongBatch(4);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.LongColumnReader reader = batch.getLongColumn(0);
@@ -341,14 +316,13 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testLongColumnReaderFilter() {
+  @Test public void testLongColumnReaderFilter() {
     VectorSchemaRoot root = createLongBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.LongColumnReader reader = batch.getLongColumn(0);
       // Filter for values > 250
-      boolean[] selection = reader.filter(
-          new java.util.function.Predicate<Long>() {
+      boolean[] selection =
+          reader.filter(new java.util.function.Predicate<Long>() {
             @Override public boolean test(Long value) {
               return value > 250L;
             }
@@ -363,8 +337,7 @@ public class ColumnBatchTest {
 
   // --- DoubleColumnReader tests ---
 
-  @Test
-  public void testDoubleColumnReaderGetAndIsNull() {
+  @Test public void testDoubleColumnReaderGetAndIsNull() {
     VectorSchemaRoot root = createDoubleBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.DoubleColumnReader reader = batch.getDoubleColumn(0);
@@ -375,8 +348,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnReaderSum() {
+  @Test public void testDoubleColumnReaderSum() {
     VectorSchemaRoot root = createDoubleBatch(4);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.DoubleColumnReader reader = batch.getDoubleColumn(0);
@@ -385,8 +357,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnReaderMinMax() {
+  @Test public void testDoubleColumnReaderMinMax() {
     VectorSchemaRoot root = createDoubleBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.DoubleColumnReader reader = batch.getDoubleColumn(0);
@@ -396,8 +367,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnReaderMinMaxEmpty() {
+  @Test public void testDoubleColumnReaderMinMaxEmpty() {
     VectorSchemaRoot root = createDoubleBatch(0);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       // No rows, so minMax returns {0, 0}
@@ -406,13 +376,12 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnReaderFilter() {
+  @Test public void testDoubleColumnReaderFilter() {
     VectorSchemaRoot root = createDoubleBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.DoubleColumnReader reader = batch.getDoubleColumn(0);
-      boolean[] selection = reader.filter(
-          new java.util.function.Predicate<Double>() {
+      boolean[] selection =
+          reader.filter(new java.util.function.Predicate<Double>() {
             @Override public boolean test(Double value) {
               return value > 3.0;
             }
@@ -428,8 +397,7 @@ public class ColumnBatchTest {
 
   // --- BooleanColumnReader tests ---
 
-  @Test
-  public void testBooleanColumnReaderGetAndIsNull() {
+  @Test public void testBooleanColumnReaderGetAndIsNull() {
     VectorSchemaRoot root = createBooleanBatch(4);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.BooleanColumnReader reader = batch.getBooleanColumn(0);
@@ -441,8 +409,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testBooleanColumnReaderCountTrue() {
+  @Test public void testBooleanColumnReaderCountTrue() {
     VectorSchemaRoot root = createBooleanBatch(6);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.BooleanColumnReader reader = batch.getBooleanColumn(0);
@@ -453,8 +420,7 @@ public class ColumnBatchTest {
 
   // --- StringColumnReader tests ---
 
-  @Test
-  public void testStringColumnReaderGet() {
+  @Test public void testStringColumnReaderGet() {
     VectorSchemaRoot root = createStringBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.StringColumnReader reader = batch.getStringColumn(0);
@@ -465,8 +431,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testStringColumnReaderGetNull() {
+  @Test public void testStringColumnReaderGetNull() {
     VectorSchemaRoot root = createStringBatchWithNulls(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.StringColumnReader reader = batch.getStringColumn(0);
@@ -477,13 +442,12 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testStringColumnReaderFilter() {
+  @Test public void testStringColumnReaderFilter() {
     VectorSchemaRoot root = createStringBatch(5);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       ColumnBatch.StringColumnReader reader = batch.getStringColumn(0);
-      boolean[] selection = reader.filter(
-          new java.util.function.Predicate<String>() {
+      boolean[] selection =
+          reader.filter(new java.util.function.Predicate<String>() {
             @Override public boolean test(String value) {
               return value.contains("_3") || value.contains("_4");
             }
@@ -498,8 +462,7 @@ public class ColumnBatchTest {
 
   // --- toRowFormat tests ---
 
-  @Test
-  public void testToRowFormatWithMixedColumns() {
+  @Test public void testToRowFormatWithMixedColumns() {
     VectorSchemaRoot root = createMixedBatch(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       Object[][] rows = batch.toRowFormat();
@@ -514,8 +477,7 @@ public class ColumnBatchTest {
     }
   }
 
-  @Test
-  public void testToRowFormatWithNulls() {
+  @Test public void testToRowFormatWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(3);
     try (ColumnBatch batch = new ColumnBatch(root)) {
       Object[][] rows = batch.toRowFormat();
@@ -529,9 +491,8 @@ public class ColumnBatchTest {
   // --- Helper methods ---
 
   private VectorSchemaRoot createIntBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");
@@ -544,9 +505,8 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createIntBatchWithNulls(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");
@@ -563,9 +523,8 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createLongBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     BigIntVector vector = (BigIntVector) root.getVector("value");
@@ -578,12 +537,13 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("value",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     Float8Vector vector = (Float8Vector) root.getVector("value");
@@ -596,9 +556,8 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createBooleanBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("flag", FieldType.nullable(new ArrowType.Bool()), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("flag", FieldType.nullable(new ArrowType.Bool()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     BitVector vector = (BitVector) root.getVector("flag");
@@ -611,9 +570,8 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createStringBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     VarCharVector vector = (VarCharVector) root.getVector("name");
@@ -626,9 +584,8 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createStringBatchWithNulls(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     VarCharVector vector = (VarCharVector) root.getVector("name");
@@ -645,16 +602,16 @@ public class ColumnBatchTest {
   }
 
   private VectorSchemaRoot createMixedBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("intCol", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("intCol", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("longCol", FieldType.nullable(new ArrowType.Int(64, true)), null),
         new Field("doubleCol",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
             null),
         new Field("boolCol", FieldType.nullable(new ArrowType.Bool()), null),
-        new Field("stringCol", FieldType.nullable(new ArrowType.Utf8()), null)
-    ));
+        new Field("stringCol", FieldType.nullable(new ArrowType.Utf8()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 

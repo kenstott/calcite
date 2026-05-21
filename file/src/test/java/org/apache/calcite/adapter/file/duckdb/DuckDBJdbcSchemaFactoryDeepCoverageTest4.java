@@ -40,15 +40,13 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
 
   // ====== isTempDirectory tests ======
 
-  @Test
-  void testIsTempDirectoryNull() throws Exception {
+  @Test void testIsTempDirectoryNull() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, (String) null));
   }
 
-  @Test
-  void testIsTempDirectoryUnixTmp() throws Exception {
+  @Test void testIsTempDirectoryUnixTmp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "/tmp/data"));
@@ -56,30 +54,26 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue((Boolean) method.invoke(null, "/some/path/tmp/here"));
   }
 
-  @Test
-  void testIsTempDirectoryWindowsTemp() throws Exception {
+  @Test void testIsTempDirectoryWindowsTemp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "C:\\Users\\temp\\data"));
     assertTrue((Boolean) method.invoke(null, "D:\\temp\\files"));
   }
 
-  @Test
-  void testIsTempDirectoryUnixTemp() throws Exception {
+  @Test void testIsTempDirectoryUnixTemp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "/some/path/temp/here"));
   }
 
-  @Test
-  void testIsTempDirectoryJavaIoTmpDir() throws Exception {
+  @Test void testIsTempDirectoryJavaIoTmpDir() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "/var/java.io.tmpdir/files"));
   }
 
-  @Test
-  void testIsTempDirectoryNonTemp() throws Exception {
+  @Test void testIsTempDirectoryNonTemp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, "/home/user/data"));
@@ -87,15 +81,13 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertFalse((Boolean) method.invoke(null, "s3://my-bucket/data"));
   }
 
-  @Test
-  void testIsTempDirectoryStartsWithTmp() throws Exception {
+  @Test void testIsTempDirectoryStartsWithTmp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "/tmp"));
   }
 
-  @Test
-  void testIsTempDirectoryBackslashTmp() throws Exception {
+  @Test void testIsTempDirectoryBackslashTmp() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "\\tmp\\data"));
@@ -103,26 +95,23 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
 
   // ====== determineCatalogPath tests ======
 
-  @Test
-  void testDetermineCatalogPathNullDirectory() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathNullDirectory() throws Exception {
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, "test", null));
   }
 
-  @Test
-  void testDetermineCatalogPathTempDirectory() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathTempDirectory() throws Exception {
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, "test", "/tmp/data"));
   }
 
-  @Test
-  void testDetermineCatalogPathPersistentDirectory() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathPersistentDirectory() throws Exception {
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
 
     String dirPath = tempDir.toAbsolutePath().toString();
@@ -135,29 +124,25 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
 
   // ====== isHivePartitioned tests ======
 
-  @Test
-  void testIsHivePartitionedNull() throws Exception {
+  @Test void testIsHivePartitionedNull() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, (String) null));
   }
 
-  @Test
-  void testIsHivePartitionedEmpty() throws Exception {
+  @Test void testIsHivePartitionedEmpty() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, ""));
   }
 
-  @Test
-  void testIsHivePartitionedSingleFile() throws Exception {
+  @Test void testIsHivePartitionedSingleFile() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, "/data/file.parquet"));
   }
 
-  @Test
-  void testIsHivePartitionedBracketedList() throws Exception {
+  @Test void testIsHivePartitionedBracketedList() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
 
@@ -166,8 +151,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue((Boolean) method.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedCurlyBracketedList() throws Exception {
+  @Test void testIsHivePartitionedCurlyBracketedList() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
 
@@ -176,8 +160,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue((Boolean) method.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedNotPartitioned() throws Exception {
+  @Test void testIsHivePartitionedNotPartitioned() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
 
@@ -185,8 +168,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertFalse((Boolean) method.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedQuotedFiles() throws Exception {
+  @Test void testIsHivePartitionedQuotedFiles() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
 
@@ -195,8 +177,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue((Boolean) method.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedMixedPartitionStatus() throws Exception {
+  @Test void testIsHivePartitionedMixedPartitionStatus() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
 
@@ -208,22 +189,19 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
 
   // ====== deriveGlobPattern tests ======
 
-  @Test
-  void testDeriveGlobPatternNull() throws Exception {
+  @Test void testDeriveGlobPatternNull() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, (String) null));
   }
 
-  @Test
-  void testDeriveGlobPatternEmpty() throws Exception {
+  @Test void testDeriveGlobPatternEmpty() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, ""));
   }
 
-  @Test
-  void testDeriveGlobPatternBracketedList() throws Exception {
+  @Test void testDeriveGlobPatternBracketedList() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -235,8 +213,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.endsWith(".parquet"));
   }
 
-  @Test
-  void testDeriveGlobPatternCurlyBrackets() throws Exception {
+  @Test void testDeriveGlobPatternCurlyBrackets() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -247,8 +224,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.contains("/**/*"));
   }
 
-  @Test
-  void testDeriveGlobPatternQuotedFile() throws Exception {
+  @Test void testDeriveGlobPatternQuotedFile() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -258,8 +234,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.contains("/**/*"));
   }
 
-  @Test
-  void testDeriveGlobPatternNoPartition() throws Exception {
+  @Test void testDeriveGlobPatternNoPartition() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -270,8 +245,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.contains("/*.parquet"));
   }
 
-  @Test
-  void testDeriveGlobPatternNoSlash() throws Exception {
+  @Test void testDeriveGlobPatternNoSlash() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -281,8 +255,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     assertEquals("file.parquet", result);
   }
 
-  @Test
-  void testDeriveGlobPatternCustomExtension() throws Exception {
+  @Test void testDeriveGlobPatternCustomExtension() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -294,16 +267,14 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
 
   // ====== getParserConfig tests ======
 
-  @Test
-  void testGetParserConfig() {
+  @Test void testGetParserConfig() {
     SqlParser.Config config = DuckDBJdbcSchemaFactory.getParserConfig();
     assertNotNull(config);
   }
 
   // ====== createParquetView tests ======
 
-  @Test
-  void testCreateParquetViewWithNullConnection() {
+  @Test void testCreateParquetViewWithNullConnection() {
     try {
       DuckDBJdbcSchemaFactory.createParquetView(null, "test_view", "/data/test.parquet");
       fail("Expected NullPointerException");

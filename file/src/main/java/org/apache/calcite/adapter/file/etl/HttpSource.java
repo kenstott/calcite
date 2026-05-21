@@ -57,7 +57,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -308,8 +307,8 @@ public class HttpSource implements DataSource {
     }
 
     // Make a mutable copy of variables so incremental bounds can be injected for transformers
-    variables = new LinkedHashMap<String, String>(
-        variables != null ? variables : Collections.<String, String>emptyMap());
+    variables =
+        new LinkedHashMap<String, String>(variables != null ? variables : Collections.<String, String>emptyMap());
 
     // Build the URL with variables substituted (check urlRules for year-dependent URLs)
     String url = substituteVariables(config.getEffectiveUrl(variables), variables);
@@ -323,18 +322,18 @@ public class HttpSource implements DataSource {
     // Apply incremental filter when configured and a bound is active
     HttpSourceConfig.IncrementalConfig incr = config.getIncremental();
     if (incr != null && incr.getFilterParam() != null) {
-      String resolvedDate      = substituteVariables(
-          incr.getSinceDate()    != null ? incr.getSinceDate()    : "", variables);
-      String resolvedYear      = substituteVariables(
-          incr.getSinceYear()    != null ? incr.getSinceYear()    : "", variables);
-      String resolvedQuarter   = substituteVariables(
-          incr.getSinceQuarter() != null ? incr.getSinceQuarter() : "", variables);
-      String resolvedUntilDate = substituteVariables(
-          incr.getUntilDate()    != null ? incr.getUntilDate()    : "", variables);
-      String resolvedUntilYear = substituteVariables(
-          incr.getUntilYear()    != null ? incr.getUntilYear()    : "", variables);
-      String filterValue = incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter,
-          resolvedUntilDate, resolvedUntilYear);
+      String resolvedDate      =
+          substituteVariables(incr.getSinceDate()    != null ? incr.getSinceDate()    : "", variables);
+      String resolvedYear      =
+          substituteVariables(incr.getSinceYear()    != null ? incr.getSinceYear()    : "", variables);
+      String resolvedQuarter   =
+          substituteVariables(incr.getSinceQuarter() != null ? incr.getSinceQuarter() : "", variables);
+      String resolvedUntilDate =
+          substituteVariables(incr.getUntilDate()    != null ? incr.getUntilDate()    : "", variables);
+      String resolvedUntilYear =
+          substituteVariables(incr.getUntilYear()    != null ? incr.getUntilYear()    : "", variables);
+      String filterValue =
+          incr.buildFilterValue(resolvedDate, resolvedYear, resolvedQuarter, resolvedUntilDate, resolvedUntilYear);
       if (filterValue != null) {
         params.put(incr.getFilterParam(), filterValue);
         // Expose bounds to transformers via RequestContext.dimensionValues
@@ -490,8 +489,7 @@ public class HttpSource implements DataSource {
       this.rawCacheFilePath = rawCacheFilePath;
     }
 
-    @Override
-    public boolean hasNext() {
+    @Override public boolean hasNext() {
       // If current page has more records, we have next
       if (currentPageIterator != null && currentPageIterator.hasNext()) {
         return true;
@@ -506,8 +504,7 @@ public class HttpSource implements DataSource {
       return fetchNextPage();
     }
 
-    @Override
-    public Map<String, Object> next() {
+    @Override public Map<String, Object> next() {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }
@@ -750,8 +747,8 @@ public class HttpSource implements DataSource {
           tempCacheFile = File.createTempFile("http-raw-cache-", ".json", destParent);
           tempCacheFile.deleteOnExit();
           tempCacheStream = new FileOutputStream(tempCacheFile);
-          cacheGenerator = OBJECT_MAPPER.getFactory().createGenerator(tempCacheStream,
-              com.fasterxml.jackson.core.JsonEncoding.UTF8);
+          cacheGenerator =
+              OBJECT_MAPPER.getFactory().createGenerator(tempCacheStream, com.fasterxml.jackson.core.JsonEncoding.UTF8);
           cacheGenerator.writeStartObject();
           cacheGenerator.writeArrayFieldStart("results");
         }
@@ -2978,8 +2975,9 @@ public class HttpSource implements DataSource {
       return;
     }
 
-    long maxBytes = Long.parseLong(System.getProperty("calcite.etl.rawCacheMaxMb",
-        System.getenv("ETL_RAW_CACHE_MAX_MB") != null
+    long maxBytes =
+        Long.parseLong(
+            System.getProperty("calcite.etl.rawCacheMaxMb", System.getenv("ETL_RAW_CACHE_MAX_MB") != null
             ? System.getenv("ETL_RAW_CACHE_MAX_MB") : "2048")) * 1024L * 1024L;
 
     // Collect all files with their sizes and timestamps

@@ -54,8 +54,8 @@ public class CsvStreamReaderTest {
    * After construction, exercises readNext() and close().
    */
   @Test public void testConstructorWithRealFile() throws Exception {
-    File csvFile = createCsvFile("data.csv",
-        "name,age,city\nAlice,30,NYC\nBob,25,LA\n");
+    File csvFile =
+        createCsvFile("data.csv", "name,age,city\nAlice,30,NYC\nBob,25,LA\n");
     Source source = Sources.of(csvFile);
 
     CsvStreamReader reader = new CsvStreamReader(source);
@@ -136,8 +136,8 @@ public class CsvStreamReaderTest {
    * Tests readNext() with CSV containing quoted fields and special characters.
    */
   @Test public void testQuotedFields() throws Exception {
-    File csvFile = createCsvFile("quoted.csv",
-        "name,description\n\"Alice\",\"Has a, comma\"\n\"Bob\",\"No special\"\n");
+    File csvFile =
+        createCsvFile("quoted.csv", "name,description\n\"Alice\",\"Has a, comma\"\n\"Bob\",\"No special\"\n");
     Source source = Sources.of(csvFile);
 
     CsvStreamReader reader = new CsvStreamReader(source);
@@ -249,8 +249,8 @@ public class CsvStreamReaderTest {
    * Exercises the r.length > 0 and result == null branches in readNext.
    */
   @Test public void testReadNextMultipleFields() throws Exception {
-    File csvFile = createCsvFile("multi.csv",
-        "a,b,c,d,e\n1,2,3,4,5\n");
+    File csvFile =
+        createCsvFile("multi.csv", "a,b,c,d,e\n1,2,3,4,5\n");
     Source source = Sources.of(csvFile);
 
     CsvStreamReader reader = new CsvStreamReader(source);

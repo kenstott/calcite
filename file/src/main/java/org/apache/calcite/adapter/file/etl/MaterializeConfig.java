@@ -717,8 +717,8 @@ public class MaterializeConfig {
       Object releaseWindowObj = map.get("releaseWindow");
       if (releaseWindowObj instanceof Map) {
         @SuppressWarnings("unchecked")
-        ReleaseWindowConfig rwc = ReleaseWindowConfig.fromMap(
-            (Map<String, Object>) releaseWindowObj);
+        ReleaseWindowConfig rwc =
+            ReleaseWindowConfig.fromMap((Map<String, Object>) releaseWindowObj);
         if (rwc != null) {
           builder.releaseWindow(rwc);
         }

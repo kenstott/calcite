@@ -45,11 +45,10 @@ public class PartitionDetectorDeepTest {
   }
 
   @Test void testDetectPartitionSchemeAllHiveStyle() {
-    List<String> paths = Arrays.asList(
-        "/data/year=2020/month=01/file.parquet",
+    List<String> paths =
+        Arrays.asList("/data/year=2020/month=01/file.parquet",
         "/data/year=2020/month=02/file.parquet",
-        "/data/year=2021/month=01/file.parquet"
-    );
+        "/data/year=2021/month=01/file.parquet");
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNotNull(info);
     assertTrue(info.isHiveStyle());
@@ -59,36 +58,32 @@ public class PartitionDetectorDeepTest {
   }
 
   @Test void testDetectPartitionSchemeNonHivePaths() {
-    List<String> paths = Arrays.asList(
-        "/data/2020/01/file.parquet",
-        "/data/2020/02/file.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/data/2020/01/file.parquet",
+        "/data/2020/02/file.parquet");
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNull(info); // Not Hive-style
   }
 
   @Test void testDetectPartitionSchemeMixedStyles() {
-    List<String> paths = Arrays.asList(
-        "/data/year=2020/file.parquet",
-        "/data/2021/file.parquet" // Not Hive-style
-    );
+    List<String> paths =
+        Arrays.asList("/data/year=2020/file.parquet",
+        "/data/2021/file.parquet" // Not Hive-style);
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNull(info); // Mixed styles -> null
   }
 
   @Test void testDetectPartitionSchemeInconsistentColumns() {
-    List<String> paths = Arrays.asList(
-        "/data/year=2020/file.parquet",
-        "/data/region=US/file.parquet" // Different partition columns
-    );
+    List<String> paths =
+        Arrays.asList("/data/year=2020/file.parquet",
+        "/data/region=US/file.parquet" // Different partition columns);
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNull(info); // Inconsistent columns -> null
   }
 
   @Test void testDetectPartitionSchemeSingleFile() {
-    List<String> paths = Collections.singletonList(
-        "/data/year=2020/month=01/file.parquet"
-    );
+    List<String> paths =
+        Collections.singletonList("/data/year=2020/month=01/file.parquet");
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNotNull(info);
     assertTrue(info.isHiveStyle());
@@ -155,21 +150,22 @@ public class PartitionDetectorDeepTest {
   }
 
   @Test void testExtractDirectoryPartitionsEmptyColumns() {
-    assertNull(PartitionDetector.extractDirectoryPartitions(
+    assertNull(
+        PartitionDetector.extractDirectoryPartitions(
         "/data/2020/file.parquet", Collections.<String>emptyList()));
   }
 
   @Test void testExtractDirectoryPartitionsSingleLevel() {
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractDirectoryPartitions(
-        "/data/2020/file.parquet", Collections.singletonList("year"));
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractDirectoryPartitions("/data/2020/file.parquet", Collections.singletonList("year"));
     assertNotNull(info);
     assertFalse(info.isHiveStyle());
     assertEquals("2020", info.getPartitionValues().get("year"));
   }
 
   @Test void testExtractDirectoryPartitionsMultiLevel() {
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractDirectoryPartitions(
-        "/base/data/US/2020/file.parquet", Arrays.asList("region", "year"));
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractDirectoryPartitions("/base/data/US/2020/file.parquet", Arrays.asList("region", "year"));
     assertNotNull(info);
     assertFalse(info.isHiveStyle());
     assertEquals(2, info.getPartitionValues().size());
@@ -177,8 +173,8 @@ public class PartitionDetectorDeepTest {
 
   @Test void testExtractDirectoryPartitionsMoreColumnsThanDirs() {
     // More column names than directory levels
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractDirectoryPartitions(
-        "/data/file.parquet", Arrays.asList("level1", "level2", "level3"));
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractDirectoryPartitions("/data/file.parquet", Arrays.asList("level1", "level2", "level3"));
     assertNotNull(info);
     // Should match as many as available
     assertTrue(info.getPartitionValues().size() <= 3);
@@ -187,38 +183,41 @@ public class PartitionDetectorDeepTest {
   // ===== extractCustomPartitions =====
 
   @Test void testExtractCustomPartitionsNullRegex() {
-    assertNull(PartitionDetector.extractCustomPartitions(
+    assertNull(
+        PartitionDetector.extractCustomPartitions(
         "/data/file.parquet", null, new ArrayList<PartitionedTableConfig.ColumnMapping>()));
   }
 
   @Test void testExtractCustomPartitionsNullMappings() {
-    assertNull(PartitionDetector.extractCustomPartitions(
+    assertNull(
+        PartitionDetector.extractCustomPartitions(
         "/data/file.parquet", ".*", null));
   }
 
   @Test void testExtractCustomPartitionsNoMatch() {
-    List<PartitionedTableConfig.ColumnMapping> mappings = Collections.singletonList(
-        new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"));
-    assertNull(PartitionDetector.extractCustomPartitions(
+    List<PartitionedTableConfig.ColumnMapping> mappings =
+        Collections.singletonList(new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"));
+    assertNull(
+        PartitionDetector.extractCustomPartitions(
         "/data/file.parquet", "-(\\d{4})\\.csv", mappings));
   }
 
   @Test void testExtractCustomPartitionsSimpleMatch() {
-    List<PartitionedTableConfig.ColumnMapping> mappings = Collections.singletonList(
-        new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"));
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractCustomPartitions(
-        "/data/report-2020.csv", "report-(\\d{4})\\.csv", mappings);
+    List<PartitionedTableConfig.ColumnMapping> mappings =
+        Collections.singletonList(new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"));
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractCustomPartitions("/data/report-2020.csv", "report-(\\d{4})\\.csv", mappings);
     assertNotNull(info);
     assertFalse(info.isHiveStyle());
     assertEquals("2020", info.getPartitionValues().get("year"));
   }
 
   @Test void testExtractCustomPartitionsMultipleGroups() {
-    List<PartitionedTableConfig.ColumnMapping> mappings = Arrays.asList(
-        new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"),
+    List<PartitionedTableConfig.ColumnMapping> mappings =
+        Arrays.asList(new PartitionedTableConfig.ColumnMapping("year", 1, "INTEGER"),
         new PartitionedTableConfig.ColumnMapping("month", 2, "INTEGER"));
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractCustomPartitions(
-        "/data/report-2020-06.csv", "report-(\\d{4})-(\\d{2})\\.csv", mappings);
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractCustomPartitions("/data/report-2020-06.csv", "report-(\\d{4})-(\\d{2})\\.csv", mappings);
     assertNotNull(info);
     assertEquals("2020", info.getPartitionValues().get("year"));
     assertEquals("06", info.getPartitionValues().get("month"));
@@ -226,10 +225,10 @@ public class PartitionDetectorDeepTest {
 
   @Test void testExtractCustomPartitionsInvalidGroupIndex() {
     // Group index that doesn't exist in the regex match
-    List<PartitionedTableConfig.ColumnMapping> mappings = Collections.singletonList(
-        new PartitionedTableConfig.ColumnMapping("field", 99, "VARCHAR"));
-    PartitionDetector.PartitionInfo info = PartitionDetector.extractCustomPartitions(
-        "/data/report-2020.csv", "report-(\\d{4})\\.csv", mappings);
+    List<PartitionedTableConfig.ColumnMapping> mappings =
+        Collections.singletonList(new PartitionedTableConfig.ColumnMapping("field", 99, "VARCHAR"));
+    PartitionDetector.PartitionInfo info =
+        PartitionDetector.extractCustomPartitions("/data/report-2020.csv", "report-(\\d{4})\\.csv", mappings);
     assertNotNull(info);
     // Should have empty partition values (exception caught)
     assertTrue(info.getPartitionValues().isEmpty());

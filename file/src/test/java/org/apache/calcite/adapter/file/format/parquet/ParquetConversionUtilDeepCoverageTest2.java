@@ -39,16 +39,14 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== getParquetCacheDir tests ======
 
-  @Test
-  void testGetParquetCacheDirBaseOnly() {
+  @Test void testGetParquetCacheDirBaseOnly() {
     File baseDir = tempDir.toFile();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir);
     assertNotNull(result);
     assertTrue(result.getPath().endsWith(".parquet_cache"));
   }
 
-  @Test
-  void testGetParquetCacheDirWithCustomDir() {
+  @Test void testGetParquetCacheDirWithCustomDir() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("custom_cache").toAbsolutePath().toString();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, customDir);
@@ -56,8 +54,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals(customDir, result.getPath());
   }
 
-  @Test
-  void testGetParquetCacheDirWithCustomDirAndSchema() {
+  @Test void testGetParquetCacheDirWithCustomDirAndSchema() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("custom_cache").toAbsolutePath().toString();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "econ");
@@ -65,24 +62,21 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(result.getPath().contains("schema_econ"));
   }
 
-  @Test
-  void testGetParquetCacheDirWithNullCustomDir() {
+  @Test void testGetParquetCacheDirWithNullCustomDir() {
     File baseDir = tempDir.toFile();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, null, "econ");
     assertNotNull(result);
     assertTrue(result.getPath().endsWith(".parquet_cache"));
   }
 
-  @Test
-  void testGetParquetCacheDirWithEmptyCustomDir() {
+  @Test void testGetParquetCacheDirWithEmptyCustomDir() {
     File baseDir = tempDir.toFile();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, "", "econ");
     assertNotNull(result);
     assertTrue(result.getPath().endsWith(".parquet_cache"));
   }
 
-  @Test
-  void testGetParquetCacheDirWithNullSchemaName() {
+  @Test void testGetParquetCacheDirWithNullSchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("custom_cache").toAbsolutePath().toString();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, null);
@@ -91,8 +85,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertFalse(result.getPath().contains("schema_"));
   }
 
-  @Test
-  void testGetParquetCacheDirWithEmptySchemaName() {
+  @Test void testGetParquetCacheDirWithEmptySchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("custom_cache").toAbsolutePath().toString();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "");
@@ -101,8 +94,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertFalse(result.getPath().contains("schema_"));
   }
 
-  @Test
-  void testGetParquetCacheDirCreatesDirectory() {
+  @Test void testGetParquetCacheDirCreatesDirectory() {
     File baseDir = tempDir.resolve("newdir").toFile();
     baseDir.mkdirs();
     File result = ParquetConversionUtil.getParquetCacheDir(baseDir);
@@ -113,8 +105,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== getCachedParquetFile tests ======
 
-  @Test
-  void testGetCachedParquetFileBasicCsv() {
+  @Test void testGetCachedParquetFileBasicCsv() {
     File sourceFile = new File(tempDir.toFile(), "data.csv");
     File cacheDir = tempDir.resolve("cache").toFile();
     cacheDir.mkdirs();
@@ -123,8 +114,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(result.getName().endsWith(".parquet"));
   }
 
-  @Test
-  void testGetCachedParquetFileNoExtension() {
+  @Test void testGetCachedParquetFileNoExtension() {
     File sourceFile = new File(tempDir.toFile(), "datafile");
     File cacheDir = tempDir.resolve("cache").toFile();
     cacheDir.mkdirs();
@@ -133,8 +123,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(result.getName().endsWith(".parquet"));
   }
 
-  @Test
-  void testGetCachedParquetFileMultipleDots() {
+  @Test void testGetCachedParquetFileMultipleDots() {
     File sourceFile = new File(tempDir.toFile(), "data.2023.01.csv");
     File cacheDir = tempDir.resolve("cache").toFile();
     cacheDir.mkdirs();
@@ -143,8 +132,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(result.getName().endsWith(".parquet"));
   }
 
-  @Test
-  void testGetCachedParquetFileWithTypeInference() {
+  @Test void testGetCachedParquetFileWithTypeInference() {
     File sourceFile = new File(tempDir.toFile(), "test_data.json");
     File cacheDir = tempDir.resolve("cache").toFile();
     cacheDir.mkdirs();
@@ -155,8 +143,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== needsConversion(File, File) tests ======
 
-  @Test
-  void testNeedsConversionParquetDoesNotExist() throws Exception {
+  @Test void testNeedsConversionParquetDoesNotExist() throws Exception {
     File sourceFile = tempDir.resolve("source.csv").toFile();
     sourceFile.createNewFile();
     File parquetFile = tempDir.resolve("target.parquet").toFile();
@@ -164,8 +151,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(ParquetConversionUtil.needsConversion(sourceFile, parquetFile));
   }
 
-  @Test
-  void testNeedsConversionSourceNewer() throws Exception {
+  @Test void testNeedsConversionSourceNewer() throws Exception {
     File sourceFile = tempDir.resolve("source.csv").toFile();
     sourceFile.createNewFile();
     File parquetFile = tempDir.resolve("target.parquet").toFile();
@@ -179,8 +165,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue(ParquetConversionUtil.needsConversion(sourceFile, parquetFile));
   }
 
-  @Test
-  void testNeedsConversionParquetNewer() throws Exception {
+  @Test void testNeedsConversionParquetNewer() throws Exception {
     File sourceFile = tempDir.resolve("source.csv").toFile();
     sourceFile.createNewFile();
     File parquetFile = tempDir.resolve("target.parquet").toFile();
@@ -196,8 +181,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== isS3Path tests ======
 
-  @Test
-  void testIsS3Path() throws Exception {
+  @Test void testIsS3Path() throws Exception {
     Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "s3://my-bucket/data/file.parquet"));
@@ -209,22 +193,19 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== getHadoopPath tests ======
 
-  @Test
-  void testGetHadoopPathS3() throws Exception {
+  @Test void testGetHadoopPathS3() throws Exception {
     Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
     method.setAccessible(true);
     assertEquals("s3a://my-bucket/data", method.invoke(null, "s3://my-bucket/data"));
   }
 
-  @Test
-  void testGetHadoopPathLocalPath() throws Exception {
+  @Test void testGetHadoopPathLocalPath() throws Exception {
     Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
     method.setAccessible(true);
     assertEquals("/local/path", method.invoke(null, "/local/path"));
   }
 
-  @Test
-  void testGetHadoopPathNull() throws Exception {
+  @Test void testGetHadoopPathNull() throws Exception {
     Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, (String) null));
@@ -232,8 +213,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== isNullRepresentation tests ======
 
-  @Test
-  void testIsNullRepresentationDefault() throws Exception {
+  @Test void testIsNullRepresentationDefault() throws Exception {
     Method method = ParquetConversionUtil.class.getDeclaredMethod("isNullRepresentation", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(null, "NULL"));
@@ -246,10 +226,9 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertTrue((Boolean) method.invoke(null, ""));
   }
 
-  @Test
-  void testIsNullRepresentationWithCustomSet() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "isNullRepresentation", String.class, java.util.Set.class);
+  @Test void testIsNullRepresentationWithCustomSet() throws Exception {
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("isNullRepresentation", String.class, java.util.Set.class);
     method.setAccessible(true);
 
     java.util.Set<String> customNulls = new java.util.HashSet<>();
@@ -264,8 +243,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
 
   // ====== createParquetFieldFromCalciteType tests ======
 
-  @Test
-  void testCreateParquetFieldBoolean() throws Exception {
+  @Test void testCreateParquetFieldBoolean() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -285,8 +263,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals("flag", result.getName());
   }
 
-  @Test
-  void testCreateParquetFieldInteger() throws Exception {
+  @Test void testCreateParquetFieldInteger() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -306,8 +283,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals("count", result.getName());
   }
 
-  @Test
-  void testCreateParquetFieldSmallint() throws Exception {
+  @Test void testCreateParquetFieldSmallint() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -326,8 +302,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldTinyint() throws Exception {
+  @Test void testCreateParquetFieldTinyint() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -346,8 +321,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldBigint() throws Exception {
+  @Test void testCreateParquetFieldBigint() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -366,8 +340,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldFloat() throws Exception {
+  @Test void testCreateParquetFieldFloat() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -386,8 +359,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldReal() throws Exception {
+  @Test void testCreateParquetFieldReal() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -406,8 +378,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldDouble() throws Exception {
+  @Test void testCreateParquetFieldDouble() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -426,8 +397,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldDecimal() throws Exception {
+  @Test void testCreateParquetFieldDecimal() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -447,8 +417,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals("amount", result.getName());
   }
 
-  @Test
-  void testCreateParquetFieldDecimalZeroPrecision() throws Exception {
+  @Test void testCreateParquetFieldDecimalZeroPrecision() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -468,8 +437,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldDate() throws Exception {
+  @Test void testCreateParquetFieldDate() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -489,8 +457,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals("dt", result.getName());
   }
 
-  @Test
-  void testCreateParquetFieldTime() throws Exception {
+  @Test void testCreateParquetFieldTime() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -509,8 +476,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldTimestamp() throws Exception {
+  @Test void testCreateParquetFieldTimestamp() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -529,8 +495,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldTimestampWithTZ() throws Exception {
+  @Test void testCreateParquetFieldTimestampWithTZ() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -550,8 +515,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testCreateParquetFieldVarchar() throws Exception {
+  @Test void testCreateParquetFieldVarchar() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -572,8 +536,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals(org.apache.parquet.schema.Type.Repetition.OPTIONAL, result.getRepetition());
   }
 
-  @Test
-  void testCreateParquetFieldChar() throws Exception {
+  @Test void testCreateParquetFieldChar() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 
@@ -593,8 +556,7 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertEquals(org.apache.parquet.schema.Type.Repetition.OPTIONAL, result.getRepetition());
   }
 
-  @Test
-  void testCreateParquetFieldNonNullableInteger() throws Exception {
+  @Test void testCreateParquetFieldNonNullableInteger() throws Exception {
     Method method = getCreateParquetFieldMethod();
     method.setAccessible(true);
 

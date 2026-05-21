@@ -40,8 +40,7 @@ public class ConcurrentSpilloverManagerPushoverTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ConcurrentSpilloverManagerPushoverTest.class);
 
-  @Test
-  @DisplayName("getSpilloverDirectory creates directory for connection")
+  @Test @DisplayName("getSpilloverDirectory creates directory for connection")
   void testGetSpilloverDirectory() throws IOException {
     String connId = "test_conn_" + System.nanoTime();
     try {
@@ -55,8 +54,7 @@ public class ConcurrentSpilloverManagerPushoverTest {
     }
   }
 
-  @Test
-  @DisplayName("getSpilloverDirectory returns same directory for same connection")
+  @Test @DisplayName("getSpilloverDirectory returns same directory for same connection")
   void testGetSpilloverDirectorySameConnection() throws IOException {
     String connId = "same_conn_" + System.nanoTime();
     try {
@@ -69,8 +67,7 @@ public class ConcurrentSpilloverManagerPushoverTest {
     }
   }
 
-  @Test
-  @DisplayName("createSpilloverFile creates file in connection directory")
+  @Test @DisplayName("createSpilloverFile creates file in connection directory")
   void testCreateSpilloverFile() throws IOException {
     String connId = "file_conn_" + System.nanoTime();
     try {
@@ -86,8 +83,7 @@ public class ConcurrentSpilloverManagerPushoverTest {
     }
   }
 
-  @Test
-  @DisplayName("cleanupConnectionDirectory removes directory and contents")
+  @Test @DisplayName("cleanupConnectionDirectory removes directory and contents")
   void testCleanupConnectionDirectory() throws IOException {
     String connId = "cleanup_conn_" + System.nanoTime();
     Path dir = ConcurrentSpilloverManager.getSpilloverDirectory(connId);
@@ -104,51 +100,44 @@ public class ConcurrentSpilloverManagerPushoverTest {
         "Directory should be removed after cleanup");
   }
 
-  @Test
-  @DisplayName("cleanupConnectionDirectory handles non-existent connection gracefully")
+  @Test @DisplayName("cleanupConnectionDirectory handles non-existent connection gracefully")
   void testCleanupNonExistentConnection() {
     // Should not throw
     ConcurrentSpilloverManager.cleanupConnectionDirectory("non_existent_" + System.nanoTime());
   }
 
-  @Test
-  @DisplayName("cleanupOldDirectories does not throw on missing base")
+  @Test @DisplayName("cleanupOldDirectories does not throw on missing base")
   void testCleanupOldDirectoriesMissingBase() {
     // Should not throw even if base directory doesn't exist
     ConcurrentSpilloverManager.cleanupOldDirectories(24);
   }
 
-  @Test
-  @DisplayName("RedisDistributedLock createIfAvailable returns null without Redis config")
+  @Test @DisplayName("RedisDistributedLock createIfAvailable returns null without Redis config")
   void testRedisLockReturnsNullWithoutConfig() {
     RedisDistributedLock lock = RedisDistributedLock.createIfAvailable("test_resource");
     // Without calcite.redis.url system property, should return null
     assertTrue(lock == null, "Should return null when Redis is not configured");
   }
 
-  @Test
-  @DisplayName("RedisDistributedLock tryLock returns false without Redis")
+  @Test @DisplayName("RedisDistributedLock tryLock returns false without Redis")
   void testRedisLockTryLockReturnsFalse() throws InterruptedException {
     RedisDistributedLock lock = new RedisDistributedLock(new Object(), "test", 5000);
     assertFalse(lock.tryLock(100), "tryLock should return false without Redis");
   }
 
-  @Test
-  @DisplayName("RedisDistributedLock unlock is no-op without Redis")
+  @Test @DisplayName("RedisDistributedLock unlock is no-op without Redis")
   void testRedisLockUnlockNoOp() {
     RedisDistributedLock lock = new RedisDistributedLock(new Object(), "test", 5000);
     lock.unlock(); // Should not throw
   }
 
-  @Test
-  @DisplayName("RedisDistributedLock extend returns false without Redis")
+  @Test @DisplayName("RedisDistributedLock extend returns false without Redis")
   void testRedisLockExtendReturnsFalse() {
     RedisDistributedLock lock = new RedisDistributedLock(new Object(), "test", 5000);
     assertFalse(lock.extend(1000), "extend should return false without Redis");
   }
 
-  @Test
-  @DisplayName("RedisDistributedLock close calls unlock")
+  @Test @DisplayName("RedisDistributedLock close calls unlock")
   void testRedisLockClose() {
     RedisDistributedLock lock = new RedisDistributedLock(new Object(), "test", 5000);
     lock.close(); // Should not throw

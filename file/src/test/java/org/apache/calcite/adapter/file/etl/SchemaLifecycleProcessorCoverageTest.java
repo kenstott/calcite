@@ -25,11 +25,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,8 +68,7 @@ class SchemaLifecycleProcessorCoverageTest {
 
   @Test void testBuilderRequiresConfig() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() {
+      @Override public void execute() {
         SchemaLifecycleProcessor.builder()
             .storageProvider(storageProvider)
             .materializeDirectory(tempDir.toString())
@@ -83,8 +80,7 @@ class SchemaLifecycleProcessorCoverageTest {
   @Test void testBuilderRequiresStorageProvider() {
     SchemaConfig config = createMinimalConfig("test");
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() {
+      @Override public void execute() {
         SchemaLifecycleProcessor.builder()
             .config(config)
             .build();
@@ -100,8 +96,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .build();
 
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() {
+      @Override public void execute() {
         SchemaLifecycleProcessor.builder()
             .config(config)
             .storageProvider(storageProvider)
@@ -191,8 +186,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .beforeTable("test_table", new java.util.function.Consumer<TableContext>() {
-          @Override
-          public void accept(TableContext ctx) {
+          @Override public void accept(TableContext ctx) {
             called.set(true);
           }
         })
@@ -206,8 +200,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .afterTable("test_table", new java.util.function.BiConsumer<TableContext, EtlResult>() {
-          @Override
-          public void accept(TableContext ctx, EtlResult result) {
+          @Override public void accept(TableContext ctx, EtlResult result) {
             // no-op
           }
         })
@@ -222,8 +215,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .onTableError("test_table",
             new java.util.function.BiFunction<TableContext, Exception, Boolean>() {
-              @Override
-              public Boolean apply(TableContext ctx, Exception ex) {
+              @Override public Boolean apply(TableContext ctx, Exception ex) {
                 return Boolean.TRUE;
               }
             })
@@ -239,8 +231,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .resolveDimensions("test_table",
             new java.util.function.BiFunction<TableContext,
                 Map<String, DimensionConfig>, Map<String, DimensionConfig>>() {
-              @Override
-              public Map<String, DimensionConfig> apply(
+              @Override public Map<String, DimensionConfig> apply(
                   TableContext ctx, Map<String, DimensionConfig> dims) {
                 return dims;
               }
@@ -255,8 +246,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .isEnabled("test_table", new java.util.function.Predicate<TableContext>() {
-          @Override
-          public boolean test(TableContext ctx) {
+          @Override public boolean test(TableContext ctx) {
             return false;
           }
         })
@@ -271,8 +261,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .shouldProcess("test_table", new java.util.function.Predicate<TableContext>() {
-          @Override
-          public boolean test(TableContext ctx) {
+          @Override public boolean test(TableContext ctx) {
             return true;
           }
         })
@@ -290,8 +279,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .beforeSource("test_table", new java.util.function.Consumer<TableContext>() {
-          @Override
-          public void accept(TableContext ctx) {
+          @Override public void accept(TableContext ctx) {
             // no-op
           }
         })
@@ -306,8 +294,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .afterSource("test_table",
             new java.util.function.BiConsumer<TableContext, SourceResult>() {
-              @Override
-              public void accept(TableContext ctx, SourceResult result) {
+              @Override public void accept(TableContext ctx, SourceResult result) {
                 // no-op
               }
             })
@@ -322,8 +309,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .onSourceError("test_table",
             new java.util.function.BiFunction<TableContext, Exception, Boolean>() {
-              @Override
-              public Boolean apply(TableContext ctx, Exception ex) {
+              @Override public Boolean apply(TableContext ctx, Exception ex) {
                 return Boolean.TRUE;
               }
             })
@@ -341,8 +327,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .beforeMaterialize("test_table", new java.util.function.Consumer<TableContext>() {
-          @Override
-          public void accept(TableContext ctx) {
+          @Override public void accept(TableContext ctx) {
             // no-op
           }
         })
@@ -357,8 +342,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .afterMaterialize("test_table",
             new java.util.function.BiConsumer<TableContext, MaterializeResult>() {
-              @Override
-              public void accept(TableContext ctx, MaterializeResult result) {
+              @Override public void accept(TableContext ctx, MaterializeResult result) {
                 // no-op
               }
             })
@@ -373,8 +357,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .onMaterializeError("test_table",
             new java.util.function.BiFunction<TableContext, Exception, Boolean>() {
-              @Override
-              public Boolean apply(TableContext ctx, Exception ex) {
+              @Override public Boolean apply(TableContext ctx, Exception ex) {
                 return Boolean.TRUE;
               }
             })
@@ -394,8 +377,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .fetchData("test_table",
             new java.util.function.BiFunction<TableContext, Map<String, String>,
                 Iterator<Map<String, Object>>>() {
-              @Override
-              public Iterator<Map<String, Object>> apply(
+              @Override public Iterator<Map<String, Object>> apply(
                   TableContext ctx, Map<String, String> vars) {
                 return Collections.<Map<String, Object>>emptyIterator();
               }
@@ -411,8 +393,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .storageProvider(storageProvider)
         .writeData("test_table",
             new SchemaLifecycleProcessor.Builder.FetchDataWriteFunction() {
-              @Override
-              public long write(TableContext context,
+              @Override public long write(TableContext context,
                   Iterator<Map<String, Object>> data,
                   Map<String, String> variables) {
                 return 0;
@@ -665,14 +646,12 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .isEnabled("test_table", new java.util.function.Predicate<TableContext>() {
-          @Override
-          public boolean test(TableContext ctx) {
+          @Override public boolean test(TableContext ctx) {
             return false; // Disable the table
           }
         })
         .beforeTable("test_table", new java.util.function.Consumer<TableContext>() {
-          @Override
-          public void accept(TableContext ctx) {
+          @Override public void accept(TableContext ctx) {
             beforeTableCount.incrementAndGet();
           }
         })
@@ -692,8 +671,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .isEnabled("*", new java.util.function.Predicate<TableContext>() {
-          @Override
-          public boolean test(TableContext ctx) {
+          @Override public boolean test(TableContext ctx) {
             return false; // Disable all tables
           }
         })
@@ -935,8 +913,7 @@ class SchemaLifecycleProcessorCoverageTest {
 
   @Test void testSchemaConfigBuilderRequiresName() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() {
+      @Override public void execute() {
         SchemaConfig.builder().build();
       }
     });
@@ -944,8 +921,7 @@ class SchemaLifecycleProcessorCoverageTest {
 
   @Test void testSchemaConfigBuilderEmptyNameThrows() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
-      @Override
-      public void execute() {
+      @Override public void execute() {
         SchemaConfig.builder().name("").build();
       }
     });
@@ -1127,8 +1103,7 @@ class SchemaLifecycleProcessorCoverageTest {
         .config(config)
         .storageProvider(storageProvider)
         .beforeTable("test_table", new java.util.function.Consumer<TableContext>() {
-          @Override
-          public void accept(TableContext ctx) {
+          @Override public void accept(TableContext ctx) {
             tableNameRef.set(ctx.getTableName());
             tableIndexRef.set(ctx.getTableIndex());
           }
@@ -1222,7 +1197,8 @@ class SchemaLifecycleProcessorCoverageTest {
         listener.writeData(tableCtx,
             Collections.<Map<String, Object>>emptyIterator(),
             Collections.<String, String>emptyMap()));
-    assertNull(listener.resolveDimensions(tableCtx,
+    assertNull(
+        listener.resolveDimensions(tableCtx,
         Collections.<String, DimensionConfig>emptyMap()));
     assertNull(listener.resolveApiKey(tableCtx, "TEST_KEY"));
     assertTrue(listener.isTableEnabled(tableCtx));

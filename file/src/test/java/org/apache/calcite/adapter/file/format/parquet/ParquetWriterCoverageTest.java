@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.format.parquet;
 import org.apache.calcite.adapter.file.etl.ColumnConfig;
 import org.apache.calcite.adapter.file.etl.HiveParquetWriter;
 import org.apache.calcite.adapter.file.etl.MaterializeConfig;
-import org.apache.calcite.adapter.file.etl.MaterializeOptionsConfig;
 import org.apache.calcite.adapter.file.etl.MaterializeOutputConfig;
 import org.apache.calcite.adapter.file.etl.MaterializePartitionConfig;
 import org.apache.calcite.adapter.file.etl.MaterializeResult;
@@ -40,11 +39,9 @@ import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +49,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -82,8 +78,8 @@ class ParquetWriterCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT 1 AS item_id, 'Widget' AS item_name, 9.99 AS price, true AS in_stock");
+      ResultSet rs =
+          stmt.executeQuery("SELECT 1 AS item_id, 'Widget' AS item_name, 9.99 AS price, true AS in_stock");
 
       DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
     }
@@ -94,8 +90,8 @@ class ParquetWriterCoverageTest {
     // Verify content by reading back with DuckDB
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("item_id"));
       assertEquals("Widget", rs.getString("item_name"));
@@ -113,8 +109,8 @@ class ParquetWriterCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT 1 AS product_id, 'Widget' AS product_name");
+      ResultSet rs =
+          stmt.executeQuery("SELECT 1 AS product_id, 'Widget' AS product_name");
 
       DirectParquetWriter.writeResultSetToParquet(
           rs, new Path(parquetFile.toString()),
@@ -131,8 +127,8 @@ class ParquetWriterCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT "
+      ResultSet rs =
+          stmt.executeQuery("SELECT "
           + "CAST(1 AS TINYINT) AS tiny_col, "
           + "CAST(100 AS SMALLINT) AS small_col, "
           + "42 AS int_col, "
@@ -152,8 +148,8 @@ class ParquetWriterCoverageTest {
     // Verify by reading back
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
       assertTrue(rs.next());
       assertEquals(42, rs.getInt("int_col"));
       assertEquals("hello", rs.getString("str_col"));
@@ -168,8 +164,8 @@ class ParquetWriterCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT CAST(NULL AS INTEGER) AS nullable_id, "
+      ResultSet rs =
+          stmt.executeQuery("SELECT CAST(NULL AS INTEGER) AS nullable_id, "
           + "CAST(NULL AS VARCHAR) AS nullable_name, "
           + "42 AS non_null_val");
 
@@ -181,8 +177,8 @@ class ParquetWriterCoverageTest {
     // Verify nulls are preserved
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_parquet('" + parquetFile.toString() + "')");
       assertTrue(rs.next());
       rs.getInt("nullable_id");
       assertTrue(rs.wasNull());
@@ -196,8 +192,8 @@ class ParquetWriterCoverageTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM (VALUES "
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM (VALUES "
           + "(1, 'Alice', 30), "
           + "(2, 'Bob', 25), "
           + "(3, 'Charlie', 35)) AS t(person_id, person_name, person_age)");
@@ -210,8 +206,8 @@ class ParquetWriterCoverageTest {
     // Verify row count
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT count(*) AS cnt FROM read_parquet('"
+      ResultSet rs =
+          stmt.executeQuery("SELECT count(*) AS cnt FROM read_parquet('"
           + parquetFile.toString() + "')");
       assertTrue(rs.next());
       assertEquals(3, rs.getInt("cnt"));
@@ -256,10 +252,10 @@ class ParquetWriterCoverageTest {
 
     // Create test JSON file
     java.nio.file.Path jsonFile = tempDir.resolve("input_data.json");
-    Files.write(jsonFile, Arrays.asList(
+    Files.write(
+        jsonFile, Arrays.asList(
         "[{\"region\": \"US\", \"year\": 2020, \"revenue\": 1000},"
-        + " {\"region\": \"EU\", \"year\": 2020, \"revenue\": 2000}]"
-    ), StandardCharsets.UTF_8);
+        + " {\"region\": \"EU\", \"year\": 2020, \"revenue\": 2000}]"), StandardCharsets.UTF_8);
 
     HiveParquetWriter writer = new HiveParquetWriter(storageProvider, tempDir.toString());
 
@@ -282,11 +278,11 @@ class ParquetWriterCoverageTest {
 
     // Create test CSV file
     java.nio.file.Path csvFile = tempDir.resolve("input_data.csv");
-    Files.write(csvFile, Arrays.asList(
+    Files.write(
+        csvFile, Arrays.asList(
         "product,quantity,price",
         "Widget,10,9.99",
-        "Gadget,5,19.99"
-    ), StandardCharsets.UTF_8);
+        "Gadget,5,19.99"), StandardCharsets.UTF_8);
 
     HiveParquetWriter writer = new HiveParquetWriter(storageProvider, tempDir.toString());
 
@@ -305,14 +301,14 @@ class ParquetWriterCoverageTest {
   }
 
   @Test void testHiveParquetWriterMaterializeFromJsonWithPartitions() throws IOException {
-    java.nio.file.Path outputDir = Files.createDirectories(
-        tempDir.resolve("hive_partition_output"));
+    java.nio.file.Path outputDir =
+        Files.createDirectories(tempDir.resolve("hive_partition_output"));
 
     java.nio.file.Path jsonFile = tempDir.resolve("partitioned_data.json");
-    Files.write(jsonFile, Arrays.asList(
+    Files.write(
+        jsonFile, Arrays.asList(
         "[{\"region\": \"US\", \"year\": 2020, \"revenue\": 1000},"
-        + " {\"region\": \"EU\", \"year\": 2021, \"revenue\": 2000}]"
-    ), StandardCharsets.UTF_8);
+        + " {\"region\": \"EU\", \"year\": 2021, \"revenue\": 2000}]"), StandardCharsets.UTF_8);
 
     HiveParquetWriter writer = new HiveParquetWriter(storageProvider, tempDir.toString());
 
@@ -334,13 +330,13 @@ class ParquetWriterCoverageTest {
   }
 
   @Test void testHiveParquetWriterMaterializeFromJsonWithColumns() throws IOException {
-    java.nio.file.Path outputDir = Files.createDirectories(
-        tempDir.resolve("hive_columns_output"));
+    java.nio.file.Path outputDir =
+        Files.createDirectories(tempDir.resolve("hive_columns_output"));
 
     java.nio.file.Path jsonFile = tempDir.resolve("column_data.json");
-    Files.write(jsonFile, Arrays.asList(
-        "[{\"full_name\": \"Alice Smith\", \"raw_age\": 30, \"city\": \"NYC\"}]"
-    ), StandardCharsets.UTF_8);
+    Files.write(
+        jsonFile, Arrays.asList(
+        "[{\"full_name\": \"Alice Smith\", \"raw_age\": 30, \"city\": \"NYC\"}]"), StandardCharsets.UTF_8);
 
     HiveParquetWriter writer = new HiveParquetWriter(storageProvider, tempDir.toString());
 
@@ -391,8 +387,8 @@ class ParquetWriterCoverageTest {
   @Test void testGetParquetCacheDirWithSchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("cache_with_schema").toString();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, "test_schema");
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "test_schema");
     assertNotNull(cacheDir);
     assertTrue(cacheDir.getAbsolutePath().contains("schema_test_schema"));
   }
@@ -408,8 +404,8 @@ class ParquetWriterCoverageTest {
   @Test void testGetParquetCacheDirWithNullSchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("null_schema").toString();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, null);
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, null);
     assertNotNull(cacheDir);
     // Null schema name should not add schema prefix
     assertEquals(customDir, cacheDir.getAbsolutePath());
@@ -418,8 +414,8 @@ class ParquetWriterCoverageTest {
   @Test void testGetParquetCacheDirWithEmptySchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = tempDir.resolve("empty_schema").toString();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, "");
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "");
     assertNotNull(cacheDir);
     assertEquals(customDir, cacheDir.getAbsolutePath());
   }

@@ -29,7 +29,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,8 +59,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Builder validation tests =======
 
-  @Test
-  void testBuilderRequiresConfig() {
+  @Test void testBuilderRequiresConfig() {
     assertThrows(IllegalArgumentException.class, () ->
         SchemaLifecycleProcessor.builder()
             .storageProvider(storageProvider)
@@ -69,8 +67,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
             .build());
   }
 
-  @Test
-  void testBuilderRequiresStorageProvider() {
+  @Test void testBuilderRequiresStorageProvider() {
     SchemaConfig config = createMinimalSchemaConfig("test");
     assertThrows(IllegalArgumentException.class, () ->
         SchemaLifecycleProcessor.builder()
@@ -78,8 +75,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
             .build());
   }
 
-  @Test
-  void testBuilderRequiresMaterializeDirectory() {
+  @Test void testBuilderRequiresMaterializeDirectory() {
     // SchemaConfig without materialize directory
     SchemaConfig config = SchemaConfig.builder()
         .name("test")
@@ -95,8 +91,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Builder hook registration tests =======
 
-  @Test
-  void testBuilderBeforeTableHook() throws IOException {
+  @Test void testBuilderBeforeTableHook() throws IOException {
     AtomicBoolean hookCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithHooksOnlyTable("hook_schema", "myTable");
@@ -111,8 +106,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(hookCalled.get(), "beforeTable hook should be called");
   }
 
-  @Test
-  void testBuilderAfterTableHook() throws IOException {
+  @Test void testBuilderAfterTableHook() throws IOException {
     AtomicBoolean hookCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithHooksOnlyTable("hook_schema2", "myTable");
@@ -127,8 +121,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(hookCalled.get(), "afterTable hook should be called");
   }
 
-  @Test
-  void testBuilderOnTableErrorHook() throws IOException {
+  @Test void testBuilderOnTableErrorHook() throws IOException {
     AtomicBoolean errorHookCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithHooksOnlyTable("err_schema", "errTable");
@@ -149,8 +142,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(errorHookCalled.get(), "onTableError hook should be called");
   }
 
-  @Test
-  void testBuilderOnTableErrorHookAbort() {
+  @Test void testBuilderOnTableErrorHookAbort() {
     SchemaConfig config = createSchemaWithHooksOnlyTable("abort_schema", "abortTable");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -165,8 +157,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertThrows(IOException.class, () -> processor.process());
   }
 
-  @Test
-  void testBuilderResolveDimensionsHook() throws IOException {
+  @Test void testBuilderResolveDimensionsHook() throws IOException {
     AtomicBoolean dimensionHookCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithHooksOnlyTable("dim_schema", "dimTable");
@@ -184,8 +175,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(dimensionHookCalled.get(), "resolveDimensions hook should be called");
   }
 
-  @Test
-  void testBuilderIsEnabledHookSkipsTable() throws IOException {
+  @Test void testBuilderIsEnabledHookSkipsTable() throws IOException {
     AtomicBoolean beforeCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithHooksOnlyTable("skip_schema", "skipTable");
@@ -202,8 +192,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertEquals(1, result.getSkippedTables());
   }
 
-  @Test
-  void testBuilderIsEnabledWildcardHook() throws IOException {
+  @Test void testBuilderIsEnabledWildcardHook() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("wild_schema", "wildTable");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -216,8 +205,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertEquals(1, result.getSkippedTables());
   }
 
-  @Test
-  void testDeprecatedShouldProcessHook() throws IOException {
+  @Test void testDeprecatedShouldProcessHook() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("dep_schema", "depTable");
 
     @SuppressWarnings("deprecation")
@@ -233,8 +221,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Source/Materialize phase hook tests =======
 
-  @Test
-  void testBuilderSourcePhaseHooks() throws IOException {
+  @Test void testBuilderSourcePhaseHooks() throws IOException {
     AtomicBoolean beforeSourceCalled = new AtomicBoolean(false);
     AtomicBoolean afterSourceCalled = new AtomicBoolean(false);
 
@@ -258,8 +245,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(beforeSourceCalled.get(), "beforeSource hook should be called");
   }
 
-  @Test
-  void testBuilderMaterializePhaseHooks() throws IOException {
+  @Test void testBuilderMaterializePhaseHooks() throws IOException {
     AtomicBoolean beforeMatCalled = new AtomicBoolean(false);
     AtomicBoolean afterMatCalled = new AtomicBoolean(false);
 
@@ -281,8 +267,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertTrue(beforeMatCalled.get(), "beforeMaterialize hook should be called");
   }
 
-  @Test
-  void testBuilderSourceErrorHook() throws IOException {
+  @Test void testBuilderSourceErrorHook() throws IOException {
     AtomicBoolean sourceErrorCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithSourceTable("serr_schema", "serrTable");
@@ -312,8 +297,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     // The key is that we exercise the code path
   }
 
-  @Test
-  void testBuilderMaterializeErrorHook() throws IOException {
+  @Test void testBuilderMaterializeErrorHook() throws IOException {
     AtomicBoolean matErrorCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithSourceTable("merr_schema", "merrTable");
@@ -338,8 +322,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testBuilderWriteDataHook() throws IOException {
+  @Test void testBuilderWriteDataHook() throws IOException {
     AtomicBoolean writeDataCalled = new AtomicBoolean(false);
 
     SchemaConfig config = createSchemaWithSourceTable("wd_schema", "wdTable");
@@ -363,8 +346,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Deprecated builder methods =======
 
-  @Test
-  void testDeprecatedBaseDirectory() {
+  @Test void testDeprecatedBaseDirectory() {
     SchemaConfig config = createSchemaWithHooksOnlyTable("dep_bd", "t1");
 
     @SuppressWarnings("deprecation")
@@ -379,8 +361,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Builder with operatingDirectory and sourceDirectory =======
 
-  @Test
-  void testBuilderWithOperatingDirectory() {
+  @Test void testBuilderWithOperatingDirectory() {
     SchemaConfig config = createSchemaWithHooksOnlyTable("op_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -392,8 +373,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithSourceStorageProvider() {
+  @Test void testBuilderWithSourceStorageProvider() {
     StorageProvider sourceProvider = new LocalFileStorageProvider();
     SchemaConfig config = createSchemaWithHooksOnlyTable("sp_schema", "t1");
 
@@ -406,8 +386,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithSourceDirectory() {
+  @Test void testBuilderWithSourceDirectory() {
     SchemaConfig config = createSchemaWithHooksOnlyTable("sd_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -419,8 +398,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithIncrementalTracker() {
+  @Test void testBuilderWithIncrementalTracker() {
     SchemaConfig config = createSchemaWithHooksOnlyTable("it_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -434,8 +412,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Process with disabled table via YAML =======
 
-  @Test
-  void testProcessDisabledTableViaYaml() throws IOException {
+  @Test void testProcessDisabledTableViaYaml() throws IOException {
     Map<String, Object> tableMap = new LinkedHashMap<String, Object>();
     tableMap.put("name", "disabledTable");
     tableMap.put("enabled", false);
@@ -462,8 +439,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Process with no-source table =======
 
-  @Test
-  void testProcessNoSourceTable() throws IOException {
+  @Test void testProcessNoSourceTable() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("nosrc_schema", "nosrcTable");
 
     AtomicBoolean afterTableCalled = new AtomicBoolean(false);
@@ -481,8 +457,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= createVariableKey via reflection =======
 
-  @Test
-  void testCreateVariableKeyEmpty() throws Exception {
+  @Test void testCreateVariableKeyEmpty() throws Exception {
     SchemaConfig config = createSchemaWithHooksOnlyTable("vk_schema", "t1");
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
         .config(config)
@@ -512,8 +487,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= DelegatingTableListener fallback to delegate =======
 
-  @Test
-  void testDelegatingListenerFallsBackToDelegate() throws IOException {
+  @Test void testDelegatingListenerFallsBackToDelegate() throws IOException {
     AtomicBoolean delegateBeforeCalled = new AtomicBoolean(false);
     AtomicBoolean delegateAfterCalled = new AtomicBoolean(false);
 
@@ -549,8 +523,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= DelegatingTableListener resolveApiKey =======
 
-  @Test
-  void testDelegatingListenerResolveApiKeyFallsBackToDelegate() throws IOException {
+  @Test void testDelegatingListenerResolveApiKeyFallsBackToDelegate() throws IOException {
     AtomicReference<String> resolvedKey = new AtomicReference<>();
 
     TableLifecycleListener delegate = new TableLifecycleListener() {
@@ -581,8 +554,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= DelegatingTableListener with no delegate =======
 
-  @Test
-  void testDelegatingListenerWithoutDelegate() throws IOException {
+  @Test void testDelegatingListenerWithoutDelegate() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("nodel_schema", "nodelTable");
 
     // Register a hook for a different table - ensures DelegatingTableListener is created
@@ -600,8 +572,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Schema error handling =======
 
-  @Test
-  void testSchemaErrorCallsOnSchemaError() {
+  @Test void testSchemaErrorCallsOnSchemaError() {
     AtomicBoolean schemaErrorCalled = new AtomicBoolean(false);
 
     SchemaLifecycleListener schemaListener = new SchemaLifecycleListener() {
@@ -628,8 +599,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= Multiple tables processing =======
 
-  @Test
-  void testMultipleTablesProcessing() throws IOException {
+  @Test void testMultipleTablesProcessing() throws IOException {
     List<EtlPipelineConfig> tables = new ArrayList<EtlPipelineConfig>();
     tables.add(createHooksOnlyTableConfig("table1"));
     tables.add(createHooksOnlyTableConfig("table2"));
@@ -658,8 +628,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= archiveRawCache via process (operatingDir null) =======
 
-  @Test
-  void testArchiveRawCacheWithNullOperatingDir() throws IOException {
+  @Test void testArchiveRawCacheWithNullOperatingDir() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("arc_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -672,8 +641,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testArchiveRawCacheWithLocalStorageSkips() throws IOException {
+  @Test void testArchiveRawCacheWithLocalStorageSkips() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("arc_local", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -686,8 +654,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
     assertNotNull(result);
   }
 
-  @Test
-  void testArchiveRawCacheWithNonExistentCacheDir() throws IOException {
+  @Test void testArchiveRawCacheWithNonExistentCacheDir() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("arc_none", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -702,8 +669,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= processBulkDownloads empty =======
 
-  @Test
-  void testProcessBulkDownloadsEmpty() throws IOException {
+  @Test void testProcessBulkDownloadsEmpty() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("bd_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -718,8 +684,7 @@ class SchemaLifecycleProcessorDeepCoverageTest2 {
 
   // ======= executeSchemaPostProcessing with null/empty =======
 
-  @Test
-  void testSchemaPostProcessingEmpty() throws IOException {
+  @Test void testSchemaPostProcessingEmpty() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("pp_schema", "t1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()

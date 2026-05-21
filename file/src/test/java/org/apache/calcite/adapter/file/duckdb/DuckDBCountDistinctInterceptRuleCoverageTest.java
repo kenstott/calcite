@@ -54,8 +54,8 @@ public class DuckDBCountDistinctInterceptRuleCoverageTest {
   }
 
   @Test void testCreateHLLValuesMethodExists() throws Exception {
-    Method method = DuckDBCountDistinctInterceptRule.class.getDeclaredMethod(
-        "createHLLValues",
+    Method method =
+        DuckDBCountDistinctInterceptRule.class.getDeclaredMethod("createHLLValues",
         org.apache.calcite.rel.core.Aggregate.class,
         java.util.List.class);
     method.setAccessible(true);
@@ -63,15 +63,15 @@ public class DuckDBCountDistinctInterceptRuleCoverageTest {
   }
 
   @Test void testMatchesMethodExists() throws Exception {
-    Method method = DuckDBCountDistinctInterceptRule.class.getMethod(
-        "matches",
+    Method method =
+        DuckDBCountDistinctInterceptRule.class.getMethod("matches",
         org.apache.calcite.plan.RelOptRuleCall.class);
     assertNotNull(method);
   }
 
   @Test void testOnMatchMethodExists() throws Exception {
-    Method method = DuckDBCountDistinctInterceptRule.class.getMethod(
-        "onMatch",
+    Method method =
+        DuckDBCountDistinctInterceptRule.class.getMethod("onMatch",
         org.apache.calcite.plan.RelOptRuleCall.class);
     assertNotNull(method);
   }

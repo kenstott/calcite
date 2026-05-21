@@ -668,7 +668,8 @@ public class HttpSourceTest {
         .url("https://api.example.com/v1/data")
         .method(HttpSourceConfig.HttpMethod.GET)
         .auth(HttpSourceConfig.AuthConfig.bearer("my_token"))
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             new HashMap<String, Object>() {{
               put("format", "json");
               put("dataPath", "$.results");
@@ -682,7 +683,8 @@ public class HttpSourceTest {
   @Test void testHttpSourceWithCacheEnabled() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .cache(HttpSourceConfig.CacheConfig.fromMap(
+        .cache(
+            HttpSourceConfig.CacheConfig.fromMap(
             new HashMap<String, Object>() {{
               put("enabled", true);
               put("ttlSeconds", 1800);

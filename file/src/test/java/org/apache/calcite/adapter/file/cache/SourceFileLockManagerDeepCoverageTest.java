@@ -47,8 +47,7 @@ public class SourceFileLockManagerDeepCoverageTest {
 
   // === Write lock tests ===
 
-  @Test
-  public void testAcquireWriteLockBasic() throws IOException {
+  @Test public void testAcquireWriteLockBasic() throws IOException {
     File f = tempDir.resolve("write_basic.csv").toFile();
     Files.write(f.toPath(), "a,b,c\n1,2,3\n".getBytes(StandardCharsets.UTF_8));
 
@@ -60,8 +59,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     handle.close();
   }
 
-  @Test
-  public void testWriteLockHandleIsValidFalseAfterClose() throws IOException {
+  @Test public void testWriteLockHandleIsValidFalseAfterClose() throws IOException {
     File f = tempDir.resolve("write_valid.csv").toFile();
     Files.write(f.toPath(), "x".getBytes(StandardCharsets.UTF_8));
 
@@ -74,8 +72,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     assertFalse(handle.isValid());
   }
 
-  @Test
-  public void testWriteLockHandleCloseIdempotent() throws IOException {
+  @Test public void testWriteLockHandleCloseIdempotent() throws IOException {
     File f = tempDir.resolve("write_idempotent.csv").toFile();
     Files.write(f.toPath(), "x".getBytes(StandardCharsets.UTF_8));
 
@@ -86,8 +83,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     handle.close();
   }
 
-  @Test
-  public void testWriteLockOnNewFileCreatesIt() throws IOException {
+  @Test public void testWriteLockOnNewFileCreatesIt() throws IOException {
     // RandomAccessFile("rw") creates the file if it doesn't exist
     File f = tempDir.resolve("new_write.csv").toFile();
 
@@ -100,8 +96,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     assertTrue(f.exists(), "Write lock should have created the file");
   }
 
-  @Test
-  public void testWriteLockAcquireAndRelease() throws IOException {
+  @Test public void testWriteLockAcquireAndRelease() throws IOException {
     File f = tempDir.resolve("write_rel.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));
 
@@ -117,8 +112,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     handle2.close();
   }
 
-  @Test
-  public void testReadLockThenWriteLockOnDifferentFiles() throws IOException {
+  @Test public void testReadLockThenWriteLockOnDifferentFiles() throws IOException {
     File readFile = tempDir.resolve("read_file.csv").toFile();
     Files.write(readFile.toPath(), "r_data".getBytes(StandardCharsets.UTF_8));
 
@@ -139,8 +133,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     writeHandle.close();
   }
 
-  @Test
-  public void testReadLockOnSameFileMultipleTimes() throws IOException {
+  @Test public void testReadLockOnSameFileMultipleTimes() throws IOException {
     // Covers the OverlappingFileLockException path in acquireReadLock
     // where the same JVM already has a lock on the file
     File f = tempDir.resolve("overlap.csv").toFile();
@@ -163,8 +156,7 @@ public class SourceFileLockManagerDeepCoverageTest {
     h1.close();
   }
 
-  @Test
-  public void testReadLockDefaultTimeout() throws IOException {
+  @Test public void testReadLockDefaultTimeout() throws IOException {
     // Exercises the default 30-second timeout path
     File f = tempDir.resolve("default_timeout.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));
@@ -183,8 +175,7 @@ public class SourceFileLockManagerDeepCoverageTest {
    * A negative timeout means the deadline is already in the past,
    * so the while loop never executes and throws immediately.
    */
-  @Test
-  @Timeout(value = 5, unit = TimeUnit.SECONDS)
+  @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
   public void testReadLockTimeoutThrows() throws IOException {
     File f = tempDir.resolve("read_timeout.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));
@@ -198,8 +189,7 @@ public class SourceFileLockManagerDeepCoverageTest {
   /**
    * Tests the timeout path in acquireWriteLock (line 172).
    */
-  @Test
-  @Timeout(value = 5, unit = TimeUnit.SECONDS)
+  @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
   public void testWriteLockTimeoutThrows() throws IOException {
     File f = tempDir.resolve("write_timeout.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));
@@ -220,8 +210,7 @@ public class SourceFileLockManagerDeepCoverageTest {
    * main thread first (causing OverlappingFileLockException on retry), then
    * interrupt the waiting thread.
    */
-  @Test
-  @Timeout(value = 10, unit = TimeUnit.SECONDS)
+  @Test @Timeout(value = 10, unit = TimeUnit.SECONDS)
   public void testReadLockInterruptedThrows() throws Exception {
     File f = tempDir.resolve("read_interrupt.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));
@@ -263,8 +252,7 @@ public class SourceFileLockManagerDeepCoverageTest {
    * Tests that InterruptedException during sleep in acquireWriteLock throws IOException.
    * This exercises lines 162-169 in SourceFileLockManager.
    */
-  @Test
-  @Timeout(value = 10, unit = TimeUnit.SECONDS)
+  @Test @Timeout(value = 10, unit = TimeUnit.SECONDS)
   public void testWriteLockInterruptedThrows() throws Exception {
     File f = tempDir.resolve("write_interrupt.csv").toFile();
     Files.write(f.toPath(), "data".getBytes(StandardCharsets.UTF_8));

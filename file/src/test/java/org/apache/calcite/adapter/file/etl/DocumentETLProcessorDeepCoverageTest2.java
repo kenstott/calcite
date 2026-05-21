@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
-import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.Tag;
@@ -28,19 +27,14 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -66,8 +60,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== processEntities sequential ==========
 
-  @Test
-  void testProcessEntitiesEmptyList() throws IOException {
+  @Test void testProcessEntitiesEmptyList() throws IOException {
     DocumentETLProcessor processor = createProcessor(null, null, null);
 
     DocumentETLProcessor.DocumentETLResult result =
@@ -83,8 +76,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== DocumentETLResult toString and isSuccess ==========
 
-  @Test
-  void testDocumentETLResultToString() {
+  @Test void testDocumentETLResultToString() {
     DocumentETLProcessor.DocumentETLResult result =
         new DocumentETLProcessor.DocumentETLResult(
             10, 5, 2, Arrays.asList("a.parquet", "b.parquet"),
@@ -99,8 +91,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertFalse(result.isSuccess(), "Failed > 0 means not success");
   }
 
-  @Test
-  void testDocumentETLResultIsSuccessTrue() {
+  @Test void testDocumentETLResultIsSuccessTrue() {
     DocumentETLProcessor.DocumentETLResult result =
         new DocumentETLProcessor.DocumentETLResult(
             10, 0, 0, Arrays.asList("output.parquet"),
@@ -111,15 +102,14 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== isAlreadyProcessed with S3 fallback ==========
 
-  @Test
-  void testIsAlreadyProcessedWithTrackerReturnsTrue() throws Exception {
+  @Test void testIsAlreadyProcessedWithTrackerReturnsTrue() throws Exception {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     when(tracker.isProcessed("0001234567", "0001234567-24-000001", "10-K")).thenReturn(true);
 
     DocumentETLProcessor processor = createProcessor(null, null, tracker);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -130,15 +120,14 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertTrue((Boolean) m.invoke(processor, docVars));
   }
 
-  @Test
-  void testIsAlreadyProcessedWithTrackerReturnsFalse() throws Exception {
+  @Test void testIsAlreadyProcessedWithTrackerReturnsFalse() throws Exception {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     when(tracker.isProcessed(anyString(), anyString(), anyString())).thenReturn(false);
 
     DocumentETLProcessor processor = createProcessor(null, null, tracker);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -149,18 +138,17 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertFalse((Boolean) m.invoke(processor, docVars));
   }
 
-  @Test
-  void testIsAlreadyProcessedNoTrackerExistsCachePopulation() throws Exception {
+  @Test void testIsAlreadyProcessedNoTrackerExistsCachePopulation() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     // First file exists
     when(sp.exists(contains("_insider.parquet"))).thenReturn(true);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -173,18 +161,17 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertTrue((Boolean) m.invoke(processor, docVars));
   }
 
-  @Test
-  void testIsAlreadyProcessedNoTrackerNotExistsCachePopulation() throws Exception {
+  @Test void testIsAlreadyProcessedNoTrackerNotExistsCachePopulation() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     // All files do not exist
     when(sp.exists(anyString())).thenReturn(false);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -199,15 +186,14 @@ class DocumentETLProcessorDeepCoverageTest2 {
     verify(sp, times(3)).exists(anyString());
   }
 
-  @Test
-  void testIsAlreadyProcessedNoTrackerNullYear() throws Exception {
+  @Test void testIsAlreadyProcessedNoTrackerNullYear() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     // Accession too short to extract year
@@ -219,17 +205,16 @@ class DocumentETLProcessorDeepCoverageTest2 {
     verify(sp, never()).exists(anyString());
   }
 
-  @Test
-  void testIsAlreadyProcessedNoTrackerExceptionReturnsTrue() throws Exception {
+  @Test void testIsAlreadyProcessedNoTrackerExceptionReturnsTrue() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.exists(anyString())).thenThrow(new IOException("S3 error"));
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isAlreadyProcessed", Map.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isAlreadyProcessed", Map.class);
     m.setAccessible(true);
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -242,11 +227,10 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== extractYearFromAccession edge cases ==========
 
-  @Test
-  void testExtractYearFromAccessionVarious() throws Exception {
+  @Test void testExtractYearFromAccessionVarious() throws Exception {
     DocumentETLProcessor processor = createProcessor(null, null, null);
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     // Standard 2024
@@ -271,35 +255,32 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== isTransientError chain walking ==========
 
-  @Test
-  void testIsTransientErrorEOFException() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+  @Test void testIsTransientErrorEOFException() throws Exception {
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     // Direct EOFException
     assertTrue((Boolean) m.invoke(null, new java.io.EOFException("Unexpected end of stream")));
 
     // Wrapped EOFException
-    IOException wrapped = new IOException("Read failed",
-        new java.io.EOFException("premature"));
+    IOException wrapped =
+        new IOException("Read failed", new java.io.EOFException("premature"));
     assertTrue((Boolean) m.invoke(null, wrapped));
   }
 
-  @Test
-  void testIsTransientErrorConnectionReset() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+  @Test void testIsTransientErrorConnectionReset() throws Exception {
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertTrue((Boolean) m.invoke(null, new IOException("Connection reset by peer")));
     assertTrue((Boolean) m.invoke(null, new IOException("Connection closed unexpectedly")));
   }
 
-  @Test
-  void testIsTransientErrorNonTransient() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+  @Test void testIsTransientErrorNonTransient() throws Exception {
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertFalse((Boolean) m.invoke(null, new IOException("File not found: /missing")));
@@ -309,8 +290,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== fetchPaginationFile ==========
 
-  @Test
-  void testFetchPaginationFileCached() throws Exception {
+  @Test void testFetchPaginationFileCached() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.resolvePath(anyString(), anyString())).thenAnswer(inv -> {
       return inv.getArgument(0) + "/" + inv.getArgument(1);
@@ -319,43 +299,42 @@ class DocumentETLProcessorDeepCoverageTest2 {
     when(sp.openInputStream(anyString())).thenReturn(
         new ByteArrayInputStream("{\"cached\":true}".getBytes(StandardCharsets.UTF_8)));
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "fetchPaginationFile", DocumentSource.class, String.class, String.class, String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("fetchPaginationFile", DocumentSource.class, String.class, String.class, String.class);
     m.setAccessible(true);
 
     DocumentSource ds = mock(DocumentSource.class);
-    String result = (String) m.invoke(processor, ds,
-        "https://data.sec.gov/submissions/file.json", "file.json", "0001234567");
+    String result =
+        (String) m.invoke(processor, ds, "https://data.sec.gov/submissions/file.json", "file.json", "0001234567");
 
     assertTrue(result.contains("cached"), "Should return cached content: " + result);
     verify(ds, never()).fetchUrlContent(anyString());
   }
 
-  @Test
-  void testFetchPaginationFileUncached() throws Exception {
+  @Test void testFetchPaginationFileUncached() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.resolvePath(anyString(), anyString())).thenAnswer(inv -> {
       return inv.getArgument(0) + "/" + inv.getArgument(1);
     });
     when(sp.exists(anyString())).thenReturn(false);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class), null, null);
 
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "fetchPaginationFile", DocumentSource.class, String.class, String.class, String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("fetchPaginationFile", DocumentSource.class, String.class, String.class, String.class);
     m.setAccessible(true);
 
     DocumentSource ds = mock(DocumentSource.class);
     when(ds.fetchUrlContent(anyString())).thenReturn("{\"fresh\":true}");
 
-    String result = (String) m.invoke(processor, ds,
-        "https://data.sec.gov/submissions/file.json", "file.json", "0001234567");
+    String result =
+        (String) m.invoke(processor, ds, "https://data.sec.gov/submissions/file.json", "file.json", "0001234567");
 
     assertTrue(result.contains("fresh"), "Should return fresh content: " + result);
     verify(sp).writeFile(anyString(), any(byte[].class));
@@ -363,15 +342,14 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== readStorageFile ==========
 
-  @Test
-  void testReadStorageFile() throws Exception {
+  @Test void testReadStorageFile() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     String content = "line1\nline2\nline3";
     when(sp.openInputStream(anyString())).thenReturn(
         new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mock(HttpSourceConfig.class), sp, "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mock(HttpSourceConfig.class), sp, "/output", "/cache",
         mock(FileConverter.class));
 
     Method m = DocumentETLProcessor.class.getDeclaredMethod("readStorageFile", String.class);
@@ -385,13 +363,12 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== parseDocuments with pagination ==========
 
-  @Test
-  void testParseDocumentsWithoutDocumentSource() {
+  @Test void testParseDocumentsWithoutDocumentSource() {
     HttpSourceConfig config = mock(HttpSourceConfig.class);
     when(config.getDocumentSource()).thenReturn(null);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mock(StorageProvider.class), "/output", "/cache",
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mock(StorageProvider.class), "/output", "/cache",
         mock(FileConverter.class));
 
     // Minimal JSON that parses without error
@@ -408,8 +385,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== PaginationFileRef edge cases ==========
 
-  @Test
-  void testPaginationFileRefOverlapsBothNull() {
+  @Test void testPaginationFileRefOverlapsBothNull() {
     DocumentETLProcessor.PaginationFileRef ref =
         new DocumentETLProcessor.PaginationFileRef("file.json", "2020-01-01", "2024-12-31", 100);
 
@@ -417,8 +393,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertTrue(ref.overlapsYearRange(null, null));
   }
 
-  @Test
-  void testPaginationFileRefExactMatch() {
+  @Test void testPaginationFileRefExactMatch() {
     DocumentETLProcessor.PaginationFileRef ref =
         new DocumentETLProcessor.PaginationFileRef("file.json", "2020-01-01", "2024-12-31", 100);
 
@@ -428,8 +403,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertFalse(ref.overlapsYearRange(2018, 2019)); // before range
   }
 
-  @Test
-  void testPaginationFileRefPartialOverlap() {
+  @Test void testPaginationFileRefPartialOverlap() {
     DocumentETLProcessor.PaginationFileRef ref =
         new DocumentETLProcessor.PaginationFileRef("file.json", "2020-01-01", "2024-12-31", 100);
 
@@ -438,8 +412,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertTrue(ref.overlapsYearRange(2018, 2021)); // overlaps at end
   }
 
-  @Test
-  void testPaginationFileRefOnlyStartYear() {
+  @Test void testPaginationFileRefOnlyStartYear() {
     DocumentETLProcessor.PaginationFileRef ref =
         new DocumentETLProcessor.PaginationFileRef("file.json", "2020-01-01", "2024-12-31", 100);
 
@@ -448,8 +421,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertFalse(ref.overlapsYearRange(2025, null)); // after range
   }
 
-  @Test
-  void testPaginationFileRefOnlyEndYear() {
+  @Test void testPaginationFileRefOnlyEndYear() {
     DocumentETLProcessor.PaginationFileRef ref =
         new DocumentETLProcessor.PaginationFileRef("file.json", "2020-01-01", "2024-12-31", 100);
 
@@ -460,8 +432,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== extractPaginationFiles ==========
 
-  @Test
-  void testExtractPaginationFilesMultipleEntries() {
+  @Test void testExtractPaginationFilesMultipleEntries() {
     DocumentETLProcessor processor = createProcessor(null, null, null);
 
     String json = "{\"filings\":{\"recent\":{},\"files\":["
@@ -483,8 +454,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     assertEquals("CIK0001-submissions-002.json", refs.get(1).name);
   }
 
-  @Test
-  void testExtractPaginationFilesNoName() {
+  @Test void testExtractPaginationFilesNoName() {
     DocumentETLProcessor processor = createProcessor(null, null, null);
 
     // Entry without name should be skipped
@@ -499,87 +469,81 @@ class DocumentETLProcessorDeepCoverageTest2 {
 
   // ========== Constructor variants ==========
 
-  @Test
-  void testConstructorWith5Args() {
+  @Test void testConstructorWith5Args() {
     HttpSourceConfig config = mock(HttpSourceConfig.class);
     StorageProvider sp = mock(StorageProvider.class);
     FileConverter fc = mock(FileConverter.class);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, sp, "/out", "/cache", fc);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, sp, "/out", "/cache", fc);
     assertNotNull(processor);
   }
 
-  @Test
-  void testConstructorWith6Args() {
+  @Test void testConstructorWith6Args() {
     HttpSourceConfig config = mock(HttpSourceConfig.class);
     StorageProvider sp = mock(StorageProvider.class);
     FileConverter fc = mock(FileConverter.class);
     DocumentETLProcessor.ProgressListener listener =
         mock(DocumentETLProcessor.ProgressListener.class);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, sp, "/out", "/cache", fc, listener);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, sp, "/out", "/cache", fc, listener);
     assertNotNull(processor);
   }
 
-  @Test
-  void testConstructorWith7Args() {
+  @Test void testConstructorWith7Args() {
     HttpSourceConfig config = mock(HttpSourceConfig.class);
     StorageProvider sp = mock(StorageProvider.class);
     FileConverter fc = mock(FileConverter.class);
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, sp, "/out", "/cache", fc, null, tracker);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, sp, "/out", "/cache", fc, null, tracker);
     assertNotNull(processor);
   }
 
-  @Test
-  void testConstructorWith8Args() {
+  @Test void testConstructorWith8Args() {
     HttpSourceConfig config = mock(HttpSourceConfig.class);
     StorageProvider sp = mock(StorageProvider.class);
     FileConverter fc = mock(FileConverter.class);
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     FilingIndexProvider fip = mock(FilingIndexProvider.class);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, sp, "/out", "/cache", fc, null, tracker, fip);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, sp, "/out", "/cache", fc, null, tracker, fip);
     assertNotNull(processor);
   }
 
   // ========== extractJsonStringField and extractJsonIntField edge cases ==========
 
-  @Test
-  void testExtractJsonStringFieldNoEndQuote() {
-    assertNull(DocumentETLProcessor.extractJsonStringField(
+  @Test void testExtractJsonStringFieldNoEndQuote() {
+    assertNull(
+        DocumentETLProcessor.extractJsonStringField(
         "{\"key\":\"value_no_end", "key"));
   }
 
-  @Test
-  void testExtractJsonIntFieldParseException() {
+  @Test void testExtractJsonIntFieldParseException() {
     // Force NumberFormatException
-    assertEquals(0, DocumentETLProcessor.extractJsonIntField(
+    assertEquals(
+        0, DocumentETLProcessor.extractJsonIntField(
         "{\"count\":9999999999999999999999}", "count"));
   }
 
-  @Test
-  void testExtractJsonIntFieldWhitespaceBeforeValue() {
-    assertEquals(42, DocumentETLProcessor.extractJsonIntField(
+  @Test void testExtractJsonIntFieldWhitespaceBeforeValue() {
+    assertEquals(
+        42, DocumentETLProcessor.extractJsonIntField(
         "{\"count\":   42}", "count"));
   }
 
   // ========== findMatchingBracket edge case ==========
 
-  @Test
-  void testFindMatchingBracketNestedStringsWithBrackets() {
+  @Test void testFindMatchingBracketNestedStringsWithBrackets() {
     String json = "[\"a[b]\", \"c{d}\", [1,2,3]]";
     int result = DocumentETLProcessor.findMatchingBracket(json, 0);
     assertEquals(json.length() - 1, result, "Should match outer bracket");
   }
 
-  @Test
-  void testFindMatchingBracketEscapedQuote() {
+  @Test void testFindMatchingBracketEscapedQuote() {
     String json = "{\"key\":\"val\\\"ue\"}";
     int result = DocumentETLProcessor.findMatchingBracket(json, 0);
     assertEquals(json.length() - 1, result, "Should handle escaped quotes");

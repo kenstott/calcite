@@ -1,31 +1,20 @@
 #!/usr/bin/env bash
-# Run the DQ SQL script for a schema, write structured results to the Parquet result store.
-# Optionally tears down and rebuilds the schema before running DQ.
 #
-# Usage:
-#   worker-dq-run.sh <schema> [--mode daily|historical] [--dry-run] [--rebuild] [--start-year YYYY]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# --mode daily       Label result path as type=daily (default)
-# --mode historical  Label result path as type=historical
-# --dry-run          Run DQ checks locally but do not upload results to S3
-# --rebuild          Tear down tracker entries, Iceberg data, and DQ results for the
-#                    schema, run the Calcite ETL to rebuild Iceberg tables, then DQ.
-#                    Raw API cache (r2:govdata-raw-v1) is preserved so large datasets
-#                    (e.g. IPEDS) can be rebuilt from cache without live API timeouts.
-# --start-year YYYY  Override GOVDATA_START_YEAR for the rebuild ETL (e.g. 2025 for smoke tests).
-#                    Ignored when --rebuild is not set. Use when the source data cadence is < 1 year
-#                    and a full historical rebuild is not needed.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Reads:  govdata/scripts/{schema}_dq.sql
-# Writes: s3://govdata-tracker-v1/dq-results/schema={schema}/run_date={YYYY-MM-DD}/type={mode}/results.parquet
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-# Exit codes:
-#   0  All tests passed (or only warnings)
-#   1  One or more tests failed (or DuckDB aborted — table likely missing)
-#
-# Pre-flight anti-pattern checks (warn, do not abort):
-#   - Local directory named "s3" or "s3:" under GOVDATA_PARQUET_DIR
-#   - Deprecated s3://govdata-parquet-v1/source={schema}/ path present on S3
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

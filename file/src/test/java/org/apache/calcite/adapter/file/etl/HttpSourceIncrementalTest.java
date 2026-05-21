@@ -42,10 +42,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
 
 /**
  * Tests for HttpSource incremental (sinceDate / sinceYear+sinceQuarter) behaviour.
@@ -123,8 +121,8 @@ class HttpSourceIncrementalTest {
 
   private static HttpSourceConfig whereFilterConfig(String url, String sinceDate,
       String filterParam, String dateField) {
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        sinceDate, null, null, filterParam, dateField, null, null);
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig(sinceDate, null, null, filterParam, dateField, null, null);
     return HttpSourceConfig.builder()
         .url(url)
         .response(offsetResponse())
@@ -134,8 +132,8 @@ class HttpSourceIncrementalTest {
 
   private static HttpSourceConfig directParamFilterConfig(String url, String sinceDate,
       String filterParam) {
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        sinceDate, null, null, filterParam, null, null, null);
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig(sinceDate, null, null, filterParam, null, null, null);
     return HttpSourceConfig.builder()
         .url(url)
         .response(offsetResponse())
@@ -161,8 +159,8 @@ class HttpSourceIncrementalTest {
     addJsonHandler("/data", "[]");
 
     // IncrementalConfig with null sinceDate
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        null, null, null, "$where", "date", null, null);
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig(null, null, null, "$where", "date", null, null);
     HttpSourceConfig cfg = HttpSourceConfig.builder()
         .url(baseUrl + "/data")
         .response(offsetResponse())
@@ -180,8 +178,8 @@ class HttpSourceIncrementalTest {
     addJsonHandler("/data", "[]");
 
     // ${NONEXISTENT_VAR_XYZ:} resolves to "" via VariableResolver
-    HttpSourceConfig cfg = whereFilterConfig(baseUrl + "/data",
-        "${NONEXISTENT_VAR_XYZ_12345:}", "$where", "date");
+    HttpSourceConfig cfg =
+        whereFilterConfig(baseUrl + "/data", "${NONEXISTENT_VAR_XYZ_12345:}", "$where", "date");
     HttpSource src = new HttpSource(cfg);
     drain(src.fetch(Collections.<String, String>emptyMap()));
 
@@ -213,8 +211,8 @@ class HttpSourceIncrementalTest {
     addJsonHandler("/data", "[]");
     System.setProperty("TEST_SINCE_DATE_PROP", "2023-06-01");
     try {
-      HttpSourceConfig cfg = whereFilterConfig(baseUrl + "/data",
-          "${TEST_SINCE_DATE_PROP:}", "$where", "weekendingdate");
+      HttpSourceConfig cfg =
+          whereFilterConfig(baseUrl + "/data", "${TEST_SINCE_DATE_PROP:}", "$where", "weekendingdate");
       HttpSource src = new HttpSource(cfg);
       drain(src.fetch(Collections.<String, String>emptyMap()));
 
@@ -230,8 +228,8 @@ class HttpSourceIncrementalTest {
     addJsonHandler("/data", "[]");
 
     // direct-param style: filterParam is not $where, no dateField
-    HttpSourceConfig cfg = directParamFilterConfig(baseUrl + "/data",
-        "2024-06-01", "lastUpdatePostDate.gte");
+    HttpSourceConfig cfg =
+        directParamFilterConfig(baseUrl + "/data", "2024-06-01", "lastUpdatePostDate.gte");
     HttpSource src = new HttpSource(cfg);
     drain(src.fetch(Collections.<String, String>emptyMap()));
 
@@ -247,8 +245,8 @@ class HttpSourceIncrementalTest {
   @Test @Tag("unit") void sinceYearAndQuarterInjectsCompoundWhereFilter() throws IOException {
     addJsonHandler("/data", "[]");
 
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        null, "2023", "3", "$where", null, "year", "quarter");
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig(null, "2023", "3", "$where", null, "year", "quarter");
     HttpSourceConfig cfg = HttpSourceConfig.builder()
         .url(baseUrl + "/data")
         .response(offsetResponse())
@@ -265,8 +263,8 @@ class HttpSourceIncrementalTest {
   @Test @Tag("unit") void blankSinceYearProducesNoFilterParam() throws IOException {
     addJsonHandler("/data", "[]");
 
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        null, "", "3", "$where", null, "year", "quarter");
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig(null, "", "3", "$where", null, "year", "quarter");
     HttpSourceConfig cfg = HttpSourceConfig.builder()
         .url(baseUrl + "/data")
         .response(offsetResponse())
@@ -303,8 +301,8 @@ class HttpSourceIncrementalTest {
 
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("$limit", "2");
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        "2024-01-01", null, null, "$where", "date", null, null);
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig("2024-01-01", null, null, "$where", "date", null, null);
     Map<String, Object> paginationMap = new LinkedHashMap<String, Object>();
     paginationMap.put("type", "OFFSET");
     paginationMap.put("limitParam", "$limit");
@@ -339,11 +337,10 @@ class HttpSourceIncrementalTest {
    * CDC COVID vaccinations Socrata API.  Implicitly confirms the filter is
    * accepted by the server (HTTP 200) and the response is parseable.
    */
-  @Test
-  @Tag("integration")
+  @Test @Tag("integration")
   void futureSinceDateReturnsZeroRowsFromCdcCovidApi() throws IOException {
-    HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-        "2099-01-01", null, null, "$where", "date", null, null);
+    HttpSourceConfig.IncrementalConfig incr =
+        new HttpSourceConfig.IncrementalConfig("2099-01-01", null, null, "$where", "date", null, null);
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("$limit", "100");
     HttpSourceConfig cfg = HttpSourceConfig.builder()
@@ -363,15 +360,14 @@ class HttpSourceIncrementalTest {
    * Uses CDC COVID vaccinations Socrata endpoint (top-level JSON array).
    * A future date set via system property must return 0 rows from the live API.
    */
-  @Test
-  @Tag("integration")
+  @Test @Tag("integration")
   void systemPropertySinceDateReachesLiveCdcCovidApi() throws IOException {
     System.setProperty("IT_SINCE_DATE", "2099-01-01");
     try {
       Map<String, String> params = new LinkedHashMap<String, String>();
       params.put("$limit", "100");
-      HttpSourceConfig.IncrementalConfig incr = new HttpSourceConfig.IncrementalConfig(
-          "${IT_SINCE_DATE:}", null, null, "$where", "date", null, null);
+      HttpSourceConfig.IncrementalConfig incr =
+          new HttpSourceConfig.IncrementalConfig("${IT_SINCE_DATE:}", null, null, "$where", "date", null, null);
       HttpSourceConfig cfg = HttpSourceConfig.builder()
           .url("https://data.cdc.gov/resource/km4m-vcsb.json")
           .parameters(params)
@@ -392,17 +388,18 @@ class HttpSourceIncrementalTest {
    * comparisons ({@code year >= '2023'}) with HTTP 500 but accepts unquoted ones
    * ({@code year >= 2023}).  A future year returns 0 rows; a known past year returns rows.
    */
-  @Test
-  @Tag("integration")
+  @Test @Tag("integration")
   void unquotedNumericYearFilterWorksAgainstCdcBrfssApi() throws IOException {
     String url = "https://data.cdc.gov/resource/dttw-5yxu.json";
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("$limit", "10");
 
     // Future year with quoteValues=false → 0 rows (API accepts the filter)
-    HttpSourceConfig.IncrementalConfig futureIncr = new HttpSourceConfig.IncrementalConfig(
-        null, "2099", null, "$where", null, "year", null, false);
-    int futureRows = drain(new HttpSource(HttpSourceConfig.builder()
+    HttpSourceConfig.IncrementalConfig futureIncr =
+        new HttpSourceConfig.IncrementalConfig(null, "2099", null, "$where", null, "year", null, false);
+    int futureRows =
+        drain(
+            new HttpSource(HttpSourceConfig.builder()
         .url(url).parameters(params).response(offsetResponse()).incremental(futureIncr).build())
         .fetch(Collections.<String, String>emptyMap()));
     assertEquals(0, futureRows,
@@ -411,9 +408,11 @@ class HttpSourceIncrementalTest {
     try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
     // Past year with quoteValues=false → rows returned
-    HttpSourceConfig.IncrementalConfig pastIncr = new HttpSourceConfig.IncrementalConfig(
-        null, "2019", null, "$where", null, "year", null, false);
-    int pastRows = drain(new HttpSource(HttpSourceConfig.builder()
+    HttpSourceConfig.IncrementalConfig pastIncr =
+        new HttpSourceConfig.IncrementalConfig(null, "2019", null, "$where", null, "year", null, false);
+    int pastRows =
+        drain(
+            new HttpSource(HttpSourceConfig.builder()
         .url(url).parameters(params).response(offsetResponse()).incremental(pastIncr).build())
         .fetch(Collections.<String, String>emptyMap()));
     assumeTrue(pastRows > 0,

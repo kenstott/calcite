@@ -16,22 +16,16 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
-import org.apache.calcite.adapter.enumerable.EnumerableValues;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.adapter.jdbc.JdbcTable;
 import org.apache.calcite.adapter.jdbc.JdbcTableScan;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptRuleCall;
-import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableScan;
-import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
@@ -43,7 +37,6 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -62,8 +55,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== INSTANCE ==========
 
-  @Test
-  void testInstanceNotNull() {
+  @Test void testInstanceNotNull() {
     assertNotNull(DuckDBIcebergCountStarRule.INSTANCE);
     assertEquals("DuckDBIcebergCountStarRule",
         DuckDBIcebergCountStarRule.INSTANCE.toString());
@@ -71,8 +63,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: GROUP BY ==========
 
-  @Test
-  void testMatchesWithGroupBy() {
+  @Test void testMatchesWithGroupBy() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -83,8 +74,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: multiple aggregate calls ==========
 
-  @Test
-  void testMatchesMultipleAggCalls() {
+  @Test void testMatchesMultipleAggCalls() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -99,8 +89,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: non-COUNT ==========
 
-  @Test
-  void testMatchesNonCountAgg() {
+  @Test void testMatchesNonCountAgg() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -117,8 +106,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: COUNT DISTINCT ==========
 
-  @Test
-  void testMatchesCountDistinct() {
+  @Test void testMatchesCountDistinct() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -137,8 +125,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: COUNT with args ==========
 
-  @Test
-  void testMatchesCountWithArgs() {
+  @Test void testMatchesCountWithArgs() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -158,8 +145,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: valid COUNT(*) ==========
 
-  @Test
-  void testMatchesValidCountStar() {
+  @Test void testMatchesValidCountStar() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -179,8 +165,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== matches: zero aggregate calls ==========
 
-  @Test
-  void testMatchesZeroAggCalls() {
+  @Test void testMatchesZeroAggCalls() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -192,19 +177,17 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== findTableScan ==========
 
-  @Test
-  void testFindTableScanNull() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testFindTableScanNull() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     assertNull(m.invoke(DuckDBIcebergCountStarRule.INSTANCE, (RelNode) null));
   }
 
-  @Test
-  void testFindTableScanDirectTableScan() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testFindTableScanDirectTableScan() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -214,10 +197,9 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     assertSame(scan, result);
   }
 
-  @Test
-  void testFindTableScanDeepInTree() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testFindTableScanDeepInTree() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -235,10 +217,9 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     assertSame(scan, result);
   }
 
-  @Test
-  void testFindTableScanNoScanInTree() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testFindTableScanNoScanInTree() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     RelNode leaf = mock(RelNode.class);
@@ -250,10 +231,9 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== getDuckDBSchema ==========
 
-  @Test
-  void testGetDuckDBSchemaNonJdbcScan() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "getDuckDBSchema", TableScan.class);
+  @Test void testGetDuckDBSchemaNonJdbcScan() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
     m.setAccessible(true);
 
     // Plain TableScan (not JdbcTableScan) => null
@@ -261,10 +241,9 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     assertNull(m.invoke(DuckDBIcebergCountStarRule.INSTANCE, scan));
   }
 
-  @Test
-  void testGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "getDuckDBSchema", TableScan.class);
+  @Test void testGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
     m.setAccessible(true);
 
     // JdbcTableScan with a regular JdbcSchema (not DuckDBJdbcSchema) => null
@@ -287,8 +266,7 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== onMatch: input has no table scan ==========
 
-  @Test
-  void testOnMatchNoTableScan() {
+  @Test void testOnMatchNoTableScan() {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
     when(call.rel(0)).thenReturn(agg);
@@ -305,10 +283,9 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
 
   // ========== createCountStarValues via reflection ==========
 
-  @Test
-  void testCreateCountStarValuesNullOnException() throws Exception {
-    Method m = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "createCountStarValues", Aggregate.class, long.class);
+  @Test void testCreateCountStarValuesNullOnException() throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
     m.setAccessible(true);
 
     // If cluster/typeFactory is null, should return null gracefully
@@ -317,8 +294,8 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     when(agg.getCluster()).thenReturn(cluster);
     when(cluster.getRexBuilder()).thenThrow(new NullPointerException("test"));
 
-    RelNode result = (RelNode) m.invoke(
-        DuckDBIcebergCountStarRule.INSTANCE, agg, 42L);
+    RelNode result =
+        (RelNode) m.invoke(DuckDBIcebergCountStarRule.INSTANCE, agg, 42L);
     assertNull(result, "Should return null on exception");
   }
 }

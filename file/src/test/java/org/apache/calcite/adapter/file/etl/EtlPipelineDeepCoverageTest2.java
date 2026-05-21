@@ -25,8 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -47,10 +45,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,8 +88,8 @@ public class EtlPipelineDeepCoverageTest2 {
   @Test void testConstructorWithIncrementalTracker() {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline.ProgressListener listener = mock(EtlPipeline.ProgressListener.class);
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString(),
-        listener, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), listener, incrementalTracker);
     assertNotNull(pipeline);
   }
 
@@ -101,31 +97,31 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     DataProvider dataProvider = mock(DataProvider.class);
     DataWriter dataWriter = mock(DataWriter.class);
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString(),
-        null, incrementalTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
     assertNotNull(pipeline);
   }
 
   @Test void testConstructorWithSeparateSourceStorageProvider() {
     EtlPipelineConfig config = buildMinimalConfig();
     StorageProvider sourceStorageProvider = mock(StorageProvider.class);
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, sourceStorageProvider,
-        tempDir.toString(), null, incrementalTracker, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, sourceStorageProvider, tempDir.toString(), null, incrementalTracker, null, null);
     assertNotNull(pipeline);
   }
 
   @Test void testConstructorWithOperatingDirectory() {
     EtlPipelineConfig config = buildMinimalConfig();
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, null,
-        tempDir.toString(), null, incrementalTracker, null, null, tempDir.toString());
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, null, tempDir.toString(), null, incrementalTracker, null, null, tempDir.toString());
     assertNotNull(pipeline);
   }
 
   @Test void testConstructorNullSourceStorageProviderFallsBack() {
     EtlPipelineConfig config = buildMinimalConfig();
     // sourceStorageProvider is null, should fall back to storageProvider
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, null,
-        tempDir.toString(), null, null, null, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, null, tempDir.toString(), null, null, null, null, null);
     assertNotNull(pipeline);
   }
 
@@ -143,8 +139,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -162,8 +158,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -180,8 +176,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -198,8 +194,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -216,8 +212,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -234,8 +230,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -252,8 +248,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -270,8 +266,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("determineErrorAction",
-        IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -314,8 +310,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithDisabledMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Config with disabled materialization - should return true
@@ -327,8 +323,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, null, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Null storage provider - should return true
@@ -340,8 +336,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithParquetMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Parquet format data directory exists
@@ -354,8 +350,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithParquetMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Parquet format data directory doesn't exist
@@ -368,8 +364,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Iceberg metadata directory exists
@@ -382,8 +378,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     when(storageProvider.isDirectory(anyString())).thenReturn(false);
@@ -395,8 +391,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     when(storageProvider.isDirectory(anyString())).thenThrow(new IOException("Storage error"));
@@ -422,14 +418,15 @@ public class EtlPipelineDeepCoverageTest2 {
         .materialize(materialize)
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     when(incrementalTracker.getCachedCompletion(anyString())).thenReturn(null);
     when(incrementalTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
     Set<Integer> allIndices = new HashSet<Integer>();
     allIndices.add(0);
-    when(incrementalTracker.filterUnprocessedWithEmptyTtl(
+    when(
+        incrementalTracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong())).thenReturn(allIndices);
 
     EtlResult result = pipeline.execute();
@@ -472,8 +469,8 @@ public class EtlPipelineDeepCoverageTest2 {
     when(incrementalTracker.getCachedCompletion("cached_pipeline")).thenReturn(cached);
     when(storageProvider.isDirectory(anyString())).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -517,8 +514,8 @@ public class EtlPipelineDeepCoverageTest2 {
     when(incrementalTracker.getCachedCompletion("zero_rows_pipeline")).thenReturn(cached);
     when(storageProvider.isDirectory(anyString())).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -560,8 +557,8 @@ public class EtlPipelineDeepCoverageTest2 {
     when(incrementalTracker.getCachedCompletion("mismatch_pipeline")).thenReturn(cached);
     when(storageProvider.isDirectory(anyString())).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -609,7 +606,8 @@ public class EtlPipelineDeepCoverageTest2 {
     Set<Integer> allIndices = new HashSet<Integer>();
     allIndices.add(0);
     when(incrementalTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
-    when(incrementalTracker.filterUnprocessedWithEmptyTtl(
+    when(
+        incrementalTracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong())).thenReturn(allIndices);
 
     DataProvider dataProvider = mock(DataProvider.class);
@@ -625,8 +623,8 @@ public class EtlPipelineDeepCoverageTest2 {
     when(writer.getTableLocation()).thenReturn(tempDir.toString());
     when(writer.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, dataProvider, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, dataProvider, null);
 
     // This triggers the full pipeline since cached data doesn't exist
     // But it will fail at MaterializationWriterFactory.createFromConfig...
@@ -667,7 +665,8 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(incrementalTracker.filterUnprocessedWithEmptyTtl(
+    when(
+        incrementalTracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -692,8 +691,8 @@ public class EtlPipelineDeepCoverageTest2 {
     // data provider + data writer
     // The pipeline will try to create a MaterializationWriter from factory,
     // which needs DuckDB. Instead test at a higher level with the execute catching exception.
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -719,11 +718,11 @@ public class EtlPipelineDeepCoverageTest2 {
     DataWriter dataWriter = mock(DataWriter.class);
     when(dataWriter.write(any(EtlPipelineConfig.class), any(), any(Map.class))).thenReturn(5L);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, null, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, null, dataWriter);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
         MaterializationWriter.class, int.class, int.class, String.class);
     method.setAccessible(true);
 
@@ -750,11 +749,11 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = EtlPipelineConfig.fromMap(configMap);
 
     // No data writer for document source - should return 0
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, null, null);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
         MaterializationWriter.class, int.class, int.class, String.class);
     method.setAccessible(true);
 
@@ -783,11 +782,11 @@ public class EtlPipelineDeepCoverageTest2 {
 
     MaterializationWriter writer = mock(MaterializationWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
         MaterializationWriter.class, int.class, int.class, String.class);
     method.setAccessible(true);
 
@@ -818,11 +817,11 @@ public class EtlPipelineDeepCoverageTest2 {
     MaterializationWriter writer = mock(MaterializationWriter.class);
     when(writer.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(2L);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, dataProvider, dataWriter);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
         MaterializationWriter.class, int.class, int.class, String.class);
     method.setAccessible(true);
 
@@ -848,11 +847,11 @@ public class EtlPipelineDeepCoverageTest2 {
     when(dataSource.fetch(any(Map.class))).thenReturn(data.iterator());
 
     // No custom data provider or writer
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker, null, null);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("processSingleBatch",
-        EtlPipelineConfig.class, Map.class, DataSource.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
         MaterializationWriter.class, int.class, int.class, String.class);
     method.setAccessible(true);
 
@@ -957,8 +956,8 @@ public class EtlPipelineDeepCoverageTest2 {
 
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     method.setAccessible(true);
 
     DataSource ds = (DataSource) method.invoke(pipeline, config);
@@ -983,8 +982,8 @@ public class EtlPipelineDeepCoverageTest2 {
 
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // Document sources return null (they use DocumentETLProcessor which writes files directly)
@@ -996,8 +995,8 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildMinimalConfig();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("createDataSource",
-        EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
     method.setAccessible(true);
 
     DataSource ds = (DataSource) method.invoke(pipeline, config);
@@ -1008,11 +1007,11 @@ public class EtlPipelineDeepCoverageTest2 {
   // --- loadDimensionResolver via reflection ---
 
   @Test void testLoadDimensionResolverNull() throws Exception {
-    EtlPipeline pipeline = new EtlPipeline(buildMinimalConfig(), storageProvider,
-        tempDir.toString());
+    EtlPipeline pipeline =
+        new EtlPipeline(buildMinimalConfig(), storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("loadDimensionResolver",
-        HooksConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("loadDimensionResolver", HooksConfig.class);
     method.setAccessible(true);
 
     // Null hooks config
@@ -1021,11 +1020,11 @@ public class EtlPipelineDeepCoverageTest2 {
   }
 
   @Test void testLoadDimensionResolverNoClass() throws Exception {
-    EtlPipeline pipeline = new EtlPipeline(buildMinimalConfig(), storageProvider,
-        tempDir.toString());
+    EtlPipeline pipeline =
+        new EtlPipeline(buildMinimalConfig(), storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("loadDimensionResolver",
-        HooksConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("loadDimensionResolver", HooksConfig.class);
     method.setAccessible(true);
 
     HooksConfig hooks = HooksConfig.builder().build();
@@ -1037,11 +1036,11 @@ public class EtlPipelineDeepCoverageTest2 {
 
   @Test void testWriteWithResponsePartitioningEmptyData() throws Exception {
     EtlPipelineConfig config = buildMinimalConfig();
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning",
-        Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
         MaterializationWriter.class, DataWriter.class,
         IncrementalTracker.class, String.class);
     method.setAccessible(true);
@@ -1060,18 +1059,18 @@ public class EtlPipelineDeepCoverageTest2 {
     Map<String, String> urlVars = new HashMap<String, String>();
     MaterializationWriter writer = mock(MaterializationWriter.class);
 
-    long rows = (long) method.invoke(pipeline, emptyIter, urlVars, rpConfig,
-        writer, null, incrementalTracker, "test_pipeline");
+    long rows =
+        (long) method.invoke(pipeline, emptyIter, urlVars, rpConfig, writer, null, incrementalTracker, "test_pipeline");
     assertEquals(0L, rows);
   }
 
   @Test void testWriteWithResponsePartitioningWithData() throws Exception {
     EtlPipelineConfig config = buildMinimalConfig();
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
-    Method method = EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning",
-        Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
         MaterializationWriter.class, DataWriter.class,
         IncrementalTracker.class, String.class);
     method.setAccessible(true);
@@ -1097,8 +1096,8 @@ public class EtlPipelineDeepCoverageTest2 {
     MaterializationWriter writer = mock(MaterializationWriter.class);
     when(writer.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(2L);
 
-    long rows = (long) method.invoke(pipeline, dataList.iterator(), urlVars, rpConfig,
-        writer, null, incrementalTracker, "test_pipeline");
+    long rows =
+        (long) method.invoke(pipeline, dataList.iterator(), urlVars, rpConfig, writer, null, incrementalTracker, "test_pipeline");
     assertEquals(2L, rows);
   }
 
@@ -1108,14 +1107,14 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig config = buildConfigWithMaterialize();
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("buildIcebergCatalogConfig",
-        MaterializeConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("buildIcebergCatalogConfig", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig materializeConfig = config.getMaterialize();
     @SuppressWarnings("unchecked")
-    Map<String, Object> catalogConfig = (Map<String, Object>) method.invoke(pipeline,
-        materializeConfig);
+    Map<String, Object> catalogConfig =
+        (Map<String, Object>) method.invoke(pipeline, materializeConfig);
 
     assertNotNull(catalogConfig);
     assertEquals("hadoop", catalogConfig.get("catalog"));
@@ -1139,13 +1138,13 @@ public class EtlPipelineDeepCoverageTest2 {
 
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, "s3://my-bucket/warehouse");
 
-    Method method = EtlPipeline.class.getDeclaredMethod("buildIcebergCatalogConfig",
-        MaterializeConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("buildIcebergCatalogConfig", MaterializeConfig.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> catalogConfig = (Map<String, Object>) method.invoke(pipeline,
-        materialize);
+    Map<String, Object> catalogConfig =
+        (Map<String, Object>) method.invoke(pipeline, materialize);
 
     // S3 path should be converted to s3a://
     String warehousePath = (String) catalogConfig.get("warehousePath");
@@ -1188,11 +1187,12 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(incrementalTracker.filterUnprocessedWithEmptyTtl(
+    when(
+        incrementalTracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     // Will proceed to dimension expansion since config hash mismatch
     EtlResult result = pipeline.execute();
@@ -1224,8 +1224,8 @@ public class EtlPipelineDeepCoverageTest2 {
 
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
-    Method method = EtlPipeline.class.getDeclaredMethod("verifyDataExists",
-        String.class, EtlPipelineConfig.class);
+    Method method =
+        EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
     // First check (warehouse path) returns false, fallback (baseDir) returns true
@@ -1293,11 +1293,12 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(incrementalTracker.filterUnprocessedWithEmptyTtl(
+    when(
+        incrementalTracker.filterUnprocessedWithEmptyTtl(
         anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, incrementalTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
 
     // Execute will fail at MaterializationWriterFactory, but that's fine for coverage
     EtlResult result = pipeline.execute();

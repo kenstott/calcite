@@ -31,13 +31,11 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableScan;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
@@ -60,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -187,8 +184,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   // ==========================================================================
 
   @Test void testFindTableScanNull() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     Object result = m.invoke(rule, (RelNode) null);
@@ -196,8 +193,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testFindTableScanDirect() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -206,8 +203,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testFindTableScanRecursive() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -219,8 +216,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testFindTableScanDeep() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -234,8 +231,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testFindTableScanNoScanFound() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     m.setAccessible(true);
 
     RelNode leaf = mock(RelNode.class);
@@ -250,8 +247,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   // ==========================================================================
 
   @Test void testGetClickHouseSchemaNotJdbcTableScan() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "getClickHouseSchema", TableScan.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("getClickHouseSchema", TableScan.class);
     m.setAccessible(true);
 
     TableScan scan = mock(TableScan.class);
@@ -260,8 +257,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testGetClickHouseSchemaJdbcButNotClickHouse() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "getClickHouseSchema", TableScan.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("getClickHouseSchema", TableScan.class);
     m.setAccessible(true);
 
     // Create a JdbcTableScan with a regular JdbcSchema (not ClickHouseJdbcSchema)
@@ -283,8 +280,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testGetClickHouseSchemaReturnsClickHouseSchema() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "getClickHouseSchema", TableScan.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("getClickHouseSchema", TableScan.class);
     m.setAccessible(true);
 
     JdbcTableScan jdbcScan = mock(JdbcTableScan.class);
@@ -613,8 +610,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   // ==========================================================================
 
   @Test void testReadRowCountFromIcebergDirectNullStorageProvider() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "readRowCountFromIcebergDirect", String.class, StorageProvider.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("readRowCountFromIcebergDirect", String.class, StorageProvider.class);
     m.setAccessible(true);
 
     // Non-existent path with null storage provider => should return null (exception caught)
@@ -624,8 +621,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testReadRowCountFromIcebergDirectWithStorageProvider() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "readRowCountFromIcebergDirect", String.class, StorageProvider.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("readRowCountFromIcebergDirect", String.class, StorageProvider.class);
     m.setAccessible(true);
 
     StorageProvider provider = mock(StorageProvider.class);
@@ -641,8 +638,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   // ==========================================================================
 
   @Test void testCreateCountStarValuesSuccess() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "createCountStarValues", Aggregate.class, long.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
     m.setAccessible(true);
 
     // EnumerableValues.create requires a fully functional RelOptCluster
@@ -650,8 +647,8 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
     // mock chain failures in traitSet.replaceIfs().
     RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
     RexBuilder rexBuilder = new RexBuilder(typeFactory);
-    RelOptPlanner planner = new org.apache.calcite.plan.hep.HepPlanner(
-        org.apache.calcite.plan.hep.HepProgram.builder().build());
+    RelOptPlanner planner =
+        new org.apache.calcite.plan.hep.HepPlanner(org.apache.calcite.plan.hep.HepProgram.builder().build());
     RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
 
     Aggregate aggregate = mock(Aggregate.class);
@@ -666,14 +663,14 @@ public class ClickHouseIcebergCountStarRuleCoverageTest {
   }
 
   @Test void testCreateCountStarValuesWithNullName() throws Exception {
-    Method m = ClickHouseIcebergCountStarRule.class.getDeclaredMethod(
-        "createCountStarValues", Aggregate.class, long.class);
+    Method m =
+        ClickHouseIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
     m.setAccessible(true);
 
     RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
     RexBuilder rexBuilder = new RexBuilder(typeFactory);
-    RelOptPlanner planner = new org.apache.calcite.plan.hep.HepPlanner(
-        org.apache.calcite.plan.hep.HepProgram.builder().build());
+    RelOptPlanner planner =
+        new org.apache.calcite.plan.hep.HepPlanner(org.apache.calcite.plan.hep.HepProgram.builder().build());
     RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
 
     Aggregate aggregate = mock(Aggregate.class);

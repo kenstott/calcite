@@ -32,8 +32,8 @@ class DuckDBConventionTest {
 
   @Test void testOfCreatesConvention() {
     SqlDialect dialect = DuckDBSqlDialect.DEFAULT;
-    DuckDBConvention convention = DuckDBConvention.of(
-        dialect,
+    DuckDBConvention convention =
+        DuckDBConvention.of(dialect,
         org.apache.calcite.linq4j.tree.Expressions.constant(null),
         "duckdb_test");
     assertNotNull(convention);
@@ -41,8 +41,8 @@ class DuckDBConventionTest {
 
   @Test void testConstructor() {
     SqlDialect dialect = DuckDBSqlDialect.DEFAULT;
-    DuckDBConvention convention = new DuckDBConvention(
-        dialect,
+    DuckDBConvention convention =
+        new DuckDBConvention(dialect,
         org.apache.calcite.linq4j.tree.Expressions.constant(null),
         "duckdb_test2");
     assertNotNull(convention);

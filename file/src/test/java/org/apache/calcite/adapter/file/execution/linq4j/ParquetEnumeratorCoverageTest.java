@@ -821,8 +821,8 @@ class ParquetEnumeratorCoverageTest {
 
   @Test void testConstructor_defaultBatchSize() throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0});
     assertNotNull(e);
     e.close();
@@ -830,8 +830,8 @@ class ParquetEnumeratorCoverageTest {
 
   @Test void testConstructor_withColumnCasing() throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0}, "TO_UPPER");
     assertNotNull(e);
     e.close();
@@ -839,8 +839,8 @@ class ParquetEnumeratorCoverageTest {
 
   @Test void testConstructor_withBatchSize() throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0}, 500);
     assertNotNull(e);
     e.close();
@@ -848,8 +848,8 @@ class ParquetEnumeratorCoverageTest {
 
   @Test void testConstructor_withBatchSizeAndCasing() throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0}, 500, "TO_LOWER");
     assertNotNull(e);
     e.close();
@@ -858,8 +858,8 @@ class ParquetEnumeratorCoverageTest {
   @Test void testConstructor_withBatchSizeAndMemoryThreshold()
       throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0}, 500, 1024 * 1024L);
     assertNotNull(e);
     e.close();
@@ -867,8 +867,8 @@ class ParquetEnumeratorCoverageTest {
 
   @Test void testConstructor_fullParams() throws IOException {
     Source source = createCsvSource("a\n1\n");
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, new AtomicBoolean(false),
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
         createVarcharTypes(1), new int[]{0}, 500, 1024 * 1024L, "UNCHANGED");
     assertNotNull(e);
     e.close();
@@ -928,8 +928,8 @@ class ParquetEnumeratorCoverageTest {
   @Test void testMoveNext_cancelledMidIteration() throws IOException {
     Source source = createCsvSource("a\n1\n2\n3\n4\n5\n");
     AtomicBoolean cancel = new AtomicBoolean(false);
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, cancel, createVarcharTypes(1), new int[]{0});
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, cancel, createVarcharTypes(1), new int[]{0});
     try {
       assertTrue(e.moveNext());
       cancel.set(true);
@@ -942,8 +942,8 @@ class ParquetEnumeratorCoverageTest {
   @Test void testCancelFlag_stopsBeforeFirst() throws IOException {
     Source source = createCsvSource("a\n1\n");
     AtomicBoolean cancel = new AtomicBoolean(true);
-    ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-        source, cancel, createVarcharTypes(1), new int[]{0});
+    ParquetEnumerator<Object> e =
+        new ParquetEnumerator<Object>(source, cancel, createVarcharTypes(1), new int[]{0});
     try {
       assertFalse(e.moveNext());
     } finally {
@@ -1071,8 +1071,8 @@ class ParquetEnumeratorCoverageTest {
     }
     Source source = Sources.of(jsonFile);
     assertThrows(RuntimeException.class, () -> {
-      ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-          source, new AtomicBoolean(false),
+      ParquetEnumerator<Object> e =
+          new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
           createVarcharTypes(1), new int[]{0});
       e.close();
     });
@@ -1089,8 +1089,8 @@ class ParquetEnumeratorCoverageTest {
     }
     Source source = Sources.of(yamlFile);
     assertThrows(RuntimeException.class, () -> {
-      ParquetEnumerator<Object> e = new ParquetEnumerator<Object>(
-          source, new AtomicBoolean(false),
+      ParquetEnumerator<Object> e =
+          new ParquetEnumerator<Object>(source, new AtomicBoolean(false),
           createVarcharTypes(1), new int[]{0});
       e.close();
     });

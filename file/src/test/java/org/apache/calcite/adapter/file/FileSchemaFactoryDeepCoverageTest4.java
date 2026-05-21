@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry;
 import org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener;
-import org.apache.calcite.adapter.file.refresh.RefreshableParquetCacheTable;
 import org.apache.calcite.adapter.file.refresh.TableRefreshListener;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.schema.Function;
@@ -32,7 +31,6 @@ import org.apache.calcite.schema.lookup.Lookup;
 import org.apache.calcite.util.Source;
 
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Multimap;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -54,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -194,67 +191,59 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isGlobPattern tests
   // =======================================================================
 
-  @Test
-  void testIsGlobPatternNull() throws Exception {
+  @Test void testIsGlobPatternNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, (Object) null);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, (Object) null);
     assertFalse(result);
   }
 
-  @Test
-  void testIsGlobPatternHttpUrl() throws Exception {
+  @Test void testIsGlobPatternHttpUrl() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "http://example.com/data/*.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "http://example.com/data/*.csv");
     assertFalse(result);
   }
 
-  @Test
-  void testIsGlobPatternHttpsUrl() throws Exception {
+  @Test void testIsGlobPatternHttpsUrl() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "https://example.com/data/*.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "https://example.com/data/*.csv");
     assertFalse(result);
   }
 
-  @Test
-  void testIsGlobPatternWithStar() throws Exception {
+  @Test void testIsGlobPatternWithStar() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "/data/*.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "/data/*.csv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsGlobPatternWithQuestion() throws Exception {
+  @Test void testIsGlobPatternWithQuestion() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "/data/file?.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "/data/file?.csv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsGlobPatternWithBrackets() throws Exception {
+  @Test void testIsGlobPatternWithBrackets() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "/data/file[0-9].csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "/data/file[0-9].csv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsGlobPatternWithProtocolPrefix() throws Exception {
+  @Test void testIsGlobPatternWithProtocolPrefix() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "s3://bucket/path/to/*.parquet");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "s3://bucket/path/to/*.parquet");
     assertTrue(result);
   }
 
-  @Test
-  void testIsGlobPatternPlainPath() throws Exception {
+  @Test void testIsGlobPatternPlainPath() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isGlobPattern",
-        new Class<?>[]{String.class}, "/data/file.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isGlobPattern", new Class<?>[]{String.class}, "/data/file.csv");
     assertFalse(result);
   }
 
@@ -262,61 +251,55 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: hasHttpConfiguration tests
   // =======================================================================
 
-  @Test
-  void testHasHttpConfigurationNull() throws Exception {
+  @Test void testHasHttpConfigurationNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, (Object) null);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, (Object) null);
     assertFalse(result);
   }
 
-  @Test
-  void testHasHttpConfigurationWithMethod() throws Exception {
+  @Test void testHasHttpConfigurationWithMethod() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("method", "POST");
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHttpConfigurationWithBody() throws Exception {
+  @Test void testHasHttpConfigurationWithBody() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("body", "{\"query\": \"test\"}");
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHttpConfigurationWithHeaders() throws Exception {
+  @Test void testHasHttpConfigurationWithHeaders() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("headers", new HashMap<>());
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHttpConfigurationWithMimeType() throws Exception {
+  @Test void testHasHttpConfigurationWithMimeType() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("mimeType", "application/json");
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHttpConfigurationEmpty() throws Exception {
+  @Test void testHasHttpConfigurationEmpty() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("url", "http://example.com");
-    Boolean result = (Boolean) invokePrivate(schema, "hasHttpConfiguration",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHttpConfiguration", new Class<?>[]{Map.class}, tableDef);
     assertFalse(result);
   }
 
@@ -324,17 +307,15 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: hasHtmlFieldSelectors tests
   // =======================================================================
 
-  @Test
-  void testHasHtmlFieldSelectorsNoFields() throws Exception {
+  @Test void testHasHtmlFieldSelectorsNoFields() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
-    Boolean result = (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors", new Class<?>[]{Map.class}, tableDef);
     assertFalse(result);
   }
 
-  @Test
-  void testHasHtmlFieldSelectorsWithSelector() throws Exception {
+  @Test void testHasHtmlFieldSelectorsWithSelector() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     List<Map<String, Object>> fields = new ArrayList<>();
@@ -342,13 +323,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     field.put("selector", "td.value");
     fields.add(field);
     tableDef.put("fields", fields);
-    Boolean result = (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHtmlFieldSelectorsWithSelectedElement() throws Exception {
+  @Test void testHasHtmlFieldSelectorsWithSelectedElement() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     List<Map<String, Object>> fields = new ArrayList<>();
@@ -356,13 +336,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     field.put("selectedElement", 0);
     fields.add(field);
     tableDef.put("fields", fields);
-    Boolean result = (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHtmlFieldSelectorsWithTh() throws Exception {
+  @Test void testHasHtmlFieldSelectorsWithTh() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     List<Map<String, Object>> fields = new ArrayList<>();
@@ -370,13 +349,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     field.put("th", "Column Header");
     fields.add(field);
     tableDef.put("fields", fields);
-    Boolean result = (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors", new Class<?>[]{Map.class}, tableDef);
     assertTrue(result);
   }
 
-  @Test
-  void testHasHtmlFieldSelectorsWithoutSelectorKeys() throws Exception {
+  @Test void testHasHtmlFieldSelectorsWithoutSelectorKeys() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Object> tableDef = new HashMap<>();
     List<Map<String, Object>> fields = new ArrayList<>();
@@ -385,8 +363,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     field.put("type", "VARCHAR");
     fields.add(field);
     tableDef.put("fields", fields);
-    Boolean result = (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors",
-        new Class<?>[]{Map.class}, tableDef);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasHtmlFieldSelectors", new Class<?>[]{Map.class}, tableDef);
     assertFalse(result);
   }
 
@@ -394,91 +372,80 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isConvertibleFile tests
   // =======================================================================
 
-  @Test
-  void testIsConvertibleFileNull() throws Exception {
+  @Test void testIsConvertibleFileNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, (Object) null);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, (Object) null);
     assertFalse(result);
   }
 
-  @Test
-  void testIsConvertibleFileXlsx() throws Exception {
+  @Test void testIsConvertibleFileXlsx() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "data.xlsx");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "data.xlsx");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileXls() throws Exception {
+  @Test void testIsConvertibleFileXls() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "report.xls");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "report.xls");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileMd() throws Exception {
+  @Test void testIsConvertibleFileMd() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "readme.md");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "readme.md");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileMarkdown() throws Exception {
+  @Test void testIsConvertibleFileMarkdown() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "notes.markdown");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "notes.markdown");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileDocx() throws Exception {
+  @Test void testIsConvertibleFileDocx() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "document.docx");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "document.docx");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFilePptx() throws Exception {
+  @Test void testIsConvertibleFilePptx() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "slides.pptx");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "slides.pptx");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileHtml() throws Exception {
+  @Test void testIsConvertibleFileHtml() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "page.html");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "page.html");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileHtm() throws Exception {
+  @Test void testIsConvertibleFileHtm() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "page.htm");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "page.htm");
     assertTrue(result);
   }
 
-  @Test
-  void testIsConvertibleFileCsv() throws Exception {
+  @Test void testIsConvertibleFileCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "data.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "data.csv");
     assertFalse(result);
   }
 
-  @Test
-  void testIsConvertibleFileCaseInsensitive() throws Exception {
+  @Test void testIsConvertibleFileCaseInsensitive() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isConvertibleFile",
-        new Class<?>[]{String.class}, "DATA.XLSX");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isConvertibleFile", new Class<?>[]{String.class}, "DATA.XLSX");
     assertTrue(result);
   }
 
@@ -486,83 +453,73 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isTableSourceFile tests
   // =======================================================================
 
-  @Test
-  void testIsTableSourceFileNull() throws Exception {
+  @Test void testIsTableSourceFileNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, (Object) null);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, (Object) null);
     assertFalse(result);
   }
 
-  @Test
-  void testIsTableSourceFileCsv() throws Exception {
+  @Test void testIsTableSourceFileCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.csv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileTsv() throws Exception {
+  @Test void testIsTableSourceFileTsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.tsv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.tsv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileJson() throws Exception {
+  @Test void testIsTableSourceFileJson() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.json");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.json");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileYaml() throws Exception {
+  @Test void testIsTableSourceFileYaml() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.yaml");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.yaml");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileYml() throws Exception {
+  @Test void testIsTableSourceFileYml() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.yml");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.yml");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileArrow() throws Exception {
+  @Test void testIsTableSourceFileArrow() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.arrow");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.arrow");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileParquet() throws Exception {
+  @Test void testIsTableSourceFileParquet() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.parquet");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.parquet");
     assertTrue(result);
   }
 
-  @Test
-  void testIsTableSourceFileXlsx() throws Exception {
+  @Test void testIsTableSourceFileXlsx() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.xlsx");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.xlsx");
     assertFalse(result);
   }
 
-  @Test
-  void testIsTableSourceFileTxt() throws Exception {
+  @Test void testIsTableSourceFileTxt() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isTableSourceFile",
-        new Class<?>[]{String.class}, "data.txt");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isTableSourceFile", new Class<?>[]{String.class}, "data.txt");
     assertFalse(result);
   }
 
@@ -570,67 +527,59 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: trimCompressedExtensions tests
   // =======================================================================
 
-  @Test
-  void testTrimCompressedExtensionsNull() throws Exception {
+  @Test void testTrimCompressedExtensionsNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, (Object) null);
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, (Object) null);
     assertNull(result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsGz() throws Exception {
+  @Test void testTrimCompressedExtensionsGz() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "data.csv.gz");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "data.csv.gz");
     assertEquals("data.csv", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsGzip() throws Exception {
+  @Test void testTrimCompressedExtensionsGzip() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "data.json.gzip");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "data.json.gzip");
     assertEquals("data.json", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsBz2() throws Exception {
+  @Test void testTrimCompressedExtensionsBz2() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "data.csv.bz2");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "data.csv.bz2");
     assertEquals("data.csv", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsXz() throws Exception {
+  @Test void testTrimCompressedExtensionsXz() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "data.tsv.xz");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "data.tsv.xz");
     assertEquals("data.tsv", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsZip() throws Exception {
+  @Test void testTrimCompressedExtensionsZip() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "archive.csv.zip");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "archive.csv.zip");
     assertEquals("archive.csv", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsNoCompression() throws Exception {
+  @Test void testTrimCompressedExtensionsNoCompression() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "data.csv");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "data.csv");
     assertEquals("data.csv", result);
   }
 
-  @Test
-  void testTrimCompressedExtensionsCaseInsensitive() throws Exception {
+  @Test void testTrimCompressedExtensionsCaseInsensitive() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "trimCompressedExtensions",
-        new Class<?>[]{String.class}, "DATA.CSV.GZ");
+    String result =
+        (String) invokePrivate(schema, "trimCompressedExtensions", new Class<?>[]{String.class}, "DATA.CSV.GZ");
     assertEquals("DATA.CSV", result);
   }
 
@@ -638,35 +587,31 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: hasCompressedExtension tests
   // =======================================================================
 
-  @Test
-  void testHasCompressedExtensionNull() throws Exception {
+  @Test void testHasCompressedExtensionNull() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "hasCompressedExtension",
-        new Class<?>[]{String.class}, (Object) null);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasCompressedExtension", new Class<?>[]{String.class}, (Object) null);
     assertFalse(result);
   }
 
-  @Test
-  void testHasCompressedExtensionGz() throws Exception {
+  @Test void testHasCompressedExtensionGz() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "hasCompressedExtension",
-        new Class<?>[]{String.class}, "data.csv.gz");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasCompressedExtension", new Class<?>[]{String.class}, "data.csv.gz");
     assertTrue(result);
   }
 
-  @Test
-  void testHasCompressedExtensionBz2() throws Exception {
+  @Test void testHasCompressedExtensionBz2() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "hasCompressedExtension",
-        new Class<?>[]{String.class}, "data.csv.bz2");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasCompressedExtension", new Class<?>[]{String.class}, "data.csv.bz2");
     assertTrue(result);
   }
 
-  @Test
-  void testHasCompressedExtensionPlainFile() throws Exception {
+  @Test void testHasCompressedExtensionPlainFile() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "hasCompressedExtension",
-        new Class<?>[]{String.class}, "data.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasCompressedExtension", new Class<?>[]{String.class}, "data.csv");
     assertFalse(result);
   }
 
@@ -674,35 +619,31 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getFileExtension tests
   // =======================================================================
 
-  @Test
-  void testGetFileExtensionCsv() throws Exception {
+  @Test void testGetFileExtensionCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getFileExtension",
-        new Class<?>[]{String.class}, "data.csv");
+    String result =
+        (String) invokePrivate(schema, "getFileExtension", new Class<?>[]{String.class}, "data.csv");
     assertEquals("csv", result);
   }
 
-  @Test
-  void testGetFileExtensionCompressedCsv() throws Exception {
+  @Test void testGetFileExtensionCompressedCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getFileExtension",
-        new Class<?>[]{String.class}, "data.csv.gz");
+    String result =
+        (String) invokePrivate(schema, "getFileExtension", new Class<?>[]{String.class}, "data.csv.gz");
     assertEquals("csv", result);
   }
 
-  @Test
-  void testGetFileExtensionParquet() throws Exception {
+  @Test void testGetFileExtensionParquet() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getFileExtension",
-        new Class<?>[]{String.class}, "table.parquet");
+    String result =
+        (String) invokePrivate(schema, "getFileExtension", new Class<?>[]{String.class}, "table.parquet");
     assertEquals("parquet", result);
   }
 
-  @Test
-  void testGetFileExtensionNoDot() throws Exception {
+  @Test void testGetFileExtensionNoDot() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getFileExtension",
-        new Class<?>[]{String.class}, "noextension");
+    String result =
+        (String) invokePrivate(schema, "getFileExtension", new Class<?>[]{String.class}, "noextension");
     assertEquals("", result);
   }
 
@@ -710,43 +651,39 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isHtmlFile tests
   // =======================================================================
 
-  @Test
-  void testIsHtmlFileHtml() throws Exception {
+  @Test void testIsHtmlFileHtml() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File htmlFile = new File(tempDir.toFile(), "page.html");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isHtmlFile",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isHtmlFile", new Class<?>[]{File.class}, htmlFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsHtmlFileHtm() throws Exception {
+  @Test void testIsHtmlFileHtm() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File htmFile = new File(tempDir.toFile(), "page.htm");
     htmFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isHtmlFile",
-        new Class<?>[]{File.class}, htmFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isHtmlFile", new Class<?>[]{File.class}, htmFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsHtmlFileUpperCase() throws Exception {
+  @Test void testIsHtmlFileUpperCase() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File htmlFile = new File(tempDir.toFile(), "PAGE.HTML");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isHtmlFile",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isHtmlFile", new Class<?>[]{File.class}, htmlFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsHtmlFileCsv() throws Exception {
+  @Test void testIsHtmlFileCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File csvFile = new File(tempDir.toFile(), "data.csv");
     csvFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isHtmlFile",
-        new Class<?>[]{File.class}, csvFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isHtmlFile", new Class<?>[]{File.class}, csvFile);
     assertFalse(result);
   }
 
@@ -754,63 +691,57 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isFileTypeSupported tests
   // =======================================================================
 
-  @Test
-  void testIsFileTypeSupportedDirectory() throws Exception {
+  @Test void testIsFileTypeSupportedDirectory() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File dir = new File(tempDir.toFile(), "subdir");
     dir.mkdirs();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, dir);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, dir);
     assertFalse(result);
   }
 
-  @Test
-  void testIsFileTypeSupportedHiddenFile() throws Exception {
+  @Test void testIsFileTypeSupportedHiddenFile() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File hiddenFile = new File(tempDir.toFile(), ".hidden.csv");
     hiddenFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, hiddenFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, hiddenFile);
     assertFalse(result);
   }
 
-  @Test
-  void testIsFileTypeSupportedCsv() throws Exception {
+  @Test void testIsFileTypeSupportedCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File csvFile = new File(tempDir.toFile(), "data.csv");
     csvFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, csvFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, csvFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsFileTypeSupportedHtml() throws Exception {
+  @Test void testIsFileTypeSupportedHtml() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File htmlFile = new File(tempDir.toFile(), "page.html");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, htmlFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsFileTypeSupportedCompressedCsv() throws Exception {
+  @Test void testIsFileTypeSupportedCompressedCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File gzFile = new File(tempDir.toFile(), "data.csv.gz");
     gzFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, gzFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, gzFile);
     assertTrue(result);
   }
 
-  @Test
-  void testIsFileTypeSupportedTxtNotSupported() throws Exception {
+  @Test void testIsFileTypeSupportedTxtNotSupported() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File txtFile = new File(tempDir.toFile(), "notes.txt");
     txtFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "isFileTypeSupported",
-        new Class<?>[]{File.class}, txtFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileTypeSupported", new Class<?>[]{File.class}, txtFile);
     assertFalse(result);
   }
 
@@ -818,70 +749,65 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getFilesInDir tests with edge cases
   // =======================================================================
 
-  @Test
-  void testGetFilesInDirHiddenFilesExcluded() throws Exception {
+  @Test void testGetFilesInDirHiddenFilesExcluded() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Create files including ._ prefixed ones (macOS resource fork files)
     new File(tempDir.toFile(), "data.csv").createNewFile();
     new File(tempDir.toFile(), "._metadata.csv").createNewFile();
     new File(tempDir.toFile(), "._resource.json").createNewFile();
 
-    File[] result = (File[]) invokePrivate(schema, "getFilesInDir",
-        new Class<?>[]{File.class}, tempDir.toFile());
+    File[] result =
+        (File[]) invokePrivate(schema, "getFilesInDir", new Class<?>[]{File.class}, tempDir.toFile());
     // Only data.csv should be included; ._ prefixed files are excluded
     assertEquals(1, result.length);
     assertEquals("data.csv", result[0].getName());
   }
 
-  @Test
-  void testGetFilesInDirSubdirNotRecursive() throws Exception {
+  @Test void testGetFilesInDirSubdirNotRecursive() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File subdir = new File(tempDir.toFile(), "subdir");
     subdir.mkdirs();
     new File(subdir, "nested.csv").createNewFile();
     new File(tempDir.toFile(), "root.csv").createNewFile();
 
-    File[] result = (File[]) invokePrivate(schema, "getFilesInDir",
-        new Class<?>[]{File.class}, tempDir.toFile());
+    File[] result =
+        (File[]) invokePrivate(schema, "getFilesInDir", new Class<?>[]{File.class}, tempDir.toFile());
     assertEquals(1, result.length);
     assertEquals("root.csv", result[0].getName());
   }
 
-  @Test
-  void testGetFilesInDirRecursive() throws Exception {
+  @Test void testGetFilesInDirRecursive() throws Exception {
     // Create schema with recursive=true
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, defaultEngineConfig, true);
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, true);
 
     File subdir = new File(tempDir.toFile(), "subdir");
     subdir.mkdirs();
     new File(subdir, "nested.csv").createNewFile();
     new File(tempDir.toFile(), "root.csv").createNewFile();
 
-    File[] result = (File[]) invokePrivate(schema, "getFilesInDir",
-        new Class<?>[]{File.class}, tempDir.toFile());
+    File[] result =
+        (File[]) invokePrivate(schema, "getFilesInDir", new Class<?>[]{File.class}, tempDir.toFile());
     assertEquals(2, result.length);
   }
 
-  @Test
-  void testGetFilesInDirNullListFiles() throws Exception {
+  @Test void testGetFilesInDirNullListFiles() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Use a non-existent directory that will cause listFiles to return null
     File fakeDir = new File(tempDir.toFile(), "nonexistent");
-    File[] result = (File[]) invokePrivate(schema, "getFilesInDir",
-        new Class<?>[]{File.class}, fakeDir);
+    File[] result =
+        (File[]) invokePrivate(schema, "getFilesInDir", new Class<?>[]{File.class}, fakeDir);
     assertEquals(0, result.length);
   }
 
-  @Test
-  void testGetFilesInDirUnsupportedExtensions() throws Exception {
+  @Test void testGetFilesInDirUnsupportedExtensions() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     new File(tempDir.toFile(), "image.png").createNewFile();
     new File(tempDir.toFile(), "readme.txt").createNewFile();
     new File(tempDir.toFile(), "binary.dat").createNewFile();
 
-    File[] result = (File[]) invokePrivate(schema, "getFilesInDir",
-        new Class<?>[]{File.class}, tempDir.toFile());
+    File[] result =
+        (File[]) invokePrivate(schema, "getFilesInDir", new Class<?>[]{File.class}, tempDir.toFile());
     assertEquals(0, result.length);
   }
 
@@ -889,18 +815,16 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: hasExplicitHtmlTableDefinition tests
   // =======================================================================
 
-  @Test
-  void testHasExplicitHtmlTableDefinitionNoTables() throws Exception {
+  @Test void testHasExplicitHtmlTableDefinitionNoTables() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File htmlFile = new File(tempDir.toFile(), "page.html");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition", new Class<?>[]{File.class}, htmlFile);
     assertFalse(result);
   }
 
-  @Test
-  void testHasExplicitHtmlTableDefinitionWithMatchingSelector() throws Exception {
+  @Test void testHasExplicitHtmlTableDefinitionWithMatchingSelector() throws Exception {
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("url", "page.html");
     tableDef.put("selector", "#data-table");
@@ -909,13 +833,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     FileSchema schema = createSchemaWithTables(tempDir.toFile(), tables);
     File htmlFile = new File(tempDir.toFile(), "page.html");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition", new Class<?>[]{File.class}, htmlFile);
     assertTrue(result);
   }
 
-  @Test
-  void testHasExplicitHtmlTableDefinitionNoSelector() throws Exception {
+  @Test void testHasExplicitHtmlTableDefinitionNoSelector() throws Exception {
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("url", "page.html");
     tableDef.put("name", "my_table");
@@ -924,8 +847,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     FileSchema schema = createSchemaWithTables(tempDir.toFile(), tables);
     File htmlFile = new File(tempDir.toFile(), "page.html");
     htmlFile.createNewFile();
-    Boolean result = (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition",
-        new Class<?>[]{File.class}, htmlFile);
+    Boolean result =
+        (Boolean) invokePrivate(schema, "hasExplicitHtmlTableDefinition", new Class<?>[]{File.class}, htmlFile);
     assertFalse(result);
   }
 
@@ -933,8 +856,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: writeToStorage local filesystem paths
   // =======================================================================
 
-  @Test
-  void testWriteToStorageLocalWithBaseDirectory() throws Exception {
+  @Test void testWriteToStorageLocalWithBaseDirectory() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     String relativePath = "test-output/file.txt";
     byte[] content = "hello world".getBytes(StandardCharsets.UTF_8);
@@ -947,8 +869,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("hello world", new String(Files.readAllBytes(written.toPath()), StandardCharsets.UTF_8));
   }
 
-  @Test
-  void testWriteToStorageInputStreamLocal() throws Exception {
+  @Test void testWriteToStorageInputStreamLocal() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     String relativePath = "stream-output/data.bin";
     byte[] content = "stream content".getBytes(StandardCharsets.UTF_8);
@@ -962,14 +883,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("stream content", new String(Files.readAllBytes(written.toPath()), StandardCharsets.UTF_8));
   }
 
-  @Test
-  void testWriteToStorageWithStorageProvider() throws Exception {
+  @Test void testWriteToStorageWithStorageProvider() throws Exception {
     StorageProvider mockProvider = mock(StorageProvider.class);
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_storageProvider", mockProvider);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/remote/path", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote/path", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -980,14 +900,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     verify(mockProvider).writeFile(anyString(), any(byte[].class));
   }
 
-  @Test
-  void testWriteToStorageInputStreamWithStorageProvider() throws Exception {
+  @Test void testWriteToStorageInputStreamWithStorageProvider() throws Exception {
     StorageProvider mockProvider = mock(StorageProvider.class);
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_storageProvider", mockProvider);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/remote/path", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote/path", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1002,8 +921,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: existsInStorage tests
   // =======================================================================
 
-  @Test
-  void testExistsInStorageLocalExists() throws Exception {
+  @Test void testExistsInStorageLocalExists() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File cacheDir = schema.getOperatingCacheDirectory();
     File testFile = new File(cacheDir, "existing.txt");
@@ -1013,21 +931,19 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(schema.existsInStorage("existing.txt"));
   }
 
-  @Test
-  void testExistsInStorageLocalNotExists() throws Exception {
+  @Test void testExistsInStorageLocalNotExists() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     assertFalse(schema.existsInStorage("nonexistent.txt"));
   }
 
-  @Test
-  void testExistsInStorageWithProvider() throws Exception {
+  @Test void testExistsInStorageWithProvider() throws Exception {
     StorageProvider mockProvider = mock(StorageProvider.class);
     when(mockProvider.exists(anyString())).thenReturn(true);
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_storageProvider", mockProvider);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/remote", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1039,8 +955,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: deleteFromStorage tests
   // =======================================================================
 
-  @Test
-  void testDeleteFromStorageLocalExists() throws Exception {
+  @Test void testDeleteFromStorageLocalExists() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File cacheDir = schema.getOperatingCacheDirectory();
     File testFile = new File(cacheDir, "to-delete.txt");
@@ -1051,21 +966,19 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertFalse(testFile.exists());
   }
 
-  @Test
-  void testDeleteFromStorageLocalNotExists() throws Exception {
+  @Test void testDeleteFromStorageLocalNotExists() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     assertFalse(schema.deleteFromStorage("nonexistent.txt"));
   }
 
-  @Test
-  void testDeleteFromStorageWithProvider() throws Exception {
+  @Test void testDeleteFromStorageWithProvider() throws Exception {
     StorageProvider mockProvider = mock(StorageProvider.class);
     when(mockProvider.delete(anyString())).thenReturn(true);
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_storageProvider", mockProvider);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/remote", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1078,8 +991,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: createStorageDirectories tests
   // =======================================================================
 
-  @Test
-  void testCreateStorageDirectoriesLocal() throws Exception {
+  @Test void testCreateStorageDirectoriesLocal() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     schema.createStorageDirectories("nested/sub/dir");
 
@@ -1088,14 +1000,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(createdDir.exists() && createdDir.isDirectory());
   }
 
-  @Test
-  void testCreateStorageDirectoriesWithProvider() throws Exception {
+  @Test void testCreateStorageDirectoriesWithProvider() throws Exception {
     StorageProvider mockProvider = mock(StorageProvider.class);
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_storageProvider", mockProvider);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/remote", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1108,11 +1019,10 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: resolvePath tests
   // =======================================================================
 
-  @Test
-  void testResolvePathWithoutProvider() throws Exception {
+  @Test void testResolvePathWithoutProvider() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "resolvePath",
-        new Class<?>[]{String.class}, "relative/path");
+    String result =
+        (String) invokePrivate(schema, "resolvePath", new Class<?>[]{String.class}, "relative/path");
     assertEquals("relative/path", result);
   }
 
@@ -1120,13 +1030,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: BRAND constant and static field tests
   // =======================================================================
 
-  @Test
-  void testBrandConstant() {
+  @Test void testBrandConstant() {
     assertEquals("aperio", FileSchema.BRAND);
   }
 
-  @Test
-  void testConvertibleExtensionsContainsExpectedTypes() throws Exception {
+  @Test void testConvertibleExtensionsContainsExpectedTypes() throws Exception {
     Field field = FileSchema.class.getDeclaredField("CONVERTIBLE_EXTENSIONS");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
@@ -1141,8 +1049,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(extensions.contains(".htm"));
   }
 
-  @Test
-  void testTableSourceExtensionsContainsExpectedTypes() throws Exception {
+  @Test void testTableSourceExtensionsContainsExpectedTypes() throws Exception {
     Field field = FileSchema.class.getDeclaredField("TABLE_SOURCE_EXTENSIONS");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
@@ -1156,8 +1063,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(extensions.contains(".parquet"));
   }
 
-  @Test
-  void testCompressedExtensionsContainsExpectedTypes() throws Exception {
+  @Test void testCompressedExtensionsContainsExpectedTypes() throws Exception {
     Field field = FileSchema.class.getDeclaredField("COMPRESSED_EXTENSIONS");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
@@ -1173,32 +1079,29 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: constructor chaining tests (different constructors)
   // =======================================================================
 
-  @Test
-  void testSimplestConstructorWithTables() {
+  @Test void testSimplestConstructorWithTables() {
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
     table.put("name", "test_table");
     table.put("url", "file:///tmp/test.csv");
     tables.add(table);
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), tables);
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tables);
     assertNotNull(schema);
     assertNotNull(schema.getBaseDirectory());
     assertNotNull(schema.getOperatingCacheDirectory());
   }
 
-  @Test
-  void testConstructorWithRecursiveTrue() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, defaultEngineConfig, true);
+  @Test void testConstructorWithRecursiveTrue() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, true);
     assertNotNull(schema);
   }
 
-  @Test
-  void testConstructorWithAllFeaturesNoComment() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, null, null,
+  @Test void testConstructorWithAllFeaturesNoComment() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "UPPER", "LOWER",
         null, null, null, null, true);
@@ -1206,10 +1109,9 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertNotNull(schema.getBaseDirectory());
   }
 
-  @Test
-  void testConstructorWithAllFeaturesAndComment() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, null, null,
+  @Test void testConstructorWithAllFeaturesAndComment() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, true, "Test schema comment");
@@ -1217,11 +1119,10 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("Test schema comment", schema.getComment());
   }
 
-  @Test
-  void testConstructorWithDirectoryPath() {
+  @Test void testConstructorWithDirectoryPath() {
     String dirPath = tempDir.toFile().getAbsolutePath();
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        null, null, dirPath, null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), null, null, dirPath, null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "local", null, null, null, false, null);
@@ -1229,12 +1130,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals(dirPath, schema.getBaseDirectory());
   }
 
-  @Test
-  void testConstructorWithUserConfiguredBaseDirectory() {
+  @Test void testConstructorWithUserConfiguredBaseDirectory() {
     File baseDir = new File(tempDir.toFile(), "custom-base");
     baseDir.mkdirs();
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), baseDir, null, null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), baseDir, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false);
@@ -1246,8 +1146,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: addRefreshListener and notify tests
   // =======================================================================
 
-  @Test
-  void testAddRefreshListener() {
+  @Test void testAddRefreshListener() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     TableRefreshListener listener = mock(TableRefreshListener.class);
     schema.addRefreshListener(listener);
@@ -1256,8 +1155,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     verify(listener).onTableRefreshed("test_table", new File("/tmp/test.parquet"));
   }
 
-  @Test
-  void testNotifyTableRefreshedWithPatternNonPatternListener() {
+  @Test void testNotifyTableRefreshedWithPatternNonPatternListener() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Add a basic listener (not pattern-aware)
     TableRefreshListener listener = mock(TableRefreshListener.class);
@@ -1266,8 +1164,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     schema.notifyTableRefreshedWithPattern("test_table", "/data/**/*.parquet");
   }
 
-  @Test
-  void testNotifyTableRefreshedWithPatternPatternAware() {
+  @Test void testNotifyTableRefreshedWithPatternPatternAware() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     PatternAwareRefreshListener listener = mock(PatternAwareRefreshListener.class);
     schema.addRefreshListener(listener);
@@ -1275,8 +1172,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     verify(listener).onTableRefreshedWithPattern("test_table", "/data/**/*.parquet");
   }
 
-  @Test
-  void testNotifyIcebergTableRefreshedPatternAware() {
+  @Test void testNotifyIcebergTableRefreshedPatternAware() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     PatternAwareRefreshListener listener = mock(PatternAwareRefreshListener.class);
     schema.addRefreshListener(listener);
@@ -1284,8 +1180,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     verify(listener).onIcebergTableRefreshed("iceberg_table", "s3://bucket/warehouse/table");
   }
 
-  @Test
-  void testNotifyTableRefreshedExceptionHandled() {
+  @Test void testNotifyTableRefreshedExceptionHandled() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     TableRefreshListener listener = mock(TableRefreshListener.class);
     org.mockito.Mockito.doThrow(new RuntimeException("listener error"))
@@ -1299,8 +1194,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: registerRawToParquetConverter test
   // =======================================================================
 
-  @Test
-  void testRegisterRawToParquetConverter() throws Exception {
+  @Test void testRegisterRawToParquetConverter() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     org.apache.calcite.adapter.file.converters.RawToParquetConverter converter =
         mock(org.apache.calcite.adapter.file.converters.RawToParquetConverter.class);
@@ -1316,8 +1210,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getAlternatePartitionRegistry test
   // =======================================================================
 
-  @Test
-  void testGetAlternatePartitionRegistryNotNull() {
+  @Test void testGetAlternatePartitionRegistryNotNull() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     AlternatePartitionRegistry registry = schema.getAlternatePartitionRegistry();
     assertNotNull(registry);
@@ -1327,8 +1220,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: setConstraintMetadata and getTableConstraints tests
   // =======================================================================
 
-  @Test
-  void testSetConstraintMetadataAndGetTableConstraints() {
+  @Test void testSetConstraintMetadataAndGetTableConstraints() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     Map<String, Object> tableConstraint = new HashMap<>();
@@ -1342,8 +1234,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals(Arrays.asList("id"), result.get("primaryKey"));
   }
 
-  @Test
-  void testGetTableConstraintsNotFoundReturnsNull() {
+  @Test void testGetTableConstraintsNotFoundReturnsNull() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     metadata.put("other_table", new HashMap<>());
@@ -1357,8 +1248,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: setConversionRecords tests
   // =======================================================================
 
-  @Test
-  void testSetConversionRecordsPopulatesMetadata() {
+  @Test void testSetConversionRecordsPopulatesMetadata() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, ConversionMetadata.ConversionRecord> records = new HashMap<>();
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -1373,8 +1263,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertNotNull(cm.getAllConversions().get("test_table"));
   }
 
-  @Test
-  void testSetConversionRecordsNullSafe() {
+  @Test void testSetConversionRecordsNullSafe() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Should not throw
     schema.setConversionRecords(null);
@@ -1385,15 +1274,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getTableBaseline and updateTableBaseline tests
   // =======================================================================
 
-  @Test
-  void testGetTableBaselineNoRecord() {
+  @Test void testGetTableBaselineNoRecord() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     ConversionMetadata.PartitionBaseline baseline = schema.getTableBaseline("nonexistent");
     assertNull(baseline);
   }
 
-  @Test
-  void testGetTableBaselineWithRecord() {
+  @Test void testGetTableBaselineWithRecord() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Add a conversion record with baseline
     ConversionMetadata cm = schema.getConversionMetadata();
@@ -1409,8 +1296,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertNotNull(result.files);
   }
 
-  @Test
-  void testUpdateTableBaselineNoRecord() {
+  @Test void testUpdateTableBaselineNoRecord() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     // Should not throw - just logs warning
@@ -1421,15 +1307,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getAllTableRecords tests
   // =======================================================================
 
-  @Test
-  void testGetAllTableRecordsEmpty() {
+  @Test void testGetAllTableRecordsEmpty() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, ConversionMetadata.ConversionRecord> records = schema.getAllTableRecords();
     assertNotNull(records);
   }
 
-  @Test
-  void testGetAllTableRecordsWithRecords() {
+  @Test void testGetAllTableRecordsWithRecords() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     ConversionMetadata cm = schema.getConversionMetadata();
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -1444,20 +1328,18 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: hasRefreshableTables tests
   // =======================================================================
 
-  @Test
-  void testHasRefreshableTablesTrue() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, null, null,
+  @Test void testHasRefreshableTablesTrue() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         "5 minutes", "SMART_CASING", "SMART_CASING",
         null, null, null, null, false);
     assertTrue(schema.hasRefreshableTables());
   }
 
-  @Test
-  void testHasRefreshableTablesFalse() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, null, null,
+  @Test void testHasRefreshableTablesFalse() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false);
@@ -1468,18 +1350,16 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getComment tests
   // =======================================================================
 
-  @Test
-  void testGetCommentReturnsValue() {
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, null, null,
+  @Test void testGetCommentReturnsValue() {
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, "My schema");
     assertEquals("My schema", schema.getComment());
   }
 
-  @Test
-  void testGetCommentReturnsNull() {
+  @Test void testGetCommentReturnsNull() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     assertNull(schema.getComment());
   }
@@ -1488,8 +1368,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: setFunctionMultimap and getFunctionMultimap tests
   // =======================================================================
 
-  @Test
-  void testSetAndGetFunctionMultimap() {
+  @Test void testSetAndGetFunctionMultimap() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     ImmutableMultimap<String, Function> functions = ImmutableMultimap.of();
     schema.setFunctionMultimap(functions);
@@ -1497,8 +1376,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertNotNull(schema.getFunctions("nonexistent"));
   }
 
-  @Test
-  void testSetFunctionMultimapWithEntries() {
+  @Test void testSetFunctionMultimapWithEntries() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Function mockFn = mock(Function.class);
     ImmutableMultimap<String, Function> functions =
@@ -1511,8 +1389,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: clearTableCache test
   // =======================================================================
 
-  @Test
-  void testClearTableCacheResets() {
+  @Test void testClearTableCacheResets() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     // Get table map once (populates cache)
     schema.getTableMap();
@@ -1527,26 +1404,23 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: storage config accessors
   // =======================================================================
 
-  @Test
-  void testGetStorageConfigNull() {
+  @Test void testGetStorageConfigNull() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     assertNull(schema.getStorageConfig());
   }
 
-  @Test
-  void testGetStorageProviderNull() {
+  @Test void testGetStorageProviderNull() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     assertNull(schema.getStorageProvider());
   }
 
-  @Test
-  void testGetStorageConfigWithValue() {
+  @Test void testGetStorageConfigWithValue() {
     Map<String, Object> config = new HashMap<>();
     config.put("endpoint", "http://localhost:9000");
     config.put("_storageProvider", mock(StorageProvider.class));
 
-    FileSchema schema = new FileSchema(mockParentSchema, uniqueSchemaName(),
-        tempDir.toFile(), null, "/bucket", null,
+    FileSchema schema =
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/bucket", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", config, null, null, false, null);
@@ -1558,19 +1432,17 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: sanitizeOperand edge cases
   // =======================================================================
 
-  @Test
-  void testSanitizeOperandSecretKey() throws Exception {
+  @Test void testSanitizeOperandSecretKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("mySecret", "super-secret-value");
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     assertEquals("********", result.get("mySecret"));
   }
 
-  @Test
-  void testSanitizeOperandStorageConfigWithUnderscore() throws Exception {
+  @Test void testSanitizeOperandStorageConfigWithUnderscore() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_provider", new Object());
@@ -1579,8 +1451,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     operand.put("storageConfig", storageConfig);
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     @SuppressWarnings("unchecked")
     Map<String, Object> sanitizedStorage = (Map<String, Object>) result.get("storageConfig");
@@ -1589,24 +1461,22 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("http://localhost", sanitizedStorage.get("endpoint"));
   }
 
-  @Test
-  void testSanitizeOperandStorageConfigNullValue() throws Exception {
+  @Test void testSanitizeOperandStorageConfigNullValue() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("_nullProvider", null);
     operand.put("storageConfig", storageConfig);
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     @SuppressWarnings("unchecked")
     Map<String, Object> sanitizedStorage = (Map<String, Object>) result.get("storageConfig");
     assertNull(sanitizedStorage.get("_nullProvider"));
   }
 
-  @Test
-  void testSanitizeOperandGenericNestedMap() throws Exception {
+  @Test void testSanitizeOperandGenericNestedMap() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> nestedMap = new HashMap<>();
     nestedMap.put("normalKey", "normalValue");
@@ -1614,8 +1484,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     operand.put("customConfig", nestedMap);
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     @SuppressWarnings("unchecked")
     Map<String, Object> sanitizedNested = (Map<String, Object>) result.get("customConfig");
@@ -1623,14 +1493,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("********", sanitizedNested.get("secretKey"));
   }
 
-  @Test
-  void testSanitizeOperandModelUriWithCredentials() throws Exception {
+  @Test void testSanitizeOperandModelUriWithCredentials() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("modelUri", "inline:{\"accessKeyId\": \"AKIA12345\", \"secretAccessKey\": \"mykey\"}");
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     String sanitizedUri = (String) result.get("modelUri");
     assertTrue(sanitizedUri.contains("\"accessKeyId\": \"****\""));
@@ -1641,16 +1510,15 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: sanitizeNestedMap edge cases
   // =======================================================================
 
-  @Test
-  void testSanitizeNestedMapPasswordKey() throws Exception {
+  @Test void testSanitizeNestedMapPasswordKey() throws Exception {
     Map<String, Object> nested = new HashMap<>();
     nested.put("password", "secret123");
     nested.put("accesskey", "AKIA123");
     nested.put("normalField", "value");
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeNestedMap",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeNestedMap",
         new Class<?>[]{Map.class}, nested);
     assertEquals("********", result.get("password"));
     assertEquals("********", result.get("accesskey"));
@@ -1661,16 +1529,14 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: parseBooleanValue edge cases
   // =======================================================================
 
-  @Test
-  void testParseBooleanValueInteger() throws Exception {
+  @Test void testParseBooleanValueInteger() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     Object result = method.invoke(null, Integer.valueOf(42));
     assertNull(result);
   }
 
-  @Test
-  void testParseBooleanValueStringYes() throws Exception {
+  @Test void testParseBooleanValueStringYes() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     // "yes" is not recognized by Boolean.parseBoolean, returns false
@@ -1678,8 +1544,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertFalse(result);
   }
 
-  @Test
-  void testParseBooleanValueStringTrueUpperCase() throws Exception {
+  @Test void testParseBooleanValueStringTrueUpperCase() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     Boolean result = (Boolean) method.invoke(null, "TRUE");
@@ -1690,57 +1555,52 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: rewriteSchemaReferencesInSql edge cases
   // =======================================================================
 
-  @Test
-  void testRewriteSchemaReferencesInSqlWithActualRewrite() throws Exception {
+  @Test void testRewriteSchemaReferencesInSqlWithActualRewrite() throws Exception {
     // declaredSchemaName and actualSchemaName must be NOT case-insensitive equal for rewrite to apply
-    String result = (String) invokePrivateStatic(FileSchemaFactory.class,
-        "rewriteSchemaReferencesInSql",
+    String result =
+        (String) invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM econ.gdp_data", "econ", "my_econ_renamed");
     assertEquals("SELECT * FROM my_econ_renamed.gdp_data", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
-    String result = (String) invokePrivateStatic(FileSchemaFactory.class,
-        "rewriteSchemaReferencesInSql",
+  @Test void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
+    String result =
+        (String) invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM other.table_name", "econ", "renamed_econ");
     assertEquals("SELECT * FROM other.table_name", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlCaseInsensitiveMatch() throws Exception {
+  @Test void testRewriteSchemaReferencesInSqlCaseInsensitiveMatch() throws Exception {
     // Case-insensitive equal names skip rewriting (early return)
-    String result = (String) invokePrivateStatic(FileSchemaFactory.class,
-        "rewriteSchemaReferencesInSql",
+    String result =
+        (String) invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM schema1.t", "schema1", "SCHEMA1");
     assertEquals("SELECT * FROM schema1.t", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlSameNameExactMatch() throws Exception {
+  @Test void testRewriteSchemaReferencesInSqlSameNameExactMatch() throws Exception {
     // Exact same name skips rewriting
-    String result = (String) invokePrivateStatic(FileSchemaFactory.class,
-        "rewriteSchemaReferencesInSql",
+    String result =
+        (String) invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM schema1.t", "schema1", "schema1");
     assertEquals("SELECT * FROM schema1.t", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlAllNull() throws Exception {
-    assertNull(invokePrivateStatic(FileSchemaFactory.class,
+  @Test void testRewriteSchemaReferencesInSqlAllNull() throws Exception {
+    assertNull(
+        invokePrivateStatic(FileSchemaFactory.class,
         "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         null, "econ", "ECON"));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNullDeclared() throws Exception {
-    String result = (String) invokePrivateStatic(FileSchemaFactory.class,
-        "rewriteSchemaReferencesInSql",
+  @Test void testRewriteSchemaReferencesInSqlNullDeclared() throws Exception {
+    String result =
+        (String) invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
         new Class<?>[]{String.class, String.class, String.class},
         "SELECT 1", null, "ECON");
     assertEquals("SELECT 1", result);
@@ -1750,8 +1610,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: rewriteForeignKeySchemaNames edge cases
   // =======================================================================
 
-  @Test
-  void testRewriteForeignKeySchemaNamesCrossSchemaFkPreserved() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesCrossSchemaFkPreserved() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tableConstraints = new HashMap<>();
     List<Map<String, Object>> fks = new ArrayList<>();
@@ -1776,8 +1635,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("other_schema", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesFkWithNullTargetSchema() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesFkWithNullTargetSchema() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tableConstraints = new HashMap<>();
     List<Map<String, Object>> fks = new ArrayList<>();
@@ -1801,8 +1659,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertNull(resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesFkMatchingRewritten() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesFkMatchingRewritten() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tableConstraints = new HashMap<>();
     List<Map<String, Object>> fks = new ArrayList<>();
@@ -1826,8 +1683,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("ECON", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesCaseInsensitive() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesCaseInsensitive() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tableConstraints = new HashMap<>();
     List<Map<String, Object>> fks = new ArrayList<>();
@@ -1851,8 +1707,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("econ_upper", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesEmptyConstraints() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesEmptyConstraints() throws Exception {
     Map<String, Map<String, Object>> result =
         (Map<String, Map<String, Object>>) invokePrivateStatic(
             FileSchemaFactory.class, "rewriteForeignKeySchemaNames",
@@ -1861,8 +1716,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesNullConstraints() throws Exception {
+  @Test void testRewriteForeignKeySchemaNamesNullConstraints() throws Exception {
     @SuppressWarnings("unchecked")
     Map<String, Map<String, Object>> result =
         (Map<String, Map<String, Object>>) invokePrivateStatic(
@@ -1876,8 +1730,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: ROWTIME_COLUMN_NAME constant
   // =======================================================================
 
-  @Test
-  void testRowtimeColumnNameConstant() {
+  @Test void testRowtimeColumnNameConstant() {
     assertEquals("ROWTIME", FileSchemaFactory.ROWTIME_COLUMN_NAME);
   }
 
@@ -1885,8 +1738,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: supportsConstraints
   // =======================================================================
 
-  @Test
-  void testSupportsConstraintsReturnsTrue() {
+  @Test void testSupportsConstraintsReturnsTrue() {
     assertTrue(FileSchemaFactory.INSTANCE.supportsConstraints());
   }
 
@@ -1894,8 +1746,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: setTableConstraints
   // =======================================================================
 
-  @Test
-  void testSetTableConstraintsStoresValues() throws Exception {
+  @Test void testSetTableConstraintsStoresValues() throws Exception {
     FileSchemaFactory factory = FileSchemaFactory.INSTANCE;
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     constraints.put("t1", new HashMap<>());
@@ -1916,8 +1767,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: INSTANCE singleton
   // =======================================================================
 
-  @Test
-  void testSingletonInstance() {
+  @Test void testSingletonInstance() {
     assertNotNull(FileSchemaFactory.INSTANCE);
     // Same reference
     assertTrue(FileSchemaFactory.INSTANCE == FileSchemaFactory.INSTANCE);
@@ -1927,44 +1777,40 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: create with various operand combinations
   // =======================================================================
 
-  @Test
-  void testCreateWithColumnNameCasingSnakeCase() {
+  @Test void testCreateWithColumnNameCasingSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("column_name_casing", "UPPER");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithColumnNameCasingCamelCase() {
+  @Test void testCreateWithColumnNameCasingCamelCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("columnNameCasing", "LOWER");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithTableNameCasingSnakeCase() {
+  @Test void testCreateWithTableNameCasingSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("table_name_casing", "LOWER");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithCsvTypeInference() {
+  @Test void testCreateWithCsvTypeInference() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1973,13 +1819,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     csvTypeInference.put("sampleSize", 100);
     operand.put("csvTypeInference", csvTypeInference);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithDuckdbConfig() {
+  @Test void testCreateWithDuckdbConfig() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1987,25 +1832,23 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     duckdbConfig.put("memory_limit", "512MB");
     operand.put("duckdbConfig", duckdbConfig);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithParquetCacheDirectory() {
+  @Test void testCreateWithParquetCacheDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("parquetCacheDirectory", tempDir.resolve("parquet-cache").toString());
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithPartitionedTables() {
+  @Test void testCreateWithPartitionedTables() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -2016,13 +1859,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     partitionedTables.add(pt);
     operand.put("partitionedTables", partitionedTables);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithMaterializations() {
+  @Test void testCreateWithMaterializations() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -2033,13 +1875,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     materializations.add(mv);
     operand.put("materializations", materializations);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithViewDefinitions() {
+  @Test void testCreateWithViewDefinitions() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -2050,25 +1891,23 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     views.add(view);
     operand.put("views", views);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithFlattenTrue() {
+  @Test void testCreateWithFlattenTrue() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("flatten", Boolean.TRUE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithTablesExplicitDefinition() throws Exception {
+  @Test void testCreateWithTablesExplicitDefinition() throws Exception {
     // Create a CSV file in temp dir
     File csvFile = new File(tempDir.toFile(), "test_data.csv");
     try (FileWriter w = new FileWriter(csvFile)) {
@@ -2084,13 +1923,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     tables.add(table);
     operand.put("tables", tables);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithTablesIncludingViewSkipped() throws Exception {
+  @Test void testCreateWithTablesIncludingViewSkipped() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -2103,13 +1941,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     tables.add(viewDef);
     operand.put("tables", tables);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithConstraintsInOperand() {
+  @Test void testCreateWithConstraintsInOperand() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -2119,108 +1956,99 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     constraints.put("my_table", tableConstraint);
     operand.put("tableConstraints", constraints);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithBatchSizeNumber() {
+  @Test void testCreateWithBatchSizeNumber() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("batchSize", 500);
     operand.put("memoryThreshold", 1024L * 1024);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithEphemeralCacheSnakeCase() {
+  @Test void testCreateWithEphemeralCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("ephemeral_cache", "true");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryAsFile() {
+  @Test void testCreateWithBaseDirectoryAsFile() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.toFile());
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryAsString() {
+  @Test void testCreateWithBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithRelativeBaseDirectory() {
+  @Test void testCreateWithRelativeBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", "relative-dir");
     operand.put("baseDirectory_", tempDir.toFile());
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithModelBaseDirectory() {
+  @Test void testCreateWithModelBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory_", tempDir.toFile());
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateNoDirectoryUsesWorkingDir() {
+  @Test void testCreateNoDirectoryUsesWorkingDir() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateAutoDetectHdfsStorage() {
+  @Test void testCreateAutoDetectHdfsStorage() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "hdfs://namenode:8020/data");
 
     // HDFS auto-detect should create schema (it auto-sets storageType to "hdfs")
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateAutoDetectHttpsStorage() {
+  @Test void testCreateAutoDetectHttpsStorage() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "https://api.example.com/data");
 
@@ -2233,15 +2061,14 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     }
   }
 
-  @Test
-  void testCreateAutoDetectS3BaseDirectory() {
+  @Test void testCreateAutoDetectS3BaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("baseDirectory", "s3://my-bucket/cache");
 
     // S3 auto-detect from baseDirectory - may succeed or fail depending on implementation
     try {
-      Schema schema = FileSchemaFactory.INSTANCE.create(
-          mockParentSchema, uniqueSchemaName(), operand);
+      Schema schema =
+          FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
       // If it succeeds, schema should be non-null
       assertNotNull(schema);
     } catch (Exception e) {
@@ -2250,8 +2077,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     }
   }
 
-  @Test
-  void testCreateS3WithCredentialsPasses() throws Exception {
+  @Test void testCreateS3WithCredentialsPasses() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "s3://my-bucket/data");
     Map<String, Object> storageConfig = new HashMap<>();
@@ -2268,45 +2094,41 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     }
   }
 
-  @Test
-  void testCreateWithPreCreatedStorageProvider() {
+  @Test void testCreateWithPreCreatedStorageProvider() {
     StorageProvider mockProvider = mock(StorageProvider.class);
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("_storageProvider", mockProvider);
     operand.put("storageType", "local");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithDeclaredSchemaNameDifferent() {
+  @Test void testCreateWithDeclaredSchemaNameDifferent() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("declaredSchemaName", "econ");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, "ECON", operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, "ECON", operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithCanonicalSchemaName() {
+  @Test void testCreateWithCanonicalSchemaName() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("canonicalSchemaName", "econ");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, "ECON_SCHEMA", operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, "ECON_SCHEMA", operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithNullStorageTypeAndTablesAutoDetects() {
+  @Test void testCreateWithNullStorageTypeAndTablesAutoDetects() {
     Map<String, Object> operand = new HashMap<>();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -2315,100 +2137,92 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     tables.add(table);
     operand.put("tables", tables);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithRecursiveAndDirectoryPattern() {
+  @Test void testCreateWithRecursiveAndDirectoryPattern() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("recursive", Boolean.TRUE);
     operand.put("directoryPattern", "**/*.csv");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithGlobAlias() {
+  @Test void testCreateWithGlobAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("glob", "*.json");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithRefreshInterval() {
+  @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("refreshInterval", "10 minutes");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithPrimeCacheFalse() {
+  @Test void testCreateWithPrimeCacheFalse() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithPrimeCacheSnakeCase() {
+  @Test void testCreateWithPrimeCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("prime_cache", Boolean.FALSE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithComment() {
+  @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("comment", "Test schema for unit tests");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateNoStorageTypeNoDirectoryThrows() {
+  @Test void testCreateNoStorageTypeNoDirectoryThrows() {
     Map<String, Object> operand = new HashMap<>();
     // No directory, no tables, no storageType => throws
     assertThrows(IllegalStateException.class, () ->
         FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand));
   }
 
-  @Test
-  void testCreateWithSourceDirectoryAlias() {
+  @Test void testCreateWithSourceDirectoryAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
   }
 
@@ -2416,22 +2230,19 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: validateUniqueSchemaName edge cases
   // =======================================================================
 
-  @Test
-  void testValidateUniqueSchemaNameNullParent() throws Exception {
+  @Test void testValidateUniqueSchemaNameNullParent() throws Exception {
     // Should not throw when parentSchema is null
     invokePrivateStatic(FileSchemaFactory.class, "validateUniqueSchemaName",
         new Class<?>[]{SchemaPlus.class, String.class}, null, "test");
   }
 
-  @Test
-  void testValidateUniqueSchemaNameNullName() throws Exception {
+  @Test void testValidateUniqueSchemaNameNullName() throws Exception {
     // Should not throw when name is null
     invokePrivateStatic(FileSchemaFactory.class, "validateUniqueSchemaName",
         new Class<?>[]{SchemaPlus.class, String.class}, mockParentSchema, null);
   }
 
-  @Test
-  void testValidateUniqueSchemaNameDuplicate() throws Exception {
+  @Test void testValidateUniqueSchemaNameDuplicate() throws Exception {
     SchemaPlus parent = mock(SchemaPlus.class);
     Lookup subSchemaLookup = mock(Lookup.class);
     when(subSchemaLookup.get("existing")).thenReturn(mock(SchemaPlus.class));
@@ -2448,8 +2259,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: writeDebugModel tests
   // =======================================================================
 
-  @Test
-  void testWriteDebugModelCreatesFile() throws Exception {
+  @Test void testWriteDebugModelCreatesFile() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
 
@@ -2462,8 +2272,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     // File may or may not exist depending on test environment, but method should not throw
   }
 
-  @Test
-  void testWriteDebugModelNullParentName() throws Exception {
+  @Test void testWriteDebugModelNullParentName() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "/tmp/test");
 
@@ -2477,15 +2286,13 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: extractFieldConfigurations tests
   // =======================================================================
 
-  @Test
-  void testExtractFieldConfigurationsNull() throws Exception {
-    Object result = invokePrivateStatic(FileSchema.class, "extractFieldConfigurations",
-        new Class<?>[]{Map.class, String.class}, null, "test_table");
+  @Test void testExtractFieldConfigurationsNull() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchema.class, "extractFieldConfigurations", new Class<?>[]{Map.class, String.class}, null, "test_table");
     assertNull(result);
   }
 
-  @Test
-  void testExtractFieldConfigurationsWithFields() throws Exception {
+  @Test void testExtractFieldConfigurationsWithFields() throws Exception {
     Map<String, Object> tableDef = new HashMap<>();
     List<Map<String, Object>> fields = new ArrayList<>();
     Map<String, Object> field = new HashMap<>();
@@ -2503,13 +2310,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertEquals("column1", result.get(0).get("name"));
   }
 
-  @Test
-  void testExtractFieldConfigurationsNoFields() throws Exception {
+  @Test void testExtractFieldConfigurationsNoFields() throws Exception {
     Map<String, Object> tableDef = new HashMap<>();
     tableDef.put("name", "test_table");
 
-    Object result = invokePrivateStatic(FileSchema.class, "extractFieldConfigurations",
-        new Class<?>[]{Map.class, String.class}, tableDef, "test_table");
+    Object result =
+        invokePrivateStatic(FileSchema.class, "extractFieldConfigurations", new Class<?>[]{Map.class, String.class}, tableDef, "test_table");
     assertNull(result);
   }
 
@@ -2517,8 +2323,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: validateForeignKeyConstraints edge cases
   // =======================================================================
 
-  @Test
-  void testValidateForeignKeyConstraintsWithListTargetTable() throws Exception {
+  @Test void testValidateForeignKeyConstraintsWithListTargetTable() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     Map<String, Object> constraint = new HashMap<>();
@@ -2539,8 +2344,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     // Should not throw - invalid FK is removed
   }
 
-  @Test
-  void testValidateForeignKeyConstraintsWithSingleElementList() throws Exception {
+  @Test void testValidateForeignKeyConstraintsWithSingleElementList() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     Map<String, Object> constraint = new HashMap<>();
@@ -2561,8 +2365,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
         new Class<?>[]{Map.class}, tables);
   }
 
-  @Test
-  void testValidateForeignKeyConstraintsNullConstraintEntry() throws Exception {
+  @Test void testValidateForeignKeyConstraintsNullConstraintEntry() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     metadata.put("source_table", null);
@@ -2575,8 +2378,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
         new Class<?>[]{Map.class}, tables);
   }
 
-  @Test
-  void testValidateForeignKeyConstraintsNullForeignKeys() throws Exception {
+  @Test void testValidateForeignKeyConstraintsNullForeignKeys() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     Map<String, Object> constraint = new HashMap<>();
@@ -2591,8 +2393,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
         new Class<?>[]{Map.class}, tables);
   }
 
-  @Test
-  void testValidateForeignKeyConstraintsValidLocalFk() throws Exception {
+  @Test void testValidateForeignKeyConstraintsValidLocalFk() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Map<String, Object>> metadata = new HashMap<>();
     Map<String, Object> constraint = new HashMap<>();
@@ -2625,42 +2426,39 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: checkTableExists edge cases
   // =======================================================================
 
-  @Test
-  void testCheckTableExistsLocalNoSchema() throws Exception {
+  @Test void testCheckTableExistsLocalNoSchema() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Table> localTables = new HashMap<>();
     localTables.put("my_table", mock(Table.class));
 
-    Boolean result = (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class<?>[]{String.class, String.class, Map.class},
+    Boolean result =
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
         null, "my_table", localTables);
     assertTrue(result);
   }
 
-  @Test
-  void testCheckTableExistsLocalSameSchema() throws Exception {
+  @Test void testCheckTableExistsLocalSameSchema() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     String schemaName = (String) getField(schema, "name");
 
     Map<String, Table> localTables = new HashMap<>();
     localTables.put("my_table", mock(Table.class));
 
-    Boolean result = (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class<?>[]{String.class, String.class, Map.class},
+    Boolean result =
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
         schemaName, "my_table", localTables);
     assertTrue(result);
   }
 
-  @Test
-  void testCheckTableExistsCrossSchemaNotFound() throws Exception {
+  @Test void testCheckTableExistsCrossSchemaNotFound() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
 
     Map<String, Table> localTables = new HashMap<>();
     // Set parentSchema to null to trigger the "schema not found" path
     setField(schema, "parentSchema", null);
 
-    Boolean result = (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class<?>[]{String.class, String.class, Map.class},
+    Boolean result =
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
         "other_schema", "other_table", localTables);
     assertFalse(result);
   }
@@ -2669,20 +2467,18 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: getTableName tests
   // =======================================================================
 
-  @Test
-  void testGetTableNameExplicitPreserved() throws Exception {
+  @Test void testGetTableNameExplicitPreserved() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getTableName",
-        new Class<?>[]{String.class, String.class, String.class},
+    String result =
+        (String) invokePrivate(schema, "getTableName", new Class<?>[]{String.class, String.class, String.class},
         "MyExplicitName", "derived_name", "UPPER");
     assertEquals("MyExplicitName", result);
   }
 
-  @Test
-  void testGetTableNameDerivedAppliesCasing() throws Exception {
+  @Test void testGetTableNameDerivedAppliesCasing() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "getTableName",
-        new Class<?>[]{String.class, String.class, String.class},
+    String result =
+        (String) invokePrivate(schema, "getTableName", new Class<?>[]{String.class, String.class, String.class},
         null, "my_table", "SMART_CASING");
     assertNotNull(result);
   }
@@ -2691,8 +2487,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: generateModelFile test
   // =======================================================================
 
-  @Test
-  void testGenerateModelFileCreatesFile() throws Exception {
+  @Test void testGenerateModelFileCreatesFile() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Table> tables = new HashMap<>();
     tables.put("test_csv", mock(Table.class));
@@ -2711,22 +2506,20 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: buildConvertibleFilesGlobPattern tests
   // =======================================================================
 
-  @Test
-  void testBuildConvertibleFilesGlobPatternNonRecursive() throws Exception {
+  @Test void testBuildConvertibleFilesGlobPatternNonRecursive() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "buildConvertibleFilesGlobPattern",
-        new Class<?>[]{boolean.class}, false);
+    String result =
+        (String) invokePrivate(schema, "buildConvertibleFilesGlobPattern", new Class<?>[]{boolean.class}, false);
     assertNotNull(result);
     assertTrue(result.startsWith("*.{"));
     assertTrue(result.contains("xlsx"));
     assertTrue(result.contains("html"));
   }
 
-  @Test
-  void testBuildConvertibleFilesGlobPatternRecursive() throws Exception {
+  @Test void testBuildConvertibleFilesGlobPatternRecursive() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    String result = (String) invokePrivate(schema, "buildConvertibleFilesGlobPatternRecursive",
-        new Class<?>[]{});
+    String result =
+        (String) invokePrivate(schema, "buildConvertibleFilesGlobPatternRecursive", new Class<?>[]{});
     assertNotNull(result);
     assertTrue(result.startsWith("**/*.{"));
     assertTrue(result.contains("xlsx"));
@@ -2737,8 +2530,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: storeExplicitTableMapping and getExplicitTableName tests
   // =======================================================================
 
-  @Test
-  void testStoreAndGetExplicitTableMapping() throws Exception {
+  @Test void testStoreAndGetExplicitTableMapping() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File csvFile = new File(tempDir.toFile(), "data.csv");
     csvFile.createNewFile();
@@ -2748,19 +2540,18 @@ public class FileSchemaFactoryDeepCoverageTest4 {
         new Class<?>[]{String.class, Source.class},
         "custom_table_name", source);
 
-    String result = (String) invokePrivate(schema, "getExplicitTableName",
-        new Class<?>[]{File.class}, csvFile);
+    String result =
+        (String) invokePrivate(schema, "getExplicitTableName", new Class<?>[]{File.class}, csvFile);
     assertEquals("custom_table_name", result);
   }
 
-  @Test
-  void testGetExplicitTableNameNotFound() throws Exception {
+  @Test void testGetExplicitTableNameNotFound() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     File unknownFile = new File(tempDir.toFile(), "unknown.csv");
     unknownFile.createNewFile();
 
-    String result = (String) invokePrivate(schema, "getExplicitTableName",
-        new Class<?>[]{File.class}, unknownFile);
+    String result =
+        (String) invokePrivate(schema, "getExplicitTableName", new Class<?>[]{File.class}, unknownFile);
     assertNull(result);
   }
 
@@ -2768,28 +2559,25 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: isFileNameSupported test (used by storage provider path)
   // =======================================================================
 
-  @Test
-  void testIsFileNameSupportedCsv() throws Exception {
+  @Test void testIsFileNameSupportedCsv() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isFileNameSupported",
-        new Class<?>[]{String.class}, "data.csv");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileNameSupported", new Class<?>[]{String.class}, "data.csv");
     assertTrue(result);
   }
 
-  @Test
-  void testIsFileNameSupportedParquet() throws Exception {
+  @Test void testIsFileNameSupportedParquet() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Boolean result = (Boolean) invokePrivate(schema, "isFileNameSupported",
-        new Class<?>[]{String.class}, "data.parquet");
+    Boolean result =
+        (Boolean) invokePrivate(schema, "isFileNameSupported", new Class<?>[]{String.class}, "data.parquet");
     assertTrue(result);
   }
 
-  @Test
-  void testIsFileNameSupportedUnsupported() throws Exception {
+  @Test void testIsFileNameSupportedUnsupported() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     try {
-      Boolean result = (Boolean) invokePrivate(schema, "isFileNameSupported",
-          new Class<?>[]{String.class}, "data.txt");
+      Boolean result =
+          (Boolean) invokePrivate(schema, "isFileNameSupported", new Class<?>[]{String.class}, "data.txt");
       // If method exists, verify result
       assertFalse(result);
     } catch (NoSuchMethodException e) {
@@ -2801,8 +2589,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchema: table discovery with actual CSV files
   // =======================================================================
 
-  @Test
-  void testGetTableMapDiscoversCsvFiles() throws Exception {
+  @Test void testGetTableMapDiscoversCsvFiles() throws Exception {
     // Create files BEFORE schema to avoid race with cache priming
     File sourceDir = new File(tempDir.toFile(), "csv_src");
     sourceDir.mkdirs();
@@ -2817,8 +2604,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
     // The factory returns a FileSchema that has been registered
     assertTrue(schema instanceof FileSchema);
@@ -2829,8 +2616,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(tables.size() >= 1, "Should discover at least 1 table, got: " + tables.keySet());
   }
 
-  @Test
-  void testGetTableMapDiscoversJsonFiles() throws Exception {
+  @Test void testGetTableMapDiscoversJsonFiles() throws Exception {
     File sourceDir = new File(tempDir.toFile(), "json_src");
     sourceDir.mkdirs();
     File jsonFile = new File(sourceDir, "config.json");
@@ -2843,8 +2629,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
     assertTrue(schema instanceof FileSchema);
     FileSchema fs = (FileSchema) schema;
@@ -2853,8 +2639,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(tables.size() >= 1, "Should discover at least 1 table, got: " + tables.keySet());
   }
 
-  @Test
-  void testGetTableMapDiscoversMultipleFiles() throws Exception {
+  @Test void testGetTableMapDiscoversMultipleFiles() throws Exception {
     File sourceDir = new File(tempDir.toFile(), "multi_src");
     sourceDir.mkdirs();
     File csv1 = new File(sourceDir, "table_a.csv");
@@ -2871,8 +2656,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
-    Schema schema = FileSchemaFactory.INSTANCE.create(
-        mockParentSchema, uniqueSchemaName(), operand);
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
     assertNotNull(schema);
     assertTrue(schema instanceof FileSchema);
     FileSchema fs = (FileSchema) schema;
@@ -2881,16 +2666,14 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(tables.size() >= 2, "Should discover multiple tables, got: " + tables.keySet());
   }
 
-  @Test
-  void testGetTableMapEmptyDirectory() {
+  @Test void testGetTableMapEmptyDirectory() {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
     // Empty directory should produce empty or minimal tables
   }
 
-  @Test
-  void testGetTableMapCachesResults() {
+  @Test void testGetTableMapCachesResults() {
     File csvFile = new File(tempDir.toFile(), "cached_test.csv");
     try {
       try (FileWriter w = new FileWriter(csvFile)) {

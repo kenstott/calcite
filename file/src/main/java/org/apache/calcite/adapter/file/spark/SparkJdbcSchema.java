@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file.spark;
 
-import org.apache.calcite.adapter.file.execution.spark.SparkConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.jdbc.SparkSqlDialect;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
@@ -95,8 +94,8 @@ public class SparkJdbcSchema extends JdbcSchema implements CommentableSchema {
   private void recreateView(String tableName, File parquetFile) {
     try {
       String path = parquetFile.getAbsolutePath();
-      String viewSql = SparkSqlDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, path, false);
+      String viewSql =
+          SparkSqlDialect.INSTANCE.createParquetViewSql(schemaName, tableName, path, false);
 
       LOGGER.info("Recreating Spark view after refresh: \"{}.{}\" -> {}",
                   schemaName, tableName, parquetFile.getName());
@@ -116,8 +115,8 @@ public class SparkJdbcSchema extends JdbcSchema implements CommentableSchema {
    */
   private void recreateViewWithPattern(String tableName, String pattern) {
     try {
-      String viewSql = SparkSqlDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, pattern, false);
+      String viewSql =
+          SparkSqlDialect.INSTANCE.createParquetViewSql(schemaName, tableName, pattern, false);
 
       LOGGER.info("Recreating Spark view with pattern: \"{}.{}\" -> {}",
                   schemaName, tableName, pattern);
@@ -138,8 +137,8 @@ public class SparkJdbcSchema extends JdbcSchema implements CommentableSchema {
   private void recreateIcebergView(String tableName, String tableLocation) {
     try {
       // Re-register the Iceberg table in the catalog
-      String registerSql = SparkSqlDialect.INSTANCE.createIcebergTableSql(
-          schemaName, tableName, tableLocation);
+      String registerSql =
+          SparkSqlDialect.INSTANCE.createIcebergTableSql(schemaName, tableName, tableLocation);
 
       LOGGER.info("Re-registering Iceberg table in Spark catalog: {}.{}", schemaName, tableName);
       try (Statement stmt = persistentConnection.createStatement()) {
@@ -147,8 +146,8 @@ public class SparkJdbcSchema extends JdbcSchema implements CommentableSchema {
       }
 
       // Recreate the view pointing to the catalog table
-      String viewSql = SparkSqlDialect.INSTANCE.createIcebergViewSql(
-          schemaName, tableName, tableLocation);
+      String viewSql =
+          SparkSqlDialect.INSTANCE.createIcebergViewSql(schemaName, tableName, tableLocation);
 
       LOGGER.info("Recreating Spark Iceberg view: \"{}.{}\" -> {}",
                   schemaName, tableName, tableLocation);

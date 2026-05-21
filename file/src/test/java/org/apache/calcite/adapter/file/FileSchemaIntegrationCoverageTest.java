@@ -160,8 +160,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory.create() - operand parsing paths
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: CSV files discovered via directory scan")
+  @Test @DisplayName("Factory: CSV files discovered via directory scan")
   void testFactoryCsvDirectoryDiscovery() throws IOException {
     File sourceDir = tempDir.resolve("csv_dir").toFile();
     sourceDir.mkdirs();
@@ -181,8 +180,7 @@ public class FileSchemaIntegrationCoverageTest {
     LOGGER.debug("Discovered tables: {}", tableMap.keySet());
   }
 
-  @Test
-  @DisplayName("Factory: JSON files discovered via directory scan")
+  @Test @DisplayName("Factory: JSON files discovered via directory scan")
   void testFactoryJsonDirectoryDiscovery() throws IOException {
     File sourceDir = tempDir.resolve("json_dir").toFile();
     sourceDir.mkdirs();
@@ -199,8 +197,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("Factory: recursive=true scans subdirectories")
+  @Test @DisplayName("Factory: recursive=true scans subdirectories")
   void testFactoryRecursiveDirectoryScan() throws IOException {
     File sourceDir = tempDir.resolve("recursive_root").toFile();
     sourceDir.mkdirs();
@@ -219,8 +216,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("Factory: directoryPattern with glob")
+  @Test @DisplayName("Factory: directoryPattern with glob")
   void testFactoryDirectoryPatternGlob() throws IOException {
     File sourceDir = tempDir.resolve("glob_test").toFile();
     sourceDir.mkdirs();
@@ -235,8 +231,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: glob operand key (alias for directoryPattern)")
+  @Test @DisplayName("Factory: glob operand key (alias for directoryPattern)")
   void testFactoryGlobOperandKey() throws IOException {
     File sourceDir = tempDir.resolve("glob_alias").toFile();
     sourceDir.mkdirs();
@@ -248,8 +243,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: ephemeralCache=true creates temp cache directory")
+  @Test @DisplayName("Factory: ephemeralCache=true creates temp cache directory")
   void testFactoryEphemeralCacheTrue() throws IOException {
     File sourceDir = tempDir.resolve("ephemeral_src").toFile();
     sourceDir.mkdirs();
@@ -261,8 +255,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: ephemeral_cache snake_case operand")
+  @Test @DisplayName("Factory: ephemeral_cache snake_case operand")
   void testFactoryEphemeralCacheSnakeCase() throws IOException {
     File sourceDir = tempDir.resolve("eph_snake").toFile();
     sourceDir.mkdirs();
@@ -273,8 +266,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: explicit baseDirectory")
+  @Test @DisplayName("Factory: explicit baseDirectory")
   void testFactoryExplicitBaseDirectory() throws IOException {
     File sourceDir = tempDir.resolve("base_src").toFile();
     sourceDir.mkdirs();
@@ -288,8 +280,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: baseDirectory as File object")
+  @Test @DisplayName("Factory: baseDirectory as File object")
   void testFactoryBaseDirectoryAsFile() throws IOException {
     File sourceDir = tempDir.resolve("base_file_src").toFile();
     sourceDir.mkdirs();
@@ -302,13 +293,12 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: explicit tables list with CSV url")
+  @Test @DisplayName("Factory: explicit tables list with CSV url")
   void testFactoryExplicitTablesList() throws IOException {
     File sourceDir = tempDir.resolve("explicit_tbl").toFile();
     sourceDir.mkdirs();
-    File csvFile = createCsvFile(sourceDir, "inventory.csv",
-        "item_id,item_name,stock\n1,Pencil,500\n2,Pen,300\n");
+    File csvFile =
+        createCsvFile(sourceDir, "inventory.csv", "item_id,item_name,stock\n1,Pencil,500\n2,Pen,300\n");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -323,13 +313,12 @@ public class FileSchemaIntegrationCoverageTest {
     assertTrue(schema instanceof FileSchema);
   }
 
-  @Test
-  @DisplayName("Factory: explicit tables with JSON url")
+  @Test @DisplayName("Factory: explicit tables with JSON url")
   void testFactoryExplicitJsonTable() throws IOException {
     File sourceDir = tempDir.resolve("explicit_json").toFile();
     sourceDir.mkdirs();
-    File jsonFile = createJsonFile(sourceDir, "people.json",
-        "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
+    File jsonFile =
+        createJsonFile(sourceDir, "people.json", "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -344,8 +333,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: views configuration in operand")
+  @Test @DisplayName("Factory: views configuration in operand")
   void testFactoryWithViewsOperand() throws IOException {
     File sourceDir = tempDir.resolve("views_op").toFile();
     sourceDir.mkdirs();
@@ -363,8 +351,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: materializations configuration")
+  @Test @DisplayName("Factory: materializations configuration")
   void testFactoryMaterializations() throws IOException {
     File sourceDir = tempDir.resolve("mat_cfg").toFile();
     sourceDir.mkdirs();
@@ -383,8 +370,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: comment operand propagated to FileSchema")
+  @Test @DisplayName("Factory: comment operand propagated to FileSchema")
   void testFactoryCommentOperand() throws IOException {
     File sourceDir = tempDir.resolve("comment_dir").toFile();
     sourceDir.mkdirs();
@@ -399,8 +385,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertEquals("Production data schema for analytics", fs.getComment());
   }
 
-  @Test
-  @DisplayName("Factory: flatten=true operand")
+  @Test @DisplayName("Factory: flatten=true operand")
   void testFactoryFlattenTrue() throws IOException {
     File sourceDir = tempDir.resolve("flatten_dir").toFile();
     sourceDir.mkdirs();
@@ -413,8 +398,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: refreshInterval operand")
+  @Test @DisplayName("Factory: refreshInterval operand")
   void testFactoryRefreshInterval() throws IOException {
     File sourceDir = tempDir.resolve("refresh_dir").toFile();
     sourceDir.mkdirs();
@@ -426,8 +410,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: batchSize and memoryThreshold operands")
+  @Test @DisplayName("Factory: batchSize and memoryThreshold operands")
   void testFactoryBatchSizeAndMemoryThreshold() throws IOException {
     File sourceDir = tempDir.resolve("batch_dir").toFile();
     sourceDir.mkdirs();
@@ -439,8 +422,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: tableNameCasing=UPPER")
+  @Test @DisplayName("Factory: tableNameCasing=UPPER")
   void testFactoryTableNameCasingUpper() throws IOException {
     File sourceDir = tempDir.resolve("casing_upper").toFile();
     sourceDir.mkdirs();
@@ -452,8 +434,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: tableNameCasing=LOWER")
+  @Test @DisplayName("Factory: tableNameCasing=LOWER")
   void testFactoryTableNameCasingLower() throws IOException {
     File sourceDir = tempDir.resolve("casing_lower").toFile();
     sourceDir.mkdirs();
@@ -465,8 +446,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: columnNameCasing=UPPER")
+  @Test @DisplayName("Factory: columnNameCasing=UPPER")
   void testFactoryColumnNameCasingUpper() throws IOException {
     File sourceDir = tempDir.resolve("col_upper").toFile();
     sourceDir.mkdirs();
@@ -478,8 +458,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: table_name_casing snake_case operand key")
+  @Test @DisplayName("Factory: table_name_casing snake_case operand key")
   void testFactorySnakeCaseCasingOperand() throws IOException {
     File sourceDir = tempDir.resolve("snake_casing").toFile();
     sourceDir.mkdirs();
@@ -492,8 +471,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: csvTypeInference operand")
+  @Test @DisplayName("Factory: csvTypeInference operand")
   void testFactoryCsvTypeInference() throws IOException {
     File sourceDir = tempDir.resolve("type_inf").toFile();
     sourceDir.mkdirs();
@@ -510,8 +488,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: primeCache=false")
+  @Test @DisplayName("Factory: primeCache=false")
   void testFactoryPrimeCacheFalse() throws IOException {
     File sourceDir = tempDir.resolve("no_prime").toFile();
     sourceDir.mkdirs();
@@ -523,8 +500,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: prime_cache snake_case operand")
+  @Test @DisplayName("Factory: prime_cache snake_case operand")
   void testFactoryPrimeCacheSnakeCase() throws IOException {
     File sourceDir = tempDir.resolve("prime_snake").toFile();
     sourceDir.mkdirs();
@@ -535,8 +511,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: canonicalSchemaName operand")
+  @Test @DisplayName("Factory: canonicalSchemaName operand")
   void testFactoryCanonicalSchemaName() throws IOException {
     File sourceDir = tempDir.resolve("canonical_dir").toFile();
     sourceDir.mkdirs();
@@ -547,8 +522,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: executionEngine=PARQUET")
+  @Test @DisplayName("Factory: executionEngine=PARQUET")
   void testFactoryParquetEngine() throws IOException {
     File sourceDir = tempDir.resolve("parquet_eng").toFile();
     sourceDir.mkdirs();
@@ -560,8 +534,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: executionEngine=LINQ4J")
+  @Test @DisplayName("Factory: executionEngine=LINQ4J")
   void testFactoryLinq4jEngine() throws IOException {
     File sourceDir = tempDir.resolve("linq4j_eng").toFile();
     sourceDir.mkdirs();
@@ -573,8 +546,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: sourceDirectory operand (alternative to directory)")
+  @Test @DisplayName("Factory: sourceDirectory operand (alternative to directory)")
   void testFactorySourceDirectoryOperand() throws IOException {
     File sourceDir = tempDir.resolve("srcdir_op").toFile();
     sourceDir.mkdirs();
@@ -586,8 +558,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: partitionedTables operand")
+  @Test @DisplayName("Factory: partitionedTables operand")
   void testFactoryPartitionedTables() throws IOException {
     File sourceDir = tempDir.resolve("part_tbl").toFile();
     sourceDir.mkdirs();
@@ -606,8 +577,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: storageType=local operand")
+  @Test @DisplayName("Factory: storageType=local operand")
   void testFactoryStorageTypeLocal() throws IOException {
     File sourceDir = tempDir.resolve("storage_local").toFile();
     sourceDir.mkdirs();
@@ -619,8 +589,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: tableConstraints operand")
+  @Test @DisplayName("Factory: tableConstraints operand")
   void testFactoryTableConstraints() throws IOException {
     File sourceDir = tempDir.resolve("constraints_dir").toFile();
     sourceDir.mkdirs();
@@ -639,8 +608,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: declaredSchemaName operand for FK rewrite")
+  @Test @DisplayName("Factory: declaredSchemaName operand for FK rewrite")
   void testFactoryDeclaredSchemaName() throws IOException {
     File sourceDir = tempDir.resolve("declared_name").toFile();
     sourceDir.mkdirs();
@@ -652,8 +620,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: parquetCacheDirectory operand")
+  @Test @DisplayName("Factory: parquetCacheDirectory operand")
   void testFactoryParquetCacheDirectory() throws IOException {
     File sourceDir = tempDir.resolve("pq_cache_src").toFile();
     sourceDir.mkdirs();
@@ -667,8 +634,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: duckdbConfig operand map")
+  @Test @DisplayName("Factory: duckdbConfig operand map")
   void testFactoryDuckDBConfig() throws IOException {
     File sourceDir = tempDir.resolve("duckdb_cfg").toFile();
     sourceDir.mkdirs();
@@ -684,8 +650,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: S3 storage auto-detection fails fast without credentials")
+  @Test @DisplayName("Factory: S3 storage auto-detection fails fast without credentials")
   void testFactoryS3AutoDetectRequiresCredentials() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "s3://my-bucket/path");
@@ -698,8 +663,7 @@ public class FileSchemaIntegrationCoverageTest {
     }
   }
 
-  @Test
-  @DisplayName("Factory: textSimilarity operand registers functions")
+  @Test @DisplayName("Factory: textSimilarity operand registers functions")
   void testFactoryTextSimilarityFunctions() throws IOException {
     File sourceDir = tempDir.resolve("sim_funcs").toFile();
     sourceDir.mkdirs();
@@ -723,8 +687,7 @@ public class FileSchemaIntegrationCoverageTest {
     }
   }
 
-  @Test
-  @DisplayName("Factory: views with type=view and sql defined")
+  @Test @DisplayName("Factory: views with type=view and sql defined")
   void testFactoryViewTableType() throws IOException {
     File sourceDir = tempDir.resolve("view_type").toFile();
     sourceDir.mkdirs();
@@ -744,8 +707,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: mixed CSV and JSON in same directory")
+  @Test @DisplayName("Factory: mixed CSV and JSON in same directory")
   void testFactoryMixedFileTypes() throws IOException {
     File sourceDir = tempDir.resolve("mixed").toFile();
     sourceDir.mkdirs();
@@ -761,8 +723,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertFalse(tableMap.isEmpty(), "Should discover both CSV and JSON tables");
   }
 
-  @Test
-  @DisplayName("Factory: empty directory results in empty table map")
+  @Test @DisplayName("Factory: empty directory results in empty table map")
   void testFactoryEmptyDirectory() throws IOException {
     File sourceDir = tempDir.resolve("empty_dir").toFile();
     sourceDir.mkdirs();
@@ -781,22 +742,20 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema constructor paths (via direct instantiation)
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: constructor with null sourceDirectory falls back")
+  @Test @DisplayName("FileSchema: constructor with null sourceDirectory falls back")
   void testFileSchemaConstructorNullSourceDir() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(
-        mock, "null_src", null, null,
+    FileSchema fs =
+        new FileSchema(mock, "null_src", null, null,
         new ExecutionEngineConfig(), false);
 
     assertNotNull(fs);
     assertNotNull(fs.getBaseDirectory());
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with all minimal params")
+  @Test @DisplayName("FileSchema: constructor with all minimal params")
   void testFileSchemaMinimalConstructor() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -809,8 +768,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(fs.getTableMap());
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with engineConfig param")
+  @Test @DisplayName("FileSchema: constructor with engineConfig param")
   void testFileSchemaWithEngineConfig() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -823,8 +781,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(fs);
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with recursive and materializations")
+  @Test @DisplayName("FileSchema: constructor with recursive and materializations")
   void testFileSchemaWithRecursiveAndMaterializations() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -835,13 +792,12 @@ public class FileSchemaIntegrationCoverageTest {
     List<Map<String, Object>> mats = new ArrayList<>();
     List<Map<String, Object>> views = new ArrayList<>();
 
-    FileSchema fs = new FileSchema(mock, "rec_mat_schema", dir,
-        null, new ExecutionEngineConfig(), true, mats, views);
+    FileSchema fs =
+        new FileSchema(mock, "rec_mat_schema", dir, null, new ExecutionEngineConfig(), true, mats, views);
     assertNotNull(fs);
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with casing params")
+  @Test @DisplayName("FileSchema: constructor with casing params")
   void testFileSchemaWithCasing() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -849,14 +805,13 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("casing_ctor").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "casing_schema", dir,
-        "**/*.csv", null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "casing_schema", dir, "**/*.csv", null, new ExecutionEngineConfig(), false,
         null, null, null, null, "UPPER", "LOWER");
     assertNotNull(fs);
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with storageType and storageConfig")
+  @Test @DisplayName("FileSchema: constructor with storageType and storageConfig")
   void testFileSchemaWithStorageTypeAndConfig() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -864,16 +819,15 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("storage_ctor").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "storage_schema", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "storage_schema", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     assertNotNull(fs);
     assertNotNull(fs.getStorageProvider(), "Local storage type should create provider");
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with comment param")
+  @Test @DisplayName("FileSchema: constructor with comment param")
   void testFileSchemaWithComment() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -881,16 +835,15 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("comment_ctor").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "comment_schema", dir, null,
-        null, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "comment_schema", dir, null, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false, "Schema with a comment");
     assertNotNull(fs);
     assertEquals("Schema with a comment", fs.getComment());
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with canonicalSchemaName")
+  @Test @DisplayName("FileSchema: constructor with canonicalSchemaName")
   void testFileSchemaWithCanonicalSchemaName() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -898,8 +851,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("canon_ctor").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "MYSCHEMA", dir, null, null,
-        null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "MYSCHEMA", dir, null, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false, "comment", "my_canonical");
     assertNotNull(fs);
@@ -910,8 +863,7 @@ public class FileSchemaIntegrationCoverageTest {
         "Cache dir should use canonical name: " + cacheDir.getPath());
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with userConfiguredBaseDirectory")
+  @Test @DisplayName("FileSchema: constructor with userConfiguredBaseDirectory")
   void testFileSchemaWithUserBaseDirectory() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -921,16 +873,15 @@ public class FileSchemaIntegrationCoverageTest {
     File baseDir = tempDir.resolve("user_base_cache").toFile();
     baseDir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "user_base_schema",
-        sourceDir, baseDir, null,
+    FileSchema fs =
+        new FileSchema(mock, "user_base_schema", sourceDir, baseDir, null,
         null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     assertNotNull(fs);
   }
 
-  @Test
-  @DisplayName("FileSchema: constructor with ephemeral-like temp baseDirectory")
+  @Test @DisplayName("FileSchema: constructor with ephemeral-like temp baseDirectory")
   void testFileSchemaWithTempBaseDirectory() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -941,8 +892,8 @@ public class FileSchemaIntegrationCoverageTest {
     tempBase.mkdirs();
 
     try {
-      FileSchema fs = new FileSchema(mock, "ephemeral_ctor",
-          null, tempBase, null,
+      FileSchema fs =
+          new FileSchema(mock, "ephemeral_ctor", null, tempBase, null,
           null, new ExecutionEngineConfig(), false,
           null, null, null, null, "LOWER", "LOWER",
           null, null, null, null, false);
@@ -956,8 +907,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema public method coverage
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: getTableMap with CSV discovers tables")
+  @Test @DisplayName("FileSchema: getTableMap with CSV discovers tables")
   void testGetTableMapWithCsvFiles() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -968,8 +918,8 @@ public class FileSchemaIntegrationCoverageTest {
     createCsvFile(dir, "beta.csv", "x,y\n10,20\n30,40\n");
 
     // Use storageType="local" to enable file scanning
-    FileSchema fs = new FileSchema(mock, "tablemap_csv_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "tablemap_csv_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -981,8 +931,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertEquals(tableMap.size(), cached.size(), "Cached table map should be same size");
   }
 
-  @Test
-  @DisplayName("FileSchema: getTableMap with JSON discovers tables")
+  @Test @DisplayName("FileSchema: getTableMap with JSON discovers tables")
   void testGetTableMapWithJsonFiles() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -997,8 +946,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("FileSchema: clearTableCache invalidates cache")
+  @Test @DisplayName("FileSchema: clearTableCache invalidates cache")
   void testClearTableCache() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1016,8 +964,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("FileSchema: getBaseDirectory returns non-null")
+  @Test @DisplayName("FileSchema: getBaseDirectory returns non-null")
   void testGetBaseDirectory() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1025,50 +972,46 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("basedir_get").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "basedir_get_s", dir, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "basedir_get_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     assertNotNull(fs.getBaseDirectory());
   }
 
-  @Test
-  @DisplayName("FileSchema: getStorageConfig returns null when not configured")
+  @Test @DisplayName("FileSchema: getStorageConfig returns null when not configured")
   void testGetStorageConfigNull() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "no_storage_cfg",
-        tempDir.resolve("no_sc").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "no_storage_cfg", tempDir.resolve("no_sc").toFile(), null);
     assertNull(fs.getStorageConfig());
   }
 
-  @Test
-  @DisplayName("FileSchema: getOperatingCacheDirectory returns non-null")
+  @Test @DisplayName("FileSchema: getOperatingCacheDirectory returns non-null")
   void testGetOperatingCacheDirectory() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "opcache_dir",
-        tempDir.resolve("opc").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "opcache_dir", tempDir.resolve("opc").toFile(), null);
     File cacheDir = fs.getOperatingCacheDirectory();
     assertNotNull(cacheDir);
     assertTrue(cacheDir.getPath().contains("opcache_dir"));
   }
 
-  @Test
-  @DisplayName("FileSchema: getAlternatePartitionRegistry returns non-null")
+  @Test @DisplayName("FileSchema: getAlternatePartitionRegistry returns non-null")
   void testGetAlternatePartitionRegistry() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "alt_part_reg",
-        tempDir.resolve("apr").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "alt_part_reg", tempDir.resolve("apr").toFile(), null);
     assertNotNull(fs.getAlternatePartitionRegistry());
   }
 
-  @Test
-  @DisplayName("FileSchema: hasRefreshableTables")
+  @Test @DisplayName("FileSchema: hasRefreshableTables")
   void testHasRefreshableTables() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1077,20 +1020,19 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     // Without refresh interval
-    FileSchema fsNoRefresh = new FileSchema(mock, "no_refresh",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fsNoRefresh =
+        new FileSchema(mock, "no_refresh", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null);
     assertFalse(fsNoRefresh.hasRefreshableTables());
 
     // With refresh interval
-    FileSchema fsWithRefresh = new FileSchema(mock, "with_refresh",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fsWithRefresh =
+        new FileSchema(mock, "with_refresh", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, "5 minutes");
     assertTrue(fsWithRefresh.hasRefreshableTables());
   }
 
-  @Test
-  @DisplayName("FileSchema: addRefreshListener and notifyTableRefreshed")
+  @Test @DisplayName("FileSchema: addRefreshListener and notifyTableRefreshed")
   void testRefreshListeners() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1098,14 +1040,13 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("listeners").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "listeners_s",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "listeners_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null);
 
     final List<String> notifications = new ArrayList<>();
     TableRefreshListener listener = new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         notifications.add("refreshed:" + tableName);
       }
     };
@@ -1117,8 +1058,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertEquals("refreshed:test_table", notifications.get(0));
   }
 
-  @Test
-  @DisplayName("FileSchema: notifyTableRefreshedWithPattern")
+  @Test @DisplayName("FileSchema: notifyTableRefreshedWithPattern")
   void testNotifyTableRefreshedWithPattern() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1126,22 +1066,20 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("pattern_notify").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "pattern_notify_s",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "pattern_notify_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null);
 
     // Add a non-pattern-aware listener - should not crash
     fs.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         // no-op
       }
     });
     fs.notifyTableRefreshedWithPattern("tbl", "/data/**/*.parquet");
   }
 
-  @Test
-  @DisplayName("FileSchema: notifyIcebergTableRefreshed")
+  @Test @DisplayName("FileSchema: notifyIcebergTableRefreshed")
   void testNotifyIcebergTableRefreshed() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1149,8 +1087,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("iceberg_notify").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "iceberg_notify_s",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "iceberg_notify_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null);
 
     // Should not crash even with no listeners
@@ -1158,16 +1096,14 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Add listener and try again
     fs.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         // no-op
       }
     });
     fs.notifyIcebergTableRefreshed("ice_tbl", "s3://bucket/warehouse/ice_tbl");
   }
 
-  @Test
-  @DisplayName("FileSchema: writeToStorage and existsInStorage and deleteFromStorage (local)")
+  @Test @DisplayName("FileSchema: writeToStorage and existsInStorage and deleteFromStorage (local)")
   void testStorageOperationsLocal() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1175,8 +1111,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("storage_ops").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "storage_ops_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "storage_ops_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1195,8 +1131,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertFalse(deletedAgain);
   }
 
-  @Test
-  @DisplayName("FileSchema: writeToStorage with InputStream")
+  @Test @DisplayName("FileSchema: writeToStorage with InputStream")
   void testWriteToStorageInputStream() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1204,8 +1139,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("stream_write").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "stream_write_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "stream_write_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1215,8 +1150,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertTrue(fs.existsInStorage("stream_test.txt"));
   }
 
-  @Test
-  @DisplayName("FileSchema: createStorageDirectories (local)")
+  @Test @DisplayName("FileSchema: createStorageDirectories (local)")
   void testCreateStorageDirectories() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1225,8 +1159,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     // Without storage provider - uses local filesystem via operatingCacheDirectory
-    FileSchema fsNoProvider = new FileSchema(mock, "create_dirs_np", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fsNoProvider =
+        new FileSchema(mock, "create_dirs_np", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         null, null, null, null, false);
 
@@ -1237,8 +1171,8 @@ public class FileSchemaIntegrationCoverageTest {
         "Subdirectory should be created under operating cache directory");
 
     // With local storage provider - delegates to provider
-    FileSchema fsWithProvider = new FileSchema(mock, "create_dirs_wp", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fsWithProvider =
+        new FileSchema(mock, "create_dirs_wp", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     // This exercises the storageProvider.createDirectories path
@@ -1246,8 +1180,7 @@ public class FileSchemaIntegrationCoverageTest {
     fsWithProvider.createStorageDirectories("provider_sub/dir");
   }
 
-  @Test
-  @DisplayName("FileSchema: getConversionMetadata returns non-null")
+  @Test @DisplayName("FileSchema: getConversionMetadata returns non-null")
   void testGetConversionMetadata() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1255,16 +1188,15 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("conv_meta").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "conv_meta_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "conv_meta_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
     assertNotNull(fs.getConversionMetadata());
   }
 
-  @Test
-  @DisplayName("FileSchema: getAllTableRecords")
+  @Test @DisplayName("FileSchema: getAllTableRecords")
   void testGetAllTableRecords() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1273,8 +1205,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
     createCsvFile(dir, "data.csv", "id\n1\n");
 
-    FileSchema fs = new FileSchema(mock, "all_records_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "all_records_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1282,8 +1214,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(records);
   }
 
-  @Test
-  @DisplayName("FileSchema: setConstraintMetadata and getTableConstraints")
+  @Test @DisplayName("FileSchema: setConstraintMetadata and getTableConstraints")
   void testConstraintMetadata() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1292,8 +1223,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
     createCsvFile(dir, "orders.csv", "order_id,total\n1,100\n");
 
-    FileSchema fs = new FileSchema(mock, "constraint_md_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "constraint_md_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1314,8 +1245,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNull(missing);
   }
 
-  @Test
-  @DisplayName("FileSchema: setConversionRecords")
+  @Test @DisplayName("FileSchema: setConversionRecords")
   void testSetConversionRecords() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1323,8 +1253,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("conv_records").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "conv_records_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "conv_records_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1341,64 +1271,58 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(cm);
   }
 
-  @Test
-  @DisplayName("FileSchema: setConversionRecords with null/empty is no-op")
+  @Test @DisplayName("FileSchema: setConversionRecords with null/empty is no-op")
   void testSetConversionRecordsEmpty() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "conv_empty_s",
-        tempDir.resolve("conv_empty").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "conv_empty_s", tempDir.resolve("conv_empty").toFile(), null);
 
     fs.setConversionRecords(null);
     fs.setConversionRecords(Collections.<String, ConversionMetadata.ConversionRecord>emptyMap());
   }
 
-  @Test
-  @DisplayName("FileSchema: getTableBaseline returns null for unknown table")
+  @Test @DisplayName("FileSchema: getTableBaseline returns null for unknown table")
   void testGetTableBaselineNull() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "baseline_null_s",
-        tempDir.resolve("bl_null").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "baseline_null_s", tempDir.resolve("bl_null").toFile(), null);
 
     ConversionMetadata.PartitionBaseline baseline = fs.getTableBaseline("nonexistent");
     assertNull(baseline);
   }
 
-  @Test
-  @DisplayName("FileSchema: updateTableBaseline with no record is no-op")
+  @Test @DisplayName("FileSchema: updateTableBaseline with no record is no-op")
   void testUpdateTableBaselineNoRecord() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "baseline_upd_s",
-        tempDir.resolve("bl_upd").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "baseline_upd_s", tempDir.resolve("bl_upd").toFile(), null);
 
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     fs.updateTableBaseline("nonexistent", baseline);
     // Should not throw
   }
 
-  @Test
-  @DisplayName("FileSchema: registerRawToParquetConverter")
+  @Test @DisplayName("FileSchema: registerRawToParquetConverter")
   void testRegisterRawToParquetConverter() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "raw_conv_s",
-        tempDir.resolve("raw_conv").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "raw_conv_s", tempDir.resolve("raw_conv").toFile(), null);
 
     org.apache.calcite.adapter.file.converters.RawToParquetConverter converter =
         new org.apache.calcite.adapter.file.converters.RawToParquetConverter() {
-          @Override
-          public boolean canConvert(String sourcePath, ConversionMetadata metadata) {
+          @Override public boolean canConvert(String sourcePath, ConversionMetadata metadata) {
             return false;
           }
 
-          @Override
-          public boolean convertToParquet(String sourcePath, String targetParquetPath,
+          @Override public boolean convertToParquet(String sourcePath, String targetParquetPath,
               StorageProvider storageProvider) {
             return false;
           }
@@ -1408,14 +1332,13 @@ public class FileSchemaIntegrationCoverageTest {
     // No assertion needed - just verifying no exception
   }
 
-  @Test
-  @DisplayName("FileSchema: setFunctionMultimap and getFunctionMultimap")
+  @Test @DisplayName("FileSchema: setFunctionMultimap and getFunctionMultimap")
   void testSetFunctionMultimap() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "func_map_s",
-        tempDir.resolve("func_map").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "func_map_s", tempDir.resolve("func_map").toFile(), null);
 
     com.google.common.collect.ImmutableMultimap<String, org.apache.calcite.schema.Function> empty =
         com.google.common.collect.ImmutableMultimap.of();
@@ -1423,14 +1346,13 @@ public class FileSchemaIntegrationCoverageTest {
     // The function multimap is protected, but we exercised the setter path
   }
 
-  @Test
-  @DisplayName("FileSchema: getComment returns null when not set")
+  @Test @DisplayName("FileSchema: getComment returns null when not set")
   void testGetCommentNull() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "no_comment_s",
-        tempDir.resolve("no_comment").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "no_comment_s", tempDir.resolve("no_comment").toFile(), null);
     assertNull(fs.getComment());
   }
 
@@ -1438,8 +1360,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory.sanitizeOperand code paths
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: operand with password key gets sanitized in debug model")
+  @Test @DisplayName("Factory: operand with password key gets sanitized in debug model")
   void testFactorySanitizePassword() throws IOException {
     File sourceDir = tempDir.resolve("sanitize_pw").toFile();
     sourceDir.mkdirs();
@@ -1453,8 +1374,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: operand with s3Config map gets sanitized")
+  @Test @DisplayName("Factory: operand with s3Config map gets sanitized")
   void testFactorySanitizeS3Config() throws IOException {
     File sourceDir = tempDir.resolve("sanitize_s3").toFile();
     sourceDir.mkdirs();
@@ -1472,8 +1392,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: operand with storageConfig map gets sanitized")
+  @Test @DisplayName("Factory: operand with storageConfig map gets sanitized")
   void testFactorySanitizeStorageConfig() throws IOException {
     File sourceDir = tempDir.resolve("sanitize_sc").toFile();
     sourceDir.mkdirs();
@@ -1491,8 +1410,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: operand with nested map gets sanitized")
+  @Test @DisplayName("Factory: operand with nested map gets sanitized")
   void testFactorySanitizeNestedMap() throws IOException {
     File sourceDir = tempDir.resolve("sanitize_nested").toFile();
     sourceDir.mkdirs();
@@ -1507,8 +1425,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: operand with null values")
+  @Test @DisplayName("Factory: operand with null values")
   void testFactoryNullOperandValues() throws IOException {
     File sourceDir = tempDir.resolve("null_vals").toFile();
     sourceDir.mkdirs();
@@ -1524,8 +1441,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory.parseBooleanValue code paths
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: ephemeralCache as String 'true'")
+  @Test @DisplayName("Factory: ephemeralCache as String 'true'")
   void testFactoryParseBooleanString() throws IOException {
     File sourceDir = tempDir.resolve("bool_str").toFile();
     sourceDir.mkdirs();
@@ -1536,8 +1452,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: ephemeralCache as String 'false'")
+  @Test @DisplayName("Factory: ephemeralCache as String 'false'")
   void testFactoryParseBooleanStringFalse() throws IOException {
     File sourceDir = tempDir.resolve("bool_false").toFile();
     sourceDir.mkdirs();
@@ -1552,14 +1467,12 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory: supportsConstraints and setTableConstraints
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: supportsConstraints returns true")
+  @Test @DisplayName("Factory: supportsConstraints returns true")
   void testFactorySupportsConstraints() {
     assertTrue(FileSchemaFactory.INSTANCE.supportsConstraints());
   }
 
-  @Test
-  @DisplayName("Factory: setTableConstraints stores metadata")
+  @Test @DisplayName("Factory: setTableConstraints stores metadata")
   void testFactorySetTableConstraints() {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tblConstraint = new HashMap<>();
@@ -1575,8 +1488,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema: table discovery with PARQUET engine
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: PARQUET engine converts CSV to Parquet")
+  @Test @DisplayName("FileSchema: PARQUET engine converts CSV to Parquet")
   void testParquetEngineConvertsCsv() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("pq_convert").toFile();
@@ -1593,8 +1505,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("FileSchema: PARQUET engine converts JSON to Parquet")
+  @Test @DisplayName("FileSchema: PARQUET engine converts JSON to Parquet")
   void testParquetEngineConvertsJson() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("pq_json").toFile();
@@ -1612,14 +1523,13 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("FileSchema: PARQUET engine with explicit table definitions")
+  @Test @DisplayName("FileSchema: PARQUET engine with explicit table definitions")
   void testParquetEngineExplicitTables() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("pq_explicit").toFile();
     sourceDir.mkdirs();
-    File csvFile = createCsvFile(sourceDir, "sales.csv",
-        "sale_id,amount,date\n1,99.99,2024-01-15\n2,149.50,2024-01-16\n");
+    File csvFile =
+        createCsvFile(sourceDir, "sales.csv", "sale_id,amount,date\n1,99.99,2024-01-15\n2,149.50,2024-01-16\n");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -1639,8 +1549,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema: table discovery with views and materializations
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: views create ViewTable entries")
+  @Test @DisplayName("FileSchema: views create ViewTable entries")
   void testViewsInGetTableMap() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1654,8 +1563,8 @@ public class FileSchemaIntegrationCoverageTest {
     view.put("sql", "SELECT 1 AS total");
     views.add(view);
 
-    FileSchema fs = new FileSchema(mock, "view_map_s", dir, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "view_map_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, views, null, null);
 
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1664,8 +1573,7 @@ public class FileSchemaIntegrationCoverageTest {
         "Table map should contain the view");
   }
 
-  @Test
-  @DisplayName("FileSchema: materializations in getTableMap (non-PARQUET does not add)")
+  @Test @DisplayName("FileSchema: materializations in getTableMap (non-PARQUET does not add)")
   void testMaterializationsNonParquetEngine() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1681,8 +1589,8 @@ public class FileSchemaIntegrationCoverageTest {
     mats.add(mat);
 
     // LINQ4J engine - materializations should be logged as error but not crash
-    FileSchema fs = new FileSchema(mock, "mat_nonpq_s", dir, null,
-        null, new ExecutionEngineConfig("LINQ4J", 1000, 1024L * 1024L, null, null, null), false,
+    FileSchema fs =
+        new FileSchema(mock, "mat_nonpq_s", dir, null, null, new ExecutionEngineConfig("LINQ4J", 1000, 1024L * 1024L, null, null, null), false,
         mats, null, null, null);
 
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1693,8 +1601,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema: TSV file discovery
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: TSV files discovered")
+  @Test @DisplayName("FileSchema: TSV files discovered")
   void testTsvFileDiscovery() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1707,8 +1614,8 @@ public class FileSchemaIntegrationCoverageTest {
     }
 
     // Use storageType="local" to enable file scanning
-    FileSchema fs = new FileSchema(mock, "tsv_discover_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "tsv_discover_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1720,8 +1627,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema: duplicate table name handling
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: duplicate table names disambiguated")
+  @Test @DisplayName("FileSchema: duplicate table names disambiguated")
   void testDuplicateTableNameDisambiguation() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1732,8 +1638,8 @@ public class FileSchemaIntegrationCoverageTest {
     createJsonFile(dir, "report.json", "[{\"x\":1}]");
 
     // Use storageType="local" to enable file scanning
-    FileSchema fs = new FileSchema(mock, "dup_names_s", dir, null, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "dup_names_s", dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1746,8 +1652,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema: files starting with ._ and ~ are skipped
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: dotUnderscore and tilde files are skipped")
+  @Test @DisplayName("FileSchema: dotUnderscore and tilde files are skipped")
   void testDotUnderscoreAndTildeFilesSkipped() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -1771,8 +1676,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory: storageType auto-detection paths
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: HTTP directory auto-detects storageType=http")
+  @Test @DisplayName("Factory: HTTP directory auto-detects storageType=http")
   void testFactoryHttpDirectoryAutoDetect() {
     // This will fail (no http server) but exercises the auto-detection code
     Map<String, Object> operand = new HashMap<>();
@@ -1786,8 +1690,7 @@ public class FileSchemaIntegrationCoverageTest {
     }
   }
 
-  @Test
-  @DisplayName("Factory: no storageType and no directory throws")
+  @Test @DisplayName("Factory: no storageType and no directory throws")
   void testFactoryNoStorageTypeNoDirectory() {
     Map<String, Object> operand = new HashMap<>();
     // No directory, no storageType, no tables
@@ -1805,8 +1708,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory: validateUniqueSchemaName
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: duplicate schema name throws IllegalArgumentException")
+  @Test @DisplayName("Factory: duplicate schema name throws IllegalArgumentException")
   @SuppressWarnings({"deprecation", "unchecked"})
   void testFactoryDuplicateSchemaNameThrows() throws IOException {
     // Set up a parent schema that says "dup_schema" already exists
@@ -1847,8 +1749,7 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchemaFactory: PARQUET engine with materializations registers with service
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: PARQUET with materializations that have null table/sql")
+  @Test @DisplayName("Factory: PARQUET with materializations that have null table/sql")
   void testFactoryParquetMaterializationsMissingFields() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("mat_missing").toFile();
@@ -1876,14 +1777,13 @@ public class FileSchemaIntegrationCoverageTest {
   // FileSchema with PARQUET engine: refreshInterval creates RefreshableTable
   // =========================================================================
 
-  @Test
-  @DisplayName("Factory: PARQUET + refreshInterval on CSV creates RefreshableParquetCacheTable")
+  @Test @DisplayName("Factory: PARQUET + refreshInterval on CSV creates RefreshableParquetCacheTable")
   void testParquetRefreshableCsv() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("pq_refresh").toFile();
     sourceDir.mkdirs();
-    File csvFile = createCsvFile(sourceDir, "live_data.csv",
-        "sensor_id,reading\n1,42.5\n2,38.1\n");
+    File csvFile =
+        createCsvFile(sourceDir, "live_data.csv", "sensor_id,reading\n1,42.5\n2,38.1\n");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -1906,37 +1806,33 @@ public class FileSchemaIntegrationCoverageTest {
   // Edge cases and boundary conditions
   // =========================================================================
 
-  @Test
-  @DisplayName("FileSchema: BRAND constant is 'aperio'")
+  @Test @DisplayName("FileSchema: BRAND constant is 'aperio'")
   void testBrandConstant() {
     assertEquals("aperio", FileSchema.BRAND);
   }
 
-  @Test
-  @DisplayName("Factory: ROWTIME_COLUMN_NAME constant")
+  @Test @DisplayName("Factory: ROWTIME_COLUMN_NAME constant")
   void testRowtimeColumnNameConstant() {
     assertEquals("ROWTIME", FileSchemaFactory.ROWTIME_COLUMN_NAME);
   }
 
-  @Test
-  @DisplayName("FileSchema: getStorageProvider returns null when not configured")
+  @Test @DisplayName("FileSchema: getStorageProvider returns null when not configured")
   void testStorageProviderNull() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
 
-    FileSchema fs = new FileSchema(mock, "no_sp",
-        tempDir.resolve("no_sp").toFile(), null);
+    FileSchema fs =
+        new FileSchema(mock, "no_sp", tempDir.resolve("no_sp").toFile(), null);
     assertNull(fs.getStorageProvider());
   }
 
-  @Test
-  @DisplayName("FileSchema: table with JSON format in tableDef")
+  @Test @DisplayName("FileSchema: table with JSON format in tableDef")
   void testTableDefWithJsonFormat() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("json_fmt").toFile();
     sourceDir.mkdirs();
-    File jsonFile = createJsonFile(sourceDir, "data.json",
-        "[{\"key\":\"val\"}]");
+    File jsonFile =
+        createJsonFile(sourceDir, "data.json", "[{\"key\":\"val\"}]");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -1951,14 +1847,13 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("FileSchema: table with flatten option in tableDef")
+  @Test @DisplayName("FileSchema: table with flatten option in tableDef")
   void testTableDefWithFlattenOption() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("tbl_flatten").toFile();
     sourceDir.mkdirs();
-    File jsonFile = createJsonFile(sourceDir, "nested_data.json",
-        "[{\"id\":1,\"addr\":{\"city\":\"NY\"}}]");
+    File jsonFile =
+        createJsonFile(sourceDir, "nested_data.json", "[{\"id\":1,\"addr\":{\"city\":\"NY\"}}]");
 
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> tableDef = new HashMap<>();
@@ -1975,8 +1870,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("FileSchema: table with null URL in tableDef is skipped")
+  @Test @DisplayName("FileSchema: table with null URL in tableDef is skipped")
   void testTableDefWithNullUrl() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("null_url").toFile();
@@ -1994,8 +1888,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("FileSchema: multiple constructors chain correctly")
+  @Test @DisplayName("FileSchema: multiple constructors chain correctly")
   void testConstructorChaining() {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -2008,25 +1901,24 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(fs1);
 
     // 3-param constructor with engine
-    FileSchema fs2 = new FileSchema(mock, "chain2", dir, null,
-        new ExecutionEngineConfig());
+    FileSchema fs2 =
+        new FileSchema(mock, "chain2", dir, null, new ExecutionEngineConfig());
     assertNotNull(fs2);
 
     // 4-param constructor with recursive
-    FileSchema fs3 = new FileSchema(mock, "chain3", dir, null,
-        new ExecutionEngineConfig(), true);
+    FileSchema fs3 =
+        new FileSchema(mock, "chain3", dir, null, new ExecutionEngineConfig(), true);
     assertNotNull(fs3);
 
     // Full constructor
-    FileSchema fs4 = new FileSchema(mock, "chain4", dir, null,
-        null, new ExecutionEngineConfig(), false,
+    FileSchema fs4 =
+        new FileSchema(mock, "chain4", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         null, null, null, null, false);
     assertNotNull(fs4);
   }
 
-  @Test
-  @DisplayName("FileSchema: Parquet file discovery in directory scan")
+  @Test @DisplayName("FileSchema: Parquet file discovery in directory scan")
   void testParquetFileDiscoveryInScan() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -2043,8 +1935,7 @@ public class FileSchemaIntegrationCoverageTest {
     // The parquet file should be found even if not valid - it creates a ParquetTranslatableTable
   }
 
-  @Test
-  @DisplayName("FileSchema: refreshInterval on schema (not per-table)")
+  @Test @DisplayName("FileSchema: refreshInterval on schema (not per-table)")
   void testSchemaLevelRefreshInterval() throws IOException {
     SchemaPlus mock = mock(SchemaPlus.class);
     when(mock.getName()).thenReturn("mock_root");
@@ -2053,8 +1944,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
     createJsonFile(dir, "streaming.json", "[{\"ts\":1,\"val\":42}]");
 
-    FileSchema fs = new FileSchema(mock, "schema_refresh_s",
-        dir, null, null, new ExecutionEngineConfig(), false,
+    FileSchema fs =
+        new FileSchema(mock, "schema_refresh_s", dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, "2 minutes");
 
     assertTrue(fs.hasRefreshableTables());
@@ -2062,8 +1953,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  @DisplayName("Factory: modelUri in operand gets sanitized")
+  @Test @DisplayName("Factory: modelUri in operand gets sanitized")
   void testFactoryModelUriSanitization() throws IOException {
     File sourceDir = tempDir.resolve("model_uri").toFile();
     sourceDir.mkdirs();
@@ -2075,8 +1965,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: constraint metadata with foreignKeys gets rewritten")
+  @Test @DisplayName("Factory: constraint metadata with foreignKeys gets rewritten")
   void testFactoryForeignKeyRewrite() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("fk_rewrite").toFile();
@@ -2105,8 +1994,7 @@ public class FileSchemaIntegrationCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  @DisplayName("Factory: multiple CSV files with same base name get disambiguated")
+  @Test @DisplayName("Factory: multiple CSV files with same base name get disambiguated")
   void testFactoryTableNameDeduplication() throws IOException {
     resetParentSchema();
     File sourceDir = tempDir.resolve("dedup").toFile();

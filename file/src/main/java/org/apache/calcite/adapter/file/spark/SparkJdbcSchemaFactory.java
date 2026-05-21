@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
-
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
@@ -186,8 +185,8 @@ public class SparkJdbcSchemaFactory {
 
       // Create DataSource URL targeting the actual database (Spark lowercases names)
       final String sparkDbName = schemaName.toLowerCase(java.util.Locale.ROOT);
-      final String finalJdbcUrl = String.format("jdbc:hive2://%s:%s/%s",
-          config.getHost(), config.getPort(), sparkDbName);
+      final String finalJdbcUrl =
+          String.format("jdbc:hive2://%s:%s/%s", config.getHost(), config.getPort(), sparkDbName);
       final String user = config.getUser();
       final String password = config.getPassword();
       DataSource dataSource = new DataSource() {
@@ -377,14 +376,14 @@ public class SparkJdbcSchemaFactory {
           }
 
           // Step 1: Register in Iceberg catalog
-          String registerSql = SparkSqlDialect.INSTANCE.createIcebergTableSql(
-              sparkSchema, tableName, icebergPath);
+          String registerSql =
+              SparkSqlDialect.INSTANCE.createIcebergTableSql(sparkSchema, tableName, icebergPath);
           LOGGER.info("Registering Iceberg table in Spark catalog: {}", registerSql);
           conn.createStatement().execute(registerSql);
 
           // Step 2: Create view pointing to the catalog table
-          String viewSql = SparkSqlDialect.INSTANCE.createIcebergViewSql(
-              sparkSchema, tableName, icebergPath);
+          String viewSql =
+              SparkSqlDialect.INSTANCE.createIcebergViewSql(sparkSchema, tableName, icebergPath);
           LOGGER.info("Creating Spark Iceberg view: {}", viewSql);
           conn.createStatement().execute(viewSql);
           viewCount++;
@@ -395,8 +394,8 @@ public class SparkJdbcSchemaFactory {
           String parquetPath = resolveParquetPath(record);
 
           if (parquetPath != null) {
-            String viewSql = SparkSqlDialect.INSTANCE.createParquetViewSql(
-                sparkSchema, tableName, parquetPath, false);
+            String viewSql =
+                SparkSqlDialect.INSTANCE.createParquetViewSql(sparkSchema, tableName, parquetPath, false);
             LOGGER.info("Creating Spark Parquet view for '{}': {}", tableName, viewSql);
             conn.createStatement().execute(viewSql);
             viewCount++;
@@ -473,8 +472,8 @@ public class SparkJdbcSchemaFactory {
       }
 
       try {
-        String viewSql = String.format("CREATE OR REPLACE VIEW %s AS %s",
-            SparkSqlDialect.INSTANCE.qualifyName(sparkSchema, viewName), viewDef);
+        String viewSql =
+            String.format("CREATE OR REPLACE VIEW %s AS %s", SparkSqlDialect.INSTANCE.qualifyName(sparkSchema, viewName), viewDef);
         LOGGER.info("Creating SQL view in Spark: {}.{}", sparkSchema, viewName);
         conn.createStatement().execute(viewSql);
       } catch (SQLException e) {

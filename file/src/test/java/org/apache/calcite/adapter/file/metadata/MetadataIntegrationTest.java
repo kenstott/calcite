@@ -40,7 +40,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -516,8 +515,8 @@ public class MetadataIntegrationTest extends BaseFileTest {
 
     List<String> columnNames = Arrays.asList("emp_id", "name", "dept_id");
 
-    Statistic stat = TableConstraints.fromConfig(config, columnNames, 1000.0,
-        "hr", "employees");
+    Statistic stat =
+        TableConstraints.fromConfig(config, columnNames, 1000.0, "hr", "employees");
     assertNotNull(stat);
   }
 
@@ -600,8 +599,8 @@ public class MetadataIntegrationTest extends BaseFileTest {
 
     try (Connection conn = connect(buildTestModel("meta_schema", dir.getAbsolutePath()));
          Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM meta_schema.meta_data")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM meta_schema.meta_data")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }

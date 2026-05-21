@@ -655,7 +655,8 @@ public class CalciteMetaImpl extends MetaImpl {
         short seq = 1;
         for (int colIdx : pkBits) {
           if (colIdx < fields.size()) {
-            rows.add(new MetaPrimaryKeyRow(cat, schema.getName(), tblName,
+            rows.add(
+                new MetaPrimaryKeyRow(cat, schema.getName(), tblName,
                 fields.get(colIdx).getName(), seq++, pkName));
           }
         }
@@ -745,7 +746,8 @@ public class CalciteMetaImpl extends MetaImpl {
             final String tgtCol = pair.target < tgtFields.size()
                 ? tgtFields.get(pair.target).getName() : null;
             if (srcCol != null && tgtCol != null) {
-              rows.add(new MetaForeignKeyRow(
+              rows.add(
+                  new MetaForeignKeyRow(
                   cat, tgtSchema, tgtTable, tgtCol,
                   cat, schema.getName(), tblName, srcCol,
                   seq,

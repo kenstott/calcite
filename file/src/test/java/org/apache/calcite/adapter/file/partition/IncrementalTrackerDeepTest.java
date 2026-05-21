@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +42,8 @@ public class IncrementalTrackerDeepTest {
   }
 
   @Test void testNoopIsProcessedWithTtl() {
-    assertFalse(IncrementalTracker.NOOP.isProcessedWithTtl("alt", "src",
+    assertFalse(
+        IncrementalTracker.NOOP.isProcessedWithTtl("alt", "src",
         Collections.<String, String>emptyMap(), 1000));
   }
 
@@ -112,8 +112,8 @@ public class IncrementalTrackerDeepTest {
   @Test void testDefaultIsProcessedWithEmptyTtl() {
     // Default falls back to isProcessed
     IncrementalTracker tracker = createMinimalTracker(new boolean[]{false});
-    boolean result = tracker.isProcessedWithEmptyTtl("alt", "src",
-        Collections.<String, String>emptyMap(), 1000);
+    boolean result =
+        tracker.isProcessedWithEmptyTtl("alt", "src", Collections.<String, String>emptyMap(), 1000);
     // NOOP-based returns false
     assertFalse(result);
   }
@@ -122,8 +122,8 @@ public class IncrementalTrackerDeepTest {
     List<Map<String, String>> combos = new ArrayList<>();
     combos.add(Collections.singletonMap("year", "2020"));
     // Default falls back to filterUnprocessed
-    Set<Integer> result = IncrementalTracker.NOOP.filterUnprocessedWithEmptyTtl(
-        "alt", "src", combos, 1000);
+    Set<Integer> result =
+        IncrementalTracker.NOOP.filterUnprocessedWithEmptyTtl("alt", "src", combos, 1000);
     assertEquals(1, result.size());
   }
 
@@ -140,8 +140,8 @@ public class IncrementalTrackerDeepTest {
     List<Map<String, String>> combos = new ArrayList<>();
     combos.add(Collections.singletonMap("year", "2020"));
     // Default falls back to filterUnprocessedWithEmptyTtl
-    Set<Integer> result = IncrementalTracker.NOOP.filterUnprocessedWithTtl(
-        "alt", "src", combos, 1000, 500);
+    Set<Integer> result =
+        IncrementalTracker.NOOP.filterUnprocessedWithTtl("alt", "src", combos, 1000, 500);
     assertEquals(1, result.size());
   }
 

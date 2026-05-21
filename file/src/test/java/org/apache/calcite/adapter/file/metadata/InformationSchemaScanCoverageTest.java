@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.metadata;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
-import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
@@ -46,7 +45,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -249,8 +247,9 @@ public class InformationSchemaScanCoverageTest {
 
     @Override public Statistic getStatistic() {
       List<ImmutableBitSet> keys = ImmutableList.of(ImmutableBitSet.of(0));
-      List<RelReferentialConstraint> fks = ImmutableList.<RelReferentialConstraint>of(
-          new SimpleFK(
+      List<RelReferentialConstraint> fks =
+          ImmutableList.<RelReferentialConstraint>of(
+              new SimpleFK(
               ImmutableList.of("test_schema", "fk_child"),
               ImmutableList.of("test_schema", "pk_parent"),
               ImmutableList.of(IntPair.of(1, 0))));

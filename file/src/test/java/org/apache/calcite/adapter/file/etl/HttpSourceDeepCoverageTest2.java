@@ -26,7 +26,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -43,9 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -115,7 +112,8 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testConstructorWithCacheEnabled() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .cache(HttpSourceConfig.CacheConfig.fromMap(
+        .cache(
+            HttpSourceConfig.CacheConfig.fromMap(
             createMap("enabled", true, "ttlSeconds", 3600)))
         .build();
     HttpSource source = new HttpSource(config);
@@ -154,7 +152,8 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testCloseWithCache() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .cache(HttpSourceConfig.CacheConfig.fromMap(
+        .cache(
+            HttpSourceConfig.CacheConfig.fromMap(
             createMap("enabled", true, "ttlSeconds", 100)))
         .build();
     HttpSource source = new HttpSource(config);
@@ -173,8 +172,8 @@ public class HttpSourceDeepCoverageTest2 {
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "[{\"name\":\"Alice\",\"age\":30},{\"name\":\"Bob\",\"age\":25}]");
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "[{\"name\":\"Alice\",\"age\":30},{\"name\":\"Bob\",\"age\":25}]");
     assertEquals(2, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals(25, result.get(1).get("age"));
@@ -190,8 +189,8 @@ public class HttpSourceDeepCoverageTest2 {
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "{\"name\":\"Alice\",\"age\":30}");
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "{\"name\":\"Alice\",\"age\":30}");
     assertEquals(1, result.size());
     assertEquals("Alice", result.get(0).get("name"));
   }
@@ -211,8 +210,8 @@ public class HttpSourceDeepCoverageTest2 {
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "{\"results\":{\"data\":[{\"id\":1},{\"id\":2}]}}");
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "{\"results\":{\"data\":[{\"id\":1},{\"id\":2}]}}");
     assertEquals(2, result.size());
     assertEquals(1, result.get(0).get("id"));
   }
@@ -234,8 +233,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     // No error present, should parse data normally
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "{\"error\":{},\"data\":[{\"id\":1}]}");
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "{\"error\":{},\"data\":[{\"id\":1}]}");
     assertEquals(1, result.size());
   }
 
@@ -255,8 +254,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     // Error containing "no data" should return empty list
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "{\"error\":{\"message\":\"No data available\"}}");
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "{\"error\":{\"message\":\"No data available\"}}");
     assertTrue(result.isEmpty());
   }
 
@@ -311,18 +310,19 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testParseDelimitedResponseCSV() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "name,age,city\nAlice,30,NYC\nBob,25,LA", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "name,age,city\nAlice,30,NYC\nBob,25,LA", ',');
     assertEquals(2, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals(30L, result.get(0).get("age"));
@@ -332,18 +332,19 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testParseDelimitedResponseTSV() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "tsv")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "name\tage\nAlice\t30\nBob\t25", '\t');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "name\tage\nAlice\t30\nBob\t25", '\t');
     assertEquals(2, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals(30L, result.get(0).get("age"));
@@ -352,54 +353,57 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testParseDelimitedResponseEmpty() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "", ',');
     assertTrue(result.isEmpty());
   }
 
   @Test void testParseDelimitedResponseNull() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        (String) null, ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, (String) null, ',');
     assertTrue(result.isEmpty());
   }
 
   @Test void testParseDelimitedResponseWithQuotedFields() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "name,desc\n\"Alice\",\"Hello, World\"", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "name,desc\n\"Alice\",\"Hello, World\"", ',');
     assertEquals(1, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals("Hello, World", result.get(0).get("desc"));
@@ -413,8 +417,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
     method.setAccessible(true);
 
     String[] result = (String[]) method.invoke(source, "a,b,c", ',');
@@ -430,8 +434,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
     method.setAccessible(true);
 
     String[] result = (String[]) method.invoke(source, "\"a,b\",c", ',');
@@ -446,8 +450,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
     method.setAccessible(true);
 
     String[] result = (String[]) method.invoke(source, "\"say \"\"hello\"\"\",other", ',');
@@ -525,8 +529,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("navigateToPath",
-        com.fasterxml.jackson.databind.JsonNode.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("navigateToPath", com.fasterxml.jackson.databind.JsonNode.class, String.class);
     method.setAccessible(true);
 
     com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -546,8 +550,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("navigateToPath",
-        com.fasterxml.jackson.databind.JsonNode.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("navigateToPath", com.fasterxml.jackson.databind.JsonNode.class, String.class);
     method.setAccessible(true);
 
     com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -567,8 +571,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("navigateToPath",
-        com.fasterxml.jackson.databind.JsonNode.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("navigateToPath", com.fasterxml.jackson.databind.JsonNode.class, String.class);
     method.setAccessible(true);
 
     com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -587,8 +591,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("navigateToPath",
-        com.fasterxml.jackson.databind.JsonNode.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("navigateToPath", com.fasterxml.jackson.databind.JsonNode.class, String.class);
     method.setAccessible(true);
 
     com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -611,8 +615,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("buildUrlWithParams",
-        String.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("buildUrlWithParams", String.class, Map.class);
     method.setAccessible(true);
 
     String result = (String) method.invoke(source, "https://api.example.com", null);
@@ -625,8 +629,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("buildUrlWithParams",
-        String.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("buildUrlWithParams", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> params = new LinkedHashMap<String, String>();
@@ -645,8 +649,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("buildUrlWithParams",
-        String.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("buildUrlWithParams", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> params = new LinkedHashMap<String, String>();
@@ -665,8 +669,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("buildCacheKey",
-        String.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("buildCacheKey", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> params = new LinkedHashMap<String, String>();
@@ -685,8 +689,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("buildCacheKey",
-        String.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("buildCacheKey", String.class, Map.class);
     method.setAccessible(true);
 
     String result = (String) method.invoke(source, "https://api.example.com", null);
@@ -701,13 +705,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("shouldRetry",
-        IOException.class, HttpSourceConfig.RateLimitConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class, HttpSourceConfig.RateLimitConfig.class);
     method.setAccessible(true);
 
     HttpSourceConfig.RateLimitConfig rateLimit = HttpSourceConfig.RateLimitConfig.defaults();
-    boolean result = (boolean) method.invoke(source,
-        new IOException("HTTP 429: Too Many Requests"), rateLimit);
+    boolean result =
+        (boolean) method.invoke(source, new IOException("HTTP 429: Too Many Requests"), rateLimit);
     assertTrue(result);
   }
 
@@ -717,13 +721,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("shouldRetry",
-        IOException.class, HttpSourceConfig.RateLimitConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class, HttpSourceConfig.RateLimitConfig.class);
     method.setAccessible(true);
 
     HttpSourceConfig.RateLimitConfig rateLimit = HttpSourceConfig.RateLimitConfig.defaults();
-    boolean result = (boolean) method.invoke(source,
-        new IOException("HTTP 503: Service Unavailable"), rateLimit);
+    boolean result =
+        (boolean) method.invoke(source, new IOException("HTTP 503: Service Unavailable"), rateLimit);
     assertTrue(result);
   }
 
@@ -733,13 +737,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("shouldRetry",
-        IOException.class, HttpSourceConfig.RateLimitConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class, HttpSourceConfig.RateLimitConfig.class);
     method.setAccessible(true);
 
     HttpSourceConfig.RateLimitConfig rateLimit = HttpSourceConfig.RateLimitConfig.defaults();
-    boolean result = (boolean) method.invoke(source,
-        new IOException("HTTP 404: Not Found"), rateLimit);
+    boolean result =
+        (boolean) method.invoke(source, new IOException("HTTP 404: Not Found"), rateLimit);
     assertFalse(result);
   }
 
@@ -749,13 +753,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("shouldRetry",
-        IOException.class, HttpSourceConfig.RateLimitConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class, HttpSourceConfig.RateLimitConfig.class);
     method.setAccessible(true);
 
     HttpSourceConfig.RateLimitConfig rateLimit = HttpSourceConfig.RateLimitConfig.defaults();
-    boolean result = (boolean) method.invoke(source,
-        new IOException((String) null), rateLimit);
+    boolean result =
+        (boolean) method.invoke(source, new IOException((String) null), rateLimit);
     assertFalse(result);
   }
 
@@ -767,8 +771,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("readResponse",
-        java.io.InputStream.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("readResponse", java.io.InputStream.class);
     method.setAccessible(true);
 
     String result = (String) method.invoke(source, (java.io.InputStream) null);
@@ -781,8 +785,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("readResponse",
-        java.io.InputStream.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("readResponse", java.io.InputStream.class);
     method.setAccessible(true);
 
     ByteArrayInputStream bais =
@@ -800,8 +804,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("serializeBody",
-        Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("serializeBody", Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -810,8 +814,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     Map<String, String> variables = new HashMap<String, String>();
 
-    String result = (String) method.invoke(source, body,
-        HttpSourceConfig.BodyFormat.JSON, variables);
+    String result =
+        (String) method.invoke(source, body, HttpSourceConfig.BodyFormat.JSON, variables);
     assertTrue(result.contains("\"key\""));
     assertTrue(result.contains("\"value\""));
   }
@@ -823,8 +827,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("serializeBody",
-        Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("serializeBody", Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -833,8 +837,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     Map<String, String> variables = new HashMap<String, String>();
 
-    String result = (String) method.invoke(source, body,
-        HttpSourceConfig.BodyFormat.FORM_URLENCODED, variables);
+    String result =
+        (String) method.invoke(source, body, HttpSourceConfig.BodyFormat.FORM_URLENCODED, variables);
     assertTrue(result.contains("key=value"));
     assertTrue(result.contains("name="));
   }
@@ -847,8 +851,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("substituteBodyVariables",
-        Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("substituteBodyVariables", Map.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -872,8 +876,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("substituteBodyVariables",
-        Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("substituteBodyVariables", Map.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> nested = new LinkedHashMap<String, Object>();
@@ -898,8 +902,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("substituteBodyVariables",
-        Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("substituteBodyVariables", Map.class, Map.class);
     method.setAccessible(true);
 
     List<Object> list = new ArrayList<Object>();
@@ -930,8 +934,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("normalizeRecords",
-        List.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("normalizeRecords", List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -940,8 +944,8 @@ public class HttpSourceDeepCoverageTest2 {
     records.add(row);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        records, Collections.emptyMap());
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, records, Collections.emptyMap());
     assertEquals(1, result.size());
     assertEquals("value1", result.get(0).get("field1"));
   }
@@ -952,13 +956,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("normalizeRecords",
-        List.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("normalizeRecords", List.class, Map.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        Collections.emptyList(), Collections.emptyMap());
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, Collections.emptyList(), Collections.emptyMap());
     assertTrue(result.isEmpty());
   }
 
@@ -970,12 +974,12 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("transformResponse",
-        String.class, String.class, Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source, "raw response", "http://url",
-        Collections.emptyMap(), Collections.emptyMap());
+    String result =
+        (String) method.invoke(source, "raw response", "http://url", Collections.emptyMap(), Collections.emptyMap());
     assertEquals("raw response", result);
   }
 
@@ -992,12 +996,12 @@ public class HttpSourceDeepCoverageTest2 {
 
     HttpSource source = new HttpSource(config, transformer);
 
-    Method method = HttpSource.class.getDeclaredMethod("transformResponse",
-        String.class, String.class, Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source, "raw", "http://url",
-        Collections.emptyMap(), Collections.emptyMap());
+    String result =
+        (String) method.invoke(source, "raw", "http://url", Collections.emptyMap(), Collections.emptyMap());
     assertEquals("transformed:raw", result);
   }
 
@@ -1014,8 +1018,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     HttpSource source = new HttpSource(config, transformer);
 
-    Method method = HttpSource.class.getDeclaredMethod("transformResponse",
-        String.class, String.class, Map.class, Map.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
     method.setAccessible(true);
 
     try {
@@ -1046,7 +1050,8 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testIsRawCacheEnabledWithLocalPath() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .rawCache(HttpSourceConfig.RawCacheConfig.fromMap(
+        .rawCache(
+            HttpSourceConfig.RawCacheConfig.fromMap(
             createMap("enabled", true)))
         .build();
 
@@ -1062,7 +1067,8 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testIsRawCacheEnabledWithStorageProvider() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .rawCache(HttpSourceConfig.RawCacheConfig.fromMap(
+        .rawCache(
+            HttpSourceConfig.RawCacheConfig.fromMap(
             createMap("enabled", true)))
         .build();
 
@@ -1095,7 +1101,8 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testBuildRawCachePath() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .rawCache(HttpSourceConfig.RawCacheConfig.fromMap(
+        .rawCache(
+            HttpSourceConfig.RawCacheConfig.fromMap(
             createMap("enabled", true)))
         .build();
 
@@ -1161,8 +1168,8 @@ public class HttpSourceDeepCoverageTest2 {
     Method method = HttpSource.class.getDeclaredMethod("hasValidRawCache", String.class);
     method.setAccessible(true);
 
-    boolean result = (boolean) method.invoke(source,
-        tempDir.resolve("nonexistent.json").toString());
+    boolean result =
+        (boolean) method.invoke(source, tempDir.resolve("nonexistent.json").toString());
     assertFalse(result);
   }
 
@@ -1209,16 +1216,16 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("writeRawCache",
-        String.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
     method.setAccessible(true);
 
     String cachePath = tempDir.resolve("write_cache/data.json").toString();
     method.invoke(source, cachePath, "{\"data\":\"written\"}");
 
     assertTrue(new File(cachePath).exists());
-    String content = new String(Files.readAllBytes(new File(cachePath).toPath()),
-        StandardCharsets.UTF_8);
+    String content =
+        new String(Files.readAllBytes(new File(cachePath).toPath()), StandardCharsets.UTF_8);
     assertEquals("{\"data\":\"written\"}", content);
   }
 
@@ -1230,8 +1237,8 @@ public class HttpSourceDeepCoverageTest2 {
 
     HttpSource source = new HttpSource(config, null, sp, "s3://bucket/raw");
 
-    Method method = HttpSource.class.getDeclaredMethod("writeRawCache",
-        String.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
     method.setAccessible(true);
 
     method.invoke(source, "s3://bucket/raw/test/response.json", "content");
@@ -1300,51 +1307,54 @@ public class HttpSourceDeepCoverageTest2 {
   @Test void testCheckForApiErrorNoError() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "$.error")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source,
-        "{\"data\":[1,2,3]}", config.getResponse());
+    String result =
+        (String) method.invoke(source, "{\"data\":[1,2,3]}", config.getResponse());
     assertNull(result);
   }
 
   @Test void testCheckForApiErrorWithNoDataMessage() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "$.error")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source,
-        "{\"error\":\"No data available\"}", config.getResponse());
+    String result =
+        (String) method.invoke(source, "{\"error\":\"No data available\"}", config.getResponse());
     assertNull(result); // "No data" messages are treated as valid
   }
 
   @Test void testCheckForApiErrorWithRealError() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "$.error")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source,
-        "{\"error\":\"Rate limit exceeded\"}", config.getResponse());
+    String result =
+        (String) method.invoke(source, "{\"error\":\"Rate limit exceeded\"}", config.getResponse());
     assertNotNull(result);
     assertEquals("Rate limit exceeded", result);
   }
@@ -1355,48 +1365,50 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(source,
-        "{\"data\":1}", config.getResponse());
+    String result =
+        (String) method.invoke(source, "{\"data\":1}", config.getResponse());
     assertNull(result);
   }
 
   @Test void testCheckForApiErrorEmptyArray() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "$.errors")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
     // Empty array at error path is not an error
-    String result = (String) method.invoke(source,
-        "{\"errors\":[]}", config.getResponse());
+    String result =
+        (String) method.invoke(source, "{\"errors\":[]}", config.getResponse());
     assertNull(result);
   }
 
   @Test void testCheckForApiErrorInvalidJson() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "$.error")))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("checkForApiError",
-        String.class, HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
     // Invalid JSON should be treated as valid (null)
-    String result = (String) method.invoke(source,
-        "not valid json!!!", config.getResponse());
+    String result =
+        (String) method.invoke(source, "not valid json!!!", config.getResponse());
     assertNull(result);
   }
 
@@ -1408,8 +1420,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("cacheResponseString",
-        String.class, String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
     method.setAccessible(true);
 
     String cachePath = tempDir.resolve("cache_str/response.json").toString();
@@ -1440,8 +1452,8 @@ public class HttpSourceDeepCoverageTest2 {
   // --- collectFiles via reflection ---
 
   @Test void testCollectFiles() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("collectFiles",
-        File.class, List.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
     method.setAccessible(true);
 
     // Create nested directory structure
@@ -1456,8 +1468,8 @@ public class HttpSourceDeepCoverageTest2 {
   }
 
   @Test void testCollectFilesEmptyDir() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("collectFiles",
-        File.class, List.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
     method.setAccessible(true);
 
     File emptyDir = tempDir.resolve("emptydir").toFile();
@@ -1471,34 +1483,34 @@ public class HttpSourceDeepCoverageTest2 {
   // --- resolveDelimiter via reflection ---
 
   @Test void testResolveDelimiterCSV() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    HttpSourceConfig.ResponseConfig respConfig = HttpSourceConfig.ResponseConfig.fromMap(
-        createMap("format", "csv"));
+    HttpSourceConfig.ResponseConfig respConfig =
+        HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "csv"));
     char result = (char) method.invoke(null, respConfig);
     assertEquals(',', result);
   }
 
   @Test void testResolveDelimiterTSV() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    HttpSourceConfig.ResponseConfig respConfig = HttpSourceConfig.ResponseConfig.fromMap(
-        createMap("format", "tsv"));
+    HttpSourceConfig.ResponseConfig respConfig =
+        HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "tsv"));
     char result = (char) method.invoke(null, respConfig);
     assertEquals('\t', result);
   }
 
   @Test void testResolveDelimiterCustom() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    HttpSourceConfig.ResponseConfig respConfig = HttpSourceConfig.ResponseConfig.fromMap(
-        createMap("format", "csv", "delimiter", "|"));
+    HttpSourceConfig.ResponseConfig respConfig =
+        HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "csv", "delimiter", "|"));
     char result = (char) method.invoke(null, respConfig);
     assertEquals('|', result);
   }
@@ -1511,8 +1523,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadResponseTransformer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadResponseTransformer", HooksConfig.class);
     method.setAccessible(true);
 
     Object result = method.invoke(source, (HooksConfig) null);
@@ -1525,8 +1537,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadResponseTransformer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadResponseTransformer", HooksConfig.class);
     method.setAccessible(true);
 
     HooksConfig hooks = HooksConfig.builder().build();
@@ -1540,8 +1552,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadResponseTransformer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadResponseTransformer", HooksConfig.class);
     method.setAccessible(true);
 
     HooksConfig hooks = HooksConfig.builder()
@@ -1564,8 +1576,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadVariableNormalizer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadVariableNormalizer", HooksConfig.class);
     method.setAccessible(true);
 
     Object result = method.invoke(source, (HooksConfig) null);
@@ -1578,8 +1590,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadVariableNormalizer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadVariableNormalizer", HooksConfig.class);
     method.setAccessible(true);
 
     HooksConfig hooks = HooksConfig.builder().build();
@@ -1593,8 +1605,8 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("loadVariableNormalizer",
-        HooksConfig.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("loadVariableNormalizer", HooksConfig.class);
     method.setAccessible(true);
 
     HooksConfig hooks = HooksConfig.builder()
@@ -1612,8 +1624,8 @@ public class HttpSourceDeepCoverageTest2 {
   // --- createBatches via reflection ---
 
   @Test void testCreateBatches() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("createBatches",
-        List.class, int.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("createBatches", List.class, int.class);
     method.setAccessible(true);
 
     List<String> items = Arrays.asList("a", "b", "c", "d", "e");
@@ -1627,8 +1639,8 @@ public class HttpSourceDeepCoverageTest2 {
   }
 
   @Test void testCreateBatchesSingleBatch() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("createBatches",
-        List.class, int.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("createBatches", List.class, int.class);
     method.setAccessible(true);
 
     List<String> items = Arrays.asList("a", "b");
@@ -1662,8 +1674,8 @@ public class HttpSourceDeepCoverageTest2 {
 
   @Test void testCacheEntryExpired() throws Exception {
     // Use reflection to instantiate CacheEntry
-    Class<?> cacheEntryClass = Class.forName(
-        "org.apache.calcite.adapter.file.etl.HttpSource$CacheEntry");
+    Class<?> cacheEntryClass =
+        Class.forName("org.apache.calcite.adapter.file.etl.HttpSource$CacheEntry");
     java.lang.reflect.Constructor<?> ctor =
         cacheEntryClass.getDeclaredConstructor(List.class, long.class);
     ctor.setAccessible(true);
@@ -1694,19 +1706,20 @@ public class HttpSourceDeepCoverageTest2 {
 
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(filterMap))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "name,type\nAlice,A\nBob,B\nCharlie,A", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "name,type\nAlice,A\nBob,B\nCharlie,A", ',');
     assertEquals(2, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals("Charlie", result.get(1).get("name"));
@@ -1718,19 +1731,20 @@ public class HttpSourceDeepCoverageTest2 {
 
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "csv")))
         .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(filterMap))
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "name,age\nAlice,30\nBob,25\nCharlie,35", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "name,age\nAlice,30\nBob,25\nCharlie,35", ',');
     assertEquals(1, result.size());
   }
 
@@ -1748,13 +1762,13 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-        String.class, char.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-        "Alice,30,NYC\nBob,25,LA", ',');
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, "Alice,30,NYC\nBob,25,LA", ',');
     assertEquals(2, result.size());
     assertEquals("Alice", result.get(0).get("name"));
     assertEquals(30L, result.get(0).get("age"));

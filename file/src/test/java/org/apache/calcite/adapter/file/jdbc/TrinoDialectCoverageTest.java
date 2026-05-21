@@ -105,23 +105,23 @@ public class TrinoDialectCoverageTest {
   // =========================================================================
 
   @Test public void testGetConfigValueNullConfig() throws Exception {
-    Method method = TrinoDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        TrinoDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     assertEquals("default", method.invoke(null, null, "key", "default"));
   }
 
   @Test public void testGetConfigValueMissingKey() throws Exception {
-    Method method = TrinoDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        TrinoDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     assertEquals("default", method.invoke(null, config, "missing", "default"));
   }
 
   @Test public void testGetConfigValueEmptyValue() throws Exception {
-    Method method = TrinoDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        TrinoDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     config.put("key", "");
@@ -129,8 +129,8 @@ public class TrinoDialectCoverageTest {
   }
 
   @Test public void testGetConfigValuePresentValue() throws Exception {
-    Method method = TrinoDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        TrinoDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     config.put("key", "myvalue");

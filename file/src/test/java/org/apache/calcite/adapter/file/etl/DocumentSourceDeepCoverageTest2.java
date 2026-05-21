@@ -116,10 +116,9 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== Constructor with real LocalFileStorageProvider =====
 
-  @Test
-  void testConstructorWithLocalStorage() {
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta", "http://localhost/doc");
+  @Test void testConstructorWithLocalStorage() {
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta", "http://localhost/doc");
 
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -129,8 +128,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals(tempDir.toString(), ds.getCacheDirectory());
   }
 
-  @Test
-  void testConstructorDefaultRateInterval() {
+  @Test void testConstructorDefaultRateInterval() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -138,8 +136,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals(100, ds.getMinRequestIntervalMs());
   }
 
-  @Test
-  void testConstructorWithHighRateLimit() {
+  @Test void testConstructorWithHighRateLimit() {
     HttpSourceConfig config = createConfigWithRateLimit(100);
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -147,8 +144,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals(10, ds.getMinRequestIntervalMs());
   }
 
-  @Test
-  void testConstructorCustomHeaders() {
+  @Test void testConstructorCustomHeaders() {
     Map<String, Object> headers = new LinkedHashMap<String, Object>();
     headers.put("User-Agent", "TestAgent/1.0");
     // Do NOT set Accept-Encoding - constructor should add it
@@ -163,8 +159,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertNotNull(ds);
   }
 
-  @Test
-  void testConstructorHeadersWithAcceptEncoding() {
+  @Test void testConstructorHeadersWithAcceptEncoding() {
     Map<String, Object> headers = new LinkedHashMap<String, Object>();
     headers.put("Accept-Encoding", "identity"); // already set
     headers.put("X-Custom", "value");
@@ -181,8 +176,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== substituteVariables additional cases =====
 
-  @Test
-  void testSubstituteVariablesSpecialChars() {
+  @Test void testSubstituteVariablesSpecialChars() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -193,8 +187,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals("https://api.example.com/search?q=foo bar&baz=1", result);
   }
 
-  @Test
-  void testSubstituteVariablesDollarSign() {
+  @Test void testSubstituteVariablesDollarSign() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -205,8 +198,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals("price=$100", result);
   }
 
-  @Test
-  void testSubstituteVariablesEmptyValue() {
+  @Test void testSubstituteVariablesEmptyValue() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -217,23 +209,21 @@ class DocumentSourceDeepCoverageTest2 {
     assertEquals("val=", result);
   }
 
-  @Test
-  void testSubstituteVariablesMultipleOccurrences() {
+  @Test void testSubstituteVariablesMultipleOccurrences() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
     Map<String, String> vars = new HashMap<String, String>();
     vars.put("year", "2024");
 
-    String result = ds.substituteVariables(
-        "start={year}&end={year}", vars);
+    String result =
+        ds.substituteVariables("start={year}&end={year}", vars);
     assertEquals("start=2024&end=2024", result);
   }
 
   // ===== buildCacheKey additional =====
 
-  @Test
-  void testBuildCacheKeyEmptyMap() throws Exception {
+  @Test void testBuildCacheKeyEmptyMap() throws Exception {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -246,8 +236,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertTrue(key.endsWith(".dat"));
   }
 
-  @Test
-  void testBuildCacheKeyDocumentOnly() throws Exception {
+  @Test void testBuildCacheKeyDocumentOnly() throws Exception {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -262,8 +251,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertFalse(key.contains("/")); // no cik or accession prefix
   }
 
-  @Test
-  void testBuildCacheKeyAccessionAndDocument() throws Exception {
+  @Test void testBuildCacheKeyAccessionAndDocument() throws Exception {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -281,8 +269,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== fetchMetadata with null metadata URL =====
 
-  @Test
-  void testFetchMetadataNullMetadataUrl() {
+  @Test void testFetchMetadataNullMetadataUrl() {
     HttpSourceConfig config = createConfigWithDocSource(null, "http://localhost/doc");
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -292,8 +279,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== downloadDocument with null document URL =====
 
-  @Test
-  void testDownloadDocumentNullDocumentUrl() {
+  @Test void testDownloadDocumentNullDocumentUrl() {
     HttpSourceConfig config = createConfigWithDocSource("http://localhost/meta", null);
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -303,14 +289,13 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== downloadDocument - cached file exists =====
 
-  @Test
-  void testDownloadDocumentCachedFileExists() throws Exception {
+  @Test void testDownloadDocumentCachedFileExists() throws Exception {
     // Create a cached file
     Path cacheDir = tempDir.resolve("docscache");
     Files.createDirectories(cacheDir);
 
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta", "http://localhost/{cik}/doc");
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta", "http://localhost/{cik}/doc");
     DocumentSource ds = new DocumentSource(config, storageProvider, cacheDir.toString());
 
     // Create the expected cache file
@@ -341,8 +326,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== fetchUrlContent with unreachable URL =====
 
-  @Test
-  void testFetchUrlContentUnreachable() {
+  @Test void testFetchUrlContentUnreachable() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -352,8 +336,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== sleepQuietly =====
 
-  @Test
-  void testSleepQuietly() throws Exception {
+  @Test void testSleepQuietly() throws Exception {
     Method m = DocumentSource.class.getDeclaredMethod("sleepQuietly", long.class);
     m.setAccessible(true);
 
@@ -363,8 +346,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== enforceRateLimit =====
 
-  @Test
-  void testEnforceRateLimit() throws Exception {
+  @Test void testEnforceRateLimit() throws Exception {
     HttpSourceConfig config = createConfigWithRateLimit(1000);
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
@@ -378,18 +360,16 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== getDocumentConfig null for minimal config =====
 
-  @Test
-  void testGetDocumentConfigNullForMinimal() {
+  @Test void testGetDocumentConfigNullForMinimal() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
     assertNull(ds.getDocumentConfig());
   }
 
-  @Test
-  void testGetDocumentConfigPresent() {
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta", "http://localhost/doc");
+  @Test void testGetDocumentConfigPresent() {
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta", "http://localhost/doc");
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
     assertNotNull(ds.getDocumentConfig());
@@ -397,24 +377,22 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== documentIterator with non-empty JSON (still returns empty in placeholder) =====
 
-  @Test
-  void testDocumentIteratorWithJsonPayload() {
+  @Test void testDocumentIteratorWithJsonPayload() {
     HttpSourceConfig config = createMinimalConfig();
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
     Map<String, String> baseVars = new HashMap<String, String>();
     baseVars.put("cik", "12345");
 
-    Iterator<Map<String, String>> iter = ds.documentIterator(
-        "{\"recent\": {\"filings\": []}}", baseVars);
+    Iterator<Map<String, String>> iter =
+        ds.documentIterator("{\"recent\": {\"filings\": []}}", baseVars);
     assertNotNull(iter);
     assertFalse(iter.hasNext());
   }
 
   // ===== isRetryableException additional cases =====
 
-  @Test
-  void testIsRetryableExceptionTimeout() throws Exception {
+  @Test void testIsRetryableExceptionTimeout() throws Exception {
     Method m = DocumentSource.class.getDeclaredMethod("isRetryableException", IOException.class);
     m.setAccessible(true);
 
@@ -422,8 +400,7 @@ class DocumentSourceDeepCoverageTest2 {
     assertTrue((Boolean) m.invoke(null, new IOException("HANDSHAKE_FAILURE")));
   }
 
-  @Test
-  void testIsRetryableExceptionNonRetryable() throws Exception {
+  @Test void testIsRetryableExceptionNonRetryable() throws Exception {
     Method m = DocumentSource.class.getDeclaredMethod("isRetryableException", IOException.class);
     m.setAccessible(true);
 
@@ -434,8 +411,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== isRetryableHttpStatus additional =====
 
-  @Test
-  void testIsRetryableHttpStatusBoundary() throws Exception {
+  @Test void testIsRetryableHttpStatusBoundary() throws Exception {
     Method m = DocumentSource.class.getDeclaredMethod("isRetryableHttpStatus", int.class);
     m.setAccessible(true);
 
@@ -453,8 +429,7 @@ class DocumentSourceDeepCoverageTest2 {
 
   // ===== retryDelay =====
 
-  @Test
-  void testRetryDelayExponential() throws Exception {
+  @Test void testRetryDelayExponential() throws Exception {
     Method m = DocumentSource.class.getDeclaredMethod("retryDelay", int.class);
     m.setAccessible(true);
 

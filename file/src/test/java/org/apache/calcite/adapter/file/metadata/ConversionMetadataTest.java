@@ -29,9 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -244,8 +242,8 @@ public class ConversionMetadataTest {
     ConversionMetadata metadata = new ConversionMetadata(tempDir);
 
     File converted = createTempFile("prebuilt.json");
-    ConversionRecord record = new ConversionRecord(
-        "/origin/source.html", converted.getCanonicalPath(), "HTML_TO_JSON",
+    ConversionRecord record =
+        new ConversionRecord("/origin/source.html", converted.getCanonicalPath(), "HTML_TO_JSON",
         null, "etag-abc", 5000L, "text/html");
 
     metadata.recordConversion(converted, record);
@@ -777,16 +775,17 @@ public class ConversionMetadataTest {
 
     for (int t = 0; t < threadCount; t++) {
       final int threadIndex = t;
-      futures.add(executor.submit(new Runnable() {
+      futures.add(
+          executor.submit(new Runnable() {
         @Override public void run() {
           try {
             startLatch.await();
             for (int i = 0; i < recordsPerThread; i++) {
-              File original = new File(tempDir,
-                  "concurrent_orig_" + threadIndex + "_" + i + ".html");
+              File original =
+                  new File(tempDir, "concurrent_orig_" + threadIndex + "_" + i + ".html");
               original.createNewFile();
-              File converted = new File(tempDir,
-                  "concurrent_conv_" + threadIndex + "_" + i + ".json");
+              File converted =
+                  new File(tempDir, "concurrent_conv_" + threadIndex + "_" + i + ".json");
               converted.createNewFile();
               metadata.recordConversion(original, converted, "HTML_TO_JSON");
             }
@@ -832,7 +831,8 @@ public class ConversionMetadataTest {
 
     // Two readers
     for (int r = 0; r < 2; r++) {
-      futures.add(executor.submit(new Runnable() {
+      futures.add(
+          executor.submit(new Runnable() {
         @Override public void run() {
           try {
             startLatch.await();
@@ -850,16 +850,17 @@ public class ConversionMetadataTest {
     // Two writers
     for (int w = 0; w < 2; w++) {
       final int writerIndex = w;
-      futures.add(executor.submit(new Runnable() {
+      futures.add(
+          executor.submit(new Runnable() {
         @Override public void run() {
           try {
             startLatch.await();
             for (int i = 0; i < 10; i++) {
-              File original = new File(tempDir,
-                  "rw_orig_" + writerIndex + "_" + i + ".html");
+              File original =
+                  new File(tempDir, "rw_orig_" + writerIndex + "_" + i + ".html");
               original.createNewFile();
-              File converted = new File(tempDir,
-                  "rw_conv_" + writerIndex + "_" + i + ".json");
+              File converted =
+                  new File(tempDir, "rw_conv_" + writerIndex + "_" + i + ".json");
               converted.createNewFile();
               metadata.recordConversion(original, converted, "HTML_TO_JSON");
             }
@@ -905,8 +906,8 @@ public class ConversionMetadataTest {
   }
 
   @Test void testConversionRecordFourArgConstructor() {
-    ConversionRecord record = new ConversionRecord(
-        "/orig.xlsx", "/conv.json", "EXCEL_TO_JSON", "/cache.parquet");
+    ConversionRecord record =
+        new ConversionRecord("/orig.xlsx", "/conv.json", "EXCEL_TO_JSON", "/cache.parquet");
     assertEquals("/orig.xlsx", record.originalFile);
     assertEquals("/conv.json", record.convertedFile);
     assertEquals("EXCEL_TO_JSON", record.conversionType);
@@ -915,8 +916,8 @@ public class ConversionMetadataTest {
   }
 
   @Test void testConversionRecordHttpMetadataConstructor() {
-    ConversionRecord record = new ConversionRecord(
-        "https://example.com/data.csv", "/conv.json", "HTTP_DOWNLOAD",
+    ConversionRecord record =
+        new ConversionRecord("https://example.com/data.csv", "/conv.json", "HTTP_DOWNLOAD",
         "/cache.parquet", "etag-123", 5000L, "text/csv");
     assertEquals("https://example.com/data.csv", record.originalFile);
     assertEquals("etag-123", record.etag);
@@ -928,8 +929,8 @@ public class ConversionMetadataTest {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("key", "value");
 
-    ConversionRecord record = new ConversionRecord(
-        "table1", "CsvScannableTable", "/source.csv", "csv",
+    ConversionRecord record =
+        new ConversionRecord("table1", "CsvScannableTable", "/source.csv", "csv",
         "/orig.csv", "/conv.json", "DIRECT",
         "/cache.parquet", "/dir/**/*.parquet", true, "PT5M",
         "etag-xyz", 1234L, "text/csv",
@@ -953,8 +954,8 @@ public class ConversionMetadataTest {
   }
 
   @Test void testConversionRecordGetters() {
-    ConversionRecord record = new ConversionRecord(
-        "/orig.xlsx", "/conv.json", "EXCEL_TO_JSON", "/cache.parquet");
+    ConversionRecord record =
+        new ConversionRecord("/orig.xlsx", "/conv.json", "EXCEL_TO_JSON", "/cache.parquet");
     record.tableName = "test_table";
     record.sourceFile = "/source.csv";
 
@@ -972,8 +973,8 @@ public class ConversionMetadataTest {
       writer.write("initial data");
     }
 
-    ConversionRecord record = new ConversionRecord(
-        localFile.getCanonicalPath(), "/converted.json", "DIRECT");
+    ConversionRecord record =
+        new ConversionRecord(localFile.getCanonicalPath(), "/converted.json", "DIRECT");
     // Set timestamp to before the file was last modified
     record.timestamp = localFile.lastModified() - 5000;
 
@@ -987,8 +988,8 @@ public class ConversionMetadataTest {
       writer.write("data");
     }
 
-    ConversionRecord record = new ConversionRecord(
-        localFile.getCanonicalPath(), "/converted.json", "DIRECT");
+    ConversionRecord record =
+        new ConversionRecord(localFile.getCanonicalPath(), "/converted.json", "DIRECT");
     // Set timestamp to after the file was last modified
     record.timestamp = localFile.lastModified() + 5000;
 
@@ -997,16 +998,16 @@ public class ConversionMetadataTest {
   }
 
   @Test void testConversionRecordHasChangedRemoteFile() {
-    ConversionRecord record = new ConversionRecord(
-        "https://example.com/data.csv", "/converted.json", "DIRECT");
+    ConversionRecord record =
+        new ConversionRecord("https://example.com/data.csv", "/converted.json", "DIRECT");
 
     // Remote files always return true (conservative)
     assertTrue(record.hasChanged());
   }
 
   @Test void testConversionRecordHasChangedNonExistentLocalFile() {
-    ConversionRecord record = new ConversionRecord(
-        "/nonexistent/file.csv", "/converted.json", "DIRECT");
+    ConversionRecord record =
+        new ConversionRecord("/nonexistent/file.csv", "/converted.json", "DIRECT");
     // Non-existent file should return false (no change possible)
     assertFalse(record.hasChanged());
   }
@@ -1233,20 +1234,20 @@ public class ConversionMetadataTest {
     assertFalse(localRecord.hasChanged());
 
     // Remote files always return true (conservative)
-    ConversionRecord httpRecord = new ConversionRecord(
-        "https://example.com/file.csv", "/conv.json", "DIRECT");
+    ConversionRecord httpRecord =
+        new ConversionRecord("https://example.com/file.csv", "/conv.json", "DIRECT");
     assertTrue(httpRecord.hasChanged());
 
-    ConversionRecord s3Record = new ConversionRecord(
-        "s3://bucket/file.csv", "/conv.json", "DIRECT");
+    ConversionRecord s3Record =
+        new ConversionRecord("s3://bucket/file.csv", "/conv.json", "DIRECT");
     assertTrue(s3Record.hasChanged());
 
-    ConversionRecord ftpRecord = new ConversionRecord(
-        "ftp://server/file.csv", "/conv.json", "DIRECT");
+    ConversionRecord ftpRecord =
+        new ConversionRecord("ftp://server/file.csv", "/conv.json", "DIRECT");
     assertTrue(ftpRecord.hasChanged());
 
-    ConversionRecord sftpRecord = new ConversionRecord(
-        "sftp://server/file.csv", "/conv.json", "DIRECT");
+    ConversionRecord sftpRecord =
+        new ConversionRecord("sftp://server/file.csv", "/conv.json", "DIRECT");
     assertTrue(sftpRecord.hasChanged());
   }
 

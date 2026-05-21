@@ -251,8 +251,8 @@ public class DocumentETLProcessor {
             continue;
           }
 
-          List<String> converted = processDocumentWithRetry(
-              docVariables, documentSource, outputDirectory);
+          List<String> converted =
+              processDocumentWithRetry(docVariables, documentSource, outputDirectory);
 
           outputFiles.addAll(converted);
           documentsProcessed++;
@@ -380,7 +380,8 @@ public class DocumentETLProcessor {
     List<Future<?>> futures = new ArrayList<Future<?>>();
 
     for (final Map<String, String> entityVariables : entities) {
-      futures.add(executor.submit(new Callable<Void>() {
+      futures.add(
+          executor.submit(new Callable<Void>() {
         @Override public Void call() {
           try {
             DocumentETLResult result = processEntity(entityVariables);
@@ -589,7 +590,8 @@ public class DocumentETLProcessor {
     List<Future<?>> futures = new ArrayList<Future<?>>();
 
     for (final AccessionRef ref : accessions) {
-      futures.add(executor.submit(new Callable<Void>() {
+      futures.add(
+          executor.submit(new Callable<Void>() {
         @Override public Void call() {
           DocumentETLResult result =
               processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
@@ -808,8 +810,8 @@ public class DocumentETLProcessor {
           }
 
           try {
-            String paginationJson = fetchPaginationFile(
-                documentSource, baseUrl + ref.name, ref.name, cik);
+            String paginationJson =
+                fetchPaginationFile(documentSource, baseUrl + ref.name, ref.name, cik);
 
             // Parse pagination file through same iterator (same array structure)
             List<Map<String, String>> paginatedDocs =
@@ -838,8 +840,8 @@ public class DocumentETLProcessor {
   private String fetchPaginationFile(DocumentSource documentSource,
       String url, String filename, String cik) throws IOException {
     // Check cache first
-    String cachePath = storageProvider.resolvePath(cacheDirectory,
-        "submissions_pagination/" + filename);
+    String cachePath =
+        storageProvider.resolvePath(cacheDirectory, "submissions_pagination/" + filename);
 
     if (storageProvider.exists(cachePath)) {
       LOGGER.debug("Using cached pagination file: {}", cachePath);
@@ -862,8 +864,8 @@ public class DocumentETLProcessor {
   private String readStorageFile(String path) throws IOException {
     StringBuilder sb = new StringBuilder();
     try (InputStream is = storageProvider.openInputStream(path);
-         BufferedReader reader = new BufferedReader(
-             new InputStreamReader(is, StandardCharsets.UTF_8))) {
+         BufferedReader reader =
+             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         sb.append(line).append("\n");

@@ -34,7 +34,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,8 +71,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testProjectColumnsReturnsCorrectSchema() {
+  @Test public void testProjectColumnsReturnsCorrectSchema() {
     // The project() method uses Arrow's transfer mechanism which requires
     // vectors to share the same allocator root. This test verifies the
     // schema transformation logic by using a batch from the same allocator
@@ -112,8 +110,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testFilterViaColumnBatchReturnsCorrectSubset() {
+  @Test public void testFilterViaColumnBatchReturnsCorrectSubset() {
     // The direct filter() method has a known issue where BitVector
     // valueCount is not set after allocateNew, causing get() to fail.
     // The filterWithColumnBatch() method handles this gracefully via
@@ -122,8 +119,8 @@ public class VectorizedArrowExecutionEngineTest {
     VectorSchemaRoot filtered = null;
     try {
       // Filter on column 0 (id) where value > 5
-      filtered = VectorizedArrowExecutionEngine.filterWithColumnBatch(
-          input, 0,
+      filtered =
+          VectorizedArrowExecutionEngine.filterWithColumnBatch(input, 0,
           value -> value instanceof Integer && ((Integer) value) > 5);
 
       assertNotNull(filtered, "Filtered result should not be null");
@@ -140,8 +137,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testAggregateSumOnDoubleColumn() {
+  @Test public void testAggregateSumOnDoubleColumn() {
     VectorSchemaRoot input = createTestBatch(5);
     try {
       // Sum on column 2 (amount): 100.0 + 200.0 + 300.0 + 400.0 + 500.0
@@ -156,8 +152,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testAggregateSumOnIntColumn() {
+  @Test public void testAggregateSumOnIntColumn() {
     VectorSchemaRoot input = createTestBatch(5);
     try {
       // Sum on column 0 (id): 1 + 2 + 3 + 4 + 5 = 15
@@ -172,8 +167,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testAggregateMinMax() {
+  @Test public void testAggregateMinMax() {
     VectorSchemaRoot input = createTestBatch(5);
     try {
       // MinMax on column 2 (amount): min=100.0, max=500.0
@@ -192,8 +186,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testColumnBatchIntReaderWorksCorrectly() {
+  @Test public void testColumnBatchIntReaderWorksCorrectly() {
     VectorSchemaRoot input = createTestBatch(5);
     try (ColumnBatch batch = new ColumnBatch(input)) {
       assertEquals(5, batch.getRowCount(),
@@ -216,8 +209,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testColumnBatchDoubleReaderWorksCorrectly() {
+  @Test public void testColumnBatchDoubleReaderWorksCorrectly() {
     VectorSchemaRoot input = createTestBatch(5);
     try (ColumnBatch batch = new ColumnBatch(input)) {
       // Test DoubleColumnReader on column 2 (amount)
@@ -244,8 +236,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testColumnBatchStringReaderWorksCorrectly() {
+  @Test public void testColumnBatchStringReaderWorksCorrectly() {
     VectorSchemaRoot input = createTestBatch(5);
     try (ColumnBatch batch = new ColumnBatch(input)) {
       // Test StringColumnReader on column 1 (name)
@@ -263,15 +254,14 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testColumnBatchFilterOnIntColumn() {
+  @Test public void testColumnBatchFilterOnIntColumn() {
     VectorSchemaRoot input = createTestBatch(10);
     try (ColumnBatch batch = new ColumnBatch(input)) {
       ColumnBatch.IntColumnReader intReader = batch.getIntColumn(0);
 
       // Filter: id > 5
-      boolean[] selection = intReader.filter(
-          value -> value > 5);
+      boolean[] selection =
+          intReader.filter(value -> value > 5);
 
       int selectedCount = 0;
       for (boolean selected : selection) {
@@ -298,8 +288,7 @@ public class VectorizedArrowExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testColumnBatchToRowFormat() {
+  @Test public void testColumnBatchToRowFormat() {
     VectorSchemaRoot input = createTestBatch(3);
     try (ColumnBatch batch = new ColumnBatch(input)) {
       Object[][] rows = batch.toRowFormat();
@@ -323,8 +312,10 @@ public class VectorizedArrowExecutionEngineTest {
    * can cause issues with Arrow's internal buffer management.
    */
   private VectorSchemaRoot createNumericBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
             null),
@@ -335,8 +326,7 @@ public class VectorizedArrowExecutionEngineTest {
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
 
     VectorSchemaRoot batch = VectorSchemaRoot.create(schema, allocator);
     batch.allocateNew();
@@ -363,16 +353,17 @@ public class VectorizedArrowExecutionEngineTest {
    * Creates a test Arrow batch with int, string, and double columns.
    */
   private VectorSchemaRoot createTestBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id",
             FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("name",
             FieldType.nullable(new ArrowType.Utf8()), null),
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
 
     VectorSchemaRoot batch = VectorSchemaRoot.create(schema, allocator);
     batch.allocateNew();

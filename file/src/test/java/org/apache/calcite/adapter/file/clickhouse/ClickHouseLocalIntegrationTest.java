@@ -38,7 +38,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Integration tests for ClickHouse local (embedded) mode.
@@ -62,8 +61,7 @@ class ClickHouseLocalIntegrationTest {
     return ClickHouseExecutionEngine.isAvailable();
   }
 
-  @Test
-  @EnabledIf("isClickHouseLocalAvailable")
+  @Test @EnabledIf("isClickHouseLocalAvailable")
   void testStartAndStopClickHouseLocal() throws Exception {
     String binaryPath = ClickHouseExecutionEngine.findLocalBinaryPath(null);
     assertNotNull(binaryPath, "clickhouse-local binary should be found");
@@ -80,12 +78,11 @@ class ClickHouseLocalIntegrationTest {
     dataDir.mkdirs();
 
     // Start clickhouse-local
-    ProcessBuilder pb = new ProcessBuilder(
-        binaryPath,
+    ProcessBuilder pb =
+        new ProcessBuilder(binaryPath,
         "--http_port", String.valueOf(port),
         "--path", dataDir.getAbsolutePath(),
-        "--log-level", "warning"
-    );
+        "--log-level", "warning");
     pb.redirectErrorStream(true);
     Process process = pb.start();
 
@@ -133,8 +130,7 @@ class ClickHouseLocalIntegrationTest {
     }
   }
 
-  @Test
-  @EnabledIf("isClickHouseLocalAvailable")
+  @Test @EnabledIf("isClickHouseLocalAvailable")
   void testClickHouseLocalConfig() {
     Map<String, Object> configMap = new HashMap<>();
     configMap.put("mode", "local");
@@ -149,8 +145,7 @@ class ClickHouseLocalIntegrationTest {
     assertEquals(2, config.getMaxThreads());
   }
 
-  @Test
-  @EnabledIf("isClickHouseLocalAvailable")
+  @Test @EnabledIf("isClickHouseLocalAvailable")
   void testClickHouseLocalCreateDatabase() throws Exception {
     String binaryPath = ClickHouseExecutionEngine.findLocalBinaryPath(null);
     assertNotNull(binaryPath);
@@ -164,12 +159,11 @@ class ClickHouseLocalIntegrationTest {
     File dataDir = new File(tempDir, "ch-db-test");
     dataDir.mkdirs();
 
-    ProcessBuilder pb = new ProcessBuilder(
-        binaryPath,
+    ProcessBuilder pb =
+        new ProcessBuilder(binaryPath,
         "--http_port", String.valueOf(port),
         "--path", dataDir.getAbsolutePath(),
-        "--log-level", "warning"
-    );
+        "--log-level", "warning");
     pb.redirectErrorStream(true);
     Process process = pb.start();
 

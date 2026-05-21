@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.refresh.RefreshableTable;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.impl.AbstractSchema;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -70,31 +68,27 @@ public class RefreshableMaterializedViewTableTest {
         refreshInterval);
   }
 
-  @Test
-  public void testGetRefreshInterval() {
+  @Test public void testGetRefreshInterval() {
     Duration interval = Duration.ofMinutes(30);
     RefreshableMaterializedViewTable table = createTable(interval);
 
     assertEquals(interval, table.getRefreshInterval());
   }
 
-  @Test
-  public void testGetRefreshIntervalNull() {
+  @Test public void testGetRefreshIntervalNull() {
     RefreshableMaterializedViewTable table = createTable(null);
 
     assertNull(table.getRefreshInterval());
   }
 
-  @Test
-  public void testNeedsRefreshWithNullInterval() {
+  @Test public void testNeedsRefreshWithNullInterval() {
     RefreshableMaterializedViewTable table = createTable(null);
 
     // No refresh interval means never needs refresh
     assertFalse(table.needsRefresh());
   }
 
-  @Test
-  public void testNeedsRefreshFirstTime() {
+  @Test public void testNeedsRefreshFirstTime() {
     Duration interval = Duration.ofMinutes(30);
     RefreshableMaterializedViewTable table = createTable(interval);
 
@@ -102,8 +96,7 @@ public class RefreshableMaterializedViewTableTest {
     assertTrue(table.needsRefresh());
   }
 
-  @Test
-  public void testNeedsRefreshAfterRefresh() {
+  @Test public void testNeedsRefreshAfterRefresh() {
     Duration interval = Duration.ofHours(1);
     RefreshableMaterializedViewTable table = createTable(interval);
 
@@ -114,8 +107,7 @@ public class RefreshableMaterializedViewTableTest {
     assertFalse(table.needsRefresh());
   }
 
-  @Test
-  public void testNeedsRefreshWithExpiredInterval() {
+  @Test public void testNeedsRefreshWithExpiredInterval() {
     // Use a very short interval
     Duration interval = Duration.ofMillis(1);
     RefreshableMaterializedViewTable table = createTable(interval);
@@ -134,16 +126,14 @@ public class RefreshableMaterializedViewTableTest {
     assertTrue(table.needsRefresh());
   }
 
-  @Test
-  public void testGetLastRefreshTimeInitiallyNull() {
+  @Test public void testGetLastRefreshTimeInitiallyNull() {
     Duration interval = Duration.ofMinutes(5);
     RefreshableMaterializedViewTable table = createTable(interval);
 
     assertNull(table.getLastRefreshTime());
   }
 
-  @Test
-  public void testGetLastRefreshTimeAfterRefresh() {
+  @Test public void testGetLastRefreshTimeAfterRefresh() {
     Duration interval = Duration.ofMinutes(5);
     RefreshableMaterializedViewTable table = createTable(interval);
 
@@ -158,16 +148,14 @@ public class RefreshableMaterializedViewTableTest {
     assertFalse(lastRefresh.isAfter(after));
   }
 
-  @Test
-  public void testRefreshBehavior() {
+  @Test public void testRefreshBehavior() {
     RefreshableMaterializedViewTable table = createTable(Duration.ofMinutes(5));
 
     assertEquals(RefreshableTable.RefreshBehavior.MATERIALIZED_VIEW,
         table.getRefreshBehavior());
   }
 
-  @Test
-  public void testRefreshDoesNotRefreshWhenNotNeeded() {
+  @Test public void testRefreshDoesNotRefreshWhenNotNeeded() {
     // No interval = never needs refresh
     RefreshableMaterializedViewTable table = createTable(null);
 
@@ -178,8 +166,7 @@ public class RefreshableMaterializedViewTableTest {
     assertNull(table.getLastRefreshTime());
   }
 
-  @Test
-  public void testToString() {
+  @Test public void testToString() {
     RefreshableMaterializedViewTable table = createTable(Duration.ofMinutes(5));
 
     String str = table.toString();
@@ -187,8 +174,7 @@ public class RefreshableMaterializedViewTableTest {
     assertTrue(str.contains("test_view"));
   }
 
-  @Test
-  public void testMultipleRefreshes() {
+  @Test public void testMultipleRefreshes() {
     Duration interval = Duration.ofMillis(1);
     RefreshableMaterializedViewTable table = createTable(interval);
 
@@ -213,8 +199,7 @@ public class RefreshableMaterializedViewTableTest {
     assertTrue(secondRefresh.isAfter(firstRefresh) || secondRefresh.equals(firstRefresh));
   }
 
-  @Test
-  public void testRefreshWithZeroDuration() {
+  @Test public void testRefreshWithZeroDuration() {
     // Zero duration means refresh when strictly after lastRefreshTime
     Duration interval = Duration.ZERO;
     RefreshableMaterializedViewTable table = createTable(interval);
@@ -227,8 +212,7 @@ public class RefreshableMaterializedViewTableTest {
     assertNotNull(table.getLastRefreshTime());
   }
 
-  @Test
-  public void testRefreshWithLargeDuration() {
+  @Test public void testRefreshWithLargeDuration() {
     Duration interval = Duration.ofDays(365);
     RefreshableMaterializedViewTable table = createTable(interval);
 
@@ -240,8 +224,7 @@ public class RefreshableMaterializedViewTableTest {
     assertFalse(table.needsRefresh());
   }
 
-  @Test
-  public void testParquetFileCleanupOnRefresh() throws IOException {
+  @Test public void testParquetFileCleanupOnRefresh() throws IOException {
     Duration interval = Duration.ofMillis(1);
     RefreshableMaterializedViewTable table = createTable(interval);
 

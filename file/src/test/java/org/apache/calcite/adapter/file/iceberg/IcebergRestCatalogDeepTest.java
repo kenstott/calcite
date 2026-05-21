@@ -18,16 +18,13 @@ package org.apache.calcite.adapter.file.iceberg;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Deep coverage tests for {@link IcebergRestCatalog}.
@@ -41,45 +38,39 @@ public class IcebergRestCatalogDeepTest {
 
   // --- validateRestCatalogConfig tests ---
 
-  @Test
-  public void testValidateNullConfig() {
+  @Test public void testValidateNullConfig() {
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.validateRestCatalogConfig(null));
   }
 
-  @Test
-  public void testValidateMissingUri() {
+  @Test public void testValidateMissingUri() {
     Map<String, Object> config = new HashMap<>();
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.validateRestCatalogConfig(config));
   }
 
-  @Test
-  public void testValidateEmptyUri() {
+  @Test public void testValidateEmptyUri() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "");
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.validateRestCatalogConfig(config));
   }
 
-  @Test
-  public void testValidateWhitespaceUri() {
+  @Test public void testValidateWhitespaceUri() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "   ");
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.validateRestCatalogConfig(config));
   }
 
-  @Test
-  public void testValidateValidConfig() {
+  @Test public void testValidateValidConfig() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "http://localhost:8181");
     // Should not throw
     IcebergRestCatalog.validateRestCatalogConfig(config);
   }
 
-  @Test
-  public void testValidateConfigWithAllOptions() {
+  @Test public void testValidateConfigWithAllOptions() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "https://iceberg-rest.example.com");
     config.put("credential", "my-credential");
@@ -95,31 +86,27 @@ public class IcebergRestCatalogDeepTest {
 
   // --- createRestCatalog tests ---
 
-  @Test
-  public void testCreateRestCatalogMissingUri() {
+  @Test public void testCreateRestCatalogMissingUri() {
     Map<String, Object> config = new HashMap<>();
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.createRestCatalog(config));
   }
 
-  @Test
-  public void testCreateRestCatalogEmptyUri() {
+  @Test public void testCreateRestCatalogEmptyUri() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "");
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.createRestCatalog(config));
   }
 
-  @Test
-  public void testCreateRestCatalogNullUri() {
+  @Test public void testCreateRestCatalogNullUri() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", null);
     assertThrows(IllegalArgumentException.class,
         () -> IcebergRestCatalog.createRestCatalog(config));
   }
 
-  @Test
-  public void testCreateRestCatalogWithCredentials() {
+  @Test public void testCreateRestCatalogWithCredentials() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "http://localhost:8181");
     config.put("credential", "my-credential");
@@ -136,8 +123,7 @@ public class IcebergRestCatalogDeepTest {
     }
   }
 
-  @Test
-  public void testCreateRestCatalogWithOAuth() {
+  @Test public void testCreateRestCatalogWithOAuth() {
     Map<String, Object> config = new HashMap<>();
     config.put("uri", "http://localhost:8181");
     config.put("oauth2-server-uri", "https://auth.example.com");

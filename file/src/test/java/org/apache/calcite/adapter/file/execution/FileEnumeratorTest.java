@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.execution;
 import org.apache.calcite.adapter.file.FileRowConverter;
 
 import org.jsoup.select.Elements;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -46,8 +45,7 @@ import static org.mockito.Mockito.when;
 public class FileEnumeratorTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileEnumeratorTest.class);
 
-  @Test
-  @DisplayName("moveNext returns false for empty iterator")
+  @Test @DisplayName("moveNext returns false for empty iterator")
   void testMoveNextEmpty() {
     List<Elements> emptyList = new ArrayList<>();
     FileRowConverter converter = Mockito.mock(FileRowConverter.class);
@@ -57,8 +55,7 @@ public class FileEnumeratorTest {
     assertFalse(enumerator.moveNext());
   }
 
-  @Test
-  @DisplayName("moveNext returns true when elements available and sets current")
+  @Test @DisplayName("moveNext returns true when elements available and sets current")
   void testMoveNextWithElements() {
     List<Elements> rows = new ArrayList<>();
     rows.add(new Elements());
@@ -75,8 +72,7 @@ public class FileEnumeratorTest {
     assertFalse(enumerator.moveNext());
   }
 
-  @Test
-  @DisplayName("current triggers moveNext when called first")
+  @Test @DisplayName("current triggers moveNext when called first")
   void testCurrentTriggersMove() {
     List<Elements> rows = new ArrayList<>();
     rows.add(new Elements());
@@ -91,8 +87,7 @@ public class FileEnumeratorTest {
     LOGGER.debug("Current result on first call: {}", result);
   }
 
-  @Test
-  @DisplayName("reset throws UnsupportedOperationException")
+  @Test @DisplayName("reset throws UnsupportedOperationException")
   void testResetThrowsUnsupported() {
     List<Elements> rows = new ArrayList<>();
     FileRowConverter converter = Mockito.mock(FileRowConverter.class);
@@ -102,8 +97,7 @@ public class FileEnumeratorTest {
     assertThrows(UnsupportedOperationException.class, () -> enumerator.reset());
   }
 
-  @Test
-  @DisplayName("close does not throw")
+  @Test @DisplayName("close does not throw")
   void testCloseDoesNotThrow() {
     List<Elements> rows = new ArrayList<>();
     FileRowConverter converter = Mockito.mock(FileRowConverter.class);
@@ -113,8 +107,7 @@ public class FileEnumeratorTest {
     enumerator.close(); // Should not throw
   }
 
-  @Test
-  @DisplayName("constructor with fields parameter uses provided fields")
+  @Test @DisplayName("constructor with fields parameter uses provided fields")
   void testConstructorWithFields() {
     List<Elements> rows = new ArrayList<>();
     rows.add(new Elements());
@@ -130,8 +123,7 @@ public class FileEnumeratorTest {
     LOGGER.debug("Field-filtered enumerator works");
   }
 
-  @Test
-  @DisplayName("current returns null after iterator exhausted")
+  @Test @DisplayName("current returns null after iterator exhausted")
   void testCurrentAfterExhaustion() {
     List<Elements> rows = new ArrayList<>();
     FileRowConverter converter = Mockito.mock(FileRowConverter.class);

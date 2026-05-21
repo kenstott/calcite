@@ -35,14 +35,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -77,10 +75,9 @@ public class ColumnBatchDeepTest {
 
   // --- LongColumnReader tests ---
 
-  @Test
-  public void testLongColumnSum() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+  @Test public void testLongColumnSum() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -103,10 +100,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testLongColumnWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+  @Test public void testLongColumnWithNulls() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -128,10 +124,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testLongColumnFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+  @Test public void testLongColumnFilter() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -156,10 +151,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testLongColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testLongColumnWrongType() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -172,10 +166,12 @@ public class ColumnBatchDeepTest {
 
   // --- DoubleColumnReader tests ---
 
-  @Test
-  public void testDoubleColumnSum() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(
+  @Test public void testDoubleColumnSum() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field(
+                    "value", FieldType.nullable(
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -196,10 +192,12 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testDoubleColumnMinMax() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(
+  @Test public void testDoubleColumnMinMax() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field(
+                    "value", FieldType.nullable(
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -222,10 +220,12 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testDoubleColumnMinMaxEmpty() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(
+  @Test public void testDoubleColumnMinMaxEmpty() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field(
+                    "value", FieldType.nullable(
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -244,10 +244,12 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testDoubleColumnMinMaxAllNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(
+  @Test public void testDoubleColumnMinMaxAllNulls() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field(
+                    "value", FieldType.nullable(
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -268,10 +270,12 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testDoubleColumnFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(
+  @Test public void testDoubleColumnFilter() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field(
+                    "value", FieldType.nullable(
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -298,10 +302,9 @@ public class ColumnBatchDeepTest {
 
   // --- BooleanColumnReader tests ---
 
-  @Test
-  public void testBooleanColumnCountTrue() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("flag", FieldType.nullable(new ArrowType.Bool()), null)));
+  @Test public void testBooleanColumnCountTrue() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("flag", FieldType.nullable(new ArrowType.Bool()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -329,10 +332,9 @@ public class ColumnBatchDeepTest {
 
   // --- StringColumnReader tests ---
 
-  @Test
-  public void testStringColumnFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
+  @Test public void testStringColumnFilter() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -365,10 +367,10 @@ public class ColumnBatchDeepTest {
 
   // --- toRowFormat tests ---
 
-  @Test
-  public void testToRowFormatMixedTypes() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+  @Test public void testToRowFormatMixedTypes() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -399,10 +401,9 @@ public class ColumnBatchDeepTest {
 
   // --- Index bounds tests ---
 
-  @Test
-  public void testGetIntColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testGetIntColumnOutOfBounds() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -413,10 +414,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testGetLongColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testGetLongColumnOutOfBounds() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -427,10 +427,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testGetDoubleColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testGetDoubleColumnOutOfBounds() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -441,10 +440,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testGetBooleanColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testGetBooleanColumnOutOfBounds() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -455,10 +453,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testGetStringColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testGetStringColumnOutOfBounds() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -471,10 +468,9 @@ public class ColumnBatchDeepTest {
 
   // --- IntColumnReader sumZeroCopy ---
 
-  @Test
-  public void testIntColumnSumZeroCopy() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testIntColumnSumZeroCopy() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -495,10 +491,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testIntColumnGetValues() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testIntColumnGetValues() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -523,10 +518,9 @@ public class ColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testIntColumnGetDataBuffer() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testIntColumnGetDataBuffer() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 

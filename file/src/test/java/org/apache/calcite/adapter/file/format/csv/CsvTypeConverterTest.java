@@ -57,8 +57,7 @@ public class CsvTypeConverterTest {
 
   // --- Boolean conversion ---
 
-  @Test
-  @DisplayName("convert BOOLEAN true values")
+  @Test @DisplayName("convert BOOLEAN true values")
   void testConvertBooleanTrue() {
     assertEquals(Boolean.TRUE, converter.convert("true", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.TRUE, converter.convert("TRUE", SqlTypeName.BOOLEAN));
@@ -67,8 +66,7 @@ public class CsvTypeConverterTest {
     assertEquals(Boolean.TRUE, converter.convert("y", SqlTypeName.BOOLEAN));
   }
 
-  @Test
-  @DisplayName("convert BOOLEAN false values")
+  @Test @DisplayName("convert BOOLEAN false values")
   void testConvertBooleanFalse() {
     assertEquals(Boolean.FALSE, converter.convert("false", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.FALSE, converter.convert("FALSE", SqlTypeName.BOOLEAN));
@@ -77,14 +75,12 @@ public class CsvTypeConverterTest {
     assertEquals(Boolean.FALSE, converter.convert("n", SqlTypeName.BOOLEAN));
   }
 
-  @Test
-  @DisplayName("convert BOOLEAN null representation returns null")
+  @Test @DisplayName("convert BOOLEAN null representation returns null")
   void testConvertBooleanNull() {
     assertNull(converter.convert("NULL", SqlTypeName.BOOLEAN));
   }
 
-  @Test
-  @DisplayName("convert BOOLEAN invalid throws NumberFormatException")
+  @Test @DisplayName("convert BOOLEAN invalid throws NumberFormatException")
   void testConvertBooleanInvalid() {
     assertThrows(NumberFormatException.class,
         () -> converter.convert("maybe", SqlTypeName.BOOLEAN));
@@ -92,43 +88,37 @@ public class CsvTypeConverterTest {
 
   // --- Numeric conversions ---
 
-  @Test
-  @DisplayName("convert TINYINT")
+  @Test @DisplayName("convert TINYINT")
   void testConvertTinyint() {
     assertEquals(Byte.valueOf((byte) 42), converter.convert("42", SqlTypeName.TINYINT));
     assertNull(converter.convert("NULL", SqlTypeName.TINYINT));
   }
 
-  @Test
-  @DisplayName("convert SMALLINT")
+  @Test @DisplayName("convert SMALLINT")
   void testConvertSmallint() {
     assertEquals(Short.valueOf((short) 1000), converter.convert("1000", SqlTypeName.SMALLINT));
     assertNull(converter.convert("NULL", SqlTypeName.SMALLINT));
   }
 
-  @Test
-  @DisplayName("convert INTEGER")
+  @Test @DisplayName("convert INTEGER")
   void testConvertInteger() {
     assertEquals(Integer.valueOf(12345), converter.convert("12345", SqlTypeName.INTEGER));
     assertNull(converter.convert("NULL", SqlTypeName.INTEGER));
   }
 
-  @Test
-  @DisplayName("convert BIGINT")
+  @Test @DisplayName("convert BIGINT")
   void testConvertBigint() {
     assertEquals(Long.valueOf(9999999999L), converter.convert("9999999999", SqlTypeName.BIGINT));
     assertNull(converter.convert("NULL", SqlTypeName.BIGINT));
   }
 
-  @Test
-  @DisplayName("convert REAL")
+  @Test @DisplayName("convert REAL")
   void testConvertReal() {
     assertEquals(Float.valueOf(3.14f), converter.convert("3.14", SqlTypeName.REAL));
     assertNull(converter.convert("NULL", SqlTypeName.REAL));
   }
 
-  @Test
-  @DisplayName("convert FLOAT/DOUBLE")
+  @Test @DisplayName("convert FLOAT/DOUBLE")
   void testConvertDouble() {
     assertEquals(Double.valueOf(2.718281828), converter.convert("2.718281828", SqlTypeName.DOUBLE));
     assertNull(converter.convert("NULL", SqlTypeName.DOUBLE));
@@ -136,8 +126,7 @@ public class CsvTypeConverterTest {
     assertNull(converter.convert("NULL", SqlTypeName.FLOAT));
   }
 
-  @Test
-  @DisplayName("convert DECIMAL")
+  @Test @DisplayName("convert DECIMAL")
   void testConvertDecimal() {
     assertEquals(new BigDecimal("123.456"), converter.convert("123.456", SqlTypeName.DECIMAL));
     assertNull(converter.convert("NULL", SqlTypeName.DECIMAL));
@@ -145,8 +134,7 @@ public class CsvTypeConverterTest {
 
   // --- Date/Time conversions ---
 
-  @Test
-  @DisplayName("convert DATE with ISO format")
+  @Test @DisplayName("convert DATE with ISO format")
   void testConvertDate() {
     Object result = converter.convert("2024-01-15", SqlTypeName.DATE);
     assertNotNull(result);
@@ -155,14 +143,12 @@ public class CsvTypeConverterTest {
     LOGGER.debug("Date conversion result: {}", result);
   }
 
-  @Test
-  @DisplayName("convert DATE null representation")
+  @Test @DisplayName("convert DATE null representation")
   void testConvertDateNull() {
     assertNull(converter.convert("NULL", SqlTypeName.DATE));
   }
 
-  @Test
-  @DisplayName("convert DATE with stored formatter")
+  @Test @DisplayName("convert DATE with stored formatter")
   void testConvertDateWithStoredFormatter() {
     formatters.put(SqlTypeName.DATE, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
     Object result = converter.convert("2024-06-15", SqlTypeName.DATE);
@@ -170,8 +156,7 @@ public class CsvTypeConverterTest {
     assertTrue(result instanceof Integer);
   }
 
-  @Test
-  @DisplayName("convert TIME with ISO format")
+  @Test @DisplayName("convert TIME with ISO format")
   void testConvertTime() {
     Object result = converter.convert("10:30:00", SqlTypeName.TIME);
     assertNotNull(result);
@@ -180,14 +165,12 @@ public class CsvTypeConverterTest {
     assertEquals(37800000, ((Integer) result).intValue());
   }
 
-  @Test
-  @DisplayName("convert TIME null representation")
+  @Test @DisplayName("convert TIME null representation")
   void testConvertTimeNull() {
     assertNull(converter.convert("NULL", SqlTypeName.TIME));
   }
 
-  @Test
-  @DisplayName("convert TIME with stored formatter")
+  @Test @DisplayName("convert TIME with stored formatter")
   void testConvertTimeWithStoredFormatter() {
     formatters.put(SqlTypeName.TIME, DateTimeFormatter.ofPattern("HH:mm:ss"));
     Object result = converter.convert("14:45:30", SqlTypeName.TIME);
@@ -195,8 +178,7 @@ public class CsvTypeConverterTest {
     assertTrue(result instanceof Integer);
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP with ISO format")
+  @Test @DisplayName("convert TIMESTAMP with ISO format")
   void testConvertTimestamp() {
     Object result = converter.convert("2024-01-15 10:30:00", SqlTypeName.TIMESTAMP);
     assertNotNull(result);
@@ -204,14 +186,12 @@ public class CsvTypeConverterTest {
     LOGGER.debug("Timestamp conversion result: {}", result);
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP null representation")
+  @Test @DisplayName("convert TIMESTAMP null representation")
   void testConvertTimestampNull() {
     assertNull(converter.convert("NULL", SqlTypeName.TIMESTAMP));
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE with UTC offset")
+  @Test @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE with UTC offset")
   void testConvertTimestampWithTimezone() {
     Object result = converter.convert("2024-01-15T10:30:00Z", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
     assertNotNull(result, "Should parse ISO timestamp with Z");
@@ -219,14 +199,12 @@ public class CsvTypeConverterTest {
     LOGGER.debug("TimestampTZ conversion result: {}", result);
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE null representation")
+  @Test @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE null representation")
   void testConvertTimestampTZNull() {
     assertNull(converter.convert("NULL", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE));
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE with offset")
+  @Test @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE with offset")
   void testConvertTimestampWithOffset() {
     Object result = converter.convert("2024-01-15T10:30:00+05:30", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
     assertNotNull(result, "Should parse ISO timestamp with offset");
@@ -235,24 +213,21 @@ public class CsvTypeConverterTest {
 
   // --- String conversions ---
 
-  @Test
-  @DisplayName("convert VARCHAR preserves value as-is")
+  @Test @DisplayName("convert VARCHAR preserves value as-is")
   void testConvertVarchar() {
     assertEquals("hello world", converter.convert("hello world", SqlTypeName.VARCHAR));
     // Empty string is preserved for string types
     assertEquals("", converter.convert("", SqlTypeName.VARCHAR));
   }
 
-  @Test
-  @DisplayName("convert CHAR preserves value as-is")
+  @Test @DisplayName("convert CHAR preserves value as-is")
   void testConvertChar() {
     assertEquals("x", converter.convert("x", SqlTypeName.CHAR));
   }
 
   // --- Default/unknown type ---
 
-  @Test
-  @DisplayName("convert unknown type returns string value with warning")
+  @Test @DisplayName("convert unknown type returns string value with warning")
   void testConvertUnknownType() {
     Object result = converter.convert("some_value", SqlTypeName.ARRAY);
     assertEquals("some_value", result, "Unknown type should return string value");
@@ -260,16 +235,14 @@ public class CsvTypeConverterTest {
 
   // --- Date fallback parsing ---
 
-  @Test
-  @DisplayName("convert TIMESTAMP from date-only value assumes midnight")
+  @Test @DisplayName("convert TIMESTAMP from date-only value assumes midnight")
   void testConvertTimestampFromDateOnly() {
     Object result = converter.convert("2024-03-15", SqlTypeName.TIMESTAMP);
     assertNotNull(result, "Date-only value should be parsed as timestamp at midnight");
     assertTrue(result instanceof Long);
   }
 
-  @Test
-  @DisplayName("convert unparseable date throws due to null result debug logging")
+  @Test @DisplayName("convert unparseable date throws due to null result debug logging")
   void testConvertUnparseableDate() {
     // parseDate returns null for unparseable dates, but the debug logging
     // at line 157 calls result.getClass() which triggers NPE
@@ -277,22 +250,19 @@ public class CsvTypeConverterTest {
         () -> converter.convert("not-a-date", SqlTypeName.DATE));
   }
 
-  @Test
-  @DisplayName("convert unparseable time returns null")
+  @Test @DisplayName("convert unparseable time returns null")
   void testConvertUnparseableTime() {
     Object result = converter.convert("not-a-time", SqlTypeName.TIME);
     assertNull(result, "Unparseable time should return null");
   }
 
-  @Test
-  @DisplayName("convert unparseable timestamp returns null")
+  @Test @DisplayName("convert unparseable timestamp returns null")
   void testConvertUnparseableTimestamp() {
     Object result = converter.convert("not-a-timestamp", SqlTypeName.TIMESTAMP);
     assertNull(result, "Unparseable timestamp should return null");
   }
 
-  @Test
-  @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE falls back to wall clock for non-TZ value")
+  @Test @DisplayName("convert TIMESTAMP_WITH_LOCAL_TIME_ZONE falls back to wall clock for non-TZ value")
   void testConvertTimestampTZFallback() {
     // A value without timezone info should fall back to wall clock parsing
     Object result = converter.convert("2024-01-15 10:30:00", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);

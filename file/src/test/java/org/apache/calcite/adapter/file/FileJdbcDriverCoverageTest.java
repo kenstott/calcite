@@ -63,7 +63,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testAcceptsFileSchemaUrlWithParams() throws SQLException {
     FileJdbcDriver driver = new FileJdbcDriver();
-    assertTrue(driver.acceptsURL(
+    assertTrue(
+        driver.acceptsURL(
         "jdbc:calcite:schema=file;data_path=/data;engine=parquet"));
   }
 
@@ -74,7 +75,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testAcceptsMaterializedViewMidUrl() throws SQLException {
     FileJdbcDriver driver = new FileJdbcDriver();
-    assertTrue(driver.acceptsURL(
+    assertTrue(
+        driver.acceptsURL(
         "jdbc:calcite:data_path=/data;materialized_view=enabled;engine=parquet"));
   }
 
@@ -198,8 +200,8 @@ class FileJdbcDriverCoverageTest {
       clearInitializedSchemas();
       String testUrl = "jdbc:calcite:;schema=file;data_path=" + dataPath.toAbsolutePath()
           + ";storage_path=" + storagePath.toAbsolutePath() + ";engine=parquet";
-      Method setupMethod = FileJdbcDriver.class.getDeclaredMethod(
-          "setupFileSchemas", CalciteConnection.class, String.class, Properties.class);
+      Method setupMethod =
+          FileJdbcDriver.class.getDeclaredMethod("setupFileSchemas", CalciteConnection.class, String.class, Properties.class);
       setupMethod.setAccessible(true);
       setupMethod.invoke(driver, calciteConn, testUrl, new Properties());
       assertNotNull(calciteConn.getRootSchema().getSubSchema("files"));
@@ -222,11 +224,11 @@ class FileJdbcDriverCoverageTest {
       Path storagePath = tempDir.resolve("dup_storage");
       Files.createDirectories(storagePath);
       clearInitializedSchemas();
-      Object schemaConfig = createSchemaConfig("duptest",
-          dataPath.toAbsolutePath().toString(),
+      Object schemaConfig =
+          createSchemaConfig("duptest", dataPath.toAbsolutePath().toString(),
           storagePath.toAbsolutePath().toString(), "parquet", 2048);
-      Method setupSchemaMethod = FileJdbcDriver.class.getDeclaredMethod(
-          "setupSchema", SchemaPlus.class, schemaConfig.getClass());
+      Method setupSchemaMethod =
+          FileJdbcDriver.class.getDeclaredMethod("setupSchema", SchemaPlus.class, schemaConfig.getClass());
       setupSchemaMethod.setAccessible(true);
       SchemaPlus rootSchema = calciteConn.getRootSchema();
       setupSchemaMethod.invoke(driver, rootSchema, schemaConfig);
@@ -251,8 +253,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationFileSchemaViaSemicolon() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/mydata;storage_path=/mystorage;engine=arrow",
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/mydata;storage_path=/mystorage;engine=arrow",
         new Properties());
     assertNotNull(config);
     assertEquals(1, invokeGetSchemas(config).size());
@@ -267,8 +269,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationBatchSize() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;batch_size=4096;data_path=/d;storage_path=/s",
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;batch_size=4096;data_path=/d;storage_path=/s",
         new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
@@ -277,8 +279,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationInvalidBatchSizeUsesDefault() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;batch_size=invalid;data_path=/d;storage_path=/s",
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;batch_size=invalid;data_path=/d;storage_path=/s",
         new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
@@ -291,8 +293,8 @@ class FileJdbcDriverCoverageTest {
     info.setProperty("data_path", "/override/data");
     info.setProperty("storage_path", "/override/storage");
     info.setProperty("engine", "vectorized");
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/original;storage_path=/original;engine=parquet",
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/original;storage_path=/original;engine=parquet",
         info);
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
@@ -306,8 +308,8 @@ class FileJdbcDriverCoverageTest {
     Properties info = new Properties();
     info.setProperty("materialized_view.storage_path", "/legacy/storage");
     info.setProperty("materialized_view.engine", "linq4j");
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/d;storage_path=/s;engine=parquet", info);
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/d;storage_path=/s;engine=parquet", info);
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals("/legacy/storage", invokeGetter(schemas.get(0), "getStoragePath"));
@@ -316,8 +318,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationDefaultStoragePath() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file", new Properties());
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals(System.getProperty("java.io.tmpdir") + "/calcite_file_storage",
@@ -326,8 +328,8 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationDefaultDataPath() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file", new Properties());
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals(System.getProperty("user.dir") + "/data",
@@ -336,15 +338,15 @@ class FileJdbcDriverCoverageTest {
 
   @Test void testParseConfigurationNoFileSchema() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=other", new Properties());
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=other", new Properties());
     assertEquals(0, invokeGetSchemas(config).size());
   }
 
   @Test void testParseConfigurationSchemaNameIsFiles() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/d;storage_path=/s", new Properties());
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/d;storage_path=/s", new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals("files", invokeGetter(schemas.get(0), "getName"));
@@ -397,8 +399,8 @@ class FileJdbcDriverCoverageTest {
     Properties info = new Properties();
     info.setProperty("schema.extra.data_path", "/data/extra");
     info.setProperty("schema.extra.storage_path", "/storage/extra");
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/url/data;storage_path=/url/storage", info);
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/url/data;storage_path=/url/storage", info);
     assertEquals(2, invokeGetSchemas(config).size());
   }
 
@@ -455,8 +457,8 @@ class FileJdbcDriverCoverageTest {
     Properties info = new Properties();
     info.setProperty("storage_path", "/prop/storage");
     info.setProperty("materialized_view.storage_path", "/legacy/storage");
-    Object config = invokeParseConfiguration(driver,
-        "jdbc:calcite:;schema=file;data_path=/d", info);
+    Object config =
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;data_path=/d", info);
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals("/legacy/storage", invokeGetter(schemas.get(0), "getStoragePath"));
@@ -473,8 +475,8 @@ class FileJdbcDriverCoverageTest {
 
   private Object invokeParseConfiguration(FileJdbcDriver driver, String url, Properties info)
       throws Exception {
-    Method method = FileJdbcDriver.class.getDeclaredMethod(
-        "parseConfiguration", String.class, Properties.class);
+    Method method =
+        FileJdbcDriver.class.getDeclaredMethod("parseConfiguration", String.class, Properties.class);
     method.setAccessible(true);
     return method.invoke(driver, url, info);
   }
@@ -503,8 +505,8 @@ class FileJdbcDriverCoverageTest {
       }
     }
     assertNotNull(schemaConfigClass);
-    Constructor<?> ctor = schemaConfigClass.getDeclaredConstructor(
-        String.class, String.class, String.class, String.class, int.class);
+    Constructor<?> ctor =
+        schemaConfigClass.getDeclaredConstructor(String.class, String.class, String.class, String.class, int.class);
     ctor.setAccessible(true);
     return ctor.newInstance(name, dataPath, storagePath, engineType, batchSize);
   }

@@ -29,10 +29,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
-import java.util.LinkedList;
-import java.util.Queue;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,8 +48,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for constructor
   // ====================================================================
 
-  @Test
-  void testConstructor() {
+  @Test void testConstructor() {
     Source source = createCsvSource("id,name\n1,Alice\n2,Bob\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -63,8 +59,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConstructorDifferentBatchSizes() {
+  @Test void testConstructorDifferentBatchSizes() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -84,8 +79,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for current() before moveNext
   // ====================================================================
 
-  @Test
-  void testCurrentBeforeMoveNext() {
+  @Test void testCurrentBeforeMoveNext() {
     Source source = createCsvSource("id,name\n1,Alice\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -101,8 +95,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for moveNext and current
   // ====================================================================
 
-  @Test
-  void testMoveNextAndCurrentWithData() {
+  @Test void testMoveNextAndCurrentWithData() {
     Source source = createCsvSource("id,name\n1,Alice\n2,Bob\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -116,8 +109,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testMoveNextEmptyData() {
+  @Test void testMoveNextEmptyData() {
     Source source = createCsvSource("id,name\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -130,8 +122,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testMoveNextMultipleRows() {
+  @Test void testMoveNextMultipleRows() {
     Source source = createCsvSource("id,name\n1,A\n2,B\n3,C\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -148,8 +139,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testMoveNextSmallBatchSize() {
+  @Test void testMoveNextSmallBatchSize() {
     Source source = createCsvSource("id,name\n1,A\n2,B\n3,C\n4,D\n5,E\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -167,8 +157,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testMoveNextExactlyBatchSize() {
+  @Test void testMoveNextExactlyBatchSize() {
     Source source = createCsvSource("id,name\n1,A\n2,B\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -189,8 +178,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for type conversion in convertRow
   // ====================================================================
 
-  @Test
-  void testConvertRowInteger() {
+  @Test void testConvertRowInteger() {
     Source source = createCsvSource("val\n42\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -204,8 +192,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowBigint() {
+  @Test void testConvertRowBigint() {
     Source source = createCsvSource("val\n9999999999\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.BIGINT);
 
@@ -219,8 +206,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowFloat() {
+  @Test void testConvertRowFloat() {
     Source source = createCsvSource("val\n3.14\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.FLOAT);
 
@@ -234,8 +220,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowDouble() {
+  @Test void testConvertRowDouble() {
     Source source = createCsvSource("val\n2.71828\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.DOUBLE);
 
@@ -249,8 +234,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowBoolean() {
+  @Test void testConvertRowBoolean() {
     Source source = createCsvSource("val\ntrue\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.BOOLEAN);
 
@@ -264,8 +248,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowVarchar() {
+  @Test void testConvertRowVarchar() {
     Source source = createCsvSource("val\nhello world\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.VARCHAR);
 
@@ -279,8 +262,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowNullValue() {
+  @Test void testConvertRowNullValue() {
     Source source = createCsvSource("val\n\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -296,8 +278,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowInvalidNumber() {
+  @Test void testConvertRowInvalidNumber() {
     Source source = createCsvSource("val\nabc\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -313,8 +294,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowFewerColumnsThanSchema() {
+  @Test void testConvertRowFewerColumnsThanSchema() {
     // CSV has 1 column, schema expects 2
     Source source = createCsvSource("val\n1\n");
     RelDataType rowType = createSimpleRowType();
@@ -335,8 +315,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for reset
   // ====================================================================
 
-  @Test
-  void testReset() {
+  @Test void testReset() {
     Source source = createCsvSource("id,name\n1,A\n2,B\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -352,8 +331,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testResetBeforeUse() {
+  @Test void testResetBeforeUse() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -370,8 +348,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for close
   // ====================================================================
 
-  @Test
-  void testClose() {
+  @Test void testClose() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -382,8 +359,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testDoubleClose() {
+  @Test void testDoubleClose() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -399,8 +375,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for getMemoryUsage
   // ====================================================================
 
-  @Test
-  void testGetMemoryUsageEmpty() {
+  @Test void testGetMemoryUsageEmpty() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -413,8 +388,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testGetMemoryUsageAfterLoad() {
+  @Test void testGetMemoryUsageAfterLoad() {
     Source source = createCsvSource("id,name\n1,Alice\n2,Bob\n3,Charlie\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -435,8 +409,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for isStreamable
   // ====================================================================
 
-  @Test
-  void testIsStreamableEmpty() {
+  @Test void testIsStreamableEmpty() {
     Source source = createCsvSource("id\n1\n");
     RelDataType rowType = createIntOnlyRowType();
 
@@ -453,8 +426,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for project
   // ====================================================================
 
-  @Test
-  void testProjectEmptyBatches() {
+  @Test void testProjectEmptyBatches() {
     Source source = createCsvSource("id,name\n1,A\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -472,8 +444,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for filter
   // ====================================================================
 
-  @Test
-  void testFilterEmptyBatches() {
+  @Test void testFilterEmptyBatches() {
     Source source = createCsvSource("id,name\n1,A\n");
     RelDataType rowType = createSimpleRowType();
 
@@ -481,8 +452,8 @@ public class ParquetFileEnumeratorCoverageTest {
         new ParquetFileEnumerator<Object[]>(source, rowType, 100);
 
     // Filter before loading any data
-    ParquetFileEnumerator<Object[]> filtered = enumerator.filter(0,
-        new java.util.function.Predicate<Object>() {
+    ParquetFileEnumerator<Object[]> filtered =
+        enumerator.filter(0, new java.util.function.Predicate<Object>() {
           @Override public boolean test(Object o) {
             return true;
           }
@@ -496,8 +467,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for Real type
   // ====================================================================
 
-  @Test
-  void testConvertRowRealType() {
+  @Test void testConvertRowRealType() {
     Source source = createCsvSource("val\n1.5\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.REAL);
 
@@ -515,8 +485,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for CHAR type
   // ====================================================================
 
-  @Test
-  void testConvertRowCharType() {
+  @Test void testConvertRowCharType() {
     Source source = createCsvSource("val\nX\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.CHAR);
 
@@ -534,8 +503,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests with multiple types in same row
   // ====================================================================
 
-  @Test
-  void testMultipleTypesInRow() {
+  @Test void testMultipleTypesInRow() {
     Source source = createCsvSource("id,price,active,name\n42,19.99,true,Widget\n");
     RelDataType rowType = createMixedRowType();
 
@@ -554,8 +522,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for SMALLINT and TINYINT types
   // ====================================================================
 
-  @Test
-  void testConvertRowSmallint() {
+  @Test void testConvertRowSmallint() {
     Source source = createCsvSource("val\n123\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.SMALLINT);
 
@@ -569,8 +536,7 @@ public class ParquetFileEnumeratorCoverageTest {
     enumerator.close();
   }
 
-  @Test
-  void testConvertRowTinyint() {
+  @Test void testConvertRowTinyint() {
     Source source = createCsvSource("val\n7\n");
     RelDataType rowType = createRowTypeWith(SqlTypeName.TINYINT);
 
@@ -588,8 +554,7 @@ public class ParquetFileEnumeratorCoverageTest {
   // Tests for moveNext with large dataset
   // ====================================================================
 
-  @Test
-  void testMoveNextLargeDataset() {
+  @Test void testMoveNextLargeDataset() {
     StringBuilder csv = new StringBuilder("id,val\n");
     for (int i = 0; i < 100; i++) {
       csv.append(i).append(",value_").append(i).append("\n");

@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
-# ============================================================================
-# Run DQ checks for all govdata schemas in parallel.
 #
-# Usage:
-#   run-all-dq.sh [--mode daily|historical] [--dry-run] [--rebuild] [--schemas s1,s2,...]
-#   run-all-dq.sh --help
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# --mode daily|historical   DQ run type label (default: daily)
-# --dry-run                 Run checks locally but do not upload to S3
-# --rebuild                 For each schema: remove tracker entries + Iceberg data,
-#                           run ETL to rebuild, then DQ (passed to worker-dq-run.sh)
-# --schemas s1,s2,...       Comma-separated subset of schemas to run
-#                           Default: all schemas with a *_dq.sql script
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Exit codes:
-#   0  All schemas passed (or only warnings)
-#   1  One or more schemas failed
-# ============================================================================
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -44,13 +44,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,13 +80,12 @@ public class IcebergTableTypeMappingTest {
     IcebergCatalogManager.clearCache();
   }
 
-  @Test
-  public void testBooleanTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "flag", Types.BooleanType.get()));
+  @Test public void testBooleanTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "flag", Types.BooleanType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_boolean"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_boolean"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -96,13 +93,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testIntegerTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "num", Types.IntegerType.get()));
+  @Test public void testIntegerTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "num", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_int"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_int"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -110,13 +106,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testLongTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "big_num", Types.LongType.get()));
+  @Test public void testLongTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "big_num", Types.LongType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_long"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_long"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -124,13 +119,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testFloatTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "flt", Types.FloatType.get()));
+  @Test public void testFloatTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "flt", Types.FloatType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_float"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_float"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -138,13 +132,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testDoubleTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "dbl", Types.DoubleType.get()));
+  @Test public void testDoubleTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "dbl", Types.DoubleType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_double"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_double"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -152,13 +145,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testStringTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "str", Types.StringType.get()));
+  @Test public void testStringTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "str", Types.StringType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_string"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_string"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -166,13 +158,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testDateTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "dt", Types.DateType.get()));
+  @Test public void testDateTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "dt", Types.DateType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_date"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_date"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -180,13 +171,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testTimestampWithoutZoneTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "ts", Types.TimestampType.withoutZone()));
+  @Test public void testTimestampWithoutZoneTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "ts", Types.TimestampType.withoutZone()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_ts"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_ts"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -194,13 +184,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testTimestampWithZoneTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "tstz", Types.TimestampType.withZone()));
+  @Test public void testTimestampWithZoneTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "tstz", Types.TimestampType.withZone()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_tstz"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_tstz"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -208,13 +197,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testDecimalTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "dec", Types.DecimalType.of(18, 4)));
+  @Test public void testDecimalTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "dec", Types.DecimalType.of(18, 4)));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_decimal"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_decimal"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -224,13 +212,12 @@ public class IcebergTableTypeMappingTest {
     assertEquals(4, decType.getScale());
   }
 
-  @Test
-  public void testBinaryTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "bin", Types.BinaryType.get()));
+  @Test public void testBinaryTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "bin", Types.BinaryType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_binary"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_binary"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -238,13 +225,12 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testUuidTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "uid", Types.UUIDType.get()));
+  @Test public void testUuidTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "uid", Types.UUIDType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_uuid"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_uuid"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -252,14 +238,14 @@ public class IcebergTableTypeMappingTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testListTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "tags",
+  @Test public void testListTypeMapping() {
+    Schema schema =
+        new Schema(
+            Types.NestedField.optional(1, "tags",
             Types.ListType.ofOptional(100, Types.StringType.get())));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_list"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_list"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -267,15 +253,15 @@ public class IcebergTableTypeMappingTest {
     assertEquals(SqlTypeName.ARRAY, listType.getSqlTypeName());
   }
 
-  @Test
-  public void testMapTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "props",
+  @Test public void testMapTypeMapping() {
+    Schema schema =
+        new Schema(
+            Types.NestedField.optional(1, "props",
             Types.MapType.ofOptional(100, 101,
                 Types.StringType.get(), Types.IntegerType.get())));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_map"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_map"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -283,16 +269,16 @@ public class IcebergTableTypeMappingTest {
     assertEquals(SqlTypeName.MAP, mapType.getSqlTypeName());
   }
 
-  @Test
-  public void testStructTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "address",
+  @Test public void testStructTypeMapping() {
+    Schema schema =
+        new Schema(
+            Types.NestedField.optional(1, "address",
             Types.StructType.of(
                 Types.NestedField.optional(100, "street", Types.StringType.get()),
                 Types.NestedField.optional(101, "city", Types.StringType.get()))));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_struct"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_struct"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -302,17 +288,16 @@ public class IcebergTableTypeMappingTest {
     assertTrue(structType.getFieldNames().contains("city"));
   }
 
-  @Test
-  public void testMultiColumnSchema() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+  @Test public void testMultiColumnSchema() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()),
         Types.NestedField.optional(3, "amount", Types.DoubleType.get()),
         Types.NestedField.optional(4, "active", Types.BooleanType.get()),
         Types.NestedField.optional(5, "created", Types.TimestampType.withoutZone()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_multi"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_multi"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);
@@ -326,13 +311,12 @@ public class IcebergTableTypeMappingTest {
     assertEquals("created", fieldNames.get(4));
   }
 
-  @Test
-  public void testStatisticsEmptyTable() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testStatisticsEmptyTable() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_stats_empty"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_stats_empty"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     Statistic stat = icebergTable.getStatistic();
@@ -341,17 +325,16 @@ public class IcebergTableTypeMappingTest {
     assertEquals(0.0, stat.getRowCount());
   }
 
-  @Test
-  public void testStatisticsPopulatedTable() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testStatisticsPopulatedTable() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_stats_pop"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_stats_pop"), schema, PartitionSpec.unpartitioned());
 
     // Add some data
-    OutputFile outputFile = table.io().newOutputFile(
-        table.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
+    OutputFile outputFile =
+        table.io().newOutputFile(table.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
 
     DataWriter<Record> writer = Parquet.writeData(outputFile)
         .schema(schema)
@@ -375,87 +358,80 @@ public class IcebergTableTypeMappingTest {
     assertEquals(5.0, stat.getRowCount());
   }
 
-  @Test
-  public void testGetIcebergTable() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testGetIcebergTable() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_get_table"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_get_table"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertNotNull(icebergTable.getIcebergTable());
     assertEquals(table, icebergTable.getIcebergTable());
   }
 
-  @Test
-  public void testTableCommentNull() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testTableCommentNull() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_no_comment"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_no_comment"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertNull(icebergTable.getTableComment());
   }
 
-  @Test
-  public void testColumnCommentFromFieldDoc() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get(), "The primary key"));
+  @Test public void testColumnCommentFromFieldDoc() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get(), "The primary key"));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_col_comment"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_col_comment"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertEquals("The primary key", icebergTable.getColumnComment("id"));
   }
 
-  @Test
-  public void testColumnCommentCaseInsensitive() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "MyColumn", Types.IntegerType.get(), "A column"));
+  @Test public void testColumnCommentCaseInsensitive() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "MyColumn", Types.IntegerType.get(), "A column"));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_col_case"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_col_case"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertEquals("A column", icebergTable.getColumnComment("mycolumn"));
     assertEquals("A column", icebergTable.getColumnComment("MYCOLUMN"));
   }
 
-  @Test
-  public void testColumnCommentNullForNonexistent() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testColumnCommentNullForNonexistent() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_col_null"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_col_null"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertNull(icebergTable.getColumnComment("nonexistent"));
   }
 
-  @Test
-  public void testColumnCommentNullInput() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testColumnCommentNullInput() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_col_null_input"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_col_null_input"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     assertNull(icebergTable.getColumnComment(null));
   }
 
-  @Test
-  public void testRowTypeCaching() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()));
+  @Test public void testRowTypeCaching() {
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_cache"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_cache"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType1 = icebergTable.getRowType(typeFactory);
@@ -464,13 +440,12 @@ public class IcebergTableTypeMappingTest {
     assertTrue(rowType1 == rowType2);
   }
 
-  @Test
-  public void testFixedTypeMapping() {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "fixed_col", Types.FixedType.ofLength(16)));
+  @Test public void testFixedTypeMapping() {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "fixed_col", Types.FixedType.ofLength(16)));
 
-    Table table = catalog.createTable(
-        TableIdentifier.of("test_fixed"), schema, PartitionSpec.unpartitioned());
+    Table table =
+        catalog.createTable(TableIdentifier.of("test_fixed"), schema, PartitionSpec.unpartitioned());
     IcebergTable icebergTable = new IcebergTable(table, Sources.of(tempDir.toFile()));
 
     RelDataType rowType = icebergTable.getRowType(typeFactory);

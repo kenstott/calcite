@@ -49,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -105,8 +104,8 @@ class HttpSourceDeepCoverageTest3 {
       }
     }
     assertNotNull(innerClass, "LazyCSVIterator class should exist");
-    Constructor<?> ctor = innerClass.getDeclaredConstructor(
-        HttpSource.class, InputStream.class, String.class, char.class,
+    Constructor<?> ctor =
+        innerClass.getDeclaredConstructor(HttpSource.class, InputStream.class, String.class, char.class,
         HttpSourceConfig.RowFilterConfig.class, HttpSourceConfig.WideToNarrowConfig.class,
         boolean.class, String.class);
     ctor.setAccessible(true);
@@ -125,18 +124,18 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= parseDelimitedResponse: CSV with filter =======
 
-  @Test
-  void testParseDelimitedResponseWithFilter() throws Exception {
+  @Test void testParseDelimitedResponseWithFilter() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(
+        .rowFilter(
+            HttpSourceConfig.RowFilterConfig.fromMap(
             map("column", "state", "pattern", "NY|CA", "maxRows", 10)))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       String csv = "name,state,value\nAlice,NY,100\nBob,TX,200\nCarol,CA,300\nDan,FL,400\n";
       @SuppressWarnings("unchecked")
@@ -149,18 +148,18 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseFilterColumnNotFound() throws Exception {
+  @Test void testParseDelimitedResponseFilterColumnNotFound() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(
+        .rowFilter(
+            HttpSourceConfig.RowFilterConfig.fromMap(
             map("column", "nonexistent", "pattern", ".*")))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -171,18 +170,18 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseFilterMaxRows() throws Exception {
+  @Test void testParseDelimitedResponseFilterMaxRows() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(
+        .rowFilter(
+            HttpSourceConfig.RowFilterConfig.fromMap(
             map("column", "name", "pattern", ".*", "maxRows", 2)))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -193,16 +192,15 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseEmpty() throws Exception {
+  @Test void testParseDelimitedResponseEmpty() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> r1 = (List<Map<String, Object>>) m.invoke(source, "", ',');
@@ -216,17 +214,17 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseHeaderlessWithColumnNames() throws Exception {
+  @Test void testParseDelimitedResponseHeaderlessWithColumnNames() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "CSV", "hasHeader", false, "columnNames", "name,value")))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -239,18 +237,18 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseQuotedFilterValues() throws Exception {
+  @Test void testParseDelimitedResponseQuotedFilterValues() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(
+        .rowFilter(
+            HttpSourceConfig.RowFilterConfig.fromMap(
             map("column", "state", "pattern", "NY")))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -264,12 +262,12 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= parseDelimitedResponse: Wide-to-narrow =======
 
-  @Test
-  void testParseDelimitedResponseWideToNarrow() throws Exception {
+  @Test void testParseDelimitedResponseWideToNarrow() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .wideToNarrow(HttpSourceConfig.WideToNarrowConfig.fromMap(
+        .wideToNarrow(
+            HttpSourceConfig.WideToNarrowConfig.fromMap(
             map("keyColumns", Arrays.asList("region"),
                 "valueColumnPattern", "\\d{4}",
                 "keyColumnName", "year",
@@ -278,8 +276,8 @@ class HttpSourceDeepCoverageTest3 {
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -293,21 +291,22 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseDelimitedResponseWideToNarrowMaxRows() throws Exception {
+  @Test void testParseDelimitedResponseWideToNarrowMaxRows() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
-        .wideToNarrow(HttpSourceConfig.WideToNarrowConfig.fromMap(
+        .wideToNarrow(
+            HttpSourceConfig.WideToNarrowConfig.fromMap(
             map("keyColumns", Arrays.asList("region"),
                 "keyColumnName", "year", "valueColumnName", "amount")))
-        .rowFilter(HttpSourceConfig.RowFilterConfig.fromMap(
+        .rowFilter(
+            HttpSourceConfig.RowFilterConfig.fromMap(
             map("column", "region", "pattern", ".*", "maxRows", 3)))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedResponse",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> result = (List<Map<String, Object>>)
@@ -320,11 +319,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= parseResponse: JSON with errorPath and dataPath =======
 
-  @Test
-  void testParseResponseWithDataPath() throws Exception {
+  @Test void testParseResponseWithDataPath() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "JSON", "dataPath", "results.data")))
         .build();
     HttpSource source = new HttpSource(config);
@@ -340,11 +339,11 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseErrorPathNoDataMsg() throws Exception {
+  @Test void testParseResponseErrorPathNoDataMsg() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "JSON", "errorPath", "error.message", "dataPath", "data")))
         .build();
     HttpSource source = new HttpSource(config);
@@ -360,11 +359,11 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseErrorPathRealError() throws Exception {
+  @Test void testParseResponseErrorPathRealError() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "JSON", "errorPath", "error")))
         .build();
     HttpSource source = new HttpSource(config);
@@ -383,11 +382,11 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseErrorPathEmptyArray() throws Exception {
+  @Test void testParseResponseErrorPathEmptyArray() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "JSON", "errorPath", "errors", "dataPath", "data")))
         .build();
     HttpSource source = new HttpSource(config);
@@ -403,11 +402,11 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseErrorPathObjectError() throws Exception {
+  @Test void testParseResponseErrorPathObjectError() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             map("format", "JSON", "errorPath", "error")))
         .build();
     HttpSource source = new HttpSource(config);
@@ -425,8 +424,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseSingleObject() throws Exception {
+  @Test void testParseResponseSingleObject() throws Exception {
     HttpSource source = createMinimalSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("parseResponse", String.class);
@@ -441,8 +439,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseUnsupportedFormat() throws Exception {
+  @Test void testParseResponseUnsupportedFormat() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "XML")))
@@ -463,8 +460,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseCSVViaParse() throws Exception {
+  @Test void testParseResponseCSVViaParse() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV")))
@@ -482,8 +478,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testParseResponseTSVViaParse() throws Exception {
+  @Test void testParseResponseTSVViaParse() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(map("format", "TSV")))
@@ -503,12 +498,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= navigateToPath =======
 
-  @Test
-  void testNavigateToPathVariants() throws Exception {
+  @Test void testNavigateToPathVariants() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("navigateToPath",
-          JsonNode.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("navigateToPath", JsonNode.class, String.class);
       m.setAccessible(true);
 
       JsonNode root = MAPPER.readTree("{\"a\":{\"b\":[{\"c\":1}]}}");
@@ -536,19 +530,18 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= serializeBody =======
 
-  @Test
-  void testSerializeBodyJson() throws Exception {
+  @Test void testSerializeBodyJson() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("serializeBody",
-          Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("serializeBody", Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
       m.setAccessible(true);
 
       Map<String, Object> body = new LinkedHashMap<String, Object>();
       body.put("key", "val");
       body.put("num", 42);
-      String result = (String) m.invoke(source, body,
-          HttpSourceConfig.BodyFormat.JSON, Collections.emptyMap());
+      String result =
+          (String) m.invoke(source, body, HttpSourceConfig.BodyFormat.JSON, Collections.emptyMap());
       assertTrue(result.contains("\"key\""));
       assertTrue(result.contains("\"val\""));
     } finally {
@@ -556,19 +549,18 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testSerializeBodyFormUrlEncoded() throws Exception {
+  @Test void testSerializeBodyFormUrlEncoded() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("serializeBody",
-          Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("serializeBody", Map.class, HttpSourceConfig.BodyFormat.class, Map.class);
       m.setAccessible(true);
 
       Map<String, Object> body = new LinkedHashMap<String, Object>();
       body.put("field1", "value 1");
       body.put("field2", "value&2");
-      String result = (String) m.invoke(source, body,
-          HttpSourceConfig.BodyFormat.FORM_URLENCODED, Collections.emptyMap());
+      String result =
+          (String) m.invoke(source, body, HttpSourceConfig.BodyFormat.FORM_URLENCODED, Collections.emptyMap());
       assertTrue(result.contains("field1="));
       assertTrue(result.contains("&"));
     } finally {
@@ -578,12 +570,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= substituteBodyVariables: nested =======
 
-  @Test
-  void testSubstituteBodyVariablesNested() throws Exception {
+  @Test void testSubstituteBodyVariablesNested() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("substituteBodyVariables",
-          Map.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("substituteBodyVariables", Map.class, Map.class);
       m.setAccessible(true);
 
       Map<String, String> vars = new HashMap<String, String>();
@@ -607,12 +598,11 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testSubstituteListVariables() throws Exception {
+  @Test void testSubstituteListVariables() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("substituteListVariables",
-          List.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("substituteListVariables", List.class, Map.class);
       m.setAccessible(true);
 
       Map<String, String> vars = new HashMap<String, String>();
@@ -639,12 +629,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= checkForApiError =======
 
-  @Test
-  void testCheckForApiErrorVariants() throws Exception {
+  @Test void testCheckForApiErrorVariants() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("checkForApiError",
-          String.class, HttpSourceConfig.ResponseConfig.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
       m.setAccessible(true);
 
       HttpSourceConfig.ResponseConfig withError =
@@ -693,10 +682,9 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= buildRawCachePath =======
 
-  @Test
-  void testBuildRawCachePath() throws Exception {
-    HttpSource source = createSourceWithRawCache(
-        mock(StorageProvider.class), "s3://bucket/.raw", tempDir.toString());
+  @Test void testBuildRawCachePath() throws Exception {
+    HttpSource source =
+        createSourceWithRawCache(mock(StorageProvider.class), "s3://bucket/.raw", tempDir.toString());
     try {
       Method m = HttpSource.class.getDeclaredMethod("buildRawCachePath", Map.class);
       m.setAccessible(true);
@@ -712,10 +700,9 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testBuildRawCachePathEmptyVars() throws Exception {
-    HttpSource source = createSourceWithRawCache(
-        mock(StorageProvider.class), "s3://bucket/.raw", tempDir.toString());
+  @Test void testBuildRawCachePathEmptyVars() throws Exception {
+    HttpSource source =
+        createSourceWithRawCache(mock(StorageProvider.class), "s3://bucket/.raw", tempDir.toString());
     try {
       Method m = HttpSource.class.getDeclaredMethod("buildRawCachePath", Map.class);
       m.setAccessible(true);
@@ -728,8 +715,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= hasValidRawCache =======
 
-  @Test
-  void testHasValidRawCacheLocalExists() throws Exception {
+  @Test void testHasValidRawCacheLocalExists() throws Exception {
     Path cacheFile = tempDir.resolve("cache/resp.json");
     Files.createDirectories(cacheFile.getParent());
     Files.write(cacheFile, "{}".getBytes(StandardCharsets.UTF_8));
@@ -743,8 +729,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testHasValidRawCacheLocalMissing() throws Exception {
+  @Test void testHasValidRawCacheLocalMissing() throws Exception {
     HttpSource source = createMinimalSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("hasValidRawCache", String.class);
@@ -755,8 +740,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testHasValidRawCacheS3Exists() throws Exception {
+  @Test void testHasValidRawCacheS3Exists() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.exists("s3://bucket/test.json")).thenReturn(true);
     HttpSource source = createSourceWithRawCache(sp, "s3://bucket/.raw", null);
@@ -772,8 +756,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testHasValidRawCacheS3Error() throws Exception {
+  @Test void testHasValidRawCacheS3Error() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.exists(anyString())).thenThrow(new IOException("S3 error"));
     HttpSource source = createSourceWithRawCache(sp, "s3://bucket/.raw", null);
@@ -791,8 +774,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= readRawCache =======
 
-  @Test
-  void testReadRawCacheLocal() throws Exception {
+  @Test void testReadRawCacheLocal() throws Exception {
     Path f = tempDir.resolve("raw/resp.json");
     Files.createDirectories(f.getParent());
     Files.write(f, "{\"d\":1}".getBytes(StandardCharsets.UTF_8));
@@ -806,8 +788,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testReadRawCacheS3() throws Exception {
+  @Test void testReadRawCacheS3() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.openInputStream("s3://b/test.json"))
         .thenReturn(new ByteArrayInputStream("{\"x\":1}".getBytes(StandardCharsets.UTF_8)));
@@ -826,13 +807,12 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= writeRawCache =======
 
-  @Test
-  void testWriteRawCacheLocal() throws Exception {
-    HttpSource source = createSourceWithRawCache(null,
-        tempDir.toString() + "/raw", tempDir.toString());
+  @Test void testWriteRawCacheLocal() throws Exception {
+    HttpSource source =
+        createSourceWithRawCache(null, tempDir.toString() + "/raw", tempDir.toString());
     try {
-      Method m = HttpSource.class.getDeclaredMethod("writeRawCache",
-          String.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
       m.setAccessible(true);
       String cp = tempDir.resolve("raw/test/resp.json").toString();
       m.invoke(source, cp, "{\"cached\":true}");
@@ -842,16 +822,15 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testWriteRawCacheS3() throws Exception {
+  @Test void testWriteRawCacheS3() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     HttpSource source = createSourceWithRawCache(sp, "s3://b/.raw", null);
     try {
       Field fld = HttpSource.class.getDeclaredField("storageProvider");
       fld.setAccessible(true);
       fld.set(source, sp);
-      Method m = HttpSource.class.getDeclaredMethod("writeRawCache",
-          String.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
       m.setAccessible(true);
       m.invoke(source, "s3://b/.raw/test/resp.json", "{\"data\":1}");
     } finally {
@@ -859,8 +838,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testWriteRawCacheS3Error() throws Exception {
+  @Test void testWriteRawCacheS3Error() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     org.mockito.Mockito.doThrow(new IOException("S3 err")).when(sp).createDirectories(anyString());
     HttpSource source = createSourceWithRawCache(sp, "s3://b/.raw", null);
@@ -868,8 +846,8 @@ class HttpSourceDeepCoverageTest3 {
       Field fld = HttpSource.class.getDeclaredField("storageProvider");
       fld.setAccessible(true);
       fld.set(source, sp);
-      Method m = HttpSource.class.getDeclaredMethod("writeRawCache",
-          String.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
       m.setAccessible(true);
       m.invoke(source, "s3://b/.raw/test/resp.json", "data");
     } finally {
@@ -879,12 +857,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= cacheResponseString =======
 
-  @Test
-  void testCacheResponseStringLocal() throws Exception {
+  @Test void testCacheResponseStringLocal() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("cacheResponseString",
-          String.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
       m.setAccessible(true);
       String cp = tempDir.resolve("lc/resp.json").toString();
       assertEquals(cp, m.invoke(source, "{\"ok\":true}", cp));
@@ -894,16 +871,15 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testCacheResponseStringS3() throws Exception {
+  @Test void testCacheResponseStringS3() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     HttpSource source = createSourceWithRawCache(sp, "s3://b/.raw", null);
     try {
       Field fld = HttpSource.class.getDeclaredField("storageProvider");
       fld.setAccessible(true);
       fld.set(source, sp);
-      Method m = HttpSource.class.getDeclaredMethod("cacheResponseString",
-          String.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
       m.setAccessible(true);
       assertEquals("s3://b/.raw/resp.json", m.invoke(source, "content", "s3://b/.raw/resp.json"));
     } finally {
@@ -913,8 +889,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= readFromCache =======
 
-  @Test
-  void testReadFromCacheLocal() throws Exception {
+  @Test void testReadFromCacheLocal() throws Exception {
     Path f = tempDir.resolve("rc/data.json");
     Files.createDirectories(f.getParent());
     Files.write(f, "{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
@@ -928,8 +903,7 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testReadFromCacheS3() throws Exception {
+  @Test void testReadFromCacheS3() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.openInputStream("s3://b/d.json"))
         .thenReturn(new ByteArrayInputStream("s3data".getBytes(StandardCharsets.UTF_8)));
@@ -948,12 +922,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= cacheResponse =======
 
-  @Test
-  void testCacheResponseLocal() throws Exception {
+  @Test void testCacheResponseLocal() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("cacheResponse",
-          InputStream.class, String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("cacheResponse", InputStream.class, String.class);
       m.setAccessible(true);
       InputStream is = new ByteArrayInputStream("cached".getBytes(StandardCharsets.UTF_8));
       String cp = tempDir.resolve("cr/file.json").toString();
@@ -966,26 +939,30 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= shouldRetry =======
 
-  @Test
-  void testShouldRetry() throws Exception {
+  @Test void testShouldRetry() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .rateLimit(HttpSourceConfig.RateLimitConfig.fromMap(
+        .rateLimit(
+            HttpSourceConfig.RateLimitConfig.fromMap(
             map("requestsPerSecond", 10, "maxRetries", 3,
                 "retryOn", Arrays.asList(429, 503))))
         .build();
     HttpSource source = new HttpSource(config);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("shouldRetry",
-          IOException.class, HttpSourceConfig.RateLimitConfig.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class, HttpSourceConfig.RateLimitConfig.class);
       m.setAccessible(true);
-      assertTrue((Boolean) m.invoke(source,
+      assertTrue(
+          (Boolean) m.invoke(source,
           new IOException("HTTP 429: Too Many"), config.getRateLimit()));
-      assertTrue((Boolean) m.invoke(source,
+      assertTrue(
+          (Boolean) m.invoke(source,
           new IOException("HTTP 503: Unavailable"), config.getRateLimit()));
-      assertFalse((Boolean) m.invoke(source,
+      assertFalse(
+          (Boolean) m.invoke(source,
           new IOException("HTTP 404: Not Found"), config.getRateLimit()));
-      assertFalse((Boolean) m.invoke(source,
+      assertFalse(
+          (Boolean) m.invoke(source,
           new IOException((String) null), config.getRateLimit()));
     } finally {
       source.close();
@@ -994,8 +971,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= readResponse =======
 
-  @Test
-  void testReadResponse() throws Exception {
+  @Test void testReadResponse() throws Exception {
     HttpSource source = createMinimalSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("readResponse", InputStream.class);
@@ -1012,22 +988,21 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= transformResponse =======
 
-  @Test
-  void testTransformResponseNoTransformer() throws Exception {
+  @Test void testTransformResponseNoTransformer() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("transformResponse",
-          String.class, String.class, Map.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
       m.setAccessible(true);
-      assertEquals("orig", m.invoke(source, "orig", "http://u",
+      assertEquals(
+          "orig", m.invoke(source, "orig", "http://u",
           Collections.emptyMap(), Collections.emptyMap()));
     } finally {
       source.close();
     }
   }
 
-  @Test
-  void testTransformResponseWithTransformer() throws Exception {
+  @Test void testTransformResponseWithTransformer() throws Exception {
     ResponseTransformer t = new ResponseTransformer() {
       @Override public String transform(String response, RequestContext context) {
         return response.toUpperCase();
@@ -1036,18 +1011,18 @@ class HttpSourceDeepCoverageTest3 {
     HttpSourceConfig config = HttpSourceConfig.builder().url("http://localhost/test").build();
     HttpSource source = new HttpSource(config, t);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("transformResponse",
-          String.class, String.class, Map.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
       m.setAccessible(true);
-      assertEquals("HELLO", m.invoke(source, "hello", "http://u",
+      assertEquals(
+          "HELLO", m.invoke(source, "hello", "http://u",
           Collections.emptyMap(), Collections.emptyMap()));
     } finally {
       source.close();
     }
   }
 
-  @Test
-  void testTransformResponseTransformerThrows() throws Exception {
+  @Test void testTransformResponseTransformerThrows() throws Exception {
     ResponseTransformer t = new ResponseTransformer() {
       @Override public String transform(String response, RequestContext ctx) {
         throw new RuntimeException("Transform error");
@@ -1056,8 +1031,8 @@ class HttpSourceDeepCoverageTest3 {
     HttpSourceConfig config = HttpSourceConfig.builder().url("http://localhost/test").build();
     HttpSource source = new HttpSource(config, t);
     try {
-      Method m = HttpSource.class.getDeclaredMethod("transformResponse",
-          String.class, String.class, Map.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("transformResponse", String.class, String.class, Map.class, Map.class);
       m.setAccessible(true);
       try {
         m.invoke(source, "data", "http://u", Collections.emptyMap(), Collections.emptyMap());
@@ -1072,10 +1047,9 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= computeLocalRawCachePath =======
 
-  @Test
-  void testComputeLocalRawCachePathVariants() throws Exception {
-    HttpSource source = new HttpSource(
-        HttpSourceConfig.builder().url("http://localhost/test").build(),
+  @Test void testComputeLocalRawCachePathVariants() throws Exception {
+    HttpSource source =
+        new HttpSource(HttpSourceConfig.builder().url("http://localhost/test").build(),
         (HooksConfig) null, null, null, tempDir.toString());
     try {
       Method m = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
@@ -1092,8 +1066,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= isLocalPath =======
 
-  @Test
-  void testIsLocalPath() throws Exception {
+  @Test void testIsLocalPath() throws Exception {
     Method m = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
     m.setAccessible(true);
     assertTrue((Boolean) m.invoke(null, "/tmp/test"));
@@ -1104,10 +1077,9 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= isRawCacheEnabled =======
 
-  @Test
-  void testIsRawCacheEnabled() throws Exception {
-    HttpSource src1 = createSourceWithRawCache(
-        mock(StorageProvider.class), "s3://b/.raw", tempDir.toString());
+  @Test void testIsRawCacheEnabled() throws Exception {
+    HttpSource src1 =
+        createSourceWithRawCache(mock(StorageProvider.class), "s3://b/.raw", tempDir.toString());
     try {
       Method m = HttpSource.class.getDeclaredMethod("isRawCacheEnabled");
       m.setAccessible(true);
@@ -1117,8 +1089,8 @@ class HttpSourceDeepCoverageTest3 {
     }
 
     StorageProvider sp = mock(StorageProvider.class);
-    HttpSource src2 = new HttpSource(
-        HttpSourceConfig.builder().url("http://localhost/test")
+    HttpSource src2 =
+        new HttpSource(HttpSourceConfig.builder().url("http://localhost/test")
             .rawCache(HttpSourceConfig.RawCacheConfig.enabled()).build(),
         (HooksConfig) null, sp, "s3://b/.raw", null);
     try {
@@ -1132,8 +1104,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= sanitizePathComponent =======
 
-  @Test
-  void testSanitizePathComponent() throws Exception {
+  @Test void testSanitizePathComponent() throws Exception {
     HttpSource source = createMinimalSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("sanitizePathComponent", String.class);
@@ -1148,12 +1119,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= buildUrlWithParams =======
 
-  @Test
-  void testBuildUrlWithParams() throws Exception {
+  @Test void testBuildUrlWithParams() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("buildUrlWithParams",
-          String.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("buildUrlWithParams", String.class, Map.class);
       m.setAccessible(true);
       assertEquals("http://e.com", m.invoke(source, "http://e.com", Collections.emptyMap()));
       assertEquals("http://e.com", m.invoke(source, "http://e.com", null));
@@ -1169,12 +1139,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= buildCacheKey =======
 
-  @Test
-  void testBuildCacheKey() throws Exception {
+  @Test void testBuildCacheKey() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("buildCacheKey",
-          String.class, Map.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("buildCacheKey", String.class, Map.class);
       m.setAccessible(true);
 
       Map<String, String> p = new LinkedHashMap<String, String>();
@@ -1192,23 +1161,24 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= resolveDelimiter =======
 
-  @Test
-  void testResolveDelimiter() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+  @Test void testResolveDelimiter() throws Exception {
+    Method m =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     m.setAccessible(true);
-    assertEquals(',', m.invoke(null,
+    assertEquals(
+        ',', m.invoke(null,
         HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV"))));
-    assertEquals('\t', m.invoke(null,
+    assertEquals(
+        '\t', m.invoke(null,
         HttpSourceConfig.ResponseConfig.fromMap(map("format", "TSV"))));
-    assertEquals('|', m.invoke(null,
+    assertEquals(
+        '|', m.invoke(null,
         HttpSourceConfig.ResponseConfig.fromMap(map("format", "CSV", "delimiter", "|"))));
   }
 
   // ======= parseValue =======
 
-  @Test
-  void testParseValue() throws Exception {
+  @Test void testParseValue() throws Exception {
     HttpSource source = createMinimalSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("parseValue", String.class);
@@ -1225,12 +1195,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= parseDelimitedLine =======
 
-  @Test
-  void testParseDelimitedLine() throws Exception {
+  @Test void testParseDelimitedLine() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-          String.class, char.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
       m.setAccessible(true);
       String[] r = (String[]) m.invoke(source, "\"A\",\"has,comma\",\"has\"\"q\"", ',');
       assertEquals(3, r.length);
@@ -1243,8 +1212,7 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= collectFiles =======
 
-  @Test
-  void testCollectFiles() throws Exception {
+  @Test void testCollectFiles() throws Exception {
     Method m = HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
     m.setAccessible(true);
     Path sub = tempDir.resolve("sub");
@@ -1270,15 +1238,14 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= LazyCSVIterator: filter paths =======
 
-  @Test
-  void testLazyCSVIteratorWithFilter() throws Exception {
-    HttpSourceConfig.RowFilterConfig filter = HttpSourceConfig.RowFilterConfig.fromMap(
-        map("column", "state", "pattern", "NY|CA"));
+  @Test void testLazyCSVIteratorWithFilter() throws Exception {
+    HttpSourceConfig.RowFilterConfig filter =
+        HttpSourceConfig.RowFilterConfig.fromMap(map("column", "state", "pattern", "NY|CA"));
     String csv = "name,state,value\nAlice,NY,100\nBob,TX,200\nCarol,CA,300\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', filter, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', filter, null, true, null);
     assertTrue(iter.hasNext());
     assertEquals("Alice", iter.next().get("name"));
     assertTrue(iter.hasNext());
@@ -1287,47 +1254,45 @@ class HttpSourceDeepCoverageTest3 {
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorFilterMaxRows() throws Exception {
-    HttpSourceConfig.RowFilterConfig filter = HttpSourceConfig.RowFilterConfig.fromMap(
-        map("column", "name", "pattern", ".*", "maxRows", 2));
+  @Test void testLazyCSVIteratorFilterMaxRows() throws Exception {
+    HttpSourceConfig.RowFilterConfig filter =
+        HttpSourceConfig.RowFilterConfig.fromMap(map("column", "name", "pattern", ".*", "maxRows", 2));
     String csv = "name,value\nA,1\nB,2\nC,3\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', filter, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', filter, null, true, null);
     iter.next();
     iter.next();
     assertFalse(iter.hasNext());
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorFilterColumnOutOfRange() throws Exception {
-    HttpSourceConfig.RowFilterConfig filter = HttpSourceConfig.RowFilterConfig.fromMap(
-        map("column", "extra", "pattern", ".*"));
+  @Test void testLazyCSVIteratorFilterColumnOutOfRange() throws Exception {
+    HttpSourceConfig.RowFilterConfig filter =
+        HttpSourceConfig.RowFilterConfig.fromMap(map("column", "extra", "pattern", ".*"));
     String csv = "name,extra\nA\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', filter, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', filter, null, true, null);
     assertFalse(iter.hasNext());
     source.close();
   }
 
   // ======= LazyCSVIterator: wide-to-narrow =======
 
-  @Test
-  void testLazyCSVIteratorWideToNarrow() throws Exception {
-    HttpSourceConfig.WideToNarrowConfig wtn = HttpSourceConfig.WideToNarrowConfig.fromMap(
-        map("keyColumns", Arrays.asList("region"),
+  @Test void testLazyCSVIteratorWideToNarrow() throws Exception {
+    HttpSourceConfig.WideToNarrowConfig wtn =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(
+            map("keyColumns", Arrays.asList("region"),
             "keyColumnName", "year", "valueColumnName", "amount",
             "skipValues", Arrays.asList("N/A", "")));
     String csv = "region,2020,2021\nUS,100,N/A\nEU,200,300\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, wtn, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, wtn, true, null);
     int count = 0;
     while (iter.hasNext()) {
       Map<String, Object> row = iter.next();
@@ -1339,19 +1304,19 @@ class HttpSourceDeepCoverageTest3 {
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorWideToNarrowColumnMapping() throws Exception {
+  @Test void testLazyCSVIteratorWideToNarrowColumnMapping() throws Exception {
     Map<String, String> colMap = new LinkedHashMap<String, String>();
     colMap.put("region", "area");
-    HttpSourceConfig.WideToNarrowConfig wtn = HttpSourceConfig.WideToNarrowConfig.fromMap(
-        map("keyColumns", Arrays.asList("region"),
+    HttpSourceConfig.WideToNarrowConfig wtn =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(
+            map("keyColumns", Arrays.asList("region"),
             "keyColumnName", "year", "valueColumnName", "amount",
             "columnMapping", colMap));
     String csv = "region,2020\nUS,100\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, wtn, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, wtn, true, null);
     assertTrue(iter.hasNext());
     Map<String, Object> row = iter.next();
     assertEquals("US", row.get("area"));
@@ -1359,18 +1324,18 @@ class HttpSourceDeepCoverageTest3 {
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorWideToNarrowMaxRows() throws Exception {
-    HttpSourceConfig.WideToNarrowConfig wtn = HttpSourceConfig.WideToNarrowConfig.fromMap(
-        map("keyColumns", Arrays.asList("region"),
+  @Test void testLazyCSVIteratorWideToNarrowMaxRows() throws Exception {
+    HttpSourceConfig.WideToNarrowConfig wtn =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(
+            map("keyColumns", Arrays.asList("region"),
             "keyColumnName", "year", "valueColumnName", "amount"));
-    HttpSourceConfig.RowFilterConfig filter = HttpSourceConfig.RowFilterConfig.fromMap(
-        map("column", "region", "pattern", ".*", "maxRows", 2));
+    HttpSourceConfig.RowFilterConfig filter =
+        HttpSourceConfig.RowFilterConfig.fromMap(map("column", "region", "pattern", ".*", "maxRows", 2));
     String csv = "region,2020,2021\nUS,100,200\nEU,300,400\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', filter, wtn, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', filter, wtn, true, null);
     int count = 0;
     while (iter.hasNext()) {
       iter.next();
@@ -1383,35 +1348,32 @@ class HttpSourceDeepCoverageTest3 {
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorQuotedFilterValues() throws Exception {
-    HttpSourceConfig.RowFilterConfig filter = HttpSourceConfig.RowFilterConfig.fromMap(
-        map("column", "state", "pattern", "NY"));
+  @Test void testLazyCSVIteratorQuotedFilterValues() throws Exception {
+    HttpSourceConfig.RowFilterConfig filter =
+        HttpSourceConfig.RowFilterConfig.fromMap(map("column", "state", "pattern", "NY"));
     String csv = "name,state\n\"Alice\",\"NY\"\n\"Bob\",\"TX\"\n";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', filter, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', filter, null, true, null);
     assertTrue(iter.hasNext());
     assertEquals("Alice", iter.next().get("name"));
     assertFalse(iter.hasNext());
     source.close();
   }
 
-  @Test
-  void testLazyCSVIteratorHeaderlessEmpty() throws Exception {
+  @Test void testLazyCSVIteratorHeaderlessEmpty() throws Exception {
     InputStream is = new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalSource();
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, false, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, false, null);
     assertFalse(iter.hasNext());
     source.close();
   }
 
   // ======= create factory methods =======
 
-  @Test
-  void testCreateFactoryMethods() {
+  @Test void testCreateFactoryMethods() {
     HttpSourceConfig config = HttpSourceConfig.builder().url("http://localhost/test").build();
     HttpSource s1 = HttpSource.create(config);
     assertEquals("http", s1.getType());

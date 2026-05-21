@@ -44,8 +44,8 @@ class VariableResolverTest {
     Map<String, String> variables = new HashMap<String, String>();
     variables.put("year", "2024");
     variables.put("region", "NORTH");
-    String result = VariableResolver.substitute(
-        "https://api.example.com/{year}/{region}/data", variables);
+    String result =
+        VariableResolver.substitute("https://api.example.com/{year}/{region}/data", variables);
     assertEquals("https://api.example.com/2024/NORTH/data", result);
   }
 
@@ -89,8 +89,8 @@ class VariableResolverTest {
   @Test void testSubstituteEnvVarPattern() {
     // Test {env:NAME:default} pattern
     Map<String, String> variables = new HashMap<String, String>();
-    String result = VariableResolver.substitute(
-        "{env:UNLIKELY_VARIABLE_NAME_12345:fallback}", variables);
+    String result =
+        VariableResolver.substitute("{env:UNLIKELY_VARIABLE_NAME_12345:fallback}", variables);
     assertEquals("fallback", result);
   }
 
@@ -105,21 +105,21 @@ class VariableResolverTest {
   }
 
   @Test void testResolveEnvVarsWithDefault() {
-    String result = VariableResolver.resolveEnvVars(
-        "${UNLIKELY_VARIABLE_XYZ123:-defaultVal}");
+    String result =
+        VariableResolver.resolveEnvVars("${UNLIKELY_VARIABLE_XYZ123:-defaultVal}");
     assertEquals("defaultVal", result);
   }
 
   @Test void testResolveEnvVarsWithColonDefault() {
-    String result = VariableResolver.resolveEnvVars(
-        "${UNLIKELY_VARIABLE_ABC456:colonDefault}");
+    String result =
+        VariableResolver.resolveEnvVars("${UNLIKELY_VARIABLE_ABC456:colonDefault}");
     assertEquals("colonDefault", result);
   }
 
   @Test void testResolveEnvVarsNoDefault() {
     // Unresolved variable with no default keeps placeholder
-    String result = VariableResolver.resolveEnvVars(
-        "${UNLIKELY_VARIABLE_NO_DEFAULT_999}");
+    String result =
+        VariableResolver.resolveEnvVars("${UNLIKELY_VARIABLE_NO_DEFAULT_999}");
     assertEquals("${UNLIKELY_VARIABLE_NO_DEFAULT_999}", result);
   }
 
@@ -153,8 +153,8 @@ class VariableResolverTest {
   }
 
   @Test void testResolveIntegerFromEnvDefault() {
-    Integer result = VariableResolver.resolveInteger(
-        "{env:UNLIKELY_INTEGER_VAR_789:2020}");
+    Integer result =
+        VariableResolver.resolveInteger("{env:UNLIKELY_INTEGER_VAR_789:2020}");
     assertNotNull(result);
     assertEquals(2020, result.intValue());
   }
@@ -171,8 +171,8 @@ class VariableResolverTest {
 
   @Test void testResolveEnvVarsIterativeResolution() {
     // Test that nested variables are resolved iteratively
-    String result = VariableResolver.resolveEnvVars(
-        "${UNLIKELY_OUTER_VAR:-inner_${UNLIKELY_INNER_VAR:-resolved}}");
+    String result =
+        VariableResolver.resolveEnvVars("${UNLIKELY_OUTER_VAR:-inner_${UNLIKELY_INNER_VAR:-resolved}}");
     assertEquals("inner_resolved", result);
   }
 }

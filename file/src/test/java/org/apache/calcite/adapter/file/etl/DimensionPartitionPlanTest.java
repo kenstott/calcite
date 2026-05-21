@@ -61,8 +61,8 @@ class DimensionPartitionPlanTest {
     nyCombos.add(ny1);
     prefixByContext.put("NY", nyCombos);
 
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "state_abbr",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("state_abbr",
         Arrays.asList("CA", "NY"),
         Arrays.asList("ori"),
         Arrays.asList(customConfig),
@@ -99,8 +99,8 @@ class DimensionPartitionPlanTest {
     combos.add(combo);
     prefixByContext.put("2020", combos);
 
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "year",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("year",
         Arrays.asList("2020"),
         Arrays.asList("dataset", "variables"),
         Arrays.asList(customConfig1, customConfig2),
@@ -118,8 +118,8 @@ class DimensionPartitionPlanTest {
     Map<String, List<Map<String, String>>> prefixByContext =
         new LinkedHashMap<String, List<Map<String, String>>>();
 
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "key",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("key",
         Collections.<String>emptyList(),
         Collections.<String>emptyList(),
         Collections.<DimensionConfig>emptyList(),
@@ -133,8 +133,8 @@ class DimensionPartitionPlanTest {
     Map<String, List<Map<String, String>>> prefixByContext =
         new LinkedHashMap<String, List<Map<String, String>>>();
 
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "key",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("key",
         Collections.<String>emptyList(),
         Collections.<String>emptyList(),
         Collections.<DimensionConfig>emptyList(),
@@ -154,8 +154,8 @@ class DimensionPartitionPlanTest {
     prefixByContext.put("CA", Collections.<Map<String, String>>emptyList());
     prefixByContext.put("NY", Collections.<Map<String, String>>emptyList());
 
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "state",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("state",
         Arrays.asList("CA", "NY"),
         Arrays.asList("ori"),
         Arrays.asList(config),
@@ -168,8 +168,8 @@ class DimensionPartitionPlanTest {
   }
 
   @Test void testContextValuesAreImmutable() {
-    DimensionPartitionPlan plan = new DimensionPartitionPlan(
-        "key",
+    DimensionPartitionPlan plan =
+        new DimensionPartitionPlan("key",
         Arrays.asList("A", "B"),
         Collections.<String>emptyList(),
         Collections.<DimensionConfig>emptyList(),

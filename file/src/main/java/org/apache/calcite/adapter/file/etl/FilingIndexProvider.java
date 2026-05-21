@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 

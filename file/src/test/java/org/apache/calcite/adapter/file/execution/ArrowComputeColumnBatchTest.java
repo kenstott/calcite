@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +65,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCreateBatchAndClose() {
+  @Test public void testCreateBatchAndClose() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     // ArrowComputeColumnBatch takes ownership and closes the root
     ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root);
@@ -75,8 +73,7 @@ public class ArrowComputeColumnBatchTest {
     // No exception means success
   }
 
-  @Test
-  public void testGetArrowIntColumn() {
+  @Test public void testGetArrowIntColumn() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeIntColumn intCol =
@@ -85,8 +82,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetArrowIntColumnOnNonIntThrows() {
+  @Test public void testGetArrowIntColumnOnNonIntThrows() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -94,8 +90,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetArrowDoubleColumn() {
+  @Test public void testGetArrowDoubleColumn() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeDoubleColumn doubleCol =
@@ -104,8 +99,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetArrowDoubleColumnOnNonDoubleThrows() {
+  @Test public void testGetArrowDoubleColumnOnNonDoubleThrows() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -113,8 +107,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnSumArrowCompute() {
+  @Test public void testIntColumnSumArrowCompute() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeIntColumn intCol =
@@ -126,8 +119,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnSumWithNulls() {
+  @Test public void testIntColumnSumWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeIntColumn intCol =
@@ -138,8 +130,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnFilterArrowCompute() {
+  @Test public void testIntColumnFilterArrowCompute() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeIntColumn intCol =
@@ -150,8 +141,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnSortArrowCompute() {
+  @Test public void testIntColumnSortArrowCompute() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeIntColumn intCol =
@@ -162,8 +152,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnComputeStatisticsGPU() {
+  @Test public void testDoubleColumnComputeStatisticsGPU() {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (ArrowComputeColumnBatch batch = new ArrowComputeColumnBatch(root)) {
       ArrowComputeColumnBatch.ArrowComputeDoubleColumn doubleCol =
@@ -181,14 +170,14 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testDoubleColumnStatisticsWithSingleValue() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value",
+  @Test public void testDoubleColumnStatisticsWithSingleValue() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("value",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     Float8Vector vector = (Float8Vector) root.getVector("value");
@@ -209,8 +198,7 @@ public class ArrowComputeColumnBatchTest {
     }
   }
 
-  @Test
-  public void testComputeStatisticsToString() {
+  @Test public void testComputeStatisticsToString() {
     ArrowComputeColumnBatch.ComputeStatistics stats =
         new ArrowComputeColumnBatch.ComputeStatistics(10.0, 1.0, 5.0, 2.5, 4);
     String str = stats.toString();
@@ -222,11 +210,9 @@ public class ArrowComputeColumnBatchTest {
     assertTrue(str.contains("4"), "Should contain count");
   }
 
-  @Test
-  public void testLargeIntColumnSum() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+  @Test public void testLargeIntColumnSum() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");
@@ -250,13 +236,13 @@ public class ArrowComputeColumnBatchTest {
   // --- Helper methods ---
 
   private VectorSchemaRoot createIntDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector intV = (IntVector) root.getVector("id");
@@ -272,9 +258,8 @@ public class ArrowComputeColumnBatchTest {
   }
 
   private VectorSchemaRoot createIntBatchWithNulls(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");

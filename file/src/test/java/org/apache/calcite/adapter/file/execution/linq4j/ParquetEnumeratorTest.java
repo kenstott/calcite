@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file.execution.linq4j;
 
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Sources;
@@ -155,8 +154,8 @@ class ParquetEnumeratorTest {
     // Use reflection to call the private method directly on any existing enumerator instance
     // Since the method only looks at the Source path, we create a CSV-based enumerator
     // and invoke detectFileFormat on a different source
-    Method detectMethod = ParquetEnumerator.class.getDeclaredMethod(
-        "detectFileFormat", org.apache.calcite.util.Source.class);
+    Method detectMethod =
+        ParquetEnumerator.class.getDeclaredMethod("detectFileFormat", org.apache.calcite.util.Source.class);
     detectMethod.setAccessible(true);
 
     // We need an instance, so use a CSV file to avoid non-streaming init issues
@@ -175,18 +174,18 @@ class ParquetEnumeratorTest {
   // -----------------------------------------------------------------------
 
   @Test void testCsvEnumeratorBasicIteration() throws Exception {
-    File csvFile = createCsvFile("iter.csv",
-        "name:string,value:int",
+    File csvFile =
+        createCsvFile("iter.csv", "name:string,value:int",
         "alpha,1",
         "beta,2",
         "gamma,3");
-    List<RelDataType> fieldTypes = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> fieldTypes =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     int[] projected = {0, 1};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
 
     try {
       // Before moveNext, current should return null
@@ -208,8 +207,8 @@ class ParquetEnumeratorTest {
   }
 
   @Test void testCancelFlagStopsIteration() throws Exception {
-    File csvFile = createCsvFile("cancel.csv",
-        "name:string",
+    File csvFile =
+        createCsvFile("cancel.csv", "name:string",
         "a",
         "b",
         "c");
@@ -217,8 +216,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(true); // pre-cancelled
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
 
     try {
       assertFalse(enumerator.moveNext(), "Should not iterate when cancelled");
@@ -228,16 +227,16 @@ class ParquetEnumeratorTest {
   }
 
   @Test void testResetResetsState() throws Exception {
-    File csvFile = createCsvFile("reset.csv",
-        "name:string",
+    File csvFile =
+        createCsvFile("reset.csv", "name:string",
         "a",
         "b");
     List<RelDataType> fieldTypes = createFieldTypes(SqlTypeName.VARCHAR);
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
 
     try {
       // Advance through items
@@ -315,8 +314,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
     try {
       // Iterate to load data
       while (enumerator.moveNext()) {
@@ -401,8 +400,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
     try {
       while (enumerator.moveNext()) {
         // consume to load batch
@@ -438,8 +437,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, "UNCHANGED");
     try {
       while (enumerator.moveNext()) {
         // consume to load batch
@@ -477,8 +476,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 500);
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 500);
     try {
       Field batchSizeField = ParquetEnumerator.class.getDeclaredField("batchSize");
       batchSizeField.setAccessible(true);
@@ -494,8 +493,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, "TO_LOWER");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, "TO_LOWER");
     try {
       Field casingField = ParquetEnumerator.class.getDeclaredField("columnNameCasing");
       casingField.setAccessible(true);
@@ -511,8 +510,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 200, "TO_UPPER");
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 200, "TO_UPPER");
     try {
       Field batchSizeField = ParquetEnumerator.class.getDeclaredField("batchSize");
       batchSizeField.setAccessible(true);
@@ -532,8 +531,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, 1024L);
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected, 100, 1024L);
     try {
       Field thresholdField = ParquetEnumerator.class.getDeclaredField("memoryThreshold");
       thresholdField.setAccessible(true);
@@ -549,8 +548,8 @@ class ParquetEnumeratorTest {
     int[] projected = {0};
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
-    ParquetEnumerator<Object[]> enumerator = new ParquetEnumerator<Object[]>(
-        Sources.of(csvFile), cancelFlag, fieldTypes, projected);
+    ParquetEnumerator<Object[]> enumerator =
+        new ParquetEnumerator<Object[]>(Sources.of(csvFile), cancelFlag, fieldTypes, projected);
     try {
       Field batchSizeField = ParquetEnumerator.class.getDeclaredField("batchSize");
       batchSizeField.setAccessible(true);

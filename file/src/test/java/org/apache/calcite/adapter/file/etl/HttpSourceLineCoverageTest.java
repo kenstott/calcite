@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Tag;
@@ -26,7 +24,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
@@ -39,7 +36,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -98,16 +93,14 @@ class HttpSourceLineCoverageTest {
 
   // ======= computeLocalRawCachePath tests =======
 
-  @Test
-  void testComputeLocalRawCachePathWithNullRawCachePath() throws Exception {
+  @Test void testComputeLocalRawCachePathWithNullRawCachePath() throws Exception {
     HttpSource source = createSourceWithRawCache(null, null);
     Object localPath = getPrivateField(source, "localRawCachePath");
     assertNull(localPath, "localRawCachePath should be null when rawCachePath is null");
     source.close();
   }
 
-  @Test
-  void testComputeLocalRawCachePathWithS3Path() throws Exception {
+  @Test void testComputeLocalRawCachePathWithS3Path() throws Exception {
     HttpSource source = createSourceWithRawCache("s3://my-bucket/raw/data", null);
     Object localPath = getPrivateField(source, "localRawCachePath");
     assertNotNull(localPath, "localRawCachePath should be computed for S3 paths");
@@ -116,8 +109,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testComputeLocalRawCachePathWithGsPath() throws Exception {
+  @Test void testComputeLocalRawCachePathWithGsPath() throws Exception {
     HttpSource source = createSourceWithRawCache("gs://my-bucket/raw/data", null);
     Object localPath = getPrivateField(source, "localRawCachePath");
     assertNotNull(localPath, "localRawCachePath should be computed for GCS paths");
@@ -126,8 +118,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testComputeLocalRawCachePathWithOperatingDirectory() throws Exception {
+  @Test void testComputeLocalRawCachePathWithOperatingDirectory() throws Exception {
     String opDir = tempDir.resolve("opdir").toString();
     HttpSource source = createSourceWithRawCache("s3://bucket/path", opDir);
     Object localPath = getPrivateField(source, "localRawCachePath");
@@ -137,16 +128,14 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testComputeLocalRawCachePathWithEmptySuffix() throws Exception {
+  @Test void testComputeLocalRawCachePathWithEmptySuffix() throws Exception {
     HttpSource source = createSourceWithRawCache("s3://bucket", null);
     Object localPath = getPrivateField(source, "localRawCachePath");
     assertNotNull(localPath);
     source.close();
   }
 
-  @Test
-  void testComputeLocalRawCachePathWithLocalPath() throws Exception {
+  @Test void testComputeLocalRawCachePathWithLocalPath() throws Exception {
     String localDir = tempDir.resolve("local-cache").toString();
     HttpSource source = createSourceWithRawCache(localDir, null);
     Object localPath = getPrivateField(source, "localRawCachePath");
@@ -156,8 +145,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= buildRawCachePath tests =======
 
-  @Test
-  void testBuildRawCachePath() throws Exception {
+  @Test void testBuildRawCachePath() throws Exception {
     String opDir = tempDir.resolve("op").toString();
     HttpSource source = createSourceWithRawCache("s3://bucket/raw", opDir);
 
@@ -165,8 +153,8 @@ class HttpSourceLineCoverageTest {
     vars.put("year", "2024");
     vars.put("region", "NORTH");
 
-    String result = (String) invokePrivate(source, "buildRawCachePath",
-        new Class[]{Map.class}, vars);
+    String result =
+        (String) invokePrivate(source, "buildRawCachePath", new Class[]{Map.class}, vars);
     assertNotNull(result);
     assertTrue(result.contains("region=NORTH"), "Should contain region partition: " + result);
     assertTrue(result.contains("year=2024"), "Should contain year partition: " + result);
@@ -174,14 +162,13 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testBuildRawCachePathWithEmptyVariables() throws Exception {
+  @Test void testBuildRawCachePathWithEmptyVariables() throws Exception {
     String opDir = tempDir.resolve("op2").toString();
     HttpSource source = createSourceWithRawCache("s3://bucket/raw", opDir);
 
     Map<String, String> vars = new HashMap<String, String>();
-    String result = (String) invokePrivate(source, "buildRawCachePath",
-        new Class[]{Map.class}, vars);
+    String result =
+        (String) invokePrivate(source, "buildRawCachePath", new Class[]{Map.class}, vars);
     assertNotNull(result);
     assertTrue(result.endsWith("response.json"));
     source.close();
@@ -189,46 +176,42 @@ class HttpSourceLineCoverageTest {
 
   // ======= hasValidRawCache tests =======
 
-  @Test
-  void testHasValidRawCacheLocalFileExists() throws Exception {
+  @Test void testHasValidRawCacheLocalFileExists() throws Exception {
     File cacheFile = tempDir.resolve("cached-response.json").toFile();
     Files.write(cacheFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
 
     HttpSource source = createMinimalSource();
-    Boolean result = (Boolean) invokePrivate(source, "hasValidRawCache",
-        new Class[]{String.class}, cacheFile.getAbsolutePath());
+    Boolean result =
+        (Boolean) invokePrivate(source, "hasValidRawCache", new Class[]{String.class}, cacheFile.getAbsolutePath());
     assertTrue(result, "Should return true when local file exists");
     source.close();
   }
 
-  @Test
-  void testHasValidRawCacheLocalFileNotExists() throws Exception {
+  @Test void testHasValidRawCacheLocalFileNotExists() throws Exception {
     HttpSource source = createMinimalSource();
-    Boolean result = (Boolean) invokePrivate(source, "hasValidRawCache",
-        new Class[]{String.class}, tempDir.resolve("nonexistent.json").toString());
+    Boolean result =
+        (Boolean) invokePrivate(source, "hasValidRawCache", new Class[]{String.class}, tempDir.resolve("nonexistent.json").toString());
     assertFalse(result, "Should return false when local file does not exist");
     source.close();
   }
 
   // ======= readRawCache tests =======
 
-  @Test
-  void testReadRawCacheLocalFile() throws Exception {
+  @Test void testReadRawCacheLocalFile() throws Exception {
     String content = "{\"data\": [1, 2, 3]}";
     File cacheFile = tempDir.resolve("raw-cache.json").toFile();
     Files.write(cacheFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "readRawCache",
-        new Class[]{String.class}, cacheFile.getAbsolutePath());
+    String result =
+        (String) invokePrivate(source, "readRawCache", new Class[]{String.class}, cacheFile.getAbsolutePath());
     assertEquals(content, result);
     source.close();
   }
 
   // ======= writeRawCache tests =======
 
-  @Test
-  void testWriteRawCacheLocalFile() throws Exception {
+  @Test void testWriteRawCacheLocalFile() throws Exception {
     String content = "{\"key\": \"value\"}";
     File cacheFile = tempDir.resolve("subdir/write-cache.json").toFile();
 
@@ -245,14 +228,13 @@ class HttpSourceLineCoverageTest {
 
   // ======= cacheResponseString for local path =======
 
-  @Test
-  void testCacheResponseStringLocalPath() throws Exception {
+  @Test void testCacheResponseStringLocalPath() throws Exception {
     String content = "{\"result\": true}";
     String path = tempDir.resolve("cache-str/resp.json").toString();
 
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "cacheResponseString",
-        new Class[]{String.class, String.class}, content, path);
+    String result =
+        (String) invokePrivate(source, "cacheResponseString", new Class[]{String.class, String.class}, content, path);
     assertEquals(path, result);
 
     String written = new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8);
@@ -262,15 +244,14 @@ class HttpSourceLineCoverageTest {
 
   // ======= cacheResponse for local path =======
 
-  @Test
-  void testCacheResponseLocalPath() throws Exception {
+  @Test void testCacheResponseLocalPath() throws Exception {
     byte[] data = "hello world".getBytes(StandardCharsets.UTF_8);
     InputStream input = new ByteArrayInputStream(data);
     String path = tempDir.resolve("cache-resp/data.bin").toString();
 
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "cacheResponse",
-        new Class[]{InputStream.class, String.class}, input, path);
+    String result =
+        (String) invokePrivate(source, "cacheResponse", new Class[]{InputStream.class, String.class}, input, path);
     assertEquals(path, result);
 
     byte[] written = Files.readAllBytes(new File(path).toPath());
@@ -280,31 +261,28 @@ class HttpSourceLineCoverageTest {
 
   // ======= readFromCache for local path =======
 
-  @Test
-  void testReadFromCacheLocalPath() throws Exception {
+  @Test void testReadFromCacheLocalPath() throws Exception {
     String content = "{\"cached\": true}";
     File file = tempDir.resolve("read-cache.json").toFile();
     Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "readFromCache",
-        new Class[]{String.class}, file.getAbsolutePath());
+    String result =
+        (String) invokePrivate(source, "readFromCache", new Class[]{String.class}, file.getAbsolutePath());
     assertEquals(content, result);
     source.close();
   }
 
   // ======= isRawCacheEnabled tests =======
 
-  @Test
-  void testIsRawCacheEnabledWithLocalRawCachePath() throws Exception {
+  @Test void testIsRawCacheEnabledWithLocalRawCachePath() throws Exception {
     HttpSource source = createSourceWithRawCache("s3://bucket/raw", tempDir.toString());
     Boolean result = (Boolean) invokePrivate(source, "isRawCacheEnabled", new Class[]{});
     assertTrue(result, "Should be enabled when localRawCachePath is set and rawCache is enabled");
     source.close();
   }
 
-  @Test
-  void testIsRawCacheEnabledWithoutConfig() throws Exception {
+  @Test void testIsRawCacheEnabledWithoutConfig() throws Exception {
     HttpSource source = createMinimalSource();
     Boolean result = (Boolean) invokePrivate(source, "isRawCacheEnabled", new Class[]{});
     assertFalse(result, "Should be disabled when rawCache is not configured");
@@ -313,8 +291,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= isLocalPath tests =======
 
-  @Test
-  void testIsLocalPath() throws Exception {
+  @Test void testIsLocalPath() throws Exception {
     Method m = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
     m.setAccessible(true);
     assertTrue((Boolean) m.invoke(null, "/tmp/file.json"));
@@ -326,35 +303,32 @@ class HttpSourceLineCoverageTest {
 
   // ======= sanitizePathComponent tests =======
 
-  @Test
-  void testSanitizePathComponent() throws Exception {
+  @Test void testSanitizePathComponent() throws Exception {
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "sanitizePathComponent",
-        new Class[]{String.class}, "hello/world:test*file");
+    String result =
+        (String) invokePrivate(source, "sanitizePathComponent", new Class[]{String.class}, "hello/world:test*file");
     assertEquals("hello_world_test_file", result);
     source.close();
   }
 
   // ======= buildUrlWithParams tests =======
 
-  @Test
-  void testBuildUrlWithParamsEmpty() throws Exception {
+  @Test void testBuildUrlWithParamsEmpty() throws Exception {
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "buildUrlWithParams",
-        new Class[]{String.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "buildUrlWithParams", new Class[]{String.class, Map.class},
         "http://example.com/api", Collections.emptyMap());
     assertEquals("http://example.com/api", result);
     source.close();
   }
 
-  @Test
-  void testBuildUrlWithParams() throws Exception {
+  @Test void testBuildUrlWithParams() throws Exception {
     HttpSource source = createMinimalSource();
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("key", "value");
     params.put("year", "2024");
-    String result = (String) invokePrivate(source, "buildUrlWithParams",
-        new Class[]{String.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "buildUrlWithParams", new Class[]{String.class, Map.class},
         "http://example.com/api", params);
     assertTrue(result.contains("key=value"));
     assertTrue(result.contains("year=2024"));
@@ -362,13 +336,12 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testBuildUrlWithParamsExistingQuery() throws Exception {
+  @Test void testBuildUrlWithParamsExistingQuery() throws Exception {
     HttpSource source = createMinimalSource();
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("extra", "param");
-    String result = (String) invokePrivate(source, "buildUrlWithParams",
-        new Class[]{String.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "buildUrlWithParams", new Class[]{String.class, Map.class},
         "http://example.com/api?existing=true", params);
     assertTrue(result.contains("&extra=param"),
         "Should append with & when URL already has query: " + result);
@@ -377,14 +350,13 @@ class HttpSourceLineCoverageTest {
 
   // ======= buildCacheKey tests =======
 
-  @Test
-  void testBuildCacheKey() throws Exception {
+  @Test void testBuildCacheKey() throws Exception {
     HttpSource source = createMinimalSource();
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("b", "2");
     params.put("a", "1");
-    String result = (String) invokePrivate(source, "buildCacheKey",
-        new Class[]{String.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "buildCacheKey", new Class[]{String.class, Map.class},
         "http://api.com/data", params);
     assertNotNull(result);
     assertTrue(result.indexOf("a=1") < result.indexOf("b=2"),
@@ -392,11 +364,10 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testBuildCacheKeyNoParams() throws Exception {
+  @Test void testBuildCacheKeyNoParams() throws Exception {
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "buildCacheKey",
-        new Class[]{String.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "buildCacheKey", new Class[]{String.class, Map.class},
         "http://api.com/data", (Object) null);
     assertEquals("http://api.com/data", result);
     source.close();
@@ -404,68 +375,67 @@ class HttpSourceLineCoverageTest {
 
   // ======= shouldRetry tests =======
 
-  @Test
-  void testShouldRetryWith429() throws Exception {
+  @Test void testShouldRetryWith429() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .rateLimit(HttpSourceConfig.RateLimitConfig.fromMap(
+        .rateLimit(
+            HttpSourceConfig.RateLimitConfig.fromMap(
             createMap("maxRetries", 3, "retryOn", Arrays.asList(429, 503))))
         .build();
     HttpSource source = new HttpSource(config);
 
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     IOException e429 = new IOException("HTTP 429: Too Many Requests");
-    Boolean result = (Boolean) invokePrivate(source, "shouldRetry",
-        new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
+    Boolean result =
+        (Boolean) invokePrivate(source, "shouldRetry", new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
         e429, rateLimit);
     assertTrue(result, "Should retry on 429");
     source.close();
   }
 
-  @Test
-  void testShouldRetryWith503() throws Exception {
+  @Test void testShouldRetryWith503() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .rateLimit(HttpSourceConfig.RateLimitConfig.fromMap(
+        .rateLimit(
+            HttpSourceConfig.RateLimitConfig.fromMap(
             createMap("maxRetries", 3, "retryOn", Arrays.asList(429, 503))))
         .build();
     HttpSource source = new HttpSource(config);
 
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     IOException e503 = new IOException("HTTP 503: Service Unavailable");
-    Boolean result = (Boolean) invokePrivate(source, "shouldRetry",
-        new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
+    Boolean result =
+        (Boolean) invokePrivate(source, "shouldRetry", new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
         e503, rateLimit);
     assertTrue(result, "Should retry on 503");
     source.close();
   }
 
-  @Test
-  void testShouldRetryWithNonRetryable() throws Exception {
+  @Test void testShouldRetryWithNonRetryable() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .rateLimit(HttpSourceConfig.RateLimitConfig.fromMap(
+        .rateLimit(
+            HttpSourceConfig.RateLimitConfig.fromMap(
             createMap("maxRetries", 3, "retryOn", Arrays.asList(429, 503))))
         .build();
     HttpSource source = new HttpSource(config);
 
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     IOException e404 = new IOException("HTTP 404: Not Found");
-    Boolean result = (Boolean) invokePrivate(source, "shouldRetry",
-        new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
+    Boolean result =
+        (Boolean) invokePrivate(source, "shouldRetry", new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
         e404, rateLimit);
     assertFalse(result, "Should not retry on 404");
     source.close();
   }
 
-  @Test
-  void testShouldRetryWithNullMessage() throws Exception {
+  @Test void testShouldRetryWithNullMessage() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.RateLimitConfig rateLimit =
         HttpSourceConfig.RateLimitConfig.defaults();
     IOException eNull = new IOException((String) null);
-    Boolean result = (Boolean) invokePrivate(source, "shouldRetry",
-        new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
+    Boolean result =
+        (Boolean) invokePrivate(source, "shouldRetry", new Class[]{IOException.class, HttpSourceConfig.RateLimitConfig.class},
         eNull, rateLimit);
     assertFalse(result, "Should not retry when message is null");
     source.close();
@@ -473,22 +443,20 @@ class HttpSourceLineCoverageTest {
 
   // ======= readResponse tests =======
 
-  @Test
-  void testReadResponseWithNull() throws Exception {
+  @Test void testReadResponseWithNull() throws Exception {
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "readResponse",
-        new Class[]{InputStream.class}, (Object) null);
+    String result =
+        (String) invokePrivate(source, "readResponse", new Class[]{InputStream.class}, (Object) null);
     assertEquals("", result);
     source.close();
   }
 
-  @Test
-  void testReadResponseWithContent() throws Exception {
+  @Test void testReadResponseWithContent() throws Exception {
     HttpSource source = createMinimalSource();
     byte[] data = "line1\nline2\n".getBytes(StandardCharsets.UTF_8);
     InputStream input = new ByteArrayInputStream(data);
-    String result = (String) invokePrivate(source, "readResponse",
-        new Class[]{InputStream.class}, input);
+    String result =
+        (String) invokePrivate(source, "readResponse", new Class[]{InputStream.class}, input);
     assertTrue(result.contains("line1"));
     assertTrue(result.contains("line2"));
     source.close();
@@ -496,8 +464,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= serializeBody tests (form-urlencoded) =======
 
-  @Test
-  void testSerializeBodyFormUrlencoded() throws Exception {
+  @Test void testSerializeBodyFormUrlencoded() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .method(HttpSourceConfig.HttpMethod.POST)
@@ -510,8 +477,8 @@ class HttpSourceLineCoverageTest {
     body.put("password", "secret");
     Map<String, String> vars = Collections.emptyMap();
 
-    String result = (String) invokePrivate(source, "serializeBody",
-        new Class[]{Map.class, HttpSourceConfig.BodyFormat.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "serializeBody", new Class[]{Map.class, HttpSourceConfig.BodyFormat.class, Map.class},
         body, HttpSourceConfig.BodyFormat.FORM_URLENCODED, vars);
 
     assertTrue(result.contains("username=admin"), "Should contain username: " + result);
@@ -520,8 +487,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testSerializeBodyJson() throws Exception {
+  @Test void testSerializeBodyJson() throws Exception {
     HttpSource source = createMinimalSource();
 
     Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -529,8 +495,8 @@ class HttpSourceLineCoverageTest {
     body.put("count", 42);
     Map<String, String> vars = Collections.emptyMap();
 
-    String result = (String) invokePrivate(source, "serializeBody",
-        new Class[]{Map.class, HttpSourceConfig.BodyFormat.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "serializeBody", new Class[]{Map.class, HttpSourceConfig.BodyFormat.class, Map.class},
         body, HttpSourceConfig.BodyFormat.JSON, vars);
 
     assertTrue(result.contains("\"key\""), "Should be JSON: " + result);
@@ -540,8 +506,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= substituteBodyVariables tests =======
 
-  @Test
-  void testSubstituteBodyVariablesWithNestedMap() throws Exception {
+  @Test void testSubstituteBodyVariablesWithNestedMap() throws Exception {
     HttpSource source = createMinimalSource();
 
     Map<String, Object> nested = new LinkedHashMap<String, Object>();
@@ -556,8 +521,8 @@ class HttpSourceLineCoverageTest {
     vars.put("year", "2024");
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivate(source,
-        "substituteBodyVariables",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivate(source, "substituteBodyVariables",
         new Class[]{Map.class, Map.class}, body, vars);
 
     assertEquals("2024", result.get("top"));
@@ -568,8 +533,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testSubstituteBodyVariablesWithList() throws Exception {
+  @Test void testSubstituteBodyVariablesWithList() throws Exception {
     HttpSource source = createMinimalSource();
 
     List<Object> items = new ArrayList<Object>();
@@ -583,8 +547,8 @@ class HttpSourceLineCoverageTest {
     vars.put("year", "2024");
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> result = (Map<String, Object>) invokePrivate(source,
-        "substituteBodyVariables",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivate(source, "substituteBodyVariables",
         new Class[]{Map.class, Map.class}, body, vars);
 
     @SuppressWarnings("unchecked")
@@ -596,8 +560,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= substituteListVariables with nested lists and maps =======
 
-  @Test
-  void testSubstituteListVariablesNested() throws Exception {
+  @Test void testSubstituteListVariablesNested() throws Exception {
     HttpSource source = createMinimalSource();
 
     Map<String, Object> innerMap = new LinkedHashMap<String, Object>();
@@ -616,8 +579,8 @@ class HttpSourceLineCoverageTest {
     vars.put("year", "2025");
 
     @SuppressWarnings("unchecked")
-    List<Object> result = (List<Object>) invokePrivate(source, "substituteListVariables",
-        new Class[]{List.class, Map.class}, outerList, vars);
+    List<Object> result =
+        (List<Object>) invokePrivate(source, "substituteListVariables", new Class[]{List.class, Map.class}, outerList, vars);
 
     assertEquals("2025", result.get(0));
     @SuppressWarnings("unchecked")
@@ -632,8 +595,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= navigateToPath tests =======
 
-  @Test
-  void testNavigateToPathWithJsonPath() throws Exception {
+  @Test void testNavigateToPathWithJsonPath() throws Exception {
     HttpSource source = createMinimalSource();
     String json = "{\"results\":{\"data\":[{\"id\":1}]}}";
     com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(json);
@@ -647,8 +609,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testNavigateToPathWithArrayIndex() throws Exception {
+  @Test void testNavigateToPathWithArrayIndex() throws Exception {
     HttpSource source = createMinimalSource();
     String json = "{\"data\":[{\"id\":1},{\"id\":2}]}";
     com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(json);
@@ -662,8 +623,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testNavigateToPathMissingNode() throws Exception {
+  @Test void testNavigateToPathMissingNode() throws Exception {
     HttpSource source = createMinimalSource();
     String json = "{\"data\":{}}";
     com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(json);
@@ -676,8 +636,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testNavigateToPathDollarOnly() throws Exception {
+  @Test void testNavigateToPathDollarOnly() throws Exception {
     HttpSource source = createMinimalSource();
     String json = "[{\"id\":1}]";
     com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(json);
@@ -692,114 +651,106 @@ class HttpSourceLineCoverageTest {
 
   // ======= checkForApiError tests =======
 
-  @Test
-  void testCheckForApiErrorWithNoError() throws Exception {
+  @Test void testCheckForApiErrorWithNoError() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"data\": []}", respConfig);
     assertNull(result, "Should return null when no error");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithRealError() throws Exception {
+  @Test void testCheckForApiErrorWithRealError() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"error\": \"Rate limit exceeded\"}", respConfig);
     assertNotNull(result, "Should return error message");
     assertTrue(result.contains("Rate limit exceeded"));
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithNoDataError() throws Exception {
+  @Test void testCheckForApiErrorWithNoDataError() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"error\": \"no data available\"}", respConfig);
     assertNull(result, "Should return null for 'no data' type errors");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithEmptyArray() throws Exception {
+  @Test void testCheckForApiErrorWithEmptyArray() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "errors"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"errors\": []}", respConfig);
     assertNull(result, "Should return null for empty error array");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithNullErrorNode() throws Exception {
+  @Test void testCheckForApiErrorWithNullErrorNode() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"error\": null}", respConfig);
     assertNull(result, "Should return null for null error node");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithNonJsonContent() throws Exception {
+  @Test void testCheckForApiErrorWithNonJsonContent() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "not json at all", respConfig);
     assertNull(result, "Should return null for unparseable content");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorWithObjectError() throws Exception {
+  @Test void testCheckForApiErrorWithObjectError() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"error\": {\"code\": 500, \"message\": \"Server error\"}}", respConfig);
     assertNotNull(result, "Should return error for object error node");
     source.close();
   }
 
-  @Test
-  void testCheckForApiErrorNoErrorPath() throws Exception {
+  @Test void testCheckForApiErrorNoErrorPath() throws Exception {
     HttpSource source = createMinimalSource();
     HttpSourceConfig.ResponseConfig respConfig =
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON"));
 
-    String result = (String) invokePrivate(source, "checkForApiError",
-        new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+    String result =
+        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
         "{\"data\": [1,2,3]}", respConfig);
     assertNull(result, "Should return null when no errorPath configured");
     source.close();
@@ -807,18 +758,18 @@ class HttpSourceLineCoverageTest {
 
   // ======= parseResponse tests (JSON) =======
 
-  @Test
-  void testParseResponseJsonArray() throws Exception {
+  @Test void testParseResponseJsonArray() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON")))
         .build();
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseResponse", new Class[]{String.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseResponse", new Class[]{String.class},
         "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
     assertEquals(2, result.size());
     assertEquals(1, result.get(0).get("id"));
@@ -826,36 +777,36 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testParseResponseJsonSingleObject() throws Exception {
+  @Test void testParseResponseJsonSingleObject() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON")))
         .build();
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseResponse", new Class[]{String.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseResponse", new Class[]{String.class},
         "{\"id\":1,\"name\":\"single\"}");
     assertEquals(1, result.size());
     assertEquals("single", result.get(0).get("name"));
     source.close();
   }
 
-  @Test
-  void testParseResponseJsonWithDataPath() throws Exception {
+  @Test void testParseResponseJsonWithDataPath() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "dataPath", "results.items")))
         .build();
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseResponse", new Class[]{String.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseResponse", new Class[]{String.class},
         "{\"results\":{\"items\":[{\"v\":1}]}}");
     assertEquals(1, result.size());
     source.close();
@@ -863,8 +814,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= parseDelimitedResponse tests =======
 
-  @Test
-  void testParseDelimitedResponseEmpty() throws Exception {
+  @Test void testParseDelimitedResponseEmpty() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "CSV")))
@@ -872,15 +822,14 @@ class HttpSourceLineCoverageTest {
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseDelimitedResponse", new Class[]{String.class, char.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseDelimitedResponse", new Class[]{String.class, char.class},
         "", ',');
     assertTrue(result.isEmpty(), "Empty input should yield empty result");
     source.close();
   }
 
-  @Test
-  void testParseDelimitedResponseNull() throws Exception {
+  @Test void testParseDelimitedResponseNull() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .response(HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "CSV")))
@@ -888,8 +837,8 @@ class HttpSourceLineCoverageTest {
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseDelimitedResponse", new Class[]{String.class, char.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseDelimitedResponse", new Class[]{String.class, char.class},
         (Object) null, ',');
     assertTrue(result.isEmpty());
     source.close();
@@ -897,57 +846,51 @@ class HttpSourceLineCoverageTest {
 
   // ======= parseValue tests =======
 
-  @Test
-  void testParseValueNull() throws Exception {
+  @Test void testParseValueNull() throws Exception {
     HttpSource source = createMinimalSource();
-    Object result = invokePrivate(source, "parseValue",
-        new Class[]{String.class}, (Object) null);
+    Object result =
+        invokePrivate(source, "parseValue", new Class[]{String.class}, (Object) null);
     assertNull(result);
     source.close();
   }
 
-  @Test
-  void testParseValueEmpty() throws Exception {
+  @Test void testParseValueEmpty() throws Exception {
     HttpSource source = createMinimalSource();
-    Object result = invokePrivate(source, "parseValue",
-        new Class[]{String.class}, "");
+    Object result =
+        invokePrivate(source, "parseValue", new Class[]{String.class}, "");
     assertNull(result);
     source.close();
   }
 
-  @Test
-  void testParseValueLong() throws Exception {
+  @Test void testParseValueLong() throws Exception {
     HttpSource source = createMinimalSource();
-    Object result = invokePrivate(source, "parseValue",
-        new Class[]{String.class}, "12345");
+    Object result =
+        invokePrivate(source, "parseValue", new Class[]{String.class}, "12345");
     assertEquals(12345L, result);
     source.close();
   }
 
-  @Test
-  void testParseValueDouble() throws Exception {
+  @Test void testParseValueDouble() throws Exception {
     HttpSource source = createMinimalSource();
-    Object result = invokePrivate(source, "parseValue",
-        new Class[]{String.class}, "3.14");
+    Object result =
+        invokePrivate(source, "parseValue", new Class[]{String.class}, "3.14");
     assertEquals(3.14, result);
     source.close();
   }
 
-  @Test
-  void testParseValueString() throws Exception {
+  @Test void testParseValueString() throws Exception {
     HttpSource source = createMinimalSource();
-    Object result = invokePrivate(source, "parseValue",
-        new Class[]{String.class}, "hello");
+    Object result =
+        invokePrivate(source, "parseValue", new Class[]{String.class}, "hello");
     assertEquals("hello", result);
     source.close();
   }
 
   // ======= resolveDelimiter tests =======
 
-  @Test
-  void testResolveDelimiterCSV() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+  @Test void testResolveDelimiterCSV() throws Exception {
+    Method m =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     m.setAccessible(true);
 
     HttpSourceConfig.ResponseConfig csvConfig =
@@ -956,10 +899,9 @@ class HttpSourceLineCoverageTest {
     assertEquals(',', result);
   }
 
-  @Test
-  void testResolveDelimiterTSV() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+  @Test void testResolveDelimiterTSV() throws Exception {
+    Method m =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     m.setAccessible(true);
 
     HttpSourceConfig.ResponseConfig tsvConfig =
@@ -968,10 +910,9 @@ class HttpSourceLineCoverageTest {
     assertEquals('\t', result);
   }
 
-  @Test
-  void testResolveDelimiterCustom() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("resolveDelimiter",
-        HttpSourceConfig.ResponseConfig.class);
+  @Test void testResolveDelimiterCustom() throws Exception {
+    Method m =
+        HttpSource.class.getDeclaredMethod("resolveDelimiter", HttpSourceConfig.ResponseConfig.class);
     m.setAccessible(true);
 
     HttpSourceConfig.ResponseConfig customConfig =
@@ -982,8 +923,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= collectFiles tests =======
 
-  @Test
-  void testCollectFiles() throws Exception {
+  @Test void testCollectFiles() throws Exception {
     File root = tempDir.resolve("collect-test").toFile();
     root.mkdirs();
     File sub = new File(root, "sub");
@@ -999,8 +939,7 @@ class HttpSourceLineCoverageTest {
     assertEquals(2, result.size());
   }
 
-  @Test
-  void testCollectFilesOnNonExistent() throws Exception {
+  @Test void testCollectFilesOnNonExistent() throws Exception {
     Method m = HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
     m.setAccessible(true);
 
@@ -1011,8 +950,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= extractFromZip tests =======
 
-  @Test
-  void testExtractFromZipMatching() throws Exception {
+  @Test void testExtractFromZipMatching() throws Exception {
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     try (ZipOutputStream zos = new ZipOutputStream(baos)) {
       ZipEntry entry = new ZipEntry("data.csv");
@@ -1030,20 +968,19 @@ class HttpSourceLineCoverageTest {
     String cachePath = tempDir.resolve("zip-extract/extracted.csv").toString();
 
     HttpSource source = createMinimalSource();
-    String result = (String) invokePrivate(source, "extractFromZip",
-        new Class[]{InputStream.class, String.class, String.class},
+    String result =
+        (String) invokePrivate(source, "extractFromZip", new Class[]{InputStream.class, String.class, String.class},
         zipInput, "*.csv", cachePath);
     assertEquals(cachePath, result);
 
-    String extracted = new String(Files.readAllBytes(new File(cachePath).toPath()),
-        StandardCharsets.UTF_8);
+    String extracted =
+        new String(Files.readAllBytes(new File(cachePath).toPath()), StandardCharsets.UTF_8);
     assertTrue(extracted.contains("id,name"));
     assertTrue(extracted.contains("Alice"));
     source.close();
   }
 
-  @Test
-  void testExtractFromZipNoMatch() throws Exception {
+  @Test void testExtractFromZipNoMatch() throws Exception {
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     try (ZipOutputStream zos = new ZipOutputStream(baos)) {
       ZipEntry entry = new ZipEntry("readme.txt");
@@ -1071,25 +1008,22 @@ class HttpSourceLineCoverageTest {
 
   // ======= transformResponse tests =======
 
-  @Test
-  void testTransformResponseWithNullTransformer() throws Exception {
+  @Test void testTransformResponseWithNullTransformer() throws Exception {
     HttpSource source = createMinimalSource();
     String response = "{\"data\": [1]}";
     Map<String, String> params = Collections.emptyMap();
     Map<String, String> vars = Collections.emptyMap();
 
-    String result = (String) invokePrivate(source, "transformResponse",
-        new Class[]{String.class, String.class, Map.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "transformResponse", new Class[]{String.class, String.class, Map.class, Map.class},
         response, "http://test.com", params, vars);
     assertEquals(response, result, "Should return original when no transformer");
     source.close();
   }
 
-  @Test
-  void testTransformResponseWithTransformer() throws Exception {
+  @Test void testTransformResponseWithTransformer() throws Exception {
     ResponseTransformer transformer = new ResponseTransformer() {
-      @Override
-      public String transform(String response, RequestContext context) {
+      @Override public String transform(String response, RequestContext context) {
         return response.replace("raw", "transformed");
       }
     };
@@ -1102,18 +1036,16 @@ class HttpSourceLineCoverageTest {
     Map<String, String> params = Collections.emptyMap();
     Map<String, String> vars = Collections.emptyMap();
 
-    String result = (String) invokePrivate(source, "transformResponse",
-        new Class[]{String.class, String.class, Map.class, Map.class},
+    String result =
+        (String) invokePrivate(source, "transformResponse", new Class[]{String.class, String.class, Map.class, Map.class},
         "raw data", "http://test.com", params, vars);
     assertEquals("transformed data", result);
     source.close();
   }
 
-  @Test
-  void testTransformResponseWithTransformerThatThrows() throws Exception {
+  @Test void testTransformResponseWithTransformerThatThrows() throws Exception {
     ResponseTransformer transformer = new ResponseTransformer() {
-      @Override
-      public String transform(String response, RequestContext context) {
+      @Override public String transform(String response, RequestContext context) {
         throw new RuntimeException("Transform error");
       }
     };
@@ -1140,8 +1072,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= CacheEntry inner class tests =======
 
-  @Test
-  void testCacheEntryNotExpired() throws Exception {
+  @Test void testCacheEntryNotExpired() throws Exception {
     Class<?> cacheEntryClass = null;
     for (Class<?> cls : HttpSource.class.getDeclaredClasses()) {
       if (cls.getSimpleName().equals("CacheEntry")) {
@@ -1169,8 +1100,7 @@ class HttpSourceLineCoverageTest {
     assertFalse((Boolean) isExpired.invoke(entry));
   }
 
-  @Test
-  void testCacheEntryExpired() throws Exception {
+  @Test void testCacheEntryExpired() throws Exception {
     Class<?> cacheEntryClass = null;
     for (Class<?> cls : HttpSource.class.getDeclaredClasses()) {
       if (cls.getSimpleName().equals("CacheEntry")) {
@@ -1183,8 +1113,8 @@ class HttpSourceLineCoverageTest {
     Constructor<?> ctor = cacheEntryClass.getDeclaredConstructor(List.class, long.class);
     ctor.setAccessible(true);
 
-    Object entry = ctor.newInstance(new ArrayList<Map<String, Object>>(),
-        System.currentTimeMillis() - 1000);
+    Object entry =
+        ctor.newInstance(new ArrayList<Map<String, Object>>(), System.currentTimeMillis() - 1000);
 
     Method isExpired = cacheEntryClass.getDeclaredMethod("isExpired");
     isExpired.setAccessible(true);
@@ -1193,15 +1123,14 @@ class HttpSourceLineCoverageTest {
 
   // ======= parseDelimitedLine tests =======
 
-  @Test
-  void testParseDelimitedLineWithQuotes() throws Exception {
+  @Test void testParseDelimitedLineWithQuotes() throws Exception {
     HttpSource source = createMinimalSource();
-    Method m = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-        String.class, char.class);
+    Method m =
+        HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
     m.setAccessible(true);
 
-    String[] result = (String[]) m.invoke(source,
-        "\"hello, world\",simple,\"with \"\"escaped\"\" quotes\"", ',');
+    String[] result =
+        (String[]) m.invoke(source, "\"hello, world\",simple,\"with \"\"escaped\"\" quotes\"", ',');
     assertEquals(3, result.length);
     assertEquals("hello, world", result[0]);
     assertEquals("simple", result[1]);
@@ -1209,11 +1138,10 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testParseDelimitedLineTSV() throws Exception {
+  @Test void testParseDelimitedLineTSV() throws Exception {
     HttpSource source = createMinimalSource();
-    Method m = HttpSource.class.getDeclaredMethod("parseDelimitedLine",
-        String.class, char.class);
+    Method m =
+        HttpSource.class.getDeclaredMethod("parseDelimitedLine", String.class, char.class);
     m.setAccessible(true);
 
     String[] result = (String[]) m.invoke(source, "a\tb\tc", '\t');
@@ -1226,8 +1154,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= create factory methods =======
 
-  @Test
-  void testCreateFactoryMethod() {
+  @Test void testCreateFactoryMethod() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .build();
@@ -1237,8 +1164,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testCreateFactoryMethodWithHooks() {
+  @Test void testCreateFactoryMethodWithHooks() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .build();
@@ -1249,27 +1175,25 @@ class HttpSourceLineCoverageTest {
 
   // ======= close tests =======
 
-  @Test
-  void testCloseWithCache() {
+  @Test void testCloseWithCache() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .cache(HttpSourceConfig.CacheConfig.fromMap(
+        .cache(
+            HttpSourceConfig.CacheConfig.fromMap(
             createMap("enabled", true, "ttlSeconds", 60)))
         .build();
     HttpSource source = new HttpSource(config);
     source.close();
   }
 
-  @Test
-  void testCloseWithoutCache() {
+  @Test void testCloseWithoutCache() {
     HttpSource source = createMinimalSource();
     source.close();
   }
 
   // ======= getType test =======
 
-  @Test
-  void testGetType() {
+  @Test void testGetType() {
     HttpSource source = createMinimalSource();
     assertEquals("http", source.getType());
     source.close();
@@ -1277,31 +1201,29 @@ class HttpSourceLineCoverageTest {
 
   // ======= normalizeRecords tests =======
 
-  @Test
-  void testNormalizeRecordsWithNullNormalizer() throws Exception {
+  @Test void testNormalizeRecordsWithNullNormalizer() throws Exception {
     HttpSource source = createMinimalSource();
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
     records.add(createMap("key", "value"));
     Map<String, String> vars = Collections.emptyMap();
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "normalizeRecords",
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "normalizeRecords",
         new Class[]{List.class, Map.class}, records, vars);
     assertEquals(1, result.size());
     assertEquals("value", result.get(0).get("key"));
     source.close();
   }
 
-  @Test
-  void testNormalizeRecordsWithEmptyList() throws Exception {
+  @Test void testNormalizeRecordsWithEmptyList() throws Exception {
     HttpSource source = createMinimalSource();
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
     Map<String, String> vars = Collections.emptyMap();
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "normalizeRecords",
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "normalizeRecords",
         new Class[]{List.class, Map.class}, records, vars);
     assertTrue(result.isEmpty());
     source.close();
@@ -1309,8 +1231,7 @@ class HttpSourceLineCoverageTest {
 
   // ======= Constructor tests =======
 
-  @Test
-  void testConstructorWithHooksConfig() {
+  @Test void testConstructorWithHooksConfig() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .build();
@@ -1320,8 +1241,7 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConstructorWithStorageProvider() {
+  @Test void testConstructorWithStorageProvider() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .rawCache(HttpSourceConfig.RawCacheConfig.enabled())
@@ -1331,14 +1251,12 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConstructorWithResponseTransformer() {
+  @Test void testConstructorWithResponseTransformer() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
         .build();
     ResponseTransformer transformer = new ResponseTransformer() {
-      @Override
-      public String transform(String response, RequestContext context) {
+      @Override public String transform(String response, RequestContext context) {
         return response;
       }
     };
@@ -1349,45 +1267,45 @@ class HttpSourceLineCoverageTest {
 
   // ======= parseResponse with error path and error message types =======
 
-  @Test
-  void testParseResponseWithErrorPathNotFoundMessage() throws Exception {
+  @Test void testParseResponseWithErrorPathNotFoundMessage() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error")))
         .build();
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseResponse", new Class[]{String.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseResponse", new Class[]{String.class},
         "{\"error\": \"not found for this query\"}");
     assertTrue(result.isEmpty(), "Should return empty for 'not found' errors");
     source.close();
   }
 
-  @Test
-  void testParseResponseWithErrorPathParameterEmpty() throws Exception {
+  @Test void testParseResponseWithErrorPathParameterEmpty() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error")))
         .build();
     HttpSource source = new HttpSource(config);
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result = (List<Map<String, Object>>) invokePrivate(source,
-        "parseResponse", new Class[]{String.class},
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) invokePrivate(source, "parseResponse", new Class[]{String.class},
         "{\"error\": \"parameter_empty\"}");
     assertTrue(result.isEmpty(), "Should return empty for 'parameter_empty' errors");
     source.close();
   }
 
-  @Test
-  void testParseResponseWithUnsupportedFormat() throws Exception {
+  @Test void testParseResponseWithUnsupportedFormat() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://localhost/test")
-        .response(HttpSourceConfig.ResponseConfig.fromMap(
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "XML")))
         .build();
     HttpSource source = new HttpSource(config);

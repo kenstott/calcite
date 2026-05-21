@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.file.converters;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -257,8 +255,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_nullsel");
 
     // null selector should fall back to regular conversion
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         null, 0, "fallback_table", tempDir.toFile());
 
     assertNotNull(result);
@@ -276,8 +274,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_nullidx");
 
     // null index should fall back to regular conversion
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table", null, "fallback_table", tempDir.toFile());
 
     assertNotNull(result);
@@ -294,8 +292,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_nomatch");
 
     // Selector that matches nothing
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.nonexistent-class", 0, "test_table", tempDir.toFile());
 
     assertNotNull(result);
@@ -312,8 +310,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_oob");
 
     // Index larger than number of matching tables
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.target", 5, "test_table", tempDir.toFile());
 
     assertNotNull(result);
@@ -330,8 +328,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_valid_sel");
 
     // Select second table
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.data", 1, "second_table", tempDir.toFile());
 
     assertNotNull(result);
@@ -351,8 +349,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_nullbase");
 
     // baseDirectory is null - should use ConversionRecorder path
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.tgt", 0, "null_base_table", null);
 
     assertNotNull(result);
@@ -383,8 +381,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     field2.put("name", "salary");
     fieldConfigs.add(field2);
 
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.mapped", 0, "mapped_table", tempDir.toFile(), fieldConfigs);
 
     assertNotNull(result);
@@ -413,8 +411,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     skipField.put("skip", "true");
     fieldConfigs.add(skipField);
 
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.skip", 0, "skip_table", tempDir.toFile(), fieldConfigs);
 
     assertNotNull(result);
@@ -443,8 +441,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     // No "name" key - should use casing-applied th value
     fieldConfigs.add(field1);
 
-    List<File> result = HtmlToJsonConverter.convertWithSelector(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> result =
+        HtmlToJsonConverter.convertWithSelector(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "table.noname", 0, "noname_table", tempDir.toFile(), fieldConfigs);
 
     assertNotNull(result);
@@ -465,8 +463,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     // Use a relative path with directory separator
     String relativePath = "subdir" + File.separator + "relpath.html";
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
 
     assertNotNull(jsonFiles);
     assertTrue(jsonFiles.size() >= 1);
@@ -488,8 +486,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     // Relative path without directory separator
     String relativePath = "nodir.html";
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
 
     assertNotNull(jsonFiles);
     assertTrue(jsonFiles.size() >= 1);
@@ -506,8 +504,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File htmlFile = createHtmlFile("single.html", html);
     File outputDir = createOutputDir("out_single");
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "my_explicit_table", tempDir.toFile(), null);
 
     assertNotNull(jsonFiles);
@@ -535,8 +533,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File htmlFile = createHtmlFile("multi.html", html);
     File outputDir = createOutputDir("out_multi");
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "largest_table", tempDir.toFile(), null);
 
     assertNotNull(jsonFiles);
@@ -560,8 +558,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File htmlFile = createHtmlFile("nullbase2.html", html);
     File outputDir = createOutputDir("out_nullbase2");
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         "nullbase_table", null, null);
 
     assertNotNull(jsonFiles);
@@ -585,8 +583,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File htmlFile = createHtmlFile("multino.html", html);
     File outputDir = createOutputDir("out_multino");
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
 
     assertNotNull(jsonFiles);
     // Should generate separate JSON files for each table
@@ -621,8 +619,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_overload4");
 
     // 4-arg convert with columnNameCasing
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", tempDir.toFile());
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", tempDir.toFile());
 
     assertNotNull(jsonFiles);
     assertTrue(jsonFiles.size() >= 1);
@@ -631,8 +629,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
   // ========== sanitizeUrlForFileName via reflection ==========
 
   @Test void testSanitizeUrlForFileName() throws Exception {
-    Method method = HtmlToJsonConverter.class.getDeclaredMethod(
-        "sanitizeUrlForFileName", String.class);
+    Method method =
+        HtmlToJsonConverter.class.getDeclaredMethod("sanitizeUrlForFileName", String.class);
     method.setAccessible(true);
 
     // Basic URL
@@ -732,8 +730,8 @@ public class HtmlToJsonConverterDeepCoverageTest {
     File outputDir = createOutputDir("out_existing");
 
     // This overload is used for preserving existing table names
-    List<File> jsonFiles = HtmlToJsonConverter.convert(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
+    List<File> jsonFiles =
+        HtmlToJsonConverter.convert(htmlFile, outputDir, "UNCHANGED", "SMART_CASING",
         tempDir.toFile(), null, "preserved_table_name");
 
     assertNotNull(jsonFiles);

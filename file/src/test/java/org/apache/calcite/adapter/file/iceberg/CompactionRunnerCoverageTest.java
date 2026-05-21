@@ -219,12 +219,12 @@ public class CompactionRunnerCoverageTest {
     catalogConfig.put("warehousePath", warehousePath);
     StorageProvider storageProvider = new LocalFileStorageProvider();
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()));
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "load_direct_test", schema,
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "load_direct_test", schema,
         PartitionSpec.unpartitioned());
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
@@ -242,8 +242,8 @@ public class CompactionRunnerCoverageTest {
     ByteArrayOutputStream outStream = new ByteArrayOutputStream();
     System.setOut(new PrintStream(outStream));
 
-    Method loadTableDirect = CompactionRunner.class.getDeclaredMethod(
-        "loadTableDirect", Configuration.class, String.class);
+    Method loadTableDirect =
+        CompactionRunner.class.getDeclaredMethod("loadTableDirect", Configuration.class, String.class);
     loadTableDirect.setAccessible(true);
 
     Configuration conf = new Configuration();
@@ -259,8 +259,8 @@ public class CompactionRunnerCoverageTest {
     Path metadataDir = tempDir.resolve("warehouse/empty_meta/metadata");
     Files.createDirectories(metadataDir);
 
-    Method loadTableDirect = CompactionRunner.class.getDeclaredMethod(
-        "loadTableDirect", Configuration.class, String.class);
+    Method loadTableDirect =
+        CompactionRunner.class.getDeclaredMethod("loadTableDirect", Configuration.class, String.class);
     loadTableDirect.setAccessible(true);
 
     Configuration conf = new Configuration();
@@ -284,10 +284,10 @@ public class CompactionRunnerCoverageTest {
     catalogConfig.put("warehousePath", warehousePath);
     StorageProvider storageProvider = new LocalFileStorageProvider();
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "skip_nonversion", schema, PartitionSpec.unpartitioned());
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "skip_nonversion", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
     Map<String, Object> row = new HashMap<String, Object>();
@@ -307,8 +307,8 @@ public class CompactionRunnerCoverageTest {
     ByteArrayOutputStream outStream = new ByteArrayOutputStream();
     System.setOut(new PrintStream(outStream));
 
-    Method loadTableDirect = CompactionRunner.class.getDeclaredMethod(
-        "loadTableDirect", Configuration.class, String.class);
+    Method loadTableDirect =
+        CompactionRunner.class.getDeclaredMethod("loadTableDirect", Configuration.class, String.class);
     loadTableDirect.setAccessible(true);
 
     Configuration conf = new Configuration();
@@ -325,10 +325,10 @@ public class CompactionRunnerCoverageTest {
     catalogConfig.put("warehousePath", warehousePath);
     StorageProvider storageProvider = new LocalFileStorageProvider();
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "multi_ver", schema, PartitionSpec.unpartitioned());
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "multi_ver", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Create multiple metadata versions via multiple commits
@@ -351,8 +351,8 @@ public class CompactionRunnerCoverageTest {
     ByteArrayOutputStream outStream = new ByteArrayOutputStream();
     System.setOut(new PrintStream(outStream));
 
-    Method loadTableDirect = CompactionRunner.class.getDeclaredMethod(
-        "loadTableDirect", Configuration.class, String.class);
+    Method loadTableDirect =
+        CompactionRunner.class.getDeclaredMethod("loadTableDirect", Configuration.class, String.class);
     loadTableDirect.setAccessible(true);
 
     Configuration conf = new Configuration();
@@ -396,8 +396,8 @@ public class CompactionRunnerCoverageTest {
   @Test void testMainAllArgsParsed() throws Exception {
     // All args provided but non-existent warehouse => will fail at table loading
     String warehousePath = tempDir.resolve("nonexistent_warehouse").toString();
-    SubprocessResult result = runMainInSubprocess(
-        "--warehouse", warehousePath,
+    SubprocessResult result =
+        runMainInSubprocess("--warehouse", warehousePath,
         "--table", "test_table",
         "--target-file-size", "268435456",
         "--min-files", "5",
@@ -416,10 +416,10 @@ public class CompactionRunnerCoverageTest {
     catalogConfig.put("warehousePath", warehousePath);
     StorageProvider storageProvider = new LocalFileStorageProvider();
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "compact_main", schema, PartitionSpec.unpartitioned());
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "compact_main", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Write 5 small files to exceed minFiles threshold of 3
@@ -434,8 +434,8 @@ public class CompactionRunnerCoverageTest {
       writer.commitDataFiles(Collections.singletonList(df), null);
     }
 
-    SubprocessResult result = runMainInSubprocess(
-        "--warehouse", warehousePath,
+    SubprocessResult result =
+        runMainInSubprocess("--warehouse", warehousePath,
         "--table", "compact_main",
         "--min-files", "3",
         "--small-file-size", "1073741824");
@@ -458,10 +458,10 @@ public class CompactionRunnerCoverageTest {
     catalogConfig.put("warehousePath", warehousePath);
     StorageProvider storageProvider = new LocalFileStorageProvider();
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "skip_compact", schema, PartitionSpec.unpartitioned());
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "skip_compact", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -471,8 +471,8 @@ public class CompactionRunnerCoverageTest {
     DataFile df = writer.writeRecords(records, null);
     writer.commitDataFiles(Collections.singletonList(df), null);
 
-    SubprocessResult result = runMainInSubprocess(
-        "--warehouse", warehousePath,
+    SubprocessResult result =
+        runMainInSubprocess("--warehouse", warehousePath,
         "--table", "skip_compact",
         "--min-files", "3",
         "--small-file-size", "1073741824");

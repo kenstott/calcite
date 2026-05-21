@@ -32,9 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
-
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -193,8 +191,8 @@ public class TrinoJdbcSchemaFactory {
 
       // Create DataSource URL targeting the actual schema (Trino lowercases unquoted names)
       final String trinoSchemaName = schemaName.toLowerCase(java.util.Locale.ROOT);
-      final String finalJdbcUrl = String.format("jdbc:trino://%s:%s/%s/%s",
-          config.getHost(), config.getPort(), config.getCatalog(), trinoSchemaName);
+      final String finalJdbcUrl =
+          String.format("jdbc:trino://%s:%s/%s/%s", config.getHost(), config.getPort(), config.getCatalog(), trinoSchemaName);
       final String user = config.getUser();
       final String password = config.getPassword();
       DataSource dataSource = new DataSource() {
@@ -333,8 +331,8 @@ public class TrinoJdbcSchemaFactory {
             icebergPath = directoryPath + "/" + trinoSchema + "/" + tableName;
           }
 
-          String registerSql = TrinoDialect.INSTANCE.createIcebergViewSql(
-              trinoSchema, tableName, icebergPath);
+          String registerSql =
+              TrinoDialect.INSTANCE.createIcebergViewSql(trinoSchema, tableName, icebergPath);
           LOGGER.info("Registering Iceberg table in Trino: {}", registerSql);
           conn.createStatement().execute(registerSql);
           tableCount++;
@@ -345,8 +343,8 @@ public class TrinoJdbcSchemaFactory {
           String parquetPath = resolveParquetPath(record);
 
           if (parquetPath != null) {
-            String createTableSql = TrinoDialect.INSTANCE.createParquetViewSql(
-                trinoSchema, tableName, parquetPath, false);
+            String createTableSql =
+                TrinoDialect.INSTANCE.createParquetViewSql(trinoSchema, tableName, parquetPath, false);
             LOGGER.info("Creating Trino external table for '{}': {}", tableName, createTableSql);
             conn.createStatement().execute(createTableSql);
             tableCount++;
@@ -427,8 +425,8 @@ public class TrinoJdbcSchemaFactory {
 
       try {
         String qualifiedName = TrinoDialect.INSTANCE.qualifyName(trinoSchema, viewName);
-        String viewSql = String.format("CREATE OR REPLACE VIEW %s AS %s",
-            qualifiedName, viewDef);
+        String viewSql =
+            String.format("CREATE OR REPLACE VIEW %s AS %s", qualifiedName, viewDef);
         LOGGER.info("Creating SQL view in Trino: {}.{}", trinoSchema, viewName);
         conn.createStatement().execute(viewSql);
       } catch (SQLException e) {

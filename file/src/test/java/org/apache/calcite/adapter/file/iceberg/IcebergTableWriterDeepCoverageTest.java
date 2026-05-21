@@ -63,22 +63,19 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- Constructor variants ---
 
-  @Test
-  void testConstructorTwoArg() {
+  @Test void testConstructorTwoArg() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
     assertNotNull(writer);
   }
 
-  @Test
-  void testConstructorThreeArg() {
+  @Test void testConstructorThreeArg() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
     assertNotNull(writer);
   }
 
   // --- commitDataFiles with empty list ---
 
-  @Test
-  void testCommitDataFilesEmptyList() {
+  @Test void testCommitDataFilesEmptyList() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
     // Should return immediately without calling table.newAppend()
     writer.commitDataFiles(Collections.<DataFile>emptyList(), null);
@@ -87,8 +84,7 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- commitDataFiles with partition filter ---
 
-  @Test
-  void testCommitDataFilesWithPartitionFilter() {
+  @Test void testCommitDataFilesWithPartitionFilter() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     AppendFiles mockAppend = mock(AppendFiles.class);
@@ -112,8 +108,7 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- commitDataFiles without partition filter ---
 
-  @Test
-  void testCommitDataFilesWithoutPartitionFilter() {
+  @Test void testCommitDataFilesWithoutPartitionFilter() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     AppendFiles mockAppend = mock(AppendFiles.class);
@@ -129,8 +124,7 @@ public class IcebergTableWriterDeepCoverageTest {
     verify(mockAppend).commit();
   }
 
-  @Test
-  void testCommitDataFilesEmptyPartitionFilter() {
+  @Test void testCommitDataFilesEmptyPartitionFilter() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     AppendFiles mockAppend = mock(AppendFiles.class);
@@ -148,16 +142,14 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- bulkCommitDataFiles ---
 
-  @Test
-  void testBulkCommitDataFilesEmpty() {
+  @Test void testBulkCommitDataFilesEmpty() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
     // Empty list should not throw
     writer.bulkCommitDataFiles(Collections.<DataFile>emptyList());
     verify(mockTable, never()).newAppend();
   }
 
-  @Test
-  void testBulkCommitDataFilesMultipleFiles() {
+  @Test void testBulkCommitDataFilesMultipleFiles() {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     AppendFiles mockAppend = mock(AppendFiles.class);
@@ -182,8 +174,7 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- stageFiles with empty staging directory ---
 
-  @Test
-  void testStageFilesEmptyDirectory() throws IOException {
+  @Test void testStageFilesEmptyDirectory() throws IOException {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     String stagingPath = tempDir.resolve("empty-staging").toString();
@@ -202,8 +193,7 @@ public class IcebergTableWriterDeepCoverageTest {
 
   // --- commitFromStaging with empty staging ---
 
-  @Test
-  void testCommitFromStagingEmptyDirectory() throws IOException {
+  @Test void testCommitFromStagingEmptyDirectory() throws IOException {
     IcebergTableWriter writer = new IcebergTableWriter(mockTable, mockStorage);
 
     String stagingPath = tempDir.resolve("empty-staging-2").toString();

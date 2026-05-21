@@ -26,11 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -229,15 +226,15 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   // ===== isHivePartitionedFromConfig tests (via reflection) =====
 
   @Test void testIsHivePartitionedFromConfigNull() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, (ConversionMetadata.ConversionRecord) null));
   }
 
   @Test void testIsHivePartitionedFromConfigNullTableConfig() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = null;
@@ -245,8 +242,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testIsHivePartitionedFromConfigWithHiveStyle() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -260,8 +257,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testIsHivePartitionedFromConfigWithNonHiveStyle() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -275,8 +272,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testIsHivePartitionedFromConfigPartitionsNotMap() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -288,8 +285,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testIsHivePartitionedFromConfigStyleNotString() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -305,15 +302,15 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   // ===== shouldUseUnionByName tests (via reflection) =====
 
   @Test void testShouldUseUnionByNameNull() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, (ConversionMetadata.ConversionRecord) null));
   }
 
   @Test void testShouldUseUnionByNameNullTableConfig() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = null;
@@ -321,8 +318,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testShouldUseUnionByNameTrue() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -336,8 +333,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testShouldUseUnionByNameFalse() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -351,8 +348,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testShouldUseUnionByNameDuckdbNotMap() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -364,8 +361,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testShouldUseUnionByNameNotBoolean() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -381,15 +378,15 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   // ===== formatRecordForError tests (via reflection) =====
 
   @Test void testFormatRecordForErrorNull() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("formatRecordForError", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     assertEquals("null", method.invoke(null, (ConversionMetadata.ConversionRecord) null));
   }
 
   @Test void testFormatRecordForErrorWithData() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("formatRecordForError", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -405,8 +402,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   }
 
   @Test void testFormatRecordForErrorLongParquetCacheFile() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("formatRecordForError", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -429,8 +426,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "viewExists", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewExists", Connection.class, String.class, String.class);
       method.setAccessible(true);
       assertFalse((Boolean) method.invoke(null, conn, "main", "nonexistent_view"));
     } finally {
@@ -443,8 +440,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
       conn.createStatement().execute("CREATE VIEW test_view AS SELECT 1 AS id");
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "viewExists", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewExists", Connection.class, String.class, String.class);
       method.setAccessible(true);
       assertTrue((Boolean) method.invoke(null, conn, "main", "test_view"));
     } finally {
@@ -459,8 +456,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
       conn.createStatement().execute("CREATE VIEW v1 AS SELECT 1 AS id");
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "viewUsesIcebergScan", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewUsesIcebergScan", Connection.class, String.class, String.class);
       method.setAccessible(true);
       assertFalse((Boolean) method.invoke(null, conn, "main", "v1"));
     } finally {
@@ -472,8 +469,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "viewUsesIcebergScan", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewUsesIcebergScan", Connection.class, String.class, String.class);
       method.setAccessible(true);
       assertFalse((Boolean) method.invoke(null, conn, "main", "nonexistent"));
     } finally {
@@ -487,8 +484,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "getViewSql", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("getViewSql", Connection.class, String.class, String.class);
       method.setAccessible(true);
       assertNull(method.invoke(null, conn, "main", "no_such_view"));
     } finally {
@@ -501,8 +498,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
       conn.createStatement().execute("CREATE VIEW v_test AS SELECT 42 AS val");
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "getViewSql", Connection.class, String.class, String.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("getViewSql", Connection.class, String.class, String.class);
       method.setAccessible(true);
       String sql = (String) method.invoke(null, conn, "main", "v_test");
       assertNotNull(sql);
@@ -515,45 +512,45 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   // ===== rewriteSchemaReferencesInSql tests (via reflection) =====
 
   @Test void testRewriteSchemaReferencesNullViewDef() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, null, "econ", "ECON"));
   }
 
   @Test void testRewriteSchemaReferencesNullDeclared() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     assertEquals("SELECT 1", method.invoke(null, "SELECT 1", null, "ECON"));
   }
 
   @Test void testRewriteSchemaReferencesNullActual() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     assertEquals("SELECT 1", method.invoke(null, "SELECT 1", "econ", null));
   }
 
   @Test void testRewriteSchemaReferencesSameSchema() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     String viewDef = "SELECT * FROM econ.gdp";
     assertEquals(viewDef, method.invoke(null, viewDef, "econ", "econ"));
   }
 
   @Test void testRewriteSchemaReferencesSameSchemaCaseInsensitive() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     String viewDef = "SELECT * FROM econ.gdp";
     assertEquals(viewDef, method.invoke(null, viewDef, "econ", "ECON"));
   }
 
   @Test void testRewriteSchemaReferencesDifferentSchema() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     String viewDef = "SELECT * FROM econ.gdp JOIN econ.cpi ON econ.gdp.year = econ.cpi.year";
     String result = (String) method.invoke(null, viewDef, "econ", "economic");
@@ -565,8 +562,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   // ===== registerSqlViewsInDuckDB tests (via reflection) =====
 
   private static Method getRegisterSqlViewsMethod() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViewsInDuckDB", String.class, String.class, Map.class);
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB", String.class, String.class, Map.class);
     m.setAccessible(true);
     return m;
   }
@@ -623,8 +620,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       registerAndFlush(method, conn, "main", operand);
 
       // Verify view was created
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT * FROM main.test_sql_view")) {
+      try (ResultSet rs =
+          conn.createStatement().executeQuery("SELECT * FROM main.test_sql_view")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt(1));
       }
@@ -698,8 +695,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
 
       registerAndFlush(method, conn, "main", operand);
 
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT * FROM main.view_def_test")) {
+      try (ResultSet rs =
+          conn.createStatement().executeQuery("SELECT * FROM main.view_def_test")) {
         assertTrue(rs.next());
         assertEquals(99, rs.getInt(1));
       }
@@ -734,8 +731,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       registerAndFlush(method, conn, "actual_schema", operand);
 
       // Verify view was created with rewritten schema
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT * FROM actual_schema.rewritten_view")) {
+      try (ResultSet rs =
+          conn.createStatement().executeQuery("SELECT * FROM actual_schema.rewritten_view")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("id"));
         assertEquals(100, rs.getInt("amount"));
@@ -803,14 +800,14 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "registerSimilarityFunctions", Connection.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSimilarityFunctions", Connection.class);
       method.setAccessible(true);
       method.invoke(null, conn);
 
       // Verify that the macros were registered by calling them
-      try (ResultSet rs = conn.createStatement().executeQuery(
-          "SELECT COSINE_SIMILARITY('1.0,0.0,0.0', '0.0,1.0,0.0')")) {
+      try (ResultSet rs =
+          conn.createStatement().executeQuery("SELECT COSINE_SIMILARITY('1.0,0.0,0.0', '0.0,1.0,0.0')")) {
         assertTrue(rs.next());
         double similarity = rs.getDouble(1);
         // Orthogonal vectors should have 0 cosine similarity
@@ -827,8 +824,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
-      Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-          "loadQueryExtensions", Connection.class);
+      Method method =
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
       method.setAccessible(true);
       // Should not throw - gracefully handles extension load failures
       method.invoke(null, conn);

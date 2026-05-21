@@ -17,12 +17,10 @@
 package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.adapter.file.statistics.HLLSketchCache;
 import org.apache.calcite.adapter.file.statistics.HyperLogLogSketch;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.schema.SchemaPlus;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -35,7 +33,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +41,6 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -52,13 +48,11 @@ import java.sql.Statement;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Comprehensive integration tests for DuckDB coverage gaps including:
@@ -105,8 +99,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM files.products")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.products")) {
         assertTrue(rs.next(), "Should have result");
         assertEquals(3, rs.getLong("cnt"));
       }
@@ -122,8 +116,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM files.orders")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.orders")) {
         assertTrue(rs.next());
         assertEquals(50, rs.getLong("cnt"));
       }
@@ -141,13 +135,13 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement()) {
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) AS cnt FROM files.customers")) {
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.customers")) {
           assertTrue(rs.next());
           assertEquals(2, rs.getLong("cnt"));
         }
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) AS cnt FROM files.invoices")) {
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.invoices")) {
           assertTrue(rs.next());
           assertEquals(2, rs.getLong("cnt"));
         }
@@ -164,8 +158,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT col_a, col_b FROM files.test_casing ORDER BY col_a")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT col_a, col_b FROM files.test_casing ORDER BY col_a")) {
         assertTrue(rs.next());
         assertEquals("1", rs.getString("col_a"));
         assertEquals("hello", rs.getString("col_b"));
@@ -201,8 +195,8 @@ public class DuckDBFullCoverageTest {
         FileSchemaFactory.INSTANCE.create(rootSchema, "eph", operand));
 
     try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT val_id FROM eph.ephemeral")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT val_id FROM eph.ephemeral")) {
       assertTrue(rs.next());
       assertEquals("1", rs.getString("val_id"));
     } finally {
@@ -219,8 +213,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM files.filter_test"
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.filter_test"
                + " WHERE metric_value > 10.0")) {
         assertTrue(rs.next());
         long count = rs.getLong("cnt");
@@ -239,8 +233,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT metric_name, COUNT(*) AS cnt, SUM(metric_value) AS total_val"
+           ResultSet rs =
+               stmt.executeQuery("SELECT metric_name, COUNT(*) AS cnt, SUM(metric_value) AS total_val"
                + " FROM files.agg_test"
                + " GROUP BY metric_name"
                + " ORDER BY metric_name")) {
@@ -266,8 +260,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT e.emp_name, d.dept_name"
+           ResultSet rs =
+               stmt.executeQuery("SELECT e.emp_name, d.dept_name"
                + " FROM files.employees e"
                + " JOIN files.departments d ON e.dept_id = d.dept_id"
                + " ORDER BY e.emp_name")) {
@@ -297,8 +291,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT record_id, metric_value FROM files.sorted_data"
+           ResultSet rs =
+               stmt.executeQuery("SELECT record_id, metric_value FROM files.sorted_data"
                + " ORDER BY metric_value DESC"
                + " FETCH FIRST 5 ROWS ONLY")) {
         int count = 0;
@@ -324,8 +318,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT * FROM files.meta_test")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT * FROM files.meta_test")) {
         ResultSetMetaData meta = rs.getMetaData();
         assertTrue(meta.getColumnCount() >= 3,
             "Should have at least 3 columns");
@@ -342,8 +336,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM ("
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM ("
                + "  SELECT metric_name FROM files.subq_data"
                + "  GROUP BY metric_name"
                + ") sub")) {
@@ -385,8 +379,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM files.count_star_test")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.count_star_test")) {
         assertTrue(rs.next());
         assertEquals(250, rs.getLong("cnt"));
       }
@@ -411,8 +405,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(DISTINCT metric_name) AS dist_cnt"
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(DISTINCT metric_name) AS dist_cnt"
                + " FROM files.hll_test")) {
         assertTrue(rs.next());
         long count = rs.getLong("dist_cnt");
@@ -434,8 +428,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT metric_name, COUNT(*) AS cnt"
+           ResultSet rs =
+               stmt.executeQuery("SELECT metric_name, COUNT(*) AS cnt"
                + " FROM files.grouped"
                + " GROUP BY metric_name")) {
         int groups = 0;
@@ -457,8 +451,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT SUM(metric_value) AS total_val"
+           ResultSet rs =
+               stmt.executeQuery("SELECT SUM(metric_value) AS total_val"
                + " FROM files.sum_test")) {
         assertTrue(rs.next());
         double sum = rs.getDouble("total_val");
@@ -476,8 +470,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT MIN(metric_value) AS min_val,"
+           ResultSet rs =
+               stmt.executeQuery("SELECT MIN(metric_value) AS min_val,"
                + " MAX(metric_value) AS max_val"
                + " FROM files.minmax_test")) {
         assertTrue(rs.next());
@@ -498,8 +492,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT DISTINCT metric_name"
+           ResultSet rs =
+               stmt.executeQuery("SELECT DISTINCT metric_name"
                + " FROM files.distinct_test"
                + " ORDER BY metric_name")) {
         int count = 0;
@@ -522,8 +516,8 @@ public class DuckDBFullCoverageTest {
    * We verify the class is loadable and INSTANCE patterns work.
    */
   @Test public void testCatalogBuilderClassLoadable() throws Exception {
-    Class<?> clazz = Class.forName(
-        "org.apache.calcite.adapter.file.duckdb.DuckDBCatalogBuilder");
+    Class<?> clazz =
+        Class.forName("org.apache.calcite.adapter.file.duckdb.DuckDBCatalogBuilder");
     assertNotNull(clazz, "DuckDBCatalogBuilder class should be loadable");
   }
 
@@ -554,8 +548,8 @@ public class DuckDBFullCoverageTest {
     rootSchema.add("prog", schema);
 
     try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT COUNT(*) AS cnt FROM prog.prog_test")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT COUNT(*) AS cnt FROM prog.prog_test")) {
       assertTrue(rs.next());
       assertEquals(30, rs.getLong("cnt"));
     } finally {
@@ -572,8 +566,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT metric_name, COUNT(*) AS cnt"
+           ResultSet rs =
+               stmt.executeQuery("SELECT metric_name, COUNT(*) AS cnt"
                + " FROM files.having_test"
                + " GROUP BY metric_name"
                + " HAVING COUNT(*) >= 20"
@@ -596,8 +590,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM files.empty_data")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM files.empty_data")) {
         assertTrue(rs.next());
         assertEquals(0, rs.getLong("cnt"));
       }
@@ -613,8 +607,8 @@ public class DuckDBFullCoverageTest {
 
     try (Connection conn = createDuckDBConnection()) {
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) AS cnt FROM ("
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) AS cnt FROM ("
                + "  SELECT item_id, item_val FROM files.part_a"
                + "  UNION ALL"
                + "  SELECT item_id, item_val FROM files.part_b"

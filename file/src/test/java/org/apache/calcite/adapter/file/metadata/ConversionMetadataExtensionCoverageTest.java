@@ -23,12 +23,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -43,7 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Coverage tests for {@link ConversionMetadata} targeting:
@@ -72,8 +69,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 1. generateFileExtensions() - covers the full iteration
   // =========================================================================
 
-  @Test
-  void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
+  @Test void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
     Method method =
         ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
     method.setAccessible(true);
@@ -115,8 +111,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Should include compressed variants (e.g., csv.gz)");
   }
 
-  @Test
-  void testGenerateFileExtensionsContainsAllCompressedVariants()
+  @Test void testGenerateFileExtensionsContainsAllCompressedVariants()
       throws Exception {
     Method method =
         ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
@@ -150,10 +145,9 @@ class ConversionMetadataExtensionCoverageTest {
   // 2. detectTypeFromExtension() - covers all 24+ extensions
   // =========================================================================
 
-  @Test
-  void testDetectTypeFromExtensionDirectlyUsableTypes() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromExtension", String.class);
+  @Test void testDetectTypeFromExtensionDirectlyUsableTypes() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
 
     // Directly usable types
@@ -166,10 +160,9 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("arrow", method.invoke(null, "arrow"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionConvertibleTypes() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromExtension", String.class);
+  @Test void testDetectTypeFromExtensionConvertibleTypes() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
 
     // Convertible types
@@ -183,10 +176,9 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("pptx", method.invoke(null, "pptx"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionCompressedDirectlyUsable() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromExtension", String.class);
+  @Test void testDetectTypeFromExtensionCompressedDirectlyUsable() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
 
     // Compressed variants of directly usable types
@@ -195,10 +187,9 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("json", method.invoke(null, "json.gz"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionUnknown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromExtension", String.class);
+  @Test void testDetectTypeFromExtensionUnknown() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
 
     assertEquals("unknown", method.invoke(null, "foo"));
@@ -211,10 +202,9 @@ class ConversionMetadataExtensionCoverageTest {
   // 3. detectTypeFromTestFile() - covers the full method
   // =========================================================================
 
-  @Test
-  void testDetectTypeFromTestFileAllCandidateExtensions() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromTestFile", String.class);
+  @Test void testDetectTypeFromTestFileAllCandidateExtensions() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
 
     // All candidate extensions from the source code
@@ -239,10 +229,9 @@ class ConversionMetadataExtensionCoverageTest {
         "At least 14 extensions should be recognized, got " + knownCount);
   }
 
-  @Test
-  void testDetectTypeFromTestFileUnknownExtension() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectTypeFromTestFile", String.class);
+  @Test void testDetectTypeFromTestFileUnknownExtension() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
 
     assertEquals("unknown", method.invoke(null, "test.randomext"));
@@ -253,10 +242,9 @@ class ConversionMetadataExtensionCoverageTest {
   // 4. extractExtension() - covers null return path
   // =========================================================================
 
-  @Test
-  void testExtractExtensionWithTestPrefix() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractExtension", String.class);
+  @Test void testExtractExtensionWithTestPrefix() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
 
     assertEquals("csv", method.invoke(null, "test.csv"));
@@ -264,10 +252,9 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("xlsx", method.invoke(null, "test.xlsx"));
   }
 
-  @Test
-  void testExtractExtensionWithoutTestPrefix() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractExtension", String.class);
+  @Test void testExtractExtensionWithoutTestPrefix() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, "data.csv"));
@@ -279,10 +266,9 @@ class ConversionMetadataExtensionCoverageTest {
   // 5. detectConvertibleType() and detectDirectType() - branch coverage
   // =========================================================================
 
-  @Test
-  void testDetectConvertibleTypeAllBranches() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectConvertibleType", String.class);
+  @Test void testDetectConvertibleTypeAllBranches() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
 
     // Each branch in order
@@ -301,10 +287,9 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("html", method.invoke(null, "PAGE.HTML"));
   }
 
-  @Test
-  void testDetectDirectTypeAllBranches() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectDirectType", String.class);
+  @Test void testDetectDirectTypeAllBranches() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
 
     // Each branch in order
@@ -326,8 +311,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 6. Concurrent save/load - covers JVM_LOCKS and thread contention
   // =========================================================================
 
-  @Test
-  void testConcurrentSaveMetadata() throws Exception {
+  @Test void testConcurrentSaveMetadata() throws Exception {
     int numThreads = 8;
     int operationsPerThread = 10;
     ExecutorService executor = Executors.newFixedThreadPool(numThreads);
@@ -339,7 +323,8 @@ class ConversionMetadataExtensionCoverageTest {
 
     for (int t = 0; t < numThreads; t++) {
       final int threadId = t;
-      futures.add(executor.submit(() -> {
+      futures.add(
+          executor.submit(() -> {
         try {
           startLatch.await(); // Wait for all threads to be ready
         } catch (InterruptedException e) {
@@ -384,8 +369,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Reloaded metadata should not be empty");
   }
 
-  @Test
-  void testConcurrentReadWriteMetadata() throws Exception {
+  @Test void testConcurrentReadWriteMetadata() throws Exception {
     // Pre-populate some data
     for (int i = 0; i < 5; i++) {
       ConversionMetadata.ConversionRecord record =
@@ -409,7 +393,8 @@ class ConversionMetadataExtensionCoverageTest {
 
     // Reader threads
     for (int t = 0; t < numReaders; t++) {
-      futures.add(executor.submit(() -> {
+      futures.add(
+          executor.submit(() -> {
         try {
           startLatch.await();
         } catch (InterruptedException e) {
@@ -433,7 +418,8 @@ class ConversionMetadataExtensionCoverageTest {
     // Writer threads
     for (int t = 0; t < numWriters; t++) {
       final int threadId = t;
-      futures.add(executor.submit(() -> {
+      futures.add(
+          executor.submit(() -> {
         try {
           startLatch.await();
         } catch (InterruptedException e) {
@@ -475,8 +461,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 7. loadMetadata cleanup paths - stale records
   // =========================================================================
 
-  @Test
-  void testLoadMetadataRemovesStaleFileBasedRecords() throws Exception {
+  @Test void testLoadMetadataRemovesStaleFileBasedRecords() throws Exception {
     // Create a file-based record with a file that exists
     File original = new File(tempDir.toFile(), "exists.csv");
     File converted = new File(tempDir.toFile(), "exists.json");
@@ -516,8 +501,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Valid record should still exist after cleanup");
   }
 
-  @Test
-  void testLoadMetadataKeepsTableBasedRecords() throws Exception {
+  @Test void testLoadMetadataKeepsTableBasedRecords() throws Exception {
     // Create a table-based record (key is a table name, no path separators)
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord();
@@ -535,8 +519,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Table-based records should be preserved during cleanup");
   }
 
-  @Test
-  void testLoadMetadataKeepsRemoteUrlRecords() throws Exception {
+  @Test void testLoadMetadataKeepsRemoteUrlRecords() throws Exception {
     // Create a record with a remote URL original file
     File converted = new File(tempDir.toFile(), "remote_data.json");
     Files.write(converted.toPath(), "{}".getBytes());
@@ -564,8 +547,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 8. saveMetadata creates file and temp file cleanup
   // =========================================================================
 
-  @Test
-  void testSaveMetadataCreatesFile() throws Exception {
+  @Test void testSaveMetadataCreatesFile() throws Exception {
     File metadataFile = new File(tempDir.toFile(), ".conversions.json");
 
     ConversionMetadata.ConversionRecord record =
@@ -579,8 +561,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Metadata file should be created after save");
   }
 
-  @Test
-  void testSaveMetadataAtomicMoveRoundTrip() throws Exception {
+  @Test void testSaveMetadataAtomicMoveRoundTrip() throws Exception {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord();
     record.tableName = "atomic_test";
@@ -608,8 +589,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 9. Multiple ConversionMetadata instances sharing same directory
   // =========================================================================
 
-  @Test
-  void testMultipleInstancesSameDirectory() throws Exception {
+  @Test void testMultipleInstancesSameDirectory() throws Exception {
     ConversionMetadata instance1 = new ConversionMetadata(tempDir.toFile());
     ConversionMetadata.ConversionRecord record1 =
         new ConversionMetadata.ConversionRecord();
@@ -638,24 +618,21 @@ class ConversionMetadataExtensionCoverageTest {
   // 10. S3 URI constructor path
   // =========================================================================
 
-  @Test
-  void testConstructorWithS3Uri() {
+  @Test void testConstructorWithS3Uri() {
     ConversionMetadata s3Metadata =
         new ConversionMetadata("s3://my-bucket/data/schema");
     assertNotNull(s3Metadata);
     assertTrue(s3Metadata.getAllConversions().isEmpty());
   }
 
-  @Test
-  void testConstructorWithFtpUri() {
+  @Test void testConstructorWithFtpUri() {
     ConversionMetadata ftpMetadata =
         new ConversionMetadata("ftp://server/data/schema");
     assertNotNull(ftpMetadata);
     assertTrue(ftpMetadata.getAllConversions().isEmpty());
   }
 
-  @Test
-  void testConstructorWithLocalStringPath() {
+  @Test void testConstructorWithLocalStringPath() {
     ConversionMetadata localMetadata =
         new ConversionMetadata(tempDir.toString());
     assertNotNull(localMetadata);
@@ -665,10 +642,9 @@ class ConversionMetadataExtensionCoverageTest {
   // 11. detectSourceType with various file paths
   // =========================================================================
 
-  @Test
-  void testDetectSourceTypeCoversAllTypes() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "detectSourceType", String.class);
+  @Test void testDetectSourceTypeCoversAllTypes() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
 
     // Direct types
@@ -699,8 +675,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 12. Concurrent reload operations
   // =========================================================================
 
-  @Test
-  void testConcurrentReloadFromMultipleInstances() throws Exception {
+  @Test void testConcurrentReloadFromMultipleInstances() throws Exception {
     // Pre-populate metadata
     for (int i = 0; i < 10; i++) {
       ConversionMetadata.ConversionRecord record =
@@ -718,7 +693,8 @@ class ConversionMetadataExtensionCoverageTest {
 
     List<Future<?>> futures = new ArrayList<>();
     for (int t = 0; t < numThreads; t++) {
-      futures.add(executor.submit(() -> {
+      futures.add(
+          executor.submit(() -> {
         try {
           startLatch.await();
         } catch (InterruptedException e) {
@@ -760,8 +736,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 13. Clear and re-save cycle
   // =========================================================================
 
-  @Test
-  void testClearDeletesMetadataFile() throws Exception {
+  @Test void testClearDeletesMetadataFile() throws Exception {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord();
     record.tableName = "clear_me";
@@ -779,8 +754,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Metadata file should be deleted after clear");
   }
 
-  @Test
-  void testClearThenSave() throws Exception {
+  @Test void testClearThenSave() throws Exception {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord();
     record.tableName = "old_data";
@@ -808,8 +782,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 14. loadMetadata with corrupted file
   // =========================================================================
 
-  @Test
-  void testLoadMetadataWithCorruptedFile() throws Exception {
+  @Test void testLoadMetadataWithCorruptedFile() throws Exception {
     File metadataFile = new File(tempDir.toFile(), ".conversions.json");
     try (FileWriter writer = new FileWriter(metadataFile)) {
       writer.write("this is not valid JSON {{{");
@@ -820,8 +793,7 @@ class ConversionMetadataExtensionCoverageTest {
         "Corrupted metadata should result in empty conversions");
   }
 
-  @Test
-  void testLoadMetadataWithEmptyFile() throws Exception {
+  @Test void testLoadMetadataWithEmptyFile() throws Exception {
     File metadataFile = new File(tempDir.toFile(), ".conversions.json");
     Files.write(metadataFile.toPath(), new byte[0]);
 
@@ -834,8 +806,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 15. hasChanged with local file newer than timestamp
   // =========================================================================
 
-  @Test
-  void testHasChangedLocalFileNewerThanRecord() throws Exception {
+  @Test void testHasChangedLocalFileNewerThanRecord() throws Exception {
     File sourceFile = new File(tempDir.toFile(), "changing.csv");
     Files.write(sourceFile.toPath(), "original".getBytes());
 

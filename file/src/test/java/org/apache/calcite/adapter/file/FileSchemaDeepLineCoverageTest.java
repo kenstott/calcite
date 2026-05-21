@@ -296,8 +296,8 @@ class FileSchemaDeepLineCoverageTest {
     views.add(v);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t08", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t08", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, views,
         (List<Map<String, Object>>) null,
         (String) null, "SMART_CASING", "SMART_CASING",
@@ -325,8 +325,8 @@ class FileSchemaDeepLineCoverageTest {
     mvs.add(mv);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t09", d, d, (String) null,
-        (List<Map<String, Object>>) null, PARQUET, false,
+    FileSchema s =
+        new FileSchema(p, "t09", d, d, (String) null, (List<Map<String, Object>>) null, PARQUET, false,
         mvs, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
         (String) null, "SMART_CASING", "SMART_CASING",
@@ -354,8 +354,8 @@ class FileSchemaDeepLineCoverageTest {
     mvs.add(mv);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t10", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t10", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         mvs, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
         (String) null, "SMART_CASING", "SMART_CASING",
@@ -375,8 +375,8 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     // 22-arg constructor with comment
-    FileSchema s = new FileSchema(p, "t11", d, (File) null,
-        (String) null, (String) null,
+    FileSchema s =
+        new FileSchema(p, "t11", d, (File) null, (String) null, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -465,8 +465,8 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     // 11-arg constructor with refreshInterval
-    FileSchema s = new FileSchema(p, "t18", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t18", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, "5 minutes",
         "SMART_CASING", "SMART_CASING",
@@ -544,8 +544,8 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     // 13-arg constructor with casing
-    FileSchema s = new FileSchema(p, "t23", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t23", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, (String) null,
         "UPPER", "UPPER",
@@ -569,8 +569,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(d, "MyFile.csv", "a,b\n1,2\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t24", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t24", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, (String) null,
         "LOWER", "LOWER",
@@ -668,8 +668,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "UPPER_NAME", d, (File) null,
-        (String) null, (String) null,
+    FileSchema s =
+        new FileSchema(p, "UPPER_NAME", d, (File) null, (String) null, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -893,13 +893,13 @@ class FileSchemaDeepLineCoverageTest {
     File d = dir("t44");
     writeCsv(d, "data.csv", "id\n1\n");
 
-    File tmpBase = new File(System.getProperty("java.io.tmpdir"),
-        "calcite_test_eph_" + System.nanoTime());
+    File tmpBase =
+        new File(System.getProperty("java.io.tmpdir"), "calcite_test_eph_" + System.nanoTime());
     tmpBase.mkdirs();
     try {
       SchemaPlus p = rootSchema();
-      FileSchema s = new FileSchema(p, "t44", d, tmpBase,
-          (String) null,
+      FileSchema s =
+          new FileSchema(p, "t44", d, tmpBase, (String) null,
           (List<Map<String, Object>>) null, LINQ4J, false,
           (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
           (List<Map<String, Object>>) null,
@@ -922,8 +922,8 @@ class FileSchemaDeepLineCoverageTest {
         "[{\"id\":1,\"address\":{\"city\":\"NYC\",\"zip\":\"10001\"}}]");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t45", d, (File) null,
-        (String) null,
+    FileSchema s =
+        new FileSchema(p, "t45", d, (File) null, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -1122,8 +1122,8 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     // 11-arg constructor with refreshInterval
-    FileSchema s = new FileSchema(p, "t55", d, d, (String) null,
-        (List<Map<String, Object>>) null, PARQUET, false,
+    FileSchema s =
+        new FileSchema(p, "t55", d, d, (String) null, (List<Map<String, Object>>) null, PARQUET, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, "5 minutes",
         "SMART_CASING", "SMART_CASING",
@@ -1154,8 +1154,8 @@ class FileSchemaDeepLineCoverageTest {
     views.add(v2);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t56", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t56", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, views,
         (List<Map<String, Object>>) null,
         (String) null, "SMART_CASING", "SMART_CASING",
@@ -1186,8 +1186,8 @@ class FileSchemaDeepLineCoverageTest {
     views.add(v2);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t57", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t57", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, views,
         (List<Map<String, Object>>) null,
         (String) null, "SMART_CASING", "SMART_CASING",
@@ -1225,24 +1225,24 @@ class FileSchemaDeepLineCoverageTest {
     SchemaPlus p = rootSchema();
 
     // 5-arg constructor
-    FileSchema s2 = new FileSchema(p, "s2", d1,
-        (List<Map<String, Object>>) null, LINQ4J);
+    FileSchema s2 =
+        new FileSchema(p, "s2", d1, (List<Map<String, Object>>) null, LINQ4J);
     assertNotNull(s2.getTableMap());
 
     // 6-arg constructor with recursive
-    FileSchema s3 = new FileSchema(p, "s3", d2,
-        (List<Map<String, Object>>) null, LINQ4J, false);
+    FileSchema s3 =
+        new FileSchema(p, "s3", d2, (List<Map<String, Object>>) null, LINQ4J, false);
     assertNotNull(s3.getTableMap());
 
     // 8-arg constructor with materializations and views
-    FileSchema s4 = new FileSchema(p, "s4", d3,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s4 =
+        new FileSchema(p, "s4", d3, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null);
     assertNotNull(s4.getTableMap());
 
     // 11-arg with refreshInterval
-    FileSchema s5 = new FileSchema(p, "s5", d4, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s5 =
+        new FileSchema(p, "s5", d4, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, (String) null);
     assertNotNull(s5.getTableMap());
@@ -1311,8 +1311,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(sub, "report.csv", "id,val\n1,100\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t62", d, d, "data_*/*.csv",
-        (List<Map<String, Object>>) null, LINQ4J, true,
+    FileSchema s =
+        new FileSchema(p, "t62", d, d, "data_*/*.csv", (List<Map<String, Object>>) null, LINQ4J, true,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, (String) null,
         "SMART_CASING", "SMART_CASING",
@@ -1331,8 +1331,8 @@ class FileSchemaDeepLineCoverageTest {
     writeJson(d, "refresh_json.json", "[{\"id\":1,\"val\":\"hello\"}]");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t63", d, d, (String) null,
-        (List<Map<String, Object>>) null, PARQUET, false,
+    FileSchema s =
+        new FileSchema(p, "t63", d, d, (String) null, (List<Map<String, Object>>) null, PARQUET, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, "10 minutes",
         "SMART_CASING", "SMART_CASING",
@@ -1449,8 +1449,8 @@ class FileSchemaDeepLineCoverageTest {
     csvTI.put("sampleSize", 10);
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t69", d, null, null,
-        null, null, LINQ4J, false, null, null, null, null,
+    FileSchema s =
+        new FileSchema(p, "t69", d, null, null, null, null, LINQ4J, false, null, null, null, null,
         "SMART_CASING", "SMART_CASING", null, null, null, csvTI, false, null, null);
     p.add("t69", s);
 
@@ -1465,8 +1465,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t70", d, null, null,
-        null, null, LINQ4J, false, null, null, null, null,
+    FileSchema s =
+        new FileSchema(p, "t70", d, null, null, null, null, LINQ4J, false, null, null, null, null,
         "SMART_CASING", "SMART_CASING", null, null, null, null, false, null, null);
     p.add("t70", s);
 
@@ -1526,8 +1526,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(d, "auto_refresh.csv", "id,name\n1,test\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t73", d, d, (String) null,
-        (List<Map<String, Object>>) null, PARQUET, false,
+    FileSchema s =
+        new FileSchema(p, "t73", d, d, (String) null, (List<Map<String, Object>>) null, PARQUET, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, "15 minutes",
         "SMART_CASING", "SMART_CASING",
@@ -1711,8 +1711,8 @@ class FileSchemaDeepLineCoverageTest {
     writeCsv(d, "My_Mixed_Case.csv", "id\n1\n");
 
     SchemaPlus p = rootSchema();
-    FileSchema s = new FileSchema(p, "t80", d, d, (String) null,
-        (List<Map<String, Object>>) null, LINQ4J, false,
+    FileSchema s =
+        new FileSchema(p, "t80", d, d, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null, (String) null,
         "SMART_CASING", "SMART_CASING",

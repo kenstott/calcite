@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -123,8 +121,8 @@ public class DuckDBConfigIntegrationTest {
     Properties additionalSettings = new Properties();
     additionalSettings.setProperty("custom", "value");
 
-    DuckDBConfig config = new DuckDBConfig(
-        "4GB", 16, "95%", "/tmp/duck-temp",
+    DuckDBConfig config =
+        new DuckDBConfig("4GB", 16, "95%", "/tmp/duck-temp",
         true, false, true, 4096, additionalSettings);
 
     assertEquals("4GB", config.getMemoryLimit());
@@ -139,8 +137,8 @@ public class DuckDBConfigIntegrationTest {
   }
 
   @Test public void testConfigFullConstructorWithNulls() {
-    DuckDBConfig config = new DuckDBConfig(
-        null, -1, null, null,
+    DuckDBConfig config =
+        new DuckDBConfig(null, -1, null, null,
         false, true, false, -1, null);
 
     assertEquals(DuckDBConfig.DEFAULT_MEMORY_LIMIT, config.getMemoryLimit());
@@ -152,8 +150,8 @@ public class DuckDBConfigIntegrationTest {
   }
 
   @Test public void testToDuckDBSettings() {
-    DuckDBConfig config = new DuckDBConfig(
-        "2GB", 4, "80%", "/tmp/duck",
+    DuckDBConfig config =
+        new DuckDBConfig("2GB", 4, "80%", "/tmp/duck",
         false, true, true, 1024, null);
 
     String[] settings = config.toDuckDBSettings();
@@ -197,8 +195,8 @@ public class DuckDBConfigIntegrationTest {
     additional.setProperty("custom_bool", "true");
     additional.setProperty("custom_string", "hello");
 
-    DuckDBConfig config = new DuckDBConfig(
-        "1GB", 2, "80%", null,
+    DuckDBConfig config =
+        new DuckDBConfig("1GB", 2, "80%", null,
         false, true, true, 1024, additional);
 
     String[] settings = config.toDuckDBSettings();
@@ -250,8 +248,8 @@ public class DuckDBConfigIntegrationTest {
   }
 
   @Test public void testDuckDBSettingsApply() throws Exception {
-    DuckDBConfig config = new DuckDBConfig(
-        "512MB", 2, "50%", null,
+    DuckDBConfig config =
+        new DuckDBConfig("512MB", 2, "50%", null,
         false, true, true, 1024, null);
 
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
@@ -267,8 +265,8 @@ public class DuckDBConfigIntegrationTest {
 
       // Verify a setting was applied with a fresh statement
       try (Statement queryStmt = conn.createStatement()) {
-        ResultSet rs = queryStmt.executeQuery(
-            "SELECT current_setting('threads') AS threads");
+        ResultSet rs =
+            queryStmt.executeQuery("SELECT current_setting('threads') AS threads");
         assertTrue(rs.next());
         String threads = rs.getString("threads");
         assertNotNull(threads);
@@ -293,8 +291,8 @@ public class DuckDBConfigIntegrationTest {
       stmt.execute("COPY test_data TO '" + parquetPath + "' (FORMAT PARQUET)");
 
       // Read back from parquet
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_parquet('" + parquetPath + "') ORDER BY id");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_parquet('" + parquetPath + "') ORDER BY id");
 
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("id"));
@@ -322,8 +320,8 @@ public class DuckDBConfigIntegrationTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_csv_auto('" + csvPath + "') ORDER BY id");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_csv_auto('" + csvPath + "') ORDER BY id");
 
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("id"));
@@ -346,8 +344,8 @@ public class DuckDBConfigIntegrationTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT * FROM read_json_auto('" + jsonPath + "') ORDER BY id");
+      ResultSet rs =
+          stmt.executeQuery("SELECT * FROM read_json_auto('" + jsonPath + "') ORDER BY id");
 
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("id"));
@@ -378,8 +376,8 @@ public class DuckDBConfigIntegrationTest {
       stmt.execute("COPY t1 TO '" + dir + "/part2.parquet' (FORMAT PARQUET)");
 
       // Read all parquet files via glob
-      ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) AS cnt FROM read_parquet('" + dir + "/*.parquet')");
+      ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) AS cnt FROM read_parquet('" + dir + "/*.parquet')");
       assertTrue(rs.next());
       assertEquals(4, rs.getInt("cnt"));
       rs.close();
@@ -427,8 +425,8 @@ public class DuckDBConfigIntegrationTest {
       stmt.execute("CREATE TABLE agg_test (category VARCHAR, amount DOUBLE)");
       stmt.execute("INSERT INTO agg_test VALUES ('A', 10), ('A', 20), ('B', 30), ('B', 40)");
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT category, SUM(amount) AS total, COUNT(*) AS cnt, "
+      ResultSet rs =
+          stmt.executeQuery("SELECT category, SUM(amount) AS total, COUNT(*) AS cnt, "
           + "AVG(amount) AS avg_amt "
           + "FROM agg_test GROUP BY category ORDER BY category");
 

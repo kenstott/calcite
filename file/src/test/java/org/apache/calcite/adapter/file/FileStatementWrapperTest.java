@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -61,8 +60,7 @@ public class FileStatementWrapperTest {
 
   // === ResultSet-wrapping methods ===
 
-  @Test
-  public void testExecuteQueryWrapsResultSet() throws Exception {
+  @Test public void testExecuteQueryWrapsResultSet() throws Exception {
     ResultSet rs = mock(ResultSet.class);
     when(delegate.executeQuery(anyString())).thenReturn(rs);
 
@@ -72,8 +70,7 @@ public class FileStatementWrapperTest {
     verify(delegate).executeQuery("SELECT 1");
   }
 
-  @Test
-  public void testGetResultSetWrapsResultSet() throws Exception {
+  @Test public void testGetResultSetWrapsResultSet() throws Exception {
     ResultSet rs = mock(ResultSet.class);
     when(delegate.getResultSet()).thenReturn(rs);
 
@@ -83,16 +80,14 @@ public class FileStatementWrapperTest {
     verify(delegate).getResultSet();
   }
 
-  @Test
-  public void testGetResultSetNullReturnsNull() throws Exception {
+  @Test public void testGetResultSetNullReturnsNull() throws Exception {
     when(delegate.getResultSet()).thenReturn(null);
 
     ResultSet result = wrapper.getResultSet();
     assertNull(result);
   }
 
-  @Test
-  public void testGetGeneratedKeysWrapsResultSet() throws Exception {
+  @Test public void testGetGeneratedKeysWrapsResultSet() throws Exception {
     ResultSet rs = mock(ResultSet.class);
     when(delegate.getGeneratedKeys()).thenReturn(rs);
 
@@ -102,8 +97,7 @@ public class FileStatementWrapperTest {
     verify(delegate).getGeneratedKeys();
   }
 
-  @Test
-  public void testGetGeneratedKeysNullReturnsNull() throws Exception {
+  @Test public void testGetGeneratedKeysNullReturnsNull() throws Exception {
     when(delegate.getGeneratedKeys()).thenReturn(null);
 
     ResultSet result = wrapper.getGeneratedKeys();
@@ -112,82 +106,71 @@ public class FileStatementWrapperTest {
 
   // === Delegating methods ===
 
-  @Test
-  public void testExecuteUpdate() throws Exception {
+  @Test public void testExecuteUpdate() throws Exception {
     when(delegate.executeUpdate(anyString())).thenReturn(1);
     int result = wrapper.executeUpdate("UPDATE t SET x=1");
     assertTrue(result == 1);
     verify(delegate).executeUpdate("UPDATE t SET x=1");
   }
 
-  @Test
-  public void testClose() throws Exception {
+  @Test public void testClose() throws Exception {
     doNothing().when(delegate).close();
     wrapper.close();
     verify(delegate).close();
   }
 
-  @Test
-  public void testGetMaxFieldSize() throws Exception {
+  @Test public void testGetMaxFieldSize() throws Exception {
     when(delegate.getMaxFieldSize()).thenReturn(512);
     int result = wrapper.getMaxFieldSize();
     assertTrue(result == 512);
     verify(delegate).getMaxFieldSize();
   }
 
-  @Test
-  public void testSetMaxFieldSize() throws Exception {
+  @Test public void testSetMaxFieldSize() throws Exception {
     doNothing().when(delegate).setMaxFieldSize(anyInt());
     wrapper.setMaxFieldSize(256);
     verify(delegate).setMaxFieldSize(256);
   }
 
-  @Test
-  public void testGetMaxRows() throws Exception {
+  @Test public void testGetMaxRows() throws Exception {
     when(delegate.getMaxRows()).thenReturn(100);
     int result = wrapper.getMaxRows();
     assertTrue(result == 100);
     verify(delegate).getMaxRows();
   }
 
-  @Test
-  public void testSetMaxRows() throws Exception {
+  @Test public void testSetMaxRows() throws Exception {
     doNothing().when(delegate).setMaxRows(anyInt());
     wrapper.setMaxRows(50);
     verify(delegate).setMaxRows(50);
   }
 
-  @Test
-  public void testSetEscapeProcessing() throws Exception {
+  @Test public void testSetEscapeProcessing() throws Exception {
     doNothing().when(delegate).setEscapeProcessing(anyBoolean());
     wrapper.setEscapeProcessing(true);
     verify(delegate).setEscapeProcessing(true);
   }
 
-  @Test
-  public void testGetQueryTimeout() throws Exception {
+  @Test public void testGetQueryTimeout() throws Exception {
     when(delegate.getQueryTimeout()).thenReturn(30);
     int result = wrapper.getQueryTimeout();
     assertTrue(result == 30);
     verify(delegate).getQueryTimeout();
   }
 
-  @Test
-  public void testSetQueryTimeout() throws Exception {
+  @Test public void testSetQueryTimeout() throws Exception {
     doNothing().when(delegate).setQueryTimeout(anyInt());
     wrapper.setQueryTimeout(60);
     verify(delegate).setQueryTimeout(60);
   }
 
-  @Test
-  public void testCancel() throws Exception {
+  @Test public void testCancel() throws Exception {
     doNothing().when(delegate).cancel();
     wrapper.cancel();
     verify(delegate).cancel();
   }
 
-  @Test
-  public void testGetWarnings() throws Exception {
+  @Test public void testGetWarnings() throws Exception {
     SQLWarning warning = mock(SQLWarning.class);
     when(delegate.getWarnings()).thenReturn(warning);
     SQLWarning result = wrapper.getWarnings();
@@ -195,106 +178,92 @@ public class FileStatementWrapperTest {
     verify(delegate).getWarnings();
   }
 
-  @Test
-  public void testClearWarnings() throws Exception {
+  @Test public void testClearWarnings() throws Exception {
     doNothing().when(delegate).clearWarnings();
     wrapper.clearWarnings();
     verify(delegate).clearWarnings();
   }
 
-  @Test
-  public void testSetCursorName() throws Exception {
+  @Test public void testSetCursorName() throws Exception {
     doNothing().when(delegate).setCursorName(anyString());
     wrapper.setCursorName("cursor1");
     verify(delegate).setCursorName("cursor1");
   }
 
-  @Test
-  public void testExecuteString() throws Exception {
+  @Test public void testExecuteString() throws Exception {
     when(delegate.execute(anyString())).thenReturn(true);
     boolean result = wrapper.execute("SELECT 1");
     assertTrue(result);
     verify(delegate).execute("SELECT 1");
   }
 
-  @Test
-  public void testGetUpdateCount() throws Exception {
+  @Test public void testGetUpdateCount() throws Exception {
     when(delegate.getUpdateCount()).thenReturn(5);
     int result = wrapper.getUpdateCount();
     assertTrue(result == 5);
     verify(delegate).getUpdateCount();
   }
 
-  @Test
-  public void testGetMoreResults() throws Exception {
+  @Test public void testGetMoreResults() throws Exception {
     when(delegate.getMoreResults()).thenReturn(false);
     boolean result = wrapper.getMoreResults();
     assertFalse(result);
     verify(delegate).getMoreResults();
   }
 
-  @Test
-  public void testSetFetchDirection() throws Exception {
+  @Test public void testSetFetchDirection() throws Exception {
     doNothing().when(delegate).setFetchDirection(anyInt());
     wrapper.setFetchDirection(ResultSet.FETCH_FORWARD);
     verify(delegate).setFetchDirection(ResultSet.FETCH_FORWARD);
   }
 
-  @Test
-  public void testGetFetchDirection() throws Exception {
+  @Test public void testGetFetchDirection() throws Exception {
     when(delegate.getFetchDirection()).thenReturn(ResultSet.FETCH_FORWARD);
     int result = wrapper.getFetchDirection();
     assertTrue(result == ResultSet.FETCH_FORWARD);
     verify(delegate).getFetchDirection();
   }
 
-  @Test
-  public void testSetFetchSize() throws Exception {
+  @Test public void testSetFetchSize() throws Exception {
     doNothing().when(delegate).setFetchSize(anyInt());
     wrapper.setFetchSize(100);
     verify(delegate).setFetchSize(100);
   }
 
-  @Test
-  public void testGetFetchSize() throws Exception {
+  @Test public void testGetFetchSize() throws Exception {
     when(delegate.getFetchSize()).thenReturn(200);
     int result = wrapper.getFetchSize();
     assertTrue(result == 200);
     verify(delegate).getFetchSize();
   }
 
-  @Test
-  public void testGetResultSetConcurrency() throws Exception {
+  @Test public void testGetResultSetConcurrency() throws Exception {
     when(delegate.getResultSetConcurrency()).thenReturn(ResultSet.CONCUR_READ_ONLY);
     int result = wrapper.getResultSetConcurrency();
     assertTrue(result == ResultSet.CONCUR_READ_ONLY);
     verify(delegate).getResultSetConcurrency();
   }
 
-  @Test
-  public void testGetResultSetType() throws Exception {
+  @Test public void testGetResultSetType() throws Exception {
     when(delegate.getResultSetType()).thenReturn(ResultSet.TYPE_FORWARD_ONLY);
     int result = wrapper.getResultSetType();
     assertTrue(result == ResultSet.TYPE_FORWARD_ONLY);
     verify(delegate).getResultSetType();
   }
 
-  @Test
-  public void testAddBatch() throws Exception {
+  @Test public void testAddBatch() throws Exception {
     doNothing().when(delegate).addBatch(anyString());
     wrapper.addBatch("INSERT INTO t VALUES(1)");
     verify(delegate).addBatch("INSERT INTO t VALUES(1)");
   }
 
-  @Test
-  public void testClearBatch() throws Exception {
+  @Test public void testClearBatch() throws Exception {
     doNothing().when(delegate).clearBatch();
     wrapper.clearBatch();
     verify(delegate).clearBatch();
   }
 
-  @Test
-  public void testExecuteBatch() throws Exception {
+  @Test public void testExecuteBatch() throws Exception {
     int[] counts = {1, 2};
     when(delegate.executeBatch()).thenReturn(counts);
     int[] result = wrapper.executeBatch();
@@ -302,8 +271,7 @@ public class FileStatementWrapperTest {
     verify(delegate).executeBatch();
   }
 
-  @Test
-  public void testGetConnection() throws Exception {
+  @Test public void testGetConnection() throws Exception {
     Connection conn = mock(Connection.class);
     when(delegate.getConnection()).thenReturn(conn);
     Connection result = wrapper.getConnection();
@@ -311,24 +279,21 @@ public class FileStatementWrapperTest {
     verify(delegate).getConnection();
   }
 
-  @Test
-  public void testGetMoreResultsWithCurrent() throws Exception {
+  @Test public void testGetMoreResultsWithCurrent() throws Exception {
     when(delegate.getMoreResults(anyInt())).thenReturn(false);
     boolean result = wrapper.getMoreResults(Statement.CLOSE_CURRENT_RESULT);
     assertFalse(result);
     verify(delegate).getMoreResults(Statement.CLOSE_CURRENT_RESULT);
   }
 
-  @Test
-  public void testExecuteUpdateWithAutoGeneratedKeys() throws Exception {
+  @Test public void testExecuteUpdateWithAutoGeneratedKeys() throws Exception {
     when(delegate.executeUpdate(anyString(), anyInt())).thenReturn(1);
     int result = wrapper.executeUpdate("INSERT INTO t VALUES(1)", Statement.RETURN_GENERATED_KEYS);
     assertTrue(result == 1);
     verify(delegate).executeUpdate("INSERT INTO t VALUES(1)", Statement.RETURN_GENERATED_KEYS);
   }
 
-  @Test
-  public void testExecuteUpdateWithColumnIndexes() throws Exception {
+  @Test public void testExecuteUpdateWithColumnIndexes() throws Exception {
     int[] cols = {1};
     when(delegate.executeUpdate(anyString(), any(int[].class))).thenReturn(1);
     int result = wrapper.executeUpdate("INSERT INTO t VALUES(1)", cols);
@@ -336,8 +301,7 @@ public class FileStatementWrapperTest {
     verify(delegate).executeUpdate("INSERT INTO t VALUES(1)", cols);
   }
 
-  @Test
-  public void testExecuteUpdateWithColumnNames() throws Exception {
+  @Test public void testExecuteUpdateWithColumnNames() throws Exception {
     String[] names = {"id"};
     when(delegate.executeUpdate(anyString(), any(String[].class))).thenReturn(1);
     int result = wrapper.executeUpdate("INSERT INTO t VALUES(1)", names);
@@ -345,16 +309,14 @@ public class FileStatementWrapperTest {
     verify(delegate).executeUpdate("INSERT INTO t VALUES(1)", names);
   }
 
-  @Test
-  public void testExecuteWithAutoGeneratedKeys() throws Exception {
+  @Test public void testExecuteWithAutoGeneratedKeys() throws Exception {
     when(delegate.execute(anyString(), anyInt())).thenReturn(false);
     boolean result = wrapper.execute("INSERT INTO t VALUES(1)", Statement.RETURN_GENERATED_KEYS);
     assertFalse(result);
     verify(delegate).execute("INSERT INTO t VALUES(1)", Statement.RETURN_GENERATED_KEYS);
   }
 
-  @Test
-  public void testExecuteWithColumnIndexes() throws Exception {
+  @Test public void testExecuteWithColumnIndexes() throws Exception {
     int[] cols = {1};
     when(delegate.execute(anyString(), any(int[].class))).thenReturn(false);
     boolean result = wrapper.execute("INSERT INTO t VALUES(1)", cols);
@@ -362,8 +324,7 @@ public class FileStatementWrapperTest {
     verify(delegate).execute("INSERT INTO t VALUES(1)", cols);
   }
 
-  @Test
-  public void testExecuteWithColumnNames() throws Exception {
+  @Test public void testExecuteWithColumnNames() throws Exception {
     String[] names = {"id"};
     when(delegate.execute(anyString(), any(String[].class))).thenReturn(false);
     boolean result = wrapper.execute("INSERT INTO t VALUES(1)", names);
@@ -371,62 +332,54 @@ public class FileStatementWrapperTest {
     verify(delegate).execute("INSERT INTO t VALUES(1)", names);
   }
 
-  @Test
-  public void testGetResultSetHoldability() throws Exception {
+  @Test public void testGetResultSetHoldability() throws Exception {
     when(delegate.getResultSetHoldability()).thenReturn(ResultSet.HOLD_CURSORS_OVER_COMMIT);
     int result = wrapper.getResultSetHoldability();
     assertTrue(result == ResultSet.HOLD_CURSORS_OVER_COMMIT);
     verify(delegate).getResultSetHoldability();
   }
 
-  @Test
-  public void testIsClosed() throws Exception {
+  @Test public void testIsClosed() throws Exception {
     when(delegate.isClosed()).thenReturn(false);
     boolean result = wrapper.isClosed();
     assertFalse(result);
     verify(delegate).isClosed();
   }
 
-  @Test
-  public void testSetPoolable() throws Exception {
+  @Test public void testSetPoolable() throws Exception {
     doNothing().when(delegate).setPoolable(anyBoolean());
     wrapper.setPoolable(true);
     verify(delegate).setPoolable(true);
   }
 
-  @Test
-  public void testIsPoolable() throws Exception {
+  @Test public void testIsPoolable() throws Exception {
     when(delegate.isPoolable()).thenReturn(true);
     boolean result = wrapper.isPoolable();
     assertTrue(result);
     verify(delegate).isPoolable();
   }
 
-  @Test
-  public void testCloseOnCompletion() throws Exception {
+  @Test public void testCloseOnCompletion() throws Exception {
     doNothing().when(delegate).closeOnCompletion();
     wrapper.closeOnCompletion();
     verify(delegate).closeOnCompletion();
   }
 
-  @Test
-  public void testIsCloseOnCompletion() throws Exception {
+  @Test public void testIsCloseOnCompletion() throws Exception {
     when(delegate.isCloseOnCompletion()).thenReturn(true);
     boolean result = wrapper.isCloseOnCompletion();
     assertTrue(result);
     verify(delegate).isCloseOnCompletion();
   }
 
-  @Test
-  public void testUnwrap() throws Exception {
+  @Test public void testUnwrap() throws Exception {
     when(delegate.unwrap(Statement.class)).thenReturn(delegate);
     Statement result = wrapper.unwrap(Statement.class);
     assertSame(delegate, result);
     verify(delegate).unwrap(Statement.class);
   }
 
-  @Test
-  public void testIsWrapperFor() throws Exception {
+  @Test public void testIsWrapperFor() throws Exception {
     when(delegate.isWrapperFor(Statement.class)).thenReturn(true);
     boolean result = wrapper.isWrapperFor(Statement.class);
     assertTrue(result);

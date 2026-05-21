@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,8 +58,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for ConversionRecord constructors
   // ====================================================================
 
-  @Test
-  void testConversionRecordDefaultConstructor() {
+  @Test void testConversionRecordDefaultConstructor() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertNull(record.tableName);
     assertNull(record.sourceFile);
@@ -68,8 +66,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNull(record.parquetCacheFile);
   }
 
-  @Test
-  void testConversionRecordThreeArgConstructor() {
+  @Test void testConversionRecordThreeArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.xlsx", "/conv.json", "EXCEL_TO_JSON");
     assertEquals("/orig.xlsx", record.originalFile);
@@ -78,8 +75,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.timestamp > 0);
   }
 
-  @Test
-  void testConversionRecordFourArgConstructor() {
+  @Test void testConversionRecordFourArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.xlsx", "/conv.json",
             "EXCEL_TO_JSON", "/cache.parquet");
@@ -89,8 +85,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals("/cache.parquet", record.parquetCacheFile);
   }
 
-  @Test
-  void testConversionRecordSevenArgConstructor() {
+  @Test void testConversionRecordSevenArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.csv", "/conv.parquet",
             "DIRECT", "/cache.parquet", "etag123", 5000L, "application/parquet");
@@ -99,8 +94,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals("application/parquet", record.contentType);
   }
 
-  @Test
-  void testConversionRecordComprehensiveConstructor() {
+  @Test void testConversionRecordComprehensiveConstructor() {
     Map<String, Object> tableConfig = new HashMap<>();
     tableConfig.put("pattern", "**/*.parquet");
 
@@ -133,43 +127,37 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for ConversionRecord getter methods
   // ====================================================================
 
-  @Test
-  void testGetOriginalPath() {
+  @Test void testGetOriginalPath() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.xlsx", "/conv.json", "EXCEL_TO_JSON");
     assertEquals("/orig.xlsx", record.getOriginalPath());
   }
 
-  @Test
-  void testGetConversionType() {
+  @Test void testGetConversionType() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.xlsx", "/conv.json", "HTML_TO_JSON");
     assertEquals("HTML_TO_JSON", record.getConversionType());
   }
 
-  @Test
-  void testGetTableName() {
+  @Test void testGetTableName() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "my_table";
     assertEquals("my_table", record.getTableName());
   }
 
-  @Test
-  void testGetSourceFile() {
+  @Test void testGetSourceFile() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.sourceFile = "/data/source.csv";
     assertEquals("/data/source.csv", record.getSourceFile());
   }
 
-  @Test
-  void testGetParquetCacheFile() {
+  @Test void testGetParquetCacheFile() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.parquetCacheFile = "/cache/data.parquet";
     assertEquals("/cache/data.parquet", record.getParquetCacheFile());
   }
 
-  @Test
-  void testGetConvertedFile() {
+  @Test void testGetConvertedFile() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.convertedFile = "/conv/data.json";
     assertEquals("/conv/data.json", record.getConvertedFile());
@@ -179,30 +167,26 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for isIcebergFormat
   // ====================================================================
 
-  @Test
-  void testIsIcebergFormatWithNullTableConfig() {
+  @Test void testIsIcebergFormatWithNullTableConfig() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = null;
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatWithNoMaterializeKey() {
+  @Test void testIsIcebergFormatWithNoMaterializeKey() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<>();
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatWithNonMapMaterialize() {
+  @Test void testIsIcebergFormatWithNonMapMaterialize() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<>();
     record.tableConfig.put("materialize", "invalid");
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatWithIcebergFormat() {
+  @Test void testIsIcebergFormatWithIcebergFormat() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<>();
     Map<String, Object> materialize = new HashMap<>();
@@ -211,8 +195,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatWithIcebergFormatCaseInsensitive() {
+  @Test void testIsIcebergFormatWithIcebergFormatCaseInsensitive() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<>();
     Map<String, Object> materialize = new HashMap<>();
@@ -221,8 +204,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatWithParquetFormat() {
+  @Test void testIsIcebergFormatWithParquetFormat() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<>();
     Map<String, Object> materialize = new HashMap<>();
@@ -235,8 +217,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for hasChanged
   // ====================================================================
 
-  @Test
-  void testHasChangedLocalFileExists() throws IOException {
+  @Test void testHasChangedLocalFileExists() throws IOException {
     File sourceFile = new File(tempDir.toFile(), "source.csv");
     Files.write(sourceFile.toPath(), "data".getBytes());
 
@@ -248,8 +229,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedLocalFileNonExistent() {
+  @Test void testHasChangedLocalFileNonExistent() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "/nonexistent/file.csv";
     record.timestamp = System.currentTimeMillis();
@@ -258,8 +238,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedRemoteFile() {
+  @Test void testHasChangedRemoteFile() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "https://example.com/data.csv";
     record.timestamp = System.currentTimeMillis();
@@ -268,8 +247,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedS3File() {
+  @Test void testHasChangedS3File() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "s3://bucket/data.csv";
     record.timestamp = System.currentTimeMillis();
@@ -281,14 +259,12 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for hasChangedViaMetadata
   // ====================================================================
 
-  @Test
-  void testHasChangedViaMetadataWithNullMetadata() {
+  @Test void testHasChangedViaMetadataWithNullMetadata() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertTrue(record.hasChangedViaMetadata(null));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagMatch() {
+  @Test void testHasChangedViaMetadataEtagMatch() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "abc123";
     record.originalFile = "file.csv";
@@ -299,8 +275,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse(record.hasChangedViaMetadata(meta));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagMismatch() {
+  @Test void testHasChangedViaMetadataEtagMismatch() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "abc123";
     record.originalFile = "file.csv";
@@ -311,8 +286,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.hasChangedViaMetadata(meta));
   }
 
-  @Test
-  void testHasChangedViaMetadataSizeChanged() {
+  @Test void testHasChangedViaMetadataSizeChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = 1000L;
@@ -325,8 +299,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(record.hasChangedViaMetadata(meta));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampSame() {
+  @Test void testHasChangedViaMetadataTimestampSame() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -341,8 +314,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse(record.hasChangedViaMetadata(meta));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampDifferent() {
+  @Test void testHasChangedViaMetadataTimestampDifferent() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -361,8 +333,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for updateMetadata
   // ====================================================================
 
-  @Test
-  void testUpdateMetadata() {
+  @Test void testUpdateMetadata() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "test.csv";
 
@@ -380,8 +351,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(2000000L, record.timestamp);
   }
 
-  @Test
-  void testUpdateMetadataWithNull() {
+  @Test void testUpdateMetadataWithNull() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "old_etag";
     record.originalFile = "test.csv";
@@ -395,16 +365,14 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for FileBaseline
   // ====================================================================
 
-  @Test
-  void testFileBaselineDefaultConstructor() {
+  @Test void testFileBaselineDefaultConstructor() {
     ConversionMetadata.FileBaseline baseline = new ConversionMetadata.FileBaseline();
     assertNull(baseline.size);
     assertNull(baseline.etag);
     assertNull(baseline.lastModified);
   }
 
-  @Test
-  void testFileBaselineThreeArgConstructor() {
+  @Test void testFileBaselineThreeArgConstructor() {
     ConversionMetadata.FileBaseline baseline =
         new ConversionMetadata.FileBaseline(1024L, "etag123", 5000L);
     assertEquals(Long.valueOf(1024L), baseline.size);
@@ -412,50 +380,43 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(Long.valueOf(5000L), baseline.lastModified);
   }
 
-  @Test
-  void testFileBaselineHasChangedWithNull() {
+  @Test void testFileBaselineHasChangedWithNull() {
     ConversionMetadata.FileBaseline baseline =
         new ConversionMetadata.FileBaseline(1024L, "etag123", 5000L);
     assertTrue(baseline.hasChanged(null));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagMatch() {
+  @Test void testFileBaselineHasChangedEtagMatch() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(1024L, "etag1", 5000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(1024L, "etag1", 5000L);
     assertFalse(old.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagMismatch() {
+  @Test void testFileBaselineHasChangedEtagMismatch() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(1024L, "etag1", 5000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(1024L, "etag2", 5000L);
     assertTrue(old.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedSizeDifferent() {
+  @Test void testFileBaselineHasChangedSizeDifferent() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(1024L, null, 5000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(2048L, null, 5000L);
     assertTrue(old.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedTimestampDifferent() {
+  @Test void testFileBaselineHasChangedTimestampDifferent() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(1024L, null, 5000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(1024L, null, 10000L);
     assertTrue(old.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedTimestampWithinTolerance() {
+  @Test void testFileBaselineHasChangedTimestampWithinTolerance() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(1024L, null, 5000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(1024L, null, 5500L);
     assertFalse(old.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedAllNull() {
+  @Test void testFileBaselineHasChangedAllNull() {
     ConversionMetadata.FileBaseline old = new ConversionMetadata.FileBaseline(null, null, null);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(null, null, null);
     assertFalse(old.hasChanged(current));
@@ -465,28 +426,24 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for PartitionBaseline
   // ====================================================================
 
-  @Test
-  void testPartitionBaselineDefaultConstructor() {
+  @Test void testPartitionBaselineDefaultConstructor() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     assertTrue(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineIsEmptyWithNullFiles() {
+  @Test void testPartitionBaselineIsEmptyWithNullFiles() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = null;
     assertTrue(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineIsEmptyWithEmptyMap() {
+  @Test void testPartitionBaselineIsEmptyWithEmptyMap() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = new HashMap<>();
     assertTrue(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineIsNotEmpty() {
+  @Test void testPartitionBaselineIsNotEmpty() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = new HashMap<>();
     baseline.files.put("/file.parquet", new ConversionMetadata.FileBaseline(100L, "e", 1000L));
@@ -497,49 +454,43 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for isHivePartitioned (private static method)
   // ====================================================================
 
-  @Test
-  void testIsHivePartitionedWithNullList() throws Exception {
+  @Test void testIsHivePartitionedWithNullList() throws Exception {
     boolean result = invokeIsHivePartitioned(null);
     assertFalse(result);
   }
 
-  @Test
-  void testIsHivePartitionedWithEmptyList() throws Exception {
+  @Test void testIsHivePartitionedWithEmptyList() throws Exception {
     boolean result = invokeIsHivePartitioned(Collections.emptyList());
     assertFalse(result);
   }
 
-  @Test
-  void testIsHivePartitionedWithSingleFile() throws Exception {
-    boolean result = invokeIsHivePartitioned(
-        Collections.singletonList("/data/year=2020/file.parquet"));
+  @Test void testIsHivePartitionedWithSingleFile() throws Exception {
+    boolean result =
+        invokeIsHivePartitioned(Collections.singletonList("/data/year=2020/file.parquet"));
     assertFalse(result, "Need at least 2 files");
   }
 
-  @Test
-  void testIsHivePartitionedWithHiveFiles() throws Exception {
-    List<String> files = Arrays.asList(
-        "/data/year=2020/file1.parquet",
+  @Test void testIsHivePartitionedWithHiveFiles() throws Exception {
+    List<String> files =
+        Arrays.asList("/data/year=2020/file1.parquet",
         "/data/year=2021/file2.parquet",
         "/data/year=2022/file3.parquet");
     boolean result = invokeIsHivePartitioned(files);
     assertTrue(result);
   }
 
-  @Test
-  void testIsHivePartitionedWithNonHiveFiles() throws Exception {
-    List<String> files = Arrays.asList(
-        "/data/2020/file1.parquet",
+  @Test void testIsHivePartitionedWithNonHiveFiles() throws Exception {
+    List<String> files =
+        Arrays.asList("/data/2020/file1.parquet",
         "/data/2021/file2.parquet");
     boolean result = invokeIsHivePartitioned(files);
     assertFalse(result);
   }
 
-  @Test
-  void testIsHivePartitionedMixed() throws Exception {
+  @Test void testIsHivePartitionedMixed() throws Exception {
     // Only 1 of 3 files is Hive-partitioned (< 50%)
-    List<String> files = Arrays.asList(
-        "/data/year=2020/file1.parquet",
+    List<String> files =
+        Arrays.asList("/data/year=2020/file1.parquet",
         "/data/plain/file2.parquet",
         "/data/flat/file3.parquet");
     boolean result = invokeIsHivePartitioned(files);
@@ -550,22 +501,19 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for extractTableSpecificPattern (private static method)
   // ====================================================================
 
-  @Test
-  void testExtractTableSpecificPatternWithNull() throws Exception {
+  @Test void testExtractTableSpecificPatternWithNull() throws Exception {
     String result = invokeExtractTableSpecificPattern(null);
     assertNull(result);
   }
 
-  @Test
-  void testExtractTableSpecificPatternWithEmpty() throws Exception {
+  @Test void testExtractTableSpecificPatternWithEmpty() throws Exception {
     String result = invokeExtractTableSpecificPattern(Collections.emptyList());
     assertNull(result);
   }
 
-  @Test
-  void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
-    List<String> files = Arrays.asList(
-        "s3://bucket/schema/table/year=2020/file1.parquet",
+  @Test void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
+    List<String> files =
+        Arrays.asList("s3://bucket/schema/table/year=2020/file1.parquet",
         "s3://bucket/schema/table/year=2021/file2.parquet");
     String result = invokeExtractTableSpecificPattern(files);
     assertNotNull(result);
@@ -573,10 +521,9 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(result.endsWith(".parquet"));
   }
 
-  @Test
-  void testExtractTableSpecificPatternWithNonPartitionedFiles() throws Exception {
-    List<String> files = Arrays.asList(
-        "/data/table/file1.parquet",
+  @Test void testExtractTableSpecificPatternWithNonPartitionedFiles() throws Exception {
+    List<String> files =
+        Arrays.asList("/data/table/file1.parquet",
         "/data/table/file2.parquet");
     String result = invokeExtractTableSpecificPattern(files);
     assertNotNull(result);
@@ -587,33 +534,29 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for findLongestCommonPrefix (private static method)
   // ====================================================================
 
-  @Test
-  void testFindLongestCommonPrefixEmpty() throws Exception {
+  @Test void testFindLongestCommonPrefixEmpty() throws Exception {
     String result = invokeFindLongestCommonPrefix(Collections.emptyList());
     assertEquals("", result);
   }
 
-  @Test
-  void testFindLongestCommonPrefixSingleFile() throws Exception {
-    String result = invokeFindLongestCommonPrefix(
-        Collections.singletonList("/data/file.parquet"));
+  @Test void testFindLongestCommonPrefixSingleFile() throws Exception {
+    String result =
+        invokeFindLongestCommonPrefix(Collections.singletonList("/data/file.parquet"));
     assertEquals("/data/file.parquet", result);
   }
 
-  @Test
-  void testFindLongestCommonPrefixMultipleFiles() throws Exception {
-    List<String> files = Arrays.asList(
-        "/data/schema/table/file1.parquet",
+  @Test void testFindLongestCommonPrefixMultipleFiles() throws Exception {
+    List<String> files =
+        Arrays.asList("/data/schema/table/file1.parquet",
         "/data/schema/table/file2.parquet",
         "/data/schema/other/file3.parquet");
     String result = invokeFindLongestCommonPrefix(files);
     assertTrue(result.startsWith("/data/schema/"));
   }
 
-  @Test
-  void testFindLongestCommonPrefixNoCommon() throws Exception {
-    List<String> files = Arrays.asList(
-        "/alpha/file1.parquet",
+  @Test void testFindLongestCommonPrefixNoCommon() throws Exception {
+    List<String> files =
+        Arrays.asList("/alpha/file1.parquet",
         "/beta/file2.parquet");
     String result = invokeFindLongestCommonPrefix(files);
     assertEquals("/", result);
@@ -623,20 +566,17 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for hints
   // ====================================================================
 
-  @Test
-  void testSetAndGetHint() {
+  @Test void testSetAndGetHint() {
     metadata.setHint("cik", "0001234567");
     assertEquals("0001234567", metadata.getHint("cik"));
   }
 
-  @Test
-  void testSetHintWithNullValueIgnored() {
+  @Test void testSetHintWithNullValueIgnored() {
     metadata.setHint("key", null);
     assertNull(metadata.getHint("key"));
   }
 
-  @Test
-  void testGetHintNonExistent() {
+  @Test void testGetHintNonExistent() {
     assertNull(metadata.getHint("nonexistent"));
   }
 
@@ -644,8 +584,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for recordConversion and retrieval
   // ====================================================================
 
-  @Test
-  void testRecordConversionTwoFileArgs() throws IOException {
+  @Test void testRecordConversionTwoFileArgs() throws IOException {
     File original = new File(tempDir.toFile(), "source.xlsx");
     File converted = new File(tempDir.toFile(), "output.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -658,8 +597,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals("EXCEL_TO_JSON", record.getConversionType());
   }
 
-  @Test
-  void testRecordConversionWithCacheFile() throws IOException {
+  @Test void testRecordConversionWithCacheFile() throws IOException {
     File original = new File(tempDir.toFile(), "source.csv");
     File converted = new File(tempDir.toFile(), "output.json");
     File cache = new File(tempDir.toFile(), "cache.parquet");
@@ -674,8 +612,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNotNull(record.parquetCacheFile);
   }
 
-  @Test
-  void testRecordConversionWithRecord() throws IOException {
+  @Test void testRecordConversionWithRecord() throws IOException {
     File converted = new File(tempDir.toFile(), "output.json");
     Files.write(converted.toPath(), "{}".getBytes());
 
@@ -694,8 +631,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for findOriginalSource
   // ====================================================================
 
-  @Test
-  void testFindOriginalSourceExisting() throws IOException {
+  @Test void testFindOriginalSourceExisting() throws IOException {
     File original = new File(tempDir.toFile(), "source.xlsx");
     File converted = new File(tempDir.toFile(), "output.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -708,8 +644,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(original.getCanonicalPath(), found.getCanonicalPath());
   }
 
-  @Test
-  void testFindOriginalSourceNotRecorded() throws IOException {
+  @Test void testFindOriginalSourceNotRecorded() throws IOException {
     File notRecorded = new File(tempDir.toFile(), "unknown.json");
     Files.write(notRecorded.toPath(), "{}".getBytes());
 
@@ -717,8 +652,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNull(found);
   }
 
-  @Test
-  void testFindOriginalSourceDeletedOriginal() throws IOException {
+  @Test void testFindOriginalSourceDeletedOriginal() throws IOException {
     File original = new File(tempDir.toFile(), "temp_source.xlsx");
     File converted = new File(tempDir.toFile(), "output2.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -738,8 +672,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for findDerivedFiles
   // ====================================================================
 
-  @Test
-  void testFindDerivedFiles() throws IOException {
+  @Test void testFindDerivedFiles() throws IOException {
     File original = new File(tempDir.toFile(), "source.html");
     File derived1 = new File(tempDir.toFile(), "table1.json");
     File derived2 = new File(tempDir.toFile(), "table2.json");
@@ -754,8 +687,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(2, derivedFiles.size());
   }
 
-  @Test
-  void testFindDerivedFilesNone() throws IOException {
+  @Test void testFindDerivedFilesNone() throws IOException {
     File original = new File(tempDir.toFile(), "no_derived.html");
     Files.write(original.toPath(), "<html>".getBytes());
 
@@ -767,8 +699,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for updateCachedFile
   // ====================================================================
 
-  @Test
-  void testUpdateCachedFile() throws IOException {
+  @Test void testUpdateCachedFile() throws IOException {
     File original = new File(tempDir.toFile(), "src.csv");
     File converted = new File(tempDir.toFile(), "out.json");
     File cache = new File(tempDir.toFile(), "cache.parquet");
@@ -784,8 +715,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNotNull(record.parquetCacheFile);
   }
 
-  @Test
-  void testUpdateCachedFileNoExistingRecord() throws IOException {
+  @Test void testUpdateCachedFileNoExistingRecord() throws IOException {
     File converted = new File(tempDir.toFile(), "no_record.json");
     File cache = new File(tempDir.toFile(), "cache2.parquet");
     Files.write(converted.toPath(), "{}".getBytes());
@@ -799,8 +729,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for updateMaterializationInfo
   // ====================================================================
 
-  @Test
-  void testUpdateMaterializationInfoExistingRecord() {
+  @Test void testUpdateMaterializationInfoExistingRecord() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "my_table";
     record.conversionType = "DIRECT";
@@ -822,8 +751,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNull(updated.parquetCacheFile);
   }
 
-  @Test
-  void testUpdateMaterializationInfoNewRecord() {
+  @Test void testUpdateMaterializationInfoNewRecord() {
     metadata.updateMaterializationInfo("new_table", "/data/new_table",
         "PARQUET", 1000L);
 
@@ -834,8 +762,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(Long.valueOf(1000L), record.rowCount);
   }
 
-  @Test
-  void testUpdateMaterializationInfoWithNullRowCount() {
+  @Test void testUpdateMaterializationInfoWithNullRowCount() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "table_with_count";
     record.rowCount = 5000L;
@@ -849,8 +776,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals(Long.valueOf(5000L), updated.rowCount);
   }
 
-  @Test
-  void testUpdateMaterializationInfoThreeArgOverload() {
+  @Test void testUpdateMaterializationInfoThreeArgOverload() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "table3arg";
     metadata.putConversionRecord("table3arg", record);
@@ -865,8 +791,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for updateRecordWithParquetFile
   // ====================================================================
 
-  @Test
-  void testUpdateRecordWithParquetFile() throws IOException {
+  @Test void testUpdateRecordWithParquetFile() throws IOException {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "table_parquet";
     metadata.putConversionRecord("table_parquet", record);
@@ -881,8 +806,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals("ParquetTranslatableTable", updated.tableType);
   }
 
-  @Test
-  void testUpdateRecordWithParquetFileNoExistingRecord() throws IOException {
+  @Test void testUpdateRecordWithParquetFileNoExistingRecord() throws IOException {
     File parquetFile = new File(tempDir.toFile(), "orphan.parquet");
     Files.write(parquetFile.toPath(), new byte[0]);
 
@@ -894,8 +818,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for hasTableMetadata and getAllConversions
   // ====================================================================
 
-  @Test
-  void testHasTableMetadata() {
+  @Test void testHasTableMetadata() {
     assertFalse(metadata.hasTableMetadata("missing"));
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -904,8 +827,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(metadata.hasTableMetadata("present"));
   }
 
-  @Test
-  void testGetAllConversionsUnmodifiable() {
+  @Test void testGetAllConversionsUnmodifiable() {
     Map<String, ConversionMetadata.ConversionRecord> all = metadata.getAllConversions();
     try {
       all.put("key", new ConversionMetadata.ConversionRecord());
@@ -919,8 +841,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for clear and reload
   // ====================================================================
 
-  @Test
-  void testClear() throws IOException {
+  @Test void testClear() throws IOException {
     File original = new File(tempDir.toFile(), "src_clear.csv");
     File converted = new File(tempDir.toFile(), "out_clear.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -933,8 +854,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertTrue(metadata.getAllConversions().isEmpty());
   }
 
-  @Test
-  void testReload() throws IOException {
+  @Test void testReload() throws IOException {
     File original = new File(tempDir.toFile(), "src_reload.csv");
     File converted = new File(tempDir.toFile(), "out_reload.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -954,17 +874,15 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for formatRecord (private method)
   // ====================================================================
 
-  @Test
-  void testFormatRecordNull() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord",
-        ConversionMetadata.ConversionRecord.class);
+  @Test void testFormatRecordNull() throws Exception {
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     String result = (String) method.invoke(metadata, (ConversionMetadata.ConversionRecord) null);
     assertEquals("null", result);
   }
 
-  @Test
-  void testFormatRecordTruncatesLongParquetCacheFile() throws Exception {
+  @Test void testFormatRecordTruncatesLongParquetCacheFile() throws Exception {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "test";
     StringBuilder longPath = new StringBuilder();
@@ -973,8 +891,8 @@ public class ConversionMetadataDeepCoverageTest3 {
     }
     record.parquetCacheFile = longPath.toString();
 
-    Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord",
-        ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     String result = (String) method.invoke(metadata, record);
     assertTrue(result.contains("..."));
@@ -984,8 +902,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for isRemoteFile and isGlobPattern (private methods)
   // ====================================================================
 
-  @Test
-  void testIsRemoteFile() throws Exception {
+  @Test void testIsRemoteFile() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
 
@@ -998,8 +915,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse((Boolean) method.invoke(metadata, (String) null));
   }
 
-  @Test
-  void testIsGlobPattern() throws Exception {
+  @Test void testIsGlobPattern() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -1015,15 +931,13 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for detectSourceType (private method)
   // ====================================================================
 
-  @Test
-  void testDetectSourceTypeNull() throws Exception {
+  @Test void testDetectSourceTypeNull() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(metadata, (String) null));
   }
 
-  @Test
-  void testDetectSourceTypeKnownTypes() throws Exception {
+  @Test void testDetectSourceTypeKnownTypes() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
 
@@ -1036,8 +950,7 @@ public class ConversionMetadataDeepCoverageTest3 {
   // Tests for getConversionRecordByConvertedFile
   // ====================================================================
 
-  @Test
-  void testGetConversionRecordByConvertedFileDirect() throws IOException {
+  @Test void testGetConversionRecordByConvertedFileDirect() throws IOException {
     File original = new File(tempDir.toFile(), "src_byconv.csv");
     File converted = new File(tempDir.toFile(), "out_byconv.json");
     Files.write(original.toPath(), "data".getBytes());
@@ -1051,8 +964,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertEquals("CSV_TO_JSON", found.conversionType);
   }
 
-  @Test
-  void testGetConversionRecordByConvertedFileSearches() throws IOException {
+  @Test void testGetConversionRecordByConvertedFileSearches() throws IOException {
     // Store record under table name key, then search by converted file
     File converted = new File(tempDir.toFile(), "search_conv.json");
     Files.write(converted.toPath(), "{}".getBytes());
@@ -1067,8 +979,7 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNotNull(found);
   }
 
-  @Test
-  void testGetConversionRecordByConvertedFileNotFound() {
+  @Test void testGetConversionRecordByConvertedFileNotFound() {
     ConversionMetadata.ConversionRecord found =
         metadata.getConversionRecordByConvertedFile("/nonexistent/file.json");
     assertNull(found);

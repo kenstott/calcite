@@ -87,8 +87,8 @@ class VariableNormalizerTest {
   }
 
   @Test void testNormalizeIdentity() {
-    String result = IDENTITY.normalize("B01001_001E",
-        Collections.singletonMap("year", "2020"));
+    String result =
+        IDENTITY.normalize("B01001_001E", Collections.singletonMap("year", "2020"));
     // Identity normalizer returns the same value
     assertTrue("B01001_001E".equals(result));
   }

@@ -50,31 +50,30 @@ public class ConversionMetadataPatternCoverageTest {
   // ===== extractTableSpecificPattern via reflection =====
 
   @Test void testExtractTableSpecificPatternNull() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractTableSpecificPattern", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, (Object) null));
   }
 
   @Test void testExtractTableSpecificPatternEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractTableSpecificPattern", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, new ArrayList<String>()));
   }
 
   @Test void testExtractTableSpecificPatternWithPartitions() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractTableSpecificPattern", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/schema/table/year=2020/file1.parquet",
+    List<String> paths =
+        Arrays.asList("/data/schema/table/year=2020/file1.parquet",
         "/data/schema/table/year=2021/file2.parquet",
-        "/data/schema/table/year=2022/file3.parquet"
-    );
+        "/data/schema/table/year=2022/file3.parquet");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -83,14 +82,13 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testExtractTableSpecificPatternNoPartitions() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractTableSpecificPattern", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/data/schema/table/file1.parquet",
+        "/data/schema/table/file2.parquet");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -98,14 +96,13 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testExtractTableSpecificPatternCsvExtension() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "extractTableSpecificPattern", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/table/year=2020/data.csv",
-        "/data/table/year=2021/data.csv"
-    );
+    List<String> paths =
+        Arrays.asList("/data/table/year=2020/data.csv",
+        "/data/table/year=2021/data.csv");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -115,22 +112,21 @@ public class ConversionMetadataPatternCoverageTest {
   // ===== findCommonPrefixBeforePartitions via reflection =====
 
   @Test void testFindCommonPrefixBeforePartitionsEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findCommonPrefixBeforePartitions", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, new ArrayList<String>()));
   }
 
   @Test void testFindCommonPrefixBeforePartitionsWithPartitionDirs() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findCommonPrefixBeforePartitions", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "s3://bucket/schema/table/year=2020/file1.parquet",
-        "s3://bucket/schema/table/year=2021/file2.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("s3://bucket/schema/table/year=2020/file1.parquet",
+        "s3://bucket/schema/table/year=2021/file2.parquet");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -140,14 +136,13 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testFindCommonPrefixBeforePartitionsNoPartitions() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findCommonPrefixBeforePartitions", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/data/schema/table/file1.parquet",
+        "/data/schema/table/file2.parquet");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -156,14 +151,13 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testFindCommonPrefixBeforePartitionsDivergentPaths() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findCommonPrefixBeforePartitions", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/tableA/year=2020/file1.parquet",
-        "/data/tableB/year=2020/file2.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/data/tableA/year=2020/file1.parquet",
+        "/data/tableB/year=2020/file2.parquet");
 
     String result = (String) method.invoke(null, paths);
     assertNotNull(result);
@@ -174,16 +168,16 @@ public class ConversionMetadataPatternCoverageTest {
   // ===== findLongestCommonPrefix via reflection =====
 
   @Test void testFindLongestCommonPrefixEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findLongestCommonPrefix", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
 
     assertEquals("", method.invoke(null, new ArrayList<String>()));
   }
 
   @Test void testFindLongestCommonPrefixSinglePath() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findLongestCommonPrefix", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
 
     List<String> paths = Arrays.asList("/data/schema/table/file.parquet");
@@ -192,41 +186,38 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testFindLongestCommonPrefixMultiplePaths() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findLongestCommonPrefix", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/schema/table/file1.parquet",
+    List<String> paths =
+        Arrays.asList("/data/schema/table/file1.parquet",
         "/data/schema/table/file2.parquet",
-        "/data/schema/table/file3.parquet"
-    );
+        "/data/schema/table/file3.parquet");
     String result = (String) method.invoke(null, paths);
     assertEquals("/data/schema/table/file", result);
   }
 
   @Test void testFindLongestCommonPrefixNoCommon() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findLongestCommonPrefix", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/alpha/file.parquet",
-        "/beta/file.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/alpha/file.parquet",
+        "/beta/file.parquet");
     String result = (String) method.invoke(null, paths);
     assertEquals("/", result);
   }
 
   @Test void testFindLongestCommonPrefixShorterPath() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod(
-        "findLongestCommonPrefix", List.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
 
-    List<String> paths = Arrays.asList(
-        "/data/schema/table/year=2020/data.parquet",
-        "/data/schema/table/data.parquet"
-    );
+    List<String> paths =
+        Arrays.asList("/data/schema/table/year=2020/data.parquet",
+        "/data/schema/table/data.parquet");
     String result = (String) method.invoke(null, paths);
     assertEquals("/data/schema/table/", result);
   }
@@ -234,23 +225,23 @@ public class ConversionMetadataPatternCoverageTest {
   // ===== buildComprehensiveMapping =====
 
   @Test void testBuildComprehensiveMappingNullDir() {
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        null, new HashMap<String, String>());
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(null, new HashMap<String, String>());
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
 
   @Test void testBuildComprehensiveMappingNonExistentDir() {
     File nonExistent = tempDir.resolve("nonexistent").toFile();
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        nonExistent, new HashMap<String, String>());
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(nonExistent, new HashMap<String, String>());
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
 
   @Test void testBuildComprehensiveMappingNoAperioDir() {
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        tempDir.toFile(), new HashMap<String, String>());
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(tempDir.toFile(), new HashMap<String, String>());
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
@@ -259,8 +250,8 @@ public class ConversionMetadataPatternCoverageTest {
     File aperioDir = tempDir.resolve(".aperio").toFile();
     aperioDir.mkdirs();
 
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        tempDir.toFile(), new HashMap<String, String>());
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(tempDir.toFile(), new HashMap<String, String>());
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
@@ -277,8 +268,8 @@ public class ConversionMetadataPatternCoverageTest {
       writer.write("{}");
     }
 
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        tempDir.toFile(), new HashMap<String, String>());
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(tempDir.toFile(), new HashMap<String, String>());
     assertNotNull(result);
     // Empty metadata should produce empty mapping
     assertTrue(result.isEmpty());
@@ -305,8 +296,8 @@ public class ConversionMetadataPatternCoverageTest {
     Map<String, String> htmlFileToTableName = new HashMap<String, String>();
     htmlFileToTableName.put("page", "my_explicit_table");
 
-    Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(
-        tempDir.toFile(), htmlFileToTableName);
+    Map<String, String> result =
+        ConversionMetadata.buildComprehensiveMapping(tempDir.toFile(), htmlFileToTableName);
     assertNotNull(result);
     // The result may or may not have entries depending on pattern matching
   }
@@ -319,8 +310,8 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testConversionRecordFields() {
-    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord(
-        "/original/file.html", "/converted/file.json", "HTML_TO_JSON");
+    ConversionMetadata.ConversionRecord record =
+        new ConversionMetadata.ConversionRecord("/original/file.html", "/converted/file.json", "HTML_TO_JSON");
     assertEquals("/original/file.html", record.getOriginalPath());
     assertEquals("HTML_TO_JSON", record.getConversionType());
     // convertedFile is a public field
@@ -328,15 +319,15 @@ public class ConversionMetadataPatternCoverageTest {
   }
 
   @Test void testConversionRecordTableName() {
-    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord(
-        "/original/file.html", "/converted/file.json", "HTML_TO_JSON");
+    ConversionMetadata.ConversionRecord record =
+        new ConversionMetadata.ConversionRecord("/original/file.html", "/converted/file.json", "HTML_TO_JSON");
     record.tableName = "custom_table";
     assertEquals("custom_table", record.tableName);
   }
 
   @Test void testConversionRecordParquetCacheFile() {
-    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord(
-        "/original/file.html", "/converted/file.json", "HTML_TO_JSON");
+    ConversionMetadata.ConversionRecord record =
+        new ConversionMetadata.ConversionRecord("/original/file.html", "/converted/file.json", "HTML_TO_JSON");
     record.parquetCacheFile = "/cache/file.parquet";
     assertEquals("/cache/file.parquet", record.parquetCacheFile);
   }
@@ -349,8 +340,8 @@ public class ConversionMetadataPatternCoverageTest {
       writer.write("<html></html>");
     }
 
-    ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord(
-        sourceFile.getCanonicalPath(),
+    ConversionMetadata.ConversionRecord record =
+        new ConversionMetadata.ConversionRecord(sourceFile.getCanonicalPath(),
         tempDir.resolve("output.json").toFile().getCanonicalPath(),
         "HTML_TO_JSON");
 

@@ -22,23 +22,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
-import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -64,15 +56,15 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== Factory Methods =====
 
   @Test void testCreateFactory() {
-    AlternatePartitionMaterializer materializer = AlternatePartitionMaterializer.create(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        AlternatePartitionMaterializer.create(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024);
     assertNotNull(materializer);
   }
 
   @Test void testCreateWithIcebergFactory() {
-    AlternatePartitionMaterializer materializer = AlternatePartitionMaterializer.createWithIceberg(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        AlternatePartitionMaterializer.createWithIceberg(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024);
     assertNotNull(materializer);
   }
@@ -80,24 +72,24 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== materializeAlternates =====
 
   @Test void testMaterializeAlternatesNoAlternates() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned", null);
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned", null);
 
     int result = materializer.materializeAlternates(config);
     assertEquals(0, result);
   }
 
   @Test void testMaterializeAlternatesNullAlternates() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, null);
 
     int result = materializer.materializeAlternates(config);
@@ -105,8 +97,8 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testMaterializeAlternatesDisabledAlternate() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -120,8 +112,8 @@ class AlternatePartitionMaterializerCoverageTest {
             "alt_disabled", "type=alt/*/*.parquet", partConfig, "disabled",
             null, null, 0, null, 0, false);
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(disabled));
 
     int result = materializer.materializeAlternates(config);
@@ -129,16 +121,16 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testMaterializeAlternatesNoPartitionConfig() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     PartitionedTableConfig.AlternatePartitionConfig alternate =
         new PartitionedTableConfig.AlternatePartitionConfig(
             "alt_no_partition", "type=alt/*/*.parquet", null, "no partition");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     int result = materializer.materializeAlternates(config);
@@ -146,8 +138,8 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testMaterializeAlternatesEmptyColumnDefinitions() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     PartitionedTableConfig.PartitionConfig partConfig =
@@ -158,8 +150,8 @@ class AlternatePartitionMaterializerCoverageTest {
         new PartitionedTableConfig.AlternatePartitionConfig(
             "alt_empty", "type=alt/*/*.parquet", partConfig, "empty");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     int result = materializer.materializeAlternates(config);
@@ -167,8 +159,8 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testMaterializeAlternatesNullColumnDefinitions() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     PartitionedTableConfig.PartitionConfig partConfig =
@@ -178,8 +170,8 @@ class AlternatePartitionMaterializerCoverageTest {
         new PartitionedTableConfig.AlternatePartitionConfig(
             "alt_null_cols", "type=alt/*/*.parquet", partConfig, "null cols");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     int result = materializer.materializeAlternates(config);
@@ -189,8 +181,8 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== materializeAll =====
 
   @Test void testMaterializeAllEmptyList() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     int result = materializer.materializeAll(Collections.<PartitionedTableConfig>emptyList());
@@ -198,15 +190,15 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testMaterializeAllMultipleTables() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     // Config without alternates
-    PartitionedTableConfig config1 = new PartitionedTableConfig(
-        "table1", "type=t1/*.parquet", "partitioned", null);
-    PartitionedTableConfig config2 = new PartitionedTableConfig(
-        "table2", "type=t2/*.parquet", "partitioned", null);
+    PartitionedTableConfig config1 =
+        new PartitionedTableConfig("table1", "type=t1/*.parquet", "partitioned", null);
+    PartitionedTableConfig config2 =
+        new PartitionedTableConfig("table2", "type=t2/*.parquet", "partitioned", null);
 
     List<PartitionedTableConfig> tables = new ArrayList<PartitionedTableConfig>();
     tables.add(config1);
@@ -219,8 +211,8 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== setIncrementalTracker =====
 
   @Test void testSetIncrementalTracker() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     IncrementalTracker tracker = IncrementalTracker.NOOP;
@@ -232,8 +224,8 @@ class AlternatePartitionMaterializerCoverageTest {
 
   @Test void testMaterializeAlternateWithExceptionHandling() {
     // This tests the try/catch block in materializeAlternates
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -249,8 +241,8 @@ class AlternatePartitionMaterializerCoverageTest {
             "alt_failing", "type=alt/geo=*/*.parquet", partConfig, "will fail",
             Arrays.asList("year"), null, 2);
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     // The DuckDB connection will fail since there's no real data,
@@ -263,8 +255,8 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== extractTargetBase (tested indirectly) =====
 
   @Test void testExtractTargetBaseFromAlternateWithBase() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -279,8 +271,8 @@ class AlternatePartitionMaterializerCoverageTest {
             "alt_with_base", "type=foo_by_geo/geo=*/data.parquet",
             partConfig, "has base");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     // Exercise the code path, even though DuckDB may fail
@@ -289,8 +281,8 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testExtractTargetBaseFromAlternateWithWildcardStart() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -305,8 +297,8 @@ class AlternatePartitionMaterializerCoverageTest {
             "alt_wildcard_start", "frequency=*/*.parquet",
             partConfig, "wildcard start");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     // Exercise the code path
@@ -317,8 +309,8 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== buildSourceGlob with concrete parquet filename =====
 
   @Test void testBuildSourceGlobConcrete() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -333,8 +325,8 @@ class AlternatePartitionMaterializerCoverageTest {
             "alt_concrete", "type=foo/geo=*/data.parquet",
             partConfig, "concrete filename");
 
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/specific_data.parquet", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/specific_data.parquet", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     int result = materializer.materializeAlternates(config);
@@ -342,8 +334,8 @@ class AlternatePartitionMaterializerCoverageTest {
   }
 
   @Test void testBuildSourceGlobNonParquetFile() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
 
     List<PartitionedTableConfig.ColumnDefinition> colDefs =
@@ -358,8 +350,8 @@ class AlternatePartitionMaterializerCoverageTest {
             partConfig, "already glob");
 
     // Source pattern that doesn't end with .parquet
-    PartitionedTableConfig config = new PartitionedTableConfig(
-        "test_table", "type=test/year=*/*.csv", "partitioned",
+    PartitionedTableConfig config =
+        new PartitionedTableConfig("test_table", "type=test/year=*/*.csv", "partitioned",
         null, null, null, null, Arrays.asList(alternate));
 
     int result = materializer.materializeAlternates(config);
@@ -369,15 +361,15 @@ class AlternatePartitionMaterializerCoverageTest {
   // ===== Constructor with null StorageProvider =====
 
   @Test void testConstructorNullStorageProvider() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        null, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(null, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, false);
     assertNotNull(materializer);
   }
 
   @Test void testConstructorIcebergSource() {
-    AlternatePartitionMaterializer materializer = new AlternatePartitionMaterializer(
-        mockStorageProvider, tempDir.getAbsolutePath(),
+    AlternatePartitionMaterializer materializer =
+        new AlternatePartitionMaterializer(mockStorageProvider, tempDir.getAbsolutePath(),
         tempDir.getAbsolutePath(), 2020, 2024, true);
     assertNotNull(materializer);
   }

@@ -18,9 +18,8 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.lookup.Lookup;
 import org.apache.calcite.schema.lookup.LikePattern;
+import org.apache.calcite.schema.lookup.Lookup;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -78,43 +77,37 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== parseBooleanValue tests ======
 
-  @Test
-  void testParseBooleanValueNull() throws Exception {
+  @Test void testParseBooleanValueNull() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, (Object) null));
   }
 
-  @Test
-  void testParseBooleanValueBooleanTrue() throws Exception {
+  @Test void testParseBooleanValueBooleanTrue() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertEquals(Boolean.TRUE, method.invoke(null, Boolean.TRUE));
   }
 
-  @Test
-  void testParseBooleanValueBooleanFalse() throws Exception {
+  @Test void testParseBooleanValueBooleanFalse() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertEquals(Boolean.FALSE, method.invoke(null, Boolean.FALSE));
   }
 
-  @Test
-  void testParseBooleanValueStringTrue() throws Exception {
+  @Test void testParseBooleanValueStringTrue() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertEquals(Boolean.TRUE, method.invoke(null, "true"));
   }
 
-  @Test
-  void testParseBooleanValueStringFalse() throws Exception {
+  @Test void testParseBooleanValueStringFalse() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertEquals(Boolean.FALSE, method.invoke(null, "false"));
   }
 
-  @Test
-  void testParseBooleanValueUnsupportedType() throws Exception {
+  @Test void testParseBooleanValueUnsupportedType() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, 42));
@@ -122,8 +115,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== sanitizeOperand tests ======
 
-  @Test
-  void testSanitizeOperandNullValue() throws Exception {
+  @Test void testSanitizeOperandNullValue() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
@@ -135,8 +127,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertNull(result.get("someKey"));
   }
 
-  @Test
-  void testSanitizeOperandPasswordKey() throws Exception {
+  @Test void testSanitizeOperandPasswordKey() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
@@ -149,8 +140,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("********", result.get("secretToken"));
   }
 
-  @Test
-  void testSanitizeOperandUnderscoreKey() throws Exception {
+  @Test void testSanitizeOperandUnderscoreKey() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
@@ -161,8 +151,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("Object", result.get("_storageProvider"));
   }
 
-  @Test
-  void testSanitizeOperandS3Config() throws Exception {
+  @Test void testSanitizeOperandS3Config() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> s3Config = new HashMap<>();
@@ -185,8 +174,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("us-west-2", sanitizedS3.get("region"));
   }
 
-  @Test
-  void testSanitizeOperandS3ConfigShortAccessKey() throws Exception {
+  @Test void testSanitizeOperandS3ConfigShortAccessKey() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> s3Config = new HashMap<>();
@@ -203,8 +191,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("****", sanitizedS3.get("accessKeyId"));
   }
 
-  @Test
-  void testSanitizeOperandS3ConfigPasswordInS3() throws Exception {
+  @Test void testSanitizeOperandS3ConfigPasswordInS3() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> s3Config = new HashMap<>();
@@ -220,8 +207,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("********", sanitizedS3.get("password"));
   }
 
-  @Test
-  void testSanitizeOperandStorageConfig() throws Exception {
+  @Test void testSanitizeOperandStorageConfig() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> storageConfig = new HashMap<>();
@@ -248,8 +234,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("my-bucket", sanitizedStorage.get("bucket"));
   }
 
-  @Test
-  void testSanitizeOperandNestedMap() throws Exception {
+  @Test void testSanitizeOperandNestedMap() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> nestedMap = new HashMap<>();
@@ -268,8 +253,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("********", sanitizedNested.get("secretToken"));
   }
 
-  @Test
-  void testSanitizeOperandModelUri() throws Exception {
+  @Test void testSanitizeOperandModelUri() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
@@ -284,8 +268,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertTrue(sanitizedUri.contains("\"secretAccessKey\": \"********\""));
   }
 
-  @Test
-  void testSanitizeOperandPlainValue() throws Exception {
+  @Test void testSanitizeOperandPlainValue() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
@@ -302,8 +285,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== sanitizeNestedMap tests ======
 
-  @Test
-  void testSanitizeNestedMapCalciteClass() throws Exception {
+  @Test void testSanitizeNestedMapCalciteClass() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeNestedMap", Map.class);
     method.setAccessible(true);
 
@@ -323,35 +305,31 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== validateUniqueSchemaName tests ======
 
-  @Test
-  void testValidateUniqueSchemaNameNullParent() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameNullParent() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     method.setAccessible(true);
     method.invoke(null, null, "test");
   }
 
-  @Test
-  void testValidateUniqueSchemaNameNullName() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameNullName() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     method.setAccessible(true);
     method.invoke(null, mockParentSchema, null);
   }
 
-  @Test
-  void testValidateUniqueSchemaNameUnique() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameUnique() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     method.setAccessible(true);
     method.invoke(null, mockParentSchema, "test");
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  @Test
-  void testValidateUniqueSchemaNameDuplicate() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameDuplicate() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     method.setAccessible(true);
 
     Lookup subSchemaLookup = mock(Lookup.class);
@@ -371,10 +349,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== rewriteSchemaReferencesInSql tests ======
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNull() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlNull() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, null, "econ", "ECON"));
@@ -384,20 +361,18 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals(sql, method.invoke(null, sql, "econ", null));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlMatchingCase() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlMatchingCase() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
 
     String sql = "SELECT * FROM econ.table1";
     assertEquals(sql, method.invoke(null, sql, "econ", "ECON"));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlDifferentNames() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlDifferentNames() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
 
     String sql = "SELECT * FROM myschema.table1 WHERE myschema.table1.id = 1";
@@ -405,10 +380,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertTrue(result.contains("ACTUAL_SCHEMA.table1"));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
 
     String sql = "SELECT * FROM other.table1";
@@ -418,10 +392,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== rewriteForeignKeySchemaNames tests ======
 
-  @Test
-  void testRewriteForeignKeySchemaNameNull() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNull() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(null, null, "econ", "ECON"));
@@ -429,10 +402,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
         method.invoke(null, Collections.emptyMap(), "econ", "ECON"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameNoForeignKeys() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNoForeignKeys() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     method.setAccessible(true);
 
     Map<String, Map<String, Object>> constraints = new HashMap<>();
@@ -446,10 +418,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals(tableConstraints, result.get("table1"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameEmptyForeignKeys() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameEmptyForeignKeys() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     method.setAccessible(true);
 
     Map<String, Map<String, Object>> constraints = new HashMap<>();
@@ -463,10 +434,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals(tableConstraints, result.get("table1"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameMatchingFK() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameMatchingFK() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> fk1 = new HashMap<>();
@@ -500,10 +470,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     assertEquals("other_schema", resultFKs.get(1).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameNullTargetSchema() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNullTargetSchema() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> fk1 = new HashMap<>();
@@ -533,26 +502,23 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== registerSqlViews tests ======
 
-  @Test
-  void testRegisterSqlViewsNullTables() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsNullTables() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, mockParentSchema, "test", null, new HashMap<>());
   }
 
-  @Test
-  void testRegisterSqlViewsEmptyTables() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsEmptyTables() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, mockParentSchema, "test", Collections.emptyList(), new HashMap<>());
   }
 
-  @Test
-  void testRegisterSqlViewsSchemaNotFound() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsSchemaNotFound() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -566,10 +532,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  @Test
-  void testRegisterSqlViewsNonViewSkipped() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsNonViewSkipped() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
 
     SchemaPlus foundSchema = mock(SchemaPlus.class);
@@ -588,10 +553,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  @Test
-  void testRegisterSqlViewsMissingViewName() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsMissingViewName() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
 
     SchemaPlus foundSchema = mock(SchemaPlus.class);
@@ -610,10 +574,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  @Test
-  void testRegisterSqlViewsWithViewDefFallback() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsWithViewDefFallback() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     method.setAccessible(true);
 
     SchemaPlus foundSchema = mock(SchemaPlus.class);
@@ -644,27 +607,23 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== supportsConstraints / setTableConstraints tests ======
 
-  @Test
-  void testSupportsConstraints() {
+  @Test void testSupportsConstraints() {
     assertTrue(FileSchemaFactory.INSTANCE.supportsConstraints());
   }
 
-  @Test
-  void testSetTableConstraints() {
+  @Test void testSetTableConstraints() {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     constraints.put("table1", new HashMap<>());
     FileSchemaFactory.INSTANCE.setTableConstraints(constraints, null);
   }
 
-  @Test
-  void testSetTableConstraintsNull() {
+  @Test void testSetTableConstraintsNull() {
     FileSchemaFactory.INSTANCE.setTableConstraints(null, null);
   }
 
   // ====== addMetadataSchemas tests ======
 
-  @Test
-  void testAddMetadataSchemas() throws Exception {
+  @Test void testAddMetadataSchemas() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("addMetadataSchemas", SchemaPlus.class);
     method.setAccessible(true);
 
@@ -675,8 +634,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  @Test
-  void testAddMetadataSchemasAlreadyExist() throws Exception {
+  @Test void testAddMetadataSchemasAlreadyExist() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("addMetadataSchemas", SchemaPlus.class);
     method.setAccessible(true);
 
@@ -695,8 +653,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== S3 validation test ======
 
-  @Test
-  void testCreateSchemaS3WithoutCredentialsFails() {
+  @Test void testCreateSchemaS3WithoutCredentialsFails() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "s3");
     operand.put("directory", "s3://my-bucket/data");
@@ -711,8 +668,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== storageType missing test ======
 
-  @Test
-  void testCreateSchemaNoStorageTypeFails() {
+  @Test void testCreateSchemaNoStorageTypeFails() {
     Map<String, Object> operand = new HashMap<>();
 
     try {
@@ -725,10 +681,9 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   // ====== writeDebugModel test ======
 
-  @Test
-  void testWriteDebugModel() throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "writeDebugModel", String.class, Map.class, String.class);
+  @Test void testWriteDebugModel() throws Exception {
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<>();

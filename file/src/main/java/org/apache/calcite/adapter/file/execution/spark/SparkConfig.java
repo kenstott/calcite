@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -97,8 +96,8 @@ public class SparkConfig {
     this.database = (String) configMap.getOrDefault("database", DEFAULT_DATABASE);
     this.user = (String) configMap.get("user");
     this.password = (String) configMap.get("password");
-    this.icebergCatalogType = (String) configMap.getOrDefault("icebergCatalogType",
-        DEFAULT_ICEBERG_CATALOG_TYPE);
+    this.icebergCatalogType =
+        (String) configMap.getOrDefault("icebergCatalogType", DEFAULT_ICEBERG_CATALOG_TYPE);
     this.icebergWarehouse = (String) configMap.get("icebergWarehouse");
 
     this.maxMemory = (String) configMap.get("maxMemory");

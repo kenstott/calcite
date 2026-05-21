@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.file.etl;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -79,8 +78,8 @@ public class DimensionPartitionPlan {
     this.contextKey = contextKey;
     this.contextValues = Collections.unmodifiableList(new ArrayList<String>(contextValues));
     this.customDimNames = Collections.unmodifiableList(new ArrayList<String>(customDimNames));
-    this.customDimConfigs = Collections.unmodifiableList(
-        new ArrayList<DimensionConfig>(customDimConfigs));
+    this.customDimConfigs =
+        Collections.unmodifiableList(new ArrayList<DimensionConfig>(customDimConfigs));
     // Keep single-dim fields for backward compatibility
     this.customDimName = customDimNames.isEmpty() ? null : customDimNames.get(0);
     this.customDimConfig = customDimConfigs.isEmpty() ? null : customDimConfigs.get(0);

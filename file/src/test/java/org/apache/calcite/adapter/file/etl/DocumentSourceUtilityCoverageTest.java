@@ -34,7 +34,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -94,8 +93,8 @@ class DocumentSourceUtilityCoverageTest {
     HttpSourceConfig mockConfig = org.mockito.Mockito.mock(HttpSourceConfig.class);
     StorageProvider mockStorage = org.mockito.Mockito.mock(StorageProvider.class);
     FileConverter mockConverter = org.mockito.Mockito.mock(FileConverter.class);
-    processorInstance = new DocumentETLProcessor(
-        mockConfig, mockStorage, "/tmp/output", "/tmp/cache", mockConverter);
+    processorInstance =
+        new DocumentETLProcessor(mockConfig, mockStorage, "/tmp/output", "/tmp/cache", mockConverter);
   }
 
   // -----------------------------------------------------------------------
@@ -402,8 +401,8 @@ class DocumentSourceUtilityCoverageTest {
     DocumentSource ds = createDocumentSourceForSubstitution();
     Map<String, String> vars = new HashMap<String, String>();
     vars.put("cik", "0001234567");
-    String result = ds.substituteVariables(
-        "https://data.sec.gov/submissions/CIK{cik}.json", vars);
+    String result =
+        ds.substituteVariables("https://data.sec.gov/submissions/CIK{cik}.json", vars);
     assertEquals("https://data.sec.gov/submissions/CIK0001234567.json", result);
   }
 
@@ -464,8 +463,8 @@ class DocumentSourceUtilityCoverageTest {
     DocumentSource ds = createDocumentSourceForSubstitution();
     Map<String, String> vars = new HashMap<String, String>();
     // Use an env var name that almost certainly does not exist
-    String result = ds.substituteVariables(
-        "{env:CALCITE_NONEXISTENT_VAR_XYZ_12345}", vars);
+    String result =
+        ds.substituteVariables("{env:CALCITE_NONEXISTENT_VAR_XYZ_12345}", vars);
     assertEquals("", result);
   }
 
@@ -824,7 +823,8 @@ class DocumentSourceUtilityCoverageTest {
   }
 
   @Test void testIsTransientErrorEndOfContentLength() {
-    assertTrue(invokeIsTransientError(
+    assertTrue(
+        invokeIsTransientError(
         new IOException("end of content-length delimited message body")));
   }
 

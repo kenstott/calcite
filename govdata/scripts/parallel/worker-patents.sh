@@ -1,28 +1,19 @@
 #!/usr/bin/env bash
-# Patents ETL worker — parameterized by MODE.
 #
-# Usage:
-#   worker-patents.sh <mode> [--force]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Modes:
-#   historical  One-time backfill: all patent and trademark tables from
-#               GOVDATA_START_YEAR (default 2010) through
-#               GOVDATA_INCREMENTAL_START_YEAR - 1.
-#               Release-window checks are skipped — historical always runs in full.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-#   daily       Recurring quarterly cadence: all patent and trademark tables
-#               for the current year (GOVDATA_INCREMENTAL_START_YEAR).
-#               Gated by within_release_window "patent" "3,6,9,12" — exits
-#               immediately in months outside {3, 6, 9, 12}.
-#
-# Required env vars (set in .env.prod or equivalent):
-#   GOVDATA_PARQUET_DIR     Root Parquet directory (patent data lands in patents subdir)
-#   GOVDATA_CACHE_DIR       Root cache directory (full-dump TSVs cached under patents/)
-#   GOVDATA_START_YEAR      Historical start year (default 2010)
-#   GOVDATA_INCREMENTAL_START_YEAR  First year of incremental / daily window
-#
-# Optional env vars:
-#   PATENTS_INCLUDE_DESIGN  Set to "true" to include design patents (default: false)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -euo pipefail
 

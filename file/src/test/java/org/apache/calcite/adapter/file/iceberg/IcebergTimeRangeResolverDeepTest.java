@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.file.iceberg;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +28,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Deep coverage tests for {@link IcebergTimeRangeResolver}.
@@ -43,8 +41,7 @@ public class IcebergTimeRangeResolverDeepTest {
 
   // --- parseTimeRange tests ---
 
-  @Test
-  public void testParseTimeRangeValid() {
+  @Test public void testParseTimeRangeValid() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "2024-01-01T00:00:00Z");
     config.put("end", "2024-12-31T23:59:59Z");
@@ -56,8 +53,7 @@ public class IcebergTimeRangeResolverDeepTest {
     assertEquals(Instant.parse("2024-12-31T23:59:59Z"), range[1]);
   }
 
-  @Test
-  public void testParseTimeRangeSameStartAndEnd() {
+  @Test public void testParseTimeRangeSameStartAndEnd() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "2024-06-15T12:00:00Z");
     config.put("end", "2024-06-15T12:00:00Z");
@@ -67,8 +63,7 @@ public class IcebergTimeRangeResolverDeepTest {
     assertEquals(range[0], range[1]);
   }
 
-  @Test
-  public void testParseTimeRangeMissingStart() {
+  @Test public void testParseTimeRangeMissingStart() {
     Map<String, Object> config = new HashMap<>();
     config.put("end", "2024-12-31T23:59:59Z");
 
@@ -76,8 +71,7 @@ public class IcebergTimeRangeResolverDeepTest {
         () -> IcebergTimeRangeResolver.parseTimeRange(config));
   }
 
-  @Test
-  public void testParseTimeRangeMissingEnd() {
+  @Test public void testParseTimeRangeMissingEnd() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "2024-01-01T00:00:00Z");
 
@@ -85,16 +79,14 @@ public class IcebergTimeRangeResolverDeepTest {
         () -> IcebergTimeRangeResolver.parseTimeRange(config));
   }
 
-  @Test
-  public void testParseTimeRangeBothMissing() {
+  @Test public void testParseTimeRangeBothMissing() {
     Map<String, Object> config = new HashMap<>();
 
     assertThrows(IllegalArgumentException.class,
         () -> IcebergTimeRangeResolver.parseTimeRange(config));
   }
 
-  @Test
-  public void testParseTimeRangeStartAfterEnd() {
+  @Test public void testParseTimeRangeStartAfterEnd() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "2024-12-31T23:59:59Z");
     config.put("end", "2024-01-01T00:00:00Z");
@@ -103,8 +95,7 @@ public class IcebergTimeRangeResolverDeepTest {
         () -> IcebergTimeRangeResolver.parseTimeRange(config));
   }
 
-  @Test
-  public void testParseTimeRangeInvalidFormat() {
+  @Test public void testParseTimeRangeInvalidFormat() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "not-a-date");
     config.put("end", "also-not-a-date");
@@ -113,8 +104,7 @@ public class IcebergTimeRangeResolverDeepTest {
         () -> IcebergTimeRangeResolver.parseTimeRange(config));
   }
 
-  @Test
-  public void testParseTimeRangeEpochBoundary() {
+  @Test public void testParseTimeRangeEpochBoundary() {
     Map<String, Object> config = new HashMap<>();
     config.put("start", "1970-01-01T00:00:00Z");
     config.put("end", "2099-12-31T23:59:59Z");
@@ -126,8 +116,7 @@ public class IcebergTimeRangeResolverDeepTest {
 
   // --- IcebergDataFile tests ---
 
-  @Test
-  public void testIcebergDataFileGetters() {
+  @Test public void testIcebergDataFileGetters() {
     Instant now = Instant.now();
     IcebergTimeRangeResolver.IcebergDataFile dataFile =
         new IcebergTimeRangeResolver.IcebergDataFile("/path/to/file.parquet", now, 123L);
@@ -137,8 +126,7 @@ public class IcebergTimeRangeResolverDeepTest {
     assertEquals(123L, dataFile.getSnapshotId());
   }
 
-  @Test
-  public void testIcebergDataFileWithDifferentPaths() {
+  @Test public void testIcebergDataFileWithDifferentPaths() {
     Instant ts = Instant.parse("2024-06-01T00:00:00Z");
 
     IcebergTimeRangeResolver.IcebergDataFile file1 =
@@ -156,8 +144,7 @@ public class IcebergTimeRangeResolverDeepTest {
 
   // --- Constructor test ---
 
-  @Test
-  public void testResolverConstructor() {
+  @Test public void testResolverConstructor() {
     IcebergTimeRangeResolver resolver = new IcebergTimeRangeResolver();
     assertNotNull(resolver);
   }

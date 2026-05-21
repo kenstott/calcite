@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Chunks backfill worker: writes vectorized_chunks parquet for accessions that have all
-# core staging tables (metadata, facts, contexts, mda, relationships) but no chunks entry.
 #
-# Usage:
-#   worker-vss-backfill.sh [start_year] [end_year]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Defaults to the full primary range (2010 to current year) when no args given.
-# Run one year at a time to limit JVM memory pressure, e.g.:
-#   worker-vss-backfill.sh 2025 2025
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Prerequisites:
-#   - ENABLE_VECTORIZATION must resolve to true in sec-schema.yaml (it defaults to true)
-#   - Core staging parquet already exists on S3 for the target year range
-#   - After this worker completes, run vss-gpu-runner.sh to generate embeddings for
-#     the new chunks rows (embedding column is NULL until the GPU step runs)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

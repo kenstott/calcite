@@ -36,7 +36,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +75,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
   }
 
   private Table createSimpleTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()));
 
     return IcebergCatalogManager.createTable(catalogConfig, name, schema,
@@ -85,8 +84,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
   }
 
   private Table createPartitionedTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()),
         Types.NestedField.optional(3, "year", Types.IntegerType.get()));
 
@@ -98,8 +97,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
   }
 
   private Table createFullTypeTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "int_col", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "int_col", Types.IntegerType.get()),
         Types.NestedField.optional(2, "long_col", Types.LongType.get()),
         Types.NestedField.optional(3, "float_col", Types.FloatType.get()),
         Types.NestedField.optional(4, "double_col", Types.DoubleType.get()),
@@ -218,8 +217,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_null_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, null, Types.IntegerType.get()));
   }
@@ -228,8 +227,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_empty_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "", Types.IntegerType.get()));
   }
@@ -238,8 +237,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_dash_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "-", Types.IntegerType.get()));
   }
@@ -248,8 +247,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_int_num_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(42, method.invoke(writer, 42L, Types.IntegerType.get()));
     assertEquals(42, method.invoke(writer, 42.7, Types.IntegerType.get()));
@@ -259,8 +258,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_int_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(42, method.invoke(writer, "42", Types.IntegerType.get()));
   }
@@ -269,8 +268,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_int_inv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "not_a_number", Types.IntegerType.get()));
   }
@@ -279,8 +278,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_long_num_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(100L, method.invoke(writer, 100, Types.LongType.get()));
     assertEquals(100L, method.invoke(writer, 100.9, Types.LongType.get()));
@@ -290,8 +289,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_long_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(999L, method.invoke(writer, "999", Types.LongType.get()));
   }
@@ -300,8 +299,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_long_inv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "abc", Types.LongType.get()));
   }
@@ -310,8 +309,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_float_num_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(3.14f, method.invoke(writer, 3.14, Types.FloatType.get()));
   }
@@ -320,8 +319,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_float_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(1.5f, method.invoke(writer, "1.5", Types.FloatType.get()));
   }
@@ -330,8 +329,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_float_inv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "xyz", Types.FloatType.get()));
   }
@@ -340,8 +339,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_double_num_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     // Float to double conversion loses precision, so use delta comparison
     double result = (Double) method.invoke(writer, 2.718f, Types.DoubleType.get());
@@ -352,8 +351,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_double_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(9.81, method.invoke(writer, "9.81", Types.DoubleType.get()));
   }
@@ -362,8 +361,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_double_inv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "nope", Types.DoubleType.get()));
   }
@@ -372,8 +371,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_bool_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals(true, method.invoke(writer, true, Types.BooleanType.get()));
     assertEquals(true, method.invoke(writer, "true", Types.BooleanType.get()));
@@ -384,8 +383,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     assertEquals("42", method.invoke(writer, 42, Types.StringType.get()));
     assertEquals("hello", method.invoke(writer, "hello", Types.StringType.get()));
@@ -395,8 +394,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_date_str_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     Object result = method.invoke(writer, "2020-01-01", Types.DateType.get());
     assertNotNull(result);
@@ -408,8 +407,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_date_ld_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     Object result = method.invoke(writer, java.time.LocalDate.of(2021, 6, 15), Types.DateType.get());
     assertNotNull(result);
@@ -420,8 +419,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_date_sql_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     java.sql.Date sqlDate = java.sql.Date.valueOf("2022-03-20");
     Object result = method.invoke(writer, sqlDate, Types.DateType.get());
@@ -432,8 +431,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_ts_inst_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     java.time.Instant instant = java.time.Instant.parse("2020-01-01T00:00:00Z");
     Object result = method.invoke(writer, instant, Types.TimestampType.withoutZone());
@@ -445,8 +444,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_ts_sql_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
     java.sql.Timestamp ts = java.sql.Timestamp.valueOf("2020-06-15 12:30:00");
     Object result = method.invoke(writer, ts, Types.TimestampType.withoutZone());
@@ -458,8 +457,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_list_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
 
     Types.ListType listType = Types.ListType.ofOptional(10, Types.IntegerType.get());
@@ -479,8 +478,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("coerce_array_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coerceValue", Object.class, org.apache.iceberg.types.Type.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coerceValue", Object.class, org.apache.iceberg.types.Type.class);
     method.setAccessible(true);
 
     Types.ListType listType = Types.ListType.ofOptional(10, Types.StringType.get());
@@ -498,8 +497,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("cpv_null_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
     method.setAccessible(true);
 
     org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
@@ -512,8 +511,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("cpv_int_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
     method.setAccessible(true);
 
     org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
@@ -524,8 +523,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("cpv_inv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
     method.setAccessible(true);
 
     org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
@@ -538,8 +537,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("crp_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "computeRelativePath", String.class, String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
     assertEquals("file.parquet",
@@ -550,8 +549,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("crp_no_slash_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "computeRelativePath", String.class, String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
     assertEquals("file.parquet",
@@ -562,8 +561,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("crp_nested_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "computeRelativePath", String.class, String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
     assertEquals("year=2020/file.parquet",
@@ -574,8 +573,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("crp_fallback_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "computeRelativePath", String.class, String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
     // Completely different paths - should fallback to filename
@@ -589,8 +588,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gpp_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertEquals("/data/warehouse", method.invoke(writer, "/data/warehouse/file.parquet"));
@@ -600,8 +599,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gpp_no_slash_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(writer, "file.parquet"));
@@ -611,8 +610,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gpp_s3_root_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(writer, "s3://bucket"));
@@ -622,8 +621,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gpp_s3a_root_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(writer, "s3a://bucket"));
@@ -633,8 +632,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gpp_s3_deep_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertEquals("s3://bucket/prefix",
@@ -647,8 +646,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("ns3_null_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     assertNull(method.invoke(writer, (String) null));
@@ -658,8 +657,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("ns3_single_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     assertEquals("s3a://bucket/file", method.invoke(writer, "s3a:/bucket/file"));
@@ -669,8 +668,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("ns3_double_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     assertEquals("s3a://bucket/file", method.invoke(writer, "s3a://bucket/file"));
@@ -680,8 +679,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("ns3_s3_single_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     assertEquals("s3://bucket/file", method.invoke(writer, "s3:/bucket/file"));
@@ -691,8 +690,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("ns3_local_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     assertEquals("/local/path", method.invoke(writer, "/local/path"));
@@ -704,8 +703,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("erc_small_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "estimateRecordCount", long.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("estimateRecordCount", long.class);
     method.setAccessible(true);
 
     assertEquals(1L, method.invoke(writer, 50L));
@@ -715,8 +714,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("erc_large_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "estimateRecordCount", long.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("estimateRecordCount", long.class);
     method.setAccessible(true);
 
     assertEquals(10000L, method.invoke(writer, 1000000L));
@@ -728,8 +727,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("bpp_null_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "buildPartitionPath", Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("buildPartitionPath", Map.class);
     method.setAccessible(true);
 
     assertEquals("", method.invoke(writer, (Map<String, String>) null));
@@ -739,8 +738,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("bpp_empty_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "buildPartitionPath", Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("buildPartitionPath", Map.class);
     method.setAccessible(true);
 
     assertEquals("", method.invoke(writer, new HashMap<String, String>()));
@@ -750,8 +749,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createPartitionedTable("bpp_vals_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "buildPartitionPath", Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("buildPartitionPath", Map.class);
     method.setAccessible(true);
 
     Map<String, String> vals = new HashMap<String, String>();
@@ -904,8 +903,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gfv_row_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getFieldValue", Map.class, String.class, Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getFieldValue", Map.class, String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -920,8 +919,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gfv_pv_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getFieldValue", Map.class, String.class, Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getFieldValue", Map.class, String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -936,8 +935,8 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("gfv_missing_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getFieldValue", Map.class, String.class, Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getFieldValue", Map.class, String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();

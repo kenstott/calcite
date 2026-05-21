@@ -26,7 +26,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -164,8 +163,8 @@ public class DuckDBPartitionStatusStoreTest {
   }
 
   @Test void testFilterUnprocessedEmptyList() {
-    Set<Integer> unprocessed = store.filterUnprocessed(
-        "alt1", "source", Collections.<Map<String, String>>emptyList());
+    Set<Integer> unprocessed =
+        store.filterUnprocessed("alt1", "source", Collections.<Map<String, String>>emptyList());
 
     assertNotNull(unprocessed);
     assertTrue(unprocessed.isEmpty());

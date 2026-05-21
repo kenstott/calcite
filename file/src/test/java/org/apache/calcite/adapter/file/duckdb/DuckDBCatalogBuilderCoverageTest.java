@@ -208,8 +208,8 @@ public class DuckDBCatalogBuilderCoverageTest {
     }
     assertTrue(catalogFile.exists());
 
-    SubprocessResult result = runMainInSubprocess(
-        modelFile.getAbsolutePath(), catalogFile.getAbsolutePath());
+    SubprocessResult result =
+        runMainInSubprocess(modelFile.getAbsolutePath(), catalogFile.getAbsolutePath());
 
     assertTrue(result.stdout.contains("Removing existing catalog:"),
         "Expected catalog removal message, got stdout: " + result.stdout);
@@ -228,8 +228,8 @@ public class DuckDBCatalogBuilderCoverageTest {
     }
     String catalogPath = tempDir.resolve("out.duckdb").toString();
 
-    SubprocessResult result = runMainInSubprocess(
-        modelFile.getAbsolutePath(), catalogPath);
+    SubprocessResult result =
+        runMainInSubprocess(modelFile.getAbsolutePath(), catalogPath);
 
     // The connection should fail, triggering error path and exit(1)
     assertEquals(1, result.exitCode);

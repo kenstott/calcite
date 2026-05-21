@@ -53,8 +53,8 @@ public class ParquetConversionUtilTest {
 
   @Test void testGetParquetCacheDirWithSchemaName() {
     File customDir = new File(tempDir, "shared_cache");
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        tempDir, customDir.getAbsolutePath(), "myschema");
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(tempDir, customDir.getAbsolutePath(), "myschema");
     assertEquals("schema_myschema", cacheDir.getName());
     assertEquals(customDir.getAbsolutePath(), cacheDir.getParentFile().getAbsolutePath());
     assertTrue(cacheDir.exists(), "Schema-specific cache directory should be created");

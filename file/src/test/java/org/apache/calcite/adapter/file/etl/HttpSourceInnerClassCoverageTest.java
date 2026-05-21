@@ -21,16 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -80,8 +74,8 @@ public class HttpSourceInnerClassCoverageTest {
     assertNotNull(innerClass, "LazyCSVIterator class should exist");
 
     // Get the constructor
-    Constructor<?> constructor = innerClass.getDeclaredConstructor(
-        HttpSource.class,
+    Constructor<?> constructor =
+        innerClass.getDeclaredConstructor(HttpSource.class,
         InputStream.class,
         String.class,
         char.class,
@@ -101,8 +95,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row1 = iter.next();
@@ -124,8 +118,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertFalse(iter.hasNext());
   }
@@ -135,8 +129,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertFalse(iter.hasNext());
   }
@@ -146,8 +140,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, false, "name,age,city");
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, false, "name,age,city");
 
     assertTrue(iter.hasNext());
     Map<String, Object> row1 = iter.next();
@@ -166,8 +160,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, false, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, false, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row1 = iter.next();
@@ -185,8 +179,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(tsv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", '\t', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", '\t', null, null, true, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row = iter.next();
@@ -201,8 +195,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row = iter.next();
@@ -215,8 +209,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row1 = iter.next();
@@ -234,8 +228,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertTrue(iter.hasNext());
     iter.next(); // consume Alice
@@ -248,8 +242,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     assertTrue(iter.hasNext());
     Map<String, Object> row = iter.next();
@@ -266,8 +260,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Iterator<Map<String, Object>> iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     int count = 0;
     while (iter.hasNext()) {
@@ -283,8 +277,8 @@ public class HttpSourceInnerClassCoverageTest {
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     HttpSource source = createMinimalHttpSource();
 
-    Object iter = createLazyCSVIterator(
-        source, is, "/test", ',', null, null, true, null);
+    Object iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
 
     // Verify it implements Closeable
     assertTrue(iter instanceof java.io.Closeable);

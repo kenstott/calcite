@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaVersion;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlDialect;
 
 import org.junit.jupiter.api.Tag;
@@ -33,8 +32,6 @@ import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
@@ -45,10 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -334,8 +329,8 @@ class ClickHouseJdbcSchemaCoverageTest {
     when(conn.createStatement()).thenReturn(stmt);
 
     ClickHouseJdbcSchema schema = createSchemaWithConnection(null, null, conn);
-    Method method = ClickHouseJdbcSchema.class.getDeclaredMethod(
-        "recreateView", String.class, File.class);
+    Method method =
+        ClickHouseJdbcSchema.class.getDeclaredMethod("recreateView", String.class, File.class);
     method.setAccessible(true);
     method.invoke(schema, "test_table", new File("/data/test.parquet"));
 
@@ -348,8 +343,8 @@ class ClickHouseJdbcSchemaCoverageTest {
     when(conn.createStatement()).thenReturn(stmt);
 
     ClickHouseJdbcSchema schema = createSchemaWithConnection(null, null, conn);
-    Method method = ClickHouseJdbcSchema.class.getDeclaredMethod(
-        "recreateViewWithPattern", String.class, String.class);
+    Method method =
+        ClickHouseJdbcSchema.class.getDeclaredMethod("recreateViewWithPattern", String.class, String.class);
     method.setAccessible(true);
     method.invoke(schema, "ptn_table", "s3://bucket/**/*.parquet");
 
@@ -362,8 +357,8 @@ class ClickHouseJdbcSchemaCoverageTest {
     when(conn.createStatement()).thenReturn(stmt);
 
     ClickHouseJdbcSchema schema = createSchemaWithConnection(null, null, conn);
-    Method method = ClickHouseJdbcSchema.class.getDeclaredMethod(
-        "recreateIcebergView", String.class, String.class);
+    Method method =
+        ClickHouseJdbcSchema.class.getDeclaredMethod("recreateIcebergView", String.class, String.class);
     method.setAccessible(true);
     method.invoke(schema, "ice_table", "s3://bucket/warehouse/ice_table");
 
@@ -443,8 +438,8 @@ class ClickHouseJdbcSchemaCoverageTest {
     JdbcConvention convention = mock(JdbcConvention.class);
     Connection conn = mock(Connection.class);
 
-    ClickHouseJdbcSchema schema = new ClickHouseJdbcSchema(
-        dataSource, dialect, convention,
+    ClickHouseJdbcSchema schema =
+        new ClickHouseJdbcSchema(dataSource, dialect, convention,
         "cat", "sch", "/data", true, conn, null, null);
     assertNotNull(schema);
   }

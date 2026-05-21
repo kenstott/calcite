@@ -97,8 +97,8 @@ public class ClickHouseJdbcSchema extends JdbcSchema implements CommentableSchem
   private void recreateView(String tableName, File parquetFile) {
     try {
       String path = parquetFile.getAbsolutePath();
-      String viewSql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, path, false);
+      String viewSql =
+          ClickHouseDialect.INSTANCE.createParquetViewSql(schemaName, tableName, path, false);
 
       LOGGER.info("Recreating ClickHouse view after refresh: \"{}.{}\" -> {}",
                   schemaName, tableName, parquetFile.getName());
@@ -118,8 +118,8 @@ public class ClickHouseJdbcSchema extends JdbcSchema implements CommentableSchem
    */
   private void recreateViewWithPattern(String tableName, String pattern) {
     try {
-      String viewSql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, pattern, false);
+      String viewSql =
+          ClickHouseDialect.INSTANCE.createParquetViewSql(schemaName, tableName, pattern, false);
 
       LOGGER.info("Recreating ClickHouse view with pattern: \"{}.{}\" -> {}",
                   schemaName, tableName, pattern);
@@ -139,8 +139,8 @@ public class ClickHouseJdbcSchema extends JdbcSchema implements CommentableSchem
    */
   private void recreateIcebergView(String tableName, String tableLocation) {
     try {
-      String viewSql = ClickHouseDialect.INSTANCE.createIcebergViewSql(
-          schemaName, tableName, tableLocation);
+      String viewSql =
+          ClickHouseDialect.INSTANCE.createIcebergViewSql(schemaName, tableName, tableLocation);
 
       LOGGER.info("Recreating ClickHouse Iceberg view: \"{}.{}\" -> {}",
                   schemaName, tableName, tableLocation);

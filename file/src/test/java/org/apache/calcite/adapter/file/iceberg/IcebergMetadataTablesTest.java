@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
-import org.apache.calcite.DataContext;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
@@ -78,8 +77,8 @@ public class IcebergMetadataTablesTest {
     HadoopCatalog catalog = new HadoopCatalog(conf, warehousePath);
 
     // Create empty table
-    Schema emptySchema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+    Schema emptySchema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.required(2, "name", Types.StringType.get()));
 
     org.apache.iceberg.Table emptyTable =
@@ -87,8 +86,8 @@ public class IcebergMetadataTablesTest {
     emptyIcebergTable = new IcebergTable(emptyTable, Sources.of(tempDir.toFile()));
 
     // Create table with data
-    Schema dataSchema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+    Schema dataSchema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.required(2, "value", Types.StringType.get()));
 
     org.apache.iceberg.Table dataTable =
@@ -96,8 +95,8 @@ public class IcebergMetadataTablesTest {
             PartitionSpec.unpartitioned());
 
     // Add data to table
-    OutputFile outputFile = dataTable.io().newOutputFile(
-        dataTable.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
+    OutputFile outputFile =
+        dataTable.io().newOutputFile(dataTable.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
 
     DataWriter<Record> writer = Parquet.writeData(outputFile)
         .schema(dataSchema)
@@ -122,8 +121,7 @@ public class IcebergMetadataTablesTest {
     populatedIcebergTable = new IcebergTable(dataTable, Sources.of(tempDir.toFile()));
   }
 
-  @Test
-  public void testCreateMetadataTablesReturnsAllExpectedTables() {
+  @Test public void testCreateMetadataTablesReturnsAllExpectedTables() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
 
     assertNotNull(tables);
@@ -135,8 +133,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(tables.containsKey("partitions"));
   }
 
-  @Test
-  public void testHistoryTableRowType() {
+  @Test public void testHistoryTableRowType() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table historyTable = tables.get("history");
 
@@ -151,8 +148,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(fieldNames.contains("is_current_ancestor"));
   }
 
-  @Test
-  public void testSnapshotsTableRowType() {
+  @Test public void testSnapshotsTableRowType() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table snapshotsTable = tables.get("snapshots");
 
@@ -169,8 +165,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(fieldNames.contains("summary"));
   }
 
-  @Test
-  public void testFilesTableRowType() {
+  @Test public void testFilesTableRowType() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table filesTable = tables.get("files");
 
@@ -187,8 +182,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(fieldNames.contains("file_size_in_bytes"));
   }
 
-  @Test
-  public void testManifestsTableRowType() {
+  @Test public void testManifestsTableRowType() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table manifestsTable = tables.get("manifests");
 
@@ -206,8 +200,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(fieldNames.contains("deleted_data_files_count"));
   }
 
-  @Test
-  public void testPartitionsTableRowType() {
+  @Test public void testPartitionsTableRowType() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table partitionsTable = tables.get("partitions");
 
@@ -221,8 +214,7 @@ public class IcebergMetadataTablesTest {
     assertTrue(fieldNames.contains("file_count"));
   }
 
-  @Test
-  public void testAllTablesAreScannableTable() {
+  @Test public void testAllTablesAreScannableTable() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     for (Map.Entry<String, Table> entry : tables.entrySet()) {
       assertTrue(entry.getValue() instanceof ScannableTable,
@@ -230,8 +222,7 @@ public class IcebergMetadataTablesTest {
     }
   }
 
-  @Test
-  public void testHistoryTableScanEmptyTable() {
+  @Test public void testHistoryTableScanEmptyTable() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     ScannableTable historyTable = (ScannableTable) tables.get("history");
 
@@ -244,8 +235,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testHistoryTableScanPopulatedTable() {
+  @Test public void testHistoryTableScanPopulatedTable() {
     Map<String, Table> tables =
         IcebergMetadataTables.createMetadataTables(populatedIcebergTable);
     ScannableTable historyTable = (ScannableTable) tables.get("history");
@@ -262,8 +252,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSnapshotsTableScanPopulatedTable() {
+  @Test public void testSnapshotsTableScanPopulatedTable() {
     Map<String, Table> tables =
         IcebergMetadataTables.createMetadataTables(populatedIcebergTable);
     ScannableTable snapshotsTable = (ScannableTable) tables.get("snapshots");
@@ -284,8 +273,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testFilesTableScanPopulatedTable() {
+  @Test public void testFilesTableScanPopulatedTable() {
     Map<String, Table> tables =
         IcebergMetadataTables.createMetadataTables(populatedIcebergTable);
     ScannableTable filesTable = (ScannableTable) tables.get("files");
@@ -305,8 +293,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testManifestsTableScanPopulatedTable() {
+  @Test public void testManifestsTableScanPopulatedTable() {
     Map<String, Table> tables =
         IcebergMetadataTables.createMetadataTables(populatedIcebergTable);
     ScannableTable manifestsTable = (ScannableTable) tables.get("manifests");
@@ -325,8 +312,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testPartitionsTableScanPopulatedTable() {
+  @Test public void testPartitionsTableScanPopulatedTable() {
     Map<String, Table> tables =
         IcebergMetadataTables.createMetadataTables(populatedIcebergTable);
     ScannableTable partitionsTable = (ScannableTable) tables.get("partitions");
@@ -346,8 +332,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testFilesTableScanEmptyTable() {
+  @Test public void testFilesTableScanEmptyTable() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     ScannableTable filesTable = (ScannableTable) tables.get("files");
 
@@ -358,8 +343,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testManifestsTableScanEmptyTable() {
+  @Test public void testManifestsTableScanEmptyTable() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     ScannableTable manifestsTable = (ScannableTable) tables.get("manifests");
 
@@ -370,8 +354,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testPartitionsTableScanEmptyTable() {
+  @Test public void testPartitionsTableScanEmptyTable() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     ScannableTable partitionsTable = (ScannableTable) tables.get("partitions");
 
@@ -382,8 +365,7 @@ public class IcebergMetadataTablesTest {
     enumerator.close();
   }
 
-  @Test
-  public void testHistoryTableFieldTypes() {
+  @Test public void testHistoryTableFieldTypes() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table historyTable = tables.get("history");
     RelDataType rowType = historyTable.getRowType(typeFactory);
@@ -394,8 +376,7 @@ public class IcebergMetadataTablesTest {
     assertEquals(SqlTypeName.BOOLEAN, rowType.getFieldList().get(3).getType().getSqlTypeName());
   }
 
-  @Test
-  public void testSnapshotsTableFieldTypes() {
+  @Test public void testSnapshotsTableFieldTypes() {
     Map<String, Table> tables = IcebergMetadataTables.createMetadataTables(emptyIcebergTable);
     Table snapshotsTable = tables.get("snapshots");
     RelDataType rowType = snapshotsTable.getRowType(typeFactory);

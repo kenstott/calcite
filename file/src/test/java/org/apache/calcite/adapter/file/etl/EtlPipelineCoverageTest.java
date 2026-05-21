@@ -45,7 +45,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -76,7 +75,8 @@ public class EtlPipelineCoverageTest {
 
     // Mock the factory to return our mockWriter instead of creating real writers
     factoryMock = mockStatic(MaterializationWriterFactory.class);
-    factoryMock.when(() -> MaterializationWriterFactory.createFromConfig(
+    factoryMock.when(
+        () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
         anyString(), any(IncrementalTracker.class)))
         .thenReturn(mockWriter);
@@ -151,8 +151,7 @@ public class EtlPipelineCoverageTest {
    */
   private DataProvider dataProviderReturning(final Iterator<Map<String, Object>> data) {
     return new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         return data;
       }
@@ -200,23 +199,23 @@ public class EtlPipelineCoverageTest {
     EtlPipelineConfig config = buildConfig("test", null);
     DataProvider dp = DataProvider.DEFAULT;
     DataWriter dw = DataWriter.DEFAULT;
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, dw);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, dw);
     assertNotNull(pipeline);
   }
 
   @Test void testConstructorWithSeparateSourceStorage() {
     EtlPipelineConfig config = buildConfig("test", null);
     StorageProvider sourceStorage = mock(StorageProvider.class);
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, sourceStorage, "/base",
-        null, mockTracker, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, sourceStorage, "/base", null, mockTracker, null, null);
     assertNotNull(pipeline);
   }
 
   @Test void testConstructorWithOperatingDirectory() {
     EtlPipelineConfig config = buildConfig("test", null);
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, null, "/base",
-        null, mockTracker, null, null, "/ops");
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, "/ops");
     assertNotNull(pipeline);
   }
 
@@ -239,11 +238,12 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion(anyString())).thenReturn(null);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
     // Return empty set => all combinations already processed
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -258,8 +258,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedCompletionFastPathSkip() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
     EtlPipelineConfig config = buildConfig("cached_pipeline", dims);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
@@ -269,8 +269,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion("cached_pipeline")).thenReturn(cached);
     when(mockStorage.isDirectory("/base/cached_pipeline/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -283,8 +283,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedCompletionZeroRowsTtlNotExpired() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("zero_rows_pipeline", dims);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
@@ -295,8 +295,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion("zero_rows_pipeline")).thenReturn(cached);
     when(mockStorage.isDirectory("/base/zero_rows_pipeline/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -309,8 +309,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedCompletionZeroRowsTtlExpired() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     // Build config with short emptyResultTtlDays
     HttpSourceConfig source = HttpSourceConfig.builder()
@@ -340,22 +340,22 @@ public class EtlPipelineCoverageTest {
     // Set up for full pipeline execution after TTL expiry
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/ttl_expired_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -368,8 +368,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedConfigMismatchWithDataExists() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
     EtlPipelineConfig config = buildConfig("mismatch_pipeline", dims);
 
     // Create cached with different config hash
@@ -379,8 +379,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion("mismatch_pipeline")).thenReturn(cached);
     when(mockStorage.isDirectory("/base/mismatch_pipeline/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -396,8 +396,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedConfigMismatchDataMissing() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("missing_data", dims);
 
     IncrementalTracker.CachedCompletion cached =
@@ -410,22 +410,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/missing_data");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -438,8 +438,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedConfigMismatchZeroRows() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("zero_mismatch", dims);
 
     IncrementalTracker.CachedCompletion cached =
@@ -450,22 +450,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/zero_mismatch");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -477,8 +477,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteNoCacheIcebergDataExists() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -503,22 +503,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/cold_recovery");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -532,8 +532,8 @@ public class EtlPipelineCoverageTest {
 
   @Test void testExecuteTableCompleteFastPath() throws IOException {
     // Use disabled materialization so isTableComplete fast-path returns EtlResult.skipped()
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -552,8 +552,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion("complete_pipeline")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("complete_pipeline"), anyString())).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -565,8 +565,8 @@ public class EtlPipelineCoverageTest {
     // readRowCountFromIceberg fails (no real Iceberg) => returns 0.
     // Since emptyResultTtlDays defaults to 7 (>0), the pipeline invalidates
     // and continues processing. This covers the rowCount==0 TTL path.
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -589,22 +589,22 @@ public class EtlPipelineCoverageTest {
     // After invalidation, must set up for processing
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/iceberg_complete");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -620,8 +620,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteTableCompleteButDataMissing() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("stale_complete", dims);
 
     when(mockTracker.getCachedCompletion("stale_complete")).thenReturn(null);
@@ -635,15 +635,14 @@ public class EtlPipelineCoverageTest {
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(3);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -656,8 +655,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteAllCombinationsAlreadyProcessed() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
     EtlPipelineConfig config = buildConfig("all_processed", dims);
 
     when(mockTracker.getCachedCompletion("all_processed")).thenReturn(null);
@@ -665,11 +664,12 @@ public class EtlPipelineCoverageTest {
     // Simulate data existing so the "no Iceberg data" fast-path does not force reprocess
     when(mockStorage.isDirectory(anyString())).thenReturn(true);
     // Return empty set => all are already processed
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -683,8 +683,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteSequentialWithDataProvider() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021", "2022"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021", "2022"));
     EtlPipelineConfig config = buildConfig("seq_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("seq_pipeline")).thenReturn(null);
@@ -694,23 +694,23 @@ public class EtlPipelineCoverageTest {
     unprocessed.add(0);
     unprocessed.add(1);
     unprocessed.add(2);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/seq_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
     EtlPipeline.ProgressListener listener = new EtlPipeline.LoggingProgressListener();
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", listener,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", listener, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -725,8 +725,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteSequentialWithCustomDataWriter() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("writer_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("writer_pipeline")).thenReturn(null);
@@ -734,14 +734,14 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/writer_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
@@ -749,8 +749,7 @@ public class EtlPipelineCoverageTest {
 
     // Custom DataWriter that returns a positive row count (overriding default writer)
     DataWriter dw = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config, Iterator<Map<String, Object>> data,
+      @Override public long write(EtlPipelineConfig config, Iterator<Map<String, Object>> data,
           Map<String, String> variables) {
         // Consume the iterator
         int count = 0;
@@ -762,8 +761,8 @@ public class EtlPipelineCoverageTest {
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, dw);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, dw);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -776,8 +775,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteDataWriterReturnsNegativeOne() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("fallback_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("fallback_pipeline")).thenReturn(null);
@@ -785,15 +784,15 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(7L);
     when(mockWriter.getTableLocation()).thenReturn("/base/fallback_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(7);
       }
@@ -802,8 +801,8 @@ public class EtlPipelineCoverageTest {
     // DataWriter returns -1 => fall through to MaterializationWriter
     DataWriter dw = DataWriter.DEFAULT;
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, dw);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, dw);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -816,8 +815,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteBatchFailureSkipAction() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -843,7 +842,8 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     unprocessed.add(1);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/skip_error_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -851,8 +851,7 @@ public class EtlPipelineCoverageTest {
     // First batch throws, second succeeds
     DataProvider dp = new DataProvider() {
       private int callCount = 0;
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         callCount++;
         if (callCount == 1) {
@@ -865,8 +864,8 @@ public class EtlPipelineCoverageTest {
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
 
     EtlPipeline.ProgressListener listener = new EtlPipeline.LoggingProgressListener();
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", listener,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", listener, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -880,8 +879,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteBatchFailureFailAction() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -906,19 +905,19 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 500 Server Error");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -931,8 +930,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteBatchFailureWarnAction() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -958,7 +957,8 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     unprocessed.add(1);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/warn_pipeline");
@@ -966,8 +966,7 @@ public class EtlPipelineCoverageTest {
 
     DataProvider dp = new DataProvider() {
       private int callCount = 0;
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         callCount++;
         if (callCount == 1) {
@@ -977,8 +976,8 @@ public class EtlPipelineCoverageTest {
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -991,8 +990,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorActionAuth401() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("auth_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("auth_pipeline")).thenReturn(null);
@@ -1000,19 +999,19 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 401 Unauthorized");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1025,8 +1024,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorAction404() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("notfound_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("notfound_pipeline")).thenReturn(null);
@@ -1034,22 +1033,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/notfound_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 404 Not Found");
       }
     };
 
     EtlPipeline.ProgressListener listener = new EtlPipeline.LoggingProgressListener();
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", listener,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", listener, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1062,8 +1061,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorAction429Transient() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("transient_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("transient_pipeline")).thenReturn(null);
@@ -1071,21 +1070,21 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/transient_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 429 Too Many Requests");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1096,8 +1095,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorAction503Transient() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("transient503_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("transient503_pipeline")).thenReturn(null);
@@ -1105,21 +1104,21 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/transient503_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 503 Service Unavailable");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1130,8 +1129,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorActionNullMessage() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("null_msg_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("null_msg_pipeline")).thenReturn(null);
@@ -1139,21 +1138,21 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/null_msg_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException((String) null);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1164,32 +1163,32 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteParquetFormat() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
-    EtlPipelineConfig config = buildConfig("parquet_pipeline", dims,
-        MaterializeConfig.Format.PARQUET, null);
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
+    EtlPipelineConfig config =
+        buildConfig("parquet_pipeline", dims, MaterializeConfig.Format.PARQUET, null);
 
     when(mockTracker.getCachedCompletion("parquet_pipeline")).thenReturn(null);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/parquet_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1213,8 +1212,8 @@ public class EtlPipelineCoverageTest {
         .output(MaterializeOutputConfig.builder().location("/output").build())
         .build();
 
-    Map<String, DimensionConfig> dims = singleListDimension("id",
-        Arrays.asList("doc1"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("id", Arrays.asList("doc1"));
 
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("doc_pipeline")
@@ -1230,21 +1229,21 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/doc_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataWriter dw = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config, Iterator<Map<String, Object>> data,
+      @Override public long write(EtlPipelineConfig config, Iterator<Map<String, Object>> data,
           Map<String, String> variables) {
         return 42L;
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, null, dw);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, dw);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1266,8 +1265,8 @@ public class EtlPipelineCoverageTest {
         .output(MaterializeOutputConfig.builder().location("/output").build())
         .build();
 
-    Map<String, DimensionConfig> dims = singleListDimension("id",
-        Arrays.asList("doc1"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("id", Arrays.asList("doc1"));
 
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("doc_no_writer")
@@ -1283,13 +1282,14 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/doc_no_writer");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1302,8 +1302,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteDataProviderReturnsNull() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("null_dp_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("null_dp_pipeline")).thenReturn(null);
@@ -1311,7 +1311,8 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(0L);
     when(mockWriter.getTableLocation()).thenReturn("/base/null_dp_pipeline");
@@ -1322,8 +1323,8 @@ public class EtlPipelineCoverageTest {
     // pipeline catches the exception
     DataProvider dp = DataProvider.DEFAULT;
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1335,8 +1336,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteUnexpectedException() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("exception_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("exception_pipeline")).thenReturn(null);
@@ -1344,14 +1345,16 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
 
     // Writer throws during initialize => caught by outer catch block
     factoryMock.close();
     factoryMock = mockStatic(MaterializationWriterFactory.class);
     MaterializationWriter failingWriter = mock(MaterializationWriter.class);
-    factoryMock.when(() -> MaterializationWriterFactory.createFromConfig(
+    factoryMock.when(
+        () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
         anyString(), any(IncrementalTracker.class)))
         .thenReturn(failingWriter);
@@ -1363,15 +1366,14 @@ public class EtlPipelineCoverageTest {
         .initialize(any(MaterializeConfig.class));
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1385,8 +1387,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteWriterCloseFailure() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("close_fail_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("close_fail_pipeline")).thenReturn(null);
@@ -1394,7 +1396,8 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/close_fail_pipeline");
@@ -1404,15 +1407,14 @@ public class EtlPipelineCoverageTest {
         .when(mockWriter).close();
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     // The result should still be returned successfully despite close failure
@@ -1425,8 +1427,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsIOException() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("io_verify_pipeline", dims);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
@@ -1437,8 +1439,8 @@ public class EtlPipelineCoverageTest {
     // Storage throws IOException during isDirectory check
     when(mockStorage.isDirectory(anyString())).thenThrow(new IOException("S3 down"));
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1451,8 +1453,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsNullStorage() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("null_storage_pipeline", dims);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
@@ -1461,8 +1463,8 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("null_storage_pipeline")).thenReturn(cached);
 
-    EtlPipeline pipeline = new EtlPipeline(config, null, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, null, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1475,10 +1477,10 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsParquetFormat() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
-    EtlPipelineConfig config = buildConfig("parquet_verify", dims,
-        MaterializeConfig.Format.PARQUET, null);
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
+    EtlPipelineConfig config =
+        buildConfig("parquet_verify", dims, MaterializeConfig.Format.PARQUET, null);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
     IncrementalTracker.CachedCompletion cached =
@@ -1488,8 +1490,8 @@ public class EtlPipelineCoverageTest {
     // For Parquet, verify checks baseDir/pipelineName not metadata subdir
     when(mockStorage.isDirectory("/base/parquet_verify")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1505,8 +1507,8 @@ public class EtlPipelineCoverageTest {
     columns.add(ColumnConfig.builder().name("col1").type("VARCHAR").build());
     columns.add(ColumnConfig.builder().name("col2").type("INTEGER").build());
 
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     // Config has columns at table level, materialize has no columns/name
     EtlPipelineConfig config = buildConfig("merge_pipeline", dims, null, columns);
 
@@ -1515,22 +1517,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/merge_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1542,33 +1544,33 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteParquetWithTrailingSlash() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
-    EtlPipelineConfig config = buildConfig("slash_pipeline", dims,
-        MaterializeConfig.Format.PARQUET, null);
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
+    EtlPipelineConfig config =
+        buildConfig("slash_pipeline", dims, MaterializeConfig.Format.PARQUET, null);
 
     when(mockTracker.getCachedCompletion("slash_pipeline")).thenReturn(null);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/slash_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
     // Use trailing slash in base directory
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base/", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base/", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1580,8 +1582,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsIcebergWithWarehousePath() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1608,8 +1610,8 @@ public class EtlPipelineCoverageTest {
     // Check warehousePath first, then fallback
     when(mockStorage.isDirectory("/warehouse/warehouse_pipeline/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1621,8 +1623,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsIcebergWarehouseFallback() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1651,8 +1653,8 @@ public class EtlPipelineCoverageTest {
     // Fallback to baseDirectory
     when(mockStorage.isDirectory("/base/fallback_verify/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1664,8 +1666,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsDisabledMaterialization() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1687,8 +1689,8 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("disabled_mat")).thenReturn(cached);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1701,8 +1703,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteTableCompleteNoMaterialization() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1721,8 +1723,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.getCachedCompletion("no_mat_complete")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("no_mat_complete"), anyString())).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1762,8 +1764,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteSuccessMarksTableComplete() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("success_complete", dims);
 
     when(mockTracker.getCachedCompletion("success_complete")).thenReturn(null);
@@ -1771,22 +1773,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/success_complete");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1803,8 +1805,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteFailedDoesNotMarkComplete() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1830,7 +1832,8 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     unprocessed.add(1);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/partial_fail");
@@ -1838,8 +1841,7 @@ public class EtlPipelineCoverageTest {
 
     DataProvider dp = new DataProvider() {
       private int callCount = 0;
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         callCount++;
         if (callCount == 1) {
@@ -1849,8 +1851,8 @@ public class EtlPipelineCoverageTest {
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1865,8 +1867,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteTableCompleteZeroRowsWithTtl() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1892,22 +1894,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/zero_ttl_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1919,8 +1921,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteTableCompleteZeroRowsNoTtl() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
 
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
@@ -1941,8 +1943,8 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.isTableComplete(eq("zero_no_ttl"), anyString())).thenReturn(true);
     when(mockStorage.isDirectory("/base/zero_no_ttl/metadata")).thenReturn(true);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1955,8 +1957,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorAction403Auth() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("auth403_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("auth403_pipeline")).thenReturn(null);
@@ -1964,19 +1966,19 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 403 Forbidden");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -1987,8 +1989,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testErrorAction5xxServerError() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("5xx_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("5xx_pipeline")).thenReturn(null);
@@ -1996,21 +1998,21 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/5xx_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) throws IOException {
         throw new IOException("HTTP 502 Bad Gateway");
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2021,10 +2023,10 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testVerifyDataExistsParquetMissing() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
-    EtlPipelineConfig config = buildConfig("parquet_missing", dims,
-        MaterializeConfig.Format.PARQUET, null);
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
+    EtlPipelineConfig config =
+        buildConfig("parquet_missing", dims, MaterializeConfig.Format.PARQUET, null);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
     IncrementalTracker.CachedCompletion cached =
@@ -2036,22 +2038,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/parquet_missing");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2086,22 +2088,22 @@ public class EtlPipelineCoverageTest {
     for (int i = 0; i < 4; i++) {
       unprocessed.add(i);
     }
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/multi_dim");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2165,8 +2167,8 @@ public class EtlPipelineCoverageTest {
 
   @Test void testAllIndicesSet() throws IOException {
     // Test indirectly through forceReprocessAll path
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020", "2021", "2022"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020", "2021", "2022"));
     EtlPipelineConfig config = buildConfig("force_reprocess", dims);
 
     when(mockTracker.getCachedCompletion("force_reprocess")).thenReturn(null);
@@ -2179,15 +2181,14 @@ public class EtlPipelineCoverageTest {
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2201,8 +2202,8 @@ public class EtlPipelineCoverageTest {
 
   @Test void testGetParallelThreadCountDefault() throws IOException {
     // Without setting calcite.etl.threads, default is 1 (sequential)
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("thread_test", dims);
 
     when(mockTracker.getCachedCompletion("thread_test")).thenReturn(null);
@@ -2210,22 +2211,22 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/thread_test");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2237,8 +2238,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testExecuteCachedCompletionDataMissing() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("cache_miss_pipeline", dims);
 
     String configHash = IncrementalTracker.computeConfigHash(dims);
@@ -2256,15 +2257,14 @@ public class EtlPipelineCoverageTest {
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(10);
       }
     };
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", null, mockTracker,
-        dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", null, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2279,8 +2279,8 @@ public class EtlPipelineCoverageTest {
   @Test void testSourceStorageProviderDefaultsToMain() {
     EtlPipelineConfig config = buildConfig("source_default", null);
     // Pass null for sourceStorageProvider => should default to main storageProvider
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, null, "/base",
-        null, mockTracker, null, null, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, null);
     assertNotNull(pipeline);
   }
 
@@ -2289,8 +2289,8 @@ public class EtlPipelineCoverageTest {
   // -----------------------------------------------------------------------
 
   @Test void testProgressListenerCalledDuringExecution() throws IOException {
-    Map<String, DimensionConfig> dims = singleListDimension("year",
-        Arrays.asList("2020"));
+    Map<String, DimensionConfig> dims =
+        singleListDimension("year", Arrays.asList("2020"));
     EtlPipelineConfig config = buildConfig("progress_pipeline", dims);
 
     when(mockTracker.getCachedCompletion("progress_pipeline")).thenReturn(null);
@@ -2298,23 +2298,23 @@ public class EtlPipelineCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         any(List.class), anyLong())).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/progress_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
     DataProvider dp = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
           Map<String, String> variables) {
         return rowIterator(5);
       }
     };
 
     EtlPipeline.ProgressListener mockListener = mock(EtlPipeline.ProgressListener.class);
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/base", mockListener,
-        mockTracker, dp, null);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/base", mockListener, mockTracker, dp, null);
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
@@ -2364,8 +2364,8 @@ public class EtlPipelineCoverageTest {
     String emptyHash = IncrementalTracker.computeConfigHash(null);
     assertEquals("empty", emptyHash);
 
-    String emptyHash2 = IncrementalTracker.computeConfigHash(
-        Collections.<String, DimensionConfig>emptyMap());
+    String emptyHash2 =
+        IncrementalTracker.computeConfigHash(Collections.<String, DimensionConfig>emptyMap());
     assertEquals("empty", emptyHash2);
 
     // Non-empty dimensions
@@ -2388,8 +2388,8 @@ public class EtlPipelineCoverageTest {
     String emptySig = IncrementalTracker.computeDimensionSignature(null);
     assertEquals("empty", emptySig);
 
-    String emptySig2 = IncrementalTracker.computeDimensionSignature(
-        Collections.<Map<String, String>>emptyList());
+    String emptySig2 =
+        IncrementalTracker.computeDimensionSignature(Collections.<Map<String, String>>emptyList());
     assertEquals("empty", emptySig2);
 
     // Non-empty combinations

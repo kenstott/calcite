@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# Reprocess specific SEC accessions regardless of existing tracker state.
 #
-# Usage:
-#   worker-sec-reprocess.sh [--force-download] <accession1> [accession2 ...]
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# --force-download
-#   Also delete the raw EDGAR cache for each accession before reprocessing,
-#   so EDGAR documents are re-fetched from the SEC website.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Accession format: XXXXXXXXXX-YY-ZZZZZZ
-#   The first 10 characters are the filing agent's CIK (NOT the company CIK).
-#   YY is the 2-digit year (e.g. 24 → 2024).
-#   The model uses _ALL_EDGAR_FILERS so the full index is searched regardless of filer.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-# Examples:
-#   worker-sec-reprocess.sh 0000320193-24-000123
-#   worker-sec-reprocess.sh --force-download 0000320193-24-000123 0000789019-23-000456
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

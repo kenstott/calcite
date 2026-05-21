@@ -44,23 +44,23 @@ public class SparkSqlDialectCoverageTest {
   // =========================================================================
 
   @Test public void testGetConfigValueNullConfig() throws Exception {
-    Method method = SparkSqlDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        SparkSqlDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     assertEquals("default", method.invoke(null, null, "key", "default"));
   }
 
   @Test public void testGetConfigValueMissingKey() throws Exception {
-    Method method = SparkSqlDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        SparkSqlDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     assertEquals("default", method.invoke(null, config, "missing", "default"));
   }
 
   @Test public void testGetConfigValueEmptyValue() throws Exception {
-    Method method = SparkSqlDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        SparkSqlDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     config.put("key", "");
@@ -68,8 +68,8 @@ public class SparkSqlDialectCoverageTest {
   }
 
   @Test public void testGetConfigValuePresent() throws Exception {
-    Method method = SparkSqlDialect.class.getDeclaredMethod(
-        "getConfigValue", Map.class, String.class, String.class);
+    Method method =
+        SparkSqlDialect.class.getDeclaredMethod("getConfigValue", Map.class, String.class, String.class);
     method.setAccessible(true);
     Map<String, String> config = new HashMap<String, String>();
     config.put("key", "value");

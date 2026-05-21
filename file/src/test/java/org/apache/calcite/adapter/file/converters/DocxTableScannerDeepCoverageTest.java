@@ -16,13 +16,13 @@
  */
 package org.apache.calcite.adapter.file.converters;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -69,8 +68,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== scanAndConvertTables - basic functionality ==========
 
   @Test void testScanAndConvertSimpleTable() throws IOException {
-    File docxFile = createDocxWithSimpleTable("simple.docx",
-        new String[]{"Name", "Age"},
+    File docxFile =
+        createDocxWithSimpleTable("simple.docx", new String[]{"Name", "Age"},
         new String[][]{{"Alice", "30"}, {"Bob", "25"}});
     File outputDir = createOutputDir("out_simple");
 
@@ -98,8 +97,8 @@ public class DocxTableScannerDeepCoverageTest {
   }
 
   @Test void testScanAndConvertNoArgsRelativePath() throws IOException {
-    File docxFile = createDocxWithSimpleTable("norel.docx",
-        new String[]{"Col1"},
+    File docxFile =
+        createDocxWithSimpleTable("norel.docx", new String[]{"Col1"},
         new String[][]{{"val1"}});
     File outputDir = createOutputDir("out_norel");
 
@@ -112,8 +111,8 @@ public class DocxTableScannerDeepCoverageTest {
   }
 
   @Test void testScanAndConvertWithRelativePath() throws IOException {
-    File docxFile = createDocxWithSimpleTable("relpath.docx",
-        new String[]{"Key"},
+    File docxFile =
+        createDocxWithSimpleTable("relpath.docx", new String[]{"Key"},
         new String[][]{{"k1"}});
     File outputDir = createOutputDir("out_relpath");
 
@@ -136,8 +135,8 @@ public class DocxTableScannerDeepCoverageTest {
   }
 
   @Test void testScanAndConvertWithRelativePathNoSeparator() throws IOException {
-    File docxFile = createDocxWithSimpleTable("nosep.docx",
-        new String[]{"Key"},
+    File docxFile =
+        createDocxWithSimpleTable("nosep.docx", new String[]{"Key"},
         new String[][]{{"k1"}});
     File outputDir = createOutputDir("out_nosep");
 
@@ -166,8 +165,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== Table with title from preceding paragraph ==========
 
   @Test void testScanAndConvertTableWithTitle() throws IOException {
-    File docxFile = createDocxWithTitledTable("titled.docx",
-        "Employee Data",
+    File docxFile =
+        createDocxWithTitledTable("titled.docx", "Employee Data",
         new String[]{"Name", "Dept"},
         new String[][]{{"Alice", "Engineering"}});
     File outputDir = createOutputDir("out_titled");
@@ -210,8 +209,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== Table with only header row (no data) ==========
 
   @Test void testScanAndConvertTableWithOnlyHeaders() throws IOException {
-    File docxFile = createDocxWithSimpleTable("headers_only.docx",
-        new String[]{"A", "B", "C"},
+    File docxFile =
+        createDocxWithSimpleTable("headers_only.docx", new String[]{"A", "B", "C"},
         new String[0][]);  // No data rows
     File outputDir = createOutputDir("out_headers_only");
 
@@ -286,8 +285,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== generateFileName via reflection ==========
 
   @Test void testGenerateFileName() throws Exception {
-    Method method = DocxTableScanner.class.getDeclaredMethod(
-        "generateFileName", String.class, String.class, int.class, int.class);
+    Method method =
+        DocxTableScanner.class.getDeclaredMethod("generateFileName", String.class, String.class, int.class, int.class);
     method.setAccessible(true);
 
     // With title
@@ -320,8 +319,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== buildColumnHeaders via reflection ==========
 
   @Test void testBuildColumnHeadersSingleRow() throws Exception {
-    Method method = DocxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+    Method method =
+        DocxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     method.setAccessible(true);
 
     List<List<String>> singleHeader = new ArrayList<>();
@@ -337,8 +336,8 @@ public class DocxTableScannerDeepCoverageTest {
   }
 
   @Test void testBuildColumnHeadersMultipleRows() throws Exception {
-    Method method = DocxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+    Method method =
+        DocxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     method.setAccessible(true);
 
     // Group header: "Sales" spans first two columns
@@ -356,8 +355,8 @@ public class DocxTableScannerDeepCoverageTest {
   }
 
   @Test void testBuildColumnHeadersEmptyList() throws Exception {
-    Method method = DocxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+    Method method =
+        DocxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
@@ -369,8 +368,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== determineHeaderRowCount via reflection ==========
 
   @Test void testDetermineHeaderRowCountEmptyRows() throws Exception {
-    Method method = DocxTableScanner.class.getDeclaredMethod(
-        "determineHeaderRowCount", List.class);
+    Method method =
+        DocxTableScanner.class.getDeclaredMethod("determineHeaderRowCount", List.class);
     method.setAccessible(true);
 
     List<XWPFTableRow> emptyList = new ArrayList<>();
@@ -394,8 +393,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== File name sanitization ==========
 
   @Test void testSpecialCharactersInFileName() throws IOException {
-    File docxFile = createDocxWithSimpleTable("my file (copy).docx",
-        new String[]{"Col"},
+    File docxFile =
+        createDocxWithSimpleTable("my file (copy).docx", new String[]{"Col"},
         new String[][]{{"val"}});
     File outputDir = createOutputDir("out_special");
 
@@ -414,8 +413,8 @@ public class DocxTableScannerDeepCoverageTest {
   // ========== Numeric type inference in table data ==========
 
   @Test void testNumericTypeInference() throws IOException {
-    File docxFile = createDocxWithSimpleTable("numeric.docx",
-        new String[]{"Label", "IntVal", "FloatVal", "BoolVal"},
+    File docxFile =
+        createDocxWithSimpleTable("numeric.docx", new String[]{"Label", "IntVal", "FloatVal", "BoolVal"},
         new String[][]{
             {"item1", "42", "3.14", "true"},
             {"item2", "0", "0.0", "false"}

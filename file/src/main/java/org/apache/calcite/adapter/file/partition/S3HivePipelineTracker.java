@@ -58,7 +58,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-
 /**
  * S3 hive-partitioned append-only PipelineTracker.
  *
@@ -297,8 +296,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
       String sessionToken = config.get("sessionToken");
 
-      StringBuilder sql = new StringBuilder(
-          "CREATE OR REPLACE SECRET s3_tracker_secret (TYPE S3");
+      StringBuilder sql =
+          new StringBuilder("CREATE OR REPLACE SECRET s3_tracker_secret (TYPE S3");
       sql.append(", KEY_ID '").append(accessKey).append("'");
       sql.append(", SECRET '").append(secretKey).append("'");
       if (region != null && !region.isEmpty()) {
@@ -627,7 +626,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       final String s3Uri = s3Files.get(i);
       final int idx = i;
       final java.io.File localFile = new java.io.File(tempDir, idx + ".parquet");
-      futures.add(pool.submit(new Runnable() {
+      futures.add(
+          pool.submit(new Runnable() {
         @Override public void run() {
           try {
             // Parse s3://bucket/key
@@ -839,8 +839,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
             + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
       }
 
-      try (PreparedStatement ps = conn.prepareStatement(
-          "INSERT INTO " + tableName
+      try (PreparedStatement ps =
+          conn.prepareStatement("INSERT INTO " + tableName
               + " VALUES (?, ?, ?, 'complete', 0, NULL, NULL, NULL, ?)")) {
         int batchSize = 0;
         for (Map.Entry<String, Set<String>> entry : stageCache.entrySet()) {
@@ -1062,7 +1062,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     boolean shouldFlush = false;
     synchronized (connectionLock) {
-      pendingStates.add(new PendingState(sourceKey, tableName, phase,
+      pendingStates.add(
+          new PendingState(sourceKey, tableName, phase,
           state, rowCount, configHash, signature, errorMessage, asOf));
       if (pendingStates.size() >= PENDING_FLUSH_THRESHOLD) {
         shouldFlush = true;
@@ -1128,8 +1129,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (tables != null) {
       tables.add(tableName);
     } else {
-      Set<String> newSet = Collections.newSetFromMap(
-          new ConcurrentHashMap<String, Boolean>());
+      Set<String> newSet =
+          Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
       newSet.add(tableName);
       stageCache.put(cacheKey, newSet);
     }
@@ -1807,11 +1808,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     }
 
     // Phase 2: parallel S3 uploads.
-    ExecutorService pool = Executors.newFixedThreadPool(
-        Math.min(FLUSH_PARALLELISM, uploads.size()));
+    ExecutorService pool =
+        Executors.newFixedThreadPool(Math.min(FLUSH_PARALLELISM, uploads.size()));
     List<Future<?>> futures = new ArrayList<Future<?>>(uploads.size());
     for (final Object[] upload : uploads) {
-      futures.add(pool.submit(new Runnable() {
+      futures.add(
+          pool.submit(new Runnable() {
         public void run() {
           java.io.File tempFile = (java.io.File) upload[0];
           String s3Path = (String) upload[1];
@@ -1877,8 +1879,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
             + "signature VARCHAR, error_message VARCHAR, as_of BIGINT)");
         stmt.executeUpdate("DELETE FROM pending_flush_aws");
       }
-      try (PreparedStatement pstmt = conn.prepareStatement(
-          "INSERT INTO pending_flush_aws VALUES (?,?,?,?,?,?,?,?,?)")) {
+      try (PreparedStatement pstmt =
+          conn.prepareStatement("INSERT INTO pending_flush_aws VALUES (?,?,?,?,?,?,?,?,?)")) {
         for (PendingState ps : states) {
           pstmt.setString(1, ps.sourceKey);
           pstmt.setString(2, ps.tableName);
@@ -1934,7 +1936,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (!shutdownHookRegistered) {
       shutdownHookRegistered = true;
       final S3HivePipelineTracker tracker = this;
-      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      Runtime.getRuntime().addShutdownHook(
+          new Thread(new Runnable() {
         @Override public void run() {
           try {
             tracker.flushPendingStates();

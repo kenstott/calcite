@@ -23,8 +23,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.StaticTableOperations;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.TableMetadata;
-import org.apache.iceberg.TableMetadataParser;
 import org.apache.iceberg.hadoop.HadoopFileIO;
 
 import org.slf4j.Logger;

@@ -16,14 +16,14 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.apache.calcite.adapter.file.etl.DimensionConfig;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.calcite.adapter.file.etl.DimensionConfig;
 
 /**
  * Interface for tracking incremental processing of alternate partitions.

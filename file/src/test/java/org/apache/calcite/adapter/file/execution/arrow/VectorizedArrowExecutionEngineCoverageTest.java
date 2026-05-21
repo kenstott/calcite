@@ -102,13 +102,13 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   // ---------------------------------------------------------------
 
   private Schema createMixedSchema() {
-    return new Schema(Arrays.asList(
+    return new Schema(
+        Arrays.asList(
         Field.nullable("id", new ArrowType.Int(32, true)),
         Field.nullable("name", ArrowType.Utf8.INSTANCE),
         Field.nullable("price", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
         Field.nullable("quantity", new ArrowType.Int(64, true)),
-        Field.nullable("active", new ArrowType.Bool())
-    ));
+        Field.nullable("active", new ArrowType.Bool())));
   }
 
   /**
@@ -174,9 +174,8 @@ public class VectorizedArrowExecutionEngineCoverageTest {
    * Creates a simple int-only root (single column "val").
    */
   private VectorSchemaRoot createIntRoot(int... values) {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -193,10 +192,11 @@ public class VectorizedArrowExecutionEngineCoverageTest {
    * Creates a simple double-only root (single column "val").
    */
   private VectorSchemaRoot createDoubleRoot(double... values) {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val",
-            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                Field.nullable("val",
+            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -213,9 +213,8 @@ public class VectorizedArrowExecutionEngineCoverageTest {
    * Creates a simple bigint-only root (single column "val").
    */
   private VectorSchemaRoot createBigIntRoot(long... values) {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(64, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(64, true))));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -232,8 +231,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  project() tests
   // ===================================================================
 
-  @Test
-  public void testProjectSingleColumn() {
+  @Test public void testProjectSingleColumn() {
     VectorSchemaRoot input = createMixedRootForProject(5);
     track(input);
 
@@ -247,8 +245,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(5, ((IntVector) result.getVector(0)).get(4));
   }
 
-  @Test
-  public void testProjectMultipleColumns() {
+  @Test public void testProjectMultipleColumns() {
     VectorSchemaRoot input = createMixedRootForProject(5);
     track(input);
 
@@ -273,8 +270,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(50.0, priceVec.get(4), 0.001);
   }
 
-  @Test
-  public void testProjectReorderedColumns() {
+  @Test public void testProjectReorderedColumns() {
     VectorSchemaRoot input = createMixedRootForProject(3);
     track(input);
 
@@ -292,8 +288,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(10.5, priceVec.get(0), 0.001);
   }
 
-  @Test
-  public void testProjectAllColumns() {
+  @Test public void testProjectAllColumns() {
     VectorSchemaRoot input = createMixedRootForProject(3);
     track(input);
 
@@ -305,8 +300,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(3, result.getRowCount());
   }
 
-  @Test
-  public void testProjectEmptyBatch() {
+  @Test public void testProjectEmptyBatch() {
     VectorSchemaRoot input = createMixedRootForProject(0);
     track(input);
 
@@ -318,8 +312,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0, result.getRowCount());
   }
 
-  @Test
-  public void testProjectSingleRow() {
+  @Test public void testProjectSingleRow() {
     VectorSchemaRoot input = createMixedRootForProject(1);
     track(input);
 
@@ -335,8 +328,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  filter() tests
   // ===================================================================
 
-  @Test
-  public void testFilterIntColumnGreaterThan() {
+  @Test public void testFilterIntColumnGreaterThan() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -357,8 +349,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(5, idVec.get(1));
   }
 
-  @Test
-  public void testFilterStringColumn() {
+  @Test public void testFilterStringColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -386,8 +377,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
         new String(nameVec.get(1), StandardCharsets.UTF_8));
   }
 
-  @Test
-  public void testFilterDoubleColumn() {
+  @Test public void testFilterDoubleColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -409,8 +399,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(50.0, priceVec.get(2), 0.001);
   }
 
-  @Test
-  public void testFilterNoMatchingRows() {
+  @Test public void testFilterNoMatchingRows() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -428,8 +417,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0, result.getRowCount());
   }
 
-  @Test
-  public void testFilterAllRowsMatch() {
+  @Test public void testFilterAllRowsMatch() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -447,8 +435,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(5, result.getRowCount());
   }
 
-  @Test
-  public void testFilterEmptyBatch() {
+  @Test public void testFilterEmptyBatch() {
     VectorSchemaRoot input = createMixedRoot(0);
     track(input);
 
@@ -465,8 +452,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0, result.getRowCount());
   }
 
-  @Test
-  public void testFilterSingleRow() {
+  @Test public void testFilterSingleRow() {
     VectorSchemaRoot input = createMixedRoot(1);
     track(input);
 
@@ -483,8 +469,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(1, result.getRowCount());
   }
 
-  @Test
-  public void testFilterPreservesAllColumns() {
+  @Test public void testFilterPreservesAllColumns() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -519,12 +504,11 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(1, activeVec.get(0));
   }
 
-  @Test
-  public void testFilterWithNullValues() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true)),
-        Field.nullable("label", ArrowType.Utf8.INSTANCE)
-    ));
+  @Test public void testFilterWithNullValues() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true)),
+        Field.nullable("label", ArrowType.Utf8.INSTANCE)));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -565,13 +549,11 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(50, resultVal.get(1));
   }
 
-  @Test
-  public void testFilterMoreThanEightRows() {
+  @Test public void testFilterMoreThanEightRows() {
     // The filter processes in chunks of 8, so test with > 8 rows
     // to exercise the chunked loop boundary
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -605,8 +587,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  aggregateSum() tests
   // ===================================================================
 
-  @Test
-  public void testAggregateSumFloat8() {
+  @Test public void testAggregateSumFloat8() {
     VectorSchemaRoot input = createDoubleRoot(10.0, 20.0, 30.0);
     track(input);
 
@@ -614,12 +595,12 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(60.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumFloat8WithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val",
-            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
+  @Test public void testAggregateSumFloat8WithNulls() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                Field.nullable("val",
+            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -636,8 +617,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(40.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumInt() {
+  @Test public void testAggregateSumInt() {
     VectorSchemaRoot input = createIntRoot(10, 20, 30, 40, 50);
     track(input);
 
@@ -645,11 +625,9 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(150.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumIntWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+  @Test public void testAggregateSumIntWithNulls() {
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -665,8 +643,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(20.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumBigInt() {
+  @Test public void testAggregateSumBigInt() {
     VectorSchemaRoot input = createBigIntRoot(1000000000L, 2000000000L, 3000000000L);
     track(input);
 
@@ -674,11 +651,9 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(6000000000.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumBigIntWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(64, true))
-    ));
+  @Test public void testAggregateSumBigIntWithNulls() {
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(64, true))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -694,8 +669,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(400.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumEmptyBatch() {
+  @Test public void testAggregateSumEmptyBatch() {
     VectorSchemaRoot input = createDoubleRoot();
     track(input);
 
@@ -703,8 +677,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumSingleValue() {
+  @Test public void testAggregateSumSingleValue() {
     VectorSchemaRoot input = createDoubleRoot(42.5);
     track(input);
 
@@ -712,8 +685,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(42.5, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumMoreThanEightRows() {
+  @Test public void testAggregateSumMoreThanEightRows() {
     // Exercise the chunked processing (chunks of 8)
     double[] values = new double[20];
     double expected = 0.0;
@@ -729,12 +701,10 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(expected, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumUnsupportedType() {
+  @Test public void testAggregateSumUnsupportedType() {
     // VarChar column -- aggregateSum returns 0.0 for unsupported types
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("name", ArrowType.Utf8.INSTANCE)));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -752,8 +722,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  aggregateMinMax() tests
   // ===================================================================
 
-  @Test
-  public void testAggregateMinMaxFloat8() {
+  @Test public void testAggregateMinMaxFloat8() {
     VectorSchemaRoot input = createDoubleRoot(15.0, 3.0, 42.0, 8.0);
     track(input);
 
@@ -762,12 +731,12 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(42.0, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxFloat8WithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val",
-            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
+  @Test public void testAggregateMinMaxFloat8WithNulls() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                Field.nullable("val",
+            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -786,8 +755,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(42.0, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxInt() {
+  @Test public void testAggregateMinMaxInt() {
     VectorSchemaRoot input = createIntRoot(50, 10, 30, 20, 40);
     track(input);
 
@@ -796,11 +764,9 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(50.0, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxIntWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+  @Test public void testAggregateMinMaxIntWithNulls() {
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -818,8 +784,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(99.0, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxSingleValue() {
+  @Test public void testAggregateMinMaxSingleValue() {
     VectorSchemaRoot input = createDoubleRoot(25.5);
     track(input);
 
@@ -828,8 +793,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(25.5, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxEmptyBatch() {
+  @Test public void testAggregateMinMaxEmptyBatch() {
     VectorSchemaRoot input = createDoubleRoot();
     track(input);
 
@@ -838,12 +802,12 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertArrayEquals(new double[]{0.0, 0.0}, minMax, 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxAllNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val",
-            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
+  @Test public void testAggregateMinMaxAllNulls() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                Field.nullable("val",
+            new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -858,8 +822,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertArrayEquals(new double[]{0.0, 0.0}, minMax, 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxNegativeValues() {
+  @Test public void testAggregateMinMaxNegativeValues() {
     // Note: the source uses Double.MIN_VALUE (smallest positive double) as
     // the initial max, so max behaves correctly for non-negative values.
     // For all-negative inputs, max will be Double.MIN_VALUE due to this.
@@ -872,8 +835,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(Double.MIN_VALUE, minMax[1], 0.001);
   }
 
-  @Test
-  public void testAggregateMinMaxUnsupportedType() {
+  @Test public void testAggregateMinMaxUnsupportedType() {
     // BigInt is not handled by aggregateMinMax -> returns {0, 0}
     VectorSchemaRoot input = createBigIntRoot(10L, 20L, 30L);
     track(input);
@@ -886,8 +848,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  aggregateMinMax() on the mixed root via column index
   // ===================================================================
 
-  @Test
-  public void testAggregateMinMaxOnMixedRootPriceColumn() {
+  @Test public void testAggregateMinMaxOnMixedRootPriceColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -901,8 +862,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  aggregateSum() on the mixed root via column index
   // ===================================================================
 
-  @Test
-  public void testAggregateSumOnMixedRootIntColumn() {
+  @Test public void testAggregateSumOnMixedRootIntColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -911,8 +871,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(15.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumOnMixedRootDoubleColumn() {
+  @Test public void testAggregateSumOnMixedRootDoubleColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -921,8 +880,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(151.6, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumOnMixedRootBigIntColumn() {
+  @Test public void testAggregateSumOnMixedRootBigIntColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -935,8 +893,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  filterWithColumnBatch() tests
   // ===================================================================
 
-  @Test
-  public void testFilterWithColumnBatchIntColumn() {
+  @Test public void testFilterWithColumnBatchIntColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -954,8 +911,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(2, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchDoubleColumn() {
+  @Test public void testFilterWithColumnBatchDoubleColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -973,8 +929,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(3, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchStringColumn() {
+  @Test public void testFilterWithColumnBatchStringColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -992,8 +947,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(2, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchBooleanColumn() {
+  @Test public void testFilterWithColumnBatchBooleanColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1011,8 +965,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(3, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchEmptyBatch() {
+  @Test public void testFilterWithColumnBatchEmptyBatch() {
     VectorSchemaRoot input = createMixedRoot(0);
     track(input);
 
@@ -1029,8 +982,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchNoMatch() {
+  @Test public void testFilterWithColumnBatchNoMatch() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1048,8 +1000,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0, result.getRowCount());
   }
 
-  @Test
-  public void testFilterWithColumnBatchAllMatch() {
+  @Test public void testFilterWithColumnBatchAllMatch() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1070,8 +1021,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  aggregateSumWithColumnBatch() tests
   // ===================================================================
 
-  @Test
-  public void testAggregateSumWithColumnBatchInt() {
+  @Test public void testAggregateSumWithColumnBatchInt() {
     VectorSchemaRoot input = createIntRoot(10, 20, 30, 40, 50);
     track(input);
 
@@ -1080,8 +1030,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(150.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchDouble() {
+  @Test public void testAggregateSumWithColumnBatchDouble() {
     VectorSchemaRoot input = createDoubleRoot(1.5, 2.5, 3.5);
     track(input);
 
@@ -1090,8 +1039,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(7.5, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchBigInt() {
+  @Test public void testAggregateSumWithColumnBatchBigInt() {
     VectorSchemaRoot input = createBigIntRoot(100L, 200L, 300L);
     track(input);
 
@@ -1100,8 +1048,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(600.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchEmptyBatch() {
+  @Test public void testAggregateSumWithColumnBatchEmptyBatch() {
     VectorSchemaRoot input = createIntRoot();
     track(input);
 
@@ -1110,8 +1057,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(0.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchSingleValue() {
+  @Test public void testAggregateSumWithColumnBatchSingleValue() {
     VectorSchemaRoot input = createIntRoot(42);
     track(input);
 
@@ -1120,8 +1066,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(42.0, sum, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchOnMixedRootIntColumn() {
+  @Test public void testAggregateSumWithColumnBatchOnMixedRootIntColumn() {
     // Each call to aggregateSumWithColumnBatch creates a ColumnBatch which
     // closes the VectorSchemaRoot, so we need a fresh root per call.
     VectorSchemaRoot input = createMixedRoot(5);
@@ -1133,8 +1078,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(15.0, sumInt, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchOnMixedRootDoubleColumn() {
+  @Test public void testAggregateSumWithColumnBatchOnMixedRootDoubleColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1144,8 +1088,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(151.6, sumDouble, 0.001);
   }
 
-  @Test
-  public void testAggregateSumWithColumnBatchOnMixedRootLongColumn() {
+  @Test public void testAggregateSumWithColumnBatchOnMixedRootLongColumn() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1159,8 +1102,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  Combined / integration-style scenarios
   // ===================================================================
 
-  @Test
-  public void testProjectThenFilter() {
+  @Test public void testProjectThenFilter() {
     VectorSchemaRoot input = createMixedRootForProject(5);
     track(input);
 
@@ -1186,8 +1128,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(2, filtered.getSchema().getFields().size());
   }
 
-  @Test
-  public void testFilterThenAggregateSum() {
+  @Test public void testFilterThenAggregateSum() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1209,8 +1150,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(120.8, sum, 0.001);
   }
 
-  @Test
-  public void testFilterThenAggregateMinMax() {
+  @Test public void testFilterThenAggregateMinMax() {
     VectorSchemaRoot input = createMixedRoot(5);
     track(input);
 
@@ -1238,8 +1178,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  Consistency tests: standard vs ColumnBatch paths
   // ===================================================================
 
-  @Test
-  public void testFilterConsistencyStandardVsColumnBatch() {
+  @Test public void testFilterConsistencyStandardVsColumnBatch() {
     VectorSchemaRoot input1 = createMixedRoot(5);
     track(input1);
     VectorSchemaRoot input2 = createMixedRoot(5);
@@ -1262,8 +1201,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(standardResult.getRowCount(), batchResult.getRowCount());
   }
 
-  @Test
-  public void testSumConsistencyStandardVsColumnBatch() {
+  @Test public void testSumConsistencyStandardVsColumnBatch() {
     VectorSchemaRoot input1 = createIntRoot(10, 20, 30, 40, 50);
     track(input1);
     VectorSchemaRoot input2 = createIntRoot(10, 20, 30, 40, 50);
@@ -1281,8 +1219,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  copyValue coverage via filter (exercises all vector types)
   // ===================================================================
 
-  @Test
-  public void testCopyValueCoversAllTypes() {
+  @Test public void testCopyValueCoversAllTypes() {
     // The private copyValue method is exercised via filter.
     // This test explicitly filters the mixed-schema root to ensure
     // every vector type (Int, VarChar, Float8, BigInt, Bit) gets copied.
@@ -1324,17 +1261,16 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertEquals(1, activeVec.get(0));
   }
 
-  @Test
-  public void testCopyValueHandlesNullSlots() {
+  @Test public void testCopyValueHandlesNullSlots() {
     // Ensures copyValue's null path is exercised
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true)),
+    Schema schema =
+        new Schema(
+            Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true)),
         Field.nullable("name", ArrowType.Utf8.INSTANCE),
         Field.nullable("val",
             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
         Field.nullable("big", new ArrowType.Int(64, true)),
-        Field.nullable("flag", new ArrowType.Bool())
-    ));
+        Field.nullable("flag", new ArrowType.Bool())));
     VectorSchemaRoot input = VectorSchemaRoot.create(schema, allocator);
     input.allocateNew();
     track(input);
@@ -1389,8 +1325,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
   //  Result not null checks (defensive)
   // ===================================================================
 
-  @Test
-  public void testProjectResultNotNull() {
+  @Test public void testProjectResultNotNull() {
     VectorSchemaRoot input = createMixedRootForProject(3);
     track(input);
 
@@ -1402,8 +1337,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertNotNull(result.getSchema());
   }
 
-  @Test
-  public void testFilterResultNotNull() {
+  @Test public void testFilterResultNotNull() {
     VectorSchemaRoot input = createMixedRoot(3);
     track(input);
 
@@ -1420,8 +1354,7 @@ public class VectorizedArrowExecutionEngineCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  public void testFilterWithColumnBatchResultNotNull() {
+  @Test public void testFilterWithColumnBatchResultNotNull() {
     VectorSchemaRoot input = createMixedRoot(3);
     track(input);
 

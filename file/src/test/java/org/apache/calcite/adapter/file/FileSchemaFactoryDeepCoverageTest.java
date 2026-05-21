@@ -83,8 +83,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with minimal operand ---
 
-  @Test
-  void testCreateWithMinimalOperand() {
+  @Test void testCreateWithMinimalOperand() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
 
@@ -95,8 +94,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with sourceDirectory ---
 
-  @Test
-  void testCreateWithSourceDirectory() {
+  @Test void testCreateWithSourceDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toString());
 
@@ -106,8 +104,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with ephemeralCache ---
 
-  @Test
-  void testCreateWithEphemeralCache() {
+  @Test void testCreateWithEphemeralCache() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("ephemeralCache", true);
@@ -116,8 +113,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithEphemeralCacheSnakeCase() {
+  @Test void testCreateWithEphemeralCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("ephemeral_cache", true);
@@ -128,8 +124,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with explicit baseDirectory ---
 
-  @Test
-  void testCreateWithBaseDirectory() {
+  @Test void testCreateWithBaseDirectory() {
     File baseDir = tempDir.resolve("custom-base").toFile();
     baseDir.mkdirs();
 
@@ -143,8 +138,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with recursive ---
 
-  @Test
-  void testCreateWithRecursive() {
+  @Test void testCreateWithRecursive() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("recursive", Boolean.TRUE);
@@ -155,8 +149,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with executionEngine ---
 
-  @Test
-  void testCreateWithExecutionEngineLinq4j() {
+  @Test void testCreateWithExecutionEngineLinq4j() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "LINQ4J");
@@ -165,8 +158,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithExecutionEngineParquet() {
+  @Test void testCreateWithExecutionEngineParquet() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -177,8 +169,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with tables list ---
 
-  @Test
-  void testCreateWithTablesOperand() throws IOException {
+  @Test void testCreateWithTablesOperand() throws IOException {
     File sourceDir = tempDir.resolve("factory-tables").toFile();
     sourceDir.mkdirs();
     File csvFile = new File(sourceDir, "data.csv");
@@ -202,8 +193,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with materializations ---
 
-  @Test
-  void testCreateWithMaterializations() {
+  @Test void testCreateWithMaterializations() {
     List<Map<String, Object>> materializations = new ArrayList<>();
     Map<String, Object> mat = new HashMap<>();
     mat.put("table", "mat_table");
@@ -220,8 +210,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with views ---
 
-  @Test
-  void testCreateWithViews() {
+  @Test void testCreateWithViews() {
     List<Map<String, Object>> views = new ArrayList<>();
     Map<String, Object> view = new HashMap<>();
     view.put("name", "my_view");
@@ -238,8 +227,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with comment ---
 
-  @Test
-  void testCreateWithComment() {
+  @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("comment", "This is a test schema");
@@ -253,8 +241,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with flatten ---
 
-  @Test
-  void testCreateWithFlatten() {
+  @Test void testCreateWithFlatten() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("flatten", true);
@@ -265,8 +252,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with directoryPattern ---
 
-  @Test
-  void testCreateWithDirectoryPattern() {
+  @Test void testCreateWithDirectoryPattern() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("directoryPattern", "**/*.csv");
@@ -275,8 +261,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithGlob() {
+  @Test void testCreateWithGlob() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("glob", "*.json");
@@ -287,8 +272,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with batchSize and memoryThreshold ---
 
-  @Test
-  void testCreateWithBatchSizeAndMemoryThreshold() {
+  @Test void testCreateWithBatchSizeAndMemoryThreshold() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("batchSize", 5000);
@@ -300,8 +284,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with refreshInterval ---
 
-  @Test
-  void testCreateWithRefreshInterval() {
+  @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("refreshInterval", "5 minutes");
@@ -312,8 +295,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with tableNameCasing ---
 
-  @Test
-  void testCreateWithTableNameCasing() {
+  @Test void testCreateWithTableNameCasing() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("tableNameCasing", "UPPER");
@@ -325,8 +307,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with primeCache disabled ---
 
-  @Test
-  void testCreateWithPrimeCacheDisabled() {
+  @Test void testCreateWithPrimeCacheDisabled() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("primeCache", false);
@@ -337,8 +318,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- sanitizeOperand via reflection ---
 
-  @Test
-  void testSanitizeOperand() throws Exception {
+  @Test void testSanitizeOperand() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
 
@@ -361,8 +341,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     assertTrue(result.get("_internalRef") instanceof String, "Internal refs should be class name");
   }
 
-  @Test
-  void testSanitizeOperandWithS3Config() throws Exception {
+  @Test void testSanitizeOperandWithS3Config() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
 
@@ -389,8 +368,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     assertEquals("us-east-1", sanitizedS3.get("region"));
   }
 
-  @Test
-  void testSanitizeOperandWithStorageConfig() throws Exception {
+  @Test void testSanitizeOperandWithStorageConfig() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
 
@@ -414,8 +392,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- sanitizeNestedMap via reflection ---
 
-  @Test
-  void testSanitizeNestedMap() throws Exception {
+  @Test void testSanitizeNestedMap() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeNestedMap", Map.class);
     method.setAccessible(true);
 
@@ -434,16 +411,14 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- INSTANCE singleton ---
 
-  @Test
-  void testSingleton() {
+  @Test void testSingleton() {
     assertNotNull(FileSchemaFactory.INSTANCE);
     assertSame(FileSchemaFactory.INSTANCE, FileSchemaFactory.INSTANCE);
   }
 
   // --- create with baseDirectory as File object ---
 
-  @Test
-  void testCreateWithBaseDirectoryAsFile() {
+  @Test void testCreateWithBaseDirectoryAsFile() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("baseDirectory", tempDir.toFile());
@@ -454,8 +429,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with partitionedTables ---
 
-  @Test
-  void testCreateWithPartitionedTables() {
+  @Test void testCreateWithPartitionedTables() {
     List<Map<String, Object>> partitioned = new ArrayList<>();
     Map<String, Object> pt = new HashMap<>();
     pt.put("name", "partitioned_table");
@@ -472,8 +446,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with csvTypeInference ---
 
-  @Test
-  void testCreateWithCsvTypeInference() {
+  @Test void testCreateWithCsvTypeInference() {
     Map<String, Object> csvTypeInference = new HashMap<>();
     csvTypeInference.put("enabled", true);
     csvTypeInference.put("sampleSize", 100);
@@ -488,8 +461,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
   // --- create with modelUri (inline model) ---
 
-  @Test
-  void testSanitizeOperandWithModelUri() throws Exception {
+  @Test void testSanitizeOperandWithModelUri() throws Exception {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
 

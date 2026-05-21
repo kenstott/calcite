@@ -30,10 +30,8 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Deep coverage tests for IcebergMaterializationWriter.
@@ -154,76 +151,76 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== mapToIcebergType tests (via reflection) =====
 
   @Test void testMapToIcebergTypeNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("STRING", method.invoke(writer, (String) null));
   }
 
   @Test void testMapToIcebergTypeVarchar() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("STRING", method.invoke(writer, "VARCHAR"));
     assertEquals("STRING", method.invoke(writer, "VARCHAR(255)"));
   }
 
   @Test void testMapToIcebergTypeChar() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("STRING", method.invoke(writer, "CHAR"));
     assertEquals("STRING", method.invoke(writer, "CHAR(10)"));
   }
 
   @Test void testMapToIcebergTypeInteger() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("INT", method.invoke(writer, "INTEGER"));
     assertEquals("INT", method.invoke(writer, "INT"));
   }
 
   @Test void testMapToIcebergTypeBigint() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("LONG", method.invoke(writer, "BIGINT"));
     assertEquals("LONG", method.invoke(writer, "LONG"));
   }
 
   @Test void testMapToIcebergTypeDouble() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("DOUBLE", method.invoke(writer, "DOUBLE"));
     assertEquals("DOUBLE", method.invoke(writer, "FLOAT"));
   }
 
   @Test void testMapToIcebergTypeBoolean() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("BOOLEAN", method.invoke(writer, "BOOLEAN"));
   }
 
   @Test void testMapToIcebergTypeDate() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("DATE", method.invoke(writer, "DATE"));
   }
 
   @Test void testMapToIcebergTypeTimestamp() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("TIMESTAMP", method.invoke(writer, "TIMESTAMP"));
   }
 
   @Test void testMapToIcebergTypeUnknown() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToIcebergType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
     assertEquals("STRING", method.invoke(writer, "DECIMAL(15,2)"));
   }
@@ -231,15 +228,15 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== mapToDuckDBType tests (via reflection) =====
 
   @Test void testMapToDuckDBTypeNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("VARCHAR", method.invoke(writer, (String) null));
   }
 
   @Test void testMapToDuckDBTypeVarchar() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("VARCHAR", method.invoke(writer, "VARCHAR"));
     assertEquals("VARCHAR", method.invoke(writer, "VARCHAR(100)"));
@@ -247,61 +244,61 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testMapToDuckDBTypeChar() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("VARCHAR", method.invoke(writer, "CHAR"));
     assertEquals("VARCHAR", method.invoke(writer, "CHAR(5)"));
   }
 
   @Test void testMapToDuckDBTypeInteger() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("INTEGER", method.invoke(writer, "INTEGER"));
     assertEquals("INTEGER", method.invoke(writer, "INT"));
   }
 
   @Test void testMapToDuckDBTypeBigint() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("BIGINT", method.invoke(writer, "BIGINT"));
     assertEquals("BIGINT", method.invoke(writer, "LONG"));
   }
 
   @Test void testMapToDuckDBTypeDouble() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("DOUBLE", method.invoke(writer, "DOUBLE"));
     assertEquals("DOUBLE", method.invoke(writer, "FLOAT"));
   }
 
   @Test void testMapToDuckDBTypeBoolean() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("BOOLEAN", method.invoke(writer, "BOOLEAN"));
   }
 
   @Test void testMapToDuckDBTypeDate() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("DATE", method.invoke(writer, "DATE"));
   }
 
   @Test void testMapToDuckDBTypeTimestamp() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("TIMESTAMP", method.invoke(writer, "TIMESTAMP"));
   }
 
   @Test void testMapToDuckDBTypeUnknown() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "mapToDuckDBType", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
     assertEquals("VARCHAR", method.invoke(writer, "BLOB"));
   }
@@ -309,22 +306,22 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== castValue tests (via reflection) =====
 
   @Test void testCastValueNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, null, "BIGINT"));
   }
 
   @Test void testCastValueEmptyString() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "", "BIGINT"));
   }
 
   @Test void testCastValueBigint() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals(42L, method.invoke(writer, "42", "BIGINT"));
     assertEquals(42L, method.invoke(writer, "42", "INT64"));
@@ -332,8 +329,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testCastValueInteger() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals(42, method.invoke(writer, "42", "INTEGER"));
     assertEquals(42, method.invoke(writer, "42", "INT"));
@@ -341,16 +338,16 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testCastValueDouble() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals(3.14, method.invoke(writer, "3.14", "DOUBLE"));
     assertEquals(3.14, method.invoke(writer, "3.14", "FLOAT8"));
   }
 
   @Test void testCastValueFloat() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     Object result = method.invoke(writer, "3.14", "FLOAT");
     assertTrue(result instanceof Float);
@@ -364,8 +361,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testCastValueVarchar() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals("hello", method.invoke(writer, "hello", "VARCHAR"));
     assertEquals("world", method.invoke(writer, "world", "STRING"));
@@ -373,8 +370,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testCastValueBoolean() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals(true, method.invoke(writer, "true", "BOOLEAN"));
     assertEquals(true, method.invoke(writer, "true", "BOOL"));
@@ -382,15 +379,15 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testCastValueUnknownType() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertEquals("42", method.invoke(writer, "42", "UNKNOWN_TYPE"));
   }
 
   @Test void testCastValueNumberFormatException() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "castValue", Object.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "not_a_number", "BIGINT"));
     assertNull(method.invoke(writer, "abc", "INTEGER"));
@@ -401,16 +398,16 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== evaluateExpression tests (via reflection) =====
 
   @Test void testEvaluateExpressionNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, null, new HashMap<String, Object>()));
     assertNull(method.invoke(writer, "", new HashMap<String, Object>()));
   }
 
   @Test void testEvaluateExpressionSrcField() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -421,8 +418,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionSrcFieldUnquoted() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -433,8 +430,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionBareField() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -445,8 +442,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionTryCast() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -457,8 +454,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionCastWithoutSrc() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -469,8 +466,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionReplace() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -481,8 +478,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionReplaceNullValue() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -492,8 +489,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionCastReplace() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -504,8 +501,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionCastReplaceNullSource() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -515,8 +512,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionSubstring() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -527,8 +524,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionSubstringNullSource() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -538,8 +535,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionSubstringBeyondLength() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -550,8 +547,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionRight() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -562,8 +559,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionRightFullLength() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -574,8 +571,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionRightNullSource() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -585,8 +582,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionCoalesce() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -597,8 +594,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionCoalesceAllNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -608,8 +605,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testEvaluateExpressionUnrecognized() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "evaluateExpression", String.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -622,8 +619,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== getValueCaseInsensitive tests (via reflection) =====
 
   @Test void testGetValueCaseInsensitiveExactMatch() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getValueCaseInsensitive", Map.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> map = new HashMap<String, Object>();
@@ -633,8 +630,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testGetValueCaseInsensitiveCaseMatch() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getValueCaseInsensitive", Map.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> map = new HashMap<String, Object>();
@@ -644,22 +641,22 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testGetValueCaseInsensitiveNullMap() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getValueCaseInsensitive", Map.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, null, "key"));
   }
 
   @Test void testGetValueCaseInsensitiveNullKey() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getValueCaseInsensitive", Map.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, new HashMap<String, Object>(), null));
   }
 
   @Test void testGetValueCaseInsensitiveNotFound() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getValueCaseInsensitive", Map.class, String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, new HashMap<String, Object>(), "missing"));
   }
@@ -667,22 +664,22 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== buildPartitionKey tests (via reflection) =====
 
   @Test void testBuildPartitionKeyNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionKey", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionKey", Map.class);
     method.setAccessible(true);
     assertEquals("", method.invoke(writer, (Map<String, String>) null));
   }
 
   @Test void testBuildPartitionKeyEmpty() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionKey", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionKey", Map.class);
     method.setAccessible(true);
     assertEquals("", method.invoke(writer, new HashMap<String, String>()));
   }
 
   @Test void testBuildPartitionKeySorted() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionKey", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionKey", Map.class);
     method.setAccessible(true);
 
     Map<String, String> vars = new LinkedHashMap<String, String>();
@@ -695,8 +692,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildPartitionKeySingleEntry() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionKey", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionKey", Map.class);
     method.setAccessible(true);
 
     Map<String, String> vars = new HashMap<String, String>();
@@ -727,8 +724,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionFilter", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionFilter", Map.class);
     method.setAccessible(true);
 
     Map<String, Object> result =
@@ -754,8 +751,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionFilter", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionFilter", Map.class);
     method.setAccessible(true);
 
     Map<String, Object> result =
@@ -781,8 +778,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildPartitionFilter", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionFilter", Map.class);
     method.setAccessible(true);
 
     Map<String, String> vars = new HashMap<String, String>();
@@ -797,29 +794,29 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== convertToS3aScheme tests (via reflection) =====
 
   @Test void testConvertToS3aSchemeS3() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "convertToS3aScheme", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("convertToS3aScheme", String.class);
     method.setAccessible(true);
     assertEquals("s3a://bucket/path", method.invoke(writer, "s3://bucket/path"));
   }
 
   @Test void testConvertToS3aSchemeAlreadyS3a() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "convertToS3aScheme", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("convertToS3aScheme", String.class);
     method.setAccessible(true);
     assertEquals("s3a://bucket/path", method.invoke(writer, "s3a://bucket/path"));
   }
 
   @Test void testConvertToS3aSchemeLocalPath() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "convertToS3aScheme", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("convertToS3aScheme", String.class);
     method.setAccessible(true);
     assertEquals("/local/path", method.invoke(writer, "/local/path"));
   }
 
   @Test void testConvertToS3aSchemeNull() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "convertToS3aScheme", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("convertToS3aScheme", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, (String) null));
   }
@@ -827,8 +824,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== buildHadoopS3Config tests (via reflection) =====
 
   @Test void testBuildHadoopS3Config() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildHadoopS3Config", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildHadoopS3Config", Map.class);
     method.setAccessible(true);
 
     Map<String, String> s3Config = new HashMap<String, String>();
@@ -847,8 +844,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildHadoopS3ConfigPartial() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildHadoopS3Config", Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildHadoopS3Config", Map.class);
     method.setAccessible(true);
 
     Map<String, String> s3Config = new HashMap<String, String>();
@@ -864,8 +861,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== escapeString tests (via reflection) =====
 
   @Test void testEscapeString() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "escapeString", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("escapeString", String.class);
     method.setAccessible(true);
     assertEquals("hello''world", method.invoke(null, "hello'world"));
     assertEquals("no quotes", method.invoke(null, "no quotes"));
@@ -875,36 +872,36 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== getRemoteParentPath tests (via reflection) =====
 
   @Test void testGetRemoteParentPath() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getRemoteParentPath", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
     assertEquals("/data/warehouse", method.invoke(writer, "/data/warehouse/file.parquet"));
   }
 
   @Test void testGetRemoteParentPathNoSlash() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getRemoteParentPath", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "file.parquet"));
   }
 
   @Test void testGetRemoteParentPathS3Prefix() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getRemoteParentPath", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "s3://bucket"));
   }
 
   @Test void testGetRemoteParentPathS3aPrefix() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getRemoteParentPath", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
     assertNull(method.invoke(writer, "s3a://bucket"));
   }
 
   @Test void testGetRemoteParentPathS3Deep() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getRemoteParentPath", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
     assertEquals("s3://bucket/prefix",
         method.invoke(writer, "s3://bucket/prefix/file.parquet"));
@@ -913,8 +910,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   // ===== buildCatalogConfig tests (via reflection) =====
 
   @Test void testBuildCatalogConfigNullIcebergConfig() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
     method.setAccessible(true);
 
     Map<String, Object> result =
@@ -923,8 +920,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildCatalogConfigHadoop() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig.IcebergConfig icebergConfig =
@@ -940,8 +937,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildCatalogConfigRest() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig.IcebergConfig icebergConfig =
@@ -957,8 +954,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildCatalogConfigHive() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig.IcebergConfig icebergConfig =
@@ -972,8 +969,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testBuildCatalogConfigS3Conversion() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("buildCatalogConfig", MaterializeConfig.IcebergConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig.IcebergConfig icebergConfig =
@@ -1001,8 +998,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "transformRows", List.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("transformRows", List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -1034,8 +1031,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "transformRows", List.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("transformRows", List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -1066,8 +1063,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "transformRows", List.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("transformRows", List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -1102,8 +1099,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
         .build();
     configField.set(writer, config);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "transformRows", List.class, Map.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("transformRows", List.class, Map.class);
     method.setAccessible(true);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -1126,8 +1123,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   }
 
   @Test void testGetEnvInt() throws Exception {
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "getEnvInt", String.class, int.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("getEnvInt", String.class, int.class);
     method.setAccessible(true);
     // Nonexistent env var should return default
     int result = (Integer) method.invoke(null, "NONEXISTENT_TEST_VAR_XYZ", 42);
@@ -1143,8 +1140,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
     modeField.setAccessible(true);
     modeField.set(writer, MaterializeOptionsConfig.StagingMode.REMOTE);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "cleanupStagingDirectory", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("cleanupStagingDirectory", String.class);
     method.setAccessible(true);
     // S3 paths should be skipped (lifecycle rule handles it)
     method.invoke(writer, "s3://bucket/staging/test");
@@ -1156,8 +1153,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
     modeField.setAccessible(true);
     modeField.set(writer, MaterializeOptionsConfig.StagingMode.REMOTE);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "cleanupStagingDirectory", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("cleanupStagingDirectory", String.class);
     method.setAccessible(true);
     method.invoke(writer, "s3a://bucket/staging/test");
   }
@@ -1168,8 +1165,8 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
     modeField.setAccessible(true);
     modeField.set(writer, MaterializeOptionsConfig.StagingMode.LOCAL);
 
-    Method method = IcebergMaterializationWriter.class.getDeclaredMethod(
-        "cleanupStagingDirectory", String.class);
+    Method method =
+        IcebergMaterializationWriter.class.getDeclaredMethod("cleanupStagingDirectory", String.class);
     method.setAccessible(true);
 
     // Create a local staging dir to clean up

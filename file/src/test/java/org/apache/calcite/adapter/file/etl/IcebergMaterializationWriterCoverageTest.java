@@ -30,10 +30,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -73,8 +71,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Constructor tests ----
 
-  @Test
-  void testConstructorWithNullTracker() {
+  @Test void testConstructorWithNullTracker() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertNotNull(writer);
@@ -83,8 +80,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(MaterializeConfig.Format.ICEBERG, writer.getFormat());
   }
 
-  @Test
-  void testConstructorWithTracker() {
+  @Test void testConstructorWithTracker() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath,
             IncrementalTracker.NOOP);
@@ -93,16 +89,14 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- initialize validation tests ----
 
-  @Test
-  void testInitializeNullConfig() {
+  @Test void testInitializeNullConfig() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertThrows(IllegalArgumentException.class,
         () -> writer.initialize(null));
   }
 
-  @Test
-  void testInitializeDisabledConfig() {
+  @Test void testInitializeDisabledConfig() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     MaterializeConfig config = MaterializeConfig.builder()
@@ -114,8 +108,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertThrows(IOException.class, () -> writer.initialize(config));
   }
 
-  @Test
-  void testInitializeWrongFormat() {
+  @Test void testInitializeWrongFormat() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     MaterializeConfig config = MaterializeConfig.builder()
@@ -128,8 +121,7 @@ public class IcebergMaterializationWriterCoverageTest {
         () -> writer.initialize(config));
   }
 
-  @Test
-  void testInitializeNoTargetTableId() {
+  @Test void testInitializeNoTargetTableId() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     MaterializeConfig config = MaterializeConfig.builder()
@@ -141,8 +133,7 @@ public class IcebergMaterializationWriterCoverageTest {
         () -> writer.initialize(config));
   }
 
-  @Test
-  void testInitializeWithNameFallback() throws Exception {
+  @Test void testInitializeWithNameFallback() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -164,8 +155,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- initialize with IcebergConfig ----
 
-  @Test
-  void testInitializeWithIcebergConfig() throws Exception {
+  @Test void testInitializeWithIcebergConfig() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -194,8 +184,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertNotNull(writer.getTableLocation());
   }
 
-  @Test
-  void testInitializeWithRestCatalogType() throws Exception {
+  @Test void testInitializeWithRestCatalogType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -227,8 +216,7 @@ public class IcebergMaterializationWriterCoverageTest {
     }
   }
 
-  @Test
-  void testInitializeWithHiveCatalogType() throws Exception {
+  @Test void testInitializeWithHiveCatalogType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -259,8 +247,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- initialize with options config ----
 
-  @Test
-  void testInitializeWithOptionsConfig() throws Exception {
+  @Test void testInitializeWithOptionsConfig() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -287,8 +274,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertNotNull(writer.getTableLocation());
   }
 
-  @Test
-  void testInitializeWithNullOptions() throws Exception {
+  @Test void testInitializeWithNullOptions() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -310,8 +296,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- writeBatch tests ----
 
-  @Test
-  void testWriteBatchNotInitialized() {
+  @Test void testWriteBatchNotInitialized() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -319,23 +304,20 @@ public class IcebergMaterializationWriterCoverageTest {
         () -> writer.writeBatch(data.iterator(), null));
   }
 
-  @Test
-  void testWriteBatchNullData() throws Exception {
+  @Test void testWriteBatchNullData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("wb_null");
     long result = writer.writeBatch(null, null);
     assertEquals(0, result);
   }
 
-  @Test
-  void testWriteBatchEmptyData() throws Exception {
+  @Test void testWriteBatchEmptyData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("wb_empty");
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     long result = writer.writeBatch(data.iterator(), null);
     assertEquals(0, result);
   }
 
-  @Test
-  void testWriteBatchSimpleData() throws Exception {
+  @Test void testWriteBatchSimpleData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("wb_simple");
 
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -350,8 +332,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, writer.getTotalFilesWritten());
   }
 
-  @Test
-  void testWriteBatchWithPartitionVariables() throws Exception {
+  @Test void testWriteBatchWithPartitionVariables() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriterPartitioned("wb_part");
 
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -367,8 +348,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testWriteBatchMultipleChunks() throws Exception {
+  @Test void testWriteBatchMultipleChunks() throws Exception {
     // Create writer with very small batch size to trigger multi-chunk processing
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
@@ -408,8 +388,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Column mapping / transform tests ----
 
-  @Test
-  void testWriteBatchWithColumnMapping() throws Exception {
+  @Test void testWriteBatchWithColumnMapping() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -436,8 +415,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testWriteBatchWithComputedColumns() throws Exception {
+  @Test void testWriteBatchWithComputedColumns() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -469,8 +447,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testWriteBatchComputedPartitionVariable() throws Exception {
+  @Test void testWriteBatchComputedPartitionVariable() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -512,8 +489,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testWriteBatchComputedPartitionVariableQuoted() throws Exception {
+  @Test void testWriteBatchComputedPartitionVariableQuoted() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -548,8 +524,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Expression evaluation tests ----
 
-  @Test
-  void testExpressionEvaluationBareField() throws Exception {
+  @Test void testExpressionEvaluationBareField() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -581,8 +556,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationCast() throws Exception {
+  @Test void testExpressionEvaluationCast() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -612,8 +586,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationBareCast() throws Exception {
+  @Test void testExpressionEvaluationBareCast() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -643,8 +616,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationReplace() throws Exception {
+  @Test void testExpressionEvaluationReplace() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -674,8 +646,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationCastReplace() throws Exception {
+  @Test void testExpressionEvaluationCastReplace() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -705,8 +676,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationSubstring() throws Exception {
+  @Test void testExpressionEvaluationSubstring() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -736,8 +706,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationRight() throws Exception {
+  @Test void testExpressionEvaluationRight() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -767,8 +736,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationRightLongerThanString() throws Exception {
+  @Test void testExpressionEvaluationRightLongerThanString() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -798,8 +766,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationCoalesce() throws Exception {
+  @Test void testExpressionEvaluationCoalesce() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -832,8 +799,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testExpressionEvaluationUnrecognized() throws Exception {
+  @Test void testExpressionEvaluationUnrecognized() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -865,8 +831,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- castValue tests (exercised through expressions) ----
 
-  @Test
-  void testCastValueVariousTypes() throws Exception {
+  @Test void testCastValueVariousTypes() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -911,8 +876,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testCastValueEmptyString() throws Exception {
+  @Test void testCastValueEmptyString() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -942,8 +906,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, result);
   }
 
-  @Test
-  void testCastValueParseFailure() throws Exception {
+  @Test void testCastValueParseFailure() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -975,8 +938,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- mapToIcebergType tests (via column configs) ----
 
-  @Test
-  void testMapToIcebergTypeAllTypes() throws Exception {
+  @Test void testMapToIcebergTypeAllTypes() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1009,8 +971,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Partition column handling tests ----
 
-  @Test
-  void testPartitionColumnsAddedToSchema() throws Exception {
+  @Test void testPartitionColumnsAddedToSchema() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1038,8 +999,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertNotNull(writer.getTableLocation());
   }
 
-  @Test
-  void testPartitionColumnWithDefinition() throws Exception {
+  @Test void testPartitionColumnWithDefinition() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1071,8 +1031,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertNotNull(writer.getTableLocation());
   }
 
-  @Test
-  void testPartitionColumnAlreadyInSource() throws Exception {
+  @Test void testPartitionColumnAlreadyInSource() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1102,23 +1061,20 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- commit tests ----
 
-  @Test
-  void testCommitNotInitialized() {
+  @Test void testCommitNotInitialized() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertThrows(IllegalStateException.class, () -> writer.commit());
   }
 
-  @Test
-  void testCommitEmpty() throws Exception {
+  @Test void testCommitEmpty() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("commit_empty");
     // Commit with no data should succeed
     writer.commit();
     assertEquals(0, writer.getTotalRowsWritten());
   }
 
-  @Test
-  void testCommitWithData() throws Exception {
+  @Test void testCommitWithData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("commit_data");
 
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -1132,8 +1088,7 @@ public class IcebergMaterializationWriterCoverageTest {
     assertEquals(1, writer.getTotalRowsWritten());
   }
 
-  @Test
-  void testCommitWithMaintenance() throws Exception {
+  @Test void testCommitWithMaintenance() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1169,8 +1124,7 @@ public class IcebergMaterializationWriterCoverageTest {
     writer.commit();
   }
 
-  @Test
-  void testCommitWithCompaction() throws Exception {
+  @Test void testCommitWithCompaction() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1210,15 +1164,13 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- close tests ----
 
-  @Test
-  void testCloseUninitialized() throws Exception {
+  @Test void testCloseUninitialized() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     writer.close(); // Should not throw
   }
 
-  @Test
-  void testCloseAfterInit() throws Exception {
+  @Test void testCloseAfterInit() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("close_init");
     // Verify table location exists before close
     assertNotNull(writer.getTableLocation());
@@ -1230,8 +1182,7 @@ public class IcebergMaterializationWriterCoverageTest {
         () -> writer.writeBatch(Collections.<Map<String, Object>>emptyList().iterator(), null));
   }
 
-  @Test
-  void testCloseWithUnflushedBuffers() throws Exception {
+  @Test void testCloseWithUnflushedBuffers() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("close_unflushed");
 
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -1247,15 +1198,13 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- getTableLocation tests ----
 
-  @Test
-  void testGetTableLocationNotInitialized() {
+  @Test void testGetTableLocationNotInitialized() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertNull(writer.getTableLocation());
   }
 
-  @Test
-  void testGetTableLocationAfterInit() throws Exception {
+  @Test void testGetTableLocationAfterInit() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("loc_test");
     String location = writer.getTableLocation();
     assertNotNull(location);
@@ -1264,16 +1213,14 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- storeEtlProperties / getEtlProperty tests ----
 
-  @Test
-  void testStoreEtlPropertiesNotInitialized() {
+  @Test void testStoreEtlPropertiesNotInitialized() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     // Should log warning and return
     writer.storeEtlProperties("hash", "sig", 100);
   }
 
-  @Test
-  void testStoreAndGetEtlProperties() throws Exception {
+  @Test void testStoreAndGetEtlProperties() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("etl_props");
 
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -1292,23 +1239,20 @@ public class IcebergMaterializationWriterCoverageTest {
     assertNotNull(writer.getEtlProperty("etl.completed-timestamp"));
   }
 
-  @Test
-  void testGetEtlPropertyNotInitialized() {
+  @Test void testGetEtlPropertyNotInitialized() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertNull(writer.getEtlProperty("anything"));
   }
 
-  @Test
-  void testGetEtlPropertyNotFound() throws Exception {
+  @Test void testGetEtlPropertyNotFound() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("etl_notfound");
     assertNull(writer.getEtlProperty("nonexistent.key"));
   }
 
   // ---- storeTableMetadata tests (via commit) ----
 
-  @Test
-  void testStoreTableComment() throws Exception {
+  @Test void testStoreTableComment() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1343,8 +1287,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- convertToS3aScheme tests ----
 
-  @Test
-  void testS3SchemeConversionInInitialize() throws Exception {
+  @Test void testS3SchemeConversionInInitialize() throws Exception {
     // Test with S3 warehouse path
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, "s3://bucket/warehouse", null);
@@ -1370,8 +1313,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- buildPartitionKey tests ----
 
-  @Test
-  void testBuildPartitionKeyMultipleVars() throws Exception {
+  @Test void testBuildPartitionKeyMultipleVars() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1414,8 +1356,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- getValueCaseInsensitive tests (through column mapping) ----
 
-  @Test
-  void testCaseInsensitiveColumnLookup() throws Exception {
+  @Test void testCaseInsensitiveColumnLookup() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1444,8 +1385,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Column comments on partition columns ----
 
-  @Test
-  void testPartitionColumnComments() throws Exception {
+  @Test void testPartitionColumnComments() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1479,8 +1419,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Existing table re-use (ensureTableExists) ----
 
-  @Test
-  void testReuseExistingTable() throws Exception {
+  @Test void testReuseExistingTable() throws Exception {
     // First create the writer and initialize to create the table
     IcebergMaterializationWriter writer1 =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
@@ -1513,8 +1452,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- S3 config handling ----
 
-  @Test
-  void testBuildHadoopS3ConfigNoCredentials() throws Exception {
+  @Test void testBuildHadoopS3ConfigNoCredentials() throws Exception {
     // Use a storage provider with no S3 config
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
@@ -1536,8 +1474,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Multiple partitions then commit ----
 
-  @Test
-  void testMultiplePartitionsAndCommit() throws Exception {
+  @Test void testMultiplePartitionsAndCommit() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -1583,8 +1520,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- getFormat tests ----
 
-  @Test
-  void testGetFormat() {
+  @Test void testGetFormat() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     assertEquals(MaterializeConfig.Format.ICEBERG, writer.getFormat());
@@ -1592,8 +1528,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   // ---- Partition column with case-insensitive comment lookup ----
 
-  @Test
-  void testPartitionColumnCaseInsensitiveCommentLookup() throws Exception {
+  @Test void testPartitionColumnCaseInsensitiveCommentLookup() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 

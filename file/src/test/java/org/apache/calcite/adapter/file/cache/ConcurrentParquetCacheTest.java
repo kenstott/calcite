@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,8 +84,8 @@ public class ConcurrentParquetCacheTest {
   @Test public void testConvertWithLockingProducesOutputFile() throws Exception {
     final AtomicReference<File> convertedTarget = new AtomicReference<File>();
 
-    File result = ConcurrentParquetCache.convertWithLocking(
-        sourceFile, cacheDir, false, null, "TO_LOWER",
+    File result =
+        ConcurrentParquetCache.convertWithLocking(sourceFile, cacheDir, false, null, "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             // Simulate a conversion by writing a dummy file
@@ -112,7 +111,8 @@ public class ConcurrentParquetCacheTest {
 
     for (int i = 0; i < threadCount; i++) {
       final int threadIndex = i;
-      futures.add(executor.submit(new java.util.concurrent.Callable<File>() {
+      futures.add(
+          executor.submit(new java.util.concurrent.Callable<File>() {
         @Override public File call() throws Exception {
           startLatch.await(); // All threads start together
           try {
@@ -174,8 +174,8 @@ public class ConcurrentParquetCacheTest {
     }
 
     // Convert file1 with schema "schema1"
-    File result1 = ConcurrentParquetCache.convertWithLocking(
-        sourceFile, cacheDir, false, "schema1", "TO_LOWER",
+    File result1 =
+        ConcurrentParquetCache.convertWithLocking(sourceFile, cacheDir, false, "schema1", "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             conversionCountSchema1.incrementAndGet();
@@ -186,8 +186,8 @@ public class ConcurrentParquetCacheTest {
         });
 
     // Convert file2 with schema "schema2" - different source so gets a different cache file
-    File result2 = ConcurrentParquetCache.convertWithLocking(
-        sourceFile2, cacheDir, false, "schema2", "TO_LOWER",
+    File result2 =
+        ConcurrentParquetCache.convertWithLocking(sourceFile2, cacheDir, false, "schema2", "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             conversionCountSchema2.incrementAndGet();
@@ -214,8 +214,8 @@ public class ConcurrentParquetCacheTest {
     final AtomicInteger conversionCount = new AtomicInteger(0);
 
     // First conversion (without type inference)
-    File result1 = ConcurrentParquetCache.convertWithLocking(
-        sourceFile, cacheDir, false, null, "TO_LOWER",
+    File result1 =
+        ConcurrentParquetCache.convertWithLocking(sourceFile, cacheDir, false, null, "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             conversionCount.incrementAndGet();
@@ -226,8 +226,8 @@ public class ConcurrentParquetCacheTest {
         });
 
     // Second conversion (with type inference) - uses same cache file
-    File result2 = ConcurrentParquetCache.convertWithLocking(
-        sourceFile, cacheDir, true, null, "TO_LOWER",
+    File result2 =
+        ConcurrentParquetCache.convertWithLocking(sourceFile, cacheDir, true, null, "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             conversionCount.incrementAndGet();
@@ -274,8 +274,8 @@ public class ConcurrentParquetCacheTest {
         @Override public void run() {
           try {
             startLatch.await();
-            File result = ConcurrentParquetCache.convertWithLocking(
-                sourceFile, cacheDir, false, "concurrent_test", "TO_LOWER",
+            File result =
+                ConcurrentParquetCache.convertWithLocking(sourceFile, cacheDir, false, "concurrent_test", "TO_LOWER",
                 new ConcurrentParquetCache.ConversionCallback() {
                   @Override public void convert(File targetFile) throws Exception {
                     // Small delay to increase contention window
@@ -317,8 +317,8 @@ public class ConcurrentParquetCacheTest {
     File newCacheDir = new File(tempDir, "new_cache_dir");
     // Do not create it - convertWithLocking should create it
 
-    File result = ConcurrentParquetCache.convertWithLocking(
-        sourceFile, newCacheDir, false, null, "TO_LOWER",
+    File result =
+        ConcurrentParquetCache.convertWithLocking(sourceFile, newCacheDir, false, null, "TO_LOWER",
         new ConcurrentParquetCache.ConversionCallback() {
           @Override public void convert(File targetFile) throws Exception {
             try (FileWriter writer = new FileWriter(targetFile)) {

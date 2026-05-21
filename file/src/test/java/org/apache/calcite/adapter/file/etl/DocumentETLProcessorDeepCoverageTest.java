@@ -25,7 +25,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -150,8 +149,8 @@ class DocumentETLProcessorDeepCoverageTest {
 
     HttpSourceConfig config = createMinimalConfig();
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     String json = "{\"filings\":{\"recent\":{},\"files\":[" +
         "{\"name\":\"CIK001-001.json\",\"filingCount\":100,\"filingFrom\":\"2010-01-01\",\"filingTo\":\"2015-12-31\"}," +
@@ -173,8 +172,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     List<DocumentETLProcessor.PaginationFileRef> refs =
         processor.extractPaginationFiles("{\"data\":[]}");
@@ -188,8 +187,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     List<DocumentETLProcessor.PaginationFileRef> refs =
         processor.extractPaginationFiles("{\"filings\":{\"recent\":{}}}");
@@ -203,8 +202,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     List<DocumentETLProcessor.PaginationFileRef> refs =
         processor.extractPaginationFiles("{\"filings\":{\"files\":[]}}");
@@ -288,8 +287,8 @@ class DocumentETLProcessorDeepCoverageTest {
   // ===== DocumentETLResult tests =====
 
   @Test void testDocumentETLResultSuccess() {
-    DocumentETLProcessor.DocumentETLResult result = new DocumentETLProcessor.DocumentETLResult(
-        5, 2, 0,
+    DocumentETLProcessor.DocumentETLResult result =
+        new DocumentETLProcessor.DocumentETLResult(5, 2, 0,
         Arrays.asList("/out/file1.parquet", "/out/file2.parquet"),
         Collections.<String>emptyList(),
         1000L);
@@ -304,8 +303,8 @@ class DocumentETLProcessorDeepCoverageTest {
   }
 
   @Test void testDocumentETLResultWithErrors() {
-    DocumentETLProcessor.DocumentETLResult result = new DocumentETLProcessor.DocumentETLResult(
-        3, 1, 2,
+    DocumentETLProcessor.DocumentETLResult result =
+        new DocumentETLProcessor.DocumentETLResult(3, 1, 2,
         Arrays.asList("/out/file1.parquet"),
         Arrays.asList("Error 1", "Error 2"),
         2000L);
@@ -327,8 +326,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     Map<String, String> docVars = new HashMap<String, String>();
     // Missing cik
@@ -343,8 +342,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
     Map<String, String> docVars = new HashMap<String, String>();
     docVars.put("cik", "0001234567");
@@ -361,8 +360,8 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(ProcessedDocumentTracker.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter, null, mockTracker);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter, null, mockTracker);
 
     org.mockito.Mockito.when(mockTracker.isProcessed("123", "0001234567-20-123456", "10-K"))
         .thenReturn(true);
@@ -383,11 +382,11 @@ class DocumentETLProcessorDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.converters.FileConverter.class);
 
     HttpSourceConfig config = createMinimalConfig();
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
 
-    Method extractYear = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method extractYear =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     extractYear.setAccessible(true);
 
     // Normal accessions
@@ -405,8 +404,8 @@ class DocumentETLProcessorDeepCoverageTest {
   // ===== isTransientError via Reflection =====
 
   @Test void testIsTransientErrorViaReflection() throws Exception {
-    Method isTransient = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", java.io.IOException.class);
+    Method isTransient =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", java.io.IOException.class);
     isTransient.setAccessible(true);
 
     assertTrue((Boolean) isTransient.invoke(null, new java.io.IOException("HTTP 500 error")));
@@ -445,8 +444,8 @@ class DocumentETLProcessorDeepCoverageTest {
     HttpSourceConfig config = createMinimalConfig();
 
     // 5-arg constructor
-    DocumentETLProcessor p1 = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter);
+    DocumentETLProcessor p1 =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter);
     assertNotNull(p1);
 
     // 6-arg constructor with progress listener
@@ -456,22 +455,22 @@ class DocumentETLProcessorDeepCoverageTest {
             // no-op for test
           }
         };
-    DocumentETLProcessor p2 = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter, listener);
+    DocumentETLProcessor p2 =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter, listener);
     assertNotNull(p2);
 
     // 7-arg constructor with document tracker
     ProcessedDocumentTracker mockTracker =
         org.mockito.Mockito.mock(ProcessedDocumentTracker.class);
-    DocumentETLProcessor p3 = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter, listener, mockTracker);
+    DocumentETLProcessor p3 =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter, listener, mockTracker);
     assertNotNull(p3);
 
     // 8-arg constructor with filing index provider
     FilingIndexProvider mockIndex =
         org.mockito.Mockito.mock(FilingIndexProvider.class);
-    DocumentETLProcessor p4 = new DocumentETLProcessor(
-        config, mockStorage, "/output", "/cache", mockConverter, listener, mockTracker, mockIndex);
+    DocumentETLProcessor p4 =
+        new DocumentETLProcessor(config, mockStorage, "/output", "/cache", mockConverter, listener, mockTracker, mockIndex);
     assertNotNull(p4);
   }
 

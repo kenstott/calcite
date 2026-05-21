@@ -112,8 +112,8 @@ class MaterializeOptionsConfigTest {
   }
 
   @Test void testFromMapEmpty() {
-    MaterializeOptionsConfig config = MaterializeOptionsConfig.fromMap(
-        new HashMap<String, Object>());
+    MaterializeOptionsConfig config =
+        MaterializeOptionsConfig.fromMap(new HashMap<String, Object>());
     assertNotNull(config);
     assertEquals(2, config.getThreads());
   }

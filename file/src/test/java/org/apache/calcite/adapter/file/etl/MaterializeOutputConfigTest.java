@@ -85,8 +85,8 @@ class MaterializeOutputConfigTest {
   }
 
   @Test void testFromMapEmpty() {
-    MaterializeOutputConfig config = MaterializeOutputConfig.fromMap(
-        new HashMap<String, Object>());
+    MaterializeOutputConfig config =
+        MaterializeOutputConfig.fromMap(new HashMap<String, Object>());
     assertNotNull(config);
     assertEquals("parquet", config.getFormat());
     assertEquals("snappy", config.getCompression());

@@ -74,8 +74,7 @@ public class CacheHttpfsExtensionTest {
    * Calcite's SQL validator (which rejects DuckDB table functions).
    */
   @SuppressWarnings("deprecation")
-  @Test
-  public void testCacheHttpfsIsLoaded() throws Exception {
+  @Test public void testCacheHttpfsIsLoaded() throws Exception {
     createCsvFile("items.csv", "id,name\n1,apple\n2,banana\n");
 
     try (Connection calciteConn = createDuckDBConnection()) {
@@ -88,8 +87,8 @@ public class CacheHttpfsExtensionTest {
       JdbcSchema jdbcSchema = filesSchema.unwrap(JdbcSchema.class);
       try (Connection duckConn = jdbcSchema.getDataSource().getConnection();
            Statement stmt = duckConn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT loaded FROM duckdb_extensions() WHERE extension_name='cache_httpfs'")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT loaded FROM duckdb_extensions() WHERE extension_name='cache_httpfs'")) {
         assertTrue(rs.next(), "cache_httpfs row should exist in duckdb_extensions()");
         assertTrue(rs.getBoolean("loaded"), "cache_httpfs should be loaded");
       }
@@ -101,8 +100,7 @@ public class CacheHttpfsExtensionTest {
    * in DuckDB's own setting once the schema initialises.
    */
   @SuppressWarnings("deprecation")
-  @Test
-  public void testCacheDirIsConfiguredInDuckDb() throws Exception {
+  @Test public void testCacheDirIsConfiguredInDuckDb() throws Exception {
     createCsvFile("items.csv", "id,name\n1,apple\n2,banana\n");
 
     try (Connection calciteConn = createDuckDBConnection()) {
@@ -113,8 +111,8 @@ public class CacheHttpfsExtensionTest {
       JdbcSchema jdbcSchema = filesSchema.unwrap(JdbcSchema.class);
       try (Connection duckConn = jdbcSchema.getDataSource().getConnection();
            Statement stmt = duckConn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT current_setting('cache_httpfs_cache_directory')")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT current_setting('cache_httpfs_cache_directory')")) {
         assertTrue(rs.next(), "cache_httpfs_cache_directory setting should exist");
         String configured = rs.getString(1);
         assertFalse(configured == null || configured.isEmpty(),
@@ -128,8 +126,7 @@ public class CacheHttpfsExtensionTest {
    * (avoids double buffering of the same remote byte ranges).
    */
   @SuppressWarnings("deprecation")
-  @Test
-  public void testBuiltinExternalFileCacheIsDisabled() throws Exception {
+  @Test public void testBuiltinExternalFileCacheIsDisabled() throws Exception {
     createCsvFile("items.csv", "id,name\n1,apple\n2,banana\n");
 
     try (Connection calciteConn = createDuckDBConnection()) {
@@ -140,8 +137,8 @@ public class CacheHttpfsExtensionTest {
       JdbcSchema jdbcSchema = filesSchema.unwrap(JdbcSchema.class);
       try (Connection duckConn = jdbcSchema.getDataSource().getConnection();
            Statement stmt = duckConn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT current_setting('enable_external_file_cache')")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT current_setting('enable_external_file_cache')")) {
         if (rs.next()) {
           assertFalse(Boolean.parseBoolean(rs.getString(1)),
               "Built-in external file cache should be disabled when cache_httpfs is loaded");
@@ -155,8 +152,7 @@ public class CacheHttpfsExtensionTest {
    * visible immediately without waiting for cache expiry.
    */
   @SuppressWarnings("deprecation")
-  @Test
-  public void testIcebergMetadataExcludedFromCache() throws Exception {
+  @Test public void testIcebergMetadataExcludedFromCache() throws Exception {
     createCsvFile("items.csv", "id,name\n1,apple\n2,banana\n");
 
     try (Connection calciteConn = createDuckDBConnection()) {
@@ -167,8 +163,8 @@ public class CacheHttpfsExtensionTest {
       JdbcSchema jdbcSchema = filesSchema.unwrap(JdbcSchema.class);
       try (Connection duckConn = jdbcSchema.getDataSource().getConnection();
            Statement stmt = duckConn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) FROM cache_httpfs_list_exclusion_regex()")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) FROM cache_httpfs_list_exclusion_regex()")) {
         assertTrue(rs.next());
         assertTrue(rs.getInt(1) >= 3,
             "At least 3 Iceberg metadata exclusion regexes should be registered");

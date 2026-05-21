@@ -24,12 +24,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,7 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,8 +73,7 @@ class EtlPipelineExecutionTest {
 
     // Custom DataProvider returns 5 rows per batch
     DataProvider dataProvider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -95,8 +91,7 @@ class EtlPipelineExecutionTest {
 
     // Custom DataWriter counts rows and batches
     DataWriter dataWriter = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config,
+      @Override public long write(EtlPipelineConfig config,
           Iterator<Map<String, Object>> data,
           Map<String, String> variables) throws IOException {
         long count = 0;
@@ -133,8 +128,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
 
@@ -161,8 +156,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP,
         DataProvider.DEFAULT, DataWriter.DEFAULT);
 
     EtlResult result = pipeline.execute();
@@ -200,8 +195,7 @@ class EtlPipelineExecutionTest {
     };
 
     DataProvider provider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -213,8 +207,7 @@ class EtlPipelineExecutionTest {
     };
 
     DataWriter writer = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config,
+      @Override public long write(EtlPipelineConfig config,
           Iterator<Map<String, Object>> data,
           Map<String, String> variables) throws IOException {
         long count = 0;
@@ -249,8 +242,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), listener, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), listener, IncrementalTracker.NOOP,
         provider, writer);
 
     EtlResult result = pipeline.execute();
@@ -267,8 +260,7 @@ class EtlPipelineExecutionTest {
     // When custom DataProvider returns null, pipeline should use built-in source
     // But since there's no real HTTP source, this should result in an error path
     DataProvider nullProvider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         return null;
@@ -297,8 +289,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP,
         nullProvider, DataWriter.DEFAULT);
 
     // This will attempt to use built-in HttpSource which will fail
@@ -314,8 +306,7 @@ class EtlPipelineExecutionTest {
         new ArrayList<Map<String, String>>();
 
     DataProvider provider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         capturedVariables.add(new HashMap<String, String>(variables));
@@ -328,8 +319,7 @@ class EtlPipelineExecutionTest {
     };
 
     DataWriter writer = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config,
+      @Override public long write(EtlPipelineConfig config,
           Iterator<Map<String, Object>> data,
           Map<String, String> variables) throws IOException {
         long count = 0;
@@ -363,8 +353,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP,
         provider, writer);
 
     EtlResult result = pipeline.execute();
@@ -388,8 +378,7 @@ class EtlPipelineExecutionTest {
     final AtomicInteger batchCount = new AtomicInteger(0);
 
     DataProvider provider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -402,8 +391,7 @@ class EtlPipelineExecutionTest {
     };
 
     DataWriter writer = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config,
+      @Override public long write(EtlPipelineConfig config,
           Iterator<Map<String, Object>> data,
           Map<String, String> variables) throws IOException {
         batchCount.incrementAndGet();
@@ -444,8 +432,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP,
         provider, writer);
 
     EtlResult result = pipeline.execute();
@@ -461,8 +449,7 @@ class EtlPipelineExecutionTest {
     final AtomicInteger callCount = new AtomicInteger(0);
 
     DataProvider provider = new DataProvider() {
-      @Override
-      public Iterator<Map<String, Object>> fetch(
+      @Override public Iterator<Map<String, Object>> fetch(
           EtlPipelineConfig config, Map<String, String> variables)
           throws IOException {
         int call = callCount.incrementAndGet();
@@ -478,8 +465,7 @@ class EtlPipelineExecutionTest {
     };
 
     DataWriter writer = new DataWriter() {
-      @Override
-      public long write(EtlPipelineConfig config,
+      @Override public long write(EtlPipelineConfig config,
           Iterator<Map<String, Object>> data,
           Map<String, String> variables) throws IOException {
         long count = 0;
@@ -514,8 +500,8 @@ class EtlPipelineExecutionTest {
             .build())
         .build();
 
-    EtlPipeline pipeline = new EtlPipeline(config, storageProvider,
-        tempDir.toString(), null, IncrementalTracker.NOOP,
+    EtlPipeline pipeline =
+        new EtlPipeline(config, storageProvider, tempDir.toString(), null, IncrementalTracker.NOOP,
         provider, writer);
 
     EtlResult result = pipeline.execute();

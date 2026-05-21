@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.parquet.ParquetConfig;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,22 +37,19 @@ public class ParquetConfigTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ParquetConfigTest.class);
 
-  @Test
-  public void testConstructorSetsBatchSizeAndVectorized() {
+  @Test public void testConstructorSetsBatchSizeAndVectorized() {
     ParquetConfig config = new ParquetConfig(4096, true);
     assertEquals(4096, config.getBatchSize());
     assertTrue(config.isVectorizedReaderEnabled());
   }
 
-  @Test
-  public void testConstructorWithDisabledVectorized() {
+  @Test public void testConstructorWithDisabledVectorized() {
     ParquetConfig config = new ParquetConfig(2048, false);
     assertEquals(2048, config.getBatchSize());
     assertFalse(config.isVectorizedReaderEnabled());
   }
 
-  @Test
-  public void testComputeOptimalBatchSizeReturnsPositiveValue() {
+  @Test public void testComputeOptimalBatchSizeReturnsPositiveValue() {
     int batchSize = ParquetConfig.computeOptimalBatchSize();
     assertTrue(batchSize > 0,
         "Optimal batch size should be positive");
@@ -64,8 +60,7 @@ public class ParquetConfigTest {
     LOGGER.debug("Computed optimal batch size: {}", batchSize);
   }
 
-  @Test
-  public void testComputeOptimalBatchSizeIsConsistent() {
+  @Test public void testComputeOptimalBatchSizeIsConsistent() {
     int first = ParquetConfig.computeOptimalBatchSize();
     int second = ParquetConfig.computeOptimalBatchSize();
     // Batch sizes should be relatively close (runtime memory may vary slightly)
@@ -73,8 +68,7 @@ public class ParquetConfigTest {
         "Computed batch sizes should be consistent across calls");
   }
 
-  @Test
-  public void testDefaultConfigExists() {
+  @Test public void testDefaultConfigExists() {
     ParquetConfig defaultConfig = ParquetConfig.DEFAULT;
     assertNotNull(defaultConfig);
     assertTrue(defaultConfig.getBatchSize() >= 1024);
@@ -83,8 +77,7 @@ public class ParquetConfigTest {
     LOGGER.debug("Default ParquetConfig: {}", defaultConfig);
   }
 
-  @Test
-  public void testFromSystemPropertiesWithDefaults() {
+  @Test public void testFromSystemPropertiesWithDefaults() {
     // Clear any system properties that might affect the test
     String originalBatchSize = System.getProperty("calcite.file.parquet.batch.size");
     String originalVectorized = System.getProperty("parquet.enable.vectorized.reader");
@@ -107,8 +100,7 @@ public class ParquetConfigTest {
     }
   }
 
-  @Test
-  public void testFromSystemPropertiesWithCustomBatchSize() {
+  @Test public void testFromSystemPropertiesWithCustomBatchSize() {
     String original = System.getProperty("calcite.file.parquet.batch.size");
     try {
       System.setProperty("calcite.file.parquet.batch.size", "8192");
@@ -124,8 +116,7 @@ public class ParquetConfigTest {
     }
   }
 
-  @Test
-  public void testFromSystemPropertiesWithVectorizedEnabled() {
+  @Test public void testFromSystemPropertiesWithVectorizedEnabled() {
     String original = System.getProperty("parquet.enable.vectorized.reader");
     try {
       System.setProperty("parquet.enable.vectorized.reader", "true");
@@ -141,8 +132,7 @@ public class ParquetConfigTest {
     }
   }
 
-  @Test
-  public void testToStringContainsBatchSize() {
+  @Test public void testToStringContainsBatchSize() {
     ParquetConfig config = new ParquetConfig(4096, true);
     String str = config.toString();
     assertNotNull(str);
@@ -153,14 +143,12 @@ public class ParquetConfigTest {
     LOGGER.debug("ParquetConfig toString: {}", str);
   }
 
-  @Test
-  public void testSmallBatchSize() {
+  @Test public void testSmallBatchSize() {
     ParquetConfig config = new ParquetConfig(1, false);
     assertEquals(1, config.getBatchSize());
   }
 
-  @Test
-  public void testLargeBatchSize() {
+  @Test public void testLargeBatchSize() {
     ParquetConfig config = new ParquetConfig(1000000, false);
     assertEquals(1000000, config.getBatchSize());
   }

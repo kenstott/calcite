@@ -862,8 +862,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Step 2: Create ClickHouse JDBC schema that reads the files
       LOGGER.info("FileSchemaFactory: Now creating ClickHouse JDBC schema");
-      JdbcSchema clickhouseSchema = ClickHouseJdbcSchemaFactory.create(
-          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      JdbcSchema clickhouseSchema =
+          ClickHouseJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema, operand);
       LOGGER.info("FileSchemaFactory: ClickHouse JDBC schema created successfully");
 
       // Wrap with constraint metadata if available
@@ -956,8 +956,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Step 2: Create Trino JDBC schema that reads the files
       LOGGER.info("FileSchemaFactory: Now creating Trino JDBC schema");
-      JdbcSchema trinoSchema = org.apache.calcite.adapter.file.trino.TrinoJdbcSchemaFactory.create(
-          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      JdbcSchema trinoSchema =
+          org.apache.calcite.adapter.file.trino.TrinoJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema, operand);
       LOGGER.info("FileSchemaFactory: Trino JDBC schema created successfully");
 
       // Wrap with constraint metadata if available
@@ -1050,8 +1050,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Step 2: Create Spark JDBC schema that reads the files
       LOGGER.info("FileSchemaFactory: Now creating Spark JDBC schema");
-      JdbcSchema sparkSchema = org.apache.calcite.adapter.file.spark.SparkJdbcSchemaFactory.create(
-          parentSchema, name, directoryPath, recursive, fileSchema, operand);
+      JdbcSchema sparkSchema =
+          org.apache.calcite.adapter.file.spark.SparkJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema, operand);
       LOGGER.info("FileSchemaFactory: Spark JDBC schema created successfully");
 
       // Wrap with constraint metadata if available
@@ -1078,8 +1078,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
                directoryPath != null ? directoryPath : "null", storageType);
     // Pass resolved directoryPath as sourceDirectory so table URLs resolve relative to data directory
     // Falls back to modelFileDirPath (model file parent) for model-relative URL resolution
-    File resolvedSourceDir = directoryPath != null ? new File(directoryPath)
-        : modelFileDirPath != null ? new File(modelFileDirPath) : null;
+    File resolvedSourceDir =
+        directoryPath != null ? new File(directoryPath)
+            : modelFileDirPath != null ? new File(modelFileDirPath) : null;
     FileSchema fileSchema =
         new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,

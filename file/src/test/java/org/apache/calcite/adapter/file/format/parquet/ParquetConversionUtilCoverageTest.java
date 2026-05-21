@@ -60,8 +60,8 @@ public class ParquetConversionUtilCoverageTest {
   @Test void testGetParquetCacheDirWithSchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = new File(tempDir.toFile(), "cache").getAbsolutePath();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, "myschema");
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "myschema");
 
     assertNotNull(cacheDir);
     assertTrue(cacheDir.getAbsolutePath().contains("schema_myschema"));
@@ -88,8 +88,8 @@ public class ParquetConversionUtilCoverageTest {
   @Test void testGetParquetCacheDirNullSchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = new File(tempDir.toFile(), "cache2").getAbsolutePath();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, null);
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, null);
 
     assertNotNull(cacheDir);
     // Without schema name, should use custom dir directly
@@ -99,8 +99,8 @@ public class ParquetConversionUtilCoverageTest {
   @Test void testGetParquetCacheDirEmptySchemaName() {
     File baseDir = tempDir.toFile();
     String customDir = new File(tempDir.toFile(), "cache3").getAbsolutePath();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, customDir, "");
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, customDir, "");
 
     assertNotNull(cacheDir);
     // Empty schema name should use custom dir directly
@@ -116,8 +116,8 @@ public class ParquetConversionUtilCoverageTest {
       writer.write("a,b\n1,2\n");
     }
 
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
 
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));
@@ -133,8 +133,8 @@ public class ParquetConversionUtilCoverageTest {
       writer.write("[{\"a\":1}]");
     }
 
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
 
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));
@@ -150,8 +150,8 @@ public class ParquetConversionUtilCoverageTest {
       writer.write("a,b\n1,2\n");
     }
 
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
 
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));
@@ -166,8 +166,8 @@ public class ParquetConversionUtilCoverageTest {
       writer.write("a,b\n1,2\n");
     }
 
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
 
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));
@@ -189,8 +189,8 @@ public class ParquetConversionUtilCoverageTest {
 
   @Test void testGetParquetCacheDirWithBothNulls() {
     File baseDir = tempDir.toFile();
-    File cacheDir = ParquetConversionUtil.getParquetCacheDir(
-        baseDir, null, null);
+    File cacheDir =
+        ParquetConversionUtil.getParquetCacheDir(baseDir, null, null);
 
     assertNotNull(cacheDir);
     assertTrue(cacheDir.getAbsolutePath().endsWith(".parquet_cache"));
@@ -206,8 +206,8 @@ public class ParquetConversionUtilCoverageTest {
       writer.write("a,b\n1,2\n");
     }
 
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
 
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));

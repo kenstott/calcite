@@ -15,13 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Reset all 7 SEC Iceberg tables and their tracker entries.
-# Deletes Iceberg table directories from S3 and writes "cleared" tracker markers
-# so the next ETL run performs a full rematerialization from staging parquet.
-#
-# Usage:
-#   ./scripts/reset-sec-iceberg-tables.sh [--dry-run]
-#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

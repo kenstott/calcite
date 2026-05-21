@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,8 +44,7 @@ public class CrawlerConfigurationPushoverTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CrawlerConfigurationPushoverTest.class);
 
-  @Test
-  @DisplayName("Default configuration has expected defaults")
+  @Test @DisplayName("Default configuration has expected defaults")
   void testDefaultConfiguration() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     assertFalse(config.isEnabled());
@@ -72,8 +70,7 @@ public class CrawlerConfigurationPushoverTest {
     assertNull(config.getDataFileExcludePattern());
   }
 
-  @Test
-  @DisplayName("fromMap with enabled=true sets enabled")
+  @Test @DisplayName("fromMap with enabled=true sets enabled")
   void testFromMapEnabled() {
     Map<String, Object> options = new HashMap<>();
     options.put("enabled", "true");
@@ -81,8 +78,7 @@ public class CrawlerConfigurationPushoverTest {
     assertTrue(config.isEnabled());
   }
 
-  @Test
-  @DisplayName("fromMap sets maxDepth")
+  @Test @DisplayName("fromMap sets maxDepth")
   void testFromMapMaxDepth() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxDepth", "3");
@@ -90,8 +86,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(3, config.getMaxDepth());
   }
 
-  @Test
-  @DisplayName("fromMap sets linkPattern")
+  @Test @DisplayName("fromMap sets linkPattern")
   void testFromMapLinkPattern() {
     Map<String, Object> options = new HashMap<>();
     options.put("linkPattern", ".*\\.html$");
@@ -99,8 +94,7 @@ public class CrawlerConfigurationPushoverTest {
     assertNotNull(config.getLinkPattern());
   }
 
-  @Test
-  @DisplayName("fromMap sets maxPages")
+  @Test @DisplayName("fromMap sets maxPages")
   void testFromMapMaxPages() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxPages", "50");
@@ -108,8 +102,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(50, config.getMaxPages());
   }
 
-  @Test
-  @DisplayName("fromMap sets followExternalLinks")
+  @Test @DisplayName("fromMap sets followExternalLinks")
   void testFromMapFollowExternalLinks() {
     Map<String, Object> options = new HashMap<>();
     options.put("followExternalLinks", "true");
@@ -117,8 +110,7 @@ public class CrawlerConfigurationPushoverTest {
     assertTrue(config.isFollowExternalLinks());
   }
 
-  @Test
-  @DisplayName("fromMap parses maxHtmlSize with MB suffix")
+  @Test @DisplayName("fromMap parses maxHtmlSize with MB suffix")
   void testFromMapMaxHtmlSizeMB() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxHtmlSize", "5MB");
@@ -126,8 +118,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(5L * 1024 * 1024, config.getMaxHtmlSize());
   }
 
-  @Test
-  @DisplayName("fromMap parses maxDataFileSize with KB suffix")
+  @Test @DisplayName("fromMap parses maxDataFileSize with KB suffix")
   void testFromMapMaxDataFileSizeKB() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxDataFileSize", "500KB");
@@ -135,8 +126,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(500L * 1024, config.getMaxDataFileSize());
   }
 
-  @Test
-  @DisplayName("fromMap parses dataFileCacheTTL with minutes")
+  @Test @DisplayName("fromMap parses dataFileCacheTTL with minutes")
   void testFromMapDataFileCacheTTL() {
     Map<String, Object> options = new HashMap<>();
     options.put("dataFileCacheTTL", "30 minutes");
@@ -144,8 +134,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(Duration.ofMinutes(30), config.getDataFileCacheTTL());
   }
 
-  @Test
-  @DisplayName("fromMap parses refreshInterval with hours")
+  @Test @DisplayName("fromMap parses refreshInterval with hours")
   void testFromMapRefreshInterval() {
     Map<String, Object> options = new HashMap<>();
     options.put("refreshInterval", "2 hours");
@@ -153,8 +142,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(Duration.ofHours(2), config.getRefreshInterval());
   }
 
-  @Test
-  @DisplayName("fromMap sets allowedDomains from string")
+  @Test @DisplayName("fromMap sets allowedDomains from string")
   void testFromMapAllowedDomainsString() {
     Map<String, Object> options = new HashMap<>();
     options.put("allowedDomains", "example.com");
@@ -162,8 +150,7 @@ public class CrawlerConfigurationPushoverTest {
     assertTrue(config.getAllowedDomains().contains("example.com"));
   }
 
-  @Test
-  @DisplayName("fromMap sets allowedDomains from list")
+  @Test @DisplayName("fromMap sets allowedDomains from list")
   void testFromMapAllowedDomainsList() {
     Map<String, Object> options = new HashMap<>();
     List<String> domains = new ArrayList<>(Arrays.asList("example.com", "test.org"));
@@ -173,8 +160,7 @@ public class CrawlerConfigurationPushoverTest {
     assertTrue(config.getAllowedDomains().contains("test.org"));
   }
 
-  @Test
-  @DisplayName("fromMap sets dataFilePattern")
+  @Test @DisplayName("fromMap sets dataFilePattern")
   void testFromMapDataFilePattern() {
     Map<String, Object> options = new HashMap<>();
     options.put("dataFilePattern", ".*\\.csv$");
@@ -182,8 +168,7 @@ public class CrawlerConfigurationPushoverTest {
     assertNotNull(config.getDataFilePattern());
   }
 
-  @Test
-  @DisplayName("fromMap sets dataFileExcludePattern")
+  @Test @DisplayName("fromMap sets dataFileExcludePattern")
   void testFromMapDataFileExcludePattern() {
     Map<String, Object> options = new HashMap<>();
     options.put("dataFileExcludePattern", ".*temp.*");
@@ -191,8 +176,7 @@ public class CrawlerConfigurationPushoverTest {
     assertNotNull(config.getDataFileExcludePattern());
   }
 
-  @Test
-  @DisplayName("fromMap sets generateTablesFromHtml")
+  @Test @DisplayName("fromMap sets generateTablesFromHtml")
   void testFromMapGenerateTablesFromHtml() {
     Map<String, Object> options = new HashMap<>();
     options.put("generateTablesFromHtml", "false");
@@ -200,8 +184,7 @@ public class CrawlerConfigurationPushoverTest {
     assertFalse(config.isGenerateTablesFromHtml());
   }
 
-  @Test
-  @DisplayName("fromMap sets htmlTableMinRows and htmlTableMaxRows")
+  @Test @DisplayName("fromMap sets htmlTableMinRows and htmlTableMaxRows")
   void testFromMapHtmlTableRowLimits() {
     Map<String, Object> options = new HashMap<>();
     options.put("htmlTableMinRows", "5");
@@ -213,8 +196,7 @@ public class CrawlerConfigurationPushoverTest {
 
   // --- Setter tests ---
 
-  @Test
-  @DisplayName("setters update configuration values")
+  @Test @DisplayName("setters update configuration values")
   void testSetters() {
     CrawlerConfiguration config = new CrawlerConfiguration();
 
@@ -246,8 +228,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(Duration.ofMinutes(15), config.getHtmlCacheTTL());
   }
 
-  @Test
-  @DisplayName("addAllowedFileExtension adds to set")
+  @Test @DisplayName("addAllowedFileExtension adds to set")
   void testAddAllowedFileExtension() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     config.addAllowedFileExtension("PDF");
@@ -255,8 +236,7 @@ public class CrawlerConfigurationPushoverTest {
         "Extension should be stored lowercase");
   }
 
-  @Test
-  @DisplayName("addAllowedDomain adds to set")
+  @Test @DisplayName("addAllowedDomain adds to set")
   void testAddAllowedDomain() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     config.addAllowedDomain("EXAMPLE.COM");
@@ -264,8 +244,7 @@ public class CrawlerConfigurationPushoverTest {
         "Domain should be stored lowercase");
   }
 
-  @Test
-  @DisplayName("getSizeLimitForExtension returns configured limit")
+  @Test @DisplayName("getSizeLimitForExtension returns configured limit")
   void testGetSizeLimitForExtension() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     Long csvLimit = config.getSizeLimitForExtension("csv");
@@ -273,16 +252,14 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(50L * 1024 * 1024, csvLimit.longValue());
   }
 
-  @Test
-  @DisplayName("getSizeLimitForExtension returns default for unknown extension")
+  @Test @DisplayName("getSizeLimitForExtension returns default for unknown extension")
   void testGetSizeLimitForUnknownExtension() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     Long unknownLimit = config.getSizeLimitForExtension("xyz");
     assertEquals(config.getMaxDataFileSize(), unknownLimit.longValue());
   }
 
-  @Test
-  @DisplayName("setSizeLimitForExtension updates limit")
+  @Test @DisplayName("setSizeLimitForExtension updates limit")
   void testSetSizeLimitForExtension() {
     CrawlerConfiguration config = new CrawlerConfiguration();
     config.setSizeLimitForExtension("custom", 42L * 1024);
@@ -291,8 +268,7 @@ public class CrawlerConfigurationPushoverTest {
 
   // --- Duration parsing via fromMap ---
 
-  @Test
-  @DisplayName("fromMap parses seconds duration")
+  @Test @DisplayName("fromMap parses seconds duration")
   void testFromMapDurationSeconds() {
     Map<String, Object> options = new HashMap<>();
     options.put("refreshInterval", "30 seconds");
@@ -300,8 +276,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(Duration.ofSeconds(30), config.getRefreshInterval());
   }
 
-  @Test
-  @DisplayName("fromMap parses days duration")
+  @Test @DisplayName("fromMap parses days duration")
   void testFromMapDurationDays() {
     Map<String, Object> options = new HashMap<>();
     options.put("refreshInterval", "1 days");
@@ -311,8 +286,7 @@ public class CrawlerConfigurationPushoverTest {
 
   // --- Size parsing via fromMap ---
 
-  @Test
-  @DisplayName("fromMap parses GB size suffix")
+  @Test @DisplayName("fromMap parses GB size suffix")
   void testFromMapSizeGB() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxDataFileSize", "1GB");
@@ -320,8 +294,7 @@ public class CrawlerConfigurationPushoverTest {
     assertEquals(1L * 1024 * 1024 * 1024, config.getMaxDataFileSize());
   }
 
-  @Test
-  @DisplayName("fromMap parses plain number as bytes")
+  @Test @DisplayName("fromMap parses plain number as bytes")
   void testFromMapSizePlainNumber() {
     Map<String, Object> options = new HashMap<>();
     options.put("maxHtmlSize", "1024");

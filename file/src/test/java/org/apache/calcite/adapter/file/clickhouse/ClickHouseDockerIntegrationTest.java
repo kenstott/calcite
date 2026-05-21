@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.ResourceLock;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +45,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
 import javax.sql.DataSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,7 +117,8 @@ class ClickHouseDockerIntegrationTest {
       // test is interrupted (e.g. by gtimeout or IDE stop). @AfterAll handles
       // normal termination; the hook covers SIGTERM / unexpected JVM exits.
       final String nameToRemove = containerName;
-      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      Runtime.getRuntime().addShutdownHook(
+          new Thread(new Runnable() {
         @Override public void run() {
           try {
             new ProcessBuilder("docker", "rm", "-f", nameToRemove)
@@ -158,8 +157,8 @@ class ClickHouseDockerIntegrationTest {
       // 1. tempDir mounted at its own host absolute path (so paths match host<->container)
       // 2. Config override setting user_files_path to tempDir
       // This lets both raw JDBC tests and adapter tests use the same paths.
-      ProcessBuilder pb = new ProcessBuilder(
-          "docker", "run", "-d",
+      ProcessBuilder pb =
+          new ProcessBuilder("docker", "run", "-d",
           "--name", containerName,
           "-p", hostPort + ":8123",
           "-e", "CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1",
@@ -167,8 +166,7 @@ class ClickHouseDockerIntegrationTest {
           "-v", tempDir.getAbsolutePath() + ":" + tempDir.getAbsolutePath(),
           "-v", configDir.getAbsolutePath() + ":/etc/clickhouse-server/config.d",
           "--ulimit", "nofile=262144:262144",
-          CLICKHOUSE_IMAGE
-      );
+          CLICKHOUSE_IMAGE);
       pb.redirectErrorStream(true);
       Process p = pb.start();
 
@@ -259,8 +257,8 @@ class ClickHouseDockerIntegrationTest {
             + "(1, 'Alice', 75000.0), (2, 'Bob', 85000.0)");
 
         // Query back
-        ResultSet rs = stmt.executeQuery(
-            "SELECT id, name, salary FROM " + dbName + ".test_table ORDER BY id");
+        ResultSet rs =
+            stmt.executeQuery("SELECT id, name, salary FROM " + dbName + ".test_table ORDER BY id");
         try {
           assertTrue(rs.next());
           assertEquals(1, rs.getInt("id"));
@@ -308,8 +306,8 @@ class ClickHouseDockerIntegrationTest {
             + "AS SELECT * FROM file('" + parquetFile + "', 'Parquet')");
 
         // Query the view
-        ResultSet rs = stmt.executeQuery(
-            "SELECT * FROM default.test_parquet ORDER BY id");
+        ResultSet rs =
+            stmt.executeQuery("SELECT * FROM default.test_parquet ORDER BY id");
         try {
           assertTrue(rs.next());
           assertEquals(1, rs.getInt("id"));
@@ -350,8 +348,8 @@ class ClickHouseDockerIntegrationTest {
             + "SELECT * FROM default.dialect_temp");
 
         // Generate SQL using ClickHouseDialect and execute against live server
-        String createViewSql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-            "default", "dialect_test", dialectParquet, false);
+        String createViewSql =
+            ClickHouseDialect.INSTANCE.createParquetViewSql("default", "dialect_test", dialectParquet, false);
         LOGGER.info("Dialect-generated CREATE VIEW SQL: {}", createViewSql);
         stmt.execute(createViewSql);
 
@@ -485,8 +483,8 @@ class ClickHouseDockerIntegrationTest {
     try {
       Statement stmt = conn.createStatement();
       try {
-        ResultSet rs = stmt.executeQuery(
-            "SELECT name, salary FROM employees WHERE salary > 80000 ORDER BY salary");
+        ResultSet rs =
+            stmt.executeQuery("SELECT name, salary FROM employees WHERE salary > 80000 ORDER BY salary");
         try {
           assertTrue(rs.next(), "Expected first row (Bob)");
           assertEquals("Bob", rs.getString("name"));
@@ -564,8 +562,8 @@ class ClickHouseDockerIntegrationTest {
 
     // Step 4: Open CalciteConnection via model (exercises FileSchemaFactory → ClickHouseJdbcSchemaFactory)
     java.sql.Driver calciteDriver = new org.apache.calcite.jdbc.Driver();
-    Connection conn = calciteDriver.connect(
-        "jdbc:calcite:model=" + modelFile.getAbsolutePath() + ";caseSensitive=false",
+    Connection conn =
+        calciteDriver.connect("jdbc:calcite:model=" + modelFile.getAbsolutePath() + ";caseSensitive=false",
         new java.util.Properties());
     try {
       Statement stmt = conn.createStatement();
@@ -609,8 +607,8 @@ class ClickHouseDockerIntegrationTest {
     try {
       Statement stmt = conn.createStatement();
       try {
-        ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) AS cnt, SUM(salary) AS total FROM employees");
+        ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) AS cnt, SUM(salary) AS total FROM employees");
         try {
           assertTrue(rs.next(), "Expected aggregation result row");
           assertEquals(3, rs.getInt("cnt"));
@@ -681,8 +679,8 @@ class ClickHouseDockerIntegrationTest {
     CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
 
     // Create isolated DataSource using a dedicated ClickHouse driver instance
-    final java.sql.Driver chDriver = (java.sql.Driver) Class.forName(
-        "com.clickhouse.jdbc.ClickHouseDriver").getDeclaredConstructor().newInstance();
+    final java.sql.Driver chDriver =
+        (java.sql.Driver) Class.forName("com.clickhouse.jdbc.ClickHouseDriver").getDeclaredConstructor().newInstance();
     final String url = "jdbc:clickhouse://localhost:" + hostPort + "/" + dbName;
     DataSource ds = new DataSource() {
       @Override public Connection getConnection() throws SQLException {

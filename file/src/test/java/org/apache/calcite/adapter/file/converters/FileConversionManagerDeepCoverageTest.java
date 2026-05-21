@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -38,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -276,8 +274,8 @@ public class FileConversionManagerDeepCoverageTest {
     File htmlFile = createTempFile("casing.html", html);
     File outputDir = createOutputDir("out_casing");
 
-    boolean result = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING");
+    boolean result =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING");
     assertTrue(result);
   }
 
@@ -290,8 +288,8 @@ public class FileConversionManagerDeepCoverageTest {
     File htmlFile = createTempFile("basedir.html", html);
     File outputDir = createOutputDir("out_basedir");
 
-    boolean result = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+    boolean result =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
     assertTrue(result);
   }
 
@@ -305,8 +303,8 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_relpath");
 
     String relativePath = "subdir" + File.separator + "relpath.html";
-    boolean result = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
+    boolean result =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
     assertTrue(result);
   }
 
@@ -371,8 +369,8 @@ public class FileConversionManagerDeepCoverageTest {
   // ========== extractJsonPath via reflection ==========
 
   @Test void testExtractJsonPath() throws Exception {
-    Method method = FileConversionManager.class.getDeclaredMethod(
-        "extractJsonPath", String.class);
+    Method method =
+        FileConversionManager.class.getDeclaredMethod("extractJsonPath", String.class);
     method.setAccessible(true);
 
     String result = (String) method.invoke(null, "JSONPATH_EXTRACTION[$.data.items]");
@@ -434,16 +432,16 @@ public class FileConversionManagerDeepCoverageTest {
     File baseDir = createOutputDir("base_preserve");
 
     // First conversion
-    boolean result1 = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
+    boolean result1 =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
     assertTrue(result1);
 
     // Modify file timestamp to trigger re-conversion
     htmlFile.setLastModified(System.currentTimeMillis() + 5000);
 
     // Second conversion should pick up existing record
-    boolean result2 = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
+    boolean result2 =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
     // Result depends on change detection
   }
 
@@ -548,8 +546,8 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_nullbase");
 
     // null baseDirectory - should skip change detection and just convert
-    boolean result = FileConversionManager.convertIfNeeded(
-        htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null);
+    boolean result =
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null);
     assertTrue(result);
   }
 
@@ -560,8 +558,8 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_json");
 
     // Plain JSON should not trigger conversion
-    boolean result = FileConversionManager.convertIfNeeded(
-        jsonFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+    boolean result =
+        FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
     assertFalse(result);
   }
 
@@ -571,8 +569,8 @@ public class FileConversionManagerDeepCoverageTest {
     File yamlFile = createTempFile("plain.yaml", "key: value\n");
     File outputDir = createOutputDir("out_yaml");
 
-    boolean result = FileConversionManager.convertIfNeeded(
-        yamlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+    boolean result =
+        FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
     assertFalse(result);
   }
 
@@ -580,8 +578,8 @@ public class FileConversionManagerDeepCoverageTest {
     File ymlFile = createTempFile("config.yml", "key: value\n");
     File outputDir = createOutputDir("out_yml");
 
-    boolean result = FileConversionManager.convertIfNeeded(
-        ymlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+    boolean result =
+        FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
     assertFalse(result);
   }
 
@@ -624,8 +622,8 @@ public class FileConversionManagerDeepCoverageTest {
   // ========== isConversionNeeded via reflection ==========
 
   @Test void testIsConversionNeededWithNoRecord() throws Exception {
-    Method method = FileConversionManager.class.getDeclaredMethod(
-        "isConversionNeeded", File.class, File.class);
+    Method method =
+        FileConversionManager.class.getDeclaredMethod("isConversionNeeded", File.class, File.class);
     method.setAccessible(true);
 
     File sourceFile = new File(tempDir.toFile(), "new_file.html");

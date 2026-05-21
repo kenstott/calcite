@@ -35,8 +35,8 @@ class ModelResultTest {
   @Test void testBasicModelResult() {
     SchemaResult sr = new SchemaResult("econ", 5, 0, 1, 1000, 5000, null);
 
-    ModelResult result = new ModelResult("govdata",
-        Collections.singletonList(sr), 1, 0, 6000);
+    ModelResult result =
+        new ModelResult("govdata", Collections.singletonList(sr), 1, 0, 6000);
 
     assertEquals("govdata", result.getModelName());
     assertEquals(1, result.getTotalSchemas());
@@ -51,8 +51,8 @@ class ModelResultTest {
     SchemaResult sr1 = new SchemaResult("econ", 3, 0, 0, 500, 2000, null);
     SchemaResult sr2 = new SchemaResult("geo", 2, 1, 0, 300, 3000, "error");
 
-    ModelResult result = new ModelResult("govdata",
-        Arrays.asList(sr1, sr2), 1, 1, 5000);
+    ModelResult result =
+        new ModelResult("govdata", Arrays.asList(sr1, sr2), 1, 1, 5000);
 
     assertEquals(2, result.getTotalSchemas());
     assertEquals(1, result.getSuccessfulSchemas());
@@ -63,8 +63,8 @@ class ModelResultTest {
 
   @Test void testSchemaResultsAreImmutable() {
     SchemaResult sr = new SchemaResult("test", 1, 0, 0, 10, 100, null);
-    ModelResult result = new ModelResult("model",
-        Collections.singletonList(sr), 1, 0, 200);
+    ModelResult result =
+        new ModelResult("model", Collections.singletonList(sr), 1, 0, 200);
     try {
       result.getSchemaResults().add(sr);
       assertTrue(false, "Expected UnsupportedOperationException");
@@ -75,8 +75,8 @@ class ModelResultTest {
 
   @Test void testToString() {
     SchemaResult sr = new SchemaResult("econ", 2, 0, 0, 100, 1000, null);
-    ModelResult result = new ModelResult("govdata",
-        Collections.singletonList(sr), 1, 0, 2000);
+    ModelResult result =
+        new ModelResult("govdata", Collections.singletonList(sr), 1, 0, 2000);
 
     String str = result.toString();
     assertNotNull(str);
@@ -85,8 +85,8 @@ class ModelResultTest {
   }
 
   @Test void testEmptySchemaResults() {
-    ModelResult result = new ModelResult("empty",
-        Collections.<SchemaResult>emptyList(), 0, 0, 0);
+    ModelResult result =
+        new ModelResult("empty", Collections.<SchemaResult>emptyList(), 0, 0, 0);
     assertEquals(0, result.getTotalSchemas());
     assertEquals(0, result.getTotalRows());
     assertEquals(0, result.getTotalTables());

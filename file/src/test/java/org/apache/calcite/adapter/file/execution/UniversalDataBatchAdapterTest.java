@@ -26,7 +26,6 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,17 +52,15 @@ public class UniversalDataBatchAdapterTest {
   private RelDataTypeFactory typeFactory =
       new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
-  @Test
-  public void testConvertIntegerRows() {
+  @Test public void testConvertIntegerRows() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1},
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1},
         new Object[]{2},
-        new Object[]{3}
-    );
+        new Object[]{3});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -77,17 +74,15 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertDoubleRows() {
+  @Test public void testConvertDoubleRows() {
     RelDataType rowType = typeFactory.builder()
         .add("amount", SqlTypeName.DOUBLE)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1.5},
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1.5},
         new Object[]{2.7},
-        new Object[]{3.9}
-    );
+        new Object[]{3.9});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -98,17 +93,15 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertBooleanRows() {
+  @Test public void testConvertBooleanRows() {
     RelDataType rowType = typeFactory.builder()
         .add("flag", SqlTypeName.BOOLEAN)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{true},
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{true},
         new Object[]{false},
-        new Object[]{true}
-    );
+        new Object[]{true});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -119,17 +112,15 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertVarcharRows() {
+  @Test public void testConvertVarcharRows() {
     RelDataType rowType = typeFactory.builder()
         .add("name", SqlTypeName.VARCHAR, 100)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{"Alice"},
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{"Alice"},
         new Object[]{"Bob"},
-        new Object[]{"Charlie"}
-    );
+        new Object[]{"Charlie"});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -140,8 +131,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertMixedTypeRows() {
+  @Test public void testConvertMixedTypeRows() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("name", SqlTypeName.VARCHAR, 100)
@@ -149,10 +139,9 @@ public class UniversalDataBatchAdapterTest {
         .add("active", SqlTypeName.BOOLEAN)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1, "Alice", 100.5, true},
-        new Object[]{2, "Bob", 200.0, false}
-    );
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1, "Alice", 100.5, true},
+        new Object[]{2, "Bob", 200.0, false});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -164,18 +153,16 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithNullValues() {
+  @Test public void testConvertWithNullValues() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("name", SqlTypeName.VARCHAR, 100)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1, "Alice"},
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1, "Alice"},
         new Object[]{null, null},
-        new Object[]{3, "Charlie"}
-    );
+        new Object[]{3, "Charlie"});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -190,8 +177,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithBatchSizeLimit() {
+  @Test public void testConvertWithBatchSizeLimit() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .build();
@@ -211,8 +197,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertEmptyIterator() {
+  @Test public void testConvertEmptyIterator() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .build();
@@ -227,18 +212,16 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertFromArrowBatch() {
+  @Test public void testConvertFromArrowBatch() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("name", SqlTypeName.VARCHAR, 100)
         .add("amount", SqlTypeName.DOUBLE)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1, "Alice", 100.5},
-        new Object[]{2, "Bob", 200.0}
-    );
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1, "Alice", 100.5},
+        new Object[]{2, "Bob", 200.0});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -265,17 +248,15 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertFromArrowBatchWithNulls() {
+  @Test public void testConvertFromArrowBatchWithNulls() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("name", SqlTypeName.VARCHAR, 100)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{1, "Alice"},
-        new Object[]{null, null}
-    );
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{1, "Alice"},
+        new Object[]{null, null});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -295,19 +276,17 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testRoundTripConversion() {
+  @Test public void testRoundTripConversion() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("amount", SqlTypeName.DOUBLE)
         .add("active", SqlTypeName.BOOLEAN)
         .build();
 
-    List<Object[]> originalRows = Arrays.asList(
-        new Object[]{1, 10.5, true},
+    List<Object[]> originalRows =
+        Arrays.asList(new Object[]{1, 10.5, true},
         new Object[]{2, 20.0, false},
-        new Object[]{3, 30.5, true}
-    );
+        new Object[]{3, 30.5, true});
 
     // Convert to Arrow
     VectorSchemaRoot batch =
@@ -331,8 +310,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithNumericStringValues() {
+  @Test public void testConvertWithNumericStringValues() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .build();
@@ -350,8 +328,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithNumberSubtypes() {
+  @Test public void testConvertWithNumberSubtypes() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("amount", SqlTypeName.DOUBLE)
@@ -370,16 +347,14 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithDecimalType() {
+  @Test public void testConvertWithDecimalType() {
     RelDataType rowType = typeFactory.builder()
         .add("amount", SqlTypeName.DECIMAL, 10, 2)
         .build();
 
-    List<Object[]> rows = Arrays.asList(
-        new Object[]{99.99},
-        new Object[]{100.50}
-    );
+    List<Object[]> rows =
+        Arrays.asList(new Object[]{99.99},
+        new Object[]{100.50});
 
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(
@@ -390,8 +365,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertWithShortRow() {
+  @Test public void testConvertWithShortRow() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .add("name", SqlTypeName.VARCHAR, 100)
@@ -411,8 +385,7 @@ public class UniversalDataBatchAdapterTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertFromArrowBatchEmpty() {
+  @Test public void testConvertFromArrowBatchEmpty() {
     RelDataType rowType = typeFactory.builder()
         .add("id", SqlTypeName.INTEGER)
         .build();

@@ -109,8 +109,8 @@ public class CacheResolver {
       if (entry.isBundled()) {
         // Byte-range GET from bundle
         String bundlePath = "bundles/" + schemaName + "/" + entry.getBundleFile();
-        content = storageProvider.readRange(bundlePath,
-            entry.getOffset(), entry.getLength());
+        content =
+            storageProvider.readRange(bundlePath, entry.getOffset(), entry.getLength());
         LOGGER.debug("Extracted from bundle: {} ({}B from {})",
             sourceKey, content.length, entry.getBundleFile());
       } else {

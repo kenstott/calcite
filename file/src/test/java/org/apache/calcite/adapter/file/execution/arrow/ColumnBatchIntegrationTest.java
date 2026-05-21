@@ -26,14 +26,12 @@ import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,11 +70,11 @@ public class ColumnBatchIntegrationTest {
   // --- ColumnBatch basic tests ---
 
   @Test public void testColumnBatchRowAndColumnCount() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true)),
+    Schema schema =
+        new Schema(
+            Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true)),
         Field.nullable("name", ArrowType.Utf8.INSTANCE),
-        Field.nullable("value", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))
-    ));
+        Field.nullable("value", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector idVec = (IntVector) root.getVector("id");
@@ -111,9 +109,8 @@ public class ColumnBatchIntegrationTest {
   // --- IntColumnReader tests ---
 
   @Test public void testIntColumnReader() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("id");
@@ -137,9 +134,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testIntColumnReaderSum() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");
@@ -160,9 +156,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testIntColumnReaderSumZeroCopy() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");
@@ -181,9 +176,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testIntColumnReaderFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");
@@ -209,9 +203,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testIntColumnReaderGetValues() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");
@@ -231,9 +224,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testIntColumnReaderGetDataBuffer() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");
@@ -254,9 +246,8 @@ public class ColumnBatchIntegrationTest {
   // --- LongColumnReader tests ---
 
   @Test public void testLongColumnReader() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("big_val", new ArrowType.Int(64, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("big_val", new ArrowType.Int(64, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       BigIntVector vec = (BigIntVector) root.getVector("big_val");
@@ -277,9 +268,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testLongColumnReaderFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("big_val", new ArrowType.Int(64, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("big_val", new ArrowType.Int(64, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       BigIntVector vec = (BigIntVector) root.getVector("big_val");
@@ -303,9 +293,8 @@ public class ColumnBatchIntegrationTest {
   // --- DoubleColumnReader tests ---
 
   @Test public void testDoubleColumnReader() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("price", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("price", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       Float8Vector vec = (Float8Vector) root.getVector("price");
@@ -326,9 +315,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testDoubleColumnReaderMinMax() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       Float8Vector vec = (Float8Vector) root.getVector("val");
@@ -351,9 +339,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testDoubleColumnReaderFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       Float8Vector vec = (Float8Vector) root.getVector("val");
@@ -377,9 +364,8 @@ public class ColumnBatchIntegrationTest {
   // --- BooleanColumnReader tests ---
 
   @Test public void testBooleanColumnReader() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("active", new ArrowType.Bool())
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("active", new ArrowType.Bool())));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       BitVector vec = (BitVector) root.getVector("active");
@@ -405,9 +391,8 @@ public class ColumnBatchIntegrationTest {
   // --- StringColumnReader tests ---
 
   @Test public void testStringColumnReader() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("name", ArrowType.Utf8.INSTANCE)));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       VarCharVector vec = (VarCharVector) root.getVector("name");
@@ -430,9 +415,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testStringColumnReaderFilter() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("name", ArrowType.Utf8.INSTANCE)));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       VarCharVector vec = (VarCharVector) root.getVector("name");
@@ -458,10 +442,10 @@ public class ColumnBatchIntegrationTest {
   // --- toRowFormat tests ---
 
   @Test public void testToRowFormat() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true)),
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(
+            Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true)),
+        Field.nullable("name", ArrowType.Utf8.INSTANCE)));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector idVec = (IntVector) root.getVector("id");
@@ -494,9 +478,8 @@ public class ColumnBatchIntegrationTest {
   // --- Error cases ---
 
   @Test public void testGetIntColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("id");
@@ -511,9 +494,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetIntColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("name", ArrowType.Utf8.INSTANCE)));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       VarCharVector vec = (VarCharVector) root.getVector("name");
@@ -528,9 +510,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetLongColumnOutOfBounds() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       root.setRowCount(0);
@@ -540,9 +521,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetLongColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("name", ArrowType.Utf8.INSTANCE)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("name", ArrowType.Utf8.INSTANCE)));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       root.setRowCount(0);
@@ -552,9 +532,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetDoubleColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       root.setRowCount(0);
@@ -564,9 +543,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetBooleanColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       root.setRowCount(0);
@@ -576,9 +554,8 @@ public class ColumnBatchIntegrationTest {
   }
 
   @Test public void testGetStringColumnWrongType() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("id", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("id", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       root.setRowCount(0);
@@ -590,9 +567,8 @@ public class ColumnBatchIntegrationTest {
   // --- DoubleColumnReader minMax with all nulls ---
 
   @Test public void testDoubleMinMaxAllNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       Float8Vector vec = (Float8Vector) root.getVector("val");
@@ -614,9 +590,8 @@ public class ColumnBatchIntegrationTest {
   // --- IntColumnReader sum with nulls in zero copy ---
 
   @Test public void testIntSumZeroCopyWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        Field.nullable("val", new ArrowType.Int(32, true))
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(Field.nullable("val", new ArrowType.Int(32, true))));
 
     try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
       IntVector vec = (IntVector) root.getVector("val");

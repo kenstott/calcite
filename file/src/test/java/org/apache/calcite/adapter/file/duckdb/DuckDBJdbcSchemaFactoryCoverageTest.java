@@ -16,24 +16,15 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
-import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.avatica.util.Casing;
-import org.apache.calcite.config.Lex;
 import org.apache.calcite.sql.parser.SqlParser;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,12 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Coverage unit tests for {@link DuckDBJdbcSchemaFactory}.
@@ -322,54 +307,54 @@ class DuckDBJdbcSchemaFactoryCoverageTest {
   // =======================================================================
 
   private boolean invokeIsTempDirectory(String path) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isTempDirectory", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, path);
   }
 
   private boolean invokeIsHivePartitioned(String fileList) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitioned", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, fileList);
   }
 
   private boolean invokeIsHivePartitionedFromConfig(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, record);
   }
 
   private boolean invokeShouldUseUnionByName(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, record);
   }
 
   private String invokeFormatRecordForError(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("formatRecordForError", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (String) method.invoke(null, record);
   }
 
   private String invokeRewriteSchemaReferences(String viewDef, String declared,
       String actual) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, viewDef, declared, actual);
   }
 
   private String invokeDeriveGlobPattern(String fileList) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "deriveGlobPattern", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, fileList);
   }

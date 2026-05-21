@@ -32,8 +32,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,10 +104,10 @@ public class HtmlCrawlerCoverageTest {
   // ===== ResourceMetadata inner class (via reflection) =====
 
   @Test void testResourceMetadataConstructor() throws Exception {
-    Class<?> rmClass = Class.forName(
-        "org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
-    Constructor<?> ctor = rmClass.getDeclaredConstructor(
-        String.class, long.class, String.class, String.class);
+    Class<?> rmClass =
+        Class.forName("org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
+    Constructor<?> ctor =
+        rmClass.getDeclaredConstructor(String.class, long.class, String.class, String.class);
     ctor.setAccessible(true);
 
     Object rm = ctor.newInstance("hash123", 1024L, "etag-val", "Mon, 01 Jan 2024");
@@ -132,10 +130,10 @@ public class HtmlCrawlerCoverageTest {
   }
 
   @Test void testResourceMetadataIsExpired() throws Exception {
-    Class<?> rmClass = Class.forName(
-        "org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
-    Constructor<?> ctor = rmClass.getDeclaredConstructor(
-        String.class, long.class, String.class, String.class);
+    Class<?> rmClass =
+        Class.forName("org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
+    Constructor<?> ctor =
+        rmClass.getDeclaredConstructor(String.class, long.class, String.class, String.class);
     ctor.setAccessible(true);
 
     Object rm = ctor.newInstance("hash", 100L, null, null);
@@ -155,10 +153,10 @@ public class HtmlCrawlerCoverageTest {
   }
 
   @Test void testResourceMetadataNullEtagAndLastModified() throws Exception {
-    Class<?> rmClass = Class.forName(
-        "org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
-    Constructor<?> ctor = rmClass.getDeclaredConstructor(
-        String.class, long.class, String.class, String.class);
+    Class<?> rmClass =
+        Class.forName("org.apache.calcite.adapter.file.converters.HtmlCrawler$ResourceMetadata");
+    Constructor<?> ctor =
+        rmClass.getDeclaredConstructor(String.class, long.class, String.class, String.class);
     ctor.setAccessible(true);
 
     Object rm = ctor.newInstance("hash456", 0L, null, null);
@@ -186,8 +184,8 @@ public class HtmlCrawlerCoverageTest {
   // ===== getFileExtension (via reflection) =====
 
   @Test void testGetFileExtensionMethodExists() throws Exception {
-    Method getFileExtension = HtmlCrawler.class.getDeclaredMethod(
-        "getFileExtension", String.class);
+    Method getFileExtension =
+        HtmlCrawler.class.getDeclaredMethod("getFileExtension", String.class);
     getFileExtension.setAccessible(true);
     assertNotNull(getFileExtension);
   }
@@ -195,8 +193,8 @@ public class HtmlCrawlerCoverageTest {
   // ===== computeFileHash (via reflection) =====
 
   @Test void testComputeFileHashMethodExists() throws Exception {
-    Method computeFileHash = HtmlCrawler.class.getDeclaredMethod(
-        "computeFileHash", File.class);
+    Method computeFileHash =
+        HtmlCrawler.class.getDeclaredMethod("computeFileHash", File.class);
     computeFileHash.setAccessible(true);
     assertNotNull(computeFileHash);
   }

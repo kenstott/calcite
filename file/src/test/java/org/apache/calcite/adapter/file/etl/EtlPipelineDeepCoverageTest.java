@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +66,8 @@ public class EtlPipelineDeepCoverageTest {
     mockWriter = mock(MaterializationWriter.class);
 
     factoryMock = mockStatic(MaterializationWriterFactory.class);
-    factoryMock.when(() -> MaterializationWriterFactory.createFromConfig(
+    factoryMock.when(
+        () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
         anyString(), any(IncrementalTracker.class)))
         .thenReturn(mockWriter);
@@ -82,69 +82,62 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Constructor variants ---
 
-  @Test
-  void testConstructorMinimal() {
+  @Test void testConstructorMinimal() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output");
     assertNotNull(pipeline);
   }
 
-  @Test
-  void testConstructorWithProgressListener() {
+  @Test void testConstructorWithProgressListener() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     EtlPipeline.ProgressListener listener = mock(EtlPipeline.ProgressListener.class);
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output", listener);
     assertNotNull(pipeline);
   }
 
-  @Test
-  void testConstructorWithIncrementalTracker() {
+  @Test void testConstructorWithIncrementalTracker() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     EtlPipeline.ProgressListener listener = mock(EtlPipeline.ProgressListener.class);
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        listener, mockTracker);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", listener, mockTracker);
     assertNotNull(pipeline);
   }
 
-  @Test
-  void testConstructorWithDataProviderAndWriter() {
+  @Test void testConstructorWithDataProviderAndWriter() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     DataProvider dataProvider = mock(DataProvider.class);
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
     assertNotNull(pipeline);
   }
 
-  @Test
-  void testConstructorWithSourceStorageProvider() {
+  @Test void testConstructorWithSourceStorageProvider() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     StorageProvider sourceStorage = mock(StorageProvider.class);
     DataProvider dataProvider = mock(DataProvider.class);
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, sourceStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, sourceStorage, "/output", null, mockTracker, dataProvider, dataWriter);
     assertNotNull(pipeline);
   }
 
-  @Test
-  void testConstructorWithOperatingDirectory() {
+  @Test void testConstructorWithOperatingDirectory() {
     EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
     StorageProvider sourceStorage = mock(StorageProvider.class);
     DataProvider dataProvider = mock(DataProvider.class);
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, sourceStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter, tempDir.toString());
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, sourceStorage, "/output", null, mockTracker, dataProvider, dataWriter, tempDir.toString());
     assertNotNull(pipeline);
   }
 
   // --- Execute with cached completion (fast-path skip) ---
 
-  @Test
-  void testExecuteCachedCompletionWithMatchingConfigHash() throws IOException {
+  @Test void testExecuteCachedCompletionWithMatchingConfigHash() throws IOException {
     EtlPipelineConfig config = buildConfigWithMaterialize("cached_pipeline");
 
     // Config has no dimensions, so computeConfigHash returns "empty"
@@ -157,8 +150,8 @@ public class EtlPipelineDeepCoverageTest {
     DataProvider dataProvider = (cfg, variables) -> Collections.<Map<String, Object>>emptyList().iterator();
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -168,8 +161,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Execute with zero rows and empty result TTL ---
 
-  @Test
-  void testExecuteCachedCompletionZeroRowsTtlNotExpired() throws IOException {
+  @Test void testExecuteCachedCompletionZeroRowsTtlNotExpired() throws IOException {
     MaterializeOptionsConfig options = MaterializeOptionsConfig.builder()
         .emptyResultTtlDays(1) // 1 day
         .build();
@@ -189,8 +181,8 @@ public class EtlPipelineDeepCoverageTest {
     DataProvider dataProvider = (cfg, variables) -> Collections.<Map<String, Object>>emptyList().iterator();
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -200,8 +192,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Execute with no dimension combinations ---
 
-  @Test
-  void testExecuteNoDimensionCombinations() throws IOException {
+  @Test void testExecuteNoDimensionCombinations() throws IOException {
     Map<String, DimensionConfig> dims = new LinkedHashMap<>();
     // RANGE with start > end produces 0 combinations
     dims.put("year", DimensionConfig.builder()
@@ -219,8 +210,8 @@ public class EtlPipelineDeepCoverageTest {
     DataProvider dataProvider = (cfg, variables) -> Collections.<Map<String, Object>>emptyList().iterator();
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -229,8 +220,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Execute with successful processing ---
 
-  @Test
-  void testExecuteWithSuccessfulProcessing() throws IOException {
+  @Test void testExecuteWithSuccessfulProcessing() throws IOException {
     Map<String, DimensionConfig> dims = new LinkedHashMap<>();
     dims.put("year", DimensionConfig.builder()
         .name("year")
@@ -245,7 +235,8 @@ public class EtlPipelineDeepCoverageTest {
 
     Set<Integer> unprocessed = new HashSet<>();
     unprocessed.add(0);
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         anyList(), anyLong())).thenReturn(unprocessed);
 
     List<Map<String, Object>> data = new ArrayList<>();
@@ -257,8 +248,8 @@ public class EtlPipelineDeepCoverageTest {
     DataProvider dataProvider = (cfg, variables) -> data.iterator();
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -267,8 +258,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Execute all combinations already processed ---
 
-  @Test
-  void testExecuteAllCombinationsProcessed() throws IOException {
+  @Test void testExecuteAllCombinationsProcessed() throws IOException {
     Map<String, DimensionConfig> dims = new LinkedHashMap<>();
     dims.put("year", DimensionConfig.builder()
         .name("year")
@@ -282,14 +272,15 @@ public class EtlPipelineDeepCoverageTest {
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     // Return empty set - all combinations already processed
-    when(mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
+    when(
+        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
         anyList(), anyLong())).thenReturn(new HashSet<Integer>());
 
     DataProvider dataProvider = (cfg, variables) -> Collections.<Map<String, Object>>emptyList().iterator();
     DataWriter dataWriter = mock(DataWriter.class);
 
-    EtlPipeline pipeline = new EtlPipeline(config, mockStorage, "/output",
-        null, mockTracker, dataProvider, dataWriter);
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", null, mockTracker, dataProvider, dataWriter);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -297,15 +288,13 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- EtlResult builder tests ---
 
-  @Test
-  void testEtlResultSkipped() {
+  @Test void testEtlResultSkipped() {
     EtlResult result = EtlResult.skipped("test", 100);
     assertNotNull(result);
     assertEquals("test", result.getPipelineName());
   }
 
-  @Test
-  void testEtlResultBuilder() {
+  @Test void testEtlResultBuilder() {
     EtlResult result = EtlResult.builder()
         .pipelineName("test_pipeline")
         .totalRows(500)
@@ -322,8 +311,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- LoggingProgressListener ---
 
-  @Test
-  void testLoggingProgressListener() {
+  @Test void testLoggingProgressListener() {
     EtlPipeline.LoggingProgressListener listener = new EtlPipeline.LoggingProgressListener();
 
     // These should not throw
@@ -339,8 +327,7 @@ public class EtlPipelineDeepCoverageTest {
 
   // --- Error handling config ---
 
-  @Test
-  void testErrorHandlingDefaults() {
+  @Test void testErrorHandlingDefaults() {
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
         EtlPipelineConfig.ErrorHandlingConfig.defaults();
     assertNotNull(errorConfig);

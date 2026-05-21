@@ -68,106 +68,91 @@ public class IcebergCatalogManagerTypeMappingTest {
         config(), tableName, columns, partitionColumns);
   }
 
-  @Test
-  public void testMapIntegerType() {
+  @Test public void testMapIntegerType() {
     Table table = createWithColumn("test_int", "INTEGER");
     assertEquals(Types.IntegerType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapIntType() {
+  @Test public void testMapIntType() {
     Table table = createWithColumn("test_int2", "INT");
     assertEquals(Types.IntegerType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapBigintType() {
+  @Test public void testMapBigintType() {
     Table table = createWithColumn("test_bigint", "BIGINT");
     assertEquals(Types.LongType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapLongType() {
+  @Test public void testMapLongType() {
     Table table = createWithColumn("test_long", "LONG");
     assertEquals(Types.LongType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapDoubleType() {
+  @Test public void testMapDoubleType() {
     Table table = createWithColumn("test_double", "DOUBLE");
     assertEquals(Types.DoubleType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapFloat8Type() {
+  @Test public void testMapFloat8Type() {
     Table table = createWithColumn("test_float8", "FLOAT8");
     assertEquals(Types.DoubleType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapFloatType() {
+  @Test public void testMapFloatType() {
     Table table = createWithColumn("test_float", "FLOAT");
     assertEquals(Types.FloatType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapRealType() {
+  @Test public void testMapRealType() {
     Table table = createWithColumn("test_real", "REAL");
     assertEquals(Types.FloatType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapBooleanType() {
+  @Test public void testMapBooleanType() {
     Table table = createWithColumn("test_bool", "BOOLEAN");
     assertEquals(Types.BooleanType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapBoolType() {
+  @Test public void testMapBoolType() {
     Table table = createWithColumn("test_bool2", "BOOL");
     assertEquals(Types.BooleanType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapDateType() {
+  @Test public void testMapDateType() {
     Table table = createWithColumn("test_date", "DATE");
     assertEquals(Types.DateType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapTimestampType() {
+  @Test public void testMapTimestampType() {
     Table table = createWithColumn("test_ts", "TIMESTAMP");
     assertEquals(Types.TimestampType.withoutZone(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapTimestamptzType() {
+  @Test public void testMapTimestamptzType() {
     Table table = createWithColumn("test_tstz", "TIMESTAMPTZ");
     assertEquals(Types.TimestampType.withZone(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapTimestampWithTimeZoneType() {
+  @Test public void testMapTimestampWithTimeZoneType() {
     Table table = createWithColumn("test_tstz2", "TIMESTAMP WITH TIME ZONE");
     assertEquals(Types.TimestampType.withZone(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapDecimalType() {
+  @Test public void testMapDecimalType() {
     Table table = createWithColumn("test_decimal", "DECIMAL");
     Types.DecimalType decimalType = (Types.DecimalType)
         table.schema().findField("col").type();
@@ -175,70 +160,60 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertEquals(9, decimalType.scale());
   }
 
-  @Test
-  public void testMapBinaryType() {
+  @Test public void testMapBinaryType() {
     Table table = createWithColumn("test_binary", "BINARY");
     assertEquals(Types.BinaryType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapBytesType() {
+  @Test public void testMapBytesType() {
     Table table = createWithColumn("test_bytes", "BYTES");
     assertEquals(Types.BinaryType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapVarcharType() {
+  @Test public void testMapVarcharType() {
     Table table = createWithColumn("test_varchar", "VARCHAR");
     assertEquals(Types.StringType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapStringType() {
+  @Test public void testMapStringType() {
     Table table = createWithColumn("test_string", "STRING");
     assertEquals(Types.StringType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapTextType() {
+  @Test public void testMapTextType() {
     Table table = createWithColumn("test_text", "TEXT");
     assertEquals(Types.StringType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapNullTypeDefaultsToString() {
+  @Test public void testMapNullTypeDefaultsToString() {
     Table table = createWithColumn("test_null_type", null);
     // ColumnDef constructor defaults null to "VARCHAR"
     assertEquals(Types.StringType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapUnknownTypeDefaultsToString() {
+  @Test public void testMapUnknownTypeDefaultsToString() {
     Table table = createWithColumn("test_unknown", "FOOBAR");
     assertEquals(Types.StringType.get(),
         table.schema().findField("col").type());
   }
 
-  @Test
-  public void testMapArrayType() {
+  @Test public void testMapArrayType() {
     Table table = createWithColumn("test_array", "array<double>");
     assertTrue(table.schema().findField("col").type() instanceof Types.ListType);
   }
 
-  @Test
-  public void testMapArrayTypeUpperCase() {
+  @Test public void testMapArrayTypeUpperCase() {
     Table table = createWithColumn("test_array_upper", "ARRAY<INTEGER>");
     assertTrue(table.schema().findField("col").type() instanceof Types.ListType);
   }
 
-  @Test
-  public void testMapCaseInsensitiveType() {
+  @Test public void testMapCaseInsensitiveType() {
     Table table1 = createWithColumn("test_case1", "integer");
     assertEquals(Types.IntegerType.get(),
         table1.schema().findField("col").type());
@@ -248,8 +223,7 @@ public class IcebergCatalogManagerTypeMappingTest {
         table2.schema().findField("col").type());
   }
 
-  @Test
-  public void testColumnDefWithDoc() {
+  @Test public void testColumnDefWithDoc() {
     IcebergCatalogManager.ColumnDef col =
         new IcebergCatalogManager.ColumnDef("myCol", "INTEGER", "A documented column");
 
@@ -258,8 +232,7 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertEquals("A documented column", col.getDoc());
   }
 
-  @Test
-  public void testColumnDefWithoutDoc() {
+  @Test public void testColumnDefWithoutDoc() {
     IcebergCatalogManager.ColumnDef col =
         new IcebergCatalogManager.ColumnDef("myCol", "INTEGER");
 
@@ -268,16 +241,14 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertNull(col.getDoc());
   }
 
-  @Test
-  public void testColumnDefNullTypeDefaultsToVarchar() {
+  @Test public void testColumnDefNullTypeDefaultsToVarchar() {
     IcebergCatalogManager.ColumnDef col =
         new IcebergCatalogManager.ColumnDef("myCol", null);
 
     assertEquals("VARCHAR", col.getType());
   }
 
-  @Test
-  public void testColumnDefDocOnCreatedField() {
+  @Test public void testColumnDefDocOnCreatedField() {
     List<IcebergCatalogManager.ColumnDef> columns =
         new ArrayList<IcebergCatalogManager.ColumnDef>();
     columns.add(new IcebergCatalogManager.ColumnDef("id", "INTEGER", "Primary key"));
@@ -285,8 +256,8 @@ public class IcebergCatalogManagerTypeMappingTest {
     columns.add(new IcebergCatalogManager.ColumnDef("desc", "STRING", ""));
 
     List<String> partitionColumns = Collections.emptyList();
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        config(), "test_doc_fields", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(config(), "test_doc_fields", columns, partitionColumns);
 
     assertNotNull(table);
     // Verify the doc was set on the first field
@@ -295,8 +266,7 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertNull(table.schema().findField("name").doc());
   }
 
-  @Test
-  public void testCreateTableFromColumnsMultiplePartitions() {
+  @Test public void testCreateTableFromColumnsMultiplePartitions() {
     List<IcebergCatalogManager.ColumnDef> columns =
         new ArrayList<IcebergCatalogManager.ColumnDef>();
     columns.add(new IcebergCatalogManager.ColumnDef("id", "INTEGER"));
@@ -308,16 +278,15 @@ public class IcebergCatalogManagerTypeMappingTest {
     partitionColumns.add("year");
     partitionColumns.add("month");
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        config(), "test_multi_partition", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(config(), "test_multi_partition", columns, partitionColumns);
 
     assertNotNull(table);
     assertEquals(4, table.schema().columns().size());
     assertEquals(2, table.spec().fields().size());
   }
 
-  @Test
-  public void testCreateTableFromColumnsNoPartition() {
+  @Test public void testCreateTableFromColumnsNoPartition() {
     List<IcebergCatalogManager.ColumnDef> columns =
         new ArrayList<IcebergCatalogManager.ColumnDef>();
     columns.add(new IcebergCatalogManager.ColumnDef("id", "INTEGER"));
@@ -325,18 +294,17 @@ public class IcebergCatalogManagerTypeMappingTest {
 
     List<String> partitionColumns = Collections.emptyList();
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        config(), "test_no_partition", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(config(), "test_no_partition", columns, partitionColumns);
 
     assertNotNull(table);
     assertTrue(table.spec().isUnpartitioned());
   }
 
-  @Test
-  public void testHiveCatalogThrows() {
+  @Test public void testHiveCatalogThrows() {
     final Map<String, Object> cfg = config();
-    Exception ex = org.junit.jupiter.api.Assertions.assertThrows(
-        UnsupportedOperationException.class,
+    Exception ex =
+        org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
         new org.junit.jupiter.api.function.Executable() {
           @Override public void execute() {
             IcebergCatalogManager.getCatalogForProvider("hive", cfg);
@@ -345,15 +313,13 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertTrue(ex.getMessage().contains("Hive"));
   }
 
-  @Test
-  public void testClearCacheDoesNotThrow() {
+  @Test public void testClearCacheDoesNotThrow() {
     // Just ensure it works without error
     IcebergCatalogManager.clearCache();
     IcebergCatalogManager.clearCache();
   }
 
-  @Test
-  public void testListAlternatesForSource() {
+  @Test public void testListAlternatesForSource() {
     Map<String, Object> cfg = config();
     cfg.put("namespace", "ns");
 
@@ -365,14 +331,13 @@ public class IcebergCatalogManagerTypeMappingTest {
     assertEquals(0, result.size());
   }
 
-  @Test
-  public void testParseTableIdentifierWithConfigNamespace() {
+  @Test public void testParseTableIdentifierWithConfigNamespace() {
     Map<String, Object> cfg = config();
     cfg.put("namespace", "myns");
 
     // Create a table using namespace from config
-    org.apache.iceberg.Schema schema = new org.apache.iceberg.Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    org.apache.iceberg.Schema schema =
+        new org.apache.iceberg.Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
 
     // Create namespace table using getCatalogForProvider + direct catalog create
     org.apache.iceberg.catalog.Catalog cat =

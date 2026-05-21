@@ -42,7 +42,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -70,8 +69,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: basic header parsing
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeSimpleHeaders() throws Exception {
+  @Test void testDeduceRowTypeSimpleHeaders() throws Exception {
     Path csvFile = createCsvFile("simple.csv", "name,age,city\nAlice,30,NYC\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -91,96 +89,84 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: typed headers (colon-separated)
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeStringType() throws Exception {
+  @Test void testDeduceRowTypeStringType() throws Exception {
     Path csvFile = createCsvFile("string.csv", "name:string\nAlice\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.VARCHAR, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeBooleanType() throws Exception {
+  @Test void testDeduceRowTypeBooleanType() throws Exception {
     Path csvFile = createCsvFile("bool.csv", "active:boolean\ntrue\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.BOOLEAN, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeByteType() throws Exception {
+  @Test void testDeduceRowTypeByteType() throws Exception {
     Path csvFile = createCsvFile("byte.csv", "val:byte\n1\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.TINYINT, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeCharType() throws Exception {
+  @Test void testDeduceRowTypeCharType() throws Exception {
     Path csvFile = createCsvFile("char.csv", "val:char\nA\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.CHAR, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeShortType() throws Exception {
+  @Test void testDeduceRowTypeShortType() throws Exception {
     Path csvFile = createCsvFile("short.csv", "val:short\n100\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.SMALLINT, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeIntType() throws Exception {
+  @Test void testDeduceRowTypeIntType() throws Exception {
     Path csvFile = createCsvFile("int.csv", "val:int\n100\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.INTEGER, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeLongType() throws Exception {
+  @Test void testDeduceRowTypeLongType() throws Exception {
     Path csvFile = createCsvFile("long.csv", "val:long\n999999999999\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.BIGINT, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeFloatType() throws Exception {
+  @Test void testDeduceRowTypeFloatType() throws Exception {
     Path csvFile = createCsvFile("float.csv", "val:float\n3.14\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.REAL, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeDoubleType() throws Exception {
+  @Test void testDeduceRowTypeDoubleType() throws Exception {
     Path csvFile = createCsvFile("double.csv", "val:double\n3.14159\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.DOUBLE, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeDateType() throws Exception {
+  @Test void testDeduceRowTypeDateType() throws Exception {
     Path csvFile = createCsvFile("date.csv", "val:date\n2024-01-15\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.DATE, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeTimestampType() throws Exception {
+  @Test void testDeduceRowTypeTimestampType() throws Exception {
     Path csvFile = createCsvFile("timestamp.csv", "val:timestamp\n2024-01-15 10:30:00\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.TIMESTAMP, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeTimestamptzType() throws Exception {
+  @Test void testDeduceRowTypeTimestamptzType() throws Exception {
     Path csvFile = createCsvFile("timestamptz.csv", "val:timestamptz\n2024-01-15 10:30:00Z\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
@@ -188,16 +174,14 @@ public class CsvEnumeratorDeepCoverageTest {
         rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeTimeType() throws Exception {
+  @Test void testDeduceRowTypeTimeType() throws Exception {
     Path csvFile = createCsvFile("time.csv", "val:time\n10:30:00\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
     assertEquals(SqlTypeName.TIME, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeUnknownType() throws Exception {
+  @Test void testDeduceRowTypeUnknownType() throws Exception {
     Path csvFile = createCsvFile("unknown.csv", "val:foobar\ndata\n");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
@@ -205,10 +189,9 @@ public class CsvEnumeratorDeepCoverageTest {
     assertEquals(SqlTypeName.VARCHAR, rowType.getFieldList().get(0).getType().getSqlTypeName());
   }
 
-  @Test
-  void testDeduceRowTypeMultipleTypedColumns() throws Exception {
-    Path csvFile = createCsvFile("multi.csv",
-        "name:string,age:int,score:double,active:boolean\nAlice,30,95.5,true\n");
+  @Test void testDeduceRowTypeMultipleTypedColumns() throws Exception {
+    Path csvFile =
+        createCsvFile("multi.csv", "name:string,age:int,score:double,active:boolean\nAlice,30,95.5,true\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, fieldTypes, false);
@@ -223,8 +206,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: empty / null header handling
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeEmptyFile() throws Exception {
+  @Test void testDeduceRowTypeEmptyFile() throws Exception {
     Path csvFile = createCsvFile("empty.csv", "");
     Source source = Sources.of(csvFile.toFile());
     RelDataType rowType = CsvEnumerator.deduceRowType(typeFactory, source, null, false);
@@ -238,8 +220,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: stream mode adds ROWTIME column
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeStreamMode() throws Exception {
+  @Test void testDeduceRowTypeStreamMode() throws Exception {
     Path csvFile = createCsvFile("stream.csv", "name,value\nAlice,100\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -256,12 +237,11 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: column casing
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeWithToLowerCasing() throws Exception {
+  @Test void testDeduceRowTypeWithToLowerCasing() throws Exception {
     Path csvFile = createCsvFile("casing_lower.csv", "FirstName,LastName\nAlice,Smith\n");
     Source source = Sources.of(csvFile.toFile());
-    RelDataType rowType = CsvEnumerator.deduceRowType(
-        typeFactory, source, null, false, "TO_LOWER");
+    RelDataType rowType =
+        CsvEnumerator.deduceRowType(typeFactory, source, null, false, "TO_LOWER");
     assertNotNull(rowType);
     // Names should be lowered
     for (int i = 0; i < rowType.getFieldCount(); i++) {
@@ -271,12 +251,11 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testDeduceRowTypeWithUnchangedCasing() throws Exception {
+  @Test void testDeduceRowTypeWithUnchangedCasing() throws Exception {
     Path csvFile = createCsvFile("casing_unchanged.csv", "FirstName,LastName\nAlice,Smith\n");
     Source source = Sources.of(csvFile.toFile());
-    RelDataType rowType = CsvEnumerator.deduceRowType(
-        typeFactory, source, null, false, "UNCHANGED");
+    RelDataType rowType =
+        CsvEnumerator.deduceRowType(typeFactory, source, null, false, "UNCHANGED");
     assertNotNull(rowType);
     assertEquals("FirstName", rowType.getFieldList().get(0).getName());
     assertEquals("LastName", rowType.getFieldList().get(1).getName());
@@ -286,21 +265,18 @@ public class CsvEnumeratorDeepCoverageTest {
   // identityList
   // ====================================================================
 
-  @Test
-  void testIdentityListZero() {
+  @Test void testIdentityListZero() {
     int[] result = CsvEnumerator.identityList(0);
     assertEquals(0, result.length);
   }
 
-  @Test
-  void testIdentityListOne() {
+  @Test void testIdentityListOne() {
     int[] result = CsvEnumerator.identityList(1);
     assertEquals(1, result.length);
     assertEquals(0, result[0]);
   }
 
-  @Test
-  void testIdentityListMultiple() {
+  @Test void testIdentityListMultiple() {
     int[] result = CsvEnumerator.identityList(5);
     assertEquals(5, result.length);
     for (int i = 0; i < 5; i++) {
@@ -312,74 +288,62 @@ public class CsvEnumeratorDeepCoverageTest {
   // parseDecimal
   // ====================================================================
 
-  @Test
-  void testParseDecimalExact() {
+  @Test void testParseDecimalExact() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "123.45");
     assertEquals(new BigDecimal("123.45"), result);
   }
 
-  @Test
-  void testParseDecimalRoundsUp() {
+  @Test void testParseDecimalRoundsUp() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "123.455");
     assertEquals(new BigDecimal("123.46"), result);
   }
 
-  @Test
-  void testParseDecimalRoundsDown() {
+  @Test void testParseDecimalRoundsDown() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "123.454");
     assertEquals(new BigDecimal("123.45"), result);
   }
 
-  @Test
-  void testParseDecimalNegative() {
+  @Test void testParseDecimalNegative() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "-123.45");
     assertEquals(new BigDecimal("-123.45"), result);
   }
 
-  @Test
-  void testParseDecimalNegativeRoundsUp() {
+  @Test void testParseDecimalNegativeRoundsUp() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "-123.455");
     assertEquals(new BigDecimal("-123.46"), result);
   }
 
-  @Test
-  void testParseDecimalPrecisionExceeded() {
+  @Test void testParseDecimalPrecisionExceeded() {
     assertThrows(IllegalArgumentException.class,
         () -> CsvEnumerator.parseDecimal(4, 0, "12345"));
   }
 
-  @Test
-  void testParseDecimalPrecisionExceededNegative() {
+  @Test void testParseDecimalPrecisionExceededNegative() {
     assertThrows(IllegalArgumentException.class,
         () -> CsvEnumerator.parseDecimal(4, 0, "-12345"));
   }
 
-  @Test
-  void testParseDecimalPrecisionExceededWithScale() {
+  @Test void testParseDecimalPrecisionExceededWithScale() {
     assertThrows(IllegalArgumentException.class,
         () -> CsvEnumerator.parseDecimal(4, 2, "123.45"));
   }
 
-  @Test
-  void testParseDecimalScientificNotation() {
+  @Test void testParseDecimalScientificNotation() {
     assertThrows(IllegalArgumentException.class,
         () -> CsvEnumerator.parseDecimal(4, 0, "1e+5"));
   }
 
-  @Test
-  void testParseDecimalZero() {
+  @Test void testParseDecimalZero() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 2, "0.00");
     assertEquals(new BigDecimal("0.00"), result);
   }
 
-  @Test
-  void testParseDecimalSmallNumber() {
+  @Test void testParseDecimalSmallNumber() {
     BigDecimal result = CsvEnumerator.parseDecimal(5, 4, "0.1234");
     assertEquals(new BigDecimal("0.1234"), result);
   }
 
-  @Test
-  void testParseDecimalInvalidString() {
+  @Test void testParseDecimalInvalidString() {
     assertThrows(NumberFormatException.class,
         () -> CsvEnumerator.parseDecimal(5, 2, "abc"));
   }
@@ -388,8 +352,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // CsvEnumerator: constructor, moveNext, current, close
   // ====================================================================
 
-  @Test
-  void testEnumeratorMoveNextAndCurrent() throws Exception {
+  @Test void testEnumeratorMoveNextAndCurrent() throws Exception {
     Path csvFile = createCsvFile("enum.csv", "name:string,age:int\nAlice,30\nBob,25\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -416,8 +379,7 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testEnumeratorSingleColumnField() throws Exception {
+  @Test void testEnumeratorSingleColumnField() throws Exception {
     Path csvFile = createCsvFile("single_field.csv", "name:string\nAlice\nBob\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -442,8 +404,7 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testEnumeratorCancelFlag() throws Exception {
+  @Test void testEnumeratorCancelFlag() throws Exception {
     Path csvFile = createCsvFile("cancel.csv", "name:string\nAlice\nBob\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -461,8 +422,7 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testEnumeratorResetThrows() throws Exception {
+  @Test void testEnumeratorResetThrows() throws Exception {
     Path csvFile = createCsvFile("reset.csv", "name:string\nAlice\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -484,8 +444,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // TSV support
   // ====================================================================
 
-  @Test
-  void testTsvFile() throws Exception {
+  @Test void testTsvFile() throws Exception {
     Path tsvFile = createCsvFile("data.tsv", "name\tage\tcity\nAlice\t30\tNYC\nBob\t25\tSF\n");
     Source source = Sources.of(tsvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -496,8 +455,7 @@ public class CsvEnumeratorDeepCoverageTest {
     assertEquals("city", rowType.getFieldList().get(2).getName());
   }
 
-  @Test
-  void testTsvFileEnumeration() throws Exception {
+  @Test void testTsvFileEnumeration() throws Exception {
     Path tsvFile = createCsvFile("enum.tsv", "name\tage\nAlice\t30\nBob\t25\n");
     Source source = Sources.of(tsvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -523,10 +481,9 @@ public class CsvEnumeratorDeepCoverageTest {
   // Filter values
   // ====================================================================
 
-  @Test
-  void testFilterValuesMatchingRows() throws Exception {
-    Path csvFile = createCsvFile("filter.csv",
-        "name:string,city:string\nAlice,NYC\nBob,SF\nCharlie,NYC\n");
+  @Test void testFilterValuesMatchingRows() throws Exception {
+    Path csvFile =
+        createCsvFile("filter.csv", "name:string,city:string\nAlice,NYC\nBob,SF\nCharlie,NYC\n");
     Source source = Sources.of(csvFile.toFile());
 
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -552,10 +509,9 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testFilterValuesNoMatch() throws Exception {
-    Path csvFile = createCsvFile("no_match.csv",
-        "name:string,city:string\nAlice,NYC\nBob,SF\n");
+  @Test void testFilterValuesNoMatch() throws Exception {
+    Path csvFile =
+        createCsvFile("no_match.csv", "name:string,city:string\nAlice,NYC\nBob,SF\n");
     Source source = Sources.of(csvFile.toFile());
 
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -580,8 +536,7 @@ public class CsvEnumeratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testFilterValuesNull() throws Exception {
+  @Test void testFilterValuesNull() throws Exception {
     Path csvFile = createCsvFile("null_filter.csv", "name:string\nAlice\nBob\n");
     Source source = Sources.of(csvFile.toFile());
 
@@ -610,8 +565,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // ArrayRowConverter with various parameters
   // ====================================================================
 
-  @Test
-  void testArrayConverterStreamMode() throws Exception {
+  @Test void testArrayConverterStreamMode() throws Exception {
     Path csvFile = createCsvFile("stream_arr.csv", "val:int\n42\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -622,8 +576,7 @@ public class CsvEnumeratorDeepCoverageTest {
     assertNotNull(converter);
   }
 
-  @Test
-  void testArrayConverterBlankStringsAsNull() throws Exception {
+  @Test void testArrayConverterBlankStringsAsNull() throws Exception {
     Path csvFile = createCsvFile("blank.csv", "val:string\n\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -638,8 +591,7 @@ public class CsvEnumeratorDeepCoverageTest {
     assertNotNull(converter2);
   }
 
-  @Test
-  void testArrayConverterWithTypeConverter() throws Exception {
+  @Test void testArrayConverterWithTypeConverter() throws Exception {
     Path csvFile = createCsvFile("tc.csv", "val:int\n42\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -655,8 +607,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // deduceRowType: decimal type in header
   // ====================================================================
 
-  @Test
-  void testDeduceRowTypeDecimalType() throws Exception {
+  @Test void testDeduceRowTypeDecimalType() throws Exception {
     // Decimal type pattern: "decimal(precision,scale)
     Path csvFile = createCsvFile("decimal.csv", "amount:\"decimal(10,2)\"\n123.45\n");
     Source source = Sources.of(csvFile.toFile());
@@ -670,8 +621,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // openCsv: non-TSV file
   // ====================================================================
 
-  @Test
-  void testOpenCsvRegularFile() throws Exception {
+  @Test void testOpenCsvRegularFile() throws Exception {
     Path csvFile = createCsvFile("regular.csv", "a,b,c\n1,2,3\n");
     Source source = Sources.of(csvFile.toFile());
     com.opencsv.CSVReader reader = CsvEnumerator.openCsv(source);
@@ -686,8 +636,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // Close releases lock
   // ====================================================================
 
-  @Test
-  void testCloseReleasesLock() throws Exception {
+  @Test void testCloseReleasesLock() throws Exception {
     Path csvFile = createCsvFile("lock.csv", "name:string\nAlice\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -704,10 +653,9 @@ public class CsvEnumeratorDeepCoverageTest {
   // Multiple rows with various data types
   // ====================================================================
 
-  @Test
-  void testEnumeratorWithMixedTypes() throws Exception {
-    Path csvFile = createCsvFile("mixed.csv",
-        "name:string,age:int,score:double,active:boolean\n"
+  @Test void testEnumeratorWithMixedTypes() throws Exception {
+    Path csvFile =
+        createCsvFile("mixed.csv", "name:string,age:int,score:double,active:boolean\n"
             + "Alice,30,95.5,true\n"
             + "Bob,25,87.3,false\n");
     Source source = Sources.of(csvFile.toFile());
@@ -738,8 +686,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // Empty data rows
   // ====================================================================
 
-  @Test
-  void testEnumeratorNoDataRows() throws Exception {
+  @Test void testEnumeratorNoDataRows() throws Exception {
     Path csvFile = createCsvFile("no_data.csv", "name:string,age:int\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
@@ -761,10 +708,9 @@ public class CsvEnumeratorDeepCoverageTest {
   // Cancel during iteration
   // ====================================================================
 
-  @Test
-  void testCancelDuringIteration() throws Exception {
-    Path csvFile = createCsvFile("cancel_mid.csv",
-        "name:string\nAlice\nBob\nCharlie\nDiana\n");
+  @Test void testCancelDuringIteration() throws Exception {
+    Path csvFile =
+        createCsvFile("cancel_mid.csv", "name:string\nAlice\nBob\nCharlie\nDiana\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();
     CsvEnumerator.deduceRowType(typeFactory, source, fieldTypes, false);
@@ -787,8 +733,7 @@ public class CsvEnumeratorDeepCoverageTest {
   // Enumerator with TypeInferenceConfig constructor
   // ====================================================================
 
-  @Test
-  void testEnumeratorWithTypeInferenceConfig() throws Exception {
+  @Test void testEnumeratorWithTypeInferenceConfig() throws Exception {
     Path csvFile = createCsvFile("type_inf.csv", "name:string,val:int\nAlice,42\n");
     Source source = Sources.of(csvFile.toFile());
     List<RelDataType> fieldTypes = new ArrayList<RelDataType>();

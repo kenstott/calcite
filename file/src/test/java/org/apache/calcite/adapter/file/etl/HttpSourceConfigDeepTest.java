@@ -179,8 +179,8 @@ class HttpSourceConfigDeepTest {
   }
 
   @Test void testAuthConfigApiKey() {
-    HttpSourceConfig.AuthConfig config = HttpSourceConfig.AuthConfig.apiKey(
-        HttpSourceConfig.AuthLocation.HEADER, "X-Api-Key", "secret123");
+    HttpSourceConfig.AuthConfig config =
+        HttpSourceConfig.AuthConfig.apiKey(HttpSourceConfig.AuthLocation.HEADER, "X-Api-Key", "secret123");
     assertEquals(HttpSourceConfig.AuthType.API_KEY, config.getType());
     assertEquals(HttpSourceConfig.AuthLocation.HEADER, config.getLocation());
     assertEquals("X-Api-Key", config.getName());
@@ -358,8 +358,8 @@ class HttpSourceConfigDeepTest {
   }
 
   @Test void testPaginationConfigOffset() {
-    HttpSourceConfig.PaginationConfig config = HttpSourceConfig.PaginationConfig.offset(
-        "limit", "offset", 100);
+    HttpSourceConfig.PaginationConfig config =
+        HttpSourceConfig.PaginationConfig.offset("limit", "offset", 100);
     assertEquals(HttpSourceConfig.PaginationType.OFFSET, config.getType());
     assertEquals("limit", config.getLimitParam());
     assertEquals("offset", config.getOffsetParam());
@@ -930,8 +930,8 @@ class HttpSourceConfigDeepTest {
   // --- UrlRule tests ---
 
   @Test void testUrlRuleConstructor() {
-    HttpSourceConfig.UrlRule rule = new HttpSourceConfig.UrlRule(2000, 2019,
-        "https://api.example.com/v1");
+    HttpSourceConfig.UrlRule rule =
+        new HttpSourceConfig.UrlRule(2000, 2019, "https://api.example.com/v1");
     assertEquals(2000, rule.getYearMin());
     assertEquals(2019, rule.getYearMax());
     assertEquals("https://api.example.com/v1", rule.getUrl());

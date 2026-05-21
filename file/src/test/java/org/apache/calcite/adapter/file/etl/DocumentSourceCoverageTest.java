@@ -119,8 +119,8 @@ class DocumentSourceCoverageTest {
   }
 
   @Test void testConstructorWithDocumentSourceConfig() {
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta/{cik}", "http://localhost/doc/{cik}/{document}");
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta/{cik}", "http://localhost/doc/{cik}/{document}");
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
     assertNotNull(ds.getDocumentConfig());
     assertEquals("http://localhost/meta/{cik}", ds.getDocumentConfig().getMetadataUrl());
@@ -253,8 +253,8 @@ class DocumentSourceCoverageTest {
   @Test void testDownloadDocumentReturnsCachedPath() throws Exception {
     Path cacheDir = tempDir.resolve("cache");
     Files.createDirectories(cacheDir);
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta", "http://localhost/{cik}/{document}");
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta", "http://localhost/{cik}/{document}");
     DocumentSource ds = new DocumentSource(config, storageProvider, cacheDir.toString());
     Map<String, String> vars = new HashMap<String, String>();
     vars.put("cik", "testcik");
@@ -277,8 +277,8 @@ class DocumentSourceCoverageTest {
   @Test void testDownloadDocumentCachedFileZeroSize() throws Exception {
     Path cacheDir = tempDir.resolve("cache_empty");
     Files.createDirectories(cacheDir);
-    HttpSourceConfig config = createConfigWithDocSource(
-        "http://localhost/meta", "http://localhost/{cik}/{document}");
+    HttpSourceConfig config =
+        createConfigWithDocSource("http://localhost/meta", "http://localhost/{cik}/{document}");
     DocumentSource ds = new DocumentSource(config, storageProvider, cacheDir.toString());
     Map<String, String> vars = new HashMap<String, String>();
     vars.put("cik", "testcik");

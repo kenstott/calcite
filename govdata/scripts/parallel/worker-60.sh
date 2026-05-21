@@ -1,25 +1,20 @@
 #!/usr/bin/env bash
-# Worker 60: FEC schema (campaign finance bulk downloads)
 #
-# Usage:
-#   worker-60.sh [mode] [--force]
-#   (or invoked by run-pool.sh which sets GOVDATA_RUN_MODE=historical|daily)
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Modes:
-#   historical  One-time backfill: all FEC election cycles (2010-2026).
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-#   daily       Recurring cadence: current active cycle only (GOVDATA_INCREMENTAL_START_YEAR).
-#               FEC bulk files are updated throughout the active cycle; incrementalTtlDays=30
-#               in the schema causes the current cycle to be re-fetched monthly.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-# Required env vars:
-#   GOVDATA_PARQUET_DIR              Root Parquet directory
-#   GOVDATA_CACHE_DIR                Root cache directory
-#   GOVDATA_INCREMENTAL_START_YEAR   Current active election cycle year (e.g. 2026)
-#
-# GOVDATA_START_YEAR is unset before run_etl so that GovDataSchemaFactory's
-# System.setProperty("GOVDATA_START_YEAR", startYear) takes effect in VariableResolver,
-# which checks env before system properties.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

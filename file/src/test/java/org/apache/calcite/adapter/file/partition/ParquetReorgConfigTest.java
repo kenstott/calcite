@@ -206,7 +206,8 @@ public class ParquetReorgConfigTest {
         .sourcePattern("*.parquet")
         .targetBase("out")
         .incrementalKeys(Collections.singletonList("year"))
-        .incrementalTracker(DuckDBPartitionStatusStore.getInstance(
+        .incrementalTracker(
+            DuckDBPartitionStatusStore.getInstance(
             System.getProperty("java.io.tmpdir") + "/test_reorg_" + System.nanoTime()))
         .build();
 

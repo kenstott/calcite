@@ -42,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Deep coverage tests for {@link HiveParquetWriter} targeting uncovered lines.
@@ -89,8 +88,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     // Should be baseDirectory since output location is null and partitions exist
@@ -106,8 +105,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertEquals(tempDir.toString(), resolved);
@@ -122,8 +121,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertEquals(tempDir.toString(), resolved);
@@ -143,8 +142,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertEquals(customOutput.toString(), resolved);
@@ -158,8 +157,8 @@ class HiveParquetWriterCoverageTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertTrue(resolved.endsWith("/test_data.parquet"));
@@ -172,8 +171,8 @@ class HiveParquetWriterCoverageTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertTrue(resolved.endsWith("/data.parquet"));
@@ -190,8 +189,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     assertTrue(resolved.endsWith("/mydata.parquet"));
@@ -203,8 +202,8 @@ class HiveParquetWriterCoverageTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    Method resolveMethod = HiveParquetWriter.class.getDeclaredMethod(
-        "resolveOutputPath", MaterializeConfig.class);
+    Method resolveMethod =
+        HiveParquetWriter.class.getDeclaredMethod("resolveOutputPath", MaterializeConfig.class);
     resolveMethod.setAccessible(true);
     String resolved = (String) resolveMethod.invoke(writer, config);
     // No partitions => file path
@@ -214,44 +213,42 @@ class HiveParquetWriterCoverageTest {
   // ========== buildSelectClause coverage ==========
 
   @Test void testBuildSelectClauseNull() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildSelectClause", List.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildSelectClause", List.class);
     method.setAccessible(true);
     String result = (String) method.invoke(writer, (Object) null);
     assertEquals("*", result);
   }
 
   @Test void testBuildSelectClauseEmpty() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildSelectClause", List.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildSelectClause", List.class);
     method.setAccessible(true);
     String result = (String) method.invoke(writer, Collections.emptyList());
     assertEquals("*", result);
   }
 
   @Test void testBuildSelectClauseSingleColumn() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildSelectClause", List.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildSelectClause", List.class);
     method.setAccessible(true);
 
-    List<ColumnConfig> columns = Arrays.asList(
-        ColumnConfig.builder().name("id").type("INTEGER").build()
-    );
+    List<ColumnConfig> columns =
+        Arrays.asList(ColumnConfig.builder().name("id").type("INTEGER").build());
 
     String result = (String) method.invoke(writer, columns);
     assertEquals("id", result);
   }
 
   @Test void testBuildSelectClauseMultipleColumns() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildSelectClause", List.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildSelectClause", List.class);
     method.setAccessible(true);
 
-    List<ColumnConfig> columns = Arrays.asList(
-        ColumnConfig.builder().name("id").type("INTEGER").build(),
+    List<ColumnConfig> columns =
+        Arrays.asList(ColumnConfig.builder().name("id").type("INTEGER").build(),
         ColumnConfig.builder().name("name").type("VARCHAR").source("fullName").build(),
-        ColumnConfig.builder().name("computed_val").type("INTEGER").expression("1 + 1").build()
-    );
+        ColumnConfig.builder().name("computed_val").type("INTEGER").expression("1 + 1").build());
 
     String result = (String) method.invoke(writer, columns);
     assertTrue(result.contains("id"));
@@ -263,8 +260,8 @@ class HiveParquetWriterCoverageTest {
   // ========== buildCopyOptions coverage ==========
 
   @Test void testBuildCopyOptionsBasic() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -281,8 +278,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsWithPartitions() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -301,8 +298,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsSinglePartition() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -321,8 +318,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsNoCompression() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -338,8 +335,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsNullCompression() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     // Default compression is "snappy" from MaterializeOutputConfig
@@ -354,8 +351,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsWithRowGroupSize() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -373,8 +370,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopyOptionsEmptyPartitionColumns() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopyOptions", MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopyOptions", MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -394,8 +391,8 @@ class HiveParquetWriterCoverageTest {
   // ========== buildCopySqlFromJson coverage ==========
 
   @Test void testBuildCopySqlFromJson() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopySqlFromJson", String.class, String.class, MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopySqlFromJson", String.class, String.class, MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -408,8 +405,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    String sql = (String) method.invoke(writer,
-        "/data/input.json", "/data/output", config);
+    String sql =
+        (String) method.invoke(writer, "/data/input.json", "/data/output", config);
 
     assertTrue(sql.contains("read_json_auto"));
     assertTrue(sql.contains("'/data/input.json'"));
@@ -420,8 +417,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildCopySqlFromJsonWithColumns() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopySqlFromJson", String.class, String.class, MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopySqlFromJson", String.class, String.class, MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -429,14 +426,14 @@ class HiveParquetWriterCoverageTest {
         .output(MaterializeOutputConfig.builder()
             .compression("snappy")
             .build())
-        .columns(Arrays.asList(
+        .columns(
+            Arrays.asList(
             ColumnConfig.builder().name("id").type("INTEGER").build(),
-            ColumnConfig.builder().name("name").type("VARCHAR").source("fullName").build()
-        ))
+            ColumnConfig.builder().name("name").type("VARCHAR").source("fullName").build()))
         .build();
 
-    String sql = (String) method.invoke(writer,
-        "/data/input.json", "/data/output", config);
+    String sql =
+        (String) method.invoke(writer, "/data/input.json", "/data/output", config);
 
     assertTrue(sql.contains("id"));
     assertTrue(sql.contains("AS name"));
@@ -446,8 +443,8 @@ class HiveParquetWriterCoverageTest {
   // ========== buildCopySqlFromCsv coverage ==========
 
   @Test void testBuildCopySqlFromCsv() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopySqlFromCsv", String.class, String.class, MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopySqlFromCsv", String.class, String.class, MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -457,8 +454,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    String sql = (String) method.invoke(writer,
-        "/data/input.csv", "/data/output/data.parquet", config);
+    String sql =
+        (String) method.invoke(writer, "/data/input.csv", "/data/output/data.parquet", config);
 
     assertTrue(sql.contains("read_csv_auto"));
     assertTrue(sql.contains("'/data/input.csv'"));
@@ -470,8 +467,8 @@ class HiveParquetWriterCoverageTest {
   // ========== buildCopySqlFromParquet coverage ==========
 
   @Test void testBuildCopySqlFromParquet() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildCopySqlFromParquet", String.class, String.class, MaterializeConfig.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildCopySqlFromParquet", String.class, String.class, MaterializeConfig.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -484,8 +481,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    String sql = (String) method.invoke(writer,
-        "/data/**/*.parquet", "/data/reorganized", config);
+    String sql =
+        (String) method.invoke(writer, "/data/**/*.parquet", "/data/reorganized", config);
 
     assertTrue(sql.contains("read_parquet"));
     assertTrue(sql.contains("hive_partitioning=true"));
@@ -497,12 +494,12 @@ class HiveParquetWriterCoverageTest {
   // ========== buildConsolidationSql coverage ==========
 
   @Test void testBuildConsolidationSqlWithPartitions() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", Arrays.asList("year", "region"), "snappy");
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", Arrays.asList("year", "region"), "snappy");
 
     assertTrue(sql.contains("read_parquet('/tmp/temp_base/**/*.parquet'"));
     assertTrue(sql.contains("hive_partitioning=true"));
@@ -514,12 +511,12 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildConsolidationSqlNoPartitions() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", Collections.emptyList(), "zstd");
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", Collections.emptyList(), "zstd");
 
     assertFalse(sql.contains("PARTITION_BY"));
     assertTrue(sql.contains("COMPRESSION ZSTD"));
@@ -527,47 +524,47 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testBuildConsolidationSqlNullPartitions() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", null, "snappy");
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", null, "snappy");
 
     assertFalse(sql.contains("PARTITION_BY"));
     assertTrue(sql.contains("COMPRESSION SNAPPY"));
   }
 
   @Test void testBuildConsolidationSqlNoCompression() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", Arrays.asList("year"), "none");
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", Arrays.asList("year"), "none");
 
     assertTrue(sql.contains("PARTITION_BY (year)"));
     assertFalse(sql.contains("COMPRESSION"));
   }
 
   @Test void testBuildConsolidationSqlNullCompression() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", Arrays.asList("year"), null);
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", Arrays.asList("year"), null);
 
     assertFalse(sql.contains("COMPRESSION"));
   }
 
   @Test void testBuildConsolidationSqlEmptyCompression() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class, String.class);
     method.setAccessible(true);
 
-    String sql = (String) method.invoke(writer,
-        "/tmp/temp_base", "/data/final", Arrays.asList("year"), "");
+    String sql =
+        (String) method.invoke(writer, "/tmp/temp_base", "/data/final", Arrays.asList("year"), "");
 
     assertFalse(sql.contains("COMPRESSION"));
   }
@@ -575,8 +572,8 @@ class HiveParquetWriterCoverageTest {
   // ========== quoteLiteral coverage ==========
 
   @Test void testQuoteLiteral() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "quoteLiteral", String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("quoteLiteral", String.class);
     method.setAccessible(true);
 
     assertEquals("'hello'", method.invoke(null, "hello"));
@@ -888,8 +885,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    MaterializeResult result = writer.materializeFromParquet(config,
-        sourceDir.toString() + "/**/*.parquet");
+    MaterializeResult result =
+        writer.materializeFromParquet(config, sourceDir.toString() + "/**/*.parquet");
     assertNotNull(result);
     assertTrue(result.isSuccess());
   }
@@ -925,8 +922,8 @@ class HiveParquetWriterCoverageTest {
             .build())
         .build();
 
-    MaterializeResult result = writer.materializeFromParquet(config,
-        sourceDir.toString() + "/**/*.parquet");
+    MaterializeResult result =
+        writer.materializeFromParquet(config, sourceDir.toString() + "/**/*.parquet");
     assertNotNull(result);
     assertTrue(result.isSuccess());
   }
@@ -995,10 +992,10 @@ class HiveParquetWriterCoverageTest {
             .location(outputDir.toString())
             .compression("snappy")
             .build())
-        .columns(Arrays.asList(
+        .columns(
+            Arrays.asList(
             ColumnConfig.builder().name("name").type("VARCHAR").source("fullName").build(),
-            ColumnConfig.builder().name("year").type("INTEGER").source("fiscalYear").build()
-        ))
+            ColumnConfig.builder().name("year").type("INTEGER").source("fiscalYear").build()))
         .build();
 
     MaterializeResult result = writer.materializeFromJson(config, jsonFile.toString());
@@ -1065,8 +1062,8 @@ class HiveParquetWriterCoverageTest {
   // ========== addMetadataToOutput (private) ==========
 
   @Test void testAddMetadataToOutputNoMetadata() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "addMetadataToOutput", MaterializeConfig.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("addMetadataToOutput", MaterializeConfig.class, String.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -1079,8 +1076,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testAddMetadataToOutputWithTableComment() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "addMetadataToOutput", MaterializeConfig.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("addMetadataToOutput", MaterializeConfig.class, String.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -1094,8 +1091,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testAddMetadataToOutputWithColumnComments() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "addMetadataToOutput", MaterializeConfig.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("addMetadataToOutput", MaterializeConfig.class, String.class);
     method.setAccessible(true);
 
     Map<String, String> comments = new HashMap<String, String>();
@@ -1113,8 +1110,8 @@ class HiveParquetWriterCoverageTest {
   }
 
   @Test void testAddMetadataToOutputEmptyTableComment() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "addMetadataToOutput", MaterializeConfig.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("addMetadataToOutput", MaterializeConfig.class, String.class);
     method.setAccessible(true);
 
     MaterializeConfig config = MaterializeConfig.builder()
@@ -1130,8 +1127,8 @@ class HiveParquetWriterCoverageTest {
   // ========== setLifecycleRule (private) ==========
 
   @Test void testSetLifecycleRule() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "setLifecycleRule", String.class, String.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("setLifecycleRule", String.class, String.class);
     method.setAccessible(true);
 
     // For LocalFileStorageProvider, ensureLifecycleRule is a no-op
@@ -1141,8 +1138,8 @@ class HiveParquetWriterCoverageTest {
   // ========== buildBatchCombinations (private) ==========
 
   @Test void testBuildBatchCombinations() throws Exception {
-    Method method = HiveParquetWriter.class.getDeclaredMethod(
-        "buildBatchCombinations", DataSource.class, List.class);
+    Method method =
+        HiveParquetWriter.class.getDeclaredMethod("buildBatchCombinations", DataSource.class, List.class);
     method.setAccessible(true);
 
     DataSource source = new TestDataSource(Collections.<Map<String, Object>>emptyList());
@@ -1711,13 +1708,11 @@ class HiveParquetWriterCoverageTest {
       this.data = data;
     }
 
-    @Override
-    public Iterator<Map<String, Object>> fetch(Map<String, String> variables) {
+    @Override public Iterator<Map<String, Object>> fetch(Map<String, String> variables) {
       return data.iterator();
     }
 
-    @Override
-    public String getType() {
+    @Override public String getType() {
       return "test";
     }
   }

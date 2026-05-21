@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RemoteFileMetadataTest {
 
   @Test void testCreateForTesting() {
-    RemoteFileMetadata meta = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag123", "Mon, 01 Jan 2024 00:00:00 GMT",
+    RemoteFileMetadata meta =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag123", "Mon, 01 Jan 2024 00:00:00 GMT",
         1024L, "abc123hash");
 
     assertEquals("https://example.com/data.csv", meta.getUrl());
@@ -49,8 +49,8 @@ class RemoteFileMetadataTest {
   }
 
   @Test void testCreateForTestingWithNulls() {
-    RemoteFileMetadata meta = RemoteFileMetadata.createForTesting(
-        "s3://bucket/file.parquet", null, null, -1, null);
+    RemoteFileMetadata meta =
+        RemoteFileMetadata.createForTesting("s3://bucket/file.parquet", null, null, -1, null);
 
     assertEquals("s3://bucket/file.parquet", meta.getUrl());
     assertNull(meta.getEtag());
@@ -60,81 +60,81 @@ class RemoteFileMetadataTest {
   }
 
   @Test void testHasChangedWithEtag() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag-v2", null, 0, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag-v1", null, 0, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag-v2", null, 0, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag-v1", null, 0, null);
 
     assertTrue(current.hasChanged(previous));
   }
 
   @Test void testHasNotChangedWithSameEtag() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag-v1", null, 0, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag-v1", null, 0, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag-v1", null, 0, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag-v1", null, 0, null);
 
     assertFalse(current.hasChanged(previous));
   }
 
   @Test void testHasChangedWithLastModified() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, "Tue, 02 Jan 2024 00:00:00 GMT", 0, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, "Tue, 02 Jan 2024 00:00:00 GMT", 0, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
 
     assertTrue(current.hasChanged(previous));
   }
 
   @Test void testHasNotChangedWithSameLastModified() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, "Mon, 01 Jan 2024 00:00:00 GMT", 0, null);
 
     assertFalse(current.hasChanged(previous));
   }
 
   @Test void testHasChangedWithContentLength() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 2048, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 1024, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 2048, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 1024, null);
 
     assertTrue(current.hasChanged(previous));
   }
 
   @Test void testHasChangedWithContentHash() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 0, "hash_new");
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 0, "hash_old");
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 0, "hash_new");
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 0, "hash_old");
 
     assertTrue(current.hasChanged(previous));
   }
 
   @Test void testHasNotChangedWithSameContentHash() {
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 0, "same_hash");
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, 0, "same_hash");
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 0, "same_hash");
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, 0, "same_hash");
 
     assertFalse(current.hasChanged(previous));
   }
 
   @Test void testHasChangedWithNoMetadata() {
     // When nothing is available to compare, assume changed
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, -1, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", null, null, -1, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, -1, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", null, null, -1, null);
 
     assertTrue(current.hasChanged(previous));
   }
 
   @Test void testWithContentHash() {
-    RemoteFileMetadata original = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag1", "Mon", 100, null);
+    RemoteFileMetadata original =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag1", "Mon", 100, null);
 
     RemoteFileMetadata withHash = original.withContentHash("newhash");
 
@@ -147,8 +147,8 @@ class RemoteFileMetadataTest {
 
   @Test void testComputeHash() throws IOException {
     String content = "Hello, World!";
-    ByteArrayInputStream is = new ByteArrayInputStream(
-        content.getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream is =
+        new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
 
     String hash = RemoteFileMetadata.computeHash(is);
     assertNotNull(hash);
@@ -157,10 +157,10 @@ class RemoteFileMetadataTest {
 
   @Test void testComputeHashDeterministic() throws IOException {
     String content = "Hello, World!";
-    ByteArrayInputStream is1 = new ByteArrayInputStream(
-        content.getBytes(StandardCharsets.UTF_8));
-    ByteArrayInputStream is2 = new ByteArrayInputStream(
-        content.getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream is1 =
+        new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream is2 =
+        new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
 
     String hash1 = RemoteFileMetadata.computeHash(is1);
     String hash2 = RemoteFileMetadata.computeHash(is2);
@@ -168,10 +168,10 @@ class RemoteFileMetadataTest {
   }
 
   @Test void testComputeHashDifferentContent() throws IOException {
-    ByteArrayInputStream is1 = new ByteArrayInputStream(
-        "content1".getBytes(StandardCharsets.UTF_8));
-    ByteArrayInputStream is2 = new ByteArrayInputStream(
-        "content2".getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream is1 =
+        new ByteArrayInputStream("content1".getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream is2 =
+        new ByteArrayInputStream("content2".getBytes(StandardCharsets.UTF_8));
 
     String hash1 = RemoteFileMetadata.computeHash(is1);
     String hash2 = RemoteFileMetadata.computeHash(is2);
@@ -186,8 +186,8 @@ class RemoteFileMetadataTest {
   }
 
   @Test void testToString() {
-    RemoteFileMetadata meta = RemoteFileMetadata.createForTesting(
-        "https://example.com/data.csv", "etag1", "Mon", 100, "hash");
+    RemoteFileMetadata meta =
+        RemoteFileMetadata.createForTesting("https://example.com/data.csv", "etag1", "Mon", 100, "hash");
     String str = meta.toString();
     assertNotNull(str);
     assertTrue(str.contains("https://example.com/data.csv"));
@@ -196,10 +196,10 @@ class RemoteFileMetadataTest {
 
   @Test void testEtagPrecedenceOverLastModified() {
     // When etag matches, don't check lastModified even if different
-    RemoteFileMetadata current = RemoteFileMetadata.createForTesting(
-        "url", "same_etag", "different_date", 0, null);
-    RemoteFileMetadata previous = RemoteFileMetadata.createForTesting(
-        "url", "same_etag", "original_date", 0, null);
+    RemoteFileMetadata current =
+        RemoteFileMetadata.createForTesting("url", "same_etag", "different_date", 0, null);
+    RemoteFileMetadata previous =
+        RemoteFileMetadata.createForTesting("url", "same_etag", "original_date", 0, null);
 
     assertFalse(current.hasChanged(previous));
   }

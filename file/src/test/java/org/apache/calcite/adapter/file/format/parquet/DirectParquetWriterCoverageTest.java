@@ -18,14 +18,8 @@ package org.apache.calcite.adapter.file.format.parquet;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-
-import org.apache.parquet.example.data.Group;
-import org.apache.parquet.example.data.simple.convert.GroupRecordConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.ColumnIOFactory;
-import org.apache.parquet.io.MessageColumnIO;
-import org.apache.parquet.io.RecordReader;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -36,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -293,8 +286,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldInteger() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_int.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("int_col", Types.INTEGER, true, 42));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("int_col", Types.INTEGER, true, 42));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -308,8 +301,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldRequiredInteger() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_req_int.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("id", Types.INTEGER, false, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("id", Types.INTEGER, false, 1));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -320,8 +313,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldBigint() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_bigint.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("big_col", Types.BIGINT, true, 9999999999L));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("big_col", Types.BIGINT, true, 9999999999L));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -333,8 +326,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldFloat() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_float.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("float_col", Types.FLOAT, true, 3.14f));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("float_col", Types.FLOAT, true, 3.14f));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -346,8 +339,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldReal() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_real.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("real_col", Types.REAL, true, 2.5f));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("real_col", Types.REAL, true, 2.5f));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -359,8 +352,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldDouble() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_double.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("double_col", Types.DOUBLE, true, 2.71828));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("double_col", Types.DOUBLE, true, 2.71828));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -372,8 +365,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldBoolean() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_bool.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("bool_col", Types.BOOLEAN, true, true));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("bool_col", Types.BOOLEAN, true, true));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -385,8 +378,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldVarchar() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_varchar.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("name", Types.VARCHAR, true, "hello"));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("name", Types.VARCHAR, true, "hello"));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -400,8 +393,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldDate() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_date.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("date_col", Types.DATE, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("date_col", Types.DATE, true,
             java.sql.Date.valueOf("2024-01-15")));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -416,8 +410,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldTimestamp() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_ts.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("ts_col", Types.TIMESTAMP, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("ts_col", Types.TIMESTAMP, true,
             Timestamp.valueOf("2024-01-15 10:30:00")));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -432,8 +427,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldTimestampWithTimezone() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_ts_tz.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("ts_tz_col", Types.TIMESTAMP_WITH_TIMEZONE, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("ts_tz_col", Types.TIMESTAMP_WITH_TIMEZONE, true,
             Timestamp.valueOf("2024-06-15 14:00:00")));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -449,8 +445,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldDecimal() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_decimal.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("price", Types.DECIMAL, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("price", Types.DECIMAL, true,
             new BigDecimal("19.99"), 10, 2));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -470,8 +467,9 @@ class DirectParquetWriterCoverageTest {
   @Test void testSchemaFieldDecimalDefaultPrecision() throws Exception {
     // When precision <= 0, it should default to 38
     java.nio.file.Path parquetFile = tempDir.resolve("schema_decimal_default.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("amount", Types.DECIMAL, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("amount", Types.DECIMAL, true,
             new BigDecimal("100.50"), 0, 2));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -487,8 +485,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldNumeric() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_numeric.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("numeric_col", Types.NUMERIC, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("numeric_col", Types.NUMERIC, true,
             new BigDecimal("123.456"), 12, 3));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -501,8 +500,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldTinyint() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_tinyint.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("tiny_col", Types.TINYINT, true, 7));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("tiny_col", Types.TINYINT, true, 7));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -514,8 +513,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldSmallint() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_smallint.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("small_col", Types.SMALLINT, true, 256));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("small_col", Types.SMALLINT, true, 256));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -527,8 +526,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaFieldTime() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_time.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("time_col", Types.TIME, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("time_col", Types.TIME, true,
             java.time.LocalTime.of(14, 30, 0)));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -544,8 +544,8 @@ class DirectParquetWriterCoverageTest {
   @Test void testSchemaFieldBlobFallsBackToString() throws Exception {
     // BLOB / BINARY / other unknown types should fall through to BINARY+STRING
     java.nio.file.Path parquetFile = tempDir.resolve("schema_blob.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("blob_col", Types.BLOB, true, "binary_data"));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("blob_col", Types.BLOB, true, "binary_data"));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -563,8 +563,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteIntegerValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_int.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("count", Types.INTEGER, true, 42));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("count", Types.INTEGER, true, 42));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -582,8 +582,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteBigintValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_bigint.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("big_val", Types.BIGINT, true, 9876543210L));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("big_val", Types.BIGINT, true, 9876543210L));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -596,8 +596,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteDoubleValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_double.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("amount", Types.DOUBLE, true, 3.14159));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("amount", Types.DOUBLE, true, 3.14159));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -610,8 +610,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteFloatValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_float.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("weight", Types.FLOAT, true, 1.5f));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("weight", Types.FLOAT, true, 1.5f));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -624,8 +624,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteBooleanValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_bool.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("active", Types.BOOLEAN, true, true));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("active", Types.BOOLEAN, true, true));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -638,8 +638,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteVarcharValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_varchar.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("label", Types.VARCHAR, true, "test_string"));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("label", Types.VARCHAR, true, "test_string"));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -653,8 +653,8 @@ class DirectParquetWriterCoverageTest {
   @Test void testWriteDateValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_date.parquet");
     java.sql.Date dateVal = java.sql.Date.valueOf("2024-01-15");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("created", Types.DATE, true, dateVal));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("created", Types.DATE, true, dateVal));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -673,8 +673,8 @@ class DirectParquetWriterCoverageTest {
   @Test void testWriteTimestampValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_ts.parquet");
     Timestamp tsVal = Timestamp.valueOf("2024-06-15 10:30:45");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("updated", Types.TIMESTAMP, true, tsVal));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("updated", Types.TIMESTAMP, true, tsVal));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -685,8 +685,8 @@ class DirectParquetWriterCoverageTest {
   @Test void testWriteTimestampWithTimezoneValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_ts_tz.parquet");
     Timestamp tsVal = Timestamp.valueOf("2024-06-15 14:00:00");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("event_time", Types.TIMESTAMP_WITH_TIMEZONE, true, tsVal));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("event_time", Types.TIMESTAMP_WITH_TIMEZONE, true, tsVal));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -696,8 +696,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteDecimalValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_decimal.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("price", Types.DECIMAL, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("price", Types.DECIMAL, true,
             new BigDecimal("49.99"), 10, 2));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -708,8 +709,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteTimeLocalTimeValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_time_lt.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("start_time", Types.TIME, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("start_time", Types.TIME, true,
             java.time.LocalTime.of(9, 30, 0)));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -720,8 +722,9 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testWriteTimeSqlTimeValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("val_time_st.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("end_time", Types.TIME, true,
+    ResultSet rs =
+        buildMockResultSet(
+            new ColumnDef("end_time", Types.TIME, true,
             java.sql.Time.valueOf("17:45:00")));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -736,8 +739,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullIntegerValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("null_int.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("nullable_id", Types.INTEGER, true, null));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("nullable_id", Types.INTEGER, true, null));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -752,8 +755,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullVarcharValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("null_varchar.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("nullable_name", Types.VARCHAR, true, null));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("nullable_name", Types.VARCHAR, true, null));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -779,8 +782,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullDateValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("null_date.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("nullable_date", Types.DATE, true, null));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("nullable_date", Types.DATE, true, null));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -790,8 +793,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullBooleanValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("null_bool.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("nullable_flag", Types.BOOLEAN, true, null));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("nullable_flag", Types.BOOLEAN, true, null));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -801,8 +804,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullDecimalValue() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("null_decimal.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("nullable_price", Types.DECIMAL, true, null, 10, 2));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("nullable_price", Types.DECIMAL, true, null, 10, 2));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -812,8 +815,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testMixedNullAndNonNullValues() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("mixed_nulls.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("id", Types.INTEGER, false, 1),
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("id", Types.INTEGER, false, 1),
         new ColumnDef("name", Types.VARCHAR, true, null),
         new ColumnDef("score", Types.DOUBLE, true, 95.5));
 
@@ -836,8 +839,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testTableCommentMetadata() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_table.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(
         rs, new Path(parquetFile.toString()),
@@ -850,8 +853,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testColumnCommentsMetadata() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_columns.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("product_id", Types.INTEGER, true, 1),
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("product_id", Types.INTEGER, true, 1),
         new ColumnDef("product_name", Types.VARCHAR, true, "Widget"));
 
     Map<String, String> columnComments = new HashMap<String, String>();
@@ -873,8 +876,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullTableCommentOmitted() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_null_comment.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(
         rs, new Path(parquetFile.toString()), null, null);
@@ -886,8 +889,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testEmptyTableCommentOmitted() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_empty_comment.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(
         rs, new Path(parquetFile.toString()), "", null);
@@ -899,8 +902,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testEmptyColumnCommentsOmitted() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_empty_cols.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
 
     Map<String, String> emptyComments = new HashMap<String, String>();
 
@@ -914,8 +917,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testNullColumnCommentsOmitted() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_null_cols.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(
         rs, new Path(parquetFile.toString()), "comment", null);
@@ -927,8 +930,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testMetadataMapParameter() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("meta_map.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("id", Types.INTEGER, true, 10));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("id", Types.INTEGER, true, 10));
 
     Map<String, String> columnComments = new HashMap<String, String>();
     columnComments.put("id", "Identifier column");
@@ -948,8 +951,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testTwoArgConvenienceMethod() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("convenience.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("x", Types.INTEGER, true, 99));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("x", Types.INTEGER, true, 99));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -968,8 +971,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testEmptyResultSet() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("empty.parquet");
-    ResultSet rs = buildEmptyMockResultSet(
-        new ColumnDef("id", Types.INTEGER, true, null),
+    ResultSet rs =
+        buildEmptyMockResultSet(new ColumnDef("id", Types.INTEGER, true, null),
         new ColumnDef("name", Types.VARCHAR, true, null));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
@@ -988,8 +991,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSingleRowSingleColumn() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("single.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("only_col", Types.VARCHAR, true, "only_value"));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("only_col", Types.VARCHAR, true, "only_value"));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -1004,8 +1007,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testMultipleColumns() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("multi_col.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("col_a", Types.INTEGER, true, 1),
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("col_a", Types.INTEGER, true, 1),
         new ColumnDef("col_b", Types.VARCHAR, true, "text"),
         new ColumnDef("col_c", Types.DOUBLE, true, 9.9),
         new ColumnDef("col_d", Types.BOOLEAN, true, false));
@@ -1052,8 +1055,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testAllTypesInOneRow() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("all_types.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("bool_col", Types.BOOLEAN, true, true),
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("bool_col", Types.BOOLEAN, true, true),
         new ColumnDef("int_col", Types.INTEGER, true, 42),
         new ColumnDef("bigint_col", Types.BIGINT, true, 123456789L),
         new ColumnDef("float_col", Types.FLOAT, true, 1.5f),
@@ -1077,8 +1080,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testSchemaMessageTypeName() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("schema_name.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("x", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("x", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -1091,8 +1094,8 @@ class DirectParquetWriterCoverageTest {
     java.nio.file.Path parquetFile = tempDir.resolve("exists_check.parquet");
     assertFalse(Files.exists(parquetFile), "File should not exist before writing");
 
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.INTEGER, true, 1));
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
     assertTrue(Files.exists(parquetFile), "File should exist after writing");
@@ -1100,8 +1103,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testOutputFileNonEmpty() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("nonempty.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("val", Types.VARCHAR, true, "data"));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("val", Types.VARCHAR, true, "data"));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -1114,8 +1117,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testDuckDbVerifiesSchemaTypes() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("duckdb_schema.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("int_col", Types.INTEGER, true, 10),
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("int_col", Types.INTEGER, true, 10),
         new ColumnDef("str_col", Types.VARCHAR, true, "abc"),
         new ColumnDef("bool_col", Types.BOOLEAN, true, false),
         new ColumnDef("big_col", Types.BIGINT, true, 999L));
@@ -1137,8 +1140,8 @@ class DirectParquetWriterCoverageTest {
 
   @Test void testDuckDbVerifiesRowCount() throws Exception {
     java.nio.file.Path parquetFile = tempDir.resolve("duckdb_rowcount.parquet");
-    ResultSet rs = buildMockResultSet(
-        new ColumnDef("x", Types.INTEGER, true, 1));
+    ResultSet rs =
+        buildMockResultSet(new ColumnDef("x", Types.INTEGER, true, 1));
 
     DirectParquetWriter.writeResultSetToParquet(rs, new Path(parquetFile.toString()));
 
@@ -1157,8 +1160,8 @@ class DirectParquetWriterCoverageTest {
   private MessageType readParquetSchema(java.nio.file.Path parquetFile) throws Exception {
     Configuration conf = new Configuration();
     Path hadoopPath = new Path(parquetFile.toString());
-    try (ParquetFileReader reader = ParquetFileReader.open(
-        HadoopInputFile.fromPath(hadoopPath, conf))) {
+    try (ParquetFileReader reader =
+        ParquetFileReader.open(HadoopInputFile.fromPath(hadoopPath, conf))) {
       return reader.getFooter().getFileMetaData().getSchema();
     }
   }
@@ -1167,8 +1170,8 @@ class DirectParquetWriterCoverageTest {
       throws Exception {
     Configuration conf = new Configuration();
     Path hadoopPath = new Path(parquetFile.toString());
-    try (ParquetFileReader reader = ParquetFileReader.open(
-        HadoopInputFile.fromPath(hadoopPath, conf))) {
+    try (ParquetFileReader reader =
+        ParquetFileReader.open(HadoopInputFile.fromPath(hadoopPath, conf))) {
       Map<String, String> kvMeta =
           reader.getFooter().getFileMetaData().getKeyValueMetaData();
       return kvMeta != null ? kvMeta : Collections.<String, String>emptyMap();

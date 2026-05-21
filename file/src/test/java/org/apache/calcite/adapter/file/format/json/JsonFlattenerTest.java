@@ -47,8 +47,7 @@ public class JsonFlattenerTest {
 
   // --- JsonFlattener tests ---
 
-  @Test
-  @DisplayName("Flatten with max depth truncation - objects beyond depth become strings")
+  @Test @DisplayName("Flatten with max depth truncation - objects beyond depth become strings")
   void testFlattenMaxDepthTruncation() {
     // maxDepth=2 means depth 3 objects get stringified
     JsonFlattener flattener = new JsonFlattener(",", 2, "");
@@ -76,8 +75,7 @@ public class JsonFlattenerTest {
         "Beyond max depth, value should be stringified");
   }
 
-  @Test
-  @DisplayName("Flatten empty objects are skipped")
+  @Test @DisplayName("Flatten empty objects are skipped")
   void testFlattenEmptyObjectsSkipped() {
     JsonFlattener flattener = new JsonFlattener();
 
@@ -93,8 +91,7 @@ public class JsonFlattenerTest {
         "Empty objects should be skipped");
   }
 
-  @Test
-  @DisplayName("Flatten array of objects returns null (omitted from output)")
+  @Test @DisplayName("Flatten array of objects returns null (omitted from output)")
   void testFlattenArrayOfObjectsReturnsNull() {
     JsonFlattener flattener = new JsonFlattener();
 
@@ -114,8 +111,7 @@ public class JsonFlattenerTest {
     assertEquals(1, result.get("count"));
   }
 
-  @Test
-  @DisplayName("Flatten empty array returns empty string")
+  @Test @DisplayName("Flatten empty array returns empty string")
   void testFlattenEmptyArrayReturnsEmptyString() {
     JsonFlattener flattener = new JsonFlattener();
 
@@ -127,8 +123,7 @@ public class JsonFlattenerTest {
     assertEquals("", result.get("tags"));
   }
 
-  @Test
-  @DisplayName("Flatten null values are preserved")
+  @Test @DisplayName("Flatten null values are preserved")
   void testFlattenNullValuesPreserved() {
     JsonFlattener flattener = new JsonFlattener();
 
@@ -143,8 +138,7 @@ public class JsonFlattenerTest {
     assertNull(result.get("absent"), "Null value should remain null");
   }
 
-  @Test
-  @DisplayName("Flatten value containing delimiter gets quoted")
+  @Test @DisplayName("Flatten value containing delimiter gets quoted")
   void testFlattenValueContainingDelimiterGetsQuoted() {
     JsonFlattener flattener = new JsonFlattener(",", 3, "");
 
@@ -161,8 +155,7 @@ public class JsonFlattenerTest {
         "Value with delimiter should be quoted: " + flatTags);
   }
 
-  @Test
-  @DisplayName("Flatten with custom null value")
+  @Test @DisplayName("Flatten with custom null value")
   void testFlattenCustomNullValue() {
     JsonFlattener flattener = new JsonFlattener(",", 3, "N/A");
 
@@ -179,8 +172,7 @@ public class JsonFlattenerTest {
 
   // --- SharedJsonData tests ---
 
-  @Test
-  @DisplayName("getDataAtPath with $ returns root node")
+  @Test @DisplayName("getDataAtPath with $ returns root node")
   void testGetDataAtPathRoot() throws Exception {
     JsonNode root = MAPPER.readTree("{\"name\":\"test\",\"value\":42}");
     SharedJsonData data = new SharedJsonData(root);
@@ -189,8 +181,7 @@ public class JsonFlattenerTest {
     assertEquals(root, result, "$ should return root node");
   }
 
-  @Test
-  @DisplayName("getDataAtPath navigates nested path correctly")
+  @Test @DisplayName("getDataAtPath navigates nested path correctly")
   void testGetDataAtPathNavigatesNestedPath() throws Exception {
     String json = "{\"data\":{\"users\":[{\"name\":\"Alice\"},{\"name\":\"Bob\"}]}}";
     JsonNode root = MAPPER.readTree(json);
@@ -203,8 +194,7 @@ public class JsonFlattenerTest {
     assertEquals("Alice", result.get(0).get("name").asText());
   }
 
-  @Test
-  @DisplayName("getDataAtPath with missing path returns null")
+  @Test @DisplayName("getDataAtPath with missing path returns null")
   void testGetDataAtPathMissingReturnsNull() throws Exception {
     JsonNode root = MAPPER.readTree("{\"a\":1}");
     SharedJsonData data = new SharedJsonData(root);
@@ -213,8 +203,7 @@ public class JsonFlattenerTest {
     assertNull(result, "Missing path should return null");
   }
 
-  @Test
-  @DisplayName("getDataAtPath with array index path")
+  @Test @DisplayName("getDataAtPath with array index path")
   void testGetDataAtPathArrayIndex() throws Exception {
     String json = "{\"items\":[\"first\",\"second\",\"third\"]}";
     JsonNode root = MAPPER.readTree(json);
@@ -225,8 +214,7 @@ public class JsonFlattenerTest {
     assertEquals("first", result.asText());
   }
 
-  @Test
-  @DisplayName("pathExists returns true for existing path")
+  @Test @DisplayName("pathExists returns true for existing path")
   void testPathExistsTrue() throws Exception {
     String json = "{\"a\":{\"b\":1}}";
     JsonNode root = MAPPER.readTree(json);
@@ -235,8 +223,7 @@ public class JsonFlattenerTest {
     assertTrue(data.pathExists("$.a.b"));
   }
 
-  @Test
-  @DisplayName("pathExists returns false for missing path")
+  @Test @DisplayName("pathExists returns false for missing path")
   void testPathExistsFalse() throws Exception {
     String json = "{\"a\":{\"b\":1}}";
     JsonNode root = MAPPER.readTree(json);
@@ -245,8 +232,7 @@ public class JsonFlattenerTest {
     assertFalse(data.pathExists("$.a.c"));
   }
 
-  @Test
-  @DisplayName("getPathSize for array returns length")
+  @Test @DisplayName("getPathSize for array returns length")
   void testGetPathSizeForArray() throws Exception {
     String json = "{\"items\":[1,2,3,4,5]}";
     JsonNode root = MAPPER.readTree(json);
@@ -255,8 +241,7 @@ public class JsonFlattenerTest {
     assertEquals(5, data.getPathSize("$.items"));
   }
 
-  @Test
-  @DisplayName("getPathSize for non-collection returns 0")
+  @Test @DisplayName("getPathSize for non-collection returns 0")
   void testGetPathSizeForNonCollection() throws Exception {
     String json = "{\"name\":\"hello\"}";
     JsonNode root = MAPPER.readTree(json);

@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,20 +46,20 @@ public class JsonMultiTableFactoryTest {
   public File tempDir;
 
   @Test void testCreateTablesDefaultSingleTable() throws IOException {
-    File jsonFile = writeJsonFile("data.json",
-        "[{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]");
+    File jsonFile =
+        writeJsonFile("data.json", "[{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]");
 
     JsonSearchConfig config = new JsonSearchConfig();
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("data"), "Default table should be named after file");
   }
 
   @Test void testCreateTablesWithExplicitPaths() throws IOException {
-    File jsonFile = writeJsonFile("multi.json",
-        "{\"users\": [{\"id\": 1}], \"orders\": [{\"oid\": 100}]}");
+    File jsonFile =
+        writeJsonFile("multi.json", "{\"users\": [{\"id\": 1}], \"orders\": [{\"oid\": 100}]}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.users");
@@ -69,8 +68,8 @@ public class JsonMultiTableFactoryTest {
     JsonSearchConfig config = new JsonSearchConfig();
     config.withJsonSearchPaths(paths);
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(2, tables.size());
     assertTrue(tables.containsKey("users"));
@@ -78,14 +77,14 @@ public class JsonMultiTableFactoryTest {
   }
 
   @Test void testCreateTablesWithAutoDiscovery() throws IOException {
-    File jsonFile = writeJsonFile("discover.json",
-        "{\"employees\": [{\"name\": \"A\"}], \"departments\": [{\"name\": \"B\"}]}");
+    File jsonFile =
+        writeJsonFile("discover.json", "{\"employees\": [{\"name\": \"A\"}], \"departments\": [{\"name\": \"B\"}]}");
 
     JsonSearchConfig config = new JsonSearchConfig()
         .withAutoDiscoverTables(true);
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(2, tables.size());
     assertTrue(tables.containsKey("employees"));
@@ -93,15 +92,15 @@ public class JsonMultiTableFactoryTest {
   }
 
   @Test void testAutoDiscoveryRespectsMinArraySize() throws IOException {
-    File jsonFile = writeJsonFile("minsize.json",
-        "{\"big\": [{\"a\":1},{\"a\":2},{\"a\":3}], \"small\": [{\"b\":1}]}");
+    File jsonFile =
+        writeJsonFile("minsize.json", "{\"big\": [{\"a\":1},{\"a\":2},{\"a\":3}], \"small\": [{\"b\":1}]}");
 
     JsonSearchConfig config = new JsonSearchConfig()
         .withAutoDiscoverTables(true)
         .withMinArraySize(2);
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("big"), "Only arrays >= minArraySize should be discovered");
@@ -109,15 +108,15 @@ public class JsonMultiTableFactoryTest {
 
   @Test void testAutoDiscoveryRespectsMaxDepth() throws IOException {
     // depth 0 = root object, depth 1 = level1, depth 2 = level2.nested
-    File jsonFile = writeJsonFile("depth.json",
-        "{\"level1\": [{\"x\":1}], \"wrapper\": {\"level2\": {\"nested\": [{\"y\":1}]}}}");
+    File jsonFile =
+        writeJsonFile("depth.json", "{\"level1\": [{\"x\":1}], \"wrapper\": {\"level2\": {\"nested\": [{\"y\":1}]}}}");
 
     JsonSearchConfig config = new JsonSearchConfig()
         .withAutoDiscoverTables(true)
         .withMaxDiscoveryDepth(1);
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     // Only level1 should be found (depth 1), nested is at depth 3
     assertEquals(1, tables.size());
@@ -125,8 +124,8 @@ public class JsonMultiTableFactoryTest {
   }
 
   @Test void testTableNamePatternWithPathSegment() throws IOException {
-    File jsonFile = writeJsonFile("pattern.json",
-        "{\"data\": {\"sales\": [{\"amount\": 100}]}}");
+    File jsonFile =
+        writeJsonFile("pattern.json", "{\"data\": {\"sales\": [{\"amount\": 100}]}}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.data.sales");
@@ -135,16 +134,16 @@ public class JsonMultiTableFactoryTest {
         .withJsonSearchPaths(paths)
         .withTableNamePattern("{pathSegment}");
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("sales"));
   }
 
   @Test void testTableNamePatternWithFileName() throws IOException {
-    File jsonFile = writeJsonFile("myfile.json",
-        "{\"items\": [{\"id\": 1}]}");
+    File jsonFile =
+        writeJsonFile("myfile.json", "{\"items\": [{\"id\": 1}]}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.items");
@@ -153,16 +152,16 @@ public class JsonMultiTableFactoryTest {
         .withJsonSearchPaths(paths)
         .withTableNamePattern("{fileName}");
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("myfile"));
   }
 
   @Test void testTableNamePatternCombined() throws IOException {
-    File jsonFile = writeJsonFile("report.json",
-        "{\"data\": {\"metrics\": [{\"val\": 42}]}}");
+    File jsonFile =
+        writeJsonFile("report.json", "{\"data\": {\"metrics\": [{\"val\": 42}]}}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.data.metrics");
@@ -171,8 +170,8 @@ public class JsonMultiTableFactoryTest {
         .withJsonSearchPaths(paths)
         .withTableNamePattern("{fileName}_{pathSegment}");
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("report_metrics"));
@@ -180,8 +179,8 @@ public class JsonMultiTableFactoryTest {
 
   @Test void testNameConflictResolution() throws IOException {
     // Two paths that will produce the same table name via {pathSegment}
-    File jsonFile = writeJsonFile("conflict.json",
-        "{\"a\": {\"items\": [{\"x\":1}]}, \"b\": {\"items\": [{\"y\":2}]}}");
+    File jsonFile =
+        writeJsonFile("conflict.json", "{\"a\": {\"items\": [{\"x\":1}]}, \"b\": {\"items\": [{\"y\":2}]}}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.a.items");
@@ -191,8 +190,8 @@ public class JsonMultiTableFactoryTest {
         .withJsonSearchPaths(paths)
         .withTableNamePattern("{pathSegment}");
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(2, tables.size());
     assertTrue(tables.containsKey("items"));
@@ -262,8 +261,8 @@ public class JsonMultiTableFactoryTest {
   }
 
   @Test void testCreateTablesSkipsMissingPaths() throws IOException {
-    File jsonFile = writeJsonFile("sparse.json",
-        "{\"exists\": [{\"id\": 1}]}");
+    File jsonFile =
+        writeJsonFile("sparse.json", "{\"exists\": [{\"id\": 1}]}");
 
     List<String> paths = new ArrayList<String>();
     paths.add("$.exists");
@@ -272,8 +271,8 @@ public class JsonMultiTableFactoryTest {
     JsonSearchConfig config = new JsonSearchConfig()
         .withJsonSearchPaths(paths);
 
-    Map<String, Table> tables = JsonMultiTableFactory.createTables(
-        Sources.of(jsonFile), config);
+    Map<String, Table> tables =
+        JsonMultiTableFactory.createTables(Sources.of(jsonFile), config);
 
     assertEquals(1, tables.size());
     assertTrue(tables.containsKey("exists"));

@@ -16,15 +16,15 @@
  */
 package org.apache.calcite.adapter.file.converters;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -117,8 +117,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testConvertSimpleStringData() throws IOException {
-    File xlsx = createSimpleXlsx("simple.xlsx", "Sheet1",
-        new String[]{"Name", "City"},
+    File xlsx =
+        createSimpleXlsx("simple.xlsx", "Sheet1", new String[]{"Name", "City"},
         new String[][]{
             {"Alice", "Seattle"},
             {"Bob", "Portland"}
@@ -449,8 +449,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testColumnNameCasingUpper() throws IOException {
-    File xlsx = createSimpleXlsx("casing_upper.xlsx", "Sheet1",
-        new String[]{"first_name", "last_name"},
+    File xlsx =
+        createSimpleXlsx("casing_upper.xlsx", "Sheet1", new String[]{"first_name", "last_name"},
         new String[][]{{"Alice", "Smith"}});
     File outDir = outputDir();
 
@@ -469,8 +469,8 @@ public class ExcelToJsonConverterCoverageTest {
   }
 
   @Test void testColumnNameCasingLower() throws IOException {
-    File xlsx = createSimpleXlsx("casing_lower.xlsx", "Sheet1",
-        new String[]{"FirstName", "LastName"},
+    File xlsx =
+        createSimpleXlsx("casing_lower.xlsx", "Sheet1", new String[]{"FirstName", "LastName"},
         new String[][]{{"Bob", "Jones"}});
     File outDir = outputDir();
 
@@ -488,8 +488,8 @@ public class ExcelToJsonConverterCoverageTest {
   }
 
   @Test void testColumnNameCasingUnchanged() throws IOException {
-    File xlsx = createSimpleXlsx("casing_unch.xlsx", "Sheet1",
-        new String[]{"myColumn", "AnotherCol"},
+    File xlsx =
+        createSimpleXlsx("casing_unch.xlsx", "Sheet1", new String[]{"myColumn", "AnotherCol"},
         new String[][]{{"a", "b"}});
     File outDir = outputDir();
 
@@ -512,8 +512,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testTableNameCasingUpper() throws IOException {
-    File xlsx = createSimpleXlsx("mytable.xlsx", "mySheet",
-        new String[]{"X"},
+    File xlsx =
+        createSimpleXlsx("mytable.xlsx", "mySheet", new String[]{"X"},
         new String[][]{{"1"}});
     File outDir = outputDir();
 
@@ -526,8 +526,8 @@ public class ExcelToJsonConverterCoverageTest {
   }
 
   @Test void testTableNameCasingLower() throws IOException {
-    File xlsx = createSimpleXlsx("MyTable.xlsx", "MySheet",
-        new String[]{"X"},
+    File xlsx =
+        createSimpleXlsx("MyTable.xlsx", "MySheet", new String[]{"X"},
         new String[][]{{"1"}});
     File outDir = outputDir();
 
@@ -544,8 +544,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testRelativePathIncludesDirectoryPrefix() throws IOException {
-    File xlsx = createSimpleXlsx("data.xlsx", "Sheet1",
-        new String[]{"A"},
+    File xlsx =
+        createSimpleXlsx("data.xlsx", "Sheet1", new String[]{"A"},
         new String[][]{{"v"}});
     File outDir = outputDir();
 
@@ -560,8 +560,8 @@ public class ExcelToJsonConverterCoverageTest {
   }
 
   @Test void testRelativePathWithoutSeparator() throws IOException {
-    File xlsx = createSimpleXlsx("flat.xlsx", "Sheet1",
-        new String[]{"A"},
+    File xlsx =
+        createSimpleXlsx("flat.xlsx", "Sheet1", new String[]{"A"},
         new String[][]{{"v"}});
     File outDir = outputDir();
 
@@ -575,8 +575,8 @@ public class ExcelToJsonConverterCoverageTest {
   }
 
   @Test void testNullRelativePathSameAsNoRelativePath() throws IOException {
-    File xlsx = createSimpleXlsx("nullrel.xlsx", "Sheet1",
-        new String[]{"A"},
+    File xlsx =
+        createSimpleXlsx("nullrel.xlsx", "Sheet1", new String[]{"A"},
         new String[][]{{"v"}});
     File outDir = outputDir();
 
@@ -856,8 +856,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testHeaderOnlySheetProducesEmptyArray() throws IOException {
-    File xlsx = createSimpleXlsx("headeronly.xlsx", "Sheet1",
-        new String[]{"A", "B"},
+    File xlsx =
+        createSimpleXlsx("headeronly.xlsx", "Sheet1", new String[]{"A", "B"},
         new String[][]{}); // no data rows
     File outDir = outputDir();
 
@@ -877,8 +877,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testFiveArgOverloadDelegatesToSixArg() throws IOException {
-    File xlsx = createSimpleXlsx("fivearg.xlsx", "Sheet1",
-        new String[]{"Col"},
+    File xlsx =
+        createSimpleXlsx("fivearg.xlsx", "Sheet1", new String[]{"Col"},
         new String[][]{{"val"}});
     File outDir = outputDir();
 
@@ -899,8 +899,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testColumnNameWithSpecialCharacters() throws IOException {
-    File xlsx = createSimpleXlsx("special_chars.xlsx", "Sheet1",
-        new String[]{"First Name", "E-mail Address", "Phone #"},
+    File xlsx =
+        createSimpleXlsx("special_chars.xlsx", "Sheet1", new String[]{"First Name", "E-mail Address", "Phone #"},
         new String[][]{{"Alice", "a@b.com", "555"}});
     File outDir = outputDir();
 
@@ -970,8 +970,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testSmartCasingColumnNames() throws IOException {
-    File xlsx = createSimpleXlsx("smart.xlsx", "Sheet1",
-        new String[]{"FirstName", "LastName"},
+    File xlsx =
+        createSimpleXlsx("smart.xlsx", "Sheet1", new String[]{"FirstName", "LastName"},
         new String[][]{{"Alice", "Smith"}});
     File outDir = outputDir();
 
@@ -1079,8 +1079,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testConversionMetadataRecorded() throws IOException {
-    File xlsx = createSimpleXlsx("meta_test.xlsx", "Sheet1",
-        new String[]{"A"},
+    File xlsx =
+        createSimpleXlsx("meta_test.xlsx", "Sheet1", new String[]{"A"},
         new String[][]{{"v"}});
     File outDir = outputDir();
 
@@ -1098,8 +1098,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testDeepRelativePathPrefix() throws IOException {
-    File xlsx = createSimpleXlsx("nested.xlsx", "Sheet1",
-        new String[]{"K"},
+    File xlsx =
+        createSimpleXlsx("nested.xlsx", "Sheet1", new String[]{"K"},
         new String[][]{{"v"}});
     File outDir = outputDir();
 
@@ -1399,8 +1399,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testUnicodeContent() throws IOException {
-    File xlsx = createSimpleXlsx("unicode.xlsx", "Sheet1",
-        new String[]{"Name", "City"},
+    File xlsx =
+        createSimpleXlsx("unicode.xlsx", "Sheet1", new String[]{"Name", "City"},
         new String[][]{
             {"Rene", "Zurich"},
             {"Yuki", "Tokyo"}
@@ -1424,8 +1424,8 @@ public class ExcelToJsonConverterCoverageTest {
   // ---------------------------------------------------------------
 
   @Test void testSingleCellWorkbook() throws IOException {
-    File xlsx = createSimpleXlsx("single_cell.xlsx", "Sheet1",
-        new String[]{"OnlyCol"},
+    File xlsx =
+        createSimpleXlsx("single_cell.xlsx", "Sheet1", new String[]{"OnlyCol"},
         new String[][]{{"OnlyVal"}});
     File outDir = outputDir();
 

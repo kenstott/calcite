@@ -22,7 +22,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -48,8 +47,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== isTempDirectory ==========
 
-  @Test
-  void testIsTempDirectoryVariousPatterns() throws Exception {
+  @Test void testIsTempDirectoryVariousPatterns() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     m.setAccessible(true);
 
@@ -84,48 +82,42 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== isHivePartitioned ==========
 
-  @Test
-  void testIsHivePartitionedNullAndEmpty() throws Exception {
+  @Test void testIsHivePartitionedNullAndEmpty() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     assertFalse((Boolean) m.invoke(null, (String) null));
     assertFalse((Boolean) m.invoke(null, ""));
   }
 
-  @Test
-  void testIsHivePartitionedSingleFile() throws Exception {
+  @Test void testIsHivePartitionedSingleFile() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     // Needs >= 2 files
     assertFalse((Boolean) m.invoke(null, "/data/year=2020/file.parquet"));
   }
 
-  @Test
-  void testIsHivePartitionedWithSquareBrackets() throws Exception {
+  @Test void testIsHivePartitionedWithSquareBrackets() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     String fileList = "[/data/year=2020/f1.parquet, /data/year=2021/f2.parquet]";
     assertTrue((Boolean) m.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedWithCurlyBrackets() throws Exception {
+  @Test void testIsHivePartitionedWithCurlyBrackets() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     String fileList = "{/data/year=2020/f1.parquet, /data/year=2021/f2.parquet}";
     assertTrue((Boolean) m.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedNotPartitioned() throws Exception {
+  @Test void testIsHivePartitionedNotPartitioned() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     // No key=value patterns
     assertFalse((Boolean) m.invoke(null, "/data/f1.parquet, /data/f2.parquet"));
   }
 
-  @Test
-  void testIsHivePartitionedQuotedFiles() throws Exception {
+  @Test void testIsHivePartitionedQuotedFiles() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     // Files with single quotes
@@ -133,28 +125,27 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     assertTrue((Boolean) m.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedMixed() throws Exception {
+  @Test void testIsHivePartitionedMixed() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     // 2 out of 3 partitioned => >50%
-    assertTrue((Boolean) m.invoke(null,
+    assertTrue(
+        (Boolean) m.invoke(null,
         "/data/year=2020/a.parquet, /data/year=2021/b.parquet, /data/flat.parquet"));
     // 1 out of 3 partitioned => <=50%
-    assertFalse((Boolean) m.invoke(null,
+    assertFalse(
+        (Boolean) m.invoke(null,
         "/data/x.parquet, /data/y.parquet, /data/year=2020/z.parquet"));
   }
 
-  @Test
-  void testIsHivePartitionedWindowsPaths() throws Exception {
+  @Test void testIsHivePartitionedWindowsPaths() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     String fileList = "C:\\data\\year=2020\\a.parquet, C:\\data\\year=2021\\b.parquet";
     assertTrue((Boolean) m.invoke(null, fileList));
   }
 
-  @Test
-  void testIsHivePartitionedUnderscoreColumn() throws Exception {
+  @Test void testIsHivePartitionedUnderscoreColumn() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     m.setAccessible(true);
     String fileList = "/data/geo_type=STATE/a.parquet, /data/geo_type=COUNTY/b.parquet";
@@ -163,16 +154,14 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== deriveGlobPattern ==========
 
-  @Test
-  void testDeriveGlobPatternNullAndEmpty() throws Exception {
+  @Test void testDeriveGlobPatternNullAndEmpty() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     assertNull(m.invoke(null, (String) null));
     assertNull(m.invoke(null, ""));
   }
 
-  @Test
-  void testDeriveGlobPatternWithHivePartitions() throws Exception {
+  @Test void testDeriveGlobPatternWithHivePartitions() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     String fileList = "s3://bucket/base/year=2020/geo=US/f.parquet, s3://bucket/base/year=2021/geo=UK/f.parquet";
@@ -183,8 +172,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     assertTrue(result.startsWith("s3://bucket/base"), "Should have base path: " + result);
   }
 
-  @Test
-  void testDeriveGlobPatternWithBrackets() throws Exception {
+  @Test void testDeriveGlobPatternWithBrackets() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     String fileList = "['/data/year=2020/a.parquet', '/data/year=2021/b.parquet']";
@@ -192,8 +180,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     assertNotNull(result);
   }
 
-  @Test
-  void testDeriveGlobPatternNoPartitions() throws Exception {
+  @Test void testDeriveGlobPatternNoPartitions() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     // Files without partition dirs
@@ -202,8 +189,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     assertTrue(result.contains("*"), "Should contain wildcard: " + result);
   }
 
-  @Test
-  void testDeriveGlobPatternCsvExtension() throws Exception {
+  @Test void testDeriveGlobPatternCsvExtension() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     String result = (String) m.invoke(null, "/data/year=2020/a.csv, /data/year=2021/b.csv");
@@ -211,16 +197,14 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     assertTrue(result.endsWith(".csv"), "Should preserve csv extension: " + result);
   }
 
-  @Test
-  void testDeriveGlobPatternSingleFileNoSlash() throws Exception {
+  @Test void testDeriveGlobPatternSingleFileNoSlash() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     String result = (String) m.invoke(null, "bare_file.parquet");
     assertEquals("bare_file.parquet", result);
   }
 
-  @Test
-  void testDeriveGlobPatternQuotedFirstFile() throws Exception {
+  @Test void testDeriveGlobPatternQuotedFirstFile() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     m.setAccessible(true);
     String fileList = "'/home/data/year=2020/data.parquet', '/home/data/year=2021/data.parquet'";
@@ -231,26 +215,23 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== determineCatalogPath ==========
 
-  @Test
-  void testDetermineCatalogPathNullDir() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathNullDir() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     m.setAccessible(true);
     assertNull(m.invoke(null, "schema1", (String) null));
   }
 
-  @Test
-  void testDetermineCatalogPathTempDir() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathTempDir() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     m.setAccessible(true);
     assertNull(m.invoke(null, "test_schema", "/tmp/test-data"));
   }
 
-  @Test
-  void testDetermineCatalogPathPersistentDir() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+  @Test void testDetermineCatalogPathPersistentDir() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     m.setAccessible(true);
     String path = tempDir.toFile().getAbsolutePath();
     String result = (String) m.invoke(null, "myschema", path);
@@ -261,8 +242,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== getParserConfig ==========
 
-  @Test
-  void testGetParserConfig() {
+  @Test void testGetParserConfig() {
     org.apache.calcite.sql.parser.SqlParser.Config config =
         DuckDBJdbcSchemaFactory.getParserConfig();
     assertNotNull(config);
@@ -272,8 +252,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== createDuckDBDialectWithCustomLex ==========
 
-  @Test
-  void testDialectSupportsAggregateFunctions() throws Exception {
+  @Test void testDialectSupportsAggregateFunctions() throws Exception {
     Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod("createDuckDBDialectWithCustomLex");
     m.setAccessible(true);
     org.apache.calcite.sql.SqlDialect dialect =
@@ -292,8 +271,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== createParquetView error ==========
 
-  @Test
-  void testCreateParquetViewThrowsOnSqlError() throws Exception {
+  @Test void testCreateParquetViewThrowsOnSqlError() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
@@ -303,8 +281,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
         DuckDBJdbcSchemaFactory.createParquetView(conn, "test_view", "/path/to/file.parquet"));
   }
 
-  @Test
-  void testCreateParquetViewSuccess() throws Exception {
+  @Test void testCreateParquetViewSuccess() throws Exception {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
@@ -317,10 +294,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== registerSimilarityFunctions ==========
 
-  @Test
-  void testRegisterSimilarityFunctionsSuccess() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSimilarityFunctions", Connection.class);
+  @Test void testRegisterSimilarityFunctionsSuccess() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSimilarityFunctions", Connection.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -334,10 +310,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     verify(stmt, atLeast(3)).execute(anyString());
   }
 
-  @Test
-  void testRegisterSimilarityFunctionsFailure() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSimilarityFunctions", Connection.class);
+  @Test void testRegisterSimilarityFunctionsFailure() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSimilarityFunctions", Connection.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -351,10 +326,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== loadQueryExtensions ==========
 
-  @Test
-  void testLoadQueryExtensionsSuccess() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "loadQueryExtensions", Connection.class);
+  @Test void testLoadQueryExtensionsSuccess() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -368,10 +342,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     verify(stmt, atLeast(6)).execute(anyString());
   }
 
-  @Test
-  void testLoadQueryExtensionsPartialFailure() throws Exception {
-    Method m = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "loadQueryExtensions", Connection.class);
+  @Test void testLoadQueryExtensionsPartialFailure() throws Exception {
+    Method m =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -391,8 +364,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   // ========== SharedDatabaseInfo (inner class coverage) ==========
 
-  @Test
-  void testSharedDatabaseInfoFields() throws Exception {
+  @Test void testSharedDatabaseInfoFields() throws Exception {
     // Access the inner class via reflection
     Class<?> sdiClass = null;
     for (Class<?> inner : DuckDBJdbcSchemaFactory.class.getDeclaredClasses()) {

@@ -20,8 +20,6 @@ import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.lookup.LikePattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,10 +37,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
@@ -120,31 +116,27 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== parseBooleanValue =====
 
-  @Test
-  void testParseBooleanValueNull() throws Exception {
+  @Test void testParseBooleanValueNull() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     m.setAccessible(true);
     assertNull(m.invoke(null, (Object) null));
   }
 
-  @Test
-  void testParseBooleanValueBoolean() throws Exception {
+  @Test void testParseBooleanValueBoolean() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     m.setAccessible(true);
     assertEquals(Boolean.TRUE, m.invoke(null, Boolean.TRUE));
     assertEquals(Boolean.FALSE, m.invoke(null, Boolean.FALSE));
   }
 
-  @Test
-  void testParseBooleanValueString() throws Exception {
+  @Test void testParseBooleanValueString() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     m.setAccessible(true);
     assertEquals(Boolean.TRUE, m.invoke(null, "true"));
     assertEquals(Boolean.FALSE, m.invoke(null, "false"));
   }
 
-  @Test
-  void testParseBooleanValueOtherType() throws Exception {
+  @Test void testParseBooleanValueOtherType() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     m.setAccessible(true);
     assertNull(m.invoke(null, Integer.valueOf(42)));
@@ -152,8 +144,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== sanitizeOperand =====
 
-  @Test
-  void testSanitizeOperandNullValue() throws Exception {
+  @Test void testSanitizeOperandNullValue() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -166,8 +157,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNull(result.get("nullKey"));
   }
 
-  @Test
-  void testSanitizeOperandPasswordKey() throws Exception {
+  @Test void testSanitizeOperandPasswordKey() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -181,8 +171,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("********", result.get("clientSecret"));
   }
 
-  @Test
-  void testSanitizeOperandUnderscoreKey() throws Exception {
+  @Test void testSanitizeOperandUnderscoreKey() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -194,8 +183,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("String", result.get("_storageProvider"));
   }
 
-  @Test
-  void testSanitizeOperandS3Config() throws Exception {
+  @Test void testSanitizeOperandS3Config() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -221,8 +209,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("us-east-1", sanitizedS3.get("region"));
   }
 
-  @Test
-  void testSanitizeOperandS3ConfigShortAccessKey() throws Exception {
+  @Test void testSanitizeOperandS3ConfigShortAccessKey() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -240,8 +227,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("****", sanitizedS3.get("accessKeyId"));
   }
 
-  @Test
-  void testSanitizeOperandStorageConfig() throws Exception {
+  @Test void testSanitizeOperandStorageConfig() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -266,8 +252,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("us-west-2", sanitized.get("region"));
   }
 
-  @Test
-  void testSanitizeOperandStorageConfigNullProvider() throws Exception {
+  @Test void testSanitizeOperandStorageConfigNullProvider() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -284,8 +269,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNull(sanitized.get("_provider"));
   }
 
-  @Test
-  void testSanitizeOperandModelUri() throws Exception {
+  @Test void testSanitizeOperandModelUri() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -299,8 +283,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertTrue(sanitizedUri.contains("\"secretAccessKey\": \"********\""));
   }
 
-  @Test
-  void testSanitizeOperandNestedMap() throws Exception {
+  @Test void testSanitizeOperandNestedMap() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -320,8 +303,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("********", sanitizedNested.get("secretKey"));
   }
 
-  @Test
-  void testSanitizeOperandPassThroughValues() throws Exception {
+  @Test void testSanitizeOperandPassThroughValues() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     m.setAccessible(true);
 
@@ -339,8 +321,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== sanitizeNestedMap =====
 
-  @Test
-  void testSanitizeNestedMapSecretKeys() throws Exception {
+  @Test void testSanitizeNestedMapSecretKeys() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("sanitizeNestedMap", Map.class);
     m.setAccessible(true);
 
@@ -360,29 +341,26 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== validateUniqueSchemaName =====
 
-  @Test
-  void testValidateUniqueSchemaNameNullParent() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName",
-        SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameNullParent() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     m.setAccessible(true);
     // Should not throw for null parent
     m.invoke(null, null, "test");
   }
 
-  @Test
-  void testValidateUniqueSchemaNameNullName() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName",
-        SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameNullName() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     m.setAccessible(true);
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
     // Should not throw for null name
     m.invoke(null, parentSchema, null);
   }
 
-  @Test
-  void testValidateUniqueSchemaNameDuplicate() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName",
-        SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameDuplicate() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     m.setAccessible(true);
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
@@ -399,10 +377,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     }
   }
 
-  @Test
-  void testValidateUniqueSchemaNameUnique() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName",
-        SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameUnique() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     m.setAccessible(true);
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
     // Should not throw for unique name
@@ -411,10 +388,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== rewriteForeignKeySchemaNames =====
 
-  @Test
-  void testRewriteForeignKeySchemaNames() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames",
-        Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNames() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     m.setAccessible(true);
 
     // Build constraints with FK references
@@ -460,10 +436,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNotNull(result.get("simple_table"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesFKNull() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames",
-        Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNamesFKNull() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     m.setAccessible(true);
 
     Map<String, Object> tableConstraints = new HashMap<String, Object>();
@@ -479,10 +454,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNotNull(result.get("table1"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesFKEmpty() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames",
-        Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNamesFKEmpty() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     m.setAccessible(true);
 
     Map<String, Object> tableConstraints = new HashMap<String, Object>();
@@ -497,10 +471,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNotNull(result);
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameNullConstraints() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames",
-        Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNullConstraints() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     m.setAccessible(true);
 
     @SuppressWarnings("unchecked")
@@ -510,10 +483,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertNull(result);
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameEmptyConstraints() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames",
-        Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameEmptyConstraints() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     m.setAccessible(true);
 
     Map<String, Map<String, Object>> empty = new HashMap<String, Map<String, Object>>();
@@ -526,10 +498,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== rewriteSchemaReferencesInSql =====
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNullArgs() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql",
-        String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlNullArgs() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     m.setAccessible(true);
 
     assertNull(m.invoke(null, null, "econ", "ECON"));
@@ -537,10 +508,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals("SELECT 1", m.invoke(null, "SELECT 1", "econ", null));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlMatchingSchemas() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql",
-        String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlMatchingSchemas() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     m.setAccessible(true);
 
     // Same schema name (case-insensitive) should return unchanged SQL
@@ -548,10 +518,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertEquals(sql, m.invoke(null, sql, "econ", "ECON"));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlRewrite() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql",
-        String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlRewrite() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     m.setAccessible(true);
 
     String sql = "SELECT a.id, b.name FROM declared.table1 a JOIN declared.table2 b ON a.id = b.id";
@@ -561,10 +530,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     assertFalse(result.contains("declared."));
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql",
-        String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     m.setAccessible(true);
 
     String sql = "SELECT * FROM other.table1";
@@ -574,10 +542,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== registerSqlViews =====
 
-  @Test
-  void testRegisterSqlViewsNullTables() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsNullTables() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -586,10 +553,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "test", null, operand);
   }
 
-  @Test
-  void testRegisterSqlViewsEmptyTables() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsEmptyTables() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -598,10 +564,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "test", new ArrayList<Map<String, Object>>(), operand);
   }
 
-  @Test
-  void testRegisterSqlViewsNonViewTable() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsNonViewTable() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -617,10 +582,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "test", tables, operand);
   }
 
-  @Test
-  void testRegisterSqlViewsMissingName() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsMissingName() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -638,10 +602,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "test", tables, operand);
   }
 
-  @Test
-  void testRegisterSqlViewsMissingSql() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsMissingSql() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -658,10 +621,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "test", tables, operand);
   }
 
-  @Test
-  void testRegisterSqlViewsSchemaNotFound() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsSchemaNotFound() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -678,10 +640,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "nonexistent", tables, operand);
   }
 
-  @Test
-  void testRegisterSqlViewsViewDef() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerSqlViews",
-        SchemaPlus.class, String.class, List.class, Map.class);
+  @Test void testRegisterSqlViewsViewDef() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerSqlViews", SchemaPlus.class, String.class, List.class, Map.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -701,10 +662,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== registerMaterializations =====
 
-  @Test
-  void testRegisterMaterializationsMissingSchema() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerMaterializations",
-        SchemaPlus.class, String.class, List.class);
+  @Test void testRegisterMaterializationsMissingSchema() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerMaterializations", SchemaPlus.class, String.class, List.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -719,10 +679,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.invoke(null, parentSchema, "nonexistent", materializations);
   }
 
-  @Test
-  void testRegisterMaterializationsMissingTableOrSql() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("registerMaterializations",
-        SchemaPlus.class, String.class, List.class);
+  @Test void testRegisterMaterializationsMissingTableOrSql() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("registerMaterializations", SchemaPlus.class, String.class, List.class);
     m.setAccessible(true);
 
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
@@ -746,13 +705,11 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== setTableConstraints / supportsConstraints =====
 
-  @Test
-  void testSupportsConstraints() {
+  @Test void testSupportsConstraints() {
     assertTrue(factory.supportsConstraints());
   }
 
-  @Test
-  void testSetTableConstraints() {
+  @Test void testSetTableConstraints() {
     Map<String, Map<String, Object>> constraints = new HashMap<String, Map<String, Object>>();
     constraints.put("table1", new HashMap<String, Object>());
     List<JsonTable> tableDefs = new ArrayList<JsonTable>();
@@ -771,8 +728,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== addMetadataSchemas =====
 
-  @Test
-  void testAddMetadataSchemas() throws Exception {
+  @Test void testAddMetadataSchemas() throws Exception {
     Method m = FileSchemaFactory.class.getDeclaredMethod("addMetadataSchemas", SchemaPlus.class);
     m.setAccessible(true);
 
@@ -789,10 +745,9 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== writeDebugModel =====
 
-  @Test
-  void testWriteDebugModel() throws Exception {
-    Method m = FileSchemaFactory.class.getDeclaredMethod("writeDebugModel",
-        String.class, Map.class, String.class);
+  @Test void testWriteDebugModel() throws Exception {
+    Method m =
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
     m.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -804,8 +759,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   // ===== create() with various operand configurations =====
 
-  @Test
-  void testCreateWithMinimalLocalDirectory() {
+  @Test void testCreateWithMinimalLocalDirectory() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     // Create a CSV file in tempDir
@@ -831,8 +785,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithEphemeralCacheSnakeCase() {
+  @Test void testCreateWithEphemeralCacheSnakeCase() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -845,8 +798,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryString() {
+  @Test void testCreateWithBaseDirectoryString() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -859,8 +811,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryFile() {
+  @Test void testCreateWithBaseDirectoryFile() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -873,8 +824,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithSourceDirectory() {
+  @Test void testCreateWithSourceDirectory() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -887,8 +837,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithVariousOperandTypes() {
+  @Test void testCreateWithVariousOperandTypes() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -913,8 +862,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithSnakeCaseCasing() {
+  @Test void testCreateWithSnakeCaseCasing() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -930,8 +878,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithGlobPattern() {
+  @Test void testCreateWithGlobPattern() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -945,8 +892,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithViews() {
+  @Test void testCreateWithViews() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     List<Map<String, Object>> views = new ArrayList<Map<String, Object>>();
@@ -966,8 +912,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithCsvTypeInference() {
+  @Test void testCreateWithCsvTypeInference() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> csvTypeInference = new HashMap<String, Object>();
@@ -985,8 +930,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateNoStorageTypeThrows() {
+  @Test void testCreateNoStorageTypeThrows() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -996,8 +940,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
         factory.create(parentSchema, "nodir", operand));
   }
 
-  @Test
-  void testCreateS3WithoutCredentialsThrows() {
+  @Test void testCreateS3WithoutCredentialsThrows() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1007,8 +950,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
         factory.create(parentSchema, "s3noauth", operand));
   }
 
-  @Test
-  void testCreateAutoDetectStorageFromDirectoryHttp() {
+  @Test void testCreateAutoDetectStorageFromDirectoryHttp() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1025,8 +967,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     }
   }
 
-  @Test
-  void testCreateAutoDetectStorageFromBaseDirectoryS3() {
+  @Test void testCreateAutoDetectStorageFromBaseDirectoryS3() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1043,8 +984,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     }
   }
 
-  @Test
-  void testCreateWithTablesAutoDetectsLocal() {
+  @Test void testCreateWithTablesAutoDetectsLocal() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
@@ -1062,8 +1002,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithPartitionedTables() {
+  @Test void testCreateWithPartitionedTables() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     List<Map<String, Object>> partitionedTables = new ArrayList<Map<String, Object>>();
@@ -1081,8 +1020,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithDeclaredSchemaName() {
+  @Test void testCreateWithDeclaredSchemaName() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1108,8 +1046,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithExecutionEngineFromOperand() {
+  @Test void testCreateWithExecutionEngineFromOperand() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1123,8 +1060,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithDuckDBConfig() {
+  @Test void testCreateWithDuckDBConfig() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> duckdbConfig = new HashMap<String, Object>();
@@ -1141,8 +1077,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithMaterializations() {
+  @Test void testCreateWithMaterializations() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     List<Map<String, Object>> materializations = new ArrayList<Map<String, Object>>();
@@ -1162,8 +1097,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryModelHandler() {
+  @Test void testCreateWithBaseDirectoryModelHandler() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1178,8 +1112,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryModelHandlerString() {
+  @Test void testCreateWithBaseDirectoryModelHandlerString() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1194,8 +1127,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateNoDirectoryUsesCurrentDir() {
+  @Test void testCreateNoDirectoryUsesCurrentDir() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1207,8 +1139,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithStorageProviderInstance() {
+  @Test void testCreateWithStorageProviderInstance() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     org.apache.calcite.adapter.file.storage.StorageProvider mockProvider =
@@ -1225,8 +1156,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithRelativeDirectory() {
+  @Test void testCreateWithRelativeDirectory() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -1241,8 +1171,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     trackSchema(schema);
   }
 
-  @Test
-  void testCreateWithEphemeralCacheStringTrue() {
+  @Test void testCreateWithEphemeralCacheStringTrue() {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();

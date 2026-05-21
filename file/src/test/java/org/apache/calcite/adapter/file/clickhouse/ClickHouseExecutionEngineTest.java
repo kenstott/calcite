@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.clickhouse.ClickHouseExecutionE
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,15 +39,13 @@ public class ClickHouseExecutionEngineTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ClickHouseExecutionEngineTest.class);
 
-  @Test
-  public void testGetEngineTypeReturnsClickHouse() {
+  @Test public void testGetEngineTypeReturnsClickHouse() {
     String engineType = ClickHouseExecutionEngine.getEngineType();
     assertEquals("CLICKHOUSE", engineType,
         "Engine type should be CLICKHOUSE");
   }
 
-  @Test
-  public void testIsAvailableReturnsConsistentValue() {
+  @Test public void testIsAvailableReturnsConsistentValue() {
     boolean available = ClickHouseExecutionEngine.isAvailable();
     LOGGER.debug("ClickHouse JDBC driver available: {}", available);
     // isAvailable should return a consistent boolean value
@@ -60,8 +57,7 @@ public class ClickHouseExecutionEngineTest {
         "isAvailable() should return consistent results across calls");
   }
 
-  @Test
-  public void testIsLocalAvailableReturnsConsistentValue() {
+  @Test public void testIsLocalAvailableReturnsConsistentValue() {
     boolean localAvailable = ClickHouseExecutionEngine.isLocalAvailable();
     LOGGER.debug("clickhouse-local available: {}", localAvailable);
     // isLocalAvailable should return a consistent boolean value
@@ -73,8 +69,7 @@ public class ClickHouseExecutionEngineTest {
         "isLocalAvailable() should return consistent results across calls");
   }
 
-  @Test
-  public void testFindLocalBinaryPathWithNullReturnsNullOrPath() {
+  @Test public void testFindLocalBinaryPathWithNullReturnsNullOrPath() {
     // When configured path is null, it should fall back to env/PATH search
     String result = ClickHouseExecutionEngine.findLocalBinaryPath(null);
     LOGGER.debug("findLocalBinaryPath(null) returned: {}", result);
@@ -86,8 +81,7 @@ public class ClickHouseExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testFindLocalBinaryPathWithEmptyStringReturnsNullOrPath() {
+  @Test public void testFindLocalBinaryPathWithEmptyStringReturnsNullOrPath() {
     // Empty string should be treated like null (falls back to env/PATH)
     String result = ClickHouseExecutionEngine.findLocalBinaryPath("");
     LOGGER.debug("findLocalBinaryPath('') returned: {}", result);
@@ -99,8 +93,7 @@ public class ClickHouseExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testFindLocalBinaryPathWithInvalidPathFallsBack() {
+  @Test public void testFindLocalBinaryPathWithInvalidPathFallsBack() {
     String invalidPath = "/nonexistent/path/to/clickhouse-local";
     String result = ClickHouseExecutionEngine.findLocalBinaryPath(invalidPath);
     LOGGER.debug("findLocalBinaryPath('{}') returned: {}", invalidPath, result);
@@ -114,23 +107,20 @@ public class ClickHouseExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testGetEngineTypeIsUpperCase() {
+  @Test public void testGetEngineTypeIsUpperCase() {
     String type = ClickHouseExecutionEngine.getEngineType();
     assertEquals(type, type.toUpperCase(java.util.Locale.ROOT),
         "Engine type should be all uppercase");
   }
 
-  @Test
-  public void testIsAvailableDoesNotThrow() {
+  @Test public void testIsAvailableDoesNotThrow() {
     // isAvailable should never throw, even if the driver is missing
     boolean result = ClickHouseExecutionEngine.isAvailable();
     assertNotNull(Boolean.valueOf(result),
         "isAvailable() should always return a valid boolean");
   }
 
-  @Test
-  public void testIsLocalAvailableDoesNotThrow() {
+  @Test public void testIsLocalAvailableDoesNotThrow() {
     // isLocalAvailable should never throw even in unusual PATH configs
     boolean result = ClickHouseExecutionEngine.isLocalAvailable();
     assertNotNull(Boolean.valueOf(result),

@@ -244,16 +244,15 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildCombinations = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method buildCombinations =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     buildCombinations.setAccessible(true);
 
     List<String> colNames = Arrays.asList("year", "geo");
-    List<List<String>> colValues = Arrays.asList(
-        Arrays.asList("2020", "2021"),
-        Arrays.asList("STATE", "COUNTY")
-    );
+    List<List<String>> colValues =
+        Arrays.asList(Arrays.asList("2020", "2021"),
+        Arrays.asList("STATE", "COUNTY"));
     java.util.List<Map<String, String>> result = new java.util.ArrayList<Map<String, String>>();
 
     buildCombinations.invoke(reorganizer, colNames, colValues, 0,
@@ -275,15 +274,14 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildCombinations = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method buildCombinations =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     buildCombinations.setAccessible(true);
 
     List<String> colNames = Arrays.asList("year");
-    List<List<String>> colValues = Arrays.asList(
-        Arrays.asList("2020", "2021", "2022")
-    );
+    List<List<String>> colValues =
+        Arrays.asList(Arrays.asList("2020", "2021", "2022"));
     java.util.List<Map<String, String>> result = new java.util.ArrayList<Map<String, String>>();
 
     buildCombinations.invoke(reorganizer, colNames, colValues, 0,
@@ -302,8 +300,8 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method groupMethod = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method groupMethod =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     groupMethod.setAccessible(true);
 
     Map<String, String> batch1 = new LinkedHashMap<String, String>();
@@ -346,8 +344,8 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method groupMethod = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method groupMethod =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     groupMethod.setAccessible(true);
 
     Map<String, String> batch1 = new LinkedHashMap<String, String>();
@@ -372,12 +370,12 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildConsolidation = ParquetReorganizer.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class);
+    Method buildConsolidation =
+        ParquetReorganizer.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class);
     buildConsolidation.setAccessible(true);
 
-    String sql = (String) buildConsolidation.invoke(reorganizer,
-        "/tmp/temp", "/output/final", Arrays.asList("geo", "year"));
+    String sql =
+        (String) buildConsolidation.invoke(reorganizer, "/tmp/temp", "/output/final", Arrays.asList("geo", "year"));
 
     assertNotNull(sql);
     assertTrue(sql.contains("/tmp/temp/**/*.parquet"));
@@ -391,12 +389,12 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildConsolidation = ParquetReorganizer.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class);
+    Method buildConsolidation =
+        ParquetReorganizer.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class);
     buildConsolidation.setAccessible(true);
 
-    String sql = (String) buildConsolidation.invoke(reorganizer,
-        "/tmp/temp", "/output/final", Collections.emptyList());
+    String sql =
+        (String) buildConsolidation.invoke(reorganizer, "/tmp/temp", "/output/final", Collections.emptyList());
 
     assertNotNull(sql);
     assertFalse(sql.contains("PARTITION_BY"));
@@ -410,16 +408,16 @@ class ParquetReorganizerDeepCoverageTest {
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
     // Access the 5-arg overload
-    Method buildReorgSql = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method buildReorgSql =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class);
     buildReorgSql.setAccessible(true);
 
     Map<String, String> mappings = new LinkedHashMap<String, String>();
     mappings.put("geo", "GeoFips");
 
-    String sql = (String) buildReorgSql.invoke(reorganizer,
-        "/data/source/*.parquet", "/data/target",
+    String sql =
+        (String) buildReorgSql.invoke(reorganizer, "/data/source/*.parquet", "/data/target",
         Arrays.asList("geo", "year"), mappings, "batch_{i}");
 
     assertNotNull(sql);
@@ -437,8 +435,8 @@ class ParquetReorganizerDeepCoverageTest {
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
     // Access the 9-arg overload
-    Method buildReorgSql = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method buildReorgSql =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class,
         boolean.class, String.class, String.class, Map.class);
     buildReorgSql.setAccessible(true);
@@ -447,8 +445,8 @@ class ParquetReorganizerDeepCoverageTest {
     filters.put("year", "2020");
     filters.put("state", "CA");
 
-    String sql = (String) buildReorgSql.invoke(reorganizer,
-        null, "/data/target",
+    String sql =
+        (String) buildReorgSql.invoke(reorganizer, null, "/data/target",
         Arrays.asList("geo"), Collections.emptyMap(), "data_{i}",
         true, "/warehouse", "my_table", filters);
 
@@ -465,8 +463,8 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildReorgSql = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method buildReorgSql =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class,
         boolean.class, String.class, String.class, Map.class);
     buildReorgSql.setAccessible(true);
@@ -474,8 +472,8 @@ class ParquetReorganizerDeepCoverageTest {
     Map<String, String> mappings = new LinkedHashMap<String, String>();
     mappings.put("geo", "GeoFips");
 
-    String sql = (String) buildReorgSql.invoke(reorganizer,
-        null, "/data/target",
+    String sql =
+        (String) buildReorgSql.invoke(reorganizer, null, "/data/target",
         Arrays.asList("geo"), mappings, "data_{i}",
         true, "/warehouse", "table", null);
 
@@ -490,13 +488,13 @@ class ParquetReorganizerDeepCoverageTest {
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     ParquetReorganizer reorganizer = new ParquetReorganizer(mockProvider, "/base");
 
-    Method buildReorgSql = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method buildReorgSql =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class);
     buildReorgSql.setAccessible(true);
 
-    String sql = (String) buildReorgSql.invoke(reorganizer,
-        "/data/source/*.parquet", "/data/target",
+    String sql =
+        (String) buildReorgSql.invoke(reorganizer, "/data/source/*.parquet", "/data/target",
         Collections.emptyList(), Collections.emptyMap(), null);
 
     assertNotNull(sql);

@@ -127,8 +127,8 @@ public final class DuckDBPendingViews {
         return;
       }
       try {
-        List<PendingView> pending = new ArrayList<>(
-            PENDING.getOrDefault(dbPath, new CopyOnWriteArrayList<>()));
+        List<PendingView> pending =
+            new ArrayList<>(PENDING.getOrDefault(dbPath, new CopyOnWriteArrayList<>()));
 
         LOGGER.info("Flushing {} deferred SQL views for database '{}'", pending.size(), dbPath);
 
@@ -136,8 +136,8 @@ public final class DuckDBPendingViews {
           List<PendingView> failed = new ArrayList<>();
           for (PendingView pv : pending) {
             try {
-              String sql = String.format(
-                  "CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
+              String sql =
+                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
                   pv.duckdbSchema, pv.viewName, pv.viewSql);
               try (Statement stmt = conn.createStatement()) {
                 stmt.execute(sql);
@@ -147,11 +147,13 @@ public final class DuckDBPendingViews {
               // resolution), but a real execution will fail.  Drop unexecutable views so
               // they never appear in JDBC metadata.
               try (Statement validateStmt = conn.createStatement()) {
-                validateStmt.execute(String.format(
+                validateStmt.execute(
+                    String.format(
                     "SELECT * FROM \"%s\".\"%s\" LIMIT 0", pv.duckdbSchema, pv.viewName));
               } catch (SQLException validateEx) {
                 try (Statement dropStmt = conn.createStatement()) {
-                  dropStmt.execute(String.format(
+                  dropStmt.execute(
+                      String.format(
                       "DROP VIEW IF EXISTS \"%s\".\"%s\"", pv.duckdbSchema, pv.viewName));
                 } catch (SQLException ignored) {
                   // best-effort drop

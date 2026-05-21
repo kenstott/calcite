@@ -65,8 +65,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- determineCatalogPath via reflection ---
 
-  @Test
-  void testDetermineCatalogPath() throws Exception {
+  @Test void testDetermineCatalogPath() throws Exception {
     Method method = DuckDBJdbcSchemaFactory.class
         .getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
@@ -79,8 +78,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create with File directory ---
 
-  @Test
-  void testCreateWithFileDirectory() throws IOException {
+  @Test void testCreateWithFileDirectory() throws IOException {
     File sourceDir = tempDir.resolve("duckdb-source").toFile();
     sourceDir.mkdirs();
     FileWriter fw = new FileWriter(new File(sourceDir, "test.csv"));
@@ -88,12 +86,12 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     fw.close();
 
     // Create a FileSchema to provide operatingCacheDirectory
-    FileSchema fileSchema = new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, new ExecutionEngineConfig());
+    FileSchema fileSchema =
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir.getPath(), false, fileSchema);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir.getPath(), false, fileSchema);
       assertNotNull(schema);
     } catch (Exception e) {
       // DuckDB driver may not be available in test environment
@@ -104,20 +102,19 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create with String directory path ---
 
-  @Test
-  void testCreateWithStringDirectoryPath() throws IOException {
+  @Test void testCreateWithStringDirectoryPath() throws IOException {
     File sourceDir = tempDir.resolve("duckdb-source2").toFile();
     sourceDir.mkdirs();
     FileWriter fw = new FileWriter(new File(sourceDir, "data.csv"));
     fw.write("col1,col2\na,1\n");
     fw.close();
 
-    FileSchema fileSchema = new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, new ExecutionEngineConfig());
+    FileSchema fileSchema =
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema);
       assertNotNull(schema);
     } catch (Exception e) {
       // DuckDB driver may not be available
@@ -127,23 +124,22 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create with operand containing database_filename ---
 
-  @Test
-  void testCreateWithDatabaseFilename() throws IOException {
+  @Test void testCreateWithDatabaseFilename() throws IOException {
     File sourceDir = tempDir.resolve("duckdb-source3").toFile();
     sourceDir.mkdirs();
     FileWriter fw = new FileWriter(new File(sourceDir, "data.csv"));
     fw.write("col1,col2\na,1\n");
     fw.close();
 
-    FileSchema fileSchema = new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, new ExecutionEngineConfig());
+    FileSchema fileSchema =
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("database_filename", tempDir.resolve("shared.duckdb").toString());
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema, operand);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema, operand);
       assertNotNull(schema);
     } catch (Exception e) {
       // DuckDB driver may not be available
@@ -153,20 +149,19 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create with relative database_filename ---
 
-  @Test
-  void testCreateWithRelativeDatabaseFilename() throws IOException {
+  @Test void testCreateWithRelativeDatabaseFilename() throws IOException {
     File sourceDir = tempDir.resolve("duckdb-source4").toFile();
     sourceDir.mkdirs();
 
-    FileSchema fileSchema = new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, new ExecutionEngineConfig());
+    FileSchema fileSchema =
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("database_filename", "shared.duckdb");
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema, operand);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir.getAbsolutePath(), false, fileSchema, operand);
       assertNotNull(schema);
     } catch (Exception e) {
       // DuckDB driver may not be available
@@ -176,8 +171,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create without fileSchema (should throw for null operating cache dir) ---
 
-  @Test
-  void testCreateWithNullFileSchema() {
+  @Test void testCreateWithNullFileSchema() {
     try {
       DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(),
           tempDir.toString(), false, null);
@@ -189,8 +183,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- create with recursive flag ---
 
-  @Test
-  void testCreateWithRecursiveFlag() throws IOException {
+  @Test void testCreateWithRecursiveFlag() throws IOException {
     File sourceDir = tempDir.resolve("duckdb-recursive").toFile();
     File subDir = new File(sourceDir, "sub");
     subDir.mkdirs();
@@ -199,12 +192,12 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     fw.write("a,b\n1,2\n");
     fw.close();
 
-    FileSchema fileSchema = new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, new ExecutionEngineConfig());
+    FileSchema fileSchema =
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir.getAbsolutePath(), true, fileSchema);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir.getAbsolutePath(), true, fileSchema);
       assertNotNull(schema);
     } catch (Exception e) {
       assertTrue(e.getMessage() != null);
@@ -213,14 +206,13 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
   // --- Backward-compatible create variants ---
 
-  @Test
-  void testCreateWithFileOnly() {
+  @Test void testCreateWithFileOnly() {
     File sourceDir = tempDir.resolve("duckdb-file-only").toFile();
     sourceDir.mkdirs();
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir);
       assertNotNull(schema);
     } catch (Exception e) {
       // Expected if DuckDB not available
@@ -228,14 +220,13 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testCreateWithFileAndRecursive() {
+  @Test void testCreateWithFileAndRecursive() {
     File sourceDir = tempDir.resolve("duckdb-file-recursive").toFile();
     sourceDir.mkdirs();
 
     try {
-      JdbcSchema schema = DuckDBJdbcSchemaFactory.create(parentSchema,
-          uniqueSchemaName(), sourceDir, true);
+      JdbcSchema schema =
+          DuckDBJdbcSchemaFactory.create(parentSchema, uniqueSchemaName(), sourceDir, true);
       assertNotNull(schema);
     } catch (Exception e) {
       assertNotNull(e.getMessage());

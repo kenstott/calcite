@@ -22,16 +22,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,8 +47,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- Constructor variants ---
 
-  @Test
-  void testConstructorMinimal() {
+  @Test void testConstructorMinimal() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -64,8 +57,7 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConstructorWithHooksConfig() {
+  @Test void testConstructorWithHooksConfig() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -75,8 +67,7 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConstructorWithStorageProvider() {
+  @Test void testConstructorWithStorageProvider() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -87,27 +78,24 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConstructorWithOperatingDirectory() {
+  @Test void testConstructorWithOperatingDirectory() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
     StorageProvider mockProvider = mock(StorageProvider.class);
 
-    HttpSource source = new HttpSource(config, null, mockProvider, "/raw/cache",
-        tempDir.toString());
+    HttpSource source =
+        new HttpSource(config, null, mockProvider, "/raw/cache", tempDir.toString());
     assertEquals("http", source.getType());
     source.close();
   }
 
-  @Test
-  void testConstructorWithResponseTransformer() {
+  @Test void testConstructorWithResponseTransformer() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
     ResponseTransformer transformer = new ResponseTransformer() {
-      @Override
-      public String transform(String response, RequestContext context) {
+      @Override public String transform(String response, RequestContext context) {
         return response;
       }
     };
@@ -119,11 +107,11 @@ public class HttpSourceDeepCoverageTest {
 
   // --- Close with cache enabled ---
 
-  @Test
-  void testCloseWithCacheEnabled() {
+  @Test void testCloseWithCacheEnabled() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
-        .cache(HttpSourceConfig.CacheConfig.fromMap(
+        .cache(
+            HttpSourceConfig.CacheConfig.fromMap(
             createMap("enabled", true, "ttlSeconds", 60)))
         .build();
 
@@ -133,8 +121,7 @@ public class HttpSourceDeepCoverageTest {
     // Should not throw
   }
 
-  @Test
-  void testCloseWithCacheDisabled() {
+  @Test void testCloseWithCacheDisabled() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -146,40 +133,38 @@ public class HttpSourceDeepCoverageTest {
 
   // --- Variable substitution via reflection ---
 
-  @Test
-  void testSubstituteVariablesSimple() throws Exception {
+  @Test void testSubstituteVariablesSimple() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
 
     HttpSource source = new HttpSource(config);
     try {
-      Method method = HttpSource.class.getDeclaredMethod("substituteVariables",
-          String.class, Map.class);
+      Method method =
+          HttpSource.class.getDeclaredMethod("substituteVariables", String.class, Map.class);
       method.setAccessible(true);
 
       Map<String, String> vars = new HashMap<>();
       vars.put("year", "2024");
       vars.put("country", "US");
 
-      String result = (String) method.invoke(source,
-          "https://api.example.com/{year}/{country}", vars);
+      String result =
+          (String) method.invoke(source, "https://api.example.com/{year}/{country}", vars);
       assertEquals("https://api.example.com/2024/US", result);
     } finally {
       source.close();
     }
   }
 
-  @Test
-  void testSubstituteVariablesNoPlaceholders() throws Exception {
+  @Test void testSubstituteVariablesNoPlaceholders() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
 
     HttpSource source = new HttpSource(config);
     try {
-      Method method = HttpSource.class.getDeclaredMethod("substituteVariables",
-          String.class, Map.class);
+      Method method =
+          HttpSource.class.getDeclaredMethod("substituteVariables", String.class, Map.class);
       method.setAccessible(true);
 
       Map<String, String> vars = new HashMap<>();
@@ -192,16 +177,15 @@ public class HttpSourceDeepCoverageTest {
 
   // --- buildCacheKey via reflection ---
 
-  @Test
-  void testBuildCacheKey() throws Exception {
+  @Test void testBuildCacheKey() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
 
     HttpSource source = new HttpSource(config);
     try {
-      Method method = HttpSource.class.getDeclaredMethod("buildCacheKey",
-          String.class, Map.class);
+      Method method =
+          HttpSource.class.getDeclaredMethod("buildCacheKey", String.class, Map.class);
       method.setAccessible(true);
 
       Map<String, String> params = new LinkedHashMap<>();
@@ -218,8 +202,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- parseResponse via reflection ---
 
-  @Test
-  void testParseResponseJsonArray() throws Exception {
+  @Test void testParseResponseJsonArray() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -230,8 +213,8 @@ public class HttpSourceDeepCoverageTest {
       method.setAccessible(true);
 
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-          "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
+      List<Map<String, Object>> result =
+          (List<Map<String, Object>>) method.invoke(source, "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
       assertEquals(2, result.size());
       assertEquals(1, result.get(0).get("id"));
     } finally {
@@ -239,8 +222,7 @@ public class HttpSourceDeepCoverageTest {
     }
   }
 
-  @Test
-  void testParseResponseJsonObject() throws Exception {
+  @Test void testParseResponseJsonObject() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -251,16 +233,15 @@ public class HttpSourceDeepCoverageTest {
       method.setAccessible(true);
 
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-          "{\"id\":1,\"name\":\"Alice\"}");
+      List<Map<String, Object>> result =
+          (List<Map<String, Object>>) method.invoke(source, "{\"id\":1,\"name\":\"Alice\"}");
       assertEquals(1, result.size());
     } finally {
       source.close();
     }
   }
 
-  @Test
-  void testParseResponseEmptyArray() throws Exception {
+  @Test void testParseResponseEmptyArray() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -280,16 +261,15 @@ public class HttpSourceDeepCoverageTest {
 
   // --- normalizeRecords via reflection ---
 
-  @Test
-  void testNormalizeRecordsNoNormalizer() throws Exception {
+  @Test void testNormalizeRecordsNoNormalizer() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
 
     HttpSource source = new HttpSource(config);
     try {
-      Method method = HttpSource.class.getDeclaredMethod("normalizeRecords",
-          List.class, Map.class);
+      Method method =
+          HttpSource.class.getDeclaredMethod("normalizeRecords", List.class, Map.class);
       method.setAccessible(true);
 
       List<Map<String, Object>> records = new ArrayList<>();
@@ -298,8 +278,8 @@ public class HttpSourceDeepCoverageTest {
       records.add(record);
 
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-          records, new HashMap<String, String>());
+      List<Map<String, Object>> result =
+          (List<Map<String, Object>>) method.invoke(source, records, new HashMap<String, String>());
 
       // Without a normalizer, records should be returned as-is
       assertEquals(1, result.size());
@@ -309,23 +289,22 @@ public class HttpSourceDeepCoverageTest {
     }
   }
 
-  @Test
-  void testNormalizeRecordsEmptyList() throws Exception {
+  @Test void testNormalizeRecordsEmptyList() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
 
     HttpSource source = new HttpSource(config);
     try {
-      Method method = HttpSource.class.getDeclaredMethod("normalizeRecords",
-          List.class, Map.class);
+      Method method =
+          HttpSource.class.getDeclaredMethod("normalizeRecords", List.class, Map.class);
       method.setAccessible(true);
 
       List<Map<String, Object>> records = new ArrayList<>();
 
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(source,
-          records, new HashMap<String, String>());
+      List<Map<String, Object>> result =
+          (List<Map<String, Object>>) method.invoke(source, records, new HashMap<String, String>());
 
       assertTrue(result.isEmpty());
     } finally {
@@ -335,8 +314,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- loadResponseTransformer ---
 
-  @Test
-  void testInvalidResponseTransformerClass() {
+  @Test void testInvalidResponseTransformerClass() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -350,8 +328,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- loadVariableNormalizer ---
 
-  @Test
-  void testInvalidVariableNormalizerClass() {
+  @Test void testInvalidVariableNormalizerClass() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -367,8 +344,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- createBatches via reflection ---
 
-  @Test
-  void testCreateBatches() throws Exception {
+  @Test void testCreateBatches() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -396,8 +372,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- isRawCacheEnabled via reflection ---
 
-  @Test
-  void testIsRawCacheEnabledFalse() throws Exception {
+  @Test void testIsRawCacheEnabledFalse() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -416,8 +391,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- getType ---
 
-  @Test
-  void testGetType() {
+  @Test void testGetType() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
@@ -428,8 +402,7 @@ public class HttpSourceDeepCoverageTest {
 
   // --- HttpSourceConfig variations to trigger different fetch paths ---
 
-  @Test
-  void testConfigWithPostMethod() {
+  @Test void testConfigWithPostMethod() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .method(HttpSourceConfig.HttpMethod.POST)
@@ -439,8 +412,7 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConfigWithHeaders() {
+  @Test void testConfigWithHeaders() {
     Map<String, String> headers = new HashMap<>();
     headers.put("Authorization", "Bearer token123");
     headers.put("Accept", "application/json");
@@ -454,8 +426,7 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConfigWithParameters() {
+  @Test void testConfigWithParameters() {
     Map<String, String> params = new HashMap<>();
     params.put("year", "{year}");
     params.put("apiKey", "test-key");
@@ -469,8 +440,7 @@ public class HttpSourceDeepCoverageTest {
     source.close();
   }
 
-  @Test
-  void testConfigWithJsonPathResponse() {
+  @Test void testConfigWithJsonPathResponse() {
     Map<String, Object> responseMap = new HashMap<>();
     responseMap.put("dataPath", "data.items");
     responseMap.put("format", "JSON");

@@ -58,8 +58,7 @@ public interface StreamingResponseTransformer extends ResponseTransformer {
    *
    * @throws UnsupportedOperationException always
    */
-  @Override
-  default String transform(String response, RequestContext context) {
+  @Override default String transform(String response, RequestContext context) {
     throw new UnsupportedOperationException(
         getClass().getSimpleName() + " is a streaming transformer; "
             + "it must be invoked via HttpSource.fetch(), not transform()");

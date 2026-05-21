@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# ============================================================================
-# Run workers with a memory-aware concurrency pool
 #
-# Automatically determines how many workers can run concurrently based on
-# available system memory. Each worker's max heap is reserved from the memory
-# budget before launch, preventing OOM kills from over-subscription.
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Usage: ./run-pool.sh 18-26                  — auto-fit workers to available memory
-#        ./run-pool.sh -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)
-#        ./run-pool.sh -t 90 1 5 10-15        — 90min inactivity timeout
-#        ./run-pool.sh -r 1500 18-26          — reserve 1.5GB for OS/other processes
-#        ./run-pool.sh -p 4 18-26             — 4 parallel entity threads per worker
-#        ./run-pool.sh 1-10                   — default: auto-fit, 60min timeout
-# ============================================================================
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

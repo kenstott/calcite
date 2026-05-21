@@ -49,7 +49,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -59,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Deep coverage tests for {@link ParquetConversionUtil} focusing on uncovered paths:
@@ -76,16 +74,16 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== addValueToParquetGroup via reflection ==========
 
   private Method getAddValueMethod() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "addValueToParquetGroup",
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("addValueToParquetGroup",
         Group.class, String.class, Object.class, SqlTypeName.class, boolean.class);
     method.setAccessible(true);
     return method;
   }
 
   private Group createGroupWithField(String fieldName, Type parquetType) {
-    MessageType schema = new MessageType("record",
-        Collections.singletonList(parquetType));
+    MessageType schema =
+        new MessageType("record", Collections.singletonList(parquetType));
     SimpleGroupFactory factory = new SimpleGroupFactory(schema);
     return factory.newGroup();
   }
@@ -814,8 +812,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== createParquetFieldFromCalciteType via reflection ==========
 
   private Method getCreateFieldMethod() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "createParquetFieldFromCalciteType",
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("createParquetFieldFromCalciteType",
         String.class, SqlTypeName.class, RelDataTypeField.class);
     method.setAccessible(true);
     return method;
@@ -823,15 +821,15 @@ public class ParquetConversionUtilDeepCoverageTest3 {
 
   private RelDataTypeField makeField(String name, SqlTypeName typeName) {
     RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-    RelDataType type = typeFactory.createTypeWithNullability(
-        typeFactory.createSqlType(typeName), true);
+    RelDataType type =
+        typeFactory.createTypeWithNullability(typeFactory.createSqlType(typeName), true);
     return new RelDataTypeFieldImpl(name, 0, type);
   }
 
   private RelDataTypeField makeNonNullableField(String name, SqlTypeName typeName) {
     RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-    RelDataType type = typeFactory.createTypeWithNullability(
-        typeFactory.createSqlType(typeName), false);
+    RelDataType type =
+        typeFactory.createTypeWithNullability(typeFactory.createSqlType(typeName), false);
     return new RelDataTypeFieldImpl(name, 0, type);
   }
 
@@ -950,8 +948,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   @Test void testCreateFieldTimestampWithTz() throws Exception {
     Method method = getCreateFieldMethod();
     RelDataTypeField field = makeField("ts_tz", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
-    Type result = (Type) method.invoke(null, "ts_tz",
-        SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, field);
+    Type result =
+        (Type) method.invoke(null, "ts_tz", SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, field);
     assertNotNull(result);
   }
 
@@ -1060,7 +1058,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
     for (int i = 0; i < types.length; i++) {
       String name = (names != null && i < names.length) ? names[i] : "col" + i;
-      builder.add(name, typeFactory.createTypeWithNullability(
+      builder.add(
+          name, typeFactory.createTypeWithNullability(
           typeFactory.createSqlType(types[i]), true));
     }
     return builder.build();
@@ -1077,8 +1076,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== convertToParquet with in-memory ScannableTable ==========
 
   @Test void testConvertToParquetWithStringData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "name", "value", "active"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "name", "value", "active"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR, SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "Alice", "99.5", "true"});
@@ -1090,8 +1089,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "test_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "test_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1101,8 +1100,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithIntegerData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "count", "active_flag"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "count", "active_flag"},
         SqlTypeName.INTEGER, SqlTypeName.INTEGER, SqlTypeName.BOOLEAN);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{1, 100, true});
@@ -1114,8 +1113,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_int");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "int_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "int_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1124,8 +1123,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithDoubleData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "measurement"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "measurement"},
         SqlTypeName.INTEGER, SqlTypeName.DOUBLE);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{1, 3.14});
@@ -1136,8 +1135,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_double");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "double_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "double_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1146,8 +1145,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithBigintData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "big_value"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "big_value"},
         SqlTypeName.INTEGER, SqlTypeName.BIGINT);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{1, 9999999999L});
@@ -1158,8 +1157,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_long");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "long_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "long_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1168,8 +1167,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithFloatData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "measurement"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "measurement"},
         SqlTypeName.INTEGER, SqlTypeName.FLOAT);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{1, 3.14f});
@@ -1180,8 +1179,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_float");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "float_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "float_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1190,8 +1189,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithNullValues() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "name", "score"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "name", "score"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "Alice", "95.5"});
@@ -1203,8 +1202,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_nulls");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "null_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "null_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1212,8 +1211,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithDateData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "event_date"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "event_date"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "2024-01-15"});
@@ -1224,8 +1223,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_dates");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "date_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "date_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1234,8 +1233,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithTimestampData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "event_ts"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "event_ts"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "2024-01-15 10:30:00"});
@@ -1246,8 +1245,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_ts");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "ts_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "ts_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1256,8 +1255,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithTimeData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "event_time"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "event_time"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "08:30:00"});
@@ -1268,8 +1267,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_time");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "time_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "time_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1278,8 +1277,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetWithSmallintData() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "small_val"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "small_val"},
         SqlTypeName.INTEGER, SqlTypeName.SMALLINT);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{1, (short) 100});
@@ -1290,8 +1289,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File cacheDir = new File(tempDir.toFile(), ".parquet_cache_short");
     cacheDir.mkdirs();
 
-    File result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "short_data", table,
+    File result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "short_data", table,
         cacheDir, null, "test", "UNCHANGED");
 
     assertNotNull(result);
@@ -1299,8 +1298,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testConvertToParquetSkipsIfUpToDate() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "name"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "name"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "Alice"});
@@ -1311,15 +1310,15 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     cacheDir.mkdirs();
 
     // First conversion
-    File result1 = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "uptodate", table,
+    File result1 =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "uptodate", table,
         cacheDir, null, "test", "UNCHANGED");
     assertNotNull(result1);
     assertTrue(result1.exists());
 
     // Second conversion should skip (parquet is up to date)
-    File result2 = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "uptodate", table,
+    File result2 =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "uptodate", table,
         cacheDir, null, "test", "UNCHANGED");
     assertNotNull(result2);
     assertTrue(result2.exists());
@@ -1412,8 +1411,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== isNullRepresentation ==========
 
   @Test void testIsNullRepresentationDefault() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "isNullRepresentation", String.class);
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("isNullRepresentation", String.class);
     method.setAccessible(true);
 
     assertTrue((Boolean) method.invoke(null, "NULL"));
@@ -1425,8 +1424,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   }
 
   @Test void testIsNullRepresentationWithCustomSet() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "isNullRepresentation", String.class, Set.class);
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("isNullRepresentation", String.class, Set.class);
     method.setAccessible(true);
 
     Set<String> customNulls = new HashSet<String>();
@@ -1441,8 +1440,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== convertToParquet with StorageProviderFile (local) ==========
 
   @Test void testConvertToParquetStorageProviderFile() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "name"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "name"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows = new ArrayList<>();
     rows.add(new Object[]{"1", "Alice"});
@@ -1456,11 +1455,11 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     org.apache.calcite.adapter.file.storage.LocalFileStorageProvider localProvider =
         new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider();
 
-    StorageProviderFile cacheDirFile = StorageProviderFile.create(
-        cacheDir.getAbsolutePath(), localProvider);
+    StorageProviderFile cacheDirFile =
+        StorageProviderFile.create(cacheDir.getAbsolutePath(), localProvider);
 
-    StorageProviderFile result = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "spf_data", table,
+    StorageProviderFile result =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "spf_data", table,
         cacheDirFile, null, "test", "UNCHANGED", localProvider);
 
     assertNotNull(result);
@@ -1493,8 +1492,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File sourceFile = new File(tempDir.toFile(), "my_data.csv");
     File cacheDir = tempDir.resolve("cache").toFile();
     cacheDir.mkdirs();
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, true, "SMART_CASING");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, true, "SMART_CASING");
     assertNotNull(result);
     assertTrue(result.getName().endsWith(".parquet"));
     assertEquals("my_data.parquet", result.getName());
@@ -1504,8 +1503,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     File sourceFile = new File(tempDir.toFile(), "rawdata");
     File cacheDir = tempDir.resolve("cache2").toFile();
     cacheDir.mkdirs();
-    File result = ParquetConversionUtil.getCachedParquetFile(
-        sourceFile, cacheDir, false, "UNCHANGED");
+    File result =
+        ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, false, "UNCHANGED");
     assertNotNull(result);
     assertEquals("rawdata.parquet", result.getName());
   }
@@ -1513,8 +1512,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== configureS3Access via reflection ==========
 
   @Test void testConfigureS3Access() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod(
-        "configureS3Access", org.apache.hadoop.conf.Configuration.class);
+    Method method =
+        ParquetConversionUtil.class.getDeclaredMethod("configureS3Access", org.apache.hadoop.conf.Configuration.class);
     method.setAccessible(true);
 
     org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
@@ -1529,8 +1528,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
   // ========== convertToParquet overwrite existing ==========
 
   @Test void testConvertToParquetOverwritesExisting() throws Exception {
-    RelDataType rowType = buildRowType(
-        new String[]{"id", "name"},
+    RelDataType rowType =
+        buildRowType(new String[]{"id", "name"},
         SqlTypeName.VARCHAR, SqlTypeName.VARCHAR);
     List<Object[]> rows1 = new ArrayList<>();
     rows1.add(new Object[]{"1", "First"});
@@ -1541,8 +1540,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     cacheDir.mkdirs();
 
     // First write
-    File result1 = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "overwrite_data", table1,
+    File result1 =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "overwrite_data", table1,
         cacheDir, null, "test", "UNCHANGED");
     assertNotNull(result1);
     assertTrue(result1.exists());
@@ -1560,8 +1559,8 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     InMemoryScannableTable table2 = new InMemoryScannableTable(rowType, rows2);
 
     // Reconvert - source is now newer
-    File result2 = ParquetConversionUtil.convertToParquet(
-        Sources.of(sourceFile), "overwrite_data", table2,
+    File result2 =
+        ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "overwrite_data", table2,
         cacheDir, null, "test", "UNCHANGED");
     assertNotNull(result2);
     assertTrue(result2.exists());

@@ -212,8 +212,8 @@ class EtlInterfacesCoverageTest {
     records.add(Collections.<String, Object>singletonMap("a", 2));
     records.add(Collections.<String, Object>singletonMap("a", 3));
 
-    long written = writer.write(
-        createMinimalPipelineConfig("writer_test"),
+    long written =
+        writer.write(createMinimalPipelineConfig("writer_test"),
         records.iterator(),
         Collections.<String, String>emptyMap());
     assertEquals(3L, written);
@@ -229,8 +229,8 @@ class EtlInterfacesCoverageTest {
       return count;
     };
 
-    long written = writer.write(
-        createMinimalPipelineConfig("empty_write"),
+    long written =
+        writer.write(createMinimalPipelineConfig("empty_write"),
         Collections.<Map<String, Object>>emptyList().iterator(),
         Collections.<String, String>emptyMap());
     assertEquals(0L, written);
@@ -239,8 +239,8 @@ class EtlInterfacesCoverageTest {
   @Test void testDataWriterDefaultReturnsNegativeOne() throws IOException {
     DataWriter defaultWriter = DataWriter.DEFAULT;
     assertNotNull(defaultWriter);
-    long result = defaultWriter.write(
-        createMinimalPipelineConfig("test"),
+    long result =
+        defaultWriter.write(createMinimalPipelineConfig("test"),
         Collections.<Map<String, Object>>emptyList().iterator(),
         Collections.<String, String>emptyMap());
     assertEquals(-1L, result);
@@ -595,8 +595,8 @@ class EtlInterfacesCoverageTest {
         .name("year")
         .build();
 
-    List<String> years = resolver.resolve("year", dimConfig,
-        Collections.<String, String>emptyMap(), sp);
+    List<String> years =
+        resolver.resolve("year", dimConfig, Collections.<String, String>emptyMap(), sp);
     assertEquals(3, years.size());
     assertEquals("2022", years.get(0));
     assertEquals("2024", years.get(2));
@@ -642,8 +642,8 @@ class EtlInterfacesCoverageTest {
     StorageProvider sp = mock(StorageProvider.class);
     DimensionConfig dimConfig = DimensionConfig.builder().name("unknown").build();
 
-    List<String> result = resolver.resolve("unknown", dimConfig,
-        Collections.<String, String>emptyMap(), sp);
+    List<String> result =
+        resolver.resolve("unknown", dimConfig, Collections.<String, String>emptyMap(), sp);
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
@@ -668,8 +668,8 @@ class EtlInterfacesCoverageTest {
     SchemaContext context = createMinimalSchemaContext();
 
     // The default downloadBulkFile should return null
-    String path = noop.downloadBulkFile(context, null,
-        Collections.<String, String>emptyMap(), "/tmp/target");
+    String path =
+        noop.downloadBulkFile(context, null, Collections.<String, String>emptyMap(), "/tmp/target");
     assertNull(path);
   }
 
@@ -681,8 +681,8 @@ class EtlInterfacesCoverageTest {
     };
 
     SchemaContext context = createMinimalSchemaContext();
-    String path = listener.downloadBulkFile(context, null,
-        Collections.<String, String>emptyMap(), "/tmp/file.zip");
+    String path =
+        listener.downloadBulkFile(context, null, Collections.<String, String>emptyMap(), "/tmp/file.zip");
     assertNull(path);
   }
 
@@ -731,8 +731,8 @@ class EtlInterfacesCoverageTest {
     };
 
     SchemaContext context = createMinimalSchemaContext();
-    String path = listener.downloadBulkFile(context, null,
-        Collections.<String, String>emptyMap(), "/tmp/target.zip");
+    String path =
+        listener.downloadBulkFile(context, null, Collections.<String, String>emptyMap(), "/tmp/target.zip");
     assertEquals("/custom/downloaded/file.zip", path);
   }
 
@@ -820,8 +820,8 @@ class EtlInterfacesCoverageTest {
   @Test void testTableLifecycleListenerDefaultWriteDataReturnsNegativeOne() {
     TableLifecycleListener listener = createBaseTableListener();
     TableContext ctx = createMinimalTableContext("test");
-    long result = listener.writeData(ctx,
-        Collections.<Map<String, Object>>emptyList().iterator(),
+    long result =
+        listener.writeData(ctx, Collections.<Map<String, Object>>emptyList().iterator(),
         Collections.<String, String>emptyMap());
     assertEquals(-1L, result);
   }
@@ -924,8 +924,8 @@ class EtlInterfacesCoverageTest {
     records.add(Collections.<String, Object>singletonMap("a", 1));
     records.add(Collections.<String, Object>singletonMap("a", 2));
 
-    long written = listener.writeData(ctx, records.iterator(),
-        Collections.<String, String>emptyMap());
+    long written =
+        listener.writeData(ctx, records.iterator(), Collections.<String, String>emptyMap());
     assertEquals(2L, written);
   }
 

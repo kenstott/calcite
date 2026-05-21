@@ -61,8 +61,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== ReorgConfig.Builder tests ======
 
-  @Test
-  void testReorgConfigBuilderMinimal() {
+  @Test void testReorgConfigBuilderMinimal() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("type=income/year=*/*.parquet")
         .targetBase("type=income_consolidated")
@@ -87,8 +86,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertFalse(config.supportsIncremental());
   }
 
-  @Test
-  void testReorgConfigBuilderFull() {
+  @Test void testReorgConfigBuilderFull() {
     IncrementalTracker tracker = mock(IncrementalTracker.class);
 
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
@@ -127,8 +125,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertTrue(config.supportsIncremental());
   }
 
-  @Test
-  void testReorgConfigBuilderMissingSourcePattern() {
+  @Test void testReorgConfigBuilderMissingSourcePattern() {
     try {
       ParquetReorganizer.ReorgConfig.builder()
           .targetBase("target")
@@ -139,8 +136,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testReorgConfigBuilderEmptySourcePattern() {
+  @Test void testReorgConfigBuilderEmptySourcePattern() {
     try {
       ParquetReorganizer.ReorgConfig.builder()
           .sourcePattern("")
@@ -152,8 +148,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testReorgConfigBuilderMissingTargetBase() {
+  @Test void testReorgConfigBuilderMissingTargetBase() {
     try {
       ParquetReorganizer.ReorgConfig.builder()
           .sourcePattern("*.parquet")
@@ -164,8 +159,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testReorgConfigBuilderEmptyTargetBase() {
+  @Test void testReorgConfigBuilderEmptyTargetBase() {
     try {
       ParquetReorganizer.ReorgConfig.builder()
           .sourcePattern("*.parquet")
@@ -177,8 +171,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testReorgConfigBuilderNullSourcePattern() {
+  @Test void testReorgConfigBuilderNullSourcePattern() {
     try {
       ParquetReorganizer.ReorgConfig.builder()
           .sourcePattern(null)
@@ -190,8 +183,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     }
   }
 
-  @Test
-  void testReorgConfigDefaultThreads() {
+  @Test void testReorgConfigDefaultThreads() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("*.parquet")
         .targetBase("target")
@@ -201,8 +193,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertEquals(2, config.getThreads());
   }
 
-  @Test
-  void testReorgConfigDefaultCurrentYearTtl() {
+  @Test void testReorgConfigDefaultCurrentYearTtl() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("*.parquet")
         .targetBase("target")
@@ -212,8 +203,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertEquals(1, config.getCurrentYearTtlDays());
   }
 
-  @Test
-  void testReorgConfigSupportsIncrementalNoTracker() {
+  @Test void testReorgConfigSupportsIncrementalNoTracker() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("*.parquet")
         .targetBase("target")
@@ -224,8 +214,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertFalse(config.supportsIncremental());
   }
 
-  @Test
-  void testReorgConfigSupportsIncrementalNoKeys() {
+  @Test void testReorgConfigSupportsIncrementalNoKeys() {
     IncrementalTracker tracker = mock(IncrementalTracker.class);
 
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
@@ -240,8 +229,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== isNumeric tests ======
 
-  @Test
-  void testIsNumeric() throws Exception {
+  @Test void testIsNumeric() throws Exception {
     Method method = ParquetReorganizer.class.getDeclaredMethod("isNumeric", String.class);
     method.setAccessible(true);
 
@@ -258,8 +246,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== quoteLiteral tests ======
 
-  @Test
-  void testQuoteLiteral() throws Exception {
+  @Test void testQuoteLiteral() throws Exception {
     Method method = ParquetReorganizer.class.getDeclaredMethod("quoteLiteral", String.class);
     method.setAccessible(true);
 
@@ -271,8 +258,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== isCurrentYear tests ======
 
-  @Test
-  void testIsCurrentYear() throws Exception {
+  @Test void testIsCurrentYear() throws Exception {
     Method method = ParquetReorganizer.class.getDeclaredMethod("isCurrentYear", Map.class);
     method.setAccessible(true);
 
@@ -300,10 +286,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== buildCombinationsRecursive tests ======
 
-  @Test
-  void testBuildCombinationsRecursive() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive", List.class, List.class, int.class, Map.class, List.class);
+  @Test void testBuildCombinationsRecursive() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive", List.class, List.class, int.class, Map.class, List.class);
     method.setAccessible(true);
 
     List<String> columnNames = Arrays.asList("year", "geo");
@@ -317,20 +302,23 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
     assertEquals(4, result.size());
     // Verify all combinations
-    assertTrue(result.stream().anyMatch(m ->
+    assertTrue(
+        result.stream().anyMatch(m ->
         "2020".equals(m.get("year")) && "STATE".equals(m.get("geo"))));
-    assertTrue(result.stream().anyMatch(m ->
+    assertTrue(
+        result.stream().anyMatch(m ->
         "2020".equals(m.get("year")) && "COUNTY".equals(m.get("geo"))));
-    assertTrue(result.stream().anyMatch(m ->
+    assertTrue(
+        result.stream().anyMatch(m ->
         "2021".equals(m.get("year")) && "STATE".equals(m.get("geo"))));
-    assertTrue(result.stream().anyMatch(m ->
+    assertTrue(
+        result.stream().anyMatch(m ->
         "2021".equals(m.get("year")) && "COUNTY".equals(m.get("geo"))));
   }
 
-  @Test
-  void testBuildCombinationsRecursiveSingleColumn() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive", List.class, List.class, int.class, Map.class, List.class);
+  @Test void testBuildCombinationsRecursiveSingleColumn() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive", List.class, List.class, int.class, Map.class, List.class);
     method.setAccessible(true);
 
     List<String> columnNames = Arrays.asList("year");
@@ -346,10 +334,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== groupBatchesByIncrementalKey tests ======
 
-  @Test
-  void testGroupBatchesByIncrementalKey() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+  @Test void testGroupBatchesByIncrementalKey() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     method.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<>();
@@ -387,10 +374,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertEquals(1, result.get(key2021).size());
   }
 
-  @Test
-  void testGroupBatchesByIncrementalKeyNullKeys() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+  @Test void testGroupBatchesByIncrementalKeyNullKeys() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     method.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<>();
@@ -407,10 +393,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertEquals(1, result.size());
   }
 
-  @Test
-  void testGroupBatchesByIncrementalKeyEmptyKeys() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+  @Test void testGroupBatchesByIncrementalKeyEmptyKeys() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     method.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<>();
@@ -432,10 +417,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertEquals(2, result.values().iterator().next().size());
   }
 
-  @Test
-  void testGroupBatchesByIncrementalKeyMissingValue() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+  @Test void testGroupBatchesByIncrementalKeyMissingValue() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     method.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<>();
@@ -454,14 +438,13 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== buildReorganizationSql tests ======
 
-  @Test
-  void testBuildReorganizationSqlParquet() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
+  @Test void testBuildReorganizationSqlParquet() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/data/*.parquet", "/output", Arrays.asList("year", "geo"),
+    String result =
+        (String) method.invoke(reorganizer, "/data/*.parquet", "/output", Arrays.asList("year", "geo"),
         Collections.singletonMap("geo", "GeoFips"), "data_{i}");
 
     assertNotNull(result);
@@ -474,14 +457,13 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertTrue(result.contains("GeoFips"));
   }
 
-  @Test
-  void testBuildReorganizationSqlNoPartitions() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
+  @Test void testBuildReorganizationSqlNoPartitions() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/data/*.parquet", "/output", Collections.emptyList(),
+    String result =
+        (String) method.invoke(reorganizer, "/data/*.parquet", "/output", Collections.emptyList(),
         Collections.emptyMap(), "data_{i}");
 
     assertNotNull(result);
@@ -489,28 +471,26 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertFalse(result.contains("PARTITION_BY"));
   }
 
-  @Test
-  void testBuildReorganizationSqlNoFilename() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
+  @Test void testBuildReorganizationSqlNoFilename() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/data/*.parquet", "/output", Collections.emptyList(),
+    String result =
+        (String) method.invoke(reorganizer, "/data/*.parquet", "/output", Collections.emptyList(),
         Collections.emptyMap(), null);
 
     assertNotNull(result);
     assertFalse(result.contains("FILENAME_PATTERN"));
   }
 
-  @Test
-  void testBuildReorganizationSqlEmptyFilename() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
+  @Test void testBuildReorganizationSqlEmptyFilename() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class, String.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/data/*.parquet", "/output", Collections.emptyList(),
+    String result =
+        (String) method.invoke(reorganizer, "/data/*.parquet", "/output", Collections.emptyList(),
         Collections.emptyMap(), "");
 
     assertNotNull(result);
@@ -519,10 +499,9 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== buildReorganizationSql Iceberg variant tests ======
 
-  @Test
-  void testBuildReorganizationSqlIceberg() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class,
+  @Test void testBuildReorganizationSqlIceberg() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class,
         String.class, boolean.class, String.class, String.class, Map.class);
     method.setAccessible(true);
 
@@ -530,8 +509,8 @@ public class ParquetReorganizerDeepCoverageTest2 {
     filters.put("year", "2020");
     filters.put("state", "CA");
 
-    String result = (String) method.invoke(reorganizer,
-        null, "/output", Arrays.asList("geo"), Collections.emptyMap(), "data_{i}",
+    String result =
+        (String) method.invoke(reorganizer, null, "/output", Arrays.asList("geo"), Collections.emptyMap(), "data_{i}",
         true, "/warehouse", "income_table", filters);
 
     assertNotNull(result);
@@ -541,15 +520,14 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertTrue(result.contains("state = 'CA'")); // string filter
   }
 
-  @Test
-  void testBuildReorganizationSqlIcebergNoFilters() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class,
+  @Test void testBuildReorganizationSqlIcebergNoFilters() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class,
         String.class, boolean.class, String.class, String.class, Map.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        null, "/output", Arrays.asList("geo"), Collections.emptyMap(), "data_{i}",
+    String result =
+        (String) method.invoke(reorganizer, null, "/output", Arrays.asList("geo"), Collections.emptyMap(), "data_{i}",
         true, "/warehouse", "income_table", null);
 
     assertNotNull(result);
@@ -557,18 +535,17 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertFalse(result.contains("WHERE"));
   }
 
-  @Test
-  void testBuildReorganizationSqlIcebergWithColumnMappings() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class,
+  @Test void testBuildReorganizationSqlIcebergWithColumnMappings() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class,
         String.class, boolean.class, String.class, String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnMappings = new LinkedHashMap<>();
     columnMappings.put("geo", "GeoFips");
 
-    String result = (String) method.invoke(reorganizer,
-        null, "/output", Arrays.asList("geo"), columnMappings, "data_{i}",
+    String result =
+        (String) method.invoke(reorganizer, null, "/output", Arrays.asList("geo"), columnMappings, "data_{i}",
         true, "/warehouse", "income_table", null);
 
     assertNotNull(result);
@@ -577,15 +554,14 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertTrue(result.contains("_aliased"));
   }
 
-  @Test
-  void testBuildReorganizationSqlIcebergEmptyFilters() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class, List.class, Map.class,
+  @Test void testBuildReorganizationSqlIcebergEmptyFilters() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class, List.class, Map.class,
         String.class, boolean.class, String.class, String.class, Map.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        null, "/output", Collections.emptyList(), Collections.emptyMap(), "data_{i}",
+    String result =
+        (String) method.invoke(reorganizer, null, "/output", Collections.emptyList(), Collections.emptyMap(), "data_{i}",
         true, "/warehouse", "income_table", Collections.emptyMap());
 
     assertNotNull(result);
@@ -595,14 +571,13 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== buildConsolidationSql tests ======
 
-  @Test
-  void testBuildConsolidationSql() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class);
+  @Test void testBuildConsolidationSql() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/temp/base", "/final/base", Arrays.asList("year", "geo"));
+    String result =
+        (String) method.invoke(reorganizer, "/temp/base", "/final/base", Arrays.asList("year", "geo"));
 
     assertNotNull(result);
     assertTrue(result.contains("COPY"));
@@ -614,14 +589,13 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertTrue(result.contains("OVERWRITE_OR_IGNORE"));
   }
 
-  @Test
-  void testBuildConsolidationSqlNoPartitions() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class);
+  @Test void testBuildConsolidationSqlNoPartitions() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/temp/base", "/final/base", Collections.emptyList());
+    String result =
+        (String) method.invoke(reorganizer, "/temp/base", "/final/base", Collections.emptyList());
 
     assertNotNull(result);
     assertTrue(result.contains("COPY"));
@@ -629,14 +603,13 @@ public class ParquetReorganizerDeepCoverageTest2 {
     assertFalse(result.contains("OVERWRITE_OR_IGNORE"));
   }
 
-  @Test
-  void testBuildConsolidationSqlNullPartitions() throws Exception {
-    Method method = ParquetReorganizer.class.getDeclaredMethod(
-        "buildConsolidationSql", String.class, String.class, List.class);
+  @Test void testBuildConsolidationSqlNullPartitions() throws Exception {
+    Method method =
+        ParquetReorganizer.class.getDeclaredMethod("buildConsolidationSql", String.class, String.class, List.class);
     method.setAccessible(true);
 
-    String result = (String) method.invoke(reorganizer,
-        "/temp/base", "/final/base", null);
+    String result =
+        (String) method.invoke(reorganizer, "/temp/base", "/final/base", null);
 
     assertNotNull(result);
     assertFalse(result.contains("PARTITION_BY"));
@@ -644,8 +617,7 @@ public class ParquetReorganizerDeepCoverageTest2 {
 
   // ====== create() factory method test ======
 
-  @Test
-  void testCreateFactoryMethod() {
+  @Test void testCreateFactoryMethod() {
     ParquetReorganizer created =
         ParquetReorganizer.create(mockStorageProvider, "/base/dir");
     assertNotNull(created);

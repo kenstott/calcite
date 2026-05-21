@@ -236,8 +236,9 @@ public class EtlPipeline {
     int failedBatches = 0;
     int skippedBatches = 0;
     int consecutiveFailures = 0;
-    final int maxConsecutiveFailures = Integer.parseInt(
-        System.getProperty("calcite.etl.maxConsecutiveFailures",
+    final int maxConsecutiveFailures =
+        Integer.parseInt(
+            System.getProperty("calcite.etl.maxConsecutiveFailures",
             System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") != null
                 ? System.getenv("ETL_MAX_CONSECUTIVE_FAILURES") : "10"));
     List<String> errors = new ArrayList<String>();
@@ -732,8 +733,8 @@ public class EtlPipeline {
             LOGGER.info("Skip-if-materialized: querying Iceberg table '{}' for existing partitions",
                 targetTableId);
             try {
-              existingIcebergPartitions = IcebergMaterializationWriter.getExistingPartitions(
-                  catalogConfig, targetTableId, icebergPartitionColumns);
+              existingIcebergPartitions =
+                  IcebergMaterializationWriter.getExistingPartitions(catalogConfig, targetTableId, icebergPartitionColumns);
             } catch (Exception e) {
               LOGGER.warn("Skip-if-materialized: failed to query Iceberg partitions for '{}': {}",
                   targetTableId, e.getMessage());
@@ -842,14 +843,15 @@ public class EtlPipeline {
             for (final int idx : unprocessedIndices) {
               final Map<String, String> variables = partCombos.get(idx);
 
-              partFutures.add(partExecutor.submit(new Callable<Void>() {
+              partFutures.add(
+                  partExecutor.submit(new Callable<Void>() {
                 @Override public Void call() {
                   int currentBatch = partProcessed.incrementAndGet();
                   try {
                     LOGGER.info("Processing batch {} (partition {}/{}): {}",
                         currentBatch, piFinal + 1, partCountFinal, variables);
-                    long batchRows = processSingleBatch(cfgFinal, variables, dsFinal, writerFinal,
-                        currentBatch, neededCountFinal, pipelineNameFinal);
+                    long batchRows =
+                        processSingleBatch(cfgFinal, variables, dsFinal, writerFinal, currentBatch, neededCountFinal, pipelineNameFinal);
                     partRows.addAndGet(batchRows);
                     partSucceeded.incrementAndGet();
 
@@ -857,8 +859,8 @@ public class EtlPipeline {
                       System.gc();
                     }
                   } catch (IOException e) {
-                    String errorMsg = String.format("Batch %d (partition %d/%d) failed: %s",
-                        currentBatch, piFinal + 1, partCountFinal, e.getMessage());
+                    String errorMsg =
+                        String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
                     LOGGER.error(errorMsg, e);
                     partErrors.add(errorMsg);
 
@@ -935,8 +937,8 @@ public class EtlPipeline {
               try {
                 LOGGER.info("Processing batch {} (partition {}/{}): {}",
                     processedCount, pi + 1, partCount, variables);
-                long batchRows = processSingleBatch(config, variables, dataSource, writer,
-                    processedCount, neededCount, pipelineName);
+                long batchRows =
+                    processSingleBatch(config, variables, dataSource, writer, processedCount, neededCount, pipelineName);
                 totalRows += batchRows;
                 successfulBatches++;
                 consecutiveFailures = 0;
@@ -1060,13 +1062,14 @@ public class EtlPipeline {
             final Map<String, String> vars = workVariables.get(wi);
             final int batchNumber = workIndices.get(wi)[1];
 
-            futures.add(executor.submit(new Callable<Void>() {
+            futures.add(
+                executor.submit(new Callable<Void>() {
               @Override public Void call() {
                 int currentBatch = parallelProcessed.incrementAndGet();
                 try {
                   LOGGER.info("Processing batch {}/{}: {}", currentBatch, neededCountFinal, vars);
-                  long batchRows = processSingleBatch(cfgFinal, vars, dsFinal, writerFinal,
-                      currentBatch, neededCountFinal, pipelineNameFinal);
+                  long batchRows =
+                      processSingleBatch(cfgFinal, vars, dsFinal, writerFinal, currentBatch, neededCountFinal, pipelineNameFinal);
                   parallelTotalRows.addAndGet(batchRows);
                   parallelSucceeded.incrementAndGet();
 
@@ -1074,8 +1077,8 @@ public class EtlPipeline {
                     System.gc();
                   }
                 } catch (IOException e) {
-                  String errorMsg = String.format("Batch %d/%d failed: %s",
-                      currentBatch, neededCountFinal, e.getMessage());
+                  String errorMsg =
+                      String.format("Batch %d/%d failed: %s", currentBatch, neededCountFinal, e.getMessage());
                   LOGGER.error(errorMsg, e);
                   parallelErrors.add(errorMsg);
 
@@ -1158,8 +1161,8 @@ public class EtlPipeline {
 
             try {
               LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
-              long batchRows = processSingleBatch(config, variables, dataSource, writer,
-                  processedCount, neededCount, pipelineName);
+              long batchRows =
+                  processSingleBatch(config, variables, dataSource, writer, processedCount, neededCount, pipelineName);
               totalRows += batchRows;
               successfulBatches++;
               consecutiveFailures = 0;

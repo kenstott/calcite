@@ -359,8 +359,8 @@ public interface StorageProvider {
           org.apache.avro.Schema dateSchema = org.apache.avro.LogicalTypes.date()
               .addToSchema(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT));
           if (column.isNullable()) {
-            org.apache.avro.Schema nullableDateSchema = org.apache.avro.Schema.createUnion(
-                org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL), dateSchema);
+            org.apache.avro.Schema nullableDateSchema =
+                org.apache.avro.Schema.createUnion(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL), dateSchema);
             fields = fields.name(column.getName()).doc(column.getComment())
                 .type(nullableDateSchema).noDefault();
           } else {
@@ -684,8 +684,8 @@ public interface StorageProvider {
           case "date": {
             org.apache.avro.Schema ds = org.apache.avro.LogicalTypes.date()
                 .addToSchema(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT));
-            org.apache.avro.Schema nds = org.apache.avro.Schema.createUnion(
-                org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL), ds);
+            org.apache.avro.Schema nds =
+                org.apache.avro.Schema.createUnion(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL), ds);
             fields = fields.name(colName).type(nds).noDefault();
             break;
           }

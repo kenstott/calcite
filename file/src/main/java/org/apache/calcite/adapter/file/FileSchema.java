@@ -1858,12 +1858,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 conversionMetadata.getConversionRecordByConvertedFile(source.path());
             // Handle macOS /private prefix mismatch (symlinks /var -> /private/var)
             if (existingRecord == null) {
-              existingRecord = conversionMetadata.getConversionRecordByConvertedFile(
-                  "/private" + source.path());
+              existingRecord =
+                  conversionMetadata.getConversionRecordByConvertedFile("/private" + source.path());
             }
             if (existingRecord == null && source.path().startsWith("/private")) {
-              existingRecord = conversionMetadata.getConversionRecordByConvertedFile(
-                  source.path().substring("/private".length()));
+              existingRecord =
+                  conversionMetadata.getConversionRecordByConvertedFile(source.path().substring("/private".length()));
             }
             if (existingRecord != null && existingRecord.tableName != null) {
               // This JSON file is a converted file from another source (e.g., HTML)
@@ -5145,12 +5145,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               conversionMetadata.getConversionRecordByConvertedFile(file.getAbsolutePath());
           if (record == null) {
             // Also try with /private prefix (macOS symlinks /var -> /private/var)
-            record = conversionMetadata.getConversionRecordByConvertedFile(
-                "/private" + file.getAbsolutePath());
+            record =
+                conversionMetadata.getConversionRecordByConvertedFile("/private" + file.getAbsolutePath());
           }
           if (record == null && file.getAbsolutePath().startsWith("/private")) {
-            record = conversionMetadata.getConversionRecordByConvertedFile(
-                file.getAbsolutePath().substring("/private".length()));
+            record =
+                conversionMetadata.getConversionRecordByConvertedFile(file.getAbsolutePath().substring("/private".length()));
           }
           if (record != null && record.tableName != null) {
             LOGGER.debug("[processConvertedFiles] Skipping {} - already handled as "

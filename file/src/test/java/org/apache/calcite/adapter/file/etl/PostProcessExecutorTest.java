@@ -20,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,8 +108,8 @@ class PostProcessExecutorTest {
   @Test void testVariableSubstitution() throws Exception {
     // Script that writes variables to a file for verification
     Path outputFile = tempDir.resolve("output.txt");
-    Path script = createScript("vars.sh",
-        "#!/bin/bash\necho \"$1 $2\" > " + outputFile.toString() + "\nexit 0");
+    Path script =
+        createScript("vars.sh", "#!/bin/bash\necho \"$1 $2\" > " + outputFile.toString() + "\nexit 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_vars")
@@ -133,8 +132,8 @@ class PostProcessExecutorTest {
 
   @Test void testBaseDirectoryVariableSubstitution() throws Exception {
     Path outputFile = tempDir.resolve("basedir_output.txt");
-    Path script = createScript("basedir.sh",
-        "#!/bin/bash\necho \"$1\" > " + outputFile.toString() + "\nexit 0");
+    Path script =
+        createScript("basedir.sh", "#!/bin/bash\necho \"$1\" > " + outputFile.toString() + "\nexit 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_basedir")
@@ -152,8 +151,8 @@ class PostProcessExecutorTest {
 
   @Test void testEnvironmentVariables() throws Exception {
     Path outputFile = tempDir.resolve("env_output.txt");
-    Path script = createScript("env.sh",
-        "#!/bin/bash\necho \"$POSTPROCESS_YEAR $MY_VAR\" > "
+    Path script =
+        createScript("env.sh", "#!/bin/bash\necho \"$POSTPROCESS_YEAR $MY_VAR\" > "
             + outputFile.toString() + "\nexit 0");
 
     Map<String, String> env = new HashMap<String, String>();
@@ -239,8 +238,8 @@ class PostProcessExecutorTest {
   }
 
   @Test void testAsyncExecution() throws Exception {
-    Path script = createScript("async.sh",
-        "#!/bin/bash\necho \"async running\"\nexit 0");
+    Path script =
+        createScript("async.sh", "#!/bin/bash\necho \"async running\"\nexit 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_async")

@@ -17,16 +17,13 @@
 package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
-import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,9 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -335,8 +330,8 @@ class DocumentETLProcessorCoverageTest {
   // ===== extractPaginationFiles =====
 
   @Test void testExtractPaginationFilesNoFilingsKey() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -346,8 +341,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testExtractPaginationFilesNoFilesKey() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -358,8 +353,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testExtractPaginationFilesNoArray() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -370,8 +365,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testExtractPaginationFilesValid() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -392,8 +387,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testExtractPaginationFilesMultiple() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -412,8 +407,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testExtractPaginationFilesEmptyName() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -430,8 +425,8 @@ class DocumentETLProcessorCoverageTest {
   // ===== isAlreadyProcessed =====
 
   @Test void testIsAlreadyProcessedNullCik() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -441,8 +436,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testIsAlreadyProcessedNullAccession() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -455,8 +450,8 @@ class DocumentETLProcessorCoverageTest {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     when(tracker.isProcessed("0000070502", "0001-23-000001", "10-K")).thenReturn(true);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter, null, tracker);
 
@@ -470,8 +465,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testIsAlreadyProcessedFallbackExistsInCache() throws IOException {
     when(mockStorageProvider.exists(anyString())).thenReturn(false);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -484,8 +479,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testIsAlreadyProcessedFallbackFileExists() throws IOException {
     when(mockStorageProvider.exists(anyString())).thenReturn(true);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -496,8 +491,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testIsAlreadyProcessedShortAccession() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -508,8 +503,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testIsAlreadyProcessedNoDashInAccession() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -520,8 +515,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testIsAlreadyProcessedNonNumericYear() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -534,8 +529,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testIsAlreadyProcessedYear2000sMapping() throws IOException {
     when(mockStorageProvider.exists(anyString())).thenReturn(true);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -548,8 +543,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testIsAlreadyProcessedYear1900sMapping() throws IOException {
     when(mockStorageProvider.exists(anyString())).thenReturn(true);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -562,8 +557,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testIsAlreadyProcessedStorageProviderException() throws IOException {
     when(mockStorageProvider.exists(anyString())).thenThrow(new IOException("S3 error"));
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -578,8 +573,8 @@ class DocumentETLProcessorCoverageTest {
   // ===== parseDocuments =====
 
   @Test void testParseDocumentsNoOverload() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -592,8 +587,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testParseDocumentsWithSubmissionsJson() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -625,8 +620,8 @@ class DocumentETLProcessorCoverageTest {
     when(docConfig.getDocumentTypes()).thenReturn(null);
     when(mockConfig.getDocumentSource()).thenReturn(docConfig);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -658,8 +653,8 @@ class DocumentETLProcessorCoverageTest {
     when(docConfig.getDocumentTypes()).thenReturn(Arrays.asList("10-K"));
     when(mockConfig.getDocumentSource()).thenReturn(docConfig);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -683,8 +678,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testParseDocumentsForm4XSLStripping() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -706,8 +701,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testParseDocumentsForm3XSLStripping() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -728,8 +723,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testParseDocumentsForm5Normal() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -751,8 +746,8 @@ class DocumentETLProcessorCoverageTest {
   }
 
   @Test void testParseDocumentsCikUrlStripping() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 
@@ -778,8 +773,8 @@ class DocumentETLProcessorCoverageTest {
   // ===== Constructors =====
 
   @Test void testConstructorBasic() {
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
     assertNotNull(processor);
@@ -787,8 +782,8 @@ class DocumentETLProcessorCoverageTest {
 
   @Test void testConstructorWithProgressListener() {
     DocumentETLProcessor.ProgressListener listener = (processed, total, message) -> {};
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter, listener);
     assertNotNull(processor);
@@ -797,8 +792,8 @@ class DocumentETLProcessorCoverageTest {
   @Test void testConstructorWithTrackerAndListener() {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     DocumentETLProcessor.ProgressListener listener = (processed, total, message) -> {};
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter, listener, tracker);
     assertNotNull(processor);
@@ -808,8 +803,8 @@ class DocumentETLProcessorCoverageTest {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     DocumentETLProcessor.ProgressListener listener = (processed, total, message) -> {};
     FilingIndexProvider indexProvider = mock(FilingIndexProvider.class);
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter, listener, tracker, indexProvider);
     assertNotNull(processor);
@@ -821,8 +816,8 @@ class DocumentETLProcessorCoverageTest {
     // First call returns false, second call also false but cached
     when(mockStorageProvider.exists(anyString())).thenReturn(false);
 
-    DocumentETLProcessor processor = new DocumentETLProcessor(
-        mockConfig, mockStorageProvider,
+    DocumentETLProcessor processor =
+        new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
         mockConverter);
 

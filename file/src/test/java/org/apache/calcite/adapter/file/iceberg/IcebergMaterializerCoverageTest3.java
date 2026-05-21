@@ -109,8 +109,8 @@ public class IcebergMaterializerCoverageTest3 {
         return new java.io.StringReader("");
       }
     };
-    materializer = new IcebergMaterializer(
-        tempDir.toString(), mockStorageProvider, IncrementalTracker.NOOP);
+    materializer =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, IncrementalTracker.NOOP);
   }
 
   // ========== MaterializationConfig Builder Tests ==========
@@ -460,8 +460,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testFindColumnTypeFound() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "findColumnType", List.class, String.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("findColumnType", List.class, String.class);
     m.setAccessible(true);
     List<ColumnDefinition> cols = new ArrayList<ColumnDefinition>();
     cols.add(new ColumnDefinition("year", "INTEGER"));
@@ -470,8 +470,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testFindColumnTypeNotFound() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "findColumnType", List.class, String.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("findColumnType", List.class, String.class);
     m.setAccessible(true);
     List<ColumnDefinition> cols = new ArrayList<ColumnDefinition>();
     cols.add(new ColumnDefinition("year", "INTEGER"));
@@ -481,8 +481,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildBatchCombinations and related via Reflection ==========
 
   @Test void testBuildCombinationsRecursiveBase() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     m.setAccessible(true);
 
@@ -501,8 +501,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildCombinationsRecursiveMultiColumn() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     m.setAccessible(true);
 
@@ -521,8 +521,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== groupBatchesByIncrementalKey Tests ==========
 
   @Test void testGroupBatchesByIncrementalKeyNull() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     m.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<Map<String, String>>();
@@ -539,8 +539,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testGroupBatchesByIncrementalKeyWithKeys() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     m.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<Map<String, String>>();
@@ -570,8 +570,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== needsFilenameEmbedding Tests ==========
 
   @Test void testNeedsFilenameEmbeddingEmptyBatch() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "needsFilenameEmbedding",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("needsFilenameEmbedding",
         IcebergMaterializer.MaterializationConfig.class, Map.class);
     m.setAccessible(true);
 
@@ -581,14 +581,14 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    boolean result = (boolean) m.invoke(materializer, config,
-        Collections.emptyMap());
+    boolean result =
+        (boolean) m.invoke(materializer, config, Collections.emptyMap());
     assertFalse(result);
   }
 
   @Test void testNeedsFilenameEmbeddingBatchKeyInPartition() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "needsFilenameEmbedding",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("needsFilenameEmbedding",
         IcebergMaterializer.MaterializationConfig.class, Map.class);
     m.setAccessible(true);
 
@@ -610,8 +610,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testNeedsFilenameEmbeddingBatchKeyNotInPartition() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "needsFilenameEmbedding",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("needsFilenameEmbedding",
         IcebergMaterializer.MaterializationConfig.class, Map.class);
     m.setAccessible(true);
 
@@ -631,8 +631,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildFilenamePattern Tests ==========
 
   @Test void testBuildFilenamePatternSingleKey() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildFilenamePattern", Map.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildFilenamePattern", Map.class);
     m.setAccessible(true);
 
     Map<String, String> batch = new LinkedHashMap<String, String>();
@@ -644,8 +644,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildFilenamePatternMultiKey() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildFilenamePattern", Map.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildFilenamePattern", Map.class);
     m.setAccessible(true);
 
     Map<String, String> batch = new LinkedHashMap<String, String>();
@@ -662,8 +662,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildSelectSql Tests ==========
 
   @Test void testBuildSelectSqlParquetNoFilter() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -674,8 +674,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/year=2020/*.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/year=2020/*.parquet",
         Collections.emptyMap(), null);
 
     assertTrue(sql.contains("SELECT * FROM"));
@@ -684,8 +684,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlJsonFormat() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -697,16 +697,16 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.json",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.json",
         Collections.emptyMap(), null);
 
     assertTrue(sql.contains("read_json("));
   }
 
   @Test void testBuildSelectSqlWithComputedColumns() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -721,8 +721,8 @@ public class IcebergMaterializerCoverageTest3 {
             .computedColumns(computed)
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.parquet",
         Collections.emptyMap(), null);
 
     assertTrue(sql.contains("SELECT *"));
@@ -730,8 +730,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlWithRowFilter() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -743,16 +743,16 @@ public class IcebergMaterializerCoverageTest3 {
             .rowFilter("cik IN ('001')")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.parquet",
         Collections.emptyMap(), null);
 
     assertTrue(sql.contains("WHERE cik IN ('001')"));
   }
 
   @Test void testBuildSelectSqlWithSmallExclusionList() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -767,8 +767,8 @@ public class IcebergMaterializerCoverageTest3 {
     excludeAccessions.add("acc1");
     excludeAccessions.add("acc2");
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.parquet",
         Collections.emptyMap(), excludeAccessions);
 
     assertTrue(sql.contains("NOT IN"));
@@ -776,8 +776,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlWithLargeExclusionList() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -794,8 +794,8 @@ public class IcebergMaterializerCoverageTest3 {
       excludeAccessions.add("acc_" + i);
     }
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.parquet",
         Collections.emptyMap(), excludeAccessions);
 
     assertTrue(sql.contains("NOT EXISTS"));
@@ -803,8 +803,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlWithRowFilterAndExclusions() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, Set.class);
     m.setAccessible(true);
@@ -819,8 +819,8 @@ public class IcebergMaterializerCoverageTest3 {
     Set<String> excludeAccessions = new HashSet<String>();
     excludeAccessions.add("acc1");
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/data.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/data.parquet",
         Collections.emptyMap(), excludeAccessions);
 
     assertTrue(sql.contains("WHERE cik = '001'"));
@@ -831,8 +831,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildSelectSqlWithPaging Tests ==========
 
   @Test void testBuildSelectSqlWithPagingBasic() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSqlWithPaging",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSqlWithPaging",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, int.class, int.class, Set.class);
     m.setAccessible(true);
@@ -843,8 +843,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.parquet",
         Collections.emptyMap(), 100, 0, null);
 
     assertTrue(sql.contains("LIMIT 100"));
@@ -852,8 +852,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlWithPagingAndOffset() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSqlWithPaging",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSqlWithPaging",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, int.class, int.class, Set.class);
     m.setAccessible(true);
@@ -864,8 +864,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.parquet",
         Collections.emptyMap(), 100, 500, null);
 
     assertTrue(sql.contains("LIMIT 100"));
@@ -873,8 +873,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildSelectSqlWithPagingJsonFormat() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildSelectSqlWithPaging",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildSelectSqlWithPaging",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, Map.class, int.class, int.class, Set.class);
     m.setAccessible(true);
@@ -886,8 +886,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.json",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.json",
         Collections.emptyMap(), 50, 0, null);
 
     assertTrue(sql.contains("read_json("));
@@ -897,8 +897,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildCountSql Tests ==========
 
   @Test void testBuildCountSqlParquet() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildCountSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildCountSql",
         IcebergMaterializer.MaterializationConfig.class, String.class);
     m.setAccessible(true);
 
@@ -914,8 +914,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildCountSqlJson() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildCountSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildCountSql",
         IcebergMaterializer.MaterializationConfig.class, String.class);
     m.setAccessible(true);
 
@@ -932,8 +932,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildCountSqlWithRowFilter() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildCountSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildCountSql",
         IcebergMaterializer.MaterializationConfig.class, String.class);
     m.setAccessible(true);
 
@@ -951,8 +951,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== buildDuckDBSql Tests ==========
 
   @Test void testBuildDuckDBSqlBasic() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildDuckDBSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildDuckDBSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, String.class, Map.class, int.class, int.class);
     m.setAccessible(true);
@@ -963,8 +963,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.parquet", "/tmp/staging/out.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.parquet", "/tmp/staging/out.parquet",
         Collections.emptyMap(), -1, -1);
 
     assertTrue(sql.contains("COPY ("));
@@ -975,8 +975,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildDuckDBSqlWithLimitOffset() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildDuckDBSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildDuckDBSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, String.class, Map.class, int.class, int.class);
     m.setAccessible(true);
@@ -987,8 +987,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.parquet", "/tmp/out.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.parquet", "/tmp/out.parquet",
         Collections.emptyMap(), 100, 50);
 
     assertTrue(sql.contains("LIMIT 100"));
@@ -996,8 +996,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildDuckDBSqlWithPartitionColumns() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildDuckDBSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildDuckDBSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, String.class, Map.class, int.class, int.class);
     m.setAccessible(true);
@@ -1012,8 +1012,8 @@ public class IcebergMaterializerCoverageTest3 {
             .partitionColumns(partCols)
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.parquet", "/tmp/staging/",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.parquet", "/tmp/staging/",
         Collections.emptyMap(), -1, -1);
 
     assertTrue(sql.contains("PARTITION_BY"));
@@ -1022,8 +1022,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testBuildDuckDBSqlJsonFormat() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "buildDuckDBSql",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("buildDuckDBSql",
         IcebergMaterializer.MaterializationConfig.class,
         String.class, String.class, Map.class, int.class, int.class);
     m.setAccessible(true);
@@ -1035,8 +1035,8 @@ public class IcebergMaterializerCoverageTest3 {
             .targetTableId("tbl")
             .build();
 
-    String sql = (String) m.invoke(materializer, config,
-        "s3://bucket/*.json", "/tmp/out.parquet",
+    String sql =
+        (String) m.invoke(materializer, config, "s3://bucket/*.json", "/tmp/out.parquet",
         Collections.emptyMap(), -1, -1);
 
     assertTrue(sql.contains("read_json("));
@@ -1045,16 +1045,16 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== Constructor Tests ==========
 
   @Test void testConstructorWithNullIncrementalTracker() throws Exception {
-    IcebergMaterializer mat = new IcebergMaterializer(
-        tempDir.toString(), mockStorageProvider, null);
+    IcebergMaterializer mat =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, null);
     Field trackerField = IcebergMaterializer.class.getDeclaredField("incrementalTracker");
     trackerField.setAccessible(true);
     assertNotNull(trackerField.get(mat));
   }
 
   @Test void testConstructorWithCustomRetrySettings() throws Exception {
-    IcebergMaterializer mat = new IcebergMaterializer(
-        tempDir.toString(), mockStorageProvider, IncrementalTracker.NOOP, 5, 2000);
+    IcebergMaterializer mat =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, IncrementalTracker.NOOP, 5, 2000);
     Field maxRetriesField = IcebergMaterializer.class.getDeclaredField("maxRetries");
     maxRetriesField.setAccessible(true);
     assertEquals(5, maxRetriesField.getInt(mat));
@@ -1091,8 +1091,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testConstructorNullStorageProvider() throws Exception {
-    IcebergMaterializer mat = new IcebergMaterializer(
-        tempDir.toString(), null, IncrementalTracker.NOOP);
+    IcebergMaterializer mat =
+        new IcebergMaterializer(tempDir.toString(), null, IncrementalTracker.NOOP);
     Field configField = IcebergMaterializer.class.getDeclaredField("catalogConfig");
     configField.setAccessible(true);
     @SuppressWarnings("unchecked")
@@ -1125,24 +1125,24 @@ public class IcebergMaterializerCoverageTest3 {
       }
     };
 
-    IcebergMaterializer mat = new IcebergMaterializer(
-        tempDir.toString(), emptyS3Provider, IncrementalTracker.NOOP);
+    IcebergMaterializer mat =
+        new IcebergMaterializer(tempDir.toString(), emptyS3Provider, IncrementalTracker.NOOP);
     assertNotNull(mat);
   }
 
   // ========== cleanupStagingDirectory Tests ==========
 
   @Test void testCleanupStagingDirectoryS3Path() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "cleanupStagingDirectory", String.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("cleanupStagingDirectory", String.class);
     m.setAccessible(true);
     // S3 paths should skip cleanup (no exception)
     m.invoke(materializer, "s3://bucket/.staging/test");
   }
 
   @Test void testCleanupStagingDirectoryS3aPath() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "cleanupStagingDirectory", String.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("cleanupStagingDirectory", String.class);
     m.setAccessible(true);
     // S3a paths should skip cleanup (no exception)
     m.invoke(materializer, "s3a://bucket/.staging/test");
@@ -1151,8 +1151,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== isSourceWatermarkEnabled Tests ==========
 
   @Test void testIsSourceWatermarkEnabled() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "isSourceWatermarkEnabled",
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("isSourceWatermarkEnabled",
         IcebergMaterializer.MaterializationConfig.class);
     m.setAccessible(true);
 
@@ -1181,8 +1181,8 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== selfHealTracker edge cases ==========
 
   @Test void testCountAllAccessions() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "countAllAccessions", Map.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("countAllAccessions", Map.class);
     m.setAccessible(true);
 
     Map<String, Set<String>> cikToAccessions = new HashMap<String, Set<String>>();
@@ -1199,8 +1199,8 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testCountAllAccessionsEmpty() throws Exception {
-    Method m = IcebergMaterializer.class.getDeclaredMethod(
-        "countAllAccessions", Map.class);
+    Method m =
+        IcebergMaterializer.class.getDeclaredMethod("countAllAccessions", Map.class);
     m.setAccessible(true);
 
     Map<String, Set<String>> empty = new HashMap<String, Set<String>>();
@@ -1211,15 +1211,15 @@ public class IcebergMaterializerCoverageTest3 {
   // ========== getSourceFileWatermark for S3 ==========
 
   @Test void testGetSourceFileWatermarkS3() {
-    long watermark = materializer.getSourceFileWatermark(
-        "s3://bucket/data/*.parquet",
+    long watermark =
+        materializer.getSourceFileWatermark("s3://bucket/data/*.parquet",
         IcebergMaterializer.SourceFormat.PARQUET);
     assertEquals(0, watermark); // S3 returns 0
   }
 
   @Test void testGetSourceFileWatermarkS3a() {
-    long watermark = materializer.getSourceFileWatermark(
-        "s3a://bucket/data/*.parquet",
+    long watermark =
+        materializer.getSourceFileWatermark("s3a://bucket/data/*.parquet",
         IcebergMaterializer.SourceFormat.PARQUET);
     assertEquals(0, watermark);
   }

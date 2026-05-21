@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +59,8 @@ public class MaterializationWriterFactoryTest {
   }
 
   @Test public void testCreateParquetWriter() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof ParquetMaterializationWriter,
@@ -71,8 +70,8 @@ public class MaterializationWriterFactoryTest {
   }
 
   @Test public void testCreateIcebergWriter() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.ICEBERG, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.ICEBERG, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -124,8 +123,8 @@ public class MaterializationWriterFactoryTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof ParquetMaterializationWriter,
@@ -139,8 +138,8 @@ public class MaterializationWriterFactoryTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -154,8 +153,8 @@ public class MaterializationWriterFactoryTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -181,8 +180,8 @@ public class MaterializationWriterFactoryTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -202,8 +201,8 @@ public class MaterializationWriterFactoryTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat(),
@@ -217,8 +216,8 @@ public class MaterializationWriterFactoryTest {
   }
 
   @Test public void testCreateWithOverloadedMethodIncludingTracker() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
 
     assertNotNull(writer, "Factory should return a non-null writer for overloaded method");
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat(),

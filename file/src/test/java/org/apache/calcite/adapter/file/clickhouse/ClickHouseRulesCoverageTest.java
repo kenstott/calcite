@@ -16,42 +16,23 @@
  */
 package org.apache.calcite.adapter.file.clickhouse;
 
-import org.apache.calcite.adapter.file.FileSchema;
-import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
-import org.apache.calcite.adapter.file.statistics.HLLSketchCache;
-import org.apache.calcite.adapter.file.statistics.HyperLogLogSketch;
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.adapter.jdbc.JdbcTable;
-import org.apache.calcite.adapter.jdbc.JdbcTableScan;
-import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -402,8 +383,8 @@ class ClickHouseRulesCoverageTest {
     AggregateCall aggCall = mock(AggregateCall.class);
     when(aggCall.getArgList()).thenReturn(ImmutableList.<Integer>of());
 
-    Object result = getEstimate.invoke(
-        ClickHouseHLLCountDistinctRule.INSTANCE, tableInfo, input, aggCall);
+    Object result =
+        getEstimate.invoke(ClickHouseHLLCountDistinctRule.INSTANCE, tableInfo, input, aggCall);
     assertNull(result, "Empty arg list should return null");
   }
 

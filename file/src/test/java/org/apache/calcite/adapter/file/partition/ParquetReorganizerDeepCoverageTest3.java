@@ -24,8 +24,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -33,11 +31,9 @@ import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -63,8 +59,7 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== getDistinctPartitionValues ==========
 
-  @Test
-  void testGetDistinctPartitionValuesColumnNotInPath() throws Exception {
+  @Test void testGetDistinctPartitionValuesColumnNotInPath() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.resolvePath(anyString(), anyString())).thenAnswer(inv -> {
       String base = inv.getArgument(0);
@@ -73,8 +68,8 @@ class ParquetReorganizerDeepCoverageTest3 {
     });
     ParquetReorganizer reorg = new ParquetReorganizer(sp, tempDir.toString());
 
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "getDistinctPartitionValues", Connection.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("getDistinctPartitionValues", Connection.class,
         ParquetReorganizer.ReorgConfig.class, String.class);
     m.setAccessible(true);
 
@@ -85,8 +80,8 @@ class ParquetReorganizerDeepCoverageTest3 {
         .build();
 
     // Need a real DuckDB connection for this method
-    Connection conn = DriverManager.getConnection(
-        "jdbc:duckdb:" + tempDir.resolve("test_distinct.duckdb").toString());
+    Connection conn =
+        DriverManager.getConnection("jdbc:duckdb:" + tempDir.resolve("test_distinct.duckdb").toString());
     try {
       @SuppressWarnings("unchecked")
       List<String> result = (List<String>) m.invoke(reorg, conn, config, "mystery_col");
@@ -96,8 +91,7 @@ class ParquetReorganizerDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testGetDistinctPartitionValuesFromDirectoryListing() throws Exception {
+  @Test void testGetDistinctPartitionValuesFromDirectoryListing() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.resolvePath(anyString(), anyString())).thenAnswer(inv -> {
       String base = inv.getArgument(0);
@@ -107,18 +101,20 @@ class ParquetReorganizerDeepCoverageTest3 {
 
     // Mock directory listing returning partition directories
     List<StorageProvider.FileEntry> entries = new ArrayList<StorageProvider.FileEntry>();
-    entries.add(new StorageProvider.FileEntry(
+    entries.add(
+        new StorageProvider.FileEntry(
         tempDir + "/type=income/geo=STATE/data.parquet",
         "data.parquet", false, 100L, System.currentTimeMillis()));
-    entries.add(new StorageProvider.FileEntry(
+    entries.add(
+        new StorageProvider.FileEntry(
         tempDir + "/type=income/geo=COUNTY/data.parquet",
         "data.parquet", false, 200L, System.currentTimeMillis()));
     when(sp.listFiles(anyString(), eq(true))).thenReturn(entries);
 
     ParquetReorganizer reorg = new ParquetReorganizer(sp, tempDir.toString());
 
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "getDistinctPartitionValues", Connection.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("getDistinctPartitionValues", Connection.class,
         ParquetReorganizer.ReorgConfig.class, String.class);
     m.setAccessible(true);
 
@@ -127,8 +123,8 @@ class ParquetReorganizerDeepCoverageTest3 {
         .targetBase("target")
         .build();
 
-    Connection conn = DriverManager.getConnection(
-        "jdbc:duckdb:" + tempDir.resolve("test_listing.duckdb").toString());
+    Connection conn =
+        DriverManager.getConnection("jdbc:duckdb:" + tempDir.resolve("test_listing.duckdb").toString());
     try {
       @SuppressWarnings("unchecked")
       List<String> result = (List<String>) m.invoke(reorg, conn, config, "geo");
@@ -139,8 +135,7 @@ class ParquetReorganizerDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testGetDistinctPartitionValuesWildcardPrefix() throws Exception {
+  @Test void testGetDistinctPartitionValuesWildcardPrefix() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.resolvePath(anyString(), anyString())).thenAnswer(inv -> {
       String base = inv.getArgument(0);
@@ -149,15 +144,16 @@ class ParquetReorganizerDeepCoverageTest3 {
     });
 
     List<StorageProvider.FileEntry> entries = new ArrayList<StorageProvider.FileEntry>();
-    entries.add(new StorageProvider.FileEntry(
+    entries.add(
+        new StorageProvider.FileEntry(
         tempDir + "/type=income/year=2020/geo=STATE/f.parquet",
         "f.parquet", false, 100L, System.currentTimeMillis()));
     when(sp.listFiles(anyString(), eq(true))).thenReturn(entries);
 
     ParquetReorganizer reorg = new ParquetReorganizer(sp, tempDir.toString());
 
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "getDistinctPartitionValues", Connection.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("getDistinctPartitionValues", Connection.class,
         ParquetReorganizer.ReorgConfig.class, String.class);
     m.setAccessible(true);
 
@@ -167,8 +163,8 @@ class ParquetReorganizerDeepCoverageTest3 {
         .targetBase("target")
         .build();
 
-    Connection conn = DriverManager.getConnection(
-        "jdbc:duckdb:" + tempDir.resolve("test_wc.duckdb").toString());
+    Connection conn =
+        DriverManager.getConnection("jdbc:duckdb:" + tempDir.resolve("test_wc.duckdb").toString());
     try {
       @SuppressWarnings("unchecked")
       List<String> result = (List<String>) m.invoke(reorg, conn, config, "geo");
@@ -181,11 +177,10 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== buildBatchCombinations ==========
 
-  @Test
-  void testBuildBatchCombinationsEmptyBatchColumns() throws Exception {
+  @Test void testBuildBatchCombinationsEmptyBatchColumns() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildBatchCombinations", Connection.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildBatchCombinations", Connection.class,
         ParquetReorganizer.ReorgConfig.class);
     m.setAccessible(true);
 
@@ -194,8 +189,8 @@ class ParquetReorganizerDeepCoverageTest3 {
         .targetBase("tgt")
         .build();  // No batchPartitionColumns
 
-    Connection conn = DriverManager.getConnection(
-        "jdbc:duckdb:" + tempDir.resolve("test_empty_batch.duckdb").toString());
+    Connection conn =
+        DriverManager.getConnection("jdbc:duckdb:" + tempDir.resolve("test_empty_batch.duckdb").toString());
     try {
       @SuppressWarnings("unchecked")
       List<Map<String, String>> result =
@@ -206,11 +201,10 @@ class ParquetReorganizerDeepCoverageTest3 {
     }
   }
 
-  @Test
-  void testBuildBatchCombinationsYearColumnOnly() throws Exception {
+  @Test void testBuildBatchCombinationsYearColumnOnly() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildBatchCombinations", Connection.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildBatchCombinations", Connection.class,
         ParquetReorganizer.ReorgConfig.class);
     m.setAccessible(true);
 
@@ -221,8 +215,8 @@ class ParquetReorganizerDeepCoverageTest3 {
         .yearRange(2020, 2022)
         .build();
 
-    Connection conn = DriverManager.getConnection(
-        "jdbc:duckdb:" + tempDir.resolve("test_year_batch.duckdb").toString());
+    Connection conn =
+        DriverManager.getConnection("jdbc:duckdb:" + tempDir.resolve("test_year_batch.duckdb").toString());
     try {
       @SuppressWarnings("unchecked")
       List<Map<String, String>> result =
@@ -238,11 +232,10 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== buildReorganizationSql additional edge cases ==========
 
-  @Test
-  void testBuildReorganizationSqlMultipleColumnMappings() throws Exception {
+  @Test void testBuildReorganizationSqlMultipleColumnMappings() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class);
     m.setAccessible(true);
 
@@ -250,19 +243,18 @@ class ParquetReorganizerDeepCoverageTest3 {
     mappings.put("geo", "GeoFips");
     mappings.put("name", "GeoName");
 
-    String sql = (String) m.invoke(reorg,
-        "/data/*.parquet", "/data/target",
+    String sql =
+        (String) m.invoke(reorg, "/data/*.parquet", "/data/target",
         Arrays.asList("geo", "name"), mappings, "batch_{i}");
 
     assertTrue(sql.contains("\"GeoFips\" AS geo"), "Should alias GeoFips: " + sql);
     assertTrue(sql.contains("\"GeoName\" AS name"), "Should alias GeoName: " + sql);
   }
 
-  @Test
-  void testBuildReorganizationSqlIcebergSingleNumericFilter() throws Exception {
+  @Test void testBuildReorganizationSqlIcebergSingleNumericFilter() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class,
         boolean.class, String.class, String.class, Map.class);
     m.setAccessible(true);
@@ -270,8 +262,8 @@ class ParquetReorganizerDeepCoverageTest3 {
     Map<String, String> filters = new LinkedHashMap<String, String>();
     filters.put("year", "2024");
 
-    String sql = (String) m.invoke(reorg,
-        null, "/data/target", Arrays.asList("geo"), Collections.emptyMap(),
+    String sql =
+        (String) m.invoke(reorg, null, "/data/target", Arrays.asList("geo"), Collections.emptyMap(),
         "data_{i}", true, "s3://warehouse", "tbl", filters);
 
     assertTrue(sql.contains("WHERE year = 2024"),
@@ -279,32 +271,30 @@ class ParquetReorganizerDeepCoverageTest3 {
     assertFalse(sql.contains(" AND "), "Single filter no AND: " + sql);
   }
 
-  @Test
-  void testBuildReorganizationSqlIcebergEmptyFilterMap() throws Exception {
+  @Test void testBuildReorganizationSqlIcebergEmptyFilterMap() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class,
         boolean.class, String.class, String.class, Map.class);
     m.setAccessible(true);
 
-    String sql = (String) m.invoke(reorg,
-        null, "/data/target", Arrays.asList("geo"), Collections.emptyMap(),
+    String sql =
+        (String) m.invoke(reorg, null, "/data/target", Arrays.asList("geo"), Collections.emptyMap(),
         "data_{i}", true, "s3://warehouse", "tbl", Collections.emptyMap());
 
     assertFalse(sql.contains("WHERE"), "Empty filter map = no WHERE: " + sql);
   }
 
-  @Test
-  void testBuildReorganizationSqlParquetEmptyFilenamePattern() throws Exception {
+  @Test void testBuildReorganizationSqlParquetEmptyFilenamePattern() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildReorganizationSql", String.class, String.class,
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildReorganizationSql", String.class, String.class,
         List.class, Map.class, String.class);
     m.setAccessible(true);
 
-    String sql = (String) m.invoke(reorg,
-        "/data/*.parquet", "/data/target",
+    String sql =
+        (String) m.invoke(reorg, "/data/*.parquet", "/data/target",
         Arrays.asList("geo"), Collections.emptyMap(), "");
 
     // Empty string pattern might still be included
@@ -314,11 +304,10 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== buildCombinationsRecursive edge cases ==========
 
-  @Test
-  void testBuildCombinationsRecursiveSingleValuePerColumn() throws Exception {
+  @Test void testBuildCombinationsRecursiveSingleValuePerColumn() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     m.setAccessible(true);
 
@@ -337,11 +326,10 @@ class ParquetReorganizerDeepCoverageTest3 {
     assertEquals("income", result.get(0).get("type"));
   }
 
-  @Test
-  void testBuildCombinationsRecursiveThreeByTwo() throws Exception {
+  @Test void testBuildCombinationsRecursiveThreeByTwo() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "buildCombinationsRecursive",
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("buildCombinationsRecursive",
         List.class, List.class, int.class, Map.class, List.class);
     m.setAccessible(true);
 
@@ -358,11 +346,10 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== groupBatchesByIncrementalKey additional edge cases ==========
 
-  @Test
-  void testGroupBatchesByIncrementalKeyEmptyKeys() throws Exception {
+  @Test void testGroupBatchesByIncrementalKeyEmptyKeys() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     m.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<Map<String, String>>();
@@ -380,11 +367,10 @@ class ParquetReorganizerDeepCoverageTest3 {
     assertEquals(1, result.size());
   }
 
-  @Test
-  void testGroupBatchesByIncrementalKeyMultipleKeys() throws Exception {
+  @Test void testGroupBatchesByIncrementalKeyMultipleKeys() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
-    Method m = ParquetReorganizer.class.getDeclaredMethod(
-        "groupBatchesByIncrementalKey", List.class, List.class);
+    Method m =
+        ParquetReorganizer.class.getDeclaredMethod("groupBatchesByIncrementalKey", List.class, List.class);
     m.setAccessible(true);
 
     List<Map<String, String>> batches = new ArrayList<Map<String, String>>();
@@ -417,8 +403,7 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== isCurrentYear non-numeric year ==========
 
-  @Test
-  void testIsCurrentYearNonNumeric() throws Exception {
+  @Test void testIsCurrentYearNonNumeric() throws Exception {
     ParquetReorganizer reorg = createReorganizer();
     Method m = ParquetReorganizer.class.getDeclaredMethod("isCurrentYear", Map.class);
     m.setAccessible(true);
@@ -429,8 +414,7 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== ReorgConfig IncrementalTracker NOOP identity ==========
 
-  @Test
-  void testReorgConfigNoopTrackerIdentity() {
+  @Test void testReorgConfigNoopTrackerIdentity() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("src/*")
         .targetBase("tgt")
@@ -441,8 +425,7 @@ class ParquetReorganizerDeepCoverageTest3 {
     assertFalse(config.supportsIncremental());
   }
 
-  @Test
-  void testReorgConfigCurrentYearTtlMillisDefault() {
+  @Test void testReorgConfigCurrentYearTtlMillisDefault() {
     ParquetReorganizer.ReorgConfig config = ParquetReorganizer.ReorgConfig.builder()
         .sourcePattern("src/*")
         .targetBase("tgt")
@@ -453,8 +436,7 @@ class ParquetReorganizerDeepCoverageTest3 {
 
   // ========== getDuckDBConnection ==========
 
-  @Test
-  void testGetDuckDBConnectionReturnsConnection() throws Exception {
+  @Test void testGetDuckDBConnectionReturnsConnection() throws Exception {
     Method m = ParquetReorganizer.class.getDeclaredMethod("getDuckDBConnection");
     m.setAccessible(true);
 

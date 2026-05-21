@@ -31,7 +31,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,8 +67,8 @@ public class CompressedColumnBatchDeepTest {
   }
 
   private VectorSchemaRoot createIntBatch(int... values) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -83,8 +82,9 @@ public class CompressedColumnBatchDeepTest {
   }
 
   private VectorSchemaRoot createStringIntBatch(String[] strings, int[] ints) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("name", FieldType.nullable(new ArrowType.Utf8()), null),
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("name", FieldType.nullable(new ArrowType.Utf8()), null),
         new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
@@ -102,16 +102,14 @@ public class CompressedColumnBatchDeepTest {
     return root;
   }
 
-  @Test
-  public void testConstructorAnalyzesCompression() {
+  @Test public void testConstructorAnalyzesCompression() {
     VectorSchemaRoot root = createIntBatch(1, 2, 3, 4, 5);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
     assertNotNull(batch);
     batch.close();
   }
 
-  @Test
-  public void testGetCompressedIntColumn() {
+  @Test public void testGetCompressedIntColumn() {
     VectorSchemaRoot root = createIntBatch(10, 20, 30);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
 
@@ -122,10 +120,9 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testGetCompressedIntColumnWrongType() {
-    VectorSchemaRoot root = createStringIntBatch(
-        new String[]{"a", "b"}, new int[]{1, 2});
+  @Test public void testGetCompressedIntColumnWrongType() {
+    VectorSchemaRoot root =
+        createStringIntBatch(new String[]{"a", "b"}, new int[]{1, 2});
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
 
     assertThrows(IllegalArgumentException.class,
@@ -134,8 +131,7 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testSumCompressed() {
+  @Test public void testSumCompressed() {
     VectorSchemaRoot root = createIntBatch(10, 20, 30, 40, 50);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
 
@@ -150,8 +146,7 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testFilterCompressed() {
+  @Test public void testFilterCompressed() {
     VectorSchemaRoot root = createIntBatch(10, 20, 30, 40, 50);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
 
@@ -165,10 +160,9 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testEmptyBatch() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testEmptyBatch() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     ((IntVector) root.getVector(0)).setValueCount(0);
@@ -179,10 +173,9 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testLargeDataset() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
+  @Test public void testLargeDataset() {
+    Schema schema =
+        new Schema(Arrays.asList(new Field("value", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -204,18 +197,16 @@ public class CompressedColumnBatchDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testCloseNullRoot() {
+  @Test public void testCloseNullRoot() {
     VectorSchemaRoot root = createIntBatch(1);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
     // close should not throw
     batch.close();
   }
 
-  @Test
-  public void testMultiColumnBatch() {
-    VectorSchemaRoot root = createStringIntBatch(
-        new String[]{"Alice", "Bob", "Charlie"},
+  @Test public void testMultiColumnBatch() {
+    VectorSchemaRoot root =
+        createStringIntBatch(new String[]{"Alice", "Bob", "Charlie"},
         new int[]{100, 200, 300});
 
     CompressedColumnBatch batch = new CompressedColumnBatch(root);

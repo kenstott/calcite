@@ -17,9 +17,9 @@
 package org.apache.calcite.adapter.file.execution;
 
 import org.apache.calcite.adapter.file.execution.arrow.VectorizedArrowExecutionEngine;
+import org.apache.calcite.adapter.file.execution.linq4j.ParquetEnumerator;
 import org.apache.calcite.adapter.file.execution.parquet.ParquetExecutionEngine;
 import org.apache.calcite.adapter.file.execution.parquet.ParquetFileEnumerator;
-import org.apache.calcite.adapter.file.execution.linq4j.ParquetEnumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
@@ -29,7 +29,6 @@ import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
 
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
@@ -43,14 +42,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
-import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -61,7 +58,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -106,8 +102,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator with a CSV source (detects format from extension).
    */
   @Test public void testParquetEnumeratorCsvFormat() throws Exception {
-    File csvFile = createCsvFile("enum_test.csv",
-        "item_id,item_name,price\n"
+    File csvFile =
+        createCsvFile("enum_test.csv", "item_id,item_name,price\n"
         + "1,Widget,9.99\n"
         + "2,Gadget,19.99\n"
         + "3,Doohickey,4.99\n");
@@ -143,8 +139,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator with custom batch size.
    */
   @Test public void testParquetEnumeratorCustomBatchSize() throws Exception {
-    File csvFile = createCsvFile("batch_test.csv",
-        "col_a,col_b\n1,x\n2,y\n3,z\n4,w\n5,v\n");
+    File csvFile =
+        createCsvFile("batch_test.csv", "col_a,col_b\n1,x\n2,y\n3,z\n4,w\n5,v\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -176,8 +172,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator reset functionality.
    */
   @Test public void testParquetEnumeratorReset() throws Exception {
-    File csvFile = createCsvFile("reset_test.csv",
-        "val_x,val_y\n10,A\n20,B\n");
+    File csvFile =
+        createCsvFile("reset_test.csv", "val_x,val_y\n10,A\n20,B\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -215,8 +211,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator with cancellation flag.
    */
   @Test public void testParquetEnumeratorCancellation() throws Exception {
-    File csvFile = createCsvFile("cancel_test.csv",
-        "val_a,val_b\n1,x\n2,y\n3,z\n4,w\n5,v\n");
+    File csvFile =
+        createCsvFile("cancel_test.csv", "val_a,val_b\n1,x\n2,y\n3,z\n4,w\n5,v\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -246,8 +242,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator with TSV file (tab-delimited, detected as CSV).
    */
   @Test public void testParquetEnumeratorTsvFormat() throws Exception {
-    File tsvFile = createCsvFile("data.tsv",
-        "name\tage\nAlice\t30\nBob\t25\n");
+    File tsvFile =
+        createCsvFile("data.tsv", "name\tage\nAlice\t30\nBob\t25\n");
 
     Source source = Sources.of(tsvFile);
     RelDataTypeFactory typeFactory =
@@ -280,8 +276,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator streaming stats.
    */
   @Test public void testParquetEnumeratorStreamingStats() throws Exception {
-    File csvFile = createCsvFile("stats_test.csv",
-        "val_a,val_b\n1,x\n2,y\n3,z\n");
+    File csvFile =
+        createCsvFile("stats_test.csv", "val_a,val_b\n1,x\n2,y\n3,z\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -321,8 +317,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator column stats.
    */
   @Test public void testParquetEnumeratorColumnStats() throws Exception {
-    File csvFile = createCsvFile("colstats.csv",
-        "num_val,str_val\n10,hello\n20,world\n5,test\n");
+    File csvFile =
+        createCsvFile("colstats.csv", "num_val,str_val\n10,hello\n20,world\n5,test\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -360,8 +356,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetEnumerator with column name casing.
    */
   @Test public void testParquetEnumeratorColumnCasing() throws Exception {
-    File csvFile = createCsvFile("casing_test.csv",
-        "ColA,ColB\n1,abc\n2,def\n");
+    File csvFile =
+        createCsvFile("casing_test.csv", "ColA,ColB\n1,abc\n2,def\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -649,8 +645,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetFileEnumerator reads CSV data through parquet pipeline.
    */
   @Test public void testParquetFileEnumeratorBasic() throws Exception {
-    File csvFile = createCsvFile("pfe_test.csv",
-        "col_id,col_name,col_amt\n"
+    File csvFile =
+        createCsvFile("pfe_test.csv", "col_id,col_name,col_amt\n"
         + "1,Alpha,10.5\n"
         + "2,Beta,20.5\n"
         + "3,Gamma,30.5\n");
@@ -683,8 +679,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetFileEnumerator with small batch size.
    */
   @Test public void testParquetFileEnumeratorSmallBatch() throws Exception {
-    File csvFile = createCsvFile("pfe_batch.csv",
-        "item,qty\n"
+    File csvFile =
+        createCsvFile("pfe_batch.csv", "item,qty\n"
         + "A,10\n"
         + "B,20\n"
         + "C,30\n"
@@ -717,8 +713,8 @@ public class ParquetExecutionCoverageTest {
    * Tests ParquetFileEnumerator reset.
    */
   @Test public void testParquetFileEnumeratorReset() throws Exception {
-    File csvFile = createCsvFile("pfe_reset.csv",
-        "val_x\n1\n2\n3\n");
+    File csvFile =
+        createCsvFile("pfe_reset.csv", "val_x\n1\n2\n3\n");
 
     Source source = Sources.of(csvFile);
     RelDataTypeFactory typeFactory =
@@ -767,8 +763,8 @@ public class ParquetExecutionCoverageTest {
    */
   private VectorSchemaRoot createArrowBatchWith(
       org.apache.arrow.memory.BufferAllocator alloc, int rows) {
-    List<Field> fields = Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    List<Field> fields =
+        Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("label", FieldType.nullable(new ArrowType.Utf8()), null),
         new Field("amount",
             FieldType.nullable(
@@ -800,8 +796,8 @@ public class ParquetExecutionCoverageTest {
    * Columns: id (INT), label (VARCHAR), amount (DOUBLE)
    */
   private VectorSchemaRoot createArrowBatch(int rows) {
-    List<Field> fields = Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    List<Field> fields =
+        Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("label", FieldType.nullable(new ArrowType.Utf8()), null),
         new Field("amount",
             FieldType.nullable(

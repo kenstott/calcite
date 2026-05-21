@@ -28,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,14 +74,13 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testCreateAndLoadTable() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()),
-        Types.NestedField.optional(3, "value", Types.DoubleType.get())
-    );
+        Types.NestedField.optional(3, "value", Types.DoubleType.get()));
 
-    Table table = IcebergCatalogManager.createTable(
-        hadoopConfig, "test_ns.my_table", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(hadoopConfig, "test_ns.my_table", schema, PartitionSpec.unpartitioned());
 
     assertNotNull(table);
     assertNotNull(table.location());
@@ -90,18 +88,17 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testCreateTableWithPartitionSpec() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "region", Types.StringType.get()),
-        Types.NestedField.optional(3, "amount", Types.DoubleType.get())
-    );
+        Types.NestedField.optional(3, "amount", Types.DoubleType.get()));
 
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("region")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        hadoopConfig, "test_ns.partitioned_table", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(hadoopConfig, "test_ns.partitioned_table", schema, spec);
 
     assertNotNull(table);
     assertFalse(table.spec().isUnpartitioned());
@@ -109,9 +106,8 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testTableExists() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     IcebergCatalogManager.createTable(
         hadoopConfig, "test_ns.exists_test", schema, PartitionSpec.unpartitioned());
@@ -121,9 +117,8 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testDropTable() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     IcebergCatalogManager.createTable(
         hadoopConfig, "test_ns.drop_me", schema, PartitionSpec.unpartitioned());
@@ -152,8 +147,8 @@ public class IcebergCatalogManagerIntegrationTest {
     List<String> partitionColumns = new ArrayList<>();
     // No partitions
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        hadoopConfig, "test_ns.columns_table", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(hadoopConfig, "test_ns.columns_table", columns, partitionColumns);
 
     assertNotNull(table);
     assertEquals(5, table.schema().columns().size());
@@ -168,8 +163,8 @@ public class IcebergCatalogManagerIntegrationTest {
     List<String> partitionColumns = new ArrayList<>();
     partitionColumns.add("region");
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        hadoopConfig, "test_ns.partitioned_cols", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(hadoopConfig, "test_ns.partitioned_cols", columns, partitionColumns);
 
     assertNotNull(table);
     assertFalse(table.spec().isUnpartitioned());
@@ -200,8 +195,8 @@ public class IcebergCatalogManagerIntegrationTest {
 
     List<String> partitionColumns = new ArrayList<>();
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        hadoopConfig, "test_ns.all_types", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(hadoopConfig, "test_ns.all_types", columns, partitionColumns);
 
     assertNotNull(table);
     assertEquals(20, table.schema().columns().size());
@@ -214,8 +209,8 @@ public class IcebergCatalogManagerIntegrationTest {
     columns.add(new IcebergCatalogManager.ColumnDef("email", "STRING", null));
     columns.add(new IcebergCatalogManager.ColumnDef("score", "DOUBLE", ""));
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        hadoopConfig, "test_ns.doc_table", columns, new ArrayList<>());
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(hadoopConfig, "test_ns.doc_table", columns, new ArrayList<>());
 
     assertNotNull(table);
     assertEquals(4, table.schema().columns().size());
@@ -226,37 +221,35 @@ public class IcebergCatalogManagerIntegrationTest {
     columns.add(new IcebergCatalogManager.ColumnDef("id", "INTEGER"));
     columns.add(new IcebergCatalogManager.ColumnDef("tags", "array<string>"));
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        hadoopConfig, "test_ns.array_table", columns, new ArrayList<>());
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(hadoopConfig, "test_ns.array_table", columns, new ArrayList<>());
 
     assertNotNull(table);
     assertEquals(2, table.schema().columns().size());
   }
 
   @Test public void testCreateExistingTableReturnsExisting() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table1 = IcebergCatalogManager.createTable(
-        hadoopConfig, "test_ns.idempotent", schema, PartitionSpec.unpartitioned());
+    Table table1 =
+        IcebergCatalogManager.createTable(hadoopConfig, "test_ns.idempotent", schema, PartitionSpec.unpartitioned());
 
     // Creating again should return existing table
-    Table table2 = IcebergCatalogManager.createTable(
-        hadoopConfig, "test_ns.idempotent", schema, PartitionSpec.unpartitioned());
+    Table table2 =
+        IcebergCatalogManager.createTable(hadoopConfig, "test_ns.idempotent", schema, PartitionSpec.unpartitioned());
 
     assertEquals(table1.location(), table2.location());
   }
 
   @Test public void testLoadTableFromDirectPath() {
     // Create a table via HadoopCatalog first
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
-        Types.NestedField.optional(2, "name", Types.StringType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
+        Types.NestedField.optional(2, "name", Types.StringType.get()));
 
-    Table created = IcebergCatalogManager.createTable(
-        hadoopConfig, "test_ns.direct_path", schema, PartitionSpec.unpartitioned());
+    Table created =
+        IcebergCatalogManager.createTable(hadoopConfig, "test_ns.direct_path", schema, PartitionSpec.unpartitioned());
 
     String location = created.location();
 
@@ -341,9 +334,8 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testListAlternateTables() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     // Create regular and alternate tables
     IcebergCatalogManager.createTable(
@@ -377,9 +369,8 @@ public class IcebergCatalogManagerIntegrationTest {
   }
 
   @Test public void testListAlternatesForSource() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     String altName = IcebergCatalogManager.generateAlternateName();
     IcebergCatalogManager.createTable(
@@ -419,23 +410,21 @@ public class IcebergCatalogManagerIntegrationTest {
     config.put("warehouse", tempDir.resolve("default-catalog").toString());
     config.put("namespace", "ns");
 
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
-    Table table = IcebergCatalogManager.createTable(
-        config, "ns.default_type_table", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(config, "ns.default_type_table", schema, PartitionSpec.unpartitioned());
     assertNotNull(table);
   }
 
   @Test public void testParseTableIdentifierWithDot() {
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     // Table path with dot notation: namespace.tableName
-    Table table = IcebergCatalogManager.createTable(
-        hadoopConfig, "custom_ns.dotted_table", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(hadoopConfig, "custom_ns.dotted_table", schema, PartitionSpec.unpartitioned());
     assertNotNull(table);
   }
 
@@ -445,13 +434,12 @@ public class IcebergCatalogManagerIntegrationTest {
     config.put("warehouse", tempDir.resolve("single-level").toString());
     // No namespace in config
 
-    Schema schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get())
-    );
+    Schema schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
     // Single level table name
-    Table table = IcebergCatalogManager.createTable(
-        config, "single_table", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(config, "single_table", schema, PartitionSpec.unpartitioned());
     assertNotNull(table);
   }
 

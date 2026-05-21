@@ -25,12 +25,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.InputFile;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -39,14 +35,12 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -131,8 +125,7 @@ class ParquetMetadataWriterTest {
   //    the error handling path (lines 198-203) which is important coverage.
   // =========================================================================
 
-  @Test
-  void testAddMetadataToFileThrowsOnWriterModelNameConflict()
+  @Test void testAddMetadataToFileThrowsOnWriterModelNameConflict()
       throws IOException {
     // Files created by AvroParquetWriter contain writer.model.name="avro"
     // The production code merges this into ExtraMetaData for ExampleParquetWriter,
@@ -150,8 +143,7 @@ class ParquetMetadataWriterTest {
         "Should contain error message about failed metadata addition");
   }
 
-  @Test
-  void testAddMetadataToFileInvalidPath() {
+  @Test void testAddMetadataToFileInvalidPath() {
     Map<String, String> metadata = new HashMap<>();
     metadata.put("key", "value");
 
@@ -160,8 +152,7 @@ class ParquetMetadataWriterTest {
             "/nonexistent/path/file.parquet", metadata));
   }
 
-  @Test
-  void testAddMetadataToFileErrorCleansUpTempFile() {
+  @Test void testAddMetadataToFileErrorCleansUpTempFile() {
     // Test that the catch block at line 200 runs (temp file cleanup)
     Map<String, String> metadata = new HashMap<>();
     metadata.put("key", "value");
@@ -174,8 +165,7 @@ class ParquetMetadataWriterTest {
     }
   }
 
-  @Test
-  void testAddMetadataToFileCoversTempFileCreation() throws IOException {
+  @Test void testAddMetadataToFileCoversTempFileCreation() throws IOException {
     // This test verifies the code path at lines 132-134 (temp file creation)
     // and lines 136-147 (reading existing file and schema) even though the
     // write ultimately fails due to metadata key conflict.
@@ -199,45 +189,42 @@ class ParquetMetadataWriterTest {
   // 2. addMetadataToDirectory() - all paths
   // =========================================================================
 
-  @Test
-  void testAddMetadataToDirectoryNoMetadata() throws IOException {
+  @Test void testAddMetadataToDirectoryNoMetadata() throws IOException {
     StorageProvider storageProvider = mock(StorageProvider.class);
 
     // Both null - exercises lines 79-83
-    int result1 = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(), null, null);
+    int result1 =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(), null, null);
     assertEquals(0, result1,
         "Should return 0 when no metadata to add");
 
     // Empty strings and empty map
-    int result2 = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(), "",
+    int result2 =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(), "",
         new HashMap<String, String>());
     assertEquals(0, result2,
         "Should return 0 when metadata is empty");
   }
 
-  @Test
-  void testAddMetadataToDirectoryNoParquetFiles() throws IOException {
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(), new String[]{});
+  @Test void testAddMetadataToDirectoryNoParquetFiles() throws IOException {
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(), new String[]{});
 
     Map<String, String> columnComments = new HashMap<>();
     columnComments.put("id", "Key");
 
     // Exercises lines 88-100 (empty file list path)
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Table comment", columnComments);
 
     assertEquals(0, processed,
         "Should return 0 when no Parquet files found");
   }
 
-  @Test
-  void testAddMetadataToDirectoryWithNonParquetFiles() throws IOException {
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+  @Test void testAddMetadataToDirectoryWithNonParquetFiles() throws IOException {
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("data.csv").toString(),
             tempDir.resolve("data.json").toString()
@@ -247,22 +234,21 @@ class ParquetMetadataWriterTest {
     columnComments.put("id", "Key");
 
     // Exercises lines 91-95 (filtering non-parquet files)
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Table comment", columnComments);
 
     assertEquals(0, processed,
         "Should return 0 when no .parquet files in listing");
   }
 
-  @Test
-  void testAddMetadataToDirectoryHandlesFailingFile() throws IOException {
+  @Test void testAddMetadataToDirectoryHandlesFailingFile() throws IOException {
     // Create one valid and one invalid file reference
     // Both are real parquet files but will fail due to metadata conflict
     createTestParquetFile("valid.parquet", 2);
 
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("valid.parquet").toString(),
             tempDir.resolve("nonexistent.parquet").toString()
@@ -274,8 +260,8 @@ class ParquetMetadataWriterTest {
     // Exercises lines 105-112 (exception handling per file)
     // Both files fail: valid.parquet fails due to metadata conflict,
     // nonexistent.parquet fails because it doesn't exist.
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Test", columnComments);
 
     // Both should fail (0 processed)
@@ -283,13 +269,12 @@ class ParquetMetadataWriterTest {
         "Both files should fail - one due to conflict, one missing");
   }
 
-  @Test
-  void testAddMetadataToDirectoryTableCommentOnly() throws IOException {
+  @Test void testAddMetadataToDirectoryTableCommentOnly() throws IOException {
     // Tests with only table comment, null column comments
     createTestParquetFile("tc_only.parquet", 2);
 
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("tc_only.parquet").toString()
         });
@@ -297,8 +282,8 @@ class ParquetMetadataWriterTest {
     // Exercises the buildMetadataMap path where columnComments is null
     // The addMetadataToFile call will fail due to metadata conflict,
     // but this exercises lines 86-115 (the for loop)
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Just a table comment", null);
 
     // Will be 0 due to metadata conflict in underlying addMetadataToFile
@@ -306,12 +291,11 @@ class ParquetMetadataWriterTest {
         "Expected 0 due to writer.model.name conflict");
   }
 
-  @Test
-  void testAddMetadataToDirectoryColumnCommentsOnly() throws IOException {
+  @Test void testAddMetadataToDirectoryColumnCommentsOnly() throws IOException {
     createTestParquetFile("cc_only.parquet", 2);
 
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("cc_only.parquet").toString()
         });
@@ -320,54 +304,50 @@ class ParquetMetadataWriterTest {
     columnComments.put("id", "Primary key");
 
     // Exercises path where tableComment is null but columnComments is not
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         null, columnComments);
 
     assertEquals(0, processed,
         "Expected 0 due to writer.model.name conflict");
   }
 
-  @Test
-  void testAddMetadataToDirectoryNullTableCommentNullColumnComments()
+  @Test void testAddMetadataToDirectoryNullTableCommentNullColumnComments()
       throws IOException {
     StorageProvider storageProvider = mock(StorageProvider.class);
 
-    int result = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(), null, null);
+    int result =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(), null, null);
     assertEquals(0, result);
   }
 
-  @Test
-  void testAddMetadataToDirectoryEmptyTableCommentNullColumnComments()
+  @Test void testAddMetadataToDirectoryEmptyTableCommentNullColumnComments()
       throws IOException {
     StorageProvider storageProvider = mock(StorageProvider.class);
 
-    int result = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(), "", null);
+    int result =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(), "", null);
     assertEquals(0, result);
   }
 
-  @Test
-  void testAddMetadataToDirectoryNullTableCommentEmptyColumnComments()
+  @Test void testAddMetadataToDirectoryNullTableCommentEmptyColumnComments()
       throws IOException {
     StorageProvider storageProvider = mock(StorageProvider.class);
 
-    int result = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int result =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         null, new HashMap<String, String>());
     assertEquals(0, result);
   }
 
-  @Test
-  void testAddMetadataToDirectoryMultipleFiles() throws IOException {
+  @Test void testAddMetadataToDirectoryMultipleFiles() throws IOException {
     // Create multiple parquet files
     createTestParquetFile("dir_file1.parquet", 3);
     createTestParquetFile("dir_file2.parquet", 5);
     createTestParquetFile("dir_file3.parquet", 2);
 
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("dir_file1.parquet").toString(),
             tempDir.resolve("dir_file2.parquet").toString(),
@@ -378,8 +358,8 @@ class ParquetMetadataWriterTest {
     columnComments.put("id", "Primary key");
 
     // Exercises the full loop at lines 105-112 with multiple files
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Test directory", columnComments);
 
     // All files will fail due to metadata conflict, but the loop runs
@@ -387,13 +367,12 @@ class ParquetMetadataWriterTest {
         "All files fail due to writer.model.name conflict");
   }
 
-  @Test
-  void testAddMetadataToDirectoryMixedParquetAndOtherFiles()
+  @Test void testAddMetadataToDirectoryMixedParquetAndOtherFiles()
       throws IOException {
     createTestParquetFile("mixed.parquet", 2);
 
-    StorageProvider storageProvider = createMockStorageProvider(
-        tempDir.toString(),
+    StorageProvider storageProvider =
+        createMockStorageProvider(tempDir.toString(),
         new String[]{
             tempDir.resolve("mixed.parquet").toString(),
             tempDir.resolve("data.csv").toString(),
@@ -404,8 +383,8 @@ class ParquetMetadataWriterTest {
     columnComments.put("id", "Key");
 
     // Only the .parquet file should be attempted
-    int processed = ParquetMetadataWriter.addMetadataToDirectory(
-        storageProvider, tempDir.toString(),
+    int processed =
+        ParquetMetadataWriter.addMetadataToDirectory(storageProvider, tempDir.toString(),
         "Test", columnComments);
 
     // The parquet file attempt fails due to metadata conflict
@@ -416,24 +395,22 @@ class ParquetMetadataWriterTest {
   // 3. buildMetadataMap() - via reflection since it is private
   // =========================================================================
 
-  @Test
-  void testBuildMetadataMapTableCommentOnly() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapTableCommentOnly() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "My table comment", null);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "My table comment", null);
 
     assertEquals(1, result.size());
     assertEquals("My table comment", result.get("table_comment"));
   }
 
-  @Test
-  void testBuildMetadataMapColumnCommentsOnly() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapColumnCommentsOnly() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
@@ -441,8 +418,8 @@ class ParquetMetadataWriterTest {
     columnComments.put("name", "User name");
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, null, columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, null, columnComments);
 
     assertEquals(1, result.size());
     assertTrue(result.containsKey("column_comments"),
@@ -452,42 +429,39 @@ class ParquetMetadataWriterTest {
     assertTrue(json.contains("name"), "JSON should contain 'name'");
   }
 
-  @Test
-  void testBuildMetadataMapBothTableAndColumnComments() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapBothTableAndColumnComments() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
     columnComments.put("id", "Primary key");
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "Table comment", columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "Table comment", columnComments);
 
     assertEquals(2, result.size());
     assertEquals("Table comment", result.get("table_comment"));
     assertTrue(result.containsKey("column_comments"));
   }
 
-  @Test
-  void testBuildMetadataMapEmptyStrings() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapEmptyStrings() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "", new HashMap<String, String>());
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "", new HashMap<String, String>());
 
     assertTrue(result.isEmpty(),
         "Empty table comment and empty column comments yield empty map");
   }
 
-  @Test
-  void testBuildMetadataMapNullInputs() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapNullInputs() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     @SuppressWarnings("unchecked")
@@ -498,10 +472,9 @@ class ParquetMetadataWriterTest {
         "Null inputs should return empty map");
   }
 
-  @Test
-  void testBuildMetadataMapManyColumns() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapManyColumns() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
@@ -510,8 +483,8 @@ class ParquetMetadataWriterTest {
     }
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "Large schema table", columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "Large schema table", columnComments);
 
     assertEquals(2, result.size());
     assertTrue(result.containsKey("table_comment"));
@@ -523,10 +496,9 @@ class ParquetMetadataWriterTest {
     }
   }
 
-  @Test
-  void testBuildMetadataMapEmptyColumnComment() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapEmptyColumnComment() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
@@ -535,17 +507,16 @@ class ParquetMetadataWriterTest {
     columnComments.put("name", "Name field");
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, null, columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, null, columnComments);
 
     assertEquals(1, result.size());
     assertTrue(result.containsKey("column_comments"));
   }
 
-  @Test
-  void testBuildMetadataMapNullColumnValue() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapNullColumnValue() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
@@ -553,18 +524,17 @@ class ParquetMetadataWriterTest {
     columnComments.put("null_col", null); // null value
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "Table", columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "Table", columnComments);
 
     assertEquals(2, result.size());
     assertTrue(result.containsKey("table_comment"));
     assertTrue(result.containsKey("column_comments"));
   }
 
-  @Test
-  void testBuildMetadataMapSpecialCharacters() throws Exception {
-    Method method = ParquetMetadataWriter.class.getDeclaredMethod(
-        "buildMetadataMap", String.class, Map.class);
+  @Test void testBuildMetadataMapSpecialCharacters() throws Exception {
+    Method method =
+        ParquetMetadataWriter.class.getDeclaredMethod("buildMetadataMap", String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, String> columnComments = new HashMap<>();
@@ -572,8 +542,8 @@ class ParquetMetadataWriterTest {
     columnComments.put("col2", "Has unicode: \u00e9\u00e8\u00ea");
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) method.invoke(
-        null, "Table with special chars: <>&", columnComments);
+    Map<String, String> result =
+        (Map<String, String>) method.invoke(null, "Table with special chars: <>&", columnComments);
 
     assertEquals(2, result.size());
     assertEquals("Table with special chars: <>&",
@@ -599,8 +569,8 @@ class ParquetMetadataWriterTest {
     List<StorageProvider.FileEntry> fileEntries = new ArrayList<>();
     for (String filePath : filePaths) {
       File file = new File(filePath);
-      StorageProvider.FileEntry entry = new StorageProvider.FileEntry(
-          filePath, file.getName(), false,
+      StorageProvider.FileEntry entry =
+          new StorageProvider.FileEntry(filePath, file.getName(), false,
           file.exists() ? file.length() : 0,
           file.exists() ? file.lastModified() : 0);
       fileEntries.add(entry);

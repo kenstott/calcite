@@ -178,8 +178,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 1. Table-specific operands - tables array with specific table configs
   // =======================================================================
 
-  @Test
-  void testTablesArrayWithUrlAndFormatCsv() throws Exception {
+  @Test void testTablesArrayWithUrlAndFormatCsv() throws Exception {
     File csvFile = createCsvFile("data1.csv", "id,name\n1,Alice\n");
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
@@ -196,10 +195,9 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(schema instanceof FileSchema);
   }
 
-  @Test
-  void testTablesArrayWithUrlAndFormatJson() throws Exception {
-    File jsonFile = createJsonFile("items.json",
-        "[{\"id\":1,\"val\":\"x\"},{\"id\":2,\"val\":\"y\"}]");
+  @Test void testTablesArrayWithUrlAndFormatJson() throws Exception {
+    File jsonFile =
+        createJsonFile("items.json", "[{\"id\":1,\"val\":\"x\"},{\"id\":2,\"val\":\"y\"}]");
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -214,8 +212,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesArrayWithMultipleTables() throws Exception {
+  @Test void testTablesArrayWithMultipleTables() throws Exception {
     File csv1 = createCsvFile("orders.csv", "oid,amount\n1,100\n2,200\n");
     File csv2 = createCsvFile("customers.csv", "cid,name\n1,Alice\n");
     Map<String, Object> operand = new HashMap<>();
@@ -241,8 +238,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(tableMap.containsKey("customers"));
   }
 
-  @Test
-  void testTablesArrayWithExplicitTableName() throws Exception {
+  @Test void testTablesArrayWithExplicitTableName() throws Exception {
     File csvFile = createCsvFile("raw_data.csv", "id,val\n1,hello\n");
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
@@ -259,8 +255,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(tableMap.containsKey("renamed_table"));
   }
 
-  @Test
-  void testTablesArrayWithNullUrlSkipped() throws Exception {
+  @Test void testTablesArrayWithNullUrlSkipped() throws Exception {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -273,8 +268,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesArrayWithViewTypeSkipped() throws Exception {
+  @Test void testTablesArrayWithViewTypeSkipped() throws Exception {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> viewDef = new HashMap<>();
@@ -288,10 +282,9 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesArrayWithFlattenPerTable() throws Exception {
-    File jsonFile = createJsonFile("nested.json",
-        "[{\"id\":1,\"info\":{\"name\":\"test\"}}]");
+  @Test void testTablesArrayWithFlattenPerTable() throws Exception {
+    File jsonFile =
+        createJsonFile("nested.json", "[{\"id\":1,\"info\":{\"name\":\"test\"}}]");
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -307,8 +300,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesArrayWithEmptyList() {
+  @Test void testTablesArrayWithEmptyList() {
     Map<String, Object> operand = baseOperand();
     operand.put("tables", new ArrayList<>());
 
@@ -320,8 +312,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 2. Storage provider config
   // =======================================================================
 
-  @Test
-  void testStorageTypeLocalExplicit() {
+  @Test void testStorageTypeLocalExplicit() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -330,8 +321,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testStorageConfigMapPassedThrough() {
+  @Test void testStorageConfigMapPassedThrough() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("region", "us-east-1");
@@ -342,8 +332,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testStorageConfigWithPreCreatedProviderAndNullStorageConfig() {
+  @Test void testStorageConfigWithPreCreatedProviderAndNullStorageConfig() {
     Map<String, Object> operand = baseOperand();
     // Simulate a pre-created storage provider instance passed via underscore key
     operand.put("_storageProvider", new Object());
@@ -352,8 +341,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testStorageConfigWithPreCreatedProviderAndExistingStorageConfig() {
+  @Test void testStorageConfigWithPreCreatedProviderAndExistingStorageConfig() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("bucket", "my-bucket");
@@ -364,8 +352,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectS3StorageFromDirectory() {
+  @Test void testAutoDetectS3StorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "s3://my-bucket/data");
     operand.put("storageConfig", createS3Credentials());
@@ -375,8 +362,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectHttpStorageFromDirectory() {
+  @Test void testAutoDetectHttpStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "http://example.com/data");
 
@@ -384,8 +370,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectHttpsStorageFromDirectory() {
+  @Test void testAutoDetectHttpsStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "https://example.com/data");
 
@@ -393,8 +378,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectHdfsStorageFromDirectory() {
+  @Test void testAutoDetectHdfsStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "hdfs://namenode:8020/data");
 
@@ -402,8 +386,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectS3StorageFromBaseDirectory() {
+  @Test void testAutoDetectS3StorageFromBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("baseDirectory", "s3://cache-bucket/data");
@@ -413,8 +396,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectHdfsStorageFromBaseDirectory() {
+  @Test void testAutoDetectHdfsStorageFromBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("baseDirectory", "hdfs://namenode:8020/cache");
@@ -423,8 +405,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testS3WithoutCredentialsThrows() {
+  @Test void testS3WithoutCredentialsThrows() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "s3://my-bucket/data");
 
@@ -432,8 +413,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
         createSchema(operand));
   }
 
-  @Test
-  void testS3WithPartialCredentialsThrows() {
+  @Test void testS3WithPartialCredentialsThrows() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "s3://my-bucket/data");
     Map<String, Object> storageConfig = new HashMap<>();
@@ -445,8 +425,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
         createSchema(operand));
   }
 
-  @Test
-  void testAutoDetectLocalStorageFromTables() {
+  @Test void testAutoDetectLocalStorageFromTables() {
     Map<String, Object> operand = new HashMap<>();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -459,8 +438,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDetectLocalStorageFromPartitionedTables() {
+  @Test void testAutoDetectLocalStorageFromPartitionedTables() {
     Map<String, Object> operand = new HashMap<>();
     List<Map<String, Object>> ptables = new ArrayList<>();
     Map<String, Object> pt = new HashMap<>();
@@ -473,8 +451,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testNoStorageTypeNoDirectoryThrows() {
+  @Test void testNoStorageTypeNoDirectoryThrows() {
     Map<String, Object> operand = new HashMap<>();
     assertThrows(IllegalStateException.class, () ->
         createSchema(operand));
@@ -484,8 +461,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 3. Materialization config
   // =======================================================================
 
-  @Test
-  void testMaterializationsListWithTableAndSql() {
+  @Test void testMaterializationsListWithTableAndSql() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -498,8 +474,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMaterializationsWithViewSchemaPath() {
+  @Test void testMaterializationsWithViewSchemaPath() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -514,8 +489,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMaterializationsWithNullTableSkipped() {
+  @Test void testMaterializationsWithNullTableSkipped() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -528,8 +502,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMaterializationsWithNullSqlSkipped() {
+  @Test void testMaterializationsWithNullSqlSkipped() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -542,8 +515,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMaterializationsWithExistingFalse() {
+  @Test void testMaterializationsWithExistingFalse() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -557,8 +529,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEmptyMaterializationsList() {
+  @Test void testEmptyMaterializationsList() {
     Map<String, Object> operand = baseOperand();
     operand.put("materializations", new ArrayList<>());
 
@@ -570,8 +541,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 4. ETL pipeline config
   // =======================================================================
 
-  @Test
-  void testAutoDownloadFalseDoesNotTriggerEtl() {
+  @Test void testAutoDownloadFalseDoesNotTriggerEtl() {
     Map<String, Object> operand = baseOperand();
     operand.put("autoDownload", Boolean.FALSE);
 
@@ -579,8 +549,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testAutoDownloadStringFalse() {
+  @Test void testAutoDownloadStringFalse() {
     Map<String, Object> operand = baseOperand();
     operand.put("autoDownload", "false");
 
@@ -588,8 +557,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEtlCompleteSkipsAutoDownload() {
+  @Test void testEtlCompleteSkipsAutoDownload() {
     Map<String, Object> operand = baseOperand();
     operand.put("autoDownload", Boolean.TRUE);
     operand.put("_etlComplete", Boolean.TRUE);
@@ -602,16 +570,14 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 5. Statistics config - primeCache
   // =======================================================================
 
-  @Test
-  void testPrimeCacheTrueDefault() {
+  @Test void testPrimeCacheTrueDefault() {
     Map<String, Object> operand = baseOperand();
     // primeCache not set - should default to true
     Schema schema = createSchema(operand);
     assertNotNull(schema);
   }
 
-  @Test
-  void testPrimeCacheExplicitFalse() {
+  @Test void testPrimeCacheExplicitFalse() {
     Map<String, Object> operand = baseOperand();
     operand.put("primeCache", Boolean.FALSE);
 
@@ -619,8 +585,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testPrimeCacheExplicitTrue() {
+  @Test void testPrimeCacheExplicitTrue() {
     Map<String, Object> operand = baseOperand();
     operand.put("primeCache", Boolean.TRUE);
 
@@ -628,8 +593,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testPrimeCacheSnakeCase() {
+  @Test void testPrimeCacheSnakeCase() {
     Map<String, Object> operand = baseOperand();
     operand.put("prime_cache", Boolean.FALSE);
 
@@ -637,8 +601,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testPrimeCacheCamelCaseTakesPrecedence() {
+  @Test void testPrimeCacheCamelCaseTakesPrecedence() {
     Map<String, Object> operand = baseOperand();
     operand.put("primeCache", Boolean.FALSE);
     operand.put("prime_cache", Boolean.TRUE);
@@ -652,8 +615,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 6. Constraint metadata
   // =======================================================================
 
-  @Test
-  void testTableConstraintsOperandPassedToSchema() {
+  @Test void testTableConstraintsOperandPassedToSchema() {
     Map<String, Object> operand = baseOperand();
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -666,8 +628,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(schema instanceof FileSchema);
   }
 
-  @Test
-  void testTableConstraintsWithForeignKeys() {
+  @Test void testTableConstraintsWithForeignKeys() {
     Map<String, Object> operand = baseOperand();
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -687,8 +648,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTableConstraintsWithDeclaredSchemaNameRewrite() {
+  @Test void testTableConstraintsWithDeclaredSchemaNameRewrite() {
     Map<String, Object> operand = baseOperand();
     String schemaName = uniqueSchemaName();
     operand.put("declaredSchemaName", "canonical");
@@ -710,8 +670,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTableConstraintsEmptyMapPassedThrough() {
+  @Test void testTableConstraintsEmptyMapPassedThrough() {
     Map<String, Object> operand = baseOperand();
     operand.put("tableConstraints", new HashMap<>());
 
@@ -719,8 +678,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testInstanceConstraintsViaSetTableConstraints() {
+  @Test void testInstanceConstraintsViaSetTableConstraints() {
     Map<String, Object> operand = baseOperand();
 
     // Set instance constraints first
@@ -737,8 +695,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     FileSchemaFactory.INSTANCE.setTableConstraints(null, null);
   }
 
-  @Test
-  void testOperandConstraintsTakePrecedenceOverInstance() {
+  @Test void testOperandConstraintsTakePrecedenceOverInstance() {
     Map<String, Object> operand = baseOperand();
 
     // Set instance constraints
@@ -766,8 +723,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 7. Comment handling
   // =======================================================================
 
-  @Test
-  void testCommentOperandPassedToSchema() {
+  @Test void testCommentOperandPassedToSchema() {
     Map<String, Object> operand = baseOperand();
     operand.put("comment", "This is a test schema");
 
@@ -777,8 +733,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("This is a test schema", ((FileSchema) schema).getComment());
   }
 
-  @Test
-  void testCommentNullByDefault() {
+  @Test void testCommentNullByDefault() {
     Map<String, Object> operand = baseOperand();
 
     Schema schema = createSchema(operand);
@@ -786,8 +741,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNull(((FileSchema) schema).getComment());
   }
 
-  @Test
-  void testCommentEmptyString() {
+  @Test void testCommentEmptyString() {
     Map<String, Object> operand = baseOperand();
     operand.put("comment", "");
 
@@ -800,8 +754,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 8. Advanced casing combinations
   // =======================================================================
 
-  @Test
-  void testTableNameCasingUpperViaOperand() throws Exception {
+  @Test void testTableNameCasingUpperViaOperand() throws Exception {
     createCsvFile("casing_test.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("tableNameCasing", "UPPER");
@@ -810,8 +763,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTableNameCasingLowerViaOperand() throws Exception {
+  @Test void testTableNameCasingLowerViaOperand() throws Exception {
     createCsvFile("CasingTest.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("tableNameCasing", "LOWER");
@@ -820,8 +772,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTableNameCasingSmartDefault() throws Exception {
+  @Test void testTableNameCasingSmartDefault() throws Exception {
     createCsvFile("smart_test.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     // No tableNameCasing set - should default to SMART_CASING
@@ -830,8 +781,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testColumnNameCasingUpperViaOperand() throws Exception {
+  @Test void testColumnNameCasingUpperViaOperand() throws Exception {
     createCsvFile("col_test.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("columnNameCasing", "UPPER");
@@ -840,8 +790,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testColumnNameCasingLowerViaOperand() throws Exception {
+  @Test void testColumnNameCasingLowerViaOperand() throws Exception {
     createCsvFile("col_test2.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("columnNameCasing", "LOWER");
@@ -850,8 +799,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTableNameCasingSnakeCaseKey() throws Exception {
+  @Test void testTableNameCasingSnakeCaseKey() throws Exception {
     createCsvFile("snake_key.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("table_name_casing", "UPPER");
@@ -860,8 +808,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testColumnNameCasingSnakeCaseKey() throws Exception {
+  @Test void testColumnNameCasingSnakeCaseKey() throws Exception {
     createCsvFile("col_snake.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("column_name_casing", "UPPER");
@@ -870,8 +817,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCamelCaseTakesPrecedenceOverSnakeCaseForTableCasing() throws Exception {
+  @Test void testCamelCaseTakesPrecedenceOverSnakeCaseForTableCasing() throws Exception {
     createCsvFile("priority_test.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("tableNameCasing", "UPPER");
@@ -881,8 +827,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCamelCaseTakesPrecedenceOverSnakeCaseForColumnCasing() throws Exception {
+  @Test void testCamelCaseTakesPrecedenceOverSnakeCaseForColumnCasing() throws Exception {
     createCsvFile("col_priority.csv", "id,name\n1,test\n");
     Map<String, Object> operand = baseOperand();
     operand.put("columnNameCasing", "UPPER");
@@ -896,8 +841,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 9. Recursive with patterns
   // =======================================================================
 
-  @Test
-  void testRecursiveTrueDiscoversSubs() throws Exception {
+  @Test void testRecursiveTrueDiscoversSubs() throws Exception {
     File subDir = createSubDir("subdir");
     createCsvFile("top.csv", "id,name\n1,top\n");
     File subFile = new File(subDir, "sub.csv");
@@ -913,8 +857,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(tableMap.size() >= 2);
   }
 
-  @Test
-  void testRecursiveFalseDoesNotDiscoverSubs() throws Exception {
+  @Test void testRecursiveFalseDoesNotDiscoverSubs() throws Exception {
     File subDir = createSubDir("subdir2");
     createCsvFile("top2.csv", "id,name\n1,top\n");
     File subFile = new File(subDir, "sub2.csv");
@@ -931,8 +874,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertFalse(tableMap.containsKey("sub2"));
   }
 
-  @Test
-  void testDirectoryPatternViaOperand() throws Exception {
+  @Test void testDirectoryPatternViaOperand() throws Exception {
     createCsvFile("match_a.csv", "id\n1\n");
     createCsvFile("match_b.csv", "id\n2\n");
     Map<String, Object> operand = baseOperand();
@@ -942,8 +884,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testGlobAliasForDirectoryPattern() throws Exception {
+  @Test void testGlobAliasForDirectoryPattern() throws Exception {
     createCsvFile("glob_a.csv", "id\n1\n");
     Map<String, Object> operand = baseOperand();
     operand.put("glob", "*.csv");
@@ -952,8 +893,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testDirectoryPatternTakesPrecedenceOverGlob() throws Exception {
+  @Test void testDirectoryPatternTakesPrecedenceOverGlob() throws Exception {
     createCsvFile("prio.csv", "id\n1\n");
     Map<String, Object> operand = baseOperand();
     operand.put("directoryPattern", "*.csv");
@@ -968,8 +908,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 10. View definitions - complex view SQL
   // =======================================================================
 
-  @Test
-  void testViewsOperandWithMultipleViews() throws Exception {
+  @Test void testViewsOperandWithMultipleViews() throws Exception {
     createCsvFile("base.csv", "id,value\n1,100\n");
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> views = new ArrayList<>();
@@ -990,8 +929,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testViewsWithViewDefFallback() throws Exception {
+  @Test void testViewsWithViewDefFallback() throws Exception {
     createCsvFile("vbase.csv", "id\n1\n");
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -1006,8 +944,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testViewWithNullNameIsSkipped() {
+  @Test void testViewWithNullNameIsSkipped() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> viewDef = new HashMap<>();
@@ -1021,8 +958,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testViewWithNullSqlAndNullViewDefIsSkipped() {
+  @Test void testViewWithNullSqlAndNullViewDefIsSkipped() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> viewDef = new HashMap<>();
@@ -1041,8 +977,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 11. Partition config
   // =======================================================================
 
-  @Test
-  void testPartitionedTablesOperand() {
+  @Test void testPartitionedTablesOperand() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> partitionedTables = new ArrayList<>();
     Map<String, Object> pt = new HashMap<>();
@@ -1056,8 +991,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMultiplePartitionedTables() {
+  @Test void testMultiplePartitionedTables() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> ptables = new ArrayList<>();
 
@@ -1081,8 +1015,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 12. Refresh config
   // =======================================================================
 
-  @Test
-  void testRefreshIntervalOperand() {
+  @Test void testRefreshIntervalOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("refreshInterval", "5 minutes");
 
@@ -1090,8 +1023,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testRefreshIntervalNull() {
+  @Test void testRefreshIntervalNull() {
     Map<String, Object> operand = baseOperand();
     operand.put("refreshInterval", null);
 
@@ -1099,8 +1031,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testRefreshIntervalWithSeconds() {
+  @Test void testRefreshIntervalWithSeconds() {
     Map<String, Object> operand = baseOperand();
     operand.put("refreshInterval", "30 seconds");
 
@@ -1112,8 +1043,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 13. Cache config
   // =======================================================================
 
-  @Test
-  void testEphemeralCacheBooleanTrue() {
+  @Test void testEphemeralCacheBooleanTrue() {
     Map<String, Object> operand = baseOperand();
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -1121,8 +1051,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEphemeralCacheStringTrue() {
+  @Test void testEphemeralCacheStringTrue() {
     Map<String, Object> operand = baseOperand();
     operand.put("ephemeralCache", "true");
 
@@ -1130,8 +1059,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEphemeralCacheStringFalse() {
+  @Test void testEphemeralCacheStringFalse() {
     Map<String, Object> operand = baseOperand();
     operand.put("ephemeralCache", "false");
 
@@ -1139,8 +1067,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEphemeralCacheSnakeCaseOperandKey() {
+  @Test void testEphemeralCacheSnakeCaseOperandKey() {
     Map<String, Object> operand = baseOperand();
     operand.put("ephemeral_cache", Boolean.TRUE);
 
@@ -1148,8 +1075,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testEphemeralCacheCamelCaseTakesPrecedence() {
+  @Test void testEphemeralCacheCamelCaseTakesPrecedence() {
     Map<String, Object> operand = baseOperand();
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("ephemeral_cache", Boolean.FALSE);
@@ -1158,8 +1084,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testBaseDirectoryAsString() {
+  @Test void testBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1169,8 +1094,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testBaseDirectoryAsFileObject() {
+  @Test void testBaseDirectoryAsFileObject() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1180,8 +1104,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testBaseDirectoryRelativeToModel() {
+  @Test void testBaseDirectoryRelativeToModel() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1193,8 +1116,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testModelBaseDirectoryAsFileObject() {
+  @Test void testModelBaseDirectoryAsFileObject() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1204,8 +1126,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testModelBaseDirectoryAsString() {
+  @Test void testModelBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1219,8 +1140,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 14. Error paths
   // =======================================================================
 
-  @Test
-  void testDuplicateSchemaNameThrows() {
+  @Test void testDuplicateSchemaNameThrows() {
     String name = uniqueSchemaName();
     Map<String, Object> operand = baseOperand();
 
@@ -1239,14 +1159,12 @@ public class FileSchemaFactoryDeepCoverageTest5 {
         createSchemaWithName(name, operand));
   }
 
-  @Test
-  void testValidateUniqueSchemaNameNullParentDoesNotThrow() throws Exception {
+  @Test void testValidateUniqueSchemaNameNullParentDoesNotThrow() throws Exception {
     invokePrivateStatic(FileSchemaFactory.class, "validateUniqueSchemaName",
         new Class<?>[]{SchemaPlus.class, String.class}, null, "test");
   }
 
-  @Test
-  void testValidateUniqueSchemaNameNullNameDoesNotThrow() throws Exception {
+  @Test void testValidateUniqueSchemaNameNullNameDoesNotThrow() throws Exception {
     invokePrivateStatic(FileSchemaFactory.class, "validateUniqueSchemaName",
         new Class<?>[]{SchemaPlus.class, String.class}, mockParentSchema, null);
   }
@@ -1255,52 +1173,47 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 15. Sanitize operand - edge cases
   // =======================================================================
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandNullValue() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("someKey", null);
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     assertNull(result.get("someKey"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandPasswordKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("dbPassword", "secret123");
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     assertEquals("********", result.get("dbPassword"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandSecretKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("apiSecret", "topsecret");
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     assertEquals("********", result.get("apiSecret"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandUnderscoreKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("_internalObj", new Object());
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
     assertEquals("Object", result.get("_internalObj"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandS3ConfigWithLongAccessKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> s3Config = new HashMap<>();
@@ -1309,8 +1222,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     s3Config.put("region", "us-east-1");
     operand.put("s3Config", s3Config);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1322,16 +1235,15 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("us-east-1", sanitizedS3.get("region"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandS3ConfigWithShortAccessKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> s3Config = new HashMap<>();
     s3Config.put("accessKeyId", "AB");
     operand.put("s3Config", s3Config);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1339,16 +1251,15 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("****", sanitizedS3.get("accessKeyId"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandS3ConfigPasswordInKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> s3Config = new HashMap<>();
     s3Config.put("password", "secret");
     operand.put("s3Config", s3Config);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1356,8 +1267,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("********", sanitizedS3.get("password"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandStorageConfigWithUnderscoreKey() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> storageConfig = new HashMap<>();
@@ -1367,8 +1277,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     storageConfig.put("accessKeyId", "AKID");
     operand.put("storageConfig", storageConfig);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1380,8 +1290,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("********", sanitizedStorage.get("accessKeyId"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandStorageConfigNullValue() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> storageConfig = new HashMap<>();
@@ -1389,8 +1298,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     storageConfig.put("region", "eu-west-1");
     operand.put("storageConfig", storageConfig);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1399,15 +1308,14 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("eu-west-1", sanitizedStorage.get("region"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandModelUriWithCredentials() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("modelUri",
         "{\"accessKeyId\": \"AKID123\", \"secretAccessKey\": \"secret123\"}");
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     String sanitizedUri = (String) result.get("modelUri");
@@ -1417,8 +1325,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(sanitizedUri.contains("********"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandGenericNestedMap() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     Map<String, Object> nestedMap = new HashMap<>();
@@ -1426,8 +1333,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     nestedMap.put("port", 5432);
     operand.put("connectionConfig", nestedMap);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     @SuppressWarnings("unchecked")
@@ -1437,16 +1344,15 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals(5432, sanitizedNested.get("port"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandPassThroughValues() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "/some/path");
     operand.put("recursive", Boolean.TRUE);
     operand.put("batchSize", 1024);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeOperand",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeOperand",
         new Class<?>[]{Map.class}, operand);
 
     assertEquals("/some/path", result.get("directory"));
@@ -1458,57 +1364,53 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 16. sanitizeNestedMap edge cases
   // =======================================================================
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeNestedMapAccessKeyMasked() throws Exception {
     Map<String, Object> map = new HashMap<>();
     map.put("accesskey", "AKID12345");
     map.put("region", "us-east-1");
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeNestedMap",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeNestedMap",
         new Class<?>[]{Map.class}, map);
 
     assertEquals("********", result.get("accesskey"));
     assertEquals("us-east-1", result.get("region"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeNestedMapPasswordMasked() throws Exception {
     Map<String, Object> map = new HashMap<>();
     map.put("password", "secret");
     map.put("username", "admin");
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeNestedMap",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeNestedMap",
         new Class<?>[]{Map.class}, map);
 
     assertEquals("********", result.get("password"));
     assertEquals("admin", result.get("username"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeNestedMapSecretMasked() throws Exception {
     Map<String, Object> map = new HashMap<>();
     map.put("mySecret", "hidden");
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeNestedMap",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeNestedMap",
         new Class<?>[]{Map.class}, map);
 
     assertEquals("********", result.get("mySecret"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testSanitizeNestedMapNullValuePassedThrough() throws Exception {
     Map<String, Object> map = new HashMap<>();
     map.put("key", null);
 
-    Map<String, Object> result = (Map<String, Object>) invokePrivateStatic(
-        FileSchemaFactory.class, "sanitizeNestedMap",
+    Map<String, Object> result =
+        (Map<String, Object>) invokePrivateStatic(FileSchemaFactory.class, "sanitizeNestedMap",
         new Class<?>[]{Map.class}, map);
 
     // null value is not a Calcite class, not a sensitive key, so passed through
@@ -1519,59 +1421,51 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 17. parseBooleanValue edge cases
   // =======================================================================
 
-  @Test
-  void testParseBooleanValueNull() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, (Object) null);
+  @Test void testParseBooleanValueNull() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, (Object) null);
     assertNull(result);
   }
 
-  @Test
-  void testParseBooleanValueBooleanTrue() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, Boolean.TRUE);
+  @Test void testParseBooleanValueBooleanTrue() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, Boolean.TRUE);
     assertEquals(Boolean.TRUE, result);
   }
 
-  @Test
-  void testParseBooleanValueBooleanFalse() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, Boolean.FALSE);
+  @Test void testParseBooleanValueBooleanFalse() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, Boolean.FALSE);
     assertEquals(Boolean.FALSE, result);
   }
 
-  @Test
-  void testParseBooleanValueStringTrue() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, "true");
+  @Test void testParseBooleanValueStringTrue() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, "true");
     assertEquals(Boolean.TRUE, result);
   }
 
-  @Test
-  void testParseBooleanValueStringFalse() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, "false");
+  @Test void testParseBooleanValueStringFalse() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, "false");
     assertEquals(Boolean.FALSE, result);
   }
 
-  @Test
-  void testParseBooleanValueStringTrueUpperCase() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, "TRUE");
+  @Test void testParseBooleanValueStringTrueUpperCase() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, "TRUE");
     assertEquals(Boolean.TRUE, result);
   }
 
-  @Test
-  void testParseBooleanValueInteger() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, Integer.valueOf(1));
+  @Test void testParseBooleanValueInteger() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, Integer.valueOf(1));
     assertNull(result);
   }
 
-  @Test
-  void testParseBooleanValueNonBooleanString() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue",
-        new Class<?>[]{Object.class}, "yes");
+  @Test void testParseBooleanValueNonBooleanString() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "parseBooleanValue", new Class<?>[]{Object.class}, "yes");
     // Boolean.parseBoolean("yes") returns false
     assertEquals(Boolean.FALSE, result);
   }
@@ -1580,59 +1474,52 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 18. rewriteSchemaReferencesInSql edge cases
   // =======================================================================
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNullViewSql() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlNullViewSql() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         null, "econ", "ECON");
     assertNull(result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNullDeclaredName() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlNullDeclaredName() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM econ.t", null, "ECON");
     assertEquals("SELECT * FROM econ.t", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNullActualName() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlNullActualName() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM econ.t", "econ", null);
     assertEquals("SELECT * FROM econ.t", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlSameNameNoRewrite() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlSameNameNoRewrite() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM econ.table1", "econ", "econ");
     assertEquals("SELECT * FROM econ.table1", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlCaseInsensitiveMatch() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlCaseInsensitiveMatch() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM ECON.table1", "econ", "MY_ECON");
     assertEquals("SELECT * FROM MY_ECON.table1", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlMultipleOccurrences() throws Exception {
+  @Test void testRewriteSchemaReferencesInSqlMultipleOccurrences() throws Exception {
     // declaredSchemaName and actualSchemaName must differ case-insensitively for rewriting
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT a.id FROM econ.a JOIN econ.b ON a.id = b.id", "econ", "MY_ECON");
     assertEquals("SELECT a.id FROM MY_ECON.a JOIN MY_ECON.b ON a.id = b.id", result);
   }
 
-  @Test
-  void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
-    Object result = invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql",
-        new Class<?>[]{String.class, String.class, String.class},
+  @Test void testRewriteSchemaReferencesInSqlNoMatch() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteSchemaReferencesInSql", new Class<?>[]{String.class, String.class, String.class},
         "SELECT * FROM other_schema.table1", "econ", "ECON");
     assertEquals("SELECT * FROM other_schema.table1", result);
   }
@@ -1641,8 +1528,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 19. rewriteForeignKeySchemaNames edge cases
   // =======================================================================
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesCrossSchemaFkPreserved() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1667,8 +1553,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("other_schema", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesFkMatchingRewritten() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1693,8 +1578,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("ECON", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesCaseInsensitiveMatch() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1719,8 +1603,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("MY_SCHEMA", resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesFkNullTargetSchema() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1745,8 +1628,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNull(resultFks.get(0).get("targetSchema"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesEmptyConstraints() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
 
@@ -1759,18 +1641,16 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesNullConstraints() throws Exception {
-    Object result = invokePrivateStatic(
-        FileSchemaFactory.class, "rewriteForeignKeySchemaNames",
+  @Test void testRewriteForeignKeySchemaNamesNullConstraints() throws Exception {
+    Object result =
+        invokePrivateStatic(FileSchemaFactory.class, "rewriteForeignKeySchemaNames",
         new Class<?>[]{Map.class, String.class, String.class},
         null, "econ", "ECON");
 
     assertNull(result);
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesNoFksInTable() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1787,8 +1667,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals(Arrays.asList("id"), result.get("simple_table").get("primaryKey"));
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testRewriteForeignKeySchemaNamesEmptyFksList() throws Exception {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
@@ -1808,8 +1687,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 20. Execution engine config operands
   // =======================================================================
 
-  @Test
-  void testExecutionEngineFromOperand() {
+  @Test void testExecutionEngineFromOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("executionEngine", "PARQUET");
 
@@ -1817,8 +1695,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testExecutionEngineLinq4j() {
+  @Test void testExecutionEngineLinq4j() {
     Map<String, Object> operand = baseOperand();
     operand.put("executionEngine", "LINQ4J");
 
@@ -1826,8 +1703,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testBatchSizeAsNumber() {
+  @Test void testBatchSizeAsNumber() {
     Map<String, Object> operand = baseOperand();
     operand.put("batchSize", 4096);
 
@@ -1835,8 +1711,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testBatchSizeAsString() {
+  @Test void testBatchSizeAsString() {
     Map<String, Object> operand = baseOperand();
     operand.put("batchSize", "not_a_number");
     // Non-Number should fall back to default
@@ -1845,8 +1720,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMemoryThresholdAsNumber() {
+  @Test void testMemoryThresholdAsNumber() {
     Map<String, Object> operand = baseOperand();
     operand.put("memoryThreshold", 128L * 1024 * 1024);
 
@@ -1854,8 +1728,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMemoryThresholdAsStringFallsBackToDefault() {
+  @Test void testMemoryThresholdAsStringFallsBackToDefault() {
     Map<String, Object> operand = baseOperand();
     operand.put("memoryThreshold", "256MB");
     // Non-Number should fall back to default
@@ -1864,8 +1737,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testDuckdbConfigMapPassedThrough() {
+  @Test void testDuckdbConfigMapPassedThrough() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> duckdbConfig = new HashMap<>();
     duckdbConfig.put("memory_limit", "512MB");
@@ -1876,8 +1748,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testParquetCacheDirectoryOperand() {
+  @Test void testParquetCacheDirectoryOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("parquetCacheDirectory", tempDir.resolve("pq-cache").toString());
 
@@ -1889,8 +1760,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 21. Flatten and CSV type inference
   // =======================================================================
 
-  @Test
-  void testFlattenTrueOperand() {
+  @Test void testFlattenTrueOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("flatten", Boolean.TRUE);
 
@@ -1898,8 +1768,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testFlattenFalseOperand() {
+  @Test void testFlattenFalseOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("flatten", Boolean.FALSE);
 
@@ -1907,8 +1776,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCsvTypeInferenceOperand() {
+  @Test void testCsvTypeInferenceOperand() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> csvTypeInference = new HashMap<>();
     csvTypeInference.put("enabled", true);
@@ -1924,8 +1792,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 22. Canonical schema name
   // =======================================================================
 
-  @Test
-  void testCanonicalSchemaNameOperand() {
+  @Test void testCanonicalSchemaNameOperand() {
     Map<String, Object> operand = baseOperand();
     operand.put("canonicalSchemaName", "my_canon");
 
@@ -1933,8 +1800,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCanonicalSchemaNameNull() {
+  @Test void testCanonicalSchemaNameNull() {
     Map<String, Object> operand = baseOperand();
     // canonicalSchemaName not set
 
@@ -1946,8 +1812,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 23. Declared schema name and FK rewrite
   // =======================================================================
 
-  @Test
-  void testDeclaredSchemaNameDifferentFromActual() {
+  @Test void testDeclaredSchemaNameDifferentFromActual() {
     String name = uniqueSchemaName();
     Map<String, Object> operand = baseOperand();
     operand.put("declaredSchemaName", "lowered");
@@ -1956,8 +1821,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testDeclaredSchemaNameSameAsActual() {
+  @Test void testDeclaredSchemaNameSameAsActual() {
     String name = "myschema";
     Map<String, Object> operand = baseOperand();
     operand.put("declaredSchemaName", "myschema");
@@ -1966,8 +1830,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testDeclaredSchemaNameDefaultsToLowercase() {
+  @Test void testDeclaredSchemaNameDefaultsToLowercase() {
     String name = "UPPER_SCHEMA";
     Map<String, Object> operand = baseOperand();
     // No declaredSchemaName; should default to name.toLowerCase()
@@ -1980,8 +1843,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 24. Directory and sourceDirectory operands
   // =======================================================================
 
-  @Test
-  void testSourceDirectoryAlias() {
+  @Test void testSourceDirectoryAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
@@ -1990,8 +1852,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testDirectoryTakesPrecedenceOverSourceDirectory() {
+  @Test void testDirectoryTakesPrecedenceOverSourceDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("sourceDirectory", "/nonexistent/path");
@@ -2001,8 +1862,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testNoDirectoryUsesWorkingDir() {
+  @Test void testNoDirectoryUsesWorkingDir() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "local");
     // No directory or sourceDirectory
@@ -2011,8 +1871,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testRelativeDirectoryResolvedAgainstModel() {
+  @Test void testRelativeDirectoryResolvedAgainstModel() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", "data");
     operand.put("storageType", "local");
@@ -2026,13 +1885,11 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 25. supportsConstraints and setTableConstraints
   // =======================================================================
 
-  @Test
-  void testSupportsConstraintsReturnsTrue() {
+  @Test void testSupportsConstraintsReturnsTrue() {
     assertTrue(FileSchemaFactory.INSTANCE.supportsConstraints());
   }
 
-  @Test
-  void testSetTableConstraintsWithTableDefinitions() {
+  @Test void testSetTableConstraintsWithTableDefinitions() {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tc = new HashMap<>();
     tc.put("primaryKey", Arrays.asList("id"));
@@ -2045,8 +1902,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     FileSchemaFactory.INSTANCE.setTableConstraints(null, null);
   }
 
-  @Test
-  void testSetTableConstraintsNullValues() {
+  @Test void testSetTableConstraintsNullValues() {
     FileSchemaFactory.INSTANCE.setTableConstraints(null, null);
     // Should not throw
   }
@@ -2055,18 +1911,15 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 26. Constants
   // =======================================================================
 
-  @Test
-  void testRowtimeColumnNameConstant() {
+  @Test void testRowtimeColumnNameConstant() {
     assertEquals("ROWTIME", FileSchemaFactory.ROWTIME_COLUMN_NAME);
   }
 
-  @Test
-  void testSingletonInstanceNotNull() {
+  @Test void testSingletonInstanceNotNull() {
     assertNotNull(FileSchemaFactory.INSTANCE);
   }
 
-  @Test
-  void testSingletonInstanceSameReference() {
+  @Test void testSingletonInstanceSameReference() {
     assertTrue(FileSchemaFactory.INSTANCE == FileSchemaFactory.INSTANCE);
   }
 
@@ -2074,8 +1927,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 27. Text similarity config
   // =======================================================================
 
-  @Test
-  void testTextSimilarityEnabledTrue() {
+  @Test void testTextSimilarityEnabledTrue() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> textSimilarity = new HashMap<>();
     textSimilarity.put("enabled", Boolean.TRUE);
@@ -2085,8 +1937,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTextSimilarityEnabledFalse() {
+  @Test void testTextSimilarityEnabledFalse() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> textSimilarity = new HashMap<>();
     textSimilarity.put("enabled", Boolean.FALSE);
@@ -2096,8 +1947,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTextSimilarityEnabledNull() {
+  @Test void testTextSimilarityEnabledNull() {
     Map<String, Object> operand = baseOperand();
     Map<String, Object> textSimilarity = new HashMap<>();
     textSimilarity.put("enabled", null);
@@ -2111,8 +1961,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 28. Complex combined operand scenarios
   // =======================================================================
 
-  @Test
-  void testFullOperandCombination() throws Exception {
+  @Test void testFullOperandCombination() throws Exception {
     File csvFile = createCsvFile("combo.csv", "id,name\n1,Alice\n2,Bob\n");
 
     Map<String, Object> operand = new HashMap<>();
@@ -2140,8 +1989,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertEquals("Full combo test", ((FileSchema) schema).getComment());
   }
 
-  @Test
-  void testTablesAndViewsCombined() throws Exception {
+  @Test void testTablesAndViewsCombined() throws Exception {
     File csvFile = createCsvFile("tbase.csv", "id,value\n1,100\n");
 
     Map<String, Object> operand = new HashMap<>();
@@ -2166,8 +2014,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesAndPartitionedTablesCombined() throws Exception {
+  @Test void testTablesAndPartitionedTablesCombined() throws Exception {
     File csvFile = createCsvFile("ptbase.csv", "id,value\n1,100\n");
 
     Map<String, Object> operand = new HashMap<>();
@@ -2191,8 +2038,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testTablesAndConstraintsCombined() throws Exception {
+  @Test void testTablesAndConstraintsCombined() throws Exception {
     File csvFile = createCsvFile("constrained.csv", "id,name\n1,Alice\n");
 
     Map<String, Object> operand = new HashMap<>();
@@ -2215,8 +2061,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertNotNull(schema);
   }
 
-  @Test
-  void testMultipleMaterializationsInList() {
+  @Test void testMultipleMaterializationsInList() {
     Map<String, Object> operand = baseOperand();
     List<Map<String, Object>> mvs = new ArrayList<>();
 
@@ -2246,8 +2091,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 29. writeDebugModel edge cases
   // =======================================================================
 
-  @Test
-  void testWriteDebugModelCreatesFile() throws Exception {
+  @Test void testWriteDebugModelCreatesFile() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
     operand.put("setting", "value");
@@ -2258,8 +2102,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     // Should not throw; file is written to .aperio/debug-model-debugtest.json
   }
 
-  @Test
-  void testWriteDebugModelNullParentName() throws Exception {
+  @Test void testWriteDebugModelNullParentName() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("key", "value");
 
@@ -2269,8 +2112,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     // Should not throw
   }
 
-  @Test
-  void testWriteDebugModelEmptyOperand() throws Exception {
+  @Test void testWriteDebugModelEmptyOperand() throws Exception {
     Map<String, Object> operand = new HashMap<>();
 
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
@@ -2283,8 +2125,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   // 30. Mixed file type discovery
   // =======================================================================
 
-  @Test
-  void testDiscoveryCsvAndJsonMixed() throws Exception {
+  @Test void testDiscoveryCsvAndJsonMixed() throws Exception {
     createCsvFile("mixed1.csv", "id\n1\n");
     createJsonFile("mixed2.json", "[{\"id\":2}]");
 
@@ -2297,8 +2138,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(tableMap.containsKey("mixed2"));
   }
 
-  @Test
-  void testHiddenFilesExcluded() throws Exception {
+  @Test void testHiddenFilesExcluded() throws Exception {
     createCsvFile("visible.csv", "id\n1\n");
     createCsvFile(".hidden.csv", "id\n2\n");
 
@@ -2311,8 +2151,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertFalse(tableMap.containsKey(".hidden"));
   }
 
-  @Test
-  void testCalciteModelFileExcluded() throws Exception {
+  @Test void testCalciteModelFileExcluded() throws Exception {
     createCsvFile("data.csv", "id\n1\n");
     createJsonFile("model.json",
         "{\"version\":\"1.0\",\"schemas\":[]}");
@@ -2325,8 +2164,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     assertTrue(tableMap.containsKey("data"));
   }
 
-  @Test
-  void testUnsupportedFileExtensionsIgnored() throws Exception {
+  @Test void testUnsupportedFileExtensionsIgnored() throws Exception {
     createCsvFile("good.csv", "id\n1\n");
     File txtFile = new File(tempDir.toFile(), "notes.txt");
     try (FileWriter w = new FileWriter(txtFile)) {

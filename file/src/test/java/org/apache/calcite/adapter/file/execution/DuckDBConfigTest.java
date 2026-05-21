@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +42,7 @@ public class DuckDBConfigTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(DuckDBConfigTest.class);
 
-  @Test
-  public void testDefaultConstructorUsesDefaults() {
+  @Test public void testDefaultConstructorUsesDefaults() {
     DuckDBConfig config = new DuckDBConfig();
     assertEquals(DuckDBConfig.DEFAULT_MEMORY_LIMIT, config.getMemoryLimit());
     assertEquals(DuckDBConfig.DEFAULT_THREADS, config.getThreads());
@@ -59,8 +57,7 @@ public class DuckDBConfigTest {
     LOGGER.debug("Default DuckDBConfig: {}", config);
   }
 
-  @Test
-  public void testMapConstructorWithAllSettings() {
+  @Test public void testMapConstructorWithAllSettings() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("memory_limit", "4GB");
     configMap.put("threads", 8);
@@ -82,8 +79,7 @@ public class DuckDBConfigTest {
     assertEquals(2048, config.getArrowBatchSize());
   }
 
-  @Test
-  public void testMapConstructorWithMissingSettingsUsesDefaults() {
+  @Test public void testMapConstructorWithMissingSettingsUsesDefaults() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     DuckDBConfig config = new DuckDBConfig(configMap);
     assertEquals(DuckDBConfig.DEFAULT_MEMORY_LIMIT, config.getMemoryLimit());
@@ -93,8 +89,7 @@ public class DuckDBConfigTest {
     assertFalse(config.isEnableProgressBar());
   }
 
-  @Test
-  public void testMapConstructorWithAdditionalSettings() {
+  @Test public void testMapConstructorWithAdditionalSettings() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("custom_setting", "custom_value");
     configMap.put("another_setting", "42");
@@ -105,8 +100,7 @@ public class DuckDBConfigTest {
     assertEquals("42", additional.getProperty("another_setting"));
   }
 
-  @Test
-  public void testMapConstructorIgnoresNullAdditionalValues() {
+  @Test public void testMapConstructorIgnoresNullAdditionalValues() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("custom_setting", null);
 
@@ -115,8 +109,7 @@ public class DuckDBConfigTest {
     assertNull(additional.getProperty("custom_setting"));
   }
 
-  @Test
-  public void testMapConstructorWithNumberThreads() {
+  @Test public void testMapConstructorWithNumberThreads() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("threads", Integer.valueOf(16));
 
@@ -124,8 +117,7 @@ public class DuckDBConfigTest {
     assertEquals(16, config.getThreads());
   }
 
-  @Test
-  public void testMapConstructorWithNonNumberThreadsUsesDefault() {
+  @Test public void testMapConstructorWithNonNumberThreadsUsesDefault() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("threads", "not_a_number");
 
@@ -133,8 +125,7 @@ public class DuckDBConfigTest {
     assertEquals(DuckDBConfig.DEFAULT_THREADS, config.getThreads());
   }
 
-  @Test
-  public void testMapConstructorWithNumberBatchSize() {
+  @Test public void testMapConstructorWithNumberBatchSize() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("arrow_batch_size", Integer.valueOf(4096));
 
@@ -142,13 +133,12 @@ public class DuckDBConfigTest {
     assertEquals(4096, config.getArrowBatchSize());
   }
 
-  @Test
-  public void testFullConstructorWithAllParams() {
+  @Test public void testFullConstructorWithAllParams() {
     Properties additionalSettings = new Properties();
     additionalSettings.setProperty("custom", "value");
 
-    DuckDBConfig config = new DuckDBConfig(
-        "8GB", 16, "95%", "/tmp/duck", true, false,
+    DuckDBConfig config =
+        new DuckDBConfig("8GB", 16, "95%", "/tmp/duck", true, false,
         true, 4096, additionalSettings);
 
     assertEquals("8GB", config.getMemoryLimit());
@@ -162,10 +152,9 @@ public class DuckDBConfigTest {
     assertEquals("value", config.getAdditionalSettings().getProperty("custom"));
   }
 
-  @Test
-  public void testFullConstructorWithNullsUsesDefaults() {
-    DuckDBConfig config = new DuckDBConfig(
-        null, -1, null, null, false, true,
+  @Test public void testFullConstructorWithNullsUsesDefaults() {
+    DuckDBConfig config =
+        new DuckDBConfig(null, -1, null, null, false, true,
         false, -1, null);
 
     assertEquals(DuckDBConfig.DEFAULT_MEMORY_LIMIT, config.getMemoryLimit());
@@ -177,8 +166,7 @@ public class DuckDBConfigTest {
     assertTrue(config.getAdditionalSettings().isEmpty());
   }
 
-  @Test
-  public void testToDuckDBSettingsContainsCoreSettings() {
+  @Test public void testToDuckDBSettingsContainsCoreSettings() {
     DuckDBConfig config = new DuckDBConfig();
     String[] settings = config.toDuckDBSettings();
     assertNotNull(settings);
@@ -217,10 +205,9 @@ public class DuckDBConfigTest {
     assertTrue(hasInsertionOrder, "Should include preserve_insertion_order setting");
   }
 
-  @Test
-  public void testToDuckDBSettingsIncludesTempDirectory() {
-    DuckDBConfig config = new DuckDBConfig(
-        "1GB", 4, "80%", "/tmp/duck", false, true,
+  @Test public void testToDuckDBSettingsIncludesTempDirectory() {
+    DuckDBConfig config =
+        new DuckDBConfig("1GB", 4, "80%", "/tmp/duck", false, true,
         true, 1024, null);
 
     String[] settings = config.toDuckDBSettings();
@@ -234,8 +221,7 @@ public class DuckDBConfigTest {
     assertTrue(hasTempDir, "Should include temp_directory when set");
   }
 
-  @Test
-  public void testToDuckDBSettingsExcludesTempDirectoryWhenNull() {
+  @Test public void testToDuckDBSettingsExcludesTempDirectoryWhenNull() {
     DuckDBConfig config = new DuckDBConfig();
     String[] settings = config.toDuckDBSettings();
     for (String setting : settings) {
@@ -244,13 +230,12 @@ public class DuckDBConfigTest {
     }
   }
 
-  @Test
-  public void testToDuckDBSettingsIncludesAdditionalNumericSetting() {
+  @Test public void testToDuckDBSettingsIncludesAdditionalNumericSetting() {
     Properties additional = new Properties();
     additional.setProperty("parallel_csv_reader", "true");
 
-    DuckDBConfig config = new DuckDBConfig(
-        "1GB", 4, "80%", null, false, true,
+    DuckDBConfig config =
+        new DuckDBConfig("1GB", 4, "80%", null, false, true,
         true, 1024, additional);
 
     String[] settings = config.toDuckDBSettings();
@@ -266,13 +251,12 @@ public class DuckDBConfigTest {
     assertTrue(hasCustom, "Should include additional settings");
   }
 
-  @Test
-  public void testToDuckDBSettingsQuotesStringValues() {
+  @Test public void testToDuckDBSettingsQuotesStringValues() {
     Properties additional = new Properties();
     additional.setProperty("access_mode", "read_only");
 
-    DuckDBConfig config = new DuckDBConfig(
-        "1GB", 4, "80%", null, false, true,
+    DuckDBConfig config =
+        new DuckDBConfig("1GB", 4, "80%", null, false, true,
         true, 1024, additional);
 
     String[] settings = config.toDuckDBSettings();
@@ -287,10 +271,9 @@ public class DuckDBConfigTest {
     assertTrue(hasAccessMode, "Should include access_mode setting");
   }
 
-  @Test
-  public void testToStringContainsAllFields() {
-    DuckDBConfig config = new DuckDBConfig(
-        "4GB", 8, "90%", "/tmp", true, false,
+  @Test public void testToStringContainsAllFields() {
+    DuckDBConfig config =
+        new DuckDBConfig("4GB", 8, "90%", "/tmp", true, false,
         true, 2048, null);
 
     String str = config.toString();
@@ -302,8 +285,7 @@ public class DuckDBConfigTest {
     LOGGER.debug("DuckDBConfig toString: {}", str);
   }
 
-  @Test
-  public void testDefaultConstants() {
+  @Test public void testDefaultConstants() {
     assertEquals("1GB", DuckDBConfig.DEFAULT_MEMORY_LIMIT);
     assertEquals("80%", DuckDBConfig.DEFAULT_MAX_MEMORY);
     assertFalse(DuckDBConfig.DEFAULT_ENABLE_PROGRESS_BAR);

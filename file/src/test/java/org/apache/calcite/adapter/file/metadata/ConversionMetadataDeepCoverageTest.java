@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,44 +72,38 @@ public class ConversionMetadataDeepCoverageTest {
   // isLocalFile -- all branches via hasChanged()
   // ===================================================================
 
-  @Test
-  void testIsLocalFileWithHttpUrl() {
+  @Test void testIsLocalFileWithHttpUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "http://example.com/data.csv";
     // Remote file -> hasChanged returns true (conservative)
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithHttpsUrl() {
+  @Test void testIsLocalFileWithHttpsUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "https://secure.example.com/data.csv";
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithS3Url() {
+  @Test void testIsLocalFileWithS3Url() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "s3://my-bucket/data/file.parquet";
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithFtpUrl() {
+  @Test void testIsLocalFileWithFtpUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "ftp://files.example.com/data.csv";
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithSftpUrl() {
+  @Test void testIsLocalFileWithSftpUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "sftp://secure.example.com/data.csv";
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithAbsoluteUnixPath() throws IOException {
+  @Test void testIsLocalFileWithAbsoluteUnixPath() throws IOException {
     File testFile = new File(metadataDir, "local_test.csv");
     testFile.createNewFile();
 
@@ -121,8 +114,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithRelativePath() {
+  @Test void testIsLocalFileWithRelativePath() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "relative/path/data.csv";
     record.timestamp = System.currentTimeMillis();
@@ -130,8 +122,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testIsLocalFileWithNullPath() {
+  @Test void testIsLocalFileWithNullPath() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = null;
     // null path -> isLocalFile returns false -> remote code path -> returns true
@@ -142,8 +133,7 @@ public class ConversionMetadataDeepCoverageTest {
   // hasChangedViaTimestamp -- timestamp-based local file change detection
   // ===================================================================
 
-  @Test
-  void testHasChangedViaTimestampFileNotExists() {
+  @Test void testHasChangedViaTimestampFileNotExists() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "/nonexistent/path/to/file.xlsx";
     record.timestamp = System.currentTimeMillis();
@@ -151,8 +141,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedViaTimestampFileUnchanged() throws IOException {
+  @Test void testHasChangedViaTimestampFileUnchanged() throws IOException {
     File testFile = new File(metadataDir, "unchanged.xlsx");
     testFile.createNewFile();
 
@@ -163,8 +152,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedViaTimestampFileChanged() throws Exception {
+  @Test void testHasChangedViaTimestampFileChanged() throws Exception {
     File testFile = new File(metadataDir, "changed.xlsx");
     try (FileWriter fw = new FileWriter(testFile)) {
       fw.write("initial content");
@@ -177,8 +165,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedViaTimestampFileModifiedAfterRecord() throws Exception {
+  @Test void testHasChangedViaTimestampFileModifiedAfterRecord() throws Exception {
     File testFile = new File(metadataDir, "modified_later.txt");
     try (FileWriter fw = new FileWriter(testFile)) {
       fw.write("original");
@@ -197,14 +184,12 @@ public class ConversionMetadataDeepCoverageTest {
   // hasChangedViaMetadata -- StorageProvider metadata comparison
   // ===================================================================
 
-  @Test
-  void testHasChangedViaMetadataNullMetadataReturnsTrue() {
+  @Test void testHasChangedViaMetadataNullMetadataReturnsTrue() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertTrue(record.hasChangedViaMetadata(null));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagMatchNoChange() {
+  @Test void testHasChangedViaMetadataEtagMatchNoChange() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "\"abc123\"";
     record.originalFile = "s3://bucket/file.csv";
@@ -214,8 +199,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagMismatchChanged() {
+  @Test void testHasChangedViaMetadataEtagMismatchChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "\"abc123\"";
     record.originalFile = "s3://bucket/file.csv";
@@ -225,8 +209,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataNoEtagFallbackToSizeChanged() {
+  @Test void testHasChangedViaMetadataNoEtagFallbackToSizeChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = 1000L;
@@ -237,8 +220,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataNoEtagSameSizeFallbackToTimestamp() {
+  @Test void testHasChangedViaMetadataNoEtagSameSizeFallbackToTimestamp() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = 1000L;
@@ -251,8 +233,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampWithinOneSec() {
+  @Test void testHasChangedViaMetadataTimestampWithinOneSec() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -265,8 +246,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampExactlyOneSecBoundary() {
+  @Test void testHasChangedViaMetadataTimestampExactlyOneSecBoundary() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -279,8 +259,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampJustOverTolerance() {
+  @Test void testHasChangedViaMetadataTimestampJustOverTolerance() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -293,8 +272,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataStoredEtagNullCurrentEtagPresent() {
+  @Test void testHasChangedViaMetadataStoredEtagNullCurrentEtagPresent() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = null;
     record.contentLength = null;
@@ -307,8 +285,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataStoredEtagPresentCurrentEtagNull() {
+  @Test void testHasChangedViaMetadataStoredEtagPresentCurrentEtagNull() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "\"existing-etag\"";
     record.contentLength = null;
@@ -325,8 +302,7 @@ public class ConversionMetadataDeepCoverageTest {
   // updateMetadata -- update record fields from FileMetadata
   // ===================================================================
 
-  @Test
-  void testUpdateMetadataPopulatesAllFields() {
+  @Test void testUpdateMetadataPopulatesAllFields() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "test.csv";
 
@@ -340,8 +316,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals(12345L, record.timestamp);
   }
 
-  @Test
-  void testUpdateMetadataWithNullDoesNotModifyRecord() {
+  @Test void testUpdateMetadataWithNullDoesNotModifyRecord() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "old-etag";
     record.contentLength = 999L;
@@ -355,8 +330,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals(50000L, record.timestamp);
   }
 
-  @Test
-  void testUpdateMetadataOverwritesPreviousValues() {
+  @Test void testUpdateMetadataOverwritesPreviousValues() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "test.csv";
     record.etag = "old-etag";
@@ -378,38 +352,33 @@ public class ConversionMetadataDeepCoverageTest {
   // isIcebergFormat -- all branches
   // ===================================================================
 
-  @Test
-  void testIsIcebergFormatNullTableConfig() {
+  @Test void testIsIcebergFormatNullTableConfig() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = null;
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatEmptyTableConfig() {
+  @Test void testIsIcebergFormatEmptyTableConfig() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<String, Object>();
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatMaterializeNotAMap() {
+  @Test void testIsIcebergFormatMaterializeNotAMap() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<String, Object>();
     record.tableConfig.put("materialize", "string_value");
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatMaterializeIsInteger() {
+  @Test void testIsIcebergFormatMaterializeIsInteger() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = new HashMap<String, Object>();
     record.tableConfig.put("materialize", 42);
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatIcebergLowerCase() {
+  @Test void testIsIcebergFormatIcebergLowerCase() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -419,8 +388,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatIcebergUpperCase() {
+  @Test void testIsIcebergFormatIcebergUpperCase() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -430,8 +398,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatIcebergMixedCase() {
+  @Test void testIsIcebergFormatIcebergMixedCase() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -441,8 +408,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatParquetFormat() {
+  @Test void testIsIcebergFormatParquetFormat() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -452,8 +418,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatNullFormat() {
+  @Test void testIsIcebergFormatNullFormat() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -467,15 +432,13 @@ public class ConversionMetadataDeepCoverageTest {
   // FileBaseline.hasChanged -- all branches
   // ===================================================================
 
-  @Test
-  void testFileBaselineHasChangedNullCurrentReturnsTrue() {
+  @Test void testFileBaselineHasChangedNullCurrentReturnsTrue() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, "etag-abc", 12345L);
     assertTrue(fb.hasChanged(null));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagBothPresentMatch() {
+  @Test void testFileBaselineHasChangedEtagBothPresentMatch() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, "etag-abc", 12345L);
     ConversionMetadata.FileBaseline current =
@@ -484,8 +447,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagBothPresentMismatch() {
+  @Test void testFileBaselineHasChangedEtagBothPresentMismatch() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, "etag-abc", 12345L);
     ConversionMetadata.FileBaseline current =
@@ -493,8 +455,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagOneNullFallbackToSize() {
+  @Test void testFileBaselineHasChangedEtagOneNullFallbackToSize() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, "etag-abc", 12345L);
     ConversionMetadata.FileBaseline current =
@@ -503,8 +464,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedBothEtagsNullSizesDiffer() {
+  @Test void testFileBaselineHasChangedBothEtagsNullSizesDiffer() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, null, 12345L);
     ConversionMetadata.FileBaseline current =
@@ -512,8 +472,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedBothEtagsNullSameSize() {
+  @Test void testFileBaselineHasChangedBothEtagsNullSameSize() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, null, 12345L);
     ConversionMetadata.FileBaseline current =
@@ -522,8 +481,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedNoEtagNoSizeTimestampChanged() {
+  @Test void testFileBaselineHasChangedNoEtagNoSizeTimestampChanged() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(null, null, 10000L);
     ConversionMetadata.FileBaseline current =
@@ -532,8 +490,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedNoEtagNoSizeTimestampWithinTolerance() {
+  @Test void testFileBaselineHasChangedNoEtagNoSizeTimestampWithinTolerance() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(null, null, 10000L);
     ConversionMetadata.FileBaseline current =
@@ -542,8 +499,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedAllFieldsNull() {
+  @Test void testFileBaselineHasChangedAllFieldsNull() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(null, null, null);
     ConversionMetadata.FileBaseline current =
@@ -552,8 +508,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedStoredSizeNullCurrentSizePresent() {
+  @Test void testFileBaselineHasChangedStoredSizeNullCurrentSizePresent() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(null, null, 10000L);
     ConversionMetadata.FileBaseline current =
@@ -562,8 +517,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedStoredTimestampNullCurrentPresent() {
+  @Test void testFileBaselineHasChangedStoredTimestampNullCurrentPresent() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, null, null);
     ConversionMetadata.FileBaseline current =
@@ -576,22 +530,19 @@ public class ConversionMetadataDeepCoverageTest {
   // PartitionBaseline.isEmpty -- all branches
   // ===================================================================
 
-  @Test
-  void testPartitionBaselineNullFiles() {
+  @Test void testPartitionBaselineNullFiles() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = null;
     assertTrue(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineEmptyFiles() {
+  @Test void testPartitionBaselineEmptyFiles() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = new HashMap<String, ConversionMetadata.FileBaseline>();
     assertTrue(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineWithOneFile() {
+  @Test void testPartitionBaselineWithOneFile() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     baseline.files = new HashMap<String, ConversionMetadata.FileBaseline>();
     baseline.files.put("file1.parquet",
@@ -600,8 +551,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(baseline.isEmpty());
   }
 
-  @Test
-  void testPartitionBaselineDefaultConstructorIsEmpty() {
+  @Test void testPartitionBaselineDefaultConstructorIsEmpty() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     // Default constructor leaves files null
     assertTrue(baseline.isEmpty());
@@ -611,71 +561,61 @@ public class ConversionMetadataDeepCoverageTest {
   // detectConvertibleType -- all file type branches via reflection
   // ===================================================================
 
-  @Test
-  void testDetectConvertibleTypeXlsx() throws Exception {
+  @Test void testDetectConvertibleTypeXlsx() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(null, "report.xlsx"));
   }
 
-  @Test
-  void testDetectConvertibleTypeXls() throws Exception {
+  @Test void testDetectConvertibleTypeXls() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(null, "legacy.xls"));
   }
 
-  @Test
-  void testDetectConvertibleTypeHtml() throws Exception {
+  @Test void testDetectConvertibleTypeHtml() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("html", method.invoke(null, "page.html"));
   }
 
-  @Test
-  void testDetectConvertibleTypeHtm() throws Exception {
+  @Test void testDetectConvertibleTypeHtm() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("html", method.invoke(null, "page.htm"));
   }
 
-  @Test
-  void testDetectConvertibleTypeXml() throws Exception {
+  @Test void testDetectConvertibleTypeXml() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("xml", method.invoke(null, "config.xml"));
   }
 
-  @Test
-  void testDetectConvertibleTypeMarkdown() throws Exception {
+  @Test void testDetectConvertibleTypeMarkdown() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("markdown", method.invoke(null, "readme.md"));
   }
 
-  @Test
-  void testDetectConvertibleTypeDocx() throws Exception {
+  @Test void testDetectConvertibleTypeDocx() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("docx", method.invoke(null, "document.docx"));
   }
 
-  @Test
-  void testDetectConvertibleTypePptx() throws Exception {
+  @Test void testDetectConvertibleTypePptx() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("pptx", method.invoke(null, "slides.pptx"));
   }
 
-  @Test
-  void testDetectConvertibleTypeUnknown() throws Exception {
+  @Test void testDetectConvertibleTypeUnknown() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(null, "file.xyz"));
   }
 
-  @Test
-  void testDetectConvertibleTypeCaseInsensitive() throws Exception {
+  @Test void testDetectConvertibleTypeCaseInsensitive() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(null, "DATA.XLSX"));
@@ -686,64 +626,55 @@ public class ConversionMetadataDeepCoverageTest {
   // detectDirectType -- all file type branches via reflection
   // ===================================================================
 
-  @Test
-  void testDetectDirectTypeCsv() throws Exception {
+  @Test void testDetectDirectTypeCsv() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "data.csv"));
   }
 
-  @Test
-  void testDetectDirectTypeTsv() throws Exception {
+  @Test void testDetectDirectTypeTsv() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("tsv", method.invoke(null, "data.tsv"));
   }
 
-  @Test
-  void testDetectDirectTypeJson() throws Exception {
+  @Test void testDetectDirectTypeJson() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("json", method.invoke(null, "data.json"));
   }
 
-  @Test
-  void testDetectDirectTypeParquet() throws Exception {
+  @Test void testDetectDirectTypeParquet() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("parquet", method.invoke(null, "data.parquet"));
   }
 
-  @Test
-  void testDetectDirectTypeYaml() throws Exception {
+  @Test void testDetectDirectTypeYaml() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("yaml", method.invoke(null, "config.yaml"));
   }
 
-  @Test
-  void testDetectDirectTypeYml() throws Exception {
+  @Test void testDetectDirectTypeYml() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("yaml", method.invoke(null, "config.yml"));
   }
 
-  @Test
-  void testDetectDirectTypeArrow() throws Exception {
+  @Test void testDetectDirectTypeArrow() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("arrow", method.invoke(null, "data.arrow"));
   }
 
-  @Test
-  void testDetectDirectTypeUnknown() throws Exception {
+  @Test void testDetectDirectTypeUnknown() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(null, "data.binary"));
   }
 
-  @Test
-  void testDetectDirectTypeCaseInsensitive() throws Exception {
+  @Test void testDetectDirectTypeCaseInsensitive() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "DATA.CSV"));
@@ -755,16 +686,14 @@ public class ConversionMetadataDeepCoverageTest {
   // detectTypeFromTestFile -- integration of requiresConversion/isDirectlyUsable
   // ===================================================================
 
-  @Test
-  void testDetectTypeFromTestFileConvertible() throws Exception {
+  @Test void testDetectTypeFromTestFileConvertible() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(null, "test.xlsx"));
     assertEquals("html", method.invoke(null, "test.html"));
   }
 
-  @Test
-  void testDetectTypeFromTestFileDirectlyUsable() throws Exception {
+  @Test void testDetectTypeFromTestFileDirectlyUsable() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "test.csv"));
@@ -772,22 +701,19 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals("parquet", method.invoke(null, "test.parquet"));
   }
 
-  @Test
-  void testDetectTypeFromTestFileCompressedCsv() throws Exception {
+  @Test void testDetectTypeFromTestFileCompressedCsv() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "test.csv.gz"));
   }
 
-  @Test
-  void testDetectTypeFromTestFileCompressedJson() throws Exception {
+  @Test void testDetectTypeFromTestFileCompressedJson() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
     assertEquals("json", method.invoke(null, "test.json.gz"));
   }
 
-  @Test
-  void testDetectTypeFromTestFileUnknown() throws Exception {
+  @Test void testDetectTypeFromTestFileUnknown() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(null, "test.xyz"));
@@ -797,8 +723,7 @@ public class ConversionMetadataDeepCoverageTest {
   // extractExtension
   // ===================================================================
 
-  @Test
-  void testExtractExtensionWithTestPrefix() throws Exception {
+  @Test void testExtractExtensionWithTestPrefix() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "test.csv"));
@@ -806,8 +731,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals("parquet", method.invoke(null, "test.parquet"));
   }
 
-  @Test
-  void testExtractExtensionWithoutTestPrefix() throws Exception {
+  @Test void testExtractExtensionWithoutTestPrefix() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
     // Files not starting with "test." return null
@@ -815,8 +739,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertNull(method.invoke(null, "noprefix.json"));
   }
 
-  @Test
-  void testExtractExtensionCompressedVariants() throws Exception {
+  @Test void testExtractExtensionCompressedVariants() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
     assertEquals("csv.gz", method.invoke(null, "test.csv.gz"));
@@ -827,8 +750,7 @@ public class ConversionMetadataDeepCoverageTest {
   // generateFileExtensions -- via reflection
   // ===================================================================
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
     method.setAccessible(true);
@@ -837,8 +759,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(extensions.isEmpty());
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testGenerateFileExtensionsContainsCsv() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
     method.setAccessible(true);
@@ -854,8 +775,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(hasCsv, "Expected csv in generated extensions");
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testGenerateFileExtensionsContainsCompressedVariants() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
     method.setAccessible(true);
@@ -874,8 +794,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(hasJsonBz2, "Expected json.bz2 in generated extensions");
   }
 
-  @Test
-  @SuppressWarnings("unchecked")
+  @Test @SuppressWarnings("unchecked")
   void testGenerateFileExtensionsContainsConvertibleTypes() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
     method.setAccessible(true);
@@ -900,29 +819,25 @@ public class ConversionMetadataDeepCoverageTest {
   // detectTypeFromExtension -- via reflection
   // ===================================================================
 
-  @Test
-  void testDetectTypeFromExtensionCsv() throws Exception {
+  @Test void testDetectTypeFromExtensionCsv() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(null, "csv"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionJson() throws Exception {
+  @Test void testDetectTypeFromExtensionJson() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
     assertEquals("json", method.invoke(null, "json"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionXlsx() throws Exception {
+  @Test void testDetectTypeFromExtensionXlsx() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(null, "xlsx"));
   }
 
-  @Test
-  void testDetectTypeFromExtensionUnknown() throws Exception {
+  @Test void testDetectTypeFromExtensionUnknown() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(null, "zip"));
@@ -932,56 +847,49 @@ public class ConversionMetadataDeepCoverageTest {
   // isRemoteFile -- via reflection on instance method
   // ===================================================================
 
-  @Test
-  void testIsRemoteFileHttp() throws Exception {
+  @Test void testIsRemoteFileHttp() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "http://example.com/file.csv"));
   }
 
-  @Test
-  void testIsRemoteFileHttps() throws Exception {
+  @Test void testIsRemoteFileHttps() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "https://example.com/file.csv"));
   }
 
-  @Test
-  void testIsRemoteFileS3() throws Exception {
+  @Test void testIsRemoteFileS3() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "s3://bucket/path/file.parquet"));
   }
 
-  @Test
-  void testIsRemoteFileFtp() throws Exception {
+  @Test void testIsRemoteFileFtp() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "ftp://server/file.csv"));
   }
 
-  @Test
-  void testIsRemoteFileSftp() throws Exception {
+  @Test void testIsRemoteFileSftp() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "sftp://server/file.csv"));
   }
 
-  @Test
-  void testIsRemoteFileLocalPath() throws Exception {
+  @Test void testIsRemoteFileLocalPath() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(cm, "/local/path/file.csv"));
   }
 
-  @Test
-  void testIsRemoteFileNull() throws Exception {
+  @Test void testIsRemoteFileNull() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
@@ -992,40 +900,35 @@ public class ConversionMetadataDeepCoverageTest {
   // isGlobPattern -- via reflection
   // ===================================================================
 
-  @Test
-  void testIsGlobPatternWithAsterisk() throws Exception {
+  @Test void testIsGlobPatternWithAsterisk() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "s3://bucket/**/*.parquet"));
   }
 
-  @Test
-  void testIsGlobPatternWithQuestionMark() throws Exception {
+  @Test void testIsGlobPatternWithQuestionMark() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "/path/file?.csv"));
   }
 
-  @Test
-  void testIsGlobPatternWithBrackets() throws Exception {
+  @Test void testIsGlobPatternWithBrackets() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
     assertTrue((Boolean) method.invoke(cm, "/path/file[0-9].csv"));
   }
 
-  @Test
-  void testIsGlobPatternPlainPath() throws Exception {
+  @Test void testIsGlobPatternPlainPath() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(cm, "/path/to/plain_file.csv"));
   }
 
-  @Test
-  void testIsGlobPatternNull() throws Exception {
+  @Test void testIsGlobPatternNull() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
@@ -1036,8 +939,7 @@ public class ConversionMetadataDeepCoverageTest {
   // ConversionRecord constructors and getters
   // ===================================================================
 
-  @Test
-  void testConversionRecordDefaultConstructor() {
+  @Test void testConversionRecordDefaultConstructor() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertNull(record.tableName);
     assertNull(record.sourceFile);
@@ -1048,8 +950,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertNull(record.contentType);
   }
 
-  @Test
-  void testConversionRecordThreeArgConstructor() {
+  @Test void testConversionRecordThreeArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/path/original", "/path/converted", "EXCEL_TO_JSON");
     assertEquals("/path/original", record.getOriginalPath());
@@ -1058,8 +959,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(record.timestamp > 0);
   }
 
-  @Test
-  void testConversionRecordFourArgConstructor() {
+  @Test void testConversionRecordFourArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/original", "/converted", "HTML_TO_JSON", "/cache.parquet");
     assertEquals("/original", record.getOriginalPath());
@@ -1067,8 +967,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals("/converted", record.getConvertedFile());
   }
 
-  @Test
-  void testConversionRecordHttpMetadataConstructor() {
+  @Test void testConversionRecordHttpMetadataConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("http://source",
             "/converted", "HTTP_DOWNLOAD", "/cache.parquet",
@@ -1079,8 +978,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals("http://source", record.originalFile);
   }
 
-  @Test
-  void testConversionRecordComprehensiveConstructor() {
+  @Test void testConversionRecordComprehensiveConstructor() {
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     tableConfig.put("key", "value");
 
@@ -1112,16 +1010,14 @@ public class ConversionMetadataDeepCoverageTest {
   // FileBaseline constructors
   // ===================================================================
 
-  @Test
-  void testFileBaselineDefaultConstructor() {
+  @Test void testFileBaselineDefaultConstructor() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline();
     assertNull(fb.size);
     assertNull(fb.etag);
     assertNull(fb.lastModified);
   }
 
-  @Test
-  void testFileBaselineParameterizedConstructor() {
+  @Test void testFileBaselineParameterizedConstructor() {
     ConversionMetadata.FileBaseline fb =
         new ConversionMetadata.FileBaseline(1024L, "etag-abc", 12345L);
     assertEquals(Long.valueOf(1024L), fb.size);
@@ -1133,28 +1029,24 @@ public class ConversionMetadataDeepCoverageTest {
   // ConversionMetadata constructor and basic operations
   // ===================================================================
 
-  @Test
-  void testConstructorWithLocalDirectory() {
+  @Test void testConstructorWithLocalDirectory() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     assertNotNull(cm);
     assertNotNull(cm.getAllConversions());
     assertTrue(cm.getAllConversions().isEmpty());
   }
 
-  @Test
-  void testConstructorWithStringLocalPath() {
+  @Test void testConstructorWithStringLocalPath() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir.getAbsolutePath());
     assertNotNull(cm);
   }
 
-  @Test
-  void testConstructorWithS3Path() {
+  @Test void testConstructorWithS3Path() {
     ConversionMetadata cm = new ConversionMetadata("s3://my-bucket/my-prefix");
     assertNotNull(cm);
   }
 
-  @Test
-  void testConstructorWithHttpsPath() {
+  @Test void testConstructorWithHttpsPath() {
     ConversionMetadata cm = new ConversionMetadata("https://example.com/data");
     assertNotNull(cm);
   }
@@ -1163,23 +1055,20 @@ public class ConversionMetadataDeepCoverageTest {
   // Hint accessors
   // ===================================================================
 
-  @Test
-  void testSetAndGetHint() {
+  @Test void testSetAndGetHint() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     assertNull(cm.getHint("cik"));
     cm.setHint("cik", "0001234567");
     assertEquals("0001234567", cm.getHint("cik"));
   }
 
-  @Test
-  void testSetHintNullValueIgnored() {
+  @Test void testSetHintNullValueIgnored() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     cm.setHint("key", null);
     assertNull(cm.getHint("key"));
   }
 
-  @Test
-  void testSetHintMultipleValues() {
+  @Test void testSetHintMultipleValues() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     cm.setHint("cik", "0001234567");
     cm.setHint("form", "10-K");
@@ -1193,8 +1082,7 @@ public class ConversionMetadataDeepCoverageTest {
   // recordConversion variants and persistence
   // ===================================================================
 
-  @Test
-  void testRecordConversionTwoArgs() throws IOException {
+  @Test void testRecordConversionTwoArgs() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "source.xlsx");
     original.createNewFile();
@@ -1207,8 +1095,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(records.isEmpty());
   }
 
-  @Test
-  void testRecordConversionWithParquetCache() throws IOException {
+  @Test void testRecordConversionWithParquetCache() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "data.html");
     original.createNewFile();
@@ -1221,8 +1108,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse(cm.getAllConversions().isEmpty());
   }
 
-  @Test
-  void testRecordConversionWithPreBuiltRecord() throws IOException {
+  @Test void testRecordConversionWithPreBuiltRecord() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File converted = new File(metadataDir, "result.json");
     converted.createNewFile();
@@ -1240,15 +1126,13 @@ public class ConversionMetadataDeepCoverageTest {
   // findOriginalSource
   // ===================================================================
 
-  @Test
-  void testFindOriginalSourceNotFound() {
+  @Test void testFindOriginalSourceNotFound() {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File jsonFile = new File(metadataDir, "unknown.json");
     assertNull(cm.findOriginalSource(jsonFile));
   }
 
-  @Test
-  void testFindOriginalSourceFound() throws IOException {
+  @Test void testFindOriginalSourceFound() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "original.xlsx");
     original.createNewFile();
@@ -1262,8 +1146,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals(original.getCanonicalPath(), result.getCanonicalPath());
   }
 
-  @Test
-  void testFindOriginalSourceDeletedOriginal() throws IOException {
+  @Test void testFindOriginalSourceDeletedOriginal() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "will_delete.xlsx");
     original.createNewFile();
@@ -1281,8 +1164,7 @@ public class ConversionMetadataDeepCoverageTest {
   // reload
   // ===================================================================
 
-  @Test
-  void testReloadRestoresRecordsFromDisk() throws IOException {
+  @Test void testReloadRestoresRecordsFromDisk() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "before.xlsx");
     original.createNewFile();
@@ -1300,8 +1182,7 @@ public class ConversionMetadataDeepCoverageTest {
   // clear
   // ===================================================================
 
-  @Test
-  void testClearRemovesAllRecords() throws IOException {
+  @Test void testClearRemovesAllRecords() throws IOException {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     File original = new File(metadataDir, "clear_orig.csv");
     original.createNewFile();
@@ -1319,30 +1200,26 @@ public class ConversionMetadataDeepCoverageTest {
   // isHivePartitioned -- via reflection
   // ===================================================================
 
-  @Test
-  void testIsHivePartitionedNull() throws Exception {
+  @Test void testIsHivePartitionedNull() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, (List<?>) null));
   }
 
-  @Test
-  void testIsHivePartitionedEmpty() throws Exception {
+  @Test void testIsHivePartitionedEmpty() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
     assertFalse((Boolean) method.invoke(null, Collections.emptyList()));
   }
 
-  @Test
-  void testIsHivePartitionedSingleFile() throws Exception {
+  @Test void testIsHivePartitionedSingleFile() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
     List<String> singleFile = Collections.singletonList("s3://bucket/year=2020/file.parquet");
     assertFalse((Boolean) method.invoke(null, singleFile));
   }
 
-  @Test
-  void testIsHivePartitionedNonPartitioned() throws Exception {
+  @Test void testIsHivePartitionedNonPartitioned() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
     List<String> files = new ArrayList<String>();
@@ -1351,8 +1228,7 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse((Boolean) method.invoke(null, files));
   }
 
-  @Test
-  void testIsHivePartitionedTrue() throws Exception {
+  @Test void testIsHivePartitionedTrue() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
     List<String> files = new ArrayList<String>();
@@ -1365,22 +1241,19 @@ public class ConversionMetadataDeepCoverageTest {
   // extractTableSpecificPattern -- via reflection
   // ===================================================================
 
-  @Test
-  void testExtractTableSpecificPatternNull() throws Exception {
+  @Test void testExtractTableSpecificPatternNull() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, (List<?>) null));
   }
 
-  @Test
-  void testExtractTableSpecificPatternEmpty() throws Exception {
+  @Test void testExtractTableSpecificPatternEmpty() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
     assertNull(method.invoke(null, Collections.emptyList()));
   }
 
-  @Test
-  void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
+  @Test void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
     method.setAccessible(true);
     List<String> files = new ArrayList<String>();
@@ -1396,23 +1269,20 @@ public class ConversionMetadataDeepCoverageTest {
   // findLongestCommonPrefix -- via reflection
   // ===================================================================
 
-  @Test
-  void testFindLongestCommonPrefixEmpty() throws Exception {
+  @Test void testFindLongestCommonPrefixEmpty() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
     assertEquals("", method.invoke(null, Collections.emptyList()));
   }
 
-  @Test
-  void testFindLongestCommonPrefixSingleFile() throws Exception {
+  @Test void testFindLongestCommonPrefixSingleFile() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
     List<String> files = Collections.singletonList("s3://bucket/path/file.parquet");
     assertEquals("s3://bucket/path/file.parquet", method.invoke(null, files));
   }
 
-  @Test
-  void testFindLongestCommonPrefixMultipleFiles() throws Exception {
+  @Test void testFindLongestCommonPrefixMultipleFiles() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
     method.setAccessible(true);
     List<String> files = new ArrayList<String>();
@@ -1426,20 +1296,18 @@ public class ConversionMetadataDeepCoverageTest {
   // formatRecord -- via reflection
   // ===================================================================
 
-  @Test
-  void testFormatRecordNull() throws Exception {
+  @Test void testFormatRecordNull() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
-    Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord",
-        ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     assertEquals("null", method.invoke(cm, (ConversionMetadata.ConversionRecord) null));
   }
 
-  @Test
-  void testFormatRecordNormal() throws Exception {
+  @Test void testFormatRecordNormal() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
-    Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord",
-        ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -1450,11 +1318,10 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(formatted.contains("DIRECT"));
   }
 
-  @Test
-  void testFormatRecordTruncatesLongParquetCache() throws Exception {
+  @Test void testFormatRecordTruncatesLongParquetCache() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
-    Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord",
-        ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -1472,32 +1339,28 @@ public class ConversionMetadataDeepCoverageTest {
   // detectSourceType -- via reflection on instance method
   // ===================================================================
 
-  @Test
-  void testDetectSourceTypeNull() throws Exception {
+  @Test void testDetectSourceTypeNull() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
     assertEquals("unknown", method.invoke(cm, (String) null));
   }
 
-  @Test
-  void testDetectSourceTypeCsv() throws Exception {
+  @Test void testDetectSourceTypeCsv() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
     assertEquals("csv", method.invoke(cm, "/path/to/file.csv"));
   }
 
-  @Test
-  void testDetectSourceTypeExcel() throws Exception {
+  @Test void testDetectSourceTypeExcel() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
     assertEquals("excel", method.invoke(cm, "/path/to/file.xlsx"));
   }
 
-  @Test
-  void testDetectSourceTypeUnknown() throws Exception {
+  @Test void testDetectSourceTypeUnknown() throws Exception {
     ConversionMetadata cm = new ConversionMetadata(metadataDir);
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);

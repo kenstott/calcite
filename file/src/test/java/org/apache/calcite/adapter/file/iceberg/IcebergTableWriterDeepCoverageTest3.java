@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.iceberg;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -32,7 +31,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -88,8 +86,8 @@ public class IcebergTableWriterDeepCoverageTest3 {
         new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()));
     PartitionSpec unpartSpec = PartitionSpec.unpartitioned();
-    unpartitionedTable = IcebergCatalogManager.createTable(catalogConfig, "unpart_table",
-        unpartSchema, unpartSpec);
+    unpartitionedTable =
+        IcebergCatalogManager.createTable(catalogConfig, "unpart_table", unpartSchema, unpartSpec);
   }
 
   @AfterEach
@@ -101,16 +99,14 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for constructors
   // ====================================================================
 
-  @Test
-  void testConstructorWithoutHadoopConf() {
+  @Test void testConstructorWithoutHadoopConf() {
     IcebergTableWriter w = new IcebergTableWriter(table, storageProvider);
     assertNotNull(w);
     assertNotNull(w.getTable());
     assertEquals(table.name(), w.getTable().name());
   }
 
-  @Test
-  void testConstructorWithHadoopConf() {
+  @Test void testConstructorWithHadoopConf() {
     IcebergTableWriter w = new IcebergTableWriter(table, storageProvider);
     assertNotNull(w);
   }
@@ -119,11 +115,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for computeRelativePath
   // ====================================================================
 
-  @Test
-  void testComputeRelativePath() throws Exception {
+  @Test void testComputeRelativePath() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "computeRelativePath", String.class, String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
     // Normal case with trailing slash
@@ -151,11 +146,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for getParentPath
   // ====================================================================
 
-  @Test
-  void testGetParentPath() throws Exception {
+  @Test void testGetParentPath() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getParentPath", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getParentPath", String.class);
     method.setAccessible(true);
 
     assertEquals("/parent", method.invoke(writer, "/parent/child"));
@@ -173,11 +167,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for estimateRecordCount
   // ====================================================================
 
-  @Test
-  void testEstimateRecordCount() throws Exception {
+  @Test void testEstimateRecordCount() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "estimateRecordCount", long.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("estimateRecordCount", long.class);
     method.setAccessible(true);
 
     assertEquals(1L, method.invoke(writer, 0L));
@@ -191,11 +184,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for coercePartitionValue
   // ====================================================================
 
-  @Test
-  void testCoercePartitionValueAllTypes() throws Exception {
+  @Test void testCoercePartitionValueAllTypes() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
     method.setAccessible(true);
 
     org.apache.iceberg.PartitionField yearField = table.spec().fields().get(0);
@@ -216,11 +208,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for buildPartitionPath
   // ====================================================================
 
-  @Test
-  void testBuildPartitionPath() throws Exception {
+  @Test void testBuildPartitionPath() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "buildPartitionPath", Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("buildPartitionPath", Map.class);
     method.setAccessible(true);
 
     // Null/empty
@@ -238,11 +229,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for getFieldValue
   // ====================================================================
 
-  @Test
-  void testGetFieldValue() throws Exception {
+  @Test void testGetFieldValue() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "getFieldValue", Map.class, String.class, Map.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("getFieldValue", Map.class, String.class, Map.class);
     method.setAccessible(true);
 
     Map<String, Object> row = new HashMap<String, Object>();
@@ -267,8 +257,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for commitDataFiles
   // ====================================================================
 
-  @Test
-  void testCommitDataFilesEmpty() {
+  @Test void testCommitDataFilesEmpty() {
     writer = new IcebergTableWriter(table, storageProvider);
     // Empty list should not throw
     writer.commitDataFiles(Collections.<DataFile>emptyList(), null);
@@ -278,8 +267,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for bulkCommitDataFiles
   // ====================================================================
 
-  @Test
-  void testBulkCommitDataFilesEmpty() {
+  @Test void testBulkCommitDataFilesEmpty() {
     writer = new IcebergTableWriter(table, storageProvider);
     // Empty list should not throw
     writer.bulkCommitDataFiles(Collections.<DataFile>emptyList());
@@ -289,8 +277,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for stageFiles with empty directory
   // ====================================================================
 
-  @Test
-  void testStageFilesEmptyDirectory() throws Exception {
+  @Test void testStageFilesEmptyDirectory() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     Path stagingDir = tempDir.resolve("empty_staging");
     Files.createDirectories(stagingDir);
@@ -303,8 +290,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for commitFromStaging with empty directory
   // ====================================================================
 
-  @Test
-  void testCommitFromStagingEmptyDir() throws Exception {
+  @Test void testCommitFromStagingEmptyDir() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     Path stagingDir = tempDir.resolve("staging");
     Files.createDirectories(stagingDir);
@@ -313,8 +299,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
     writer.commitFromStaging(stagingDir.toString(), null);
   }
 
-  @Test
-  void testCommitFromStagingWithPartitionFilter() throws Exception {
+  @Test void testCommitFromStagingWithPartitionFilter() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     Path stagingDir = tempDir.resolve("staging2");
     Files.createDirectories(stagingDir);
@@ -330,22 +315,19 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for deletePartition
   // ====================================================================
 
-  @Test
-  void testDeletePartitionWithNullFilter() {
+  @Test void testDeletePartitionWithNullFilter() {
     writer = new IcebergTableWriter(table, storageProvider);
     assertThrows(IllegalArgumentException.class,
         () -> writer.deletePartition(null));
   }
 
-  @Test
-  void testDeletePartitionWithEmptyFilter() {
+  @Test void testDeletePartitionWithEmptyFilter() {
     writer = new IcebergTableWriter(table, storageProvider);
     assertThrows(IllegalArgumentException.class,
         () -> writer.deletePartition(new HashMap<String, Object>()));
   }
 
-  @Test
-  void testDeletePartitionOnEmptyTable() throws Exception {
+  @Test void testDeletePartitionOnEmptyTable() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     Map<String, Object> filter = new HashMap<String, Object>();
     filter.put("year", 2020);
@@ -357,15 +339,13 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for writeRecords
   // ====================================================================
 
-  @Test
-  void testWriteRecordsNullOrEmpty() throws Exception {
+  @Test void testWriteRecordsNullOrEmpty() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     assertNull(writer.writeRecords(null, null));
     assertNull(writer.writeRecords(Collections.<Map<String, Object>>emptyList(), null));
   }
 
-  @Test
-  void testWriteRecordsSimple() throws Exception {
+  @Test void testWriteRecordsSimple() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -387,8 +367,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
     assertTrue(result.path().toString().endsWith(".parquet"));
   }
 
-  @Test
-  void testWriteRecordsUnpartitioned() throws Exception {
+  @Test void testWriteRecordsUnpartitioned() throws Exception {
     writer = new IcebergTableWriter(unpartitionedTable, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -402,8 +381,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
     assertEquals(1, result.recordCount());
   }
 
-  @Test
-  void testWriteRecordsMultipleRows() throws Exception {
+  @Test void testWriteRecordsMultipleRows() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -426,15 +404,13 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for runMaintenance
   // ====================================================================
 
-  @Test
-  void testRunMaintenanceOnEmptyTable() {
+  @Test void testRunMaintenanceOnEmptyTable() {
     writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw
     writer.runMaintenance(7, 1);
   }
 
-  @Test
-  void testRunMaintenanceAfterWrite() throws Exception {
+  @Test void testRunMaintenanceAfterWrite() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -459,11 +435,10 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for normalizeS3Path
   // ====================================================================
 
-  @Test
-  void testNormalizeS3Path() throws Exception {
+  @Test void testNormalizeS3Path() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
-    Method method = IcebergTableWriter.class.getDeclaredMethod(
-        "normalizeS3Path", String.class);
+    Method method =
+        IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
     method.setAccessible(true);
 
     // s3a:/ should become s3a://
@@ -478,8 +453,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   // Tests for ensureVersionHint
   // ====================================================================
 
-  @Test
-  void testEnsureVersionHint() throws Exception {
+  @Test void testEnsureVersionHint() throws Exception {
     writer = new IcebergTableWriter(table, storageProvider);
     Method method = IcebergTableWriter.class.getDeclaredMethod("ensureVersionHint");
     method.setAccessible(true);

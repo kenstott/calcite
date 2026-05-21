@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -333,8 +332,8 @@ class DocumentETLProcessorTest {
   // -----------------------------------------------------------------------
 
   @Test void testIsTransientErrorHttp500() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertTrue((Boolean) m.invoke(null, new IOException("HTTP 500 Server Error")));
@@ -344,8 +343,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorTimeout() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertTrue((Boolean) m.invoke(null, new IOException("Read timed out")));
@@ -353,8 +352,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorConnectionReset() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertTrue((Boolean) m.invoke(null, new IOException("Connection reset")));
@@ -363,8 +362,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorPrematureEnd() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertTrue((Boolean) m.invoke(null, new IOException("Premature end of stream")));
@@ -375,8 +374,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorEOFException() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     // EOFException is a subclass of IOException
@@ -384,19 +383,19 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorCauseChain() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     // Wrap a transient error in a non-transient wrapper
-    IOException wrapper = new IOException("Wrapper",
-        new IOException("Connection reset by peer"));
+    IOException wrapper =
+        new IOException("Wrapper", new IOException("Connection reset by peer"));
     assertTrue((Boolean) m.invoke(null, wrapper));
   }
 
   @Test void testIsTransientErrorNonTransient() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertFalse((Boolean) m.invoke(null, new IOException("File not found")));
@@ -404,8 +403,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testIsTransientErrorNullMessage() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "isTransientError", IOException.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("isTransientError", IOException.class);
     m.setAccessible(true);
 
     assertFalse((Boolean) m.invoke(null, new IOException((String) null)));
@@ -416,8 +415,8 @@ class DocumentETLProcessorTest {
   // -----------------------------------------------------------------------
 
   @Test void testExtractYearFromAccession2020s() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -428,8 +427,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccession1990s() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -440,8 +439,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccession2000() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -451,8 +450,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccession2050() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -462,8 +461,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccession1951() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -473,8 +472,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccessionNull() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -482,8 +481,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccessionTooShort() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -491,8 +490,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccessionNoDash() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();
@@ -500,8 +499,8 @@ class DocumentETLProcessorTest {
   }
 
   @Test void testExtractYearFromAccessionNonNumericYear() throws Exception {
-    Method m = DocumentETLProcessor.class.getDeclaredMethod(
-        "extractYearFromAccession", String.class);
+    Method m =
+        DocumentETLProcessor.class.getDeclaredMethod("extractYearFromAccession", String.class);
     m.setAccessible(true);
 
     DocumentETLProcessor processor = createMinimalProcessor();

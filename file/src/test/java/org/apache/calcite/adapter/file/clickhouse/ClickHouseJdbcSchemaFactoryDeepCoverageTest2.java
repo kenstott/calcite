@@ -32,7 +32,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -854,8 +853,8 @@ class ClickHouseJdbcSchemaFactoryDeepCoverageTest2 {
     java.util.Properties additionalSettings = new java.util.Properties();
     additionalSettings.setProperty("extra_key", "extra_val");
 
-    ClickHouseConfig config = new ClickHouseConfig(
-        "local", "myhost", "9999", "mydb",
+    ClickHouseConfig config =
+        new ClickHouseConfig("local", "myhost", "9999", "mydb",
         "/usr/bin/clickhouse", "/data/ch", "16GB", 16,
         additionalSettings);
 
@@ -872,8 +871,8 @@ class ClickHouseJdbcSchemaFactoryDeepCoverageTest2 {
   }
 
   @Test void testClickHouseConfigFullConstructorNullDefaults() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        null, null, null, null,
+    ClickHouseConfig config =
+        new ClickHouseConfig(null, null, null, null,
         null, null, null, 0,
         null);
 
@@ -890,8 +889,8 @@ class ClickHouseJdbcSchemaFactoryDeepCoverageTest2 {
   // =======================================================================
 
   @Test void testWaitForReadyTimesOutWithInvalidUrl() throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "waitForReady", String.class, int.class);
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("waitForReady", String.class, int.class);
     method.setAccessible(true);
 
     try {
@@ -1059,24 +1058,24 @@ class ClickHouseJdbcSchemaFactoryDeepCoverageTest2 {
 
   private String invokeResolveParquetPath(ConversionMetadata.ConversionRecord record)
       throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "resolveParquetPath", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("resolveParquetPath", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (String) method.invoke(null, record);
   }
 
   private void invokeRegisterSqlViews(Connection conn, String schema,
       Map<String, Object> operand) throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViewsInClickHouse", Connection.class, String.class, Map.class);
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInClickHouse", Connection.class, String.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, conn, schema, operand);
   }
 
   private void invokeConfigureS3Credentials(Connection conn, FileSchema fileSchema)
       throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "configureS3Credentials", Connection.class,
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("configureS3Credentials", Connection.class,
         org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
     method.invoke(null, conn, fileSchema);
@@ -1084,8 +1083,8 @@ class ClickHouseJdbcSchemaFactoryDeepCoverageTest2 {
 
   private void invokeRegisterFilesAsViews(Connection conn, String directoryPath,
       boolean recursive, String clickhouseSchema, FileSchema fileSchema) throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerFilesAsViews", Connection.class, String.class, boolean.class,
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("registerFilesAsViews", Connection.class, String.class, boolean.class,
         String.class, org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
     method.invoke(null, conn, directoryPath, recursive, clickhouseSchema, fileSchema);

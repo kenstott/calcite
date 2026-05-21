@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.execution.clickhouse.ClickHouseConfig;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +42,7 @@ public class ClickHouseConfigTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ClickHouseConfigTest.class);
 
-  @Test
-  public void testDefaultConstructorUsesDefaults() {
+  @Test public void testDefaultConstructorUsesDefaults() {
     ClickHouseConfig config = new ClickHouseConfig();
     assertEquals(ClickHouseConfig.DEFAULT_MODE, config.getMode());
     assertEquals(ClickHouseConfig.DEFAULT_HOST, config.getHost());
@@ -59,15 +57,13 @@ public class ClickHouseConfigTest {
     LOGGER.debug("Default ClickHouseConfig: {}", config);
   }
 
-  @Test
-  public void testDefaultConstructorIsServerMode() {
+  @Test public void testDefaultConstructorIsServerMode() {
     ClickHouseConfig config = new ClickHouseConfig();
     assertFalse(config.isLocalMode());
     assertEquals("server", config.getMode());
   }
 
-  @Test
-  public void testMapConstructorWithAllSettings() {
+  @Test public void testMapConstructorWithAllSettings() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("mode", "local");
     configMap.put("host", "192.168.1.1");
@@ -90,8 +86,7 @@ public class ClickHouseConfigTest {
     assertTrue(config.isLocalMode());
   }
 
-  @Test
-  public void testMapConstructorWithStringPort() {
+  @Test public void testMapConstructorWithStringPort() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("port", "9000");
 
@@ -99,8 +94,7 @@ public class ClickHouseConfigTest {
     assertEquals("9000", config.getPort());
   }
 
-  @Test
-  public void testMapConstructorWithIntegerPort() {
+  @Test public void testMapConstructorWithIntegerPort() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("port", Integer.valueOf(9000));
 
@@ -108,8 +102,7 @@ public class ClickHouseConfigTest {
     assertEquals("9000", config.getPort());
   }
 
-  @Test
-  public void testMapConstructorWithMissingSettingsUsesDefaults() {
+  @Test public void testMapConstructorWithMissingSettingsUsesDefaults() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     ClickHouseConfig config = new ClickHouseConfig(configMap);
     assertEquals(ClickHouseConfig.DEFAULT_MODE, config.getMode());
@@ -122,13 +115,12 @@ public class ClickHouseConfigTest {
     assertEquals(ClickHouseConfig.DEFAULT_MAX_THREADS, config.getMaxThreads());
   }
 
-  @Test
-  public void testFullConstructorWithAllParams() {
+  @Test public void testFullConstructorWithAllParams() {
     Properties additionalSettings = new Properties();
     additionalSettings.setProperty("max_partitions_per_insert_block", "100");
 
-    ClickHouseConfig config = new ClickHouseConfig(
-        "local", "10.0.0.1", "9000", "mydb",
+    ClickHouseConfig config =
+        new ClickHouseConfig("local", "10.0.0.1", "9000", "mydb",
         "/opt/clickhouse-local", "/data/ch",
         "16GB", 32, additionalSettings);
 
@@ -144,10 +136,9 @@ public class ClickHouseConfigTest {
         config.getAdditionalSettings().getProperty("max_partitions_per_insert_block"));
   }
 
-  @Test
-  public void testFullConstructorWithNullsUsesDefaults() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        null, null, null, null, null, null, null, -1, null);
+  @Test public void testFullConstructorWithNullsUsesDefaults() {
+    ClickHouseConfig config =
+        new ClickHouseConfig(null, null, null, null, null, null, null, -1, null);
 
     assertEquals(ClickHouseConfig.DEFAULT_MODE, config.getMode());
     assertEquals(ClickHouseConfig.DEFAULT_HOST, config.getHost());
@@ -161,33 +152,29 @@ public class ClickHouseConfigTest {
     assertTrue(config.getAdditionalSettings().isEmpty());
   }
 
-  @Test
-  public void testIsLocalModeWithLocalMode() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "local", null, null, null, null, null, null, 0, null);
+  @Test public void testIsLocalModeWithLocalMode() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("local", null, null, null, null, null, null, 0, null);
     assertTrue(config.isLocalMode());
   }
 
-  @Test
-  public void testIsLocalModeIsCaseInsensitive() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "LOCAL", null, null, null, null, null, null, 0, null);
+  @Test public void testIsLocalModeIsCaseInsensitive() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("LOCAL", null, null, null, null, null, null, 0, null);
     assertTrue(config.isLocalMode());
 
-    ClickHouseConfig config2 = new ClickHouseConfig(
-        "Local", null, null, null, null, null, null, 0, null);
+    ClickHouseConfig config2 =
+        new ClickHouseConfig("Local", null, null, null, null, null, null, 0, null);
     assertTrue(config2.isLocalMode());
   }
 
-  @Test
-  public void testIsLocalModeReturnsFalseForServerMode() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, null, 0, null);
+  @Test public void testIsLocalModeReturnsFalseForServerMode() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, null, 0, null);
     assertFalse(config.isLocalMode());
   }
 
-  @Test
-  public void testToClickHouseSettingsContainsCoreSettings() {
+  @Test public void testToClickHouseSettingsContainsCoreSettings() {
     ClickHouseConfig config = new ClickHouseConfig();
     String[] settings = config.toClickHouseSettings();
     assertNotNull(settings);
@@ -211,10 +198,9 @@ public class ClickHouseConfigTest {
     assertTrue(hasMaxThreads, "Should include max_threads setting");
   }
 
-  @Test
-  public void testToClickHouseSettingsParseMemoryGigabytes() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "4GB", 4, null);
+  @Test public void testToClickHouseSettingsParseMemoryGigabytes() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "4GB", 4, null);
     String[] settings = config.toClickHouseSettings();
 
     long expectedBytes = 4L * 1024 * 1024 * 1024;
@@ -229,10 +215,9 @@ public class ClickHouseConfigTest {
     assertTrue(found, "Should have max_memory_usage setting");
   }
 
-  @Test
-  public void testToClickHouseSettingsParseMemoryMegabytes() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "512MB", 4, null);
+  @Test public void testToClickHouseSettingsParseMemoryMegabytes() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "512MB", 4, null);
     String[] settings = config.toClickHouseSettings();
 
     long expectedBytes = 512L * 1024 * 1024;
@@ -247,10 +232,9 @@ public class ClickHouseConfigTest {
     assertTrue(found, "Should have max_memory_usage setting");
   }
 
-  @Test
-  public void testToClickHouseSettingsParseMemoryKilobytes() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "1024KB", 2, null);
+  @Test public void testToClickHouseSettingsParseMemoryKilobytes() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "1024KB", 2, null);
     String[] settings = config.toClickHouseSettings();
 
     long expectedBytes = 1024L * 1024;
@@ -265,13 +249,12 @@ public class ClickHouseConfigTest {
     assertTrue(found, "Should have max_memory_usage setting");
   }
 
-  @Test
-  public void testToClickHouseSettingsIncludesAdditionalSettings() {
+  @Test public void testToClickHouseSettingsIncludesAdditionalSettings() {
     Properties additional = new Properties();
     additional.setProperty("max_insert_block_size", "1048576");
 
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "4GB", 4, additional);
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "4GB", 4, additional);
     String[] settings = config.toClickHouseSettings();
 
     boolean hasCustom = false;
@@ -286,13 +269,12 @@ public class ClickHouseConfigTest {
     assertTrue(hasCustom, "Should include additional settings");
   }
 
-  @Test
-  public void testToClickHouseSettingsQuotesStringValues() {
+  @Test public void testToClickHouseSettingsQuotesStringValues() {
     Properties additional = new Properties();
     additional.setProperty("log_level", "warning");
 
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "4GB", 4, additional);
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "4GB", 4, additional);
     String[] settings = config.toClickHouseSettings();
 
     boolean hasLogLevel = false;
@@ -306,8 +288,7 @@ public class ClickHouseConfigTest {
     assertTrue(hasLogLevel, "Should include log_level setting");
   }
 
-  @Test
-  public void testMapConstructorAdditionalSettingsExcludeKnownKeys() {
+  @Test public void testMapConstructorAdditionalSettingsExcludeKnownKeys() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("mode", "local");
     configMap.put("host", "myhost");
@@ -336,10 +317,9 @@ public class ClickHouseConfigTest {
     assertEquals("extra_value", additional.getProperty("custom_extra"));
   }
 
-  @Test
-  public void testToStringContainsAllFields() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "local", "10.0.0.1", "9000", "analytics",
+  @Test public void testToStringContainsAllFields() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("local", "10.0.0.1", "9000", "analytics",
         "/opt/ch", "/data", "8GB", 16, null);
 
     String str = config.toString();
@@ -354,8 +334,7 @@ public class ClickHouseConfigTest {
     LOGGER.debug("ClickHouseConfig toString: {}", str);
   }
 
-  @Test
-  public void testDefaultConstants() {
+  @Test public void testDefaultConstants() {
     assertEquals("server", ClickHouseConfig.DEFAULT_MODE);
     assertEquals("localhost", ClickHouseConfig.DEFAULT_HOST);
     assertEquals("8123", ClickHouseConfig.DEFAULT_PORT);
@@ -367,11 +346,10 @@ public class ClickHouseConfigTest {
     assertEquals("local", ClickHouseConfig.MODE_LOCAL);
   }
 
-  @Test
-  public void testParseMemoryBytesWithInvalidInput() {
+  @Test public void testParseMemoryBytesWithInvalidInput() {
     // Invalid memory string should fall back to 4GB default
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "invalid", 4, null);
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "invalid", 4, null);
     String[] settings = config.toClickHouseSettings();
 
     long defaultBytes = 4L * 1024 * 1024 * 1024;
@@ -386,10 +364,9 @@ public class ClickHouseConfigTest {
     assertTrue(found);
   }
 
-  @Test
-  public void testParseMemoryBytesWithNullMemory() {
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, null, 4, null);
+  @Test public void testParseMemoryBytesWithNullMemory() {
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, null, 4, null);
     String[] settings = config.toClickHouseSettings();
 
     long defaultBytes = 4L * 1024 * 1024 * 1024;
@@ -404,11 +381,10 @@ public class ClickHouseConfigTest {
     assertTrue(found);
   }
 
-  @Test
-  public void testParseMemoryBytesWithRawNumber() {
+  @Test public void testParseMemoryBytesWithRawNumber() {
     // Raw number without suffix should be treated as bytes
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "1073741824", 4, null);
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "1073741824", 4, null);
     String[] settings = config.toClickHouseSettings();
 
     boolean found = false;
@@ -422,13 +398,12 @@ public class ClickHouseConfigTest {
     assertTrue(found);
   }
 
-  @Test
-  public void testToClickHouseSettingsBooleanValuesNotQuoted() {
+  @Test public void testToClickHouseSettingsBooleanValuesNotQuoted() {
     Properties additional = new Properties();
     additional.setProperty("enable_optimize_predicate_expression", "true");
 
-    ClickHouseConfig config = new ClickHouseConfig(
-        "server", null, null, null, null, null, "4GB", 4, additional);
+    ClickHouseConfig config =
+        new ClickHouseConfig("server", null, null, null, null, null, "4GB", 4, additional);
     String[] settings = config.toClickHouseSettings();
 
     boolean found = false;
@@ -444,8 +419,7 @@ public class ClickHouseConfigTest {
     assertTrue(found, "Should include boolean additional setting");
   }
 
-  @Test
-  public void testMapConstructorWithNullValueInMap() {
+  @Test public void testMapConstructorWithNullValueInMap() {
     Map<String, Object> configMap = new HashMap<String, Object>();
     configMap.put("mode", "server");
     configMap.put("custom_key", null);

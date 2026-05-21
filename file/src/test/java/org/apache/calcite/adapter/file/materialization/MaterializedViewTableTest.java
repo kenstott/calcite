@@ -110,7 +110,8 @@ public class MaterializedViewTableTest {
    */
   private Map<String, Table> createItemsTableMap() {
     Map<String, Table> tables = new HashMap<String, Table>();
-    tables.put("items", createScannableTable(
+    tables.put(
+        "items", createScannableTable(
         new String[]{"name", "quantity", "price"},
         new SqlTypeName[]{
             SqlTypeName.VARCHAR, SqlTypeName.INTEGER, SqlTypeName.DOUBLE},
@@ -129,8 +130,8 @@ public class MaterializedViewTableTest {
     Map<String, Table> tables = createItemsTableMap();
     File parquetFile = new File(tempDir.toFile(), "test_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "test_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "test_mv",
         "SELECT \"name\", SUM(\"quantity\") as total_qty"
             + " FROM \"items\" GROUP BY \"name\"",
         parquetFile, tables);
@@ -159,8 +160,8 @@ public class MaterializedViewTableTest {
     Map<String, Table> tables = createItemsTableMap();
     File parquetFile = new File(tempDir.toFile(), "once_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "once_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "once_mv",
         "SELECT \"name\", SUM(\"quantity\") as total_qty"
             + " FROM \"items\" GROUP BY \"name\"",
         parquetFile, tables);
@@ -199,8 +200,8 @@ public class MaterializedViewTableTest {
     File parquetFile = new File(tempDir.toFile(), "filtered_mv.parquet");
 
     // SQL that filters - only items with quantity > 5
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "filtered_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "filtered_mv",
         "SELECT \"name\", \"quantity\", \"price\""
             + " FROM \"items\" WHERE \"quantity\" > 5",
         parquetFile, tables);
@@ -235,8 +236,8 @@ public class MaterializedViewTableTest {
 
     File parquetFile = new File(tempDir.toFile(), "supplier_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "supplier_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "supplier_mv",
         "SELECT \"name\", SUM(\"quantity\") as total_qty"
             + " FROM \"items\" GROUP BY \"name\"",
         parquetFile, supplier);
@@ -269,7 +270,8 @@ public class MaterializedViewTableTest {
   // ---------------------------------------------------------------
   @Test public void materializeIntegerTypes() throws Exception {
     Map<String, Table> tables = new HashMap<String, Table>();
-    tables.put("numbers", createScannableTable(
+    tables.put(
+        "numbers", createScannableTable(
         new String[]{"id", "small_val", "big_val"},
         new SqlTypeName[]{
             SqlTypeName.INTEGER, SqlTypeName.INTEGER, SqlTypeName.BIGINT},
@@ -277,8 +279,8 @@ public class MaterializedViewTableTest {
 
     File parquetFile = new File(tempDir.toFile(), "int_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "int_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "int_mv",
         "SELECT \"id\", \"small_val\", \"big_val\" FROM \"numbers\"",
         parquetFile, tables);
 
@@ -309,7 +311,8 @@ public class MaterializedViewTableTest {
   // ---------------------------------------------------------------
   @Test public void materializeDoubleTypes() throws Exception {
     Map<String, Table> tables = new HashMap<String, Table>();
-    tables.put("decimals", createScannableTable(
+    tables.put(
+        "decimals", createScannableTable(
         new String[]{"label", "float_val", "double_val"},
         new SqlTypeName[]{
             SqlTypeName.VARCHAR, SqlTypeName.FLOAT, SqlTypeName.DOUBLE},
@@ -317,8 +320,8 @@ public class MaterializedViewTableTest {
 
     File parquetFile = new File(tempDir.toFile(), "double_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "double_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "double_mv",
         "SELECT \"label\", \"float_val\", \"double_val\""
             + " FROM \"decimals\"",
         parquetFile, tables);
@@ -352,16 +355,16 @@ public class MaterializedViewTableTest {
     Map<String, Table> tables = createItemsTableMap();
     File parquetFile = new File(tempDir.toFile(), "fail_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "fail_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "fail_mv",
         "SELECT * FROM \"nonexistent_table\"",
         parquetFile, tables);
 
     JavaTypeFactory typeFactory =
         new JavaTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
 
-    RuntimeException ex = assertThrows(RuntimeException.class,
-        new org.junit.jupiter.api.function.Executable() {
+    RuntimeException ex =
+        assertThrows(RuntimeException.class, new org.junit.jupiter.api.function.Executable() {
           @Override public void execute() {
             mvTable.getRowType(typeFactory);
           }
@@ -378,7 +381,8 @@ public class MaterializedViewTableTest {
   // ---------------------------------------------------------------
   @Test public void materializeBooleanTypes() throws Exception {
     Map<String, Table> tables = new HashMap<String, Table>();
-    tables.put("flags", createScannableTable(
+    tables.put(
+        "flags", createScannableTable(
         new String[]{"id", "active", "verified"},
         new SqlTypeName[]{
             SqlTypeName.INTEGER, SqlTypeName.BOOLEAN, SqlTypeName.BOOLEAN},
@@ -390,8 +394,8 @@ public class MaterializedViewTableTest {
 
     File parquetFile = new File(tempDir.toFile(), "bool_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "bool_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "bool_mv",
         "SELECT \"id\", \"active\", \"verified\" FROM \"flags\"",
         parquetFile, tables);
 
@@ -419,7 +423,8 @@ public class MaterializedViewTableTest {
   // ---------------------------------------------------------------
   @Test public void materializeMixedTypes() throws Exception {
     Map<String, Table> tables = new HashMap<String, Table>();
-    tables.put("mixed", createScannableTable(
+    tables.put(
+        "mixed", createScannableTable(
         new String[]{"name", "count", "ratio", "active"},
         new SqlTypeName[]{
             SqlTypeName.VARCHAR, SqlTypeName.BIGINT,
@@ -431,8 +436,8 @@ public class MaterializedViewTableTest {
 
     File parquetFile = new File(tempDir.toFile(), "mixed_mv.parquet");
 
-    MaterializedViewTable mvTable = new MaterializedViewTable(
-        null, "test_schema", "mixed_mv",
+    MaterializedViewTable mvTable =
+        new MaterializedViewTable(null, "test_schema", "mixed_mv",
         "SELECT \"name\", \"count\", \"ratio\", \"active\" FROM \"mixed\"",
         parquetFile, tables);
 

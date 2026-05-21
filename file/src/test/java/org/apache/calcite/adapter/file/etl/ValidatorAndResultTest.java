@@ -107,8 +107,7 @@ class ValidatorAndResultTest {
 
   @Test void testValidatorImplementation() {
     Validator validator = new Validator() {
-      @Override
-      public ValidationResult validate(Map<String, Object> row) {
+      @Override public ValidationResult validate(Map<String, Object> row) {
         if (row.get("required_field") == null) {
           return ValidationResult.drop("Missing required_field");
         }
@@ -320,8 +319,7 @@ class ValidatorAndResultTest {
 
   @Test void testRowTransformerImplementation() {
     RowTransformer transformer = new RowTransformer() {
-      @Override
-      public Map<String, Object> transform(Map<String, Object> row,
+      @Override public Map<String, Object> transform(Map<String, Object> row,
           RowContext context) {
         // Add computed field
         Object value = row.get("value");
@@ -354,8 +352,7 @@ class ValidatorAndResultTest {
 
   @Test void testRowTransformerDropRow() {
     RowTransformer filter = new RowTransformer() {
-      @Override
-      public Map<String, Object> transform(Map<String, Object> row,
+      @Override public Map<String, Object> transform(Map<String, Object> row,
           RowContext context) {
         // Drop rows where value is negative
         Object value = row.get("value");
@@ -379,8 +376,7 @@ class ValidatorAndResultTest {
 
   @Test void testResponseTransformerImplementation() {
     ResponseTransformer transformer = new ResponseTransformer() {
-      @Override
-      public String transform(String response, RequestContext context) {
+      @Override public String transform(String response, RequestContext context) {
         // Strip wrapper and extract data
         if (response.contains("\"data\":")) {
           int start = response.indexOf("\"data\":") + 7;

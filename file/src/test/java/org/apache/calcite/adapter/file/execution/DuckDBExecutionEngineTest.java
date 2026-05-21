@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,8 +93,7 @@ public class DuckDBExecutionEngineTest {
     dir.delete();
   }
 
-  @Test
-  public void testIsAvailableReturnsTrueWhenDriverOnClasspath() {
+  @Test public void testIsAvailableReturnsTrueWhenDriverOnClasspath() {
     // DuckDB driver should be on the test classpath
     boolean available = DuckDBExecutionEngine.isAvailable();
     LOGGER.debug("DuckDB available: {}", available);
@@ -106,15 +104,13 @@ public class DuckDBExecutionEngineTest {
         "isAvailable() should return a non-null boolean value");
   }
 
-  @Test
-  public void testGetEngineTypeReturnsDuckDB() {
+  @Test public void testGetEngineTypeReturnsDuckDB() {
     String engineType = DuckDBExecutionEngine.getEngineType();
     assertEquals("DUCKDB", engineType,
         "Engine type should be DUCKDB");
   }
 
-  @Test
-  public void testQueryParquetViaDuckDBEngine() throws Exception {
+  @Test public void testQueryParquetViaDuckDBEngine() throws Exception {
     assumeTrue(DuckDBExecutionEngine.isAvailable(),
         "DuckDB driver not available on classpath");
 
@@ -138,8 +134,7 @@ public class DuckDBExecutionEngineTest {
     assertEquals(10, rowCount, "DuckDB query should return 10 rows");
   }
 
-  @Test
-  public void testQueryReturnsCorrectColumnValues() throws Exception {
+  @Test public void testQueryReturnsCorrectColumnValues() throws Exception {
     assumeTrue(DuckDBExecutionEngine.isAvailable(),
         "DuckDB driver not available on classpath");
 
@@ -170,8 +165,7 @@ public class DuckDBExecutionEngineTest {
         "First amount should be 100.0");
   }
 
-  @Test
-  public void testErrorHandlingOnMalformedParquet() throws Exception {
+  @Test public void testErrorHandlingOnMalformedParquet() throws Exception {
     assumeTrue(DuckDBExecutionEngine.isAvailable(),
         "DuckDB driver not available on classpath");
 
@@ -187,8 +181,8 @@ public class DuckDBExecutionEngineTest {
 
     boolean exceptionThrown = false;
     try (Statement stmt = calciteConn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT * FROM \"files\".\"malformed_data\"")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT * FROM \"files\".\"malformed_data\"")) {
       while (rs.next()) {
         // should not reach here
       }

@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.converters;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTable;
-import org.apache.poi.xslf.usermodel.XSLFTableCell;
 import org.apache.poi.xslf.usermodel.XSLFTableRow;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 
@@ -43,7 +42,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -199,8 +197,7 @@ public class PptxTableScannerTest {
 
   // ========== scanAndConvertTables Tests ==========
 
-  @Test
-  public void testScanAndConvertSingleTable() throws IOException {
+  @Test public void testScanAndConvertSingleTable() throws IOException {
     String[][] data = {
         {"Name", "Age", "City"},
         {"Alice", "30", "NYC"},
@@ -223,8 +220,7 @@ public class PptxTableScannerTest {
     assertEquals(2, array.size()); // 2 data rows
   }
 
-  @Test
-  public void testScanAndConvertWithSlideTitle() throws IOException {
+  @Test public void testScanAndConvertWithSlideTitle() throws IOException {
     String[][] data = {
         {"Product", "Sales"},
         {"Widget", "1000"},
@@ -246,8 +242,7 @@ public class PptxTableScannerTest {
     assertTrue(fileName.contains("sales"));
   }
 
-  @Test
-  public void testScanAndConvertWithTableTitle() throws IOException {
+  @Test public void testScanAndConvertWithTableTitle() throws IOException {
     String[][] data = {
         {"Metric", "Value"},
         {"Revenue", "50000"}
@@ -264,8 +259,7 @@ public class PptxTableScannerTest {
     assertTrue(jsonFiles.length > 0);
   }
 
-  @Test
-  public void testScanAndConvertMultipleTablesOnSlide() throws IOException {
+  @Test public void testScanAndConvertMultipleTablesOnSlide() throws IOException {
     String[][] data1 = {
         {"A", "B"},
         {"1", "2"}
@@ -286,8 +280,7 @@ public class PptxTableScannerTest {
     assertTrue(jsonFiles.length >= 2);
   }
 
-  @Test
-  public void testScanAndConvertMultipleSlides() throws IOException {
+  @Test public void testScanAndConvertMultipleSlides() throws IOException {
     String[][] data1 = {
         {"Name", "Score"},
         {"Alice", "95"}
@@ -308,8 +301,7 @@ public class PptxTableScannerTest {
     assertTrue(jsonFiles.length >= 2);
   }
 
-  @Test
-  public void testScanAndConvertEmptyPresentation() throws IOException {
+  @Test public void testScanAndConvertEmptyPresentation() throws IOException {
     File pptxFile = new File(tempDir, "empty.pptx");
     try (XMLSlideShow ppt = new XMLSlideShow()) {
       ppt.createSlide(); // Empty slide
@@ -328,8 +320,7 @@ public class PptxTableScannerTest {
     assertTrue(jsonFiles == null || jsonFiles.length == 0);
   }
 
-  @Test
-  public void testScanAndConvertWithRelativePath() throws IOException {
+  @Test public void testScanAndConvertWithRelativePath() throws IOException {
     String[][] data = {
         {"Key", "Value"},
         {"a", "1"}
@@ -353,53 +344,49 @@ public class PptxTableScannerTest {
 
   // ========== generateBaseFileName Tests ==========
 
-  @Test
-  public void testGenerateBaseFileNameWithSlideTitle() throws Exception {
-    Method genFileName = PptxTableScanner.class.getDeclaredMethod(
-        "generateBaseFileName", String.class, String.class, String.class, int.class);
+  @Test public void testGenerateBaseFileNameWithSlideTitle() throws Exception {
+    Method genFileName =
+        PptxTableScanner.class.getDeclaredMethod("generateBaseFileName", String.class, String.class, String.class, int.class);
     genFileName.setAccessible(true);
 
-    String result = (String) genFileName.invoke(null,
-        "presentation", "Table Title", "Slide Title", 1);
+    String result =
+        (String) genFileName.invoke(null, "presentation", "Table Title", "Slide Title", 1);
     assertNotNull(result);
     assertTrue(result.contains("presentation"));
     assertTrue(result.contains("slide_title"));
     assertTrue(result.contains("table_title"));
   }
 
-  @Test
-  public void testGenerateBaseFileNameWithNoSlideTitle() throws Exception {
-    Method genFileName = PptxTableScanner.class.getDeclaredMethod(
-        "generateBaseFileName", String.class, String.class, String.class, int.class);
+  @Test public void testGenerateBaseFileNameWithNoSlideTitle() throws Exception {
+    Method genFileName =
+        PptxTableScanner.class.getDeclaredMethod("generateBaseFileName", String.class, String.class, String.class, int.class);
     genFileName.setAccessible(true);
 
-    String result = (String) genFileName.invoke(null,
-        "presentation", "Table Title", null, 3);
+    String result =
+        (String) genFileName.invoke(null, "presentation", "Table Title", null, 3);
     assertNotNull(result);
     assertTrue(result.contains("slide3"));
   }
 
-  @Test
-  public void testGenerateBaseFileNameWithEmptySlideTitle() throws Exception {
-    Method genFileName = PptxTableScanner.class.getDeclaredMethod(
-        "generateBaseFileName", String.class, String.class, String.class, int.class);
+  @Test public void testGenerateBaseFileNameWithEmptySlideTitle() throws Exception {
+    Method genFileName =
+        PptxTableScanner.class.getDeclaredMethod("generateBaseFileName", String.class, String.class, String.class, int.class);
     genFileName.setAccessible(true);
 
-    String result = (String) genFileName.invoke(null,
-        "presentation", null, "", 2);
+    String result =
+        (String) genFileName.invoke(null, "presentation", null, "", 2);
     assertNotNull(result);
     assertTrue(result.contains("slide2"));
     assertTrue(result.contains("__table"));
   }
 
-  @Test
-  public void testGenerateBaseFileNameWithNoTableTitle() throws Exception {
-    Method genFileName = PptxTableScanner.class.getDeclaredMethod(
-        "generateBaseFileName", String.class, String.class, String.class, int.class);
+  @Test public void testGenerateBaseFileNameWithNoTableTitle() throws Exception {
+    Method genFileName =
+        PptxTableScanner.class.getDeclaredMethod("generateBaseFileName", String.class, String.class, String.class, int.class);
     genFileName.setAccessible(true);
 
-    String result = (String) genFileName.invoke(null,
-        "presentation", null, "My Slide", 1);
+    String result =
+        (String) genFileName.invoke(null, "presentation", null, "My Slide", 1);
     assertNotNull(result);
     assertTrue(result.contains("__table"));
     assertFalse(result.contains("null"));
@@ -407,10 +394,9 @@ public class PptxTableScannerTest {
 
   // ========== toPascalCase Tests ==========
 
-  @Test
-  public void testToPascalCase() throws Exception {
-    Method toPascalCase = PptxTableScanner.class.getDeclaredMethod(
-        "toPascalCase", String.class);
+  @Test public void testToPascalCase() throws Exception {
+    Method toPascalCase =
+        PptxTableScanner.class.getDeclaredMethod("toPascalCase", String.class);
     toPascalCase.setAccessible(true);
 
     assertEquals("HelloWorld", toPascalCase.invoke(null, "hello world"));
@@ -422,40 +408,36 @@ public class PptxTableScannerTest {
 
   // ========== looksLikeHeader Tests ==========
 
-  @Test
-  public void testLooksLikeHeaderWithTextCells() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithTextCells() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     List<String> textCells = Arrays.asList("Name", "Age", "City");
     assertTrue((Boolean) looksLikeHeader.invoke(null, textCells));
   }
 
-  @Test
-  public void testLooksLikeHeaderWithNumericCells() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithNumericCells() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     List<String> numericCells = Arrays.asList("100", "200", "300");
     assertFalse((Boolean) looksLikeHeader.invoke(null, numericCells));
   }
 
-  @Test
-  public void testLooksLikeHeaderWithEmptyCells() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithEmptyCells() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     List<String> emptyCells = Collections.emptyList();
     assertFalse((Boolean) looksLikeHeader.invoke(null, emptyCells));
   }
 
-  @Test
-  public void testLooksLikeHeaderWithMixedCells() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithMixedCells() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     // More text than numeric -> header
@@ -463,10 +445,9 @@ public class PptxTableScannerTest {
     assertTrue((Boolean) looksLikeHeader.invoke(null, mixedCells));
   }
 
-  @Test
-  public void testLooksLikeHeaderWithAllEmpty() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithAllEmpty() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     List<String> allEmpty = Arrays.asList("", "", "");
@@ -474,10 +455,9 @@ public class PptxTableScannerTest {
     assertFalse((Boolean) looksLikeHeader.invoke(null, allEmpty));
   }
 
-  @Test
-  public void testLooksLikeHeaderWithDecimalNumbers() throws Exception {
-    Method looksLikeHeader = PptxTableScanner.class.getDeclaredMethod(
-        "looksLikeHeader", List.class);
+  @Test public void testLooksLikeHeaderWithDecimalNumbers() throws Exception {
+    Method looksLikeHeader =
+        PptxTableScanner.class.getDeclaredMethod("looksLikeHeader", List.class);
     looksLikeHeader.setAccessible(true);
 
     List<String> decimalCells = Arrays.asList("1.5", "-2.3", "0.0");
@@ -486,20 +466,18 @@ public class PptxTableScannerTest {
 
   // ========== isEmptyRow Tests ==========
 
-  @Test
-  public void testIsEmptyRowWithEmptyCells() throws Exception {
-    Method isEmptyRow = PptxTableScanner.class.getDeclaredMethod(
-        "isEmptyRow", List.class);
+  @Test public void testIsEmptyRowWithEmptyCells() throws Exception {
+    Method isEmptyRow =
+        PptxTableScanner.class.getDeclaredMethod("isEmptyRow", List.class);
     isEmptyRow.setAccessible(true);
 
     List<String> emptyCells = Arrays.asList("", "  ", "");
     assertTrue((Boolean) isEmptyRow.invoke(null, emptyCells));
   }
 
-  @Test
-  public void testIsEmptyRowWithNonEmptyCells() throws Exception {
-    Method isEmptyRow = PptxTableScanner.class.getDeclaredMethod(
-        "isEmptyRow", List.class);
+  @Test public void testIsEmptyRowWithNonEmptyCells() throws Exception {
+    Method isEmptyRow =
+        PptxTableScanner.class.getDeclaredMethod("isEmptyRow", List.class);
     isEmptyRow.setAccessible(true);
 
     List<String> cells = Arrays.asList("", "data", "");
@@ -508,10 +486,9 @@ public class PptxTableScannerTest {
 
   // ========== buildColumnHeaders Tests ==========
 
-  @Test
-  public void testBuildColumnHeadersEmptyList() throws Exception {
-    Method buildHeaders = PptxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+  @Test public void testBuildColumnHeadersEmptyList() throws Exception {
+    Method buildHeaders =
+        PptxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     buildHeaders.setAccessible(true);
 
     List<List<String>> emptyHeaders = Collections.emptyList();
@@ -521,10 +498,9 @@ public class PptxTableScannerTest {
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  public void testBuildColumnHeadersSingleRow() throws Exception {
-    Method buildHeaders = PptxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+  @Test public void testBuildColumnHeadersSingleRow() throws Exception {
+    Method buildHeaders =
+        PptxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     buildHeaders.setAccessible(true);
 
     List<List<String>> headerRows = new ArrayList<List<String>>();
@@ -540,10 +516,9 @@ public class PptxTableScannerTest {
     assertEquals("city", result.get(2));
   }
 
-  @Test
-  public void testBuildColumnHeadersMultipleRows() throws Exception {
-    Method buildHeaders = PptxTableScanner.class.getDeclaredMethod(
-        "buildColumnHeaders", List.class);
+  @Test public void testBuildColumnHeadersMultipleRows() throws Exception {
+    Method buildHeaders =
+        PptxTableScanner.class.getDeclaredMethod("buildColumnHeaders", List.class);
     buildHeaders.setAccessible(true);
 
     // Group header: "Sales" spans two columns, then empty
@@ -563,8 +538,7 @@ public class PptxTableScannerTest {
 
   // ========== Table with empty rows (data) ==========
 
-  @Test
-  public void testScanTableWithEmptyDataRows() throws IOException {
+  @Test public void testScanTableWithEmptyDataRows() throws IOException {
     String[][] data = {
         {"Header1", "Header2"},
         {"", ""},  // Empty data row - should be skipped
@@ -589,8 +563,7 @@ public class PptxTableScannerTest {
 
   // ========== Duplicate File Names ==========
 
-  @Test
-  public void testDuplicateFileNamesGetIndices() throws IOException {
+  @Test public void testDuplicateFileNamesGetIndices() throws IOException {
     // Two tables on same slide with same generated name (no title, no slide title)
     String[][] data1 = {{"A", "B"}, {"1", "2"}};
     String[][] data2 = {{"C", "D"}, {"3", "4"}};
@@ -615,8 +588,7 @@ public class PptxTableScannerTest {
 
   // ========== determineHeaderRowCount Tests ==========
 
-  @Test
-  public void testScanTableWithGroupHeaders() throws IOException {
+  @Test public void testScanTableWithGroupHeaders() throws IOException {
     // First row has fewer cells than second (group header pattern)
     String[][] data = {
         {"Group", "", ""},

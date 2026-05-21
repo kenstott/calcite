@@ -31,7 +31,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link BundleIndexLoader}.
@@ -127,8 +126,7 @@ public class BundleIndexLoaderTest {
     baseProvider.addFile("bundles/schema/run-20260310T1423.idx.jsonl", "dummy");
 
     StorageProvider provider = new FailingStorageProvider(false, true) {
-      @Override
-      public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+      @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
         return baseProvider.listFiles(path, recursive);
       }
     };
@@ -170,21 +168,20 @@ public class BundleIndexLoaderTest {
       fileContents.put(path, content);
     }
 
-    @Override
-    public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+    @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
       List<FileEntry> entries = new ArrayList<FileEntry>();
       for (String filePath : filePaths) {
         if (filePath.startsWith(path)) {
           String name = filePath.substring(filePath.lastIndexOf('/') + 1);
-          entries.add(new FileEntry(filePath, name, false,
+          entries.add(
+              new FileEntry(filePath, name, false,
               fileContents.get(filePath).length(), 0));
         }
       }
       return entries;
     }
 
-    @Override
-    public FileMetadata getMetadata(String path) throws IOException {
+    @Override public FileMetadata getMetadata(String path) throws IOException {
       String content = fileContents.get(path);
       if (content == null) {
         throw new IOException("File not found: " + path);
@@ -192,8 +189,7 @@ public class BundleIndexLoaderTest {
       return new FileMetadata(path, content.length(), 0, "application/octet-stream", null);
     }
 
-    @Override
-    public InputStream openInputStream(String path) throws IOException {
+    @Override public InputStream openInputStream(String path) throws IOException {
       String content = fileContents.get(path);
       if (content == null) {
         throw new IOException("File not found: " + path);
@@ -201,28 +197,23 @@ public class BundleIndexLoaderTest {
       return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     }
 
-    @Override
-    public Reader openReader(String path) throws IOException {
+    @Override public Reader openReader(String path) throws IOException {
       return new java.io.InputStreamReader(openInputStream(path), StandardCharsets.UTF_8);
     }
 
-    @Override
-    public boolean exists(String path) {
+    @Override public boolean exists(String path) {
       return fileContents.containsKey(path);
     }
 
-    @Override
-    public boolean isDirectory(String path) {
+    @Override public boolean isDirectory(String path) {
       return false;
     }
 
-    @Override
-    public String getStorageType() {
+    @Override public String getStorageType() {
       return "memory";
     }
 
-    @Override
-    public String resolvePath(String basePath, String relativePath) {
+    @Override public String resolvePath(String basePath, String relativePath) {
       return basePath + "/" + relativePath;
     }
   }
@@ -239,49 +230,41 @@ public class BundleIndexLoaderTest {
       this.failOnRead = failOnRead;
     }
 
-    @Override
-    public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+    @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
       if (failOnList) {
         throw new IOException("Simulated list failure");
       }
       return new ArrayList<FileEntry>();
     }
 
-    @Override
-    public FileMetadata getMetadata(String path) throws IOException {
+    @Override public FileMetadata getMetadata(String path) throws IOException {
       throw new IOException("Not supported");
     }
 
-    @Override
-    public InputStream openInputStream(String path) throws IOException {
+    @Override public InputStream openInputStream(String path) throws IOException {
       if (failOnRead) {
         throw new IOException("Simulated read failure");
       }
       return new ByteArrayInputStream(new byte[0]);
     }
 
-    @Override
-    public Reader openReader(String path) throws IOException {
+    @Override public Reader openReader(String path) throws IOException {
       throw new IOException("Not supported");
     }
 
-    @Override
-    public boolean exists(String path) {
+    @Override public boolean exists(String path) {
       return false;
     }
 
-    @Override
-    public boolean isDirectory(String path) {
+    @Override public boolean isDirectory(String path) {
       return false;
     }
 
-    @Override
-    public String getStorageType() {
+    @Override public String getStorageType() {
       return "failing";
     }
 
-    @Override
-    public String resolvePath(String basePath, String relativePath) {
+    @Override public String resolvePath(String basePath, String relativePath) {
       return basePath + "/" + relativePath;
     }
   }

@@ -22,7 +22,6 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.mockito.Mockito;
 
 import java.lang.reflect.Method;
@@ -283,8 +282,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveAllEnvVarsPlainValues() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveAll = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveAllEnvVars", Map.class);
+    Method resolveAll =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveAllEnvVars", Map.class);
     resolveAll.setAccessible(true);
 
     Map<String, Object> input = new LinkedHashMap<String, Object>();
@@ -302,8 +301,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveAllEnvVarsNestedMap() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveAll = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveAllEnvVars", Map.class);
+    Method resolveAll =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveAllEnvVars", Map.class);
     resolveAll.setAccessible(true);
 
     Map<String, Object> nested = new LinkedHashMap<String, Object>();
@@ -325,8 +324,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveAllEnvVarsWithList() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveAll = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveAllEnvVars", Map.class);
+    Method resolveAll =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveAllEnvVars", Map.class);
     resolveAll.setAccessible(true);
 
     List<Object> list = new ArrayList<Object>();
@@ -349,8 +348,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveAllEnvVarsDeeplyNestedMaps() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveAll = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveAllEnvVars", Map.class);
+    Method resolveAll =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveAllEnvVars", Map.class);
     resolveAll.setAccessible(true);
 
     Map<String, Object> level3 = new LinkedHashMap<String, Object>();
@@ -374,8 +373,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveAllEnvVarsWithNullValue() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveAll = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveAllEnvVars", Map.class);
+    Method resolveAll =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveAllEnvVars", Map.class);
     resolveAll.setAccessible(true);
 
     Map<String, Object> input = new LinkedHashMap<String, Object>();
@@ -395,8 +394,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveListEnvVarsViaReflection() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveList = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveListEnvVars", java.util.List.class);
+    Method resolveList =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveListEnvVars", java.util.List.class);
     resolveList.setAccessible(true);
 
     List<Object> input = new ArrayList<Object>();
@@ -423,8 +422,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveListEnvVarsEmptyList() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveList = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveListEnvVars", java.util.List.class);
+    Method resolveList =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveListEnvVars", java.util.List.class);
     resolveList.setAccessible(true);
 
     List<Object> input = new ArrayList<Object>();
@@ -437,8 +436,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveListEnvVarsWithNestedListOfMaps() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveList = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveListEnvVars", java.util.List.class);
+    Method resolveList =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveListEnvVars", java.util.List.class);
     resolveList.setAccessible(true);
 
     Map<String, Object> innerMap = new LinkedHashMap<String, Object>();
@@ -462,8 +461,8 @@ class FileSchemaBuilderDeepCoverageTest {
   @Test void testResolveListEnvVarsWithNullItem() throws Exception {
     FileSchemaBuilder builder = FileSchemaBuilder.create();
 
-    Method resolveList = FileSchemaBuilder.class.getDeclaredMethod(
-        "resolveListEnvVars", java.util.List.class);
+    Method resolveList =
+        FileSchemaBuilder.class.getDeclaredMethod("resolveListEnvVars", java.util.List.class);
     resolveList.setAccessible(true);
 
     List<Object> input = new ArrayList<Object>();

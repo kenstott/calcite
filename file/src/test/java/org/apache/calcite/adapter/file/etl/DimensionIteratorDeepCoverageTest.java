@@ -51,29 +51,25 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for constructors and factory methods
   // ====================================================================
 
-  @Test
-  void testDefaultConstructor() {
+  @Test void testDefaultConstructor() {
     DimensionIterator iterator = new DimensionIterator();
     assertNotNull(iterator);
   }
 
-  @Test
-  void testConstructorWithConnection() throws SQLException {
+  @Test void testConstructorWithConnection() throws SQLException {
     Connection conn = mock(Connection.class);
     DimensionIterator iterator = new DimensionIterator(conn);
     assertNotNull(iterator);
   }
 
-  @Test
-  void testConstructorWithResolverAndStorageProvider() {
+  @Test void testConstructorWithResolverAndStorageProvider() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     DimensionIterator iterator = new DimensionIterator(resolver, provider);
     assertNotNull(iterator);
   }
 
-  @Test
-  void testConstructorWithAllThreeArgs() throws SQLException {
+  @Test void testConstructorWithAllThreeArgs() throws SQLException {
     Connection conn = mock(Connection.class);
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
@@ -81,14 +77,12 @@ class DimensionIteratorDeepCoverageTest {
     assertNotNull(iterator);
   }
 
-  @Test
-  void testStaticCreateNoArgs() {
+  @Test void testStaticCreateNoArgs() {
     DimensionIterator iterator = DimensionIterator.create();
     assertNotNull(iterator);
   }
 
-  @Test
-  void testStaticCreateWithConnection() throws SQLException {
+  @Test void testStaticCreateWithConnection() throws SQLException {
     Connection conn = mock(Connection.class);
     DimensionIterator iterator = DimensionIterator.create(conn);
     assertNotNull(iterator);
@@ -98,16 +92,14 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for expand with null/empty dimensions
   // ====================================================================
 
-  @Test
-  void testExpandWithNull() {
+  @Test void testExpandWithNull() {
     DimensionIterator iterator = new DimensionIterator();
     List<Map<String, String>> result = iterator.expand(null);
     assertEquals(1, result.size());
     assertTrue(result.get(0).isEmpty());
   }
 
-  @Test
-  void testExpandWithEmpty() {
+  @Test void testExpandWithEmpty() {
     DimensionIterator iterator = new DimensionIterator();
     List<Map<String, String>> result = iterator.expand(Collections.emptyMap());
     assertEquals(1, result.size());
@@ -118,8 +110,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - RANGE
   // ====================================================================
 
-  @Test
-  void testResolveRangeBasic() {
+  @Test void testResolveRangeBasic() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -132,8 +123,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("2020", "2021", "2022", "2023"), values);
   }
 
-  @Test
-  void testResolveRangeWithStep() {
+  @Test void testResolveRangeWithStep() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -147,8 +137,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("2020", "2025", "2030"), values);
   }
 
-  @Test
-  void testResolveRangeWithNegativeStep() {
+  @Test void testResolveRangeWithNegativeStep() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("countdown")
@@ -162,8 +151,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("5", "4", "3", "2", "1"), values);
   }
 
-  @Test
-  void testResolveRangeWithZeroStep() {
+  @Test void testResolveRangeWithZeroStep() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -178,8 +166,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("2020", "2021", "2022"), values);
   }
 
-  @Test
-  void testResolveRangeMissingStart() {
+  @Test void testResolveRangeMissingStart() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -192,8 +179,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveRangeMissingEnd() {
+  @Test void testResolveRangeMissingEnd() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -210,8 +196,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - LIST
   // ====================================================================
 
-  @Test
-  void testResolveList() {
+  @Test void testResolveList() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("region")
@@ -224,8 +209,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals("NORTH", values.get(0));
   }
 
-  @Test
-  void testResolveListEmpty() {
+  @Test void testResolveListEmpty() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("empty")
@@ -241,8 +225,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - YEAR_RANGE
   // ====================================================================
 
-  @Test
-  void testResolveYearRangeBasic() {
+  @Test void testResolveYearRangeBasic() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -257,8 +240,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.contains("2022"));
   }
 
-  @Test
-  void testResolveYearRangeWithCurrentEnd() {
+  @Test void testResolveYearRangeWithCurrentEnd() {
     DimensionIterator iterator = new DimensionIterator();
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
     DimensionConfig config = DimensionConfig.builder()
@@ -273,8 +255,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(3, values.size());
   }
 
-  @Test
-  void testResolveYearRangeWithDataLag() {
+  @Test void testResolveYearRangeWithDataLag() {
     DimensionIterator iterator = new DimensionIterator();
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
     DimensionConfig config = DimensionConfig.builder()
@@ -291,8 +272,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.contains(String.valueOf(currentYear - 1)));
   }
 
-  @Test
-  void testResolveYearRangeWithExcludeYears() {
+  @Test void testResolveYearRangeWithExcludeYears() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -311,8 +291,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.contains("2022"));
   }
 
-  @Test
-  void testResolveYearRangeMissingStart() {
+  @Test void testResolveYearRangeMissingStart() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -325,8 +304,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveYearRangeWithReleaseMonth() {
+  @Test void testResolveYearRangeWithReleaseMonth() {
     DimensionIterator iterator = new DimensionIterator();
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
     int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1;
@@ -351,8 +329,7 @@ class DimensionIteratorDeepCoverageTest {
     }
   }
 
-  @Test
-  void testResolveYearRangeWithReleaseMonthInPast() {
+  @Test void testResolveYearRangeWithReleaseMonthInPast() {
     DimensionIterator iterator = new DimensionIterator();
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
     int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1;
@@ -371,8 +348,7 @@ class DimensionIteratorDeepCoverageTest {
     assertFalse(values.isEmpty());
   }
 
-  @Test
-  void testResolveYearRangeWithCustomStep() {
+  @Test void testResolveYearRangeWithCustomStep() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("year")
@@ -390,8 +366,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - QUERY
   // ====================================================================
 
-  @Test
-  void testResolveQueryWithNoConnection() {
+  @Test void testResolveQueryWithNoConnection() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("region")
@@ -402,8 +377,7 @@ class DimensionIteratorDeepCoverageTest {
     assertThrows(IllegalStateException.class, () -> iterator.resolveDimension(config));
   }
 
-  @Test
-  void testResolveQueryWithConnection() throws SQLException {
+  @Test void testResolveQueryWithConnection() throws SQLException {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     ResultSet rs = mock(ResultSet.class);
@@ -424,8 +398,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("US", "CA"), values);
   }
 
-  @Test
-  void testResolveQueryWithNullSql() throws SQLException {
+  @Test void testResolveQueryWithNullSql() throws SQLException {
     Connection conn = mock(Connection.class);
     DimensionIterator iterator = new DimensionIterator(conn);
     DimensionConfig config = DimensionConfig.builder()
@@ -438,8 +411,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveQueryWithEmptySql() throws SQLException {
+  @Test void testResolveQueryWithEmptySql() throws SQLException {
     Connection conn = mock(Connection.class);
     DimensionIterator iterator = new DimensionIterator(conn);
     DimensionConfig config = DimensionConfig.builder()
@@ -452,8 +424,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveQueryHandlesSqlException() throws SQLException {
+  @Test void testResolveQueryHandlesSqlException() throws SQLException {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     when(conn.createStatement()).thenReturn(stmt);
@@ -469,8 +440,7 @@ class DimensionIteratorDeepCoverageTest {
     assertThrows(RuntimeException.class, () -> iterator.resolveDimension(config));
   }
 
-  @Test
-  void testResolveQuerySkipsNullValues() throws SQLException {
+  @Test void testResolveQuerySkipsNullValues() throws SQLException {
     Connection conn = mock(Connection.class);
     Statement stmt = mock(Statement.class);
     ResultSet rs = mock(ResultSet.class);
@@ -495,8 +465,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - CUSTOM
   // ====================================================================
 
-  @Test
-  void testResolveCustomWithNoResolver() {
+  @Test void testResolveCustomWithNoResolver() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("custom_dim")
@@ -506,8 +475,7 @@ class DimensionIteratorDeepCoverageTest {
     assertThrows(IllegalStateException.class, () -> iterator.resolveDimension(config));
   }
 
-  @Test
-  void testResolveCustomWithResolver() {
+  @Test void testResolveCustomWithResolver() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(eq("custom_dim"), any(), any(), any()))
@@ -523,8 +491,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(2, values.size());
   }
 
-  @Test
-  void testResolveCustomWithResolverReturningNull() {
+  @Test void testResolveCustomWithResolverReturningNull() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(anyString(), any(), any(), any())).thenReturn(null);
@@ -539,8 +506,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveCustomWithResolverThrowingException() {
+  @Test void testResolveCustomWithResolverThrowingException() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(anyString(), any(), any(), any()))
@@ -559,8 +525,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for resolveDimension - JSON_CATALOG
   // ====================================================================
 
-  @Test
-  void testResolveJsonCatalogWithNullSource() {
+  @Test void testResolveJsonCatalogWithNullSource() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("catalog_dim")
@@ -572,8 +537,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveJsonCatalogWithEmptySource() {
+  @Test void testResolveJsonCatalogWithEmptySource() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("catalog_dim")
@@ -585,8 +549,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(values.isEmpty());
   }
 
-  @Test
-  void testResolveJsonCatalogWithInvalidSource() {
+  @Test void testResolveJsonCatalogWithInvalidSource() {
     DimensionIterator iterator = new DimensionIterator();
     DimensionConfig config = DimensionConfig.builder()
         .name("catalog_dim")
@@ -602,8 +565,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for expand with standard dimensions (Cartesian product)
   // ====================================================================
 
-  @Test
-  void testExpandCartesianProduct() {
+  @Test void testExpandCartesianProduct() {
     DimensionIterator iterator = new DimensionIterator();
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
@@ -644,8 +606,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(found2020North && found2020South && found2021North && found2021South);
   }
 
-  @Test
-  void testExpandWithEmptyDimensionSkipped() {
+  @Test void testExpandWithEmptyDimensionSkipped() {
     DimensionIterator iterator = new DimensionIterator();
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
@@ -667,8 +628,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for expandWithContext (CUSTOM dimensions)
   // ====================================================================
 
-  @Test
-  void testExpandWithContextSingleCustom() {
+  @Test void testExpandWithContextSingleCustom() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
 
@@ -695,8 +655,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(4, result.size()); // 2 states x 2 cities each
   }
 
-  @Test
-  void testExpandWithContextCustomReturnsEmpty() {
+  @Test void testExpandWithContextCustomReturnsEmpty() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(anyString(), any(), any(), any()))
@@ -720,8 +679,7 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  void testExpandWithCustomButNoResolver() {
+  @Test void testExpandWithCustomButNoResolver() {
     // When hasCustomDimensions is true but dimensionResolver is null, falls back to standard
     DimensionIterator iterator = new DimensionIterator();
 
@@ -744,20 +702,17 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for planPartitions
   // ====================================================================
 
-  @Test
-  void testPlanPartitionsWithNull() {
+  @Test void testPlanPartitionsWithNull() {
     DimensionIterator iterator = new DimensionIterator();
     assertNull(iterator.planPartitions(null));
   }
 
-  @Test
-  void testPlanPartitionsWithEmpty() {
+  @Test void testPlanPartitionsWithEmpty() {
     DimensionIterator iterator = new DimensionIterator();
     assertNull(iterator.planPartitions(Collections.emptyMap()));
   }
 
-  @Test
-  void testPlanPartitionsWithNoCustomDimensions() {
+  @Test void testPlanPartitionsWithNoCustomDimensions() {
     DimensionIterator iterator = new DimensionIterator();
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
     dimensions.put("year", DimensionConfig.builder()
@@ -770,8 +725,7 @@ class DimensionIteratorDeepCoverageTest {
     assertNull(iterator.planPartitions(dimensions));
   }
 
-  @Test
-  void testPlanPartitionsWithCustomButNoResolver() {
+  @Test void testPlanPartitionsWithCustomButNoResolver() {
     DimensionIterator iterator = new DimensionIterator();
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
     dimensions.put("custom_dim", DimensionConfig.builder()
@@ -782,8 +736,7 @@ class DimensionIteratorDeepCoverageTest {
     assertNull(iterator.planPartitions(dimensions));
   }
 
-  @Test
-  void testPlanPartitionsWithCustomAndContextKey() {
+  @Test void testPlanPartitionsWithCustomAndContextKey() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     DimensionIterator iterator = new DimensionIterator(resolver, provider);
@@ -810,8 +763,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals(Arrays.asList("CA", "NY", "TX"), plan.getContextValues());
   }
 
-  @Test
-  void testPlanPartitionsWithContextKeyFromPreviousDimension() {
+  @Test void testPlanPartitionsWithContextKeyFromPreviousDimension() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     DimensionIterator iterator = new DimensionIterator(resolver, provider);
@@ -833,8 +785,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals("state", plan.getContextKey());
   }
 
-  @Test
-  void testPlanPartitionsWithCustomAsFirstDimNoContextKey() {
+  @Test void testPlanPartitionsWithCustomAsFirstDimNoContextKey() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     DimensionIterator iterator = new DimensionIterator(resolver, provider);
@@ -854,8 +805,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for expandPartition
   // ====================================================================
 
-  @Test
-  void testExpandPartitionBasic() {
+  @Test void testExpandPartitionBasic() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(eq("city"), any(), any(), any()))
@@ -887,8 +837,7 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals("CA", partition.getPartitionContext().get("state"));
   }
 
-  @Test
-  void testExpandPartitionEmptyGroupCombos() {
+  @Test void testExpandPartitionEmptyGroupCombos() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     DimensionIterator iterator = new DimensionIterator(resolver, provider);
@@ -916,8 +865,7 @@ class DimensionIteratorDeepCoverageTest {
     assertNull(partition);
   }
 
-  @Test
-  void testExpandPartitionCustomReturnsEmpty() {
+  @Test void testExpandPartitionCustomReturnsEmpty() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(anyString(), any(), any(), any()))
@@ -952,11 +900,10 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for truncateForLog (private method)
   // ====================================================================
 
-  @Test
-  void testTruncateForLogSmallList() throws Exception {
+  @Test void testTruncateForLogSmallList() throws Exception {
     DimensionIterator iterator = new DimensionIterator();
-    java.lang.reflect.Method method = DimensionIterator.class.getDeclaredMethod(
-        "truncateForLog", List.class);
+    java.lang.reflect.Method method =
+        DimensionIterator.class.getDeclaredMethod("truncateForLog", List.class);
     method.setAccessible(true);
 
     List<String> small = Arrays.asList("a", "b", "c");
@@ -964,11 +911,10 @@ class DimensionIteratorDeepCoverageTest {
     assertEquals("[a, b, c]", result);
   }
 
-  @Test
-  void testTruncateForLogLargeList() throws Exception {
+  @Test void testTruncateForLogLargeList() throws Exception {
     DimensionIterator iterator = new DimensionIterator();
-    java.lang.reflect.Method method = DimensionIterator.class.getDeclaredMethod(
-        "truncateForLog", List.class);
+    java.lang.reflect.Method method =
+        DimensionIterator.class.getDeclaredMethod("truncateForLog", List.class);
     method.setAccessible(true);
 
     List<String> large = new ArrayList<>();
@@ -980,11 +926,10 @@ class DimensionIteratorDeepCoverageTest {
     assertTrue(result.contains("20 total"));
   }
 
-  @Test
-  void testTruncateForLogExactlyFive() throws Exception {
+  @Test void testTruncateForLogExactlyFive() throws Exception {
     DimensionIterator iterator = new DimensionIterator();
-    java.lang.reflect.Method method = DimensionIterator.class.getDeclaredMethod(
-        "truncateForLog", List.class);
+    java.lang.reflect.Method method =
+        DimensionIterator.class.getDeclaredMethod("truncateForLog", List.class);
     method.setAccessible(true);
 
     List<String> five = Arrays.asList("a", "b", "c", "d", "e");
@@ -996,8 +941,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for three-dimension Cartesian product
   // ====================================================================
 
-  @Test
-  void testExpandThreeDimensions() {
+  @Test void testExpandThreeDimensions() {
     DimensionIterator iterator = new DimensionIterator();
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
@@ -1034,8 +978,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for single-dimension expansion
   // ====================================================================
 
-  @Test
-  void testExpandSingleDimension() {
+  @Test void testExpandSingleDimension() {
     DimensionIterator iterator = new DimensionIterator();
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
@@ -1057,8 +1000,7 @@ class DimensionIteratorDeepCoverageTest {
   // Tests for multiple CUSTOM dimensions in partition plan
   // ====================================================================
 
-  @Test
-  void testPlanPartitionsMultipleCustomDimensions() {
+  @Test void testPlanPartitionsMultipleCustomDimensions() {
     DimensionResolver resolver = mock(DimensionResolver.class);
     StorageProvider provider = mock(StorageProvider.class);
     when(resolver.resolve(anyString(), any(), any(), any()))

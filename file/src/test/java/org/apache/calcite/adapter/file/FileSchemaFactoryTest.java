@@ -1131,8 +1131,8 @@ public class FileSchemaFactoryTest {
   @SuppressWarnings("unchecked")
   private static Map<String, Object> invokeSanitizeOperand(
       Map<String, Object> operand) throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     return (Map<String, Object>) method.invoke(null, operand);
   }
@@ -1142,8 +1142,8 @@ public class FileSchemaFactoryTest {
    */
   private static void invokeWriteDebugModel(String schemaName,
       Map<String, Object> operand, String parentSchemaName) throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "writeDebugModel", String.class, Map.class, String.class);
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
     method.setAccessible(true);
     method.invoke(null, schemaName, operand, parentSchemaName);
   }
@@ -1152,8 +1152,8 @@ public class FileSchemaFactoryTest {
    * Invokes the private static {@code parseBooleanValue} method via reflection.
    */
   private static Boolean invokeParseBooleanValue(Object value) throws Exception {
-    Method method = FileSchemaFactory.class.getDeclaredMethod(
-        "parseBooleanValue", Object.class);
+    Method method =
+        FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, value);
   }

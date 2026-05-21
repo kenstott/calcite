@@ -107,8 +107,8 @@ public class TrinoJdbcSchema extends JdbcSchema implements CommentableSchema {
       }
 
       // Create new external table
-      String createSql = TrinoDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, path, false);
+      String createSql =
+          TrinoDialect.INSTANCE.createParquetViewSql(schemaName, tableName, path, false);
       LOGGER.info("Recreating Trino external table: \"{}.{}\" -> {}",
                   schemaName, tableName, parquetFile.getName());
       try (Statement stmt = persistentConnection.createStatement()) {
@@ -134,8 +134,8 @@ public class TrinoJdbcSchema extends JdbcSchema implements CommentableSchema {
       }
 
       // Create new external table with pattern as location
-      String createSql = TrinoDialect.INSTANCE.createParquetViewSql(
-          schemaName, tableName, pattern, false);
+      String createSql =
+          TrinoDialect.INSTANCE.createParquetViewSql(schemaName, tableName, pattern, false);
       LOGGER.info("Recreating Trino table with pattern: \"{}.{}\" -> {}",
                   schemaName, tableName, pattern);
       try (Statement stmt = persistentConnection.createStatement()) {
@@ -154,8 +154,8 @@ public class TrinoJdbcSchema extends JdbcSchema implements CommentableSchema {
   private void recreateIcebergTable(String tableName, String tableLocation) {
     try {
       // Re-register the Iceberg table via CALL procedure
-      String registerSql = TrinoDialect.INSTANCE.createIcebergViewSql(
-          schemaName, tableName, tableLocation);
+      String registerSql =
+          TrinoDialect.INSTANCE.createIcebergViewSql(schemaName, tableName, tableLocation);
 
       LOGGER.info("Re-registering Iceberg table in Trino: {}.{}", schemaName, tableName);
       try (Statement stmt = persistentConnection.createStatement()) {

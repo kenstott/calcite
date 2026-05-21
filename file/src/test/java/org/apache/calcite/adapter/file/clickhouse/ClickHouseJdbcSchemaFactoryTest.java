@@ -163,40 +163,40 @@ class ClickHouseJdbcSchemaFactoryTest {
   }
 
   @Test void testDialectReadParquetSql() {
-    String sql = ClickHouseDialect.INSTANCE.readParquetSql(
-        "s3://bucket/data/*.parquet", Arrays.asList("id", "name"));
+    String sql =
+        ClickHouseDialect.INSTANCE.readParquetSql("s3://bucket/data/*.parquet", Arrays.asList("id", "name"));
     assertEquals("SELECT id, name FROM s3('s3://bucket/data/*.parquet', 'Parquet')", sql);
   }
 
   @Test void testDialectReadParquetSqlAllColumns() {
-    String sql = ClickHouseDialect.INSTANCE.readParquetSql(
-        "s3://bucket/data/*.parquet", Collections.emptyList());
+    String sql =
+        ClickHouseDialect.INSTANCE.readParquetSql("s3://bucket/data/*.parquet", Collections.emptyList());
     assertEquals("SELECT * FROM s3('s3://bucket/data/*.parquet', 'Parquet')", sql);
   }
 
   @Test void testDialectReadIcebergSql() {
-    String sql = ClickHouseDialect.INSTANCE.readIcebergSql(
-        "s3://bucket/iceberg/table", Arrays.asList("col1"));
+    String sql =
+        ClickHouseDialect.INSTANCE.readIcebergSql("s3://bucket/iceberg/table", Arrays.asList("col1"));
     assertEquals("SELECT col1 FROM iceberg('s3://bucket/iceberg/table')", sql);
   }
 
   @Test void testDialectCreateParquetViewSqlS3() {
-    String sql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-        "myschema", "mytable", "s3://bucket/data.parquet", false);
+    String sql =
+        ClickHouseDialect.INSTANCE.createParquetViewSql("myschema", "mytable", "s3://bucket/data.parquet", false);
     assertTrue(sql.contains("CREATE OR REPLACE VIEW"));
     assertTrue(sql.contains("s3('s3://bucket/data.parquet', 'Parquet')"));
   }
 
   @Test void testDialectCreateParquetViewSqlLocal() {
-    String sql = ClickHouseDialect.INSTANCE.createParquetViewSql(
-        "myschema", "mytable", "/data/file.parquet", false);
+    String sql =
+        ClickHouseDialect.INSTANCE.createParquetViewSql("myschema", "mytable", "/data/file.parquet", false);
     assertTrue(sql.contains("CREATE OR REPLACE VIEW"));
     assertTrue(sql.contains("file('/data/file.parquet', 'Parquet')"));
   }
 
   @Test void testDialectCreateIcebergViewSql() {
-    String sql = ClickHouseDialect.INSTANCE.createIcebergViewSql(
-        "myschema", "mytable", "s3://bucket/iceberg/table");
+    String sql =
+        ClickHouseDialect.INSTANCE.createIcebergViewSql("myschema", "mytable", "s3://bucket/iceberg/table");
     assertTrue(sql.contains("CREATE OR REPLACE VIEW"));
     assertTrue(sql.contains("iceberg('s3://bucket/iceberg/table')"));
   }

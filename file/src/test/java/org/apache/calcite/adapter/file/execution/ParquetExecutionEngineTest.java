@@ -34,7 +34,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,8 +70,7 @@ public class ParquetExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testConvertToParquetProducesValidData() {
+  @Test public void testConvertToParquetProducesValidData() {
     VectorSchemaRoot batch = createTestBatch(5);
     try {
       InMemoryParquetData parquetData =
@@ -93,8 +91,7 @@ public class ParquetExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testProjectSingleColumnReturnsOnlyThatColumn() {
+  @Test public void testProjectSingleColumnReturnsOnlyThatColumn() {
     VectorSchemaRoot batch = createNumericOnlyBatch(5);
     try {
       InMemoryParquetData fullData =
@@ -120,8 +117,7 @@ public class ParquetExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testFilterRowsReturnsCorrectSubset() {
+  @Test public void testFilterRowsReturnsCorrectSubset() {
     VectorSchemaRoot batch = createNumericOnlyBatch(10);
     try {
       InMemoryParquetData fullData =
@@ -149,8 +145,7 @@ public class ParquetExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testAggregateSumProducesCorrectResults() {
+  @Test public void testAggregateSumProducesCorrectResults() {
     VectorSchemaRoot batch = createNumericOnlyBatch(5);
     try {
       InMemoryParquetData parquetData =
@@ -172,8 +167,7 @@ public class ParquetExecutionEngineTest {
     }
   }
 
-  @Test
-  public void testGetMemoryUsage() {
+  @Test public void testGetMemoryUsage() {
     VectorSchemaRoot batch = createNumericOnlyBatch(5);
     try {
       InMemoryParquetData parquetData =
@@ -194,14 +188,14 @@ public class ParquetExecutionEngineTest {
    * Used where string column support is needed.
    */
   private VectorSchemaRoot createTestBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("name", FieldType.nullable(new ArrowType.Utf8()), null),
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
 
     VectorSchemaRoot batch = VectorSchemaRoot.create(schema, allocator);
     batch.allocateNew();
@@ -231,8 +225,10 @@ public class ParquetExecutionEngineTest {
    * so this avoids string encoding complexity in projection/filter tests.
    */
   private VectorSchemaRoot createNumericOnlyBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
             null),
@@ -243,8 +239,7 @@ public class ParquetExecutionEngineTest {
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
 
     VectorSchemaRoot batch = VectorSchemaRoot.create(schema, allocator);
     batch.allocateNew();

@@ -28,9 +28,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -59,15 +57,13 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- Constructor ---
 
-  @Test
-  void testConstructor() {
+  @Test void testConstructor() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
     assertNotNull(writer);
   }
 
-  @Test
-  void testConstructorNullTracker() {
+  @Test void testConstructorNullTracker() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", null);
     assertNotNull(writer);
@@ -75,15 +71,13 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- initialize validation ---
 
-  @Test
-  void testInitializeNullConfig() {
+  @Test void testInitializeNullConfig() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
     assertThrows(IllegalArgumentException.class, () -> writer.initialize(null));
   }
 
-  @Test
-  void testInitializeDisabledConfig() {
+  @Test void testInitializeDisabledConfig() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
     MaterializeConfig config = MaterializeConfig.builder()
@@ -93,8 +87,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertThrows(IOException.class, () -> writer.initialize(config));
   }
 
-  @Test
-  void testInitializeWrongFormat() {
+  @Test void testInitializeWrongFormat() {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
     MaterializeConfig config = MaterializeConfig.builder()
@@ -107,8 +100,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- convertToS3aScheme via reflection ---
 
-  @Test
-  void testConvertToS3aScheme() throws Exception {
+  @Test void testConvertToS3aScheme() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -123,8 +115,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- buildHadoopS3Config via reflection ---
 
-  @Test
-  void testBuildHadoopS3Config() throws Exception {
+  @Test void testBuildHadoopS3Config() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -150,8 +141,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("org.apache.hadoop.fs.s3a.S3AFileSystem", result.get("fs.s3a.impl"));
   }
 
-  @Test
-  void testBuildHadoopS3ConfigMinimal() throws Exception {
+  @Test void testBuildHadoopS3ConfigMinimal() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -173,8 +163,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- mapToIcebergType via reflection ---
 
-  @Test
-  void testMapToIcebergType() throws Exception {
+  @Test void testMapToIcebergType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -198,8 +187,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- buildCatalogConfig via reflection ---
 
-  @Test
-  void testBuildCatalogConfigNullIcebergConfig() throws Exception {
+  @Test void testBuildCatalogConfigNullIcebergConfig() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -214,8 +202,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("/warehouse", result.get("warehousePath"));
   }
 
-  @Test
-  void testBuildCatalogConfigHadoopType() throws Exception {
+  @Test void testBuildCatalogConfigHadoopType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -235,8 +222,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("/custom/warehouse", result.get("warehousePath"));
   }
 
-  @Test
-  void testBuildCatalogConfigRestType() throws Exception {
+  @Test void testBuildCatalogConfigRestType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -256,8 +242,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("http://rest-catalog:8181", result.get("uri"));
   }
 
-  @Test
-  void testBuildCatalogConfigHiveType() throws Exception {
+  @Test void testBuildCatalogConfigHiveType() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -275,8 +260,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("hive", result.get("catalog"));
   }
 
-  @Test
-  void testBuildCatalogConfigS3WarehousePath() throws Exception {
+  @Test void testBuildCatalogConfigS3WarehousePath() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "s3://my-bucket/warehouse", mockTracker);
 
@@ -291,8 +275,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertEquals("s3a://my-bucket/warehouse", result.get("warehousePath"));
   }
 
-  @Test
-  void testBuildCatalogConfigWithS3Credentials() throws Exception {
+  @Test void testBuildCatalogConfigWithS3Credentials() throws Exception {
     Map<String, String> s3Config = new HashMap<>();
     s3Config.put("accessKeyId", "AKID");
     s3Config.put("secretAccessKey", "SECRET");
@@ -314,8 +297,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- buildHadoopConfiguration via reflection ---
 
-  @Test
-  void testBuildHadoopConfiguration() throws Exception {
+  @Test void testBuildHadoopConfiguration() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -337,8 +319,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertNotNull(conf);
   }
 
-  @Test
-  void testBuildHadoopConfigurationNoHadoopConfig() throws Exception {
+  @Test void testBuildHadoopConfigurationNoHadoopConfig() throws Exception {
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
 
@@ -359,8 +340,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
 
   // --- getEnvInt static method ---
 
-  @Test
-  void testGetEnvIntDefault() throws Exception {
+  @Test void testGetEnvIntDefault() throws Exception {
     Method method = IcebergMaterializationWriter.class
         .getDeclaredMethod("getEnvInt", String.class, int.class);
     method.setAccessible(true);

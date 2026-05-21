@@ -18,12 +18,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,8 +36,8 @@ class JsonCatalogResolverTest {
     // Create a test JSON resource in classpath
     // Use the test resource that should be at the classpath
     // We'll test with a dynamically created test resource via class
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-simple-array.json",
         "countries");
 
@@ -54,8 +49,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveNestedPath() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-nested.json",
         "groups.G7.countries");
 
@@ -66,8 +61,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveArrayWildcard() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-array-objects.json",
         "items[*].code");
 
@@ -80,8 +75,8 @@ class JsonCatalogResolverTest {
 
   @Test void testResolveEmptyPath() {
     // Empty path on an array root
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-root-array.json",
         "");
 
@@ -90,8 +85,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveNullPath() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-root-array.json",
         null);
 
@@ -100,8 +95,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveObjectWithCodeField() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-objects-with-code.json",
         "items[*]");
 
@@ -112,8 +107,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveNumericValues() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-numeric.json",
         "years");
 
@@ -133,8 +128,8 @@ class JsonCatalogResolverTest {
   }
 
   @Test void testResolveMissingPath() {
-    List<String> values = JsonCatalogResolver.resolve(
-        JsonCatalogResolverTest.class,
+    List<String> values =
+        JsonCatalogResolver.resolve(JsonCatalogResolverTest.class,
         "/etl-test/catalog-simple-array.json",
         "nonexistent.path");
 

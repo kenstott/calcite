@@ -27,13 +27,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -73,8 +69,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with source and materialize directories from schema config
   // ====================================================================
 
-  @Test
-  void testProcessSchemaUsesSchemaLevelDirectories() {
+  @Test void testProcessSchemaUsesSchemaLevelDirectories() {
     Map<String, Object> schemaMap = new HashMap<String, Object>();
     schemaMap.put("name", "local_schema");
     schemaMap.put("tables", new ArrayList<Object>());
@@ -102,8 +97,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals(1, result.getSuccessfulSchemas());
   }
 
-  @Test
-  void testProcessSchemaFallsBackToModelDirectories() {
+  @Test void testProcessSchemaFallsBackToModelDirectories() {
     // Schema config without directories
     Map<String, Object> schemaMap = new HashMap<String, Object>();
     schemaMap.put("name", "no_dir_schema");
@@ -133,8 +127,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with all hook types registered
   // ====================================================================
 
-  @Test
-  void testProcessSchemaWithAllTableHooks() {
+  @Test void testProcessSchemaWithAllTableHooks() {
     AtomicBoolean beforeTableCalled = new AtomicBoolean(false);
     AtomicBoolean afterTableCalled = new AtomicBoolean(false);
     AtomicBoolean errorHookCalled = new AtomicBoolean(false);
@@ -206,8 +199,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema exception path (schema config load fails)
   // ====================================================================
 
-  @Test
-  void testProcessSchemaExceptionInLoadConfig() {
+  @Test void testProcessSchemaExceptionInLoadConfig() {
     ModelConfig model = ModelConfig.builder()
         .name("exception_test")
         .schema("bad_schema", "/bad.yaml")
@@ -227,8 +219,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals(1, result.getFailedSchemas());
   }
 
-  @Test
-  void testProcessSchemaExceptionInSchemaConfigLoader() {
+  @Test void testProcessSchemaExceptionInSchemaConfigLoader() {
     ModelConfig model = ModelConfig.builder()
         .name("loader_exception_test")
         .schema("throw_schema", "/throw.yaml")
@@ -254,8 +245,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // afterSchema hook invocation
   // ====================================================================
 
-  @Test
-  void testAfterSchemaHookCalled() {
+  @Test void testAfterSchemaHookCalled() {
     AtomicReference<SchemaResult> schemaResultRef = new AtomicReference<SchemaResult>();
 
     SchemaConfig schemaConfig = createMinimalSchemaConfig("after_hook_schema");
@@ -282,8 +272,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // topologicalSort edge cases
   // ====================================================================
 
-  @Test
-  void testTopologicalSortSingleSchema() {
+  @Test void testTopologicalSortSingleSchema() {
     ModelConfig model = ModelConfig.builder()
         .name("single_schema")
         .schema("only_one", "/only.yaml")
@@ -301,8 +290,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals(1, result.getTotalSchemas());
   }
 
-  @Test
-  void testTopologicalSortLinearDependencies() {
+  @Test void testTopologicalSortLinearDependencies() {
     List<String> processOrder = new ArrayList<String>();
 
     ModelConfig model = ModelConfig.builder()
@@ -333,8 +321,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals("C", processOrder.get(2));
   }
 
-  @Test
-  void testTopologicalSortDiamondDependencies() {
+  @Test void testTopologicalSortDiamondDependencies() {
     List<String> processOrder = new ArrayList<String>();
 
     ModelConfig model = ModelConfig.builder()
@@ -366,8 +353,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals("top", processOrder.get(3));
   }
 
-  @Test
-  void testTopologicalSortCircularDependency() {
+  @Test void testTopologicalSortCircularDependency() {
     ModelConfig model = ModelConfig.builder()
         .name("circular")
         .schema("a", "/a.yaml", "c")
@@ -385,8 +371,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertThrows(IllegalStateException.class, () -> processor.process());
   }
 
-  @Test
-  void testTopologicalSortIndependentSchemas() {
+  @Test void testTopologicalSortIndependentSchemas() {
     ModelConfig model = ModelConfig.builder()
         .name("independent")
         .schema("s1", "/s1.yaml")
@@ -419,14 +404,12 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // loadSchemaConfigFromYaml
   // ====================================================================
 
-  @Test
-  void testLoadSchemaConfigFromYamlNonExistent() {
+  @Test void testLoadSchemaConfigFromYamlNonExistent() {
     SchemaConfig config = ModelLifecycleProcessor.loadSchemaConfigFromYaml("/nonexistent.yaml");
     assertNull(config);
   }
 
-  @Test
-  void testLoadSchemaConfigFromYamlNullInput() {
+  @Test void testLoadSchemaConfigFromYamlNullInput() {
     // Calling with a path that doesn't exist as classpath resource
     SchemaConfig config = ModelLifecycleProcessor.loadSchemaConfigFromYaml("/does_not_exist_xyz.yaml");
     assertNull(config);
@@ -436,8 +419,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // Builder.build() with auto-created StorageProvider
   // ====================================================================
 
-  @Test
-  void testBuilderAutoCreatesStorageProvider() {
+  @Test void testBuilderAutoCreatesStorageProvider() {
     ModelConfig model = ModelConfig.builder()
         .name("auto_sp_test")
         .schema("s1", "/s1.yaml")
@@ -455,8 +437,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  void testBuilderWithDefaultSchemaConfigLoader() {
+  @Test void testBuilderWithDefaultSchemaConfigLoader() {
     ModelConfig model = ModelConfig.builder()
         .name("default_loader_test")
         .schema("s1", "/nonexistent_resource.yaml")
@@ -475,8 +456,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals(1, result.getFailedSchemas());
   }
 
-  @Test
-  void testBuilderWithNoModel() {
+  @Test void testBuilderWithNoModel() {
     assertThrows(IllegalStateException.class, () ->
         ModelLifecycleProcessor.builder()
             .schemaConfigLoader(path -> null)
@@ -487,8 +467,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // Builder.incrementalTracker
   // ====================================================================
 
-  @Test
-  void testBuilderIncrementalTracker() {
+  @Test void testBuilderIncrementalTracker() {
     ModelConfig model = ModelConfig.builder()
         .name("tracker_test")
         .schema("s1", "/s1.yaml")
@@ -509,8 +488,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // Builder.WriteDataFunction functional interface
   // ====================================================================
 
-  @Test
-  void testWriteDataFunctionInterface() {
+  @Test void testWriteDataFunctionInterface() {
     ModelLifecycleProcessor.Builder.WriteDataFunction fn =
         (ctx, data, vars) -> 42L;
 
@@ -522,8 +500,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with successful tables and afterTable hook
   // ====================================================================
 
-  @Test
-  void testProcessSchemaWithSuccessfulTablesCallsAfterTable() {
+  @Test void testProcessSchemaWithSuccessfulTablesCallsAfterTable() {
     AtomicBoolean afterCalled = new AtomicBoolean(false);
     AtomicReference<EtlResult> capturedResult = new AtomicReference<EtlResult>();
 
@@ -557,8 +534,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with hooks for unmatched schemas (prefix mismatch)
   // ====================================================================
 
-  @Test
-  void testProcessSchemaIgnoresHooksForOtherSchemas() {
+  @Test void testProcessSchemaIgnoresHooksForOtherSchemas() {
     AtomicBoolean beforeCalled = new AtomicBoolean(false);
 
     SchemaConfig schemaConfig = createSchemaConfigWithTable("schema_a", "table1");
@@ -586,10 +562,9 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // ModelResult construction and getters
   // ====================================================================
 
-  @Test
-  void testModelResultWithEmptySchemas() {
-    ModelResult result = new ModelResult("empty_model",
-        new ArrayList<SchemaResult>(), 0, 0, 100);
+  @Test void testModelResultWithEmptySchemas() {
+    ModelResult result =
+        new ModelResult("empty_model", new ArrayList<SchemaResult>(), 0, 0, 100);
 
     assertEquals("empty_model", result.getModelName());
     assertEquals(0, result.getSuccessfulSchemas());
@@ -601,8 +576,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(result.getSchemaResults().isEmpty());
   }
 
-  @Test
-  void testModelResultToStringHasModelName() {
+  @Test void testModelResultToStringHasModelName() {
     List<SchemaResult> results = new ArrayList<SchemaResult>();
     results.add(new SchemaResult("s1", 2, 1, 0, 500, 100, null));
 
@@ -612,8 +586,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(str.contains("test_model"));
   }
 
-  @Test
-  void testModelResultWithMixedSchemas() {
+  @Test void testModelResultWithMixedSchemas() {
     List<SchemaResult> results = new ArrayList<SchemaResult>();
     results.add(new SchemaResult("s1", 3, 0, 1, 1000, 500, null));
     results.add(new SchemaResult("s2", 1, 2, 0, 300, 300, "error"));
@@ -631,8 +604,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // SchemaResult construction
   // ====================================================================
 
-  @Test
-  void testSchemaResultConstruction() {
+  @Test void testSchemaResultConstruction() {
     SchemaResult result = new SchemaResult("test_schema", 5, 2, 1, 10000, 1500, null);
 
     assertEquals("test_schema", result.getSchemaName());
@@ -645,8 +617,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals(8, result.getTotalTables()); // 5+2+1
   }
 
-  @Test
-  void testSchemaResultWithError() {
+  @Test void testSchemaResultWithError() {
     SchemaResult result = new SchemaResult("err_schema", 0, 0, 0, 0, 100, "Something went wrong");
 
     assertFalse(result.getErrors().isEmpty());
@@ -658,10 +629,9 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // ModelConfig builder and SchemaRef
   // ====================================================================
 
-  @Test
-  void testModelConfigWithSchemaRefMultipleDeps() {
-    ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of("complex", "/complex.yaml",
-        "dep1", "dep2", "dep3");
+  @Test void testModelConfigWithSchemaRefMultipleDeps() {
+    ModelConfig.SchemaRef ref =
+        ModelConfig.SchemaRef.of("complex", "/complex.yaml", "dep1", "dep2", "dep3");
 
     assertEquals("complex", ref.getName());
     assertEquals("/complex.yaml", ref.getResourcePath());
@@ -671,8 +641,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(ref.getDependsOn().contains("dep3"));
   }
 
-  @Test
-  void testModelConfigBuilderWithSchemaRefObject() {
+  @Test void testModelConfigBuilderWithSchemaRefObject() {
     ModelConfig.SchemaRef ref1 = ModelConfig.SchemaRef.of("s1", "/s1.yaml");
     ModelConfig.SchemaRef ref2 = ModelConfig.SchemaRef.of("s2", "/s2.yaml", "s1");
 
@@ -687,8 +656,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertEquals("s2", config.getSchemas().get(1).getName());
   }
 
-  @Test
-  void testModelConfigBuilderEmptyNameThrows() {
+  @Test void testModelConfigBuilderEmptyNameThrows() {
     assertThrows(IllegalStateException.class, () ->
         ModelConfig.builder()
             .name("")
@@ -696,24 +664,21 @@ public class ModelLifecycleProcessorDeepCoverageTest {
             .build());
   }
 
-  @Test
-  void testModelConfigBuilderNullNameThrows() {
+  @Test void testModelConfigBuilderNullNameThrows() {
     assertThrows(IllegalStateException.class, () ->
         ModelConfig.builder()
             .schema("s1", "/s1.yaml")
             .build());
   }
 
-  @Test
-  void testModelConfigBuilderNoSchemasThrows() {
+  @Test void testModelConfigBuilderNoSchemasThrows() {
     assertThrows(IllegalStateException.class, () ->
         ModelConfig.builder()
             .name("no_schemas")
             .build());
   }
 
-  @Test
-  void testSchemaRefToStringWithDependencies() {
+  @Test void testSchemaRefToStringWithDependencies() {
     ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of("my_schema", "/path.yaml", "dep1");
     String str = ref.toString();
     assertTrue(str.contains("my_schema"));
@@ -721,22 +686,19 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(str.contains("dep1"));
   }
 
-  @Test
-  void testSchemaRefToStringWithoutDependencies() {
+  @Test void testSchemaRefToStringWithoutDependencies() {
     ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of("simple", "/simple.yaml");
     String str = ref.toString();
     assertTrue(str.contains("simple"));
     assertFalse(str.contains("dependsOn"));
   }
 
-  @Test
-  void testSchemaRefDependsOnImmutable() {
+  @Test void testSchemaRefDependsOnImmutable() {
     ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of("s", "/s.yaml", "dep");
     assertThrows(UnsupportedOperationException.class, () -> ref.getDependsOn().add("sneaky"));
   }
 
-  @Test
-  void testModelConfigSchemasImmutable() {
+  @Test void testModelConfigSchemasImmutable() {
     ModelConfig config = ModelConfig.builder()
         .name("immutable")
         .schema("s1", "/s1.yaml")
@@ -750,8 +712,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // Process with beforeSchema hook that throws
   // ====================================================================
 
-  @Test
-  void testProcessSchemaBeforeHookThrows() {
+  @Test void testProcessSchemaBeforeHookThrows() {
     SchemaConfig schemaConfig = createMinimalSchemaConfig("throw_schema");
 
     ModelConfig model = ModelConfig.builder()
@@ -779,8 +740,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with partial failures (some tables fail)
   // ====================================================================
 
-  @Test
-  void testProcessSchemaWithPartialTableFailures() {
+  @Test void testProcessSchemaWithPartialTableFailures() {
     AtomicReference<SchemaResult> resultRef = new AtomicReference<SchemaResult>();
 
     Map<String, Object> schemaMap = new HashMap<String, Object>();
@@ -812,8 +772,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // ====================================================================
 
   @SuppressWarnings("deprecation")
-  @Test
-  void testBuilderDeprecatedBaseDirectory() {
+  @Test void testBuilderDeprecatedBaseDirectory() {
     ModelConfig model = ModelConfig.builder()
         .name("deprecated_test")
         .schema("s1", "/s1.yaml")
@@ -830,8 +789,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   }
 
   @SuppressWarnings("deprecation")
-  @Test
-  void testBuilderDeprecatedShouldProcess() {
+  @Test void testBuilderDeprecatedShouldProcess() {
     ModelConfig model = ModelConfig.builder()
         .name("deprecated_should_process")
         .schema("s1", "/s1.yaml")
@@ -857,8 +815,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
   // processSchema with fetchData and writeData hooks
   // ====================================================================
 
-  @Test
-  void testProcessSchemaWithFetchDataHook() {
+  @Test void testProcessSchemaWithFetchDataHook() {
     AtomicBoolean fetchCalled = new AtomicBoolean(false);
 
     SchemaConfig schemaConfig = createSchemaConfigWithTable("fetch_schema", "fetch_table");
@@ -888,8 +845,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  void testProcessSchemaWithWriteDataHook() {
+  @Test void testProcessSchemaWithWriteDataHook() {
     AtomicBoolean writeCalled = new AtomicBoolean(false);
 
     SchemaConfig schemaConfig = createSchemaConfigWithTable("write_schema", "write_table");

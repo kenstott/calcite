@@ -40,8 +40,7 @@ public class SharedJsonDataPushoverTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SharedJsonDataPushoverTest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Test
-  @DisplayName("getDataAtPath with null returns root node")
+  @Test @DisplayName("getDataAtPath with null returns root node")
   void testGetDataAtPathNullReturnsRoot() throws Exception {
     JsonNode root = MAPPER.readTree("{\"a\":1}");
     SharedJsonData data = new SharedJsonData(root);
@@ -49,8 +48,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(root, result, "null path should return root node");
   }
 
-  @Test
-  @DisplayName("getDataAtPath with wildcard path returns array elements")
+  @Test @DisplayName("getDataAtPath with wildcard path returns array elements")
   void testGetDataAtPathWildcard() throws Exception {
     String json = "{\"users\":[{\"name\":\"Alice\"},{\"name\":\"Bob\"}]}";
     JsonNode root = MAPPER.readTree(json);
@@ -69,8 +67,7 @@ public class SharedJsonDataPushoverTest {
     LOGGER.debug("Wildcard result: {}", result);
   }
 
-  @Test
-  @DisplayName("getDataAtPath with wildcard and sub-path extracts nested fields")
+  @Test @DisplayName("getDataAtPath with wildcard and sub-path extracts nested fields")
   void testGetDataAtPathWildcardWithSubPath() throws Exception {
     String json = "{\"users\":[{\"name\":\"Alice\"},{\"name\":\"Bob\"}]}";
     JsonNode root = MAPPER.readTree(json);
@@ -84,8 +81,7 @@ public class SharedJsonDataPushoverTest {
     LOGGER.debug("Wildcard sub-path result: {}", result);
   }
 
-  @Test
-  @DisplayName("getDataAtPath wildcard on non-array returns null")
+  @Test @DisplayName("getDataAtPath wildcard on non-array returns null")
   void testGetDataAtPathWildcardOnNonArray() throws Exception {
     JsonNode root = MAPPER.readTree("{\"data\":{\"key\":\"value\"}}");
     SharedJsonData data = new SharedJsonData(root);
@@ -97,8 +93,7 @@ public class SharedJsonDataPushoverTest {
     assertNull(result, "Wildcard on non-array should return null");
   }
 
-  @Test
-  @DisplayName("getDataAtPath wildcard with empty remaining path returns array directly")
+  @Test @DisplayName("getDataAtPath wildcard with empty remaining path returns array directly")
   void testGetDataAtPathWildcardEmptyRemainingPath() throws Exception {
     String json = "{\"items\":[1,2,3]}";
     JsonNode root = MAPPER.readTree(json);
@@ -112,8 +107,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(3, result.size());
   }
 
-  @Test
-  @DisplayName("getPathSize for object returns field count")
+  @Test @DisplayName("getPathSize for object returns field count")
   void testGetPathSizeForObject() throws Exception {
     String json = "{\"obj\":{\"a\":1,\"b\":2,\"c\":3}}";
     JsonNode root = MAPPER.readTree(json);
@@ -123,8 +117,7 @@ public class SharedJsonDataPushoverTest {
         "Object path size should return field count");
   }
 
-  @Test
-  @DisplayName("getPathSize for null path returns 0")
+  @Test @DisplayName("getPathSize for null path returns 0")
   void testGetPathSizeNullPath() throws Exception {
     JsonNode root = MAPPER.readTree("{\"a\":1}");
     SharedJsonData data = new SharedJsonData(root);
@@ -132,8 +125,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(0, data.getPathSize("$.nonexistent"));
   }
 
-  @Test
-  @DisplayName("convertJsonPathToPointer handles path without leading dot")
+  @Test @DisplayName("convertJsonPathToPointer handles path without leading dot")
   void testPathWithoutLeadingDot() throws Exception {
     String json = "{\"data\":{\"value\":42}}";
     JsonNode root = MAPPER.readTree(json);
@@ -145,8 +137,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(42, result.asInt());
   }
 
-  @Test
-  @DisplayName("getDataAtPath returns root for empty path after $ removal")
+  @Test @DisplayName("getDataAtPath returns root for empty path after $ removal")
   void testGetDataAtPathEmptyAfterPrefix() throws Exception {
     JsonNode root = MAPPER.readTree("{\"x\":1}");
     SharedJsonData data = new SharedJsonData(root);
@@ -156,8 +147,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(root, result);
   }
 
-  @Test
-  @DisplayName("getRootNode returns the original root")
+  @Test @DisplayName("getRootNode returns the original root")
   void testGetRootNode() throws Exception {
     JsonNode root = MAPPER.readTree("{\"test\":true}");
     SharedJsonData data = new SharedJsonData(root);
@@ -165,8 +155,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals(root, data.getRootNode());
   }
 
-  @Test
-  @DisplayName("JsonFlattener with custom separator uses that separator in keys")
+  @Test @DisplayName("JsonFlattener with custom separator uses that separator in keys")
   void testFlattenerCustomSeparator() {
     JsonFlattener flattener = new JsonFlattener(",", 3, "", ".");
 
@@ -182,8 +171,7 @@ public class SharedJsonDataPushoverTest {
     assertEquals("value", result.get("outer.inner"));
   }
 
-  @Test
-  @DisplayName("JsonSearchConfig fromTableDefinition delegates to constructor")
+  @Test @DisplayName("JsonSearchConfig fromTableDefinition delegates to constructor")
   void testFromTableDefinition() {
     java.util.Map<String, Object> tableDef = new java.util.HashMap<>();
     tableDef.put("autoDiscoverTables", Boolean.TRUE);
@@ -193,8 +181,7 @@ public class SharedJsonDataPushoverTest {
     assertNotNull(config.getOptions());
   }
 
-  @Test
-  @DisplayName("JsonSearchConfig getOptions returns stored options")
+  @Test @DisplayName("JsonSearchConfig getOptions returns stored options")
   void testGetOptions() {
     java.util.Map<String, Object> opts = new java.util.HashMap<>();
     opts.put("key", "val");

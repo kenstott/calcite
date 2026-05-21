@@ -26,15 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -63,7 +58,8 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
     MaterializationWriter mockWriter = mock(MaterializationWriter.class);
     factoryMock = mockStatic(MaterializationWriterFactory.class);
-    factoryMock.when(() -> MaterializationWriterFactory.createFromConfig(
+    factoryMock.when(
+        () -> MaterializationWriterFactory.createFromConfig(
         any(), any(), anyString(), any()))
         .thenReturn(mockWriter);
   }
@@ -77,8 +73,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- Builder tests ---
 
-  @Test
-  void testBuilderMinimal() {
+  @Test void testBuilderMinimal() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -92,8 +87,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithSourceStorageProvider() {
+  @Test void testBuilderWithSourceStorageProvider() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
     StorageProvider sourceStorage = mock(StorageProvider.class);
 
@@ -109,8 +103,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithOperatingDirectory() {
+  @Test void testBuilderWithOperatingDirectory() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -125,8 +118,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderWithListeners() {
+  @Test void testBuilderWithListeners() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
     SchemaLifecycleListener schemaListener = mock(SchemaLifecycleListener.class);
     TableLifecycleListener tableListener = mock(TableLifecycleListener.class);
@@ -144,8 +136,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  void testBuilderNullTracker() {
+  @Test void testBuilderNullTracker() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -160,8 +151,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- Process with empty tables list ---
 
-  @Test
-  void testProcessEmptyTables() throws Exception {
+  @Test void testProcessEmptyTables() throws Exception {
     SchemaConfig config = buildMinimalSchemaConfig("empty_schema");
     SchemaLifecycleListener schemaListener = mock(SchemaLifecycleListener.class);
     TableLifecycleListener tableListener = mock(TableLifecycleListener.class);
@@ -186,8 +176,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- Process with disabled table ---
 
-  @Test
-  void testProcessWithDisabledTable() throws Exception {
+  @Test void testProcessWithDisabledTable() throws Exception {
     EtlPipelineConfig tableConfig = EtlPipelineConfig.builder()
         .name("disabled_table")
         .enabled(false)
@@ -196,8 +185,8 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
             .build())
         .build();
 
-    SchemaConfig config = buildSchemaConfigWithTables("disabled_schema",
-        Collections.singletonList(tableConfig));
+    SchemaConfig config =
+        buildSchemaConfigWithTables("disabled_schema", Collections.singletonList(tableConfig));
 
     SchemaLifecycleListener schemaListener = mock(SchemaLifecycleListener.class);
     TableLifecycleListener tableListener = mock(TableLifecycleListener.class);
@@ -220,8 +209,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- Process with hook-disabled table ---
 
-  @Test
-  void testProcessWithHookDisabledTable() throws Exception {
+  @Test void testProcessWithHookDisabledTable() throws Exception {
     EtlPipelineConfig tableConfig = EtlPipelineConfig.builder()
         .name("hook_disabled_table")
         .source(HttpSourceConfig.builder()
@@ -233,8 +221,8 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
             .build())
         .build();
 
-    SchemaConfig config = buildSchemaConfigWithTables("hook_disabled_schema",
-        Collections.singletonList(tableConfig));
+    SchemaConfig config =
+        buildSchemaConfigWithTables("hook_disabled_schema", Collections.singletonList(tableConfig));
 
     SchemaLifecycleListener schemaListener = mock(SchemaLifecycleListener.class);
     TableLifecycleListener tableListener = mock(TableLifecycleListener.class);
@@ -256,16 +244,15 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- Process with table that has no source (hooks only) ---
 
-  @Test
-  void testProcessTableNoSource() throws Exception {
+  @Test void testProcessTableNoSource() throws Exception {
     EtlPipelineConfig tableConfig = EtlPipelineConfig.builder()
         .name("no_source_table")
         // No source config - hooks-only table
         .hooks(HooksConfig.builder().enabled(true).build())
         .build();
 
-    SchemaConfig config = buildSchemaConfigWithTables("no_source_schema",
-        Collections.singletonList(tableConfig));
+    SchemaConfig config =
+        buildSchemaConfigWithTables("no_source_schema", Collections.singletonList(tableConfig));
 
     SchemaLifecycleListener schemaListener = mock(SchemaLifecycleListener.class);
     TableLifecycleListener tableListener = mock(TableLifecycleListener.class);
@@ -291,8 +278,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- SchemaResult builder ---
 
-  @Test
-  void testSchemaResultBuilder() {
+  @Test void testSchemaResultBuilder() {
     SchemaResult result = SchemaResult.builder()
         .schemaName("test")
         .elapsedMs(5000)
@@ -306,8 +292,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- SchemaContext builder ---
 
-  @Test
-  void testSchemaContextBuilder() {
+  @Test void testSchemaContextBuilder() {
     SchemaConfig config = buildMinimalSchemaConfig("test_schema");
 
     SchemaContext ctx = SchemaContext.builder()
@@ -330,8 +315,7 @@ public class SchemaLifecycleProcessorDeepCoverageTest {
 
   // --- TableContext builder ---
 
-  @Test
-  void testTableContextBuilder() {
+  @Test void testTableContextBuilder() {
     SchemaConfig schemaConfig = buildMinimalSchemaConfig("test_schema");
     EtlPipelineConfig tableConfig = EtlPipelineConfig.builder()
         .name("test_table")

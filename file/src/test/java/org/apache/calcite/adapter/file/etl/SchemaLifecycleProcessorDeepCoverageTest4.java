@@ -33,20 +33,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -87,8 +81,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= SchemaResult getters =======
 
-  @Test
-  void testSchemaResultGetters() {
+  @Test void testSchemaResultGetters() {
     EtlResult success = EtlResult.builder()
         .pipelineName("table1")
         .failed(false)
@@ -127,8 +120,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= EtlResult builder and getters =======
 
-  @Test
-  void testEtlResultBuilder() {
+  @Test void testEtlResultBuilder() {
     EtlResult result = EtlResult.builder()
         .pipelineName("test_pipeline")
         .failed(false)
@@ -144,8 +136,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result.toString());
   }
 
-  @Test
-  void testEtlResultSkipped() {
+  @Test void testEtlResultSkipped() {
     EtlResult result = EtlResult.skipped("skipped_table", 75);
     assertEquals("skipped_table", result.getPipelineName());
     assertFalse(result.isFailed());
@@ -153,8 +144,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result.toString());
   }
 
-  @Test
-  void testEtlResultFailed() {
+  @Test void testEtlResultFailed() {
     EtlResult result = EtlResult.builder()
         .pipelineName("fail_table")
         .failed(true)
@@ -168,8 +158,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= SourceResult =======
 
-  @Test
-  void testSourceResultSuccess() {
+  @Test void testSourceResultSuccess() {
     SourceResult result = SourceResult.success(100, 5000, 500, "http://example.com/data");
     assertEquals(100, result.getRecordCount());
     assertEquals(5000, result.getBytesRead());
@@ -181,8 +170,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertTrue(result.toString().contains("records=100"));
   }
 
-  @Test
-  void testSourceResultSkipped() {
+  @Test void testSourceResultSkipped() {
     SourceResult result = SourceResult.skipped("Already cached");
     assertFalse(result.isSuccess());
     assertFalse(result.isError());
@@ -190,8 +178,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result.toString());
   }
 
-  @Test
-  void testSourceResultError() {
+  @Test void testSourceResultError() {
     SourceResult result = SourceResult.error("Connection failed", 200, "http://example.com");
     assertTrue(result.isError());
     assertFalse(result.isSuccess());
@@ -202,8 +189,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertTrue(result.toString().contains("error=Connection failed"));
   }
 
-  @Test
-  void testSourceResultGetStatus() {
+  @Test void testSourceResultGetStatus() {
     SourceResult success = SourceResult.success(10, 100, 50, null);
     assertEquals(SourceResult.Status.SUCCESS, success.getStatus());
 
@@ -216,8 +202,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= MaterializeResult =======
 
-  @Test
-  void testMaterializeResultSuccess() {
+  @Test void testMaterializeResultSuccess() {
     MaterializeResult result = MaterializeResult.success(500, 3, 3000);
     assertEquals(500, result.getRowCount());
     assertEquals(3, result.getFileCount());
@@ -230,8 +215,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertTrue(result.toString().contains("rows=500"));
   }
 
-  @Test
-  void testMaterializeResultError() {
+  @Test void testMaterializeResultError() {
     MaterializeResult result = MaterializeResult.error("Write failed", 100);
     assertTrue(result.isError());
     assertFalse(result.isSuccess());
@@ -241,8 +225,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertTrue(result.toString().contains("Write failed"));
   }
 
-  @Test
-  void testMaterializeResultSkipped() {
+  @Test void testMaterializeResultSkipped() {
     MaterializeResult result = MaterializeResult.skipped("Already materialized");
     assertTrue(result.isSkipped());
     assertFalse(result.isSuccess());
@@ -251,8 +234,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result.toString());
   }
 
-  @Test
-  void testMaterializeResultGetStatus() {
+  @Test void testMaterializeResultGetStatus() {
     MaterializeResult success = MaterializeResult.success(10, 1, 50);
     assertEquals(MaterializeResult.Status.SUCCESS, success.getStatus());
 
@@ -263,8 +245,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertEquals(MaterializeResult.Status.SKIPPED, skipped.getStatus());
   }
 
-  @Test
-  void testMaterializeResultToStringBranches() {
+  @Test void testMaterializeResultToStringBranches() {
     // MaterializeResult.error sets rowCount=0, fileCount=0.
     // toString() includes "rows=" when rowCount >= 0 and "files=" when fileCount >= 0,
     // so error results with 0 values will still show rows=0 and files=0.
@@ -284,8 +265,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= SchemaContext bulkDownloadPath =======
 
-  @Test
-  void testSchemaContextBulkDownloadPaths() {
+  @Test void testSchemaContextBulkDownloadPaths() {
     SchemaConfig config = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.toString())
@@ -305,8 +285,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNull(ctx.getBulkDownloadPath("nonexistent", "default"));
   }
 
-  @Test
-  void testSchemaContextGetters() {
+  @Test void testSchemaContextGetters() {
     SchemaConfig config = SchemaConfig.builder()
         .name("ctx_test")
         .materializeDirectory(tempDir.toString())
@@ -333,8 +312,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= TableContext detectSource and getters =======
 
-  @Test
-  void testTableContextGetters() {
+  @Test void testTableContextGetters() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("tc_schema")
         .materializeDirectory(tempDir.toString())
@@ -387,8 +365,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(tableCtx.detectSource());
   }
 
-  @Test
-  void testTableContextDetectSourceNoSource() {
+  @Test void testTableContextDetectSourceNoSource() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("ns_schema")
         .materializeDirectory(tempDir.toString())
@@ -416,8 +393,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= executeSchemaPostProcessing with S3 materialize dir =======
 
-  @Test
-  void testSchemaPostProcessingWithS3Dir() throws IOException {
+  @Test void testSchemaPostProcessingWithS3Dir() throws IOException {
     Map<String, Object> pp1Map = new LinkedHashMap<String, Object>();
     pp1Map.put("name", "step1");
     pp1Map.put("script", "echo done");
@@ -449,8 +425,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     }
   }
 
-  @Test
-  void testSchemaPostProcessingWithLocalAperioDir() throws IOException {
+  @Test void testSchemaPostProcessingWithLocalAperioDir() throws IOException {
     Path aperioDir = tempDir.resolve(".aperio").resolve("test_schema");
     Files.createDirectories(aperioDir);
 
@@ -484,8 +459,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     }
   }
 
-  @Test
-  void testSchemaPostProcessingNullMatDir() throws IOException {
+  @Test void testSchemaPostProcessingNullMatDir() throws IOException {
     Map<String, Object> pp1Map = new LinkedHashMap<String, Object>();
     pp1Map.put("name", "step1");
     pp1Map.put("script", "echo done");
@@ -511,8 +485,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= executeTablePostProcess with dependencies =======
 
-  @Test
-  void testTablePostProcessWithUnmetDependencies() throws IOException {
+  @Test void testTablePostProcessWithUnmetDependencies() throws IOException {
     Map<String, Object> ppMap = new LinkedHashMap<String, Object>();
     ppMap.put("name", "embed_step");
     ppMap.put("script", "echo embed");
@@ -540,8 +513,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result);
   }
 
-  @Test
-  void testTablePostProcessWithS3MatDir() throws IOException {
+  @Test void testTablePostProcessWithS3MatDir() throws IOException {
     Map<String, Object> ppMap = new LinkedHashMap<String, Object>();
     ppMap.put("name", "s3_step");
     ppMap.put("script", "echo s3");
@@ -574,8 +546,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= needsArchiveRetry =======
 
-  @Test
-  void testNeedsArchiveRetryNullOpDir() throws Exception {
+  @Test void testNeedsArchiveRetryNullOpDir() throws Exception {
     SchemaConfig config = createHooksOnlySchema("nar1");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -583,8 +554,8 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
         .storageProvider(storageProvider)
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -599,8 +570,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertFalse((Boolean) m.invoke(processor, ctx));
   }
 
-  @Test
-  void testNeedsArchiveRetryNoCacheDir() throws Exception {
+  @Test void testNeedsArchiveRetryNoCacheDir() throws Exception {
     SchemaConfig config = createHooksOnlySchema("nar2");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -608,8 +578,8 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
         .storageProvider(storageProvider)
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -625,8 +595,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertFalse((Boolean) m.invoke(processor, ctx));
   }
 
-  @Test
-  void testNeedsArchiveRetryLocalStorage() throws Exception {
+  @Test void testNeedsArchiveRetryLocalStorage() throws Exception {
     SchemaConfig config = createHooksOnlySchema("nar3");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -634,8 +603,8 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
         .storageProvider(storageProvider)
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     // Create cache/raw dir
@@ -658,8 +627,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= archiveRawCache various branches =======
 
-  @Test
-  void testArchiveRawCacheNullOpDir() throws IOException {
+  @Test void testArchiveRawCacheNullOpDir() throws IOException {
     SchemaConfig config = createHooksOnlySchema("arc4");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -672,8 +640,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result);
   }
 
-  @Test
-  void testArchiveRawCacheDirNotExists() throws IOException {
+  @Test void testArchiveRawCacheDirNotExists() throws IOException {
     SchemaConfig config = createHooksOnlySchema("arc5");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -688,8 +655,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= processBulkDownloads =======
 
-  @Test
-  void testProcessBulkDownloadsEmpty() throws IOException {
+  @Test void testProcessBulkDownloadsEmpty() throws IOException {
     SchemaConfig config = createHooksOnlySchema("bd4");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -703,8 +669,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= Multiple tables with GC logging =======
 
-  @Test
-  void testMultipleTablesWithGcCleanup() throws IOException {
+  @Test void testMultipleTablesWithGcCleanup() throws IOException {
     List<EtlPipelineConfig> tables = new ArrayList<EtlPipelineConfig>();
     for (int i = 0; i < 3; i++) {
       tables.add(createHooksOnlyTableConfig("gc_table_" + i));
@@ -727,8 +692,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= DelegatingTableListener edge cases =======
 
-  @Test
-  void testDelegatingListenerBeforeTableNullDelegate() throws IOException {
+  @Test void testDelegatingListenerBeforeTableNullDelegate() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("dtbn_schema", "dtbnTable");
 
     // Register hooks for a different table to create DelegatingTableListener
@@ -744,8 +708,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertEquals(1, result.getSuccessfulTables());
   }
 
-  @Test
-  void testDelegatingListenerOnErrorDefaultsContinue() throws IOException {
+  @Test void testDelegatingListenerOnErrorDefaultsContinue() throws IOException {
     SchemaConfig config = createSchemaWithHooksOnlyTable("dtedc_schema", "dtedcTable");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()
@@ -767,8 +730,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= Table context with raw source config =======
 
-  @Test
-  void testTableContextWithRawSourceConfig() throws IOException {
+  @Test void testTableContextWithRawSourceConfig() throws IOException {
     Map<String, Object> rawSource = new LinkedHashMap<String, Object>();
     rawSource.put("type", "file");
     rawSource.put("path", "/path/to/data.csv");
@@ -799,10 +761,9 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= loadSchemaListener with valid hooks config =======
 
-  @Test
-  void testLoadSchemaListenerEmptyClassName() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadSchemaListener",
-        SchemaConfig.class);
+  @Test void testLoadSchemaListenerEmptyClassName() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadSchemaListener", SchemaConfig.class);
     m.setAccessible(true);
 
     Map<String, Object> hooksMap = new LinkedHashMap<String, Object>();
@@ -818,10 +779,9 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(result);
   }
 
-  @Test
-  void testLoadDefaultTableListenerEmptyClassName() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadDefaultTableListener",
-        SchemaConfig.class);
+  @Test void testLoadDefaultTableListenerEmptyClassName() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadDefaultTableListener", SchemaConfig.class);
     m.setAccessible(true);
 
     Map<String, Object> hooksMap = new LinkedHashMap<String, Object>();
@@ -839,10 +799,9 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= createDataProvider =======
 
-  @Test
-  void testCreateDataProviderNoHooks() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider",
-        EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
+  @Test void testCreateDataProviderNoHooks() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider", EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
     m.setAccessible(true);
 
     EtlPipelineConfig tableConfig = createHooksOnlyTableConfig("dp_test");
@@ -872,10 +831,9 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(dp);
   }
 
-  @Test
-  void testCreateDataProviderInvalidClass() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider",
-        EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
+  @Test void testCreateDataProviderInvalidClass() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider", EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
     m.setAccessible(true);
 
     Map<String, Object> hooksMap = new LinkedHashMap<String, Object>();
@@ -912,10 +870,9 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
     assertNotNull(dp);
   }
 
-  @Test
-  void testCreateDataProviderWrongType() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider",
-        EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
+  @Test void testCreateDataProviderWrongType() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("createDataProvider", EtlPipelineConfig.class, TableContext.class, TableLifecycleListener.class);
     m.setAccessible(true);
 
     Map<String, Object> hooksMap = new LinkedHashMap<String, Object>();
@@ -954,8 +911,7 @@ class SchemaLifecycleProcessorDeepCoverageTest4 {
 
   // ======= processTable with null materializeDirectory =======
 
-  @Test
-  void testProcessTableNullMaterializeDir() throws IOException {
+  @Test void testProcessTableNullMaterializeDir() throws IOException {
     SchemaConfig config = createSchemaWithSourceTable("nullmd_schema", "nullmdTable");
 
     SchemaLifecycleProcessor processor = SchemaLifecycleProcessor.builder()

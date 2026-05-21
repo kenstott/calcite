@@ -129,8 +129,8 @@ class MaterializePartitionConfigTest {
   }
 
   @Test void testFromMapEmpty() {
-    MaterializePartitionConfig config = MaterializePartitionConfig.fromMap(
-        new HashMap<String, Object>());
+    MaterializePartitionConfig config =
+        MaterializePartitionConfig.fromMap(new HashMap<String, Object>());
     assertNotNull(config);
     assertTrue(config.getColumns().isEmpty());
     assertTrue(config.getBatchBy().isEmpty());

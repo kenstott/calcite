@@ -62,8 +62,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
    * timestamp is in the past. Forces the directory's mtime to be very old, then
    * calls {@code cleanupOldDirectories(0)} so every directory qualifies.
    */
-  @Test
-  public void testCleanupOldDirectoriesDeletesOldDirs() throws IOException {
+  @Test public void testCleanupOldDirectoriesDeletesOldDirs() throws IOException {
     String id = uniqueId();
 
     // Create a spillover directory
@@ -94,8 +93,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
   /**
    * Tests that {@code cleanupOldDirectories} leaves recent directories intact.
    */
-  @Test
-  public void testCleanupOldDirectoriesKeepsRecentDirs() throws IOException {
+  @Test public void testCleanupOldDirectoriesKeepsRecentDirs() throws IOException {
     String id = uniqueId();
 
     // Create a spillover directory (recently created = recent mtime)
@@ -119,8 +117,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
    * Tests that {@code cleanupOldDirectories} handles non-existent base directory
    * gracefully (no exception).
    */
-  @Test
-  public void testCleanupOldDirectoriesNonExistentBaseDir() {
+  @Test public void testCleanupOldDirectoriesNonExistentBaseDir() {
     // Just call it; if no spillover dirs created yet, the base may or may not exist.
     // Either way, should not throw.
     ConcurrentSpilloverManager.cleanupOldDirectories(24);
@@ -129,8 +126,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
   /**
    * Tests {@code cleanupConnectionDirectory} path when directory has nested files.
    */
-  @Test
-  public void testCleanupConnectionDirectoryWithFiles() throws IOException {
+  @Test public void testCleanupConnectionDirectoryWithFiles() throws IOException {
     String id = uniqueId();
     Path dir = ConcurrentSpilloverManager.getSpilloverDirectory(id);
 
@@ -150,8 +146,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
   /**
    * Tests that cleanup of an already-cleaned directory is idempotent.
    */
-  @Test
-  public void testCleanupConnectionDirectoryIdempotent() {
+  @Test public void testCleanupConnectionDirectoryIdempotent() {
     String id = uniqueId();
     connectionIds.remove(id);
 
@@ -163,8 +158,7 @@ public class ConcurrentSpilloverManagerDeepCoverageTest {
   /**
    * Tests createSpilloverFile is in a directory with the connection ID in its name.
    */
-  @Test
-  public void testCreateSpilloverFileInConnectionDir() throws IOException {
+  @Test public void testCreateSpilloverFileInConnectionDir() throws IOException {
     String id = uniqueId();
 
     java.io.File file = ConcurrentSpilloverManager.createSpilloverFile(id, "test_prefix");

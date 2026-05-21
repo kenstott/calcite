@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +38,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,8 +54,8 @@ public class IcebergMetadataTablesDeepTest {
   @TempDir
   Path tempDir;
 
-  private final RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(
-      org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+  private final RelDataTypeFactory typeFactory =
+      new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
   private IcebergTable icebergTable;
   private Map<String, Object> config;
@@ -71,12 +69,12 @@ public class IcebergMetadataTablesDeepTest {
     config.put("namespace", "default");
 
     // Create a real Iceberg table
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "name", Types.StringType.get()));
 
-    org.apache.iceberg.Table table = IcebergCatalogManager.createTable(
-        config, "metadata_test", schema, PartitionSpec.unpartitioned());
+    org.apache.iceberg.Table table =
+        IcebergCatalogManager.createTable(config, "metadata_test", schema, PartitionSpec.unpartitioned());
 
     icebergTable = new IcebergTable(table, null);
   }
@@ -86,8 +84,7 @@ public class IcebergMetadataTablesDeepTest {
     IcebergCatalogManager.clearCache();
   }
 
-  @Test
-  public void testCreateMetadataTablesReturnsAllTables() {
+  @Test public void testCreateMetadataTablesReturnsAllTables() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 
@@ -100,8 +97,7 @@ public class IcebergMetadataTablesDeepTest {
     assertTrue(metadataTables.containsKey("partitions"));
   }
 
-  @Test
-  public void testHistoryTableRowType() {
+  @Test public void testHistoryTableRowType() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 
@@ -117,8 +113,7 @@ public class IcebergMetadataTablesDeepTest {
     assertEquals("is_current_ancestor", rowType.getFieldList().get(3).getName());
   }
 
-  @Test
-  public void testSnapshotsTableRowType() {
+  @Test public void testSnapshotsTableRowType() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 
@@ -136,8 +131,7 @@ public class IcebergMetadataTablesDeepTest {
     assertEquals("summary", rowType.getFieldList().get(5).getName());
   }
 
-  @Test
-  public void testFilesTableRowType() {
+  @Test public void testFilesTableRowType() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 
@@ -155,8 +149,7 @@ public class IcebergMetadataTablesDeepTest {
     assertEquals("file_size_in_bytes", rowType.getFieldList().get(5).getName());
   }
 
-  @Test
-  public void testManifestsTableRowType() {
+  @Test public void testManifestsTableRowType() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 
@@ -175,8 +168,7 @@ public class IcebergMetadataTablesDeepTest {
     assertEquals("deleted_data_files_count", rowType.getFieldList().get(6).getName());
   }
 
-  @Test
-  public void testPartitionsTableRowType() {
+  @Test public void testPartitionsTableRowType() {
     Map<String, Table> metadataTables =
         IcebergMetadataTables.createMetadataTables(icebergTable);
 

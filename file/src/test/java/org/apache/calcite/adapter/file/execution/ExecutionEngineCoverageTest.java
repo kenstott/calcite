@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -161,8 +160,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testFiveArgWithExplicitDuckDBConfig() {
-      DuckDBConfig duckDBCfg = new DuckDBConfig("8GB", 16, "95%", "/tmp",
-          true, false, true, 4096, null);
+      DuckDBConfig duckDBCfg =
+          new DuckDBConfig("8GB", 16, "95%", "/tmp", true, false, true, 4096, null);
       ExecutionEngineConfig config =
           new ExecutionEngineConfig("duckdb", 2048,
               ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD, null, duckDBCfg);
@@ -195,8 +194,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testInvalidEngineTypeThrows() {
-      IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-          () -> new ExecutionEngineConfig("bogus", 2048));
+      IllegalArgumentException ex =
+          assertThrows(IllegalArgumentException.class, () -> new ExecutionEngineConfig("bogus", 2048));
       assertTrue(ex.getMessage().contains("Invalid execution engine"));
       assertTrue(ex.getMessage().contains("bogus"));
     }
@@ -379,38 +378,38 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testFullConstructorNullMemoryLimitUsesDefault() {
-      DuckDBConfig config = new DuckDBConfig(null, 4, "80%", null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig(null, 4, "80%", null, false, true, true, 1024, null);
       assertEquals(DuckDBConfig.DEFAULT_MEMORY_LIMIT, config.getMemoryLimit());
     }
 
     @Test void testFullConstructorNegativeThreadsUsesDefault() {
-      DuckDBConfig config = new DuckDBConfig("1GB", -1, "80%", null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", -1, "80%", null, false, true, true, 1024, null);
       assertEquals(DuckDBConfig.DEFAULT_THREADS, config.getThreads());
     }
 
     @Test void testFullConstructorZeroThreadsUsesDefault() {
-      DuckDBConfig config = new DuckDBConfig("1GB", 0, "80%", null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 0, "80%", null, false, true, true, 1024, null);
       assertEquals(DuckDBConfig.DEFAULT_THREADS, config.getThreads());
     }
 
     @Test void testFullConstructorNullMaxMemoryUsesDefault() {
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, null, null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, null, null, false, true, true, 1024, null);
       assertEquals(DuckDBConfig.DEFAULT_MAX_MEMORY, config.getMaxMemory());
     }
 
     @Test void testFullConstructorNegativeBatchSizeUsesDefault() {
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", null,
-          false, true, true, -1, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", null, false, true, true, -1, null);
       assertEquals(DuckDBConfig.DEFAULT_ARROW_BATCH_SIZE, config.getArrowBatchSize());
     }
 
     @Test void testFullConstructorNullAdditionalSettingsCreatesEmpty() {
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", null, false, true, true, 1024, null);
       assertNotNull(config.getAdditionalSettings());
       assertTrue(config.getAdditionalSettings().isEmpty());
     }
@@ -418,8 +417,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testFullConstructorWithAllFields() {
       Properties additional = new Properties();
       additional.setProperty("custom", "val");
-      DuckDBConfig config = new DuckDBConfig("4GB", 8, "90%", "/data/tmp",
-          true, false, false, 2048, additional);
+      DuckDBConfig config =
+          new DuckDBConfig("4GB", 8, "90%", "/data/tmp", true, false, false, 2048, additional);
       assertEquals("4GB", config.getMemoryLimit());
       assertEquals(8, config.getThreads());
       assertEquals("90%", config.getMaxMemory());
@@ -432,8 +431,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToDuckDBSettingsCoreSetting() {
-      DuckDBConfig config = new DuckDBConfig("2GB", 8, "90%", null,
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("2GB", 8, "90%", null, false, true, true, 1024, null);
       String[] settings = config.toDuckDBSettings();
 
       boolean hasMemory = false;
@@ -466,8 +465,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToDuckDBSettingsWithTempDirectory() {
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", "/tmp/ddb",
-          false, true, true, 1024, null);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", "/tmp/ddb", false, true, true, 1024, null);
       String[] settings = config.toDuckDBSettings();
       boolean hasTempDir = false;
       for (String s : settings) {
@@ -490,8 +489,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToDuckDBSettingsAdditionalBooleanValueNotQuoted() {
       Properties additional = new Properties();
       additional.setProperty("external_access", "true");
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", null,
-          false, true, true, 1024, additional);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", null, false, true, true, 1024, additional);
       String[] settings = config.toDuckDBSettings();
       boolean found = false;
       for (String s : settings) {
@@ -507,8 +506,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToDuckDBSettingsAdditionalNumericValueNotQuoted() {
       Properties additional = new Properties();
       additional.setProperty("checkpoint_threshold", "1000");
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", null,
-          false, true, true, 1024, additional);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", null, false, true, true, 1024, additional);
       String[] settings = config.toDuckDBSettings();
       boolean found = false;
       for (String s : settings) {
@@ -523,8 +522,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToDuckDBSettingsAdditionalStringValueQuoted() {
       Properties additional = new Properties();
       additional.setProperty("access_mode", "read_only");
-      DuckDBConfig config = new DuckDBConfig("1GB", 4, "80%", null,
-          false, true, true, 1024, additional);
+      DuckDBConfig config =
+          new DuckDBConfig("1GB", 4, "80%", null, false, true, true, 1024, additional);
       String[] settings = config.toDuckDBSettings();
       boolean found = false;
       for (String s : settings) {
@@ -537,8 +536,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToStringContainsFields() {
-      DuckDBConfig config = new DuckDBConfig("4GB", 8, "90%", "/tmp", true, false,
-          true, 2048, null);
+      DuckDBConfig config =
+          new DuckDBConfig("4GB", 8, "90%", "/tmp", true, false, true, 2048, null);
       String str = config.toString();
       assertTrue(str.contains("4GB"));
       assertTrue(str.contains("8"));
@@ -791,8 +790,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testFullConstructorNullsUseDefaults() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          null, null, null, null, null, null, null, -1, null);
+      ClickHouseConfig config =
+          new ClickHouseConfig(null, null, null, null, null, null, null, -1, null);
       assertEquals(ClickHouseConfig.DEFAULT_MODE, config.getMode());
       assertEquals(ClickHouseConfig.DEFAULT_HOST, config.getHost());
       assertEquals(ClickHouseConfig.DEFAULT_PORT, config.getPort());
@@ -803,22 +802,22 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testIsLocalModeServerIsFalse() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 4, null);
       assertFalse(config.isLocalMode());
     }
 
     @Test void testIsLocalModeCaseInsensitive() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "LOCAL", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("LOCAL", "localhost", "8123", "default",
           null, null, "4GB", 4, null);
       assertTrue(config.isLocalMode());
     }
 
     @Test void testToClickHouseSettingsContainsMemory() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 4, null);
       String[] settings = config.toClickHouseSettings();
       boolean hasMemory = false;
@@ -833,8 +832,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToClickHouseSettingsContainsThreads() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 8, null);
       String[] settings = config.toClickHouseSettings();
       boolean hasThreads = false;
@@ -847,8 +846,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToClickHouseSettingsMemoryParsingGB() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "2GB", 4, null);
       String[] settings = config.toClickHouseSettings();
       String memSetting = settings[0]; // first setting is max_memory_usage
@@ -856,8 +855,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToClickHouseSettingsMemoryParsingMB() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "512MB", 4, null);
       String[] settings = config.toClickHouseSettings();
       String memSetting = settings[0];
@@ -865,8 +864,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToClickHouseSettingsMemoryParsingKB() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "1024KB", 4, null);
       String[] settings = config.toClickHouseSettings();
       String memSetting = settings[0];
@@ -874,8 +873,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToClickHouseSettingsMemoryParsingPlainNumber() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "1000000", 4, null);
       String[] settings = config.toClickHouseSettings();
       String memSetting = settings[0];
@@ -885,8 +884,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToClickHouseSettingsAdditionalBooleanNotQuoted() {
       Properties additional = new Properties();
       additional.setProperty("use_uncompressed_cache", "true");
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 4, additional);
       String[] settings = config.toClickHouseSettings();
       boolean found = false;
@@ -903,8 +902,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToClickHouseSettingsAdditionalStringQuoted() {
       Properties additional = new Properties();
       additional.setProperty("log_level", "debug");
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 4, additional);
       String[] settings = config.toClickHouseSettings();
       boolean found = false;
@@ -920,8 +919,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToClickHouseSettingsAdditional0And1AreBooleanOrNumeric() {
       Properties additional = new Properties();
       additional.setProperty("flag", "0");
-      ClickHouseConfig config = new ClickHouseConfig(
-          "server", "localhost", "8123", "default",
+      ClickHouseConfig config =
+          new ClickHouseConfig("server", "localhost", "8123", "default",
           null, null, "4GB", 4, additional);
       String[] settings = config.toClickHouseSettings();
       boolean found = false;
@@ -936,8 +935,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToStringContainsFields() {
-      ClickHouseConfig config = new ClickHouseConfig(
-          "local", "myhost", "9000", "mydb",
+      ClickHouseConfig config =
+          new ClickHouseConfig("local", "myhost", "9000", "mydb",
           "/usr/bin/ch-local", "/data", "8GB", 16, null);
       String str = config.toString();
       assertTrue(str.contains("local"));
@@ -1078,8 +1077,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testFullConstructorNullsUseDefaults() {
-      SparkConfig config = new SparkConfig(
-          null, null, null, null, null, null, null, null, 0, null);
+      SparkConfig config =
+          new SparkConfig(null, null, null, null, null, null, null, null, 0, null);
       assertEquals(SparkConfig.DEFAULT_HOST, config.getHost());
       assertEquals(SparkConfig.DEFAULT_PORT, config.getPort());
       assertEquals(SparkConfig.DEFAULT_DATABASE, config.getDatabase());
@@ -1089,8 +1088,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testFullConstructorAllFields() {
       Properties additional = new Properties();
       additional.setProperty("spark.sql.shuffle.partitions", "200");
-      SparkConfig config = new SparkConfig(
-          "spark-host", "10003", "testdb", "user1", "pass1",
+      SparkConfig config =
+          new SparkConfig("spark-host", "10003", "testdb", "user1", "pass1",
           "hive", "/wh", "16g", 24, additional);
       assertEquals("spark-host", config.getHost());
       assertEquals("10003", config.getPort());
@@ -1106,8 +1105,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToSparkSettingsWithMemoryAndThreads() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", null, "4g", 8, null);
       String[] settings = config.toSparkSettings();
       boolean hasMem = false;
@@ -1134,8 +1133,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToSparkSettingsEmptyMemoryExcluded() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", null, "", 0, null);
       String[] settings = config.toSparkSettings();
       for (String s : settings) {
@@ -1156,8 +1155,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToSparkSettingsIncludesAdditional() {
       Properties additional = new Properties();
       additional.setProperty("spark.sql.adaptive.enabled", "true");
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", null, null, 0, additional);
       String[] settings = config.toSparkSettings();
       boolean found = false;
@@ -1170,8 +1169,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToIcebergCatalogSettingsWithExplicitWarehouse() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", "/data/iceberg", null, 0, null);
       String[] settings = config.toIcebergCatalogSettings("/fallback");
       assertTrue(settings.length >= 3, "Should have at least 3 settings");
@@ -1190,8 +1189,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToIcebergCatalogSettingsFallbackWarehouse() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", null, null, 0, null);
       String[] settings = config.toIcebergCatalogSettings("/fallback/path");
       boolean hasWarehouse = false;
@@ -1204,8 +1203,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToIcebergCatalogSettingsNullWarehouseExcluded() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", null, null,
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", null, null,
           "hadoop", null, null, 0, null);
       String[] settings = config.toIcebergCatalogSettings(null);
       for (String s : settings) {
@@ -1219,8 +1218,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToStringMasksUserCredentials() {
-      SparkConfig config = new SparkConfig(
-          "localhost", "10000", "default", "admin", "secret",
+      SparkConfig config =
+          new SparkConfig("localhost", "10000", "default", "admin", "secret",
           "hadoop", null, null, 0, null);
       String str = config.toString();
       assertTrue(str.contains("***"), "User should be masked in toString");
@@ -1361,8 +1360,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testFullConstructorNullsUseDefaults() {
-      TrinoConfig config = new TrinoConfig(
-          null, null, null, null, null, null, null, null,
+      TrinoConfig config =
+          new TrinoConfig(null, null, null, null, null, null, null, null,
           null, null, null, null);
       assertEquals(TrinoConfig.DEFAULT_HOST, config.getHost());
       assertEquals(TrinoConfig.DEFAULT_PORT, config.getPort());
@@ -1377,8 +1376,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testFullConstructorAllFields() {
       Properties additional = new Properties();
       additional.setProperty("query_max_run_time", "600s");
-      TrinoConfig config = new TrinoConfig(
-          "host1", "443", "cat1", "sch1", "user1", "pass1",
+      TrinoConfig config =
+          new TrinoConfig("host1", "443", "cat1", "sch1", "user1", "pass1",
           "ice1", "/wh1", "ak1", "sk1", "ep1", additional);
       assertEquals("host1", config.getHost());
       assertEquals("443", config.getPort());
@@ -1404,8 +1403,8 @@ public class ExecutionEngineCoverageTest {
     @Test void testToSessionSettingsWithAdditional() {
       Properties additional = new Properties();
       additional.setProperty("query_max_memory", "10GB");
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", null, null,
           "iceberg", "/data/warehouse", null, null, null, additional);
       String[] settings = config.toSessionSettings();
       assertEquals(1, settings.length);
@@ -1426,8 +1425,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testGetHiveCatalogPropertiesWithS3() {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", null, null,
           "iceberg", "/wh", "AKID", "SKEY", "http://minio:9000", null);
       Properties props = config.getHiveCatalogProperties();
       assertEquals("AKID", props.getProperty("hive.s3.aws-access-key"));
@@ -1437,8 +1436,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testGetHiveCatalogPropertiesWithS3NoEndpoint() {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", null, null,
           "iceberg", "/wh", "AKID", "SKEY", null, null);
       Properties props = config.getHiveCatalogProperties();
       assertEquals("AKID", props.getProperty("hive.s3.aws-access-key"));
@@ -1457,8 +1456,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testGetIcebergCatalogPropertiesWithS3() {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", null, null,
           "iceberg", "/wh", "AKID", "SKEY", "http://minio:9000", null);
       Properties props = config.getIcebergCatalogProperties();
       assertEquals("AKID", props.getProperty("hive.s3.aws-access-key"));
@@ -1468,8 +1467,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testGenerateCatalogFilesCreatesFiles(@TempDir Path tempDir) throws IOException {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", null, null,
           "iceberg", "/data/warehouse", null, null, null, null);
       String outputDir = tempDir.resolve("catalog").toString();
       config.generateCatalogFiles(outputDir);
@@ -1484,8 +1483,8 @@ public class ExecutionEngineCoverageTest {
 
     @Test void testGenerateCatalogFilesUsesCustomCatalogNames(@TempDir Path tempDir)
         throws IOException {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "mycatalog", "default", null, null,
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "mycatalog", "default", null, null,
           "myiceberg", "/data/warehouse", null, null, null, null);
       String outputDir = tempDir.resolve("catalog").toString();
       config.generateCatalogFiles(outputDir);
@@ -1507,8 +1506,8 @@ public class ExecutionEngineCoverageTest {
     }
 
     @Test void testToStringMasksCredentials() {
-      TrinoConfig config = new TrinoConfig(
-          "localhost", "8080", "hive", "default", "admin", "secret",
+      TrinoConfig config =
+          new TrinoConfig("localhost", "8080", "hive", "default", "admin", "secret",
           "iceberg", "/wh", null, null, null, null);
       String str = config.toString();
       assertTrue(str.contains("***"), "User should be masked");
@@ -1539,8 +1538,8 @@ public class ExecutionEngineCoverageTest {
   class CrossEngineTests {
 
     @Test void testDuckDBConfigInExecutionEngineConfig() {
-      DuckDBConfig duckDBConfig = new DuckDBConfig("4GB", 8, "90%", "/tmp",
-          true, false, true, 2048, null);
+      DuckDBConfig duckDBConfig =
+          new DuckDBConfig("4GB", 8, "90%", "/tmp", true, false, true, 2048, null);
       ExecutionEngineConfig config =
           new ExecutionEngineConfig("duckdb", 2048,
               ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD, null, duckDBConfig);

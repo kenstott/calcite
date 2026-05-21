@@ -20,9 +20,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,12 +42,14 @@ public class IncrementalTrackerTest {
   // ===== NOOP tracker =====
 
   @Test void testNoopIsProcessedReturnsFalse() {
-    assertFalse(IncrementalTracker.NOOP.isProcessed(
+    assertFalse(
+        IncrementalTracker.NOOP.isProcessed(
         "alt", "source", Collections.singletonMap("year", "2023")));
   }
 
   @Test void testNoopIsProcessedWithTtlReturnsFalse() {
-    assertFalse(IncrementalTracker.NOOP.isProcessedWithTtl(
+    assertFalse(
+        IncrementalTracker.NOOP.isProcessedWithTtl(
         "alt", "source", Collections.singletonMap("year", "2023"), 60000));
   }
 
@@ -116,8 +116,8 @@ public class IncrementalTrackerTest {
 
   @Test void testDefaultIsProcessedWithEmptyTtl() {
     // Default delegates to isProcessed
-    boolean result = IncrementalTracker.NOOP.isProcessedWithEmptyTtl(
-        "alt", "source", Collections.singletonMap("year", "2023"), 60000);
+    boolean result =
+        IncrementalTracker.NOOP.isProcessedWithEmptyTtl("alt", "source", Collections.singletonMap("year", "2023"), 60000);
     assertFalse(result);
   }
 
@@ -127,8 +127,8 @@ public class IncrementalTrackerTest {
     combos.add(Collections.singletonMap("year", "2021"));
 
     // Default delegates to filterUnprocessed
-    Set<Integer> result = IncrementalTracker.NOOP.filterUnprocessedWithEmptyTtl(
-        "alt", "source", combos, 60000);
+    Set<Integer> result =
+        IncrementalTracker.NOOP.filterUnprocessedWithEmptyTtl("alt", "source", combos, 60000);
 
     assertEquals(2, result.size());
   }
@@ -144,8 +144,8 @@ public class IncrementalTrackerTest {
     combos.add(Collections.singletonMap("year", "2020"));
 
     // Default delegates to filterUnprocessedWithEmptyTtl
-    Set<Integer> result = IncrementalTracker.NOOP.filterUnprocessedWithTtl(
-        "alt", "source", combos, 60000, 30000);
+    Set<Integer> result =
+        IncrementalTracker.NOOP.filterUnprocessedWithTtl("alt", "source", combos, 60000, 30000);
 
     assertEquals(1, result.size());
   }
@@ -280,8 +280,8 @@ public class IncrementalTrackerTest {
   // ===== Static utility methods =====
 
   @Test void testComputeDimensionSignatureEmptyList() {
-    String sig = IncrementalTracker.computeDimensionSignature(
-        Collections.<Map<String, String>>emptyList());
+    String sig =
+        IncrementalTracker.computeDimensionSignature(Collections.<Map<String, String>>emptyList());
     assertEquals("empty", sig);
   }
 

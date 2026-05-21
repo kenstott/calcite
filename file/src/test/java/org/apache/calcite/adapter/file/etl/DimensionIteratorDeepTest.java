@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -454,10 +453,9 @@ class DimensionIteratorDeepTest {
 
   @Test void testDimensionPartitionToString() {
     Map<String, String> context = Collections.singletonMap("state", "CA");
-    List<Map<String, String>> combos = Arrays.asList(
-        createCombo("state", "CA", "ori", "CA001"),
-        createCombo("state", "CA", "ori", "CA002")
-    );
+    List<Map<String, String>> combos =
+        Arrays.asList(createCombo("state", "CA", "ori", "CA001"),
+        createCombo("state", "CA", "ori", "CA002"));
 
     DimensionPartition partition = new DimensionPartition(context, combos);
 

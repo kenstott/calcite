@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,16 +74,14 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCreateAndClose() throws Exception {
+  @Test public void testCreateAndClose() throws Exception {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root);
     batch.close();
     // No exception means success
   }
 
-  @Test
-  public void testGetIntColumn() throws Exception {
+  @Test public void testGetIntColumn() throws Exception {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -93,8 +90,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnSum() throws Exception {
+  @Test public void testIntColumnSum() throws Exception {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -106,8 +102,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnSumZeroCopy() throws Exception {
+  @Test public void testIntColumnSumZeroCopy() throws Exception {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -120,8 +115,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testIntColumnFilter() throws Exception {
+  @Test public void testIntColumnFilter() throws Exception {
     VectorSchemaRoot root = createIntOnlyBatch(10);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -131,8 +125,8 @@ public class AdaptiveColumnBatchTest {
       // the delegate is a CompressedColumnBatch, not a ColumnBatch.
       // Verify that the filter method handles this gracefully or throws.
       try {
-        boolean[] selection = intCol.filter(
-            new java.util.function.Predicate<Integer>() {
+        boolean[] selection =
+            intCol.filter(new java.util.function.Predicate<Integer>() {
               @Override public boolean test(Integer value) {
                 return value > 5;
               }
@@ -155,8 +149,7 @@ public class AdaptiveColumnBatchTest {
    * mode because CompressedColumnBatch does not support double columns and the
    * fallback incorrectly casts to ColumnBatch.
    */
-  @Test
-  public void testGetDoubleColumnThrowsInCompressionAwareMode() throws Exception {
+  @Test public void testGetDoubleColumnThrowsInCompressionAwareMode() throws Exception {
     VectorSchemaRoot root = createIntDoubleBatch(5);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       // COMPRESSION_AWARE mode: the double column createColumnReader falls
@@ -172,8 +165,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testSumConsistencyBetweenSumAndSumZeroCopy() throws Exception {
+  @Test public void testSumConsistencyBetweenSumAndSumZeroCopy() throws Exception {
     VectorSchemaRoot root = createIntOnlyBatch(100);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -186,12 +178,10 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testLargeBatchIntOnly() throws Exception {
+  @Test public void testLargeBatchIntOnly() throws Exception {
     int numRows = 10000;
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector intV = (IntVector) root.getVector("id");
@@ -214,8 +204,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testSingleRowBatchIntOnly() throws Exception {
+  @Test public void testSingleRowBatchIntOnly() throws Exception {
     VectorSchemaRoot root = createIntOnlyBatch(1);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -227,12 +216,11 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testMultipleIntColumnsSum() throws Exception {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("a", FieldType.nullable(new ArrowType.Int(32, true)), null),
-        new Field("b", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+  @Test public void testMultipleIntColumnsSum() throws Exception {
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("a", FieldType.nullable(new ArrowType.Int(32, true)), null),
+        new Field("b", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector aV = (IntVector) root.getVector("a");
@@ -258,8 +246,7 @@ public class AdaptiveColumnBatchTest {
     }
   }
 
-  @Test
-  public void testEmptyBatch() throws Exception {
+  @Test public void testEmptyBatch() throws Exception {
     VectorSchemaRoot root = createIntOnlyBatch(0);
     try (AdaptiveColumnBatch batch = new AdaptiveColumnBatch(root)) {
       AdaptiveColumnBatch.AdaptiveIntColumnReader intCol =
@@ -273,13 +260,13 @@ public class AdaptiveColumnBatchTest {
   // --- Helper methods ---
 
   private VectorSchemaRoot createIntDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
+    Schema schema =
+        new Schema(
+            Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector intV = (IntVector) root.getVector("id");
@@ -295,9 +282,8 @@ public class AdaptiveColumnBatchTest {
   }
 
   private VectorSchemaRoot createIntOnlyBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector intV = (IntVector) root.getVector("id");

@@ -32,20 +32,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -82,8 +78,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Constructor tests ----
 
-  @Test
-  void testConstructorWithTwoArgs() {
+  @Test void testConstructorWithTwoArgs() {
     Table table = createSimpleTable("ctor_two");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
@@ -91,8 +86,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals(table, writer.getTable());
   }
 
-  @Test
-  void testConstructorWithThreeArgs() {
+  @Test void testConstructorWithThreeArgs() {
     Table table = createSimpleTable("ctor_three");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
@@ -101,8 +95,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- commitFromStaging tests ----
 
-  @Test
-  void testCommitFromStagingEmptyDir() throws Exception {
+  @Test void testCommitFromStagingEmptyDir() throws Exception {
     Table table = createSimpleTable("commit_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Path staging = tempDir.resolve("staging_empty");
@@ -111,8 +104,7 @@ public class IcebergTableWriterCoverageTest {
     writer.commitFromStaging(staging.toString(), null);
   }
 
-  @Test
-  void testCommitFromStagingWithPartitionFilter() throws Exception {
+  @Test void testCommitFromStagingWithPartitionFilter() throws Exception {
     Table table = createPartitionedTable("commit_filter");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -139,8 +131,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- stageFiles tests ----
 
-  @Test
-  void testStageFilesNoParquet() throws Exception {
+  @Test void testStageFilesNoParquet() throws Exception {
     Table table = createSimpleTable("stage_noparquet");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Path staging = tempDir.resolve("staging_noparquet");
@@ -153,16 +144,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- commitDataFiles tests ----
 
-  @Test
-  void testCommitDataFilesEmpty() {
+  @Test void testCommitDataFilesEmpty() {
     Table table = createSimpleTable("commit_df_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should return immediately for empty list
     writer.commitDataFiles(Collections.<DataFile>emptyList(), null);
   }
 
-  @Test
-  void testCommitDataFilesNullFilter() throws Exception {
+  @Test void testCommitDataFilesNullFilter() throws Exception {
     Table table = createPartitionedTable("commit_null_filter");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -183,8 +172,7 @@ public class IcebergTableWriterCoverageTest {
     writer.commitDataFiles(files, null);
   }
 
-  @Test
-  void testCommitDataFilesEmptyFilter() throws Exception {
+  @Test void testCommitDataFilesEmptyFilter() throws Exception {
     Table table = createPartitionedTable("commit_empty_filter");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -207,15 +195,13 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- bulkCommitDataFiles tests ----
 
-  @Test
-  void testBulkCommitEmpty() {
+  @Test void testBulkCommitEmpty() {
     Table table = createSimpleTable("bulk_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writer.bulkCommitDataFiles(Collections.<DataFile>emptyList());
   }
 
-  @Test
-  void testBulkCommitMultipleFiles() throws Exception {
+  @Test void testBulkCommitMultipleFiles() throws Exception {
     Table table = createPartitionedTable("bulk_multi");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -239,25 +225,22 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- writeRecords tests ----
 
-  @Test
-  void testWriteRecordsNull() throws Exception {
+  @Test void testWriteRecordsNull() throws Exception {
     Table table = createSimpleTable("write_null");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     DataFile result = writer.writeRecords(null, null);
     assertNull(result);
   }
 
-  @Test
-  void testWriteRecordsEmpty() throws Exception {
+  @Test void testWriteRecordsEmpty() throws Exception {
     Table table = createSimpleTable("write_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-    DataFile result = writer.writeRecords(
-        Collections.<Map<String, Object>>emptyList(), null);
+    DataFile result =
+        writer.writeRecords(Collections.<Map<String, Object>>emptyList(), null);
     assertNull(result);
   }
 
-  @Test
-  void testWriteRecordsUnpartitioned() throws Exception {
+  @Test void testWriteRecordsUnpartitioned() throws Exception {
     Table table = createSimpleTable("write_unpart");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -272,8 +255,7 @@ public class IcebergTableWriterCoverageTest {
     assertTrue(df.recordCount() > 0);
   }
 
-  @Test
-  void testWriteRecordsWithPartitionValues() throws Exception {
+  @Test void testWriteRecordsWithPartitionValues() throws Exception {
     Table table = createPartitionedTable("write_part");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -291,8 +273,7 @@ public class IcebergTableWriterCoverageTest {
     assertTrue(df.recordCount() > 0);
   }
 
-  @Test
-  void testWriteRecordsNullPartitionValues() throws Exception {
+  @Test void testWriteRecordsNullPartitionValues() throws Exception {
     Table table = createPartitionedTable("write_null_part");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -307,8 +288,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsEmptyPartitionValues() throws Exception {
+  @Test void testWriteRecordsEmptyPartitionValues() throws Exception {
     Table table = createPartitionedTable("write_empty_part");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -325,8 +305,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Type coercion tests (coerceValue) ----
 
-  @Test
-  void testWriteRecordsIntegerCoercion() throws Exception {
+  @Test void testWriteRecordsIntegerCoercion() throws Exception {
     Table table = createTypedTable("int_coerce");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -344,8 +323,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsNumberCoercion() throws Exception {
+  @Test void testWriteRecordsNumberCoercion() throws Exception {
     Table table = createTypedTable("num_coerce");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -363,8 +341,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsNullCoercion() throws Exception {
+  @Test void testWriteRecordsNullCoercion() throws Exception {
     Table table = createTypedTable("null_coerce");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -382,8 +359,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsUnparseableNumbers() throws Exception {
+  @Test void testWriteRecordsUnparseableNumbers() throws Exception {
     Table table = createTypedTable("unparse_num");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -401,8 +377,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsCaseInsensitiveFieldLookup() throws Exception {
+  @Test void testWriteRecordsCaseInsensitiveFieldLookup() throws Exception {
     Table table = createSimpleTable("case_insensitive");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -417,8 +392,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testWriteRecordsFallbackToPartitionValues() throws Exception {
+  @Test void testWriteRecordsFallbackToPartitionValues() throws Exception {
     Table table = createPartitionedTable("fallback_part");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -438,15 +412,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Date and timestamp coercion ----
 
-  @Test
-  void testWriteRecordsTimestampWithoutDate() throws Exception {
+  @Test void testWriteRecordsTimestampWithoutDate() throws Exception {
     // Test timestamp coercion in a schema without DATE (which has a known coercion issue)
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "ts_col", Types.TimestampType.withoutZone()));
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "ts_coerce", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "ts_coerce", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -470,15 +443,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- List type coercion ----
 
-  @Test
-  void testWriteRecordsListCoercion() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+  @Test void testWriteRecordsListCoercion() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "values",
             Types.ListType.ofOptional(3, Types.DoubleType.get())));
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "list_coerce", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "list_coerce", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -505,24 +477,21 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- deletePartition tests ----
 
-  @Test
-  void testDeletePartitionNullFilter() {
+  @Test void testDeletePartitionNullFilter() {
     Table table = createPartitionedTable("del_null");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertThrows(IllegalArgumentException.class,
         () -> writer.deletePartition(null));
   }
 
-  @Test
-  void testDeletePartitionEmptyFilter() {
+  @Test void testDeletePartitionEmptyFilter() {
     Table table = createPartitionedTable("del_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertThrows(IllegalArgumentException.class,
         () -> writer.deletePartition(new HashMap<String, Object>()));
   }
 
-  @Test
-  void testDeletePartitionWithFilter() throws Exception {
+  @Test void testDeletePartitionWithFilter() throws Exception {
     Table table = createPartitionedTable("del_with_filter");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -548,24 +517,21 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- runMaintenance tests ----
 
-  @Test
-  void testMaintenanceOnEmptyTable() {
+  @Test void testMaintenanceOnEmptyTable() {
     Table table = createSimpleTable("maint_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw
     writer.runMaintenance(7, 1);
   }
 
-  @Test
-  void testMaintenanceSkipsOrphanDetectionForLargeThreshold() {
+  @Test void testMaintenanceSkipsOrphanDetectionForLargeThreshold() {
     Table table = createSimpleTable("maint_skip_orphan");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // orphanFilesDays > 30 should skip orphan detection
     writer.runMaintenance(7, 31);
   }
 
-  @Test
-  void testMaintenanceWithData() throws Exception {
+  @Test void testMaintenanceWithData() throws Exception {
     Table table = createPartitionedTable("maint_data");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -589,16 +555,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- compactSmallFiles tests ----
 
-  @Test
-  void testCompactSmallFilesEmptyTable() throws Exception {
+  @Test void testCompactSmallFilesEmptyTable() throws Exception {
     Table table = createSimpleTable("compact_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     int result = writer.compactSmallFiles(128 * 1024 * 1024, 10, 10 * 1024 * 1024);
     assertEquals(0, result);
   }
 
-  @Test
-  void testCompactSmallFilesBelowThreshold() throws Exception {
+  @Test void testCompactSmallFilesBelowThreshold() throws Exception {
     Table table = createPartitionedTable("compact_below");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -623,10 +587,9 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- buildPartitionPath tests (via writeRecords) ----
 
-  @Test
-  void testBuildPartitionPathMultipleKeys() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+  @Test void testBuildPartitionPathMultipleKeys() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "year", Types.IntegerType.get()),
         Types.NestedField.optional(3, "region", Types.StringType.get()));
 
@@ -635,8 +598,8 @@ public class IcebergTableWriterCoverageTest {
         .identity("region")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "multi_part", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "multi_part", schema, spec);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -657,10 +620,9 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Partition coercion for typed partition columns ----
 
-  @Test
-  void testPartitionCoercionTypes() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+  @Test void testPartitionCoercionTypes() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "int_part", Types.IntegerType.get()),
         Types.NestedField.optional(3, "long_part", Types.LongType.get()),
         Types.NestedField.optional(4, "bool_part", Types.BooleanType.get()));
@@ -671,8 +633,8 @@ public class IcebergTableWriterCoverageTest {
         .identity("bool_part")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "part_coerce", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "part_coerce", schema, spec);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -691,8 +653,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testPartitionCoercionNullIndicators() throws Exception {
+  @Test void testPartitionCoercionNullIndicators() throws Exception {
     Table table = createPartitionedTable("part_null");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -710,8 +671,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df1);
   }
 
-  @Test
-  void testPartitionCoercionDashIndicator() throws Exception {
+  @Test void testPartitionCoercionDashIndicator() throws Exception {
     Table table = createPartitionedTable("part_dash");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -728,8 +688,7 @@ public class IcebergTableWriterCoverageTest {
     assertNotNull(df);
   }
 
-  @Test
-  void testPartitionCoercionUnparseableNumber() throws Exception {
+  @Test void testPartitionCoercionUnparseableNumber() throws Exception {
     Table table = createPartitionedTable("part_unparse");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -748,10 +707,9 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Float and double partition types ----
 
-  @Test
-  void testPartitionCoercionFloatAndDouble() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+  @Test void testPartitionCoercionFloatAndDouble() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "float_part", Types.FloatType.get()),
         Types.NestedField.optional(3, "double_part", Types.DoubleType.get()));
 
@@ -760,8 +718,8 @@ public class IcebergTableWriterCoverageTest {
         .identity("double_part")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "float_part", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "float_part", schema, spec);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -780,8 +738,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Multiple record write ----
 
-  @Test
-  void testWriteMultipleRecords() throws Exception {
+  @Test void testWriteMultipleRecords() throws Exception {
     Table table = createPartitionedTable("multi_records");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -803,18 +760,17 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- String partition type ----
 
-  @Test
-  void testStringPartitionType() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+  @Test void testStringPartitionType() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "category", Types.StringType.get()));
 
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("category")
         .build();
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "str_part", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "str_part", schema, spec);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -832,8 +788,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- ensureVersionHint (via commit) ----
 
-  @Test
-  void testVersionHintCreatedOnCommit() throws Exception {
+  @Test void testVersionHintCreatedOnCommit() throws Exception {
     Table table = createPartitionedTable("version_hint");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -860,8 +815,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- normalizeS3Path tests (via reflection) ----
 
-  @Test
-  void testNormalizeS3PathNull() throws Exception {
+  @Test void testNormalizeS3PathNull() throws Exception {
     Table table = createSimpleTable("norm_null");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -869,8 +823,7 @@ public class IcebergTableWriterCoverageTest {
     assertNull(m.invoke(writer, (Object) null));
   }
 
-  @Test
-  void testNormalizeS3PathS3aSingleSlash() throws Exception {
+  @Test void testNormalizeS3PathS3aSingleSlash() throws Exception {
     Table table = createSimpleTable("norm_s3a_single");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -878,8 +831,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals("s3a://bucket/key", m.invoke(writer, "s3a:/bucket/key"));
   }
 
-  @Test
-  void testNormalizeS3PathS3aDoubleSlash() throws Exception {
+  @Test void testNormalizeS3PathS3aDoubleSlash() throws Exception {
     Table table = createSimpleTable("norm_s3a_double");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -887,8 +839,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals("s3a://bucket/key", m.invoke(writer, "s3a://bucket/key"));
   }
 
-  @Test
-  void testNormalizeS3PathS3SingleSlash() throws Exception {
+  @Test void testNormalizeS3PathS3SingleSlash() throws Exception {
     Table table = createSimpleTable("norm_s3_single");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -896,8 +847,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals("s3://bucket/key", m.invoke(writer, "s3:/bucket/key"));
   }
 
-  @Test
-  void testNormalizeS3PathS3DoubleSlash() throws Exception {
+  @Test void testNormalizeS3PathS3DoubleSlash() throws Exception {
     Table table = createSimpleTable("norm_s3_double");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -905,8 +855,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals("s3://bucket/key", m.invoke(writer, "s3://bucket/key"));
   }
 
-  @Test
-  void testNormalizeS3PathLocalPath() throws Exception {
+  @Test void testNormalizeS3PathLocalPath() throws Exception {
     Table table = createSimpleTable("norm_local");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     Method m = IcebergTableWriter.class.getDeclaredMethod("normalizeS3Path", String.class);
@@ -916,88 +865,83 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- buildPartitionPathFromKey tests (via reflection) ----
 
-  @Test
-  void testBuildPartitionPathFromKeyEmpty() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "path_empty_spec", schema, PartitionSpec.unpartitioned());
+  @Test void testBuildPartitionPathFromKeyEmpty() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "path_empty_spec", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "buildPartitionPathFromKey",
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("buildPartitionPathFromKey",
         org.apache.iceberg.PartitionKey.class,
         PartitionSpec.class);
     m.setAccessible(true);
-    String result = (String) m.invoke(writer,
-        new org.apache.iceberg.PartitionKey(PartitionSpec.unpartitioned(), schema),
+    String result =
+        (String) m.invoke(writer, new org.apache.iceberg.PartitionKey(PartitionSpec.unpartitioned(), schema),
         PartitionSpec.unpartitioned());
     assertEquals("", result);
   }
 
   // ---- buildDataFileFromPath tests (via reflection) ----
 
-  @Test
-  void testBuildDataFileFromPathNoPartition() throws Exception {
+  @Test void testBuildDataFileFromPathNoPartition() throws Exception {
     Table table = createSimpleTable("build_df_unpart");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "buildDataFile", String.class, long.class);
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("buildDataFile", String.class, long.class);
     m.setAccessible(true);
 
-    DataFile df = (DataFile) m.invoke(writer,
-        table.location() + "/data/file001.parquet", 1024L);
+    DataFile df =
+        (DataFile) m.invoke(writer, table.location() + "/data/file001.parquet", 1024L);
     assertNotNull(df);
     assertEquals(1024, df.fileSizeInBytes());
   }
 
-  @Test
-  void testBuildDataFileFromPathWithPartition() throws Exception {
+  @Test void testBuildDataFileFromPathWithPartition() throws Exception {
     Table table = createPartitionedTable("build_df_part");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "buildDataFile", String.class, long.class);
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("buildDataFile", String.class, long.class);
     m.setAccessible(true);
 
-    DataFile df = (DataFile) m.invoke(writer,
-        table.location() + "/data/year=2024/file001.parquet", 2048L);
+    DataFile df =
+        (DataFile) m.invoke(writer, table.location() + "/data/year=2024/file001.parquet", 2048L);
     assertNotNull(df);
     assertEquals(2048, df.fileSizeInBytes());
   }
 
-  @Test
-  void testBuildDataFileFromPathWithMultiPartition() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+  @Test void testBuildDataFileFromPathWithMultiPartition() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "year", Types.IntegerType.get()),
         Types.NestedField.optional(3, "region", Types.StringType.get()));
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("year")
         .identity("region")
         .build();
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "build_df_multi", schema, spec);
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "build_df_multi", schema, spec);
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "buildDataFile", String.class, long.class);
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("buildDataFile", String.class, long.class);
     m.setAccessible(true);
 
-    DataFile df = (DataFile) m.invoke(writer,
-        table.location() + "/data/year=2024/region=US/file001.parquet", 4096L);
+    DataFile df =
+        (DataFile) m.invoke(writer, table.location() + "/data/year=2024/region=US/file001.parquet", 4096L);
     assertNotNull(df);
     assertEquals(4096, df.fileSizeInBytes());
   }
 
-  @Test
-  void testBuildDataFileFromPathNoDataDir() throws Exception {
+  @Test void testBuildDataFileFromPathNoDataDir() throws Exception {
     Table table = createSimpleTable("build_df_nodata");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "buildDataFile", String.class, long.class);
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("buildDataFile", String.class, long.class);
     m.setAccessible(true);
 
     // Path without /data/ should still work
@@ -1007,12 +951,11 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- ensureVersionHint edge cases ----
 
-  @Test
-  void testEnsureVersionHintNoMetadataFiles() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "vh_no_meta", schema, PartitionSpec.unpartitioned());
+  @Test void testEnsureVersionHintNoMetadataFiles() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "vh_no_meta", schema, PartitionSpec.unpartitioned());
 
     // Create a writer with a mock storage provider that returns empty metadata list
     StorageProvider emptyMetaProvider = new StorageProvider() {
@@ -1048,8 +991,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- removeOrphanFiles tests ----
 
-  @Test
-  void testRemoveOrphanFilesEmptyTable() throws Exception {
+  @Test void testRemoveOrphanFilesEmptyTable() throws Exception {
     Table table = createSimpleTable("orphan_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // removeOrphanFiles is private; invoke via reflection
@@ -1060,8 +1002,7 @@ public class IcebergTableWriterCoverageTest {
     assertEquals(0, removed);
   }
 
-  @Test
-  void testRemoveOrphanFilesTableWithData() throws Exception {
+  @Test void testRemoveOrphanFilesTableWithData() throws Exception {
     Table table = createPartitionedTable("orphan_data");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -1089,13 +1030,12 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- coercePartitionValue via reflection ----
 
-  @Test
-  void testCoercePartitionValueNullEmpty() throws Exception {
+  @Test void testCoercePartitionValueNullEmpty() throws Exception {
     Table table = createPartitionedTable("coerce_part_null2");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    Method m = IcebergTableWriter.class.getDeclaredMethod(
-        "coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
+    Method m =
+        IcebergTableWriter.class.getDeclaredMethod("coercePartitionValue", String.class, org.apache.iceberg.PartitionField.class);
     m.setAccessible(true);
 
     org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
@@ -1106,15 +1046,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Date field coercion in writeRecords ----
 
-  @Test
-  void testWriteRecordsDateCoercion() throws Exception {
+  @Test void testWriteRecordsDateCoercion() throws Exception {
     // Test that DATE type with null values and epoch-day integers works
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "date_col", Types.DateType.get()));
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "date_coerce2", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "date_coerce2", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -1137,15 +1076,14 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Decimal field coercion ----
 
-  @Test
-  void testWriteRecordsDecimalCoercion() throws Exception {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "name", Types.StringType.get()),
+  @Test void testWriteRecordsDecimalCoercion() throws Exception {
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "name", Types.StringType.get()),
         Types.NestedField.optional(2, "amount",
             Types.DecimalType.of(10, 2)));
 
-    Table table = IcebergCatalogManager.createTable(
-        catalogConfig, "decimal_coerce", schema, PartitionSpec.unpartitioned());
+    Table table =
+        IcebergCatalogManager.createTable(catalogConfig, "decimal_coerce", schema, PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
@@ -1172,8 +1110,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- Multiple writes and commits ----
 
-  @Test
-  void testMultipleWritesAndBulkCommit() throws Exception {
+  @Test void testMultipleWritesAndBulkCommit() throws Exception {
     Table table = createPartitionedTable("multi_writes");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -1202,8 +1139,7 @@ public class IcebergTableWriterCoverageTest {
 
   // ---- getTable Tests ----
 
-  @Test
-  void testGetTable() {
+  @Test void testGetTable() {
     Table table = createSimpleTable("get_table_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertEquals(table, writer.getTable());
@@ -1212,16 +1148,16 @@ public class IcebergTableWriterCoverageTest {
   // ---- Helper methods ----
 
   private Table createSimpleTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()));
     return IcebergCatalogManager.createTable(
         catalogConfig, name, schema, PartitionSpec.unpartitioned());
   }
 
   private Table createPartitionedTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()),
         Types.NestedField.optional(3, "year", Types.IntegerType.get()));
     PartitionSpec spec = PartitionSpec.builderFor(schema)
@@ -1231,8 +1167,8 @@ public class IcebergTableWriterCoverageTest {
   }
 
   private Table createTypedTable(String name) {
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "int_col", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "int_col", Types.IntegerType.get()),
         Types.NestedField.optional(2, "long_col", Types.LongType.get()),
         Types.NestedField.optional(3, "float_col", Types.FloatType.get()),
         Types.NestedField.optional(4, "double_col", Types.DoubleType.get()),

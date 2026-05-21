@@ -26,7 +26,6 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Deep coverage tests for {@link UniversalDataBatchAdapter}.
@@ -50,8 +48,8 @@ public class UniversalDataBatchAdapterDeepTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(UniversalDataBatchAdapterDeepTest.class);
 
-  private final RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(
-      org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+  private final RelDataTypeFactory typeFactory =
+      new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
   private RelDataType createRowType(SqlTypeName... types) {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
@@ -61,8 +59,7 @@ public class UniversalDataBatchAdapterDeepTest {
     return builder.build();
   }
 
-  @Test
-  public void testConvertIntegerBatch() {
+  @Test public void testConvertIntegerBatch() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1});
     data.add(new Object[]{2});
@@ -91,8 +88,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertDoubleBatch() {
+  @Test public void testConvertDoubleBatch() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1.5});
     data.add(new Object[]{2.7});
@@ -118,8 +114,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertBooleanBatch() {
+  @Test public void testConvertBooleanBatch() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{true});
     data.add(new Object[]{false});
@@ -145,8 +140,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertVarcharBatch() {
+  @Test public void testConvertVarcharBatch() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{"hello"});
     data.add(new Object[]{"world"});
@@ -171,14 +165,13 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertMixedTypesBatch() {
+  @Test public void testConvertMixedTypesBatch() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1, 2.5, true, "text"});
     data.add(new Object[]{2, 3.7, false, "more"});
 
-    RelDataType rowType = createRowType(
-        SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
+    RelDataType rowType =
+        createRowType(SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(data.iterator(), rowType, 1024);
 
@@ -202,14 +195,13 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertNullValues() {
+  @Test public void testConvertNullValues() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{null, null, null});
     data.add(new Object[]{1, 2.0, "test"});
 
-    RelDataType rowType = createRowType(
-        SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.VARCHAR);
+    RelDataType rowType =
+        createRowType(SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.VARCHAR);
     VectorSchemaRoot batch =
         UniversalDataBatchAdapter.convertToArrowBatch(data.iterator(), rowType, 1024);
 
@@ -231,8 +223,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testConvertEmptyBatch() {
+  @Test public void testConvertEmptyBatch() {
     List<Object[]> data = new ArrayList<>();
 
     RelDataType rowType = createRowType(SqlTypeName.INTEGER);
@@ -248,8 +239,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testBatchSizeLimiting() {
+  @Test public void testBatchSizeLimiting() {
     List<Object[]> data = new ArrayList<>();
     for (int i = 0; i < 100; i++) {
       data.add(new Object[]{i});
@@ -266,8 +256,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testStringConversionFromNumber() {
+  @Test public void testStringConversionFromNumber() {
     // Integer value passed to a VARCHAR column
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{42});
@@ -295,8 +284,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testNumberFromStringConversion() {
+  @Test public void testNumberFromStringConversion() {
     // String values passed to INTEGER column
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{"42"});
@@ -321,8 +309,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testDecimalMapsToDouble() {
+  @Test public void testDecimalMapsToDouble() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1.5});
     data.add(new Object[]{2.7});
@@ -337,8 +324,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testShortRowsHandled() {
+  @Test public void testShortRowsHandled() {
     // Rows with fewer columns than the schema
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1}); // Missing second column
@@ -364,8 +350,7 @@ public class UniversalDataBatchAdapterDeepTest {
     batch.close();
   }
 
-  @Test
-  public void testBigIntType() {
+  @Test public void testBigIntType() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{Long.MAX_VALUE});
     data.add(new Object[]{Long.MIN_VALUE});

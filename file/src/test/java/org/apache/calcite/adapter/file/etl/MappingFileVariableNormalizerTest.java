@@ -37,8 +37,8 @@ class MappingFileVariableNormalizerTest {
 
   @BeforeEach
   void setUp() {
-    normalizer = new MappingFileVariableNormalizer(
-        "etl-test/test-variable-mappings.json", "acs");
+    normalizer =
+        new MappingFileVariableNormalizer("etl-test/test-variable-mappings.json", "acs");
   }
 
   @Test void testNormalizeAcsAllYearsVariable() {

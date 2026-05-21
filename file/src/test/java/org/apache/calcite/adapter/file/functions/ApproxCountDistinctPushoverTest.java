@@ -34,8 +34,7 @@ public class ApproxCountDistinctPushoverTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ApproxCountDistinctPushoverTest.class);
 
-  @Test
-  @DisplayName("getAccumulatorType returns Accumulator class")
+  @Test @DisplayName("getAccumulatorType returns Accumulator class")
   void testGetAccumulatorType() {
     ApproxCountDistinct fn = new ApproxCountDistinct("col1", null);
     Class<?> accType = fn.getAccumulatorType();
@@ -43,16 +42,14 @@ public class ApproxCountDistinctPushoverTest {
     LOGGER.debug("Accumulator type: {}", accType);
   }
 
-  @Test
-  @DisplayName("getParameters returns non-null list")
+  @Test @DisplayName("getParameters returns non-null list")
   void testGetParametersIsNotNull() {
     ApproxCountDistinct fn = new ApproxCountDistinct("testCol", null);
     assertNotNull(fn.getParameters());
     assertEquals(0, fn.getParameters().size());
   }
 
-  @Test
-  @DisplayName("HLLAccumulator with single value returns estimate >= 1")
+  @Test @DisplayName("HLLAccumulator with single value returns estimate >= 1")
   void testHllAccumulatorSingleValue() {
     ApproxCountDistinct.HLLAccumulator acc = new ApproxCountDistinct.HLLAccumulator();
     acc.add("only_value");
@@ -60,8 +57,7 @@ public class ApproxCountDistinctPushoverTest {
     assertEquals(1L, result, "Single unique value should estimate 1");
   }
 
-  @Test
-  @DisplayName("PrecomputedAccumulator multiple add calls still use sketch")
+  @Test @DisplayName("PrecomputedAccumulator multiple add calls still use sketch")
   void testPrecomputedAccumulatorMultipleAdds() {
     org.apache.calcite.adapter.file.statistics.HyperLogLogSketch sketch =
         org.apache.calcite.adapter.file.statistics.HyperLogLogSketch.fromEstimate(100L);

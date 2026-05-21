@@ -22,8 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,8 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class IcebergRestCatalogTest {
 
-  @Test
-  public void testValidateRestCatalogConfigNullConfig() {
+  @Test public void testValidateRestCatalogConfigNullConfig() {
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
       @Override public void execute() {
         IcebergRestCatalog.validateRestCatalogConfig(null);
@@ -42,11 +39,10 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testValidateRestCatalogConfigMissingUri() {
+  @Test public void testValidateRestCatalogConfigMissingUri() {
     Map<String, Object> config = new HashMap<String, Object>();
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-        new org.junit.jupiter.api.function.Executable() {
+    IllegalArgumentException ex =
+        assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
           @Override public void execute() {
             IcebergRestCatalog.validateRestCatalogConfig(config);
           }
@@ -54,12 +50,11 @@ public class IcebergRestCatalogTest {
     assertTrue(ex.getMessage().contains("uri"));
   }
 
-  @Test
-  public void testValidateRestCatalogConfigEmptyUri() {
+  @Test public void testValidateRestCatalogConfigEmptyUri() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "  ");
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-        new org.junit.jupiter.api.function.Executable() {
+    IllegalArgumentException ex =
+        assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
           @Override public void execute() {
             IcebergRestCatalog.validateRestCatalogConfig(config);
           }
@@ -67,8 +62,7 @@ public class IcebergRestCatalogTest {
     assertTrue(ex.getMessage().contains("uri"));
   }
 
-  @Test
-  public void testValidateRestCatalogConfigNullUri() {
+  @Test public void testValidateRestCatalogConfigNullUri() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", null);
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
@@ -78,16 +72,14 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testValidateRestCatalogConfigValidUri() {
+  @Test public void testValidateRestCatalogConfigValidUri() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "http://localhost:8181");
     // Should not throw
     IcebergRestCatalog.validateRestCatalogConfig(config);
   }
 
-  @Test
-  public void testValidateRestCatalogConfigWithWarehouse() {
+  @Test public void testValidateRestCatalogConfigWithWarehouse() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "http://localhost:8181");
     config.put("warehouse", "s3://my-bucket/warehouse");
@@ -95,8 +87,7 @@ public class IcebergRestCatalogTest {
     IcebergRestCatalog.validateRestCatalogConfig(config);
   }
 
-  @Test
-  public void testCreateRestCatalogMissingUri() {
+  @Test public void testCreateRestCatalogMissingUri() {
     final Map<String, Object> config = new HashMap<String, Object>();
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
       @Override public void execute() {
@@ -105,8 +96,7 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testCreateRestCatalogEmptyUri() {
+  @Test public void testCreateRestCatalogEmptyUri() {
     final Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "");
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
@@ -116,8 +106,7 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testCreateRestCatalogNullUri() {
+  @Test public void testCreateRestCatalogNullUri() {
     final Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", null);
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
@@ -127,8 +116,7 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testValidateRestCatalogConfigInvalidUri() {
+  @Test public void testValidateRestCatalogConfigInvalidUri() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "://invalid-uri");
     assertThrows(IllegalArgumentException.class, new org.junit.jupiter.api.function.Executable() {
@@ -138,8 +126,7 @@ public class IcebergRestCatalogTest {
     });
   }
 
-  @Test
-  public void testValidateRestCatalogConfigWithAllOptions() {
+  @Test public void testValidateRestCatalogConfigWithAllOptions() {
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("uri", "http://localhost:8181");
     config.put("credential", "client-id:client-secret");

@@ -239,29 +239,28 @@ public class FileSchemaFeatureCoverageTest {
 
     // -- Tests --
 
-    @Test
-    void testHiveStylePartitionedTable() {
+    @Test void testHiveStylePartitionedTable() {
       // Create Hive-style partitioned parquet files
-      boolean ok1 = createHivePartitionedParquet(tempDir, "year", "2024",
-          "SELECT 1 AS id, 'alice' AS name");
-      boolean ok2 = createHivePartitionedParquet(tempDir, "year", "2025",
-          "SELECT 2 AS id, 'bob' AS name");
+      boolean ok1 =
+          createHivePartitionedParquet(tempDir, "year", "2024", "SELECT 1 AS id, 'alice' AS name");
+      boolean ok2 =
+          createHivePartitionedParquet(tempDir, "year", "2025", "SELECT 2 AS id, 'bob' AS name");
       assertTrue(ok1 && ok2, "Failed to create parquet files");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("events",
+      partTables.add(
+          makePartTable("events",
           "year=*/data.parquet", hivePartitions()));
 
-      Schema schema = createSchema(parentSchema, "hive_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "hive_test", partitionedOperand(partTables));
       assertNotNull(schema);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("events"),
           "Expected 'events' table, got: " + tables.keySet());
     }
 
-    @Test
-    void testHiveStyleWithColumnDefinitions() {
+    @Test void testHiveStyleWithColumnDefinitions() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id, 'alice' AS name");
       createHivePartitionedParquet(tempDir, "year", "2025",
@@ -276,51 +275,51 @@ public class FileSchemaFeatureCoverageTest {
       partitions.put("columnDefinitions", colDefs);
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("events_typed",
+      partTables.add(
+          makePartTable("events_typed",
           "year=*/data.parquet", partitions));
 
-      Schema schema = createSchema(parentSchema, "hive_typed_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "hive_typed_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("events_typed"));
     }
 
-    @Test
-    void testAutoDetectPartitions() {
+    @Test void testAutoDetectPartitions() {
       createHivePartitionedParquet(tempDir, "region", "us",
           "SELECT 10 AS id, 'foo' AS val");
       createHivePartitionedParquet(tempDir, "region", "eu",
           "SELECT 20 AS id, 'bar' AS val");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("auto_table",
+      partTables.add(
+          makePartTable("auto_table",
           "region=*/data.parquet", autoPartitions()));
 
-      Schema schema = createSchema(parentSchema, "auto_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "auto_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("auto_table"),
           "Expected 'auto_table', got: " + tables.keySet());
     }
 
-    @Test
-    void testNullPartitionsAutoDetect() {
+    @Test void testNullPartitionsAutoDetect() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
       // No partitions config at all => auto-detect
-      partTables.add(makePartTable("nullpart_table",
+      partTables.add(
+          makePartTable("nullpart_table",
           "year=*/data.parquet", null));
 
-      Schema schema = createSchema(parentSchema, "nullpart_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "nullpart_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("nullpart_table"));
     }
 
-    @Test
-    void testDirectoryStylePartitions() {
+    @Test void testDirectoryStylePartitions() {
       // Create directory-style partitioned files: us/data.parquet, eu/data.parquet
       File usDir = tempDir.resolve("us").toFile();
       File euDir = tempDir.resolve("eu").toFile();
@@ -335,33 +334,33 @@ public class FileSchemaFeatureCoverageTest {
       cols.add("region");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("dir_table",
+      partTables.add(
+          makePartTable("dir_table",
           "*/data.parquet", directoryPartitions(cols)));
 
-      Schema schema = createSchema(parentSchema, "dir_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "dir_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("dir_table"),
           "Expected 'dir_table', got: " + tables.keySet());
     }
 
-    @Test
-    void testPartitionedTableNoMatchingFiles() {
+    @Test void testPartitionedTableNoMatchingFiles() {
       // No parquet files exist for this pattern
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("missing_table",
+      partTables.add(
+          makePartTable("missing_table",
           "nonexistent=*/data.parquet", hivePartitions()));
 
-      Schema schema = createSchema(parentSchema, "missing_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "missing_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       // Table should not be added when no files match
       assertFalse(tables.containsKey("missing_table"),
           "Should not contain 'missing_table' when no files match");
     }
 
-    @Test
-    void testMultiplePartitionedTables() {
+    @Test void testMultiplePartitionedTables() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
@@ -373,25 +372,27 @@ public class FileSchemaFeatureCoverageTest {
           "SELECT 'hi' AS msg");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("table_a",
+      partTables.add(
+          makePartTable("table_a",
           "year=*/data.parquet", hivePartitions()));
-      partTables.add(makePartTable("table_b",
+      partTables.add(
+          makePartTable("table_b",
           "sub/region=*/data.parquet", hivePartitions()));
 
-      Schema schema = createSchema(parentSchema, "multi_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "multi_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("table_a"));
       assertTrue(tables.containsKey("table_b"));
     }
 
-    @Test
-    void testPartitionedWithRefreshInterval() {
+    @Test void testPartitionedWithRefreshInterval() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id, 'a' AS name");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("refresh_table",
+      partTables.add(
+          makePartTable("refresh_table",
           "year=*/data.parquet", hivePartitions()));
 
       Map<String, Object> operand = partitionedOperand(partTables);
@@ -410,13 +411,12 @@ public class FileSchemaFeatureCoverageTest {
               + t.getClass().getSimpleName());
     }
 
-    @Test
-    void testPartitionedWithComment() {
+    @Test void testPartitionedWithComment() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
-      Map<String, Object> pt = makePartTable("commented_table",
-          "year=*/data.parquet", hivePartitions());
+      Map<String, Object> pt =
+          makePartTable("commented_table", "year=*/data.parquet", hivePartitions());
       pt.put("comment", "This is a commented table");
       List<Map<String, Object>> colComments = new ArrayList<>();
       Map<String, Object> cc = new HashMap<>();
@@ -428,14 +428,13 @@ public class FileSchemaFeatureCoverageTest {
       List<Map<String, Object>> partTables = new ArrayList<>();
       partTables.add(pt);
 
-      Schema schema = createSchema(parentSchema, "comment_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "comment_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("commented_table"));
     }
 
-    @Test
-    void testPartitionedWithMultipleHiveKeys() {
+    @Test void testPartitionedWithMultipleHiveKeys() {
       // year=2024/month=01/data.parquet
       File dir1 = tempDir.resolve("year=2024").resolve("month=01").toFile();
       File dir2 = tempDir.resolve("year=2024").resolve("month=02").toFile();
@@ -459,65 +458,65 @@ public class FileSchemaFeatureCoverageTest {
       partitions.put("columnDefinitions", colDefs);
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("multi_key",
+      partTables.add(
+          makePartTable("multi_key",
           "year=*/month=*/data.parquet", partitions));
 
-      Schema schema = createSchema(parentSchema, "multikey_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "multikey_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("multi_key"));
     }
 
-    @Test
-    void testPartitionedTableWithGlobStarStar() {
+    @Test void testPartitionedTableWithGlobStarStar() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("glob_table",
+      partTables.add(
+          makePartTable("glob_table",
           "**/data.parquet", hivePartitions()));
 
-      Schema schema = createSchema(parentSchema, "glob_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "glob_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("glob_table"),
           "Expected 'glob_table', got: " + tables.keySet());
     }
 
-    @Test
-    void testPartitionedTableWithType() {
+    @Test void testPartitionedTableWithType() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
-      Map<String, Object> pt = makePartTable("typed_table",
-          "year=*/data.parquet", hivePartitions());
+      Map<String, Object> pt =
+          makePartTable("typed_table", "year=*/data.parquet", hivePartitions());
       pt.put("type", "partitioned");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
       partTables.add(pt);
 
-      Schema schema = createSchema(parentSchema, "typed_test",
-          partitionedOperand(partTables));
+      Schema schema =
+          createSchema(parentSchema, "typed_test", partitionedOperand(partTables));
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("typed_table"));
     }
 
-    @Test
-    void testPartitionedWithRefreshIntervalCreatesRefreshableTable() {
+    @Test void testPartitionedWithRefreshIntervalCreatesRefreshableTable() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
       createHivePartitionedParquet(tempDir, "year", "2025",
           "SELECT 2 AS id");
 
       List<Map<String, Object>> partTables = new ArrayList<>();
-      partTables.add(makePartTable("refreshable",
+      partTables.add(
+          makePartTable("refreshable",
           "year=*/data.parquet", hivePartitions()));
 
       Map<String, Object> operand = partitionedOperand(partTables);
       operand.put("refreshInterval", "5000");
 
-      Schema schema = createSchema(parentSchema, "refresh_create_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "refresh_create_test", operand);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertTrue(tables.containsKey("refreshable"));
     }
@@ -538,8 +537,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testSchemaLevelFlattenTrue() throws IOException {
+    @Test void testSchemaLevelFlattenTrue() throws IOException {
       writeJson(new File(tempDir.toFile(), "nested.json"),
           "[{\"id\":1,\"address\":{\"city\":\"NYC\",\"zip\":\"10001\"}},"
               + "{\"id\":2,\"address\":{\"city\":\"LA\",\"zip\":\"90001\"}}]");
@@ -560,8 +558,7 @@ public class FileSchemaFeatureCoverageTest {
           "Flattened JSON file should be created in conversions dir");
     }
 
-    @Test
-    void testSchemaLevelFlattenFalse() throws IOException {
+    @Test void testSchemaLevelFlattenFalse() throws IOException {
       writeJson(new File(tempDir.toFile(), "simple.json"),
           "[{\"id\":1,\"name\":\"alice\"}]");
 
@@ -573,8 +570,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testFlattenWithDeepNesting() throws IOException {
+    @Test void testFlattenWithDeepNesting() throws IOException {
       writeJson(new File(tempDir.toFile(), "deep.json"),
           "[{\"id\":1,\"a\":{\"b\":{\"c\":\"deep_value\"}}}]");
 
@@ -590,8 +586,7 @@ public class FileSchemaFeatureCoverageTest {
           "Conversions directory should exist after deep flattening");
     }
 
-    @Test
-    void testFlattenWithArrayValues() throws IOException {
+    @Test void testFlattenWithArrayValues() throws IOException {
       writeJson(new File(tempDir.toFile(), "arrays.json"),
           "[{\"id\":1,\"tags\":[\"a\",\"b\"],\"info\":{\"x\":10}}]");
 
@@ -607,8 +602,7 @@ public class FileSchemaFeatureCoverageTest {
           "Conversions directory should exist after array value flattening");
     }
 
-    @Test
-    void testFlattenWithExplicitTableDefinition() throws IOException {
+    @Test void testFlattenWithExplicitTableDefinition() throws IOException {
       File jsonFile = new File(tempDir.toFile(), "explicit.json");
       writeJson(jsonFile,
           "[{\"id\":1,\"details\":{\"score\":99,\"grade\":\"A\"}}]");
@@ -622,14 +616,13 @@ public class FileSchemaFeatureCoverageTest {
       tables.add(tableDef);
       operand.put("tables", tables);
 
-      Schema schema = createSchema(parentSchema, "explicit_flat_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "explicit_flat_test", operand);
       Map<String, Table> tableMap = ((FileSchema) schema).getTableMap();
       assertFalse(tableMap.isEmpty());
     }
 
-    @Test
-    void testFlattenWithMultipleJsonFiles() throws IOException {
+    @Test void testFlattenWithMultipleJsonFiles() throws IOException {
       writeJson(new File(tempDir.toFile(), "file1.json"),
           "[{\"id\":1,\"meta\":{\"type\":\"A\"}}]");
       writeJson(new File(tempDir.toFile(), "file2.json"),
@@ -645,16 +638,15 @@ public class FileSchemaFeatureCoverageTest {
       File conversionsDir = new File(fs.getOperatingCacheDirectory(), "conversions");
       assertTrue(conversionsDir.exists(),
           "Conversions directory should exist");
-      File[] flattenedFiles = conversionsDir.listFiles(
-          f -> f.getName().endsWith(".json"));
+      File[] flattenedFiles =
+          conversionsDir.listFiles(f -> f.getName().endsWith(".json"));
       assertNotNull(flattenedFiles);
       assertTrue(flattenedFiles.length >= 2,
           "Expected at least 2 flattened files, got: "
               + flattenedFiles.length);
     }
 
-    @Test
-    void testFlattenNullValues() throws IOException {
+    @Test void testFlattenNullValues() throws IOException {
       writeJson(new File(tempDir.toFile(), "nulls.json"),
           "[{\"id\":1,\"info\":{\"x\":null,\"y\":\"val\"}}]");
 
@@ -670,8 +662,7 @@ public class FileSchemaFeatureCoverageTest {
           "Conversions directory should exist after null value flattening");
     }
 
-    @Test
-    void testFlattenEmptyObjects() throws IOException {
+    @Test void testFlattenEmptyObjects() throws IOException {
       writeJson(new File(tempDir.toFile(), "empty.json"),
           "[{\"id\":1,\"info\":{}}]");
 
@@ -687,8 +678,7 @@ public class FileSchemaFeatureCoverageTest {
           "Conversions directory should exist after empty object flattening");
     }
 
-    @Test
-    void testFlattenWithCustomSeparatorInTableDef() throws IOException {
+    @Test void testFlattenWithCustomSeparatorInTableDef() throws IOException {
       File jsonFile = new File(tempDir.toFile(), "sep.json");
       writeJson(jsonFile,
           "[{\"id\":1,\"info\":{\"val\":42}}]");
@@ -708,8 +698,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tableMap.isEmpty());
     }
 
-    @Test
-    void testFlattenNoJsonFiles() throws IOException {
+    @Test void testFlattenNoJsonFiles() throws IOException {
       // Only a CSV file, no JSON files to flatten
       File csv = new File(tempDir.toFile(), "data.csv");
       try (FileWriter w = new FileWriter(csv)) {
@@ -719,8 +708,8 @@ public class FileSchemaFeatureCoverageTest {
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("flatten", true);
 
-      Schema schema = createSchema(parentSchema, "no_json_flat_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "no_json_flat_test", operand);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       // Should still have the CSV table
       assertFalse(tables.isEmpty());
@@ -742,8 +731,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testXlsxConversion() throws IOException {
+    @Test void testXlsxConversion() throws IOException {
       createXlsx(new File(tempDir.toFile(), "employees.xlsx"),
           new String[]{"id", "name", "salary"},
           new Object[][]{
@@ -768,8 +756,7 @@ public class FileSchemaFeatureCoverageTest {
           "Expected table from employees.xlsx, got: " + tables.keySet());
     }
 
-    @Test
-    void testXlsxConversionCreatesConversionsDir() throws IOException {
+    @Test void testXlsxConversionCreatesConversionsDir() throws IOException {
       createXlsx(new File(tempDir.toFile(), "test.xlsx"),
           new String[]{"col1", "col2"},
           new Object[][]{{1, "a"}, {2, "b"}});
@@ -786,8 +773,7 @@ public class FileSchemaFeatureCoverageTest {
           "Conversions directory handling executed");
     }
 
-    @Test
-    void testMultipleXlsxFiles() throws IOException {
+    @Test void testMultipleXlsxFiles() throws IOException {
       createXlsx(new File(tempDir.toFile(), "file_a.xlsx"),
           new String[]{"x", "y"},
           new Object[][]{{1, 2}});
@@ -804,8 +790,7 @@ public class FileSchemaFeatureCoverageTest {
               + tables.size() + " -> " + tables.keySet());
     }
 
-    @Test
-    void testXlsxWithTempFileSkipped() throws IOException {
+    @Test void testXlsxWithTempFileSkipped() throws IOException {
       // Files starting with ~ should be skipped
       createXlsx(new File(tempDir.toFile(), "~$temp.xlsx"),
           new String[]{"id"},
@@ -825,8 +810,7 @@ public class FileSchemaFeatureCoverageTest {
       }
     }
 
-    @Test
-    void testXlsxAndJsonMixed() throws IOException {
+    @Test void testXlsxAndJsonMixed() throws IOException {
       createXlsx(new File(tempDir.toFile(), "sheet.xlsx"),
           new String[]{"id", "val"},
           new Object[][]{{1, "x"}});
@@ -841,8 +825,7 @@ public class FileSchemaFeatureCoverageTest {
           "Expected tables from both xlsx and json, got: " + tables.keySet());
     }
 
-    @Test
-    void testXlsxConversionWithRecursive() throws IOException {
+    @Test void testXlsxConversionWithRecursive() throws IOException {
       File subDir = tempDir.resolve("subdir").toFile();
       subDir.mkdirs();
       createXlsx(new File(subDir, "nested.xlsx"),
@@ -852,14 +835,13 @@ public class FileSchemaFeatureCoverageTest {
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("recursive", true);
 
-      Schema schema = createSchema(parentSchema, "recursive_xlsx_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "recursive_xlsx_test", operand);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertNotNull(tables);
     }
 
-    @Test
-    void testXlsxWithManyRows() throws IOException {
+    @Test void testXlsxWithManyRows() throws IOException {
       Object[][] rows = new Object[50][2];
       for (int i = 0; i < 50; i++) {
         rows[i] = new Object[]{i + 1, "row_" + i};
@@ -875,8 +857,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testXlsxWithNumericAndStringCells() throws IOException {
+    @Test void testXlsxWithNumericAndStringCells() throws IOException {
       createXlsx(new File(tempDir.toFile(), "types.xlsx"),
           new String[]{"num", "str", "mixed"},
           new Object[][]{
@@ -891,8 +872,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testEmptyDirectoryNoConversion() {
+    @Test void testEmptyDirectoryNoConversion() {
       Map<String, Object> operand = baseOperand(tempDir);
 
       Schema schema = createSchema(parentSchema, "empty_conv_test", operand);
@@ -902,8 +882,7 @@ public class FileSchemaFeatureCoverageTest {
               + tables.keySet());
     }
 
-    @Test
-    void testXlsxConversionWithExplicitTableDef() throws IOException {
+    @Test void testXlsxConversionWithExplicitTableDef() throws IOException {
       File xlsxFile = new File(tempDir.toFile(), "explicit.xlsx");
       createXlsx(xlsxFile,
           new String[]{"id", "value"},
@@ -917,8 +896,8 @@ public class FileSchemaFeatureCoverageTest {
       tableDefs.add(td);
       operand.put("tables", tableDefs);
 
-      Schema schema = createSchema(parentSchema, "explicit_xlsx_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "explicit_xlsx_test", operand);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertNotNull(tables);
     }
@@ -939,8 +918,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testPrimeCacheTrue() throws IOException {
+    @Test void testPrimeCacheTrue() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1,\"name\":\"alice\"}]");
 
@@ -959,8 +937,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testPrimeCacheFalse() throws IOException {
+    @Test void testPrimeCacheFalse() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -972,16 +949,15 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testPrimeCacheDefaultEnabled() throws IOException {
+    @Test void testPrimeCacheDefaultEnabled() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
       Map<String, Object> operand = baseOperand(tempDir);
       // No primeCache setting => default behavior
 
-      Schema schema = createSchema(parentSchema, "default_prime_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "default_prime_test", operand);
       assertNotNull(schema);
       try {
         Thread.sleep(200);
@@ -990,18 +966,17 @@ public class FileSchemaFeatureCoverageTest {
       }
     }
 
-    @Test
-    void testPrimeCacheWithParquetFiles() {
+    @Test void testPrimeCacheWithParquetFiles() {
       File parquetFile = tempDir.resolve("cached.parquet").toFile();
-      boolean ok = createParquetFile(parquetFile,
-          "SELECT 1 AS id, 'test' AS val");
+      boolean ok =
+          createParquetFile(parquetFile, "SELECT 1 AS id, 'test' AS val");
       assertTrue(ok, "Failed to create parquet file");
 
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("primeCache", true);
 
-      Schema schema = createSchema(parentSchema, "prime_parquet_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "prime_parquet_test", operand);
       try {
         Thread.sleep(300);
       } catch (InterruptedException e) {
@@ -1011,8 +986,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testPrimeCacheWithEmptyDirectory() {
+    @Test void testPrimeCacheWithEmptyDirectory() {
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("primeCache", true);
 
@@ -1028,8 +1002,7 @@ public class FileSchemaFeatureCoverageTest {
       assertTrue(tables.isEmpty());
     }
 
-    @Test
-    void testPrimeCacheWithMultipleTableTypes() throws IOException {
+    @Test void testPrimeCacheWithMultipleTableTypes() throws IOException {
       writeJson(new File(tempDir.toFile(), "json_data.json"),
           "[{\"id\":1}]");
       File csv = new File(tempDir.toFile(), "csv_data.csv");
@@ -1067,8 +1040,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testModelFileCreatedAfterGetTableMap() throws IOException {
+    @Test void testModelFileCreatedAfterGetTableMap() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1,\"name\":\"test\"}]");
 
@@ -1085,8 +1057,7 @@ public class FileSchemaFeatureCoverageTest {
           "Model file should exist at: " + modelFile.getAbsolutePath());
     }
 
-    @Test
-    void testModelFileContainsSchemaName() throws IOException {
+    @Test void testModelFileContainsSchemaName() throws IOException {
       writeJson(new File(tempDir.toFile(), "test.json"),
           "[{\"id\":1}]");
 
@@ -1097,16 +1068,15 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       assertTrue(modelFile.exists());
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("my_schema"),
           "Model file should contain schema name");
     }
 
-    @Test
-    void testModelFileContainsTableEntries() throws IOException {
+    @Test void testModelFileContainsTableEntries() throws IOException {
       writeJson(new File(tempDir.toFile(), "users.json"),
           "[{\"id\":1,\"name\":\"alice\"}]");
 
@@ -1117,8 +1087,8 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       Map<String, Table> tables = fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       assertTrue(modelFile.exists());
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       // Model should contain table entries
@@ -1126,8 +1096,7 @@ public class FileSchemaFeatureCoverageTest {
           "Model file should have tables section");
     }
 
-    @Test
-    void testModelFileContainsVersion() throws IOException {
+    @Test void testModelFileContainsVersion() throws IOException {
       writeJson(new File(tempDir.toFile(), "v.json"),
           "[{\"id\":1}]");
 
@@ -1138,15 +1107,14 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("\"version\": \"1.0\""),
           "Model file should contain version");
     }
 
-    @Test
-    void testModelFileContainsExecutionEngine() throws IOException {
+    @Test void testModelFileContainsExecutionEngine() throws IOException {
       writeJson(new File(tempDir.toFile(), "engine.json"),
           "[{\"id\":1}]");
 
@@ -1157,35 +1125,33 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("executionEngine"),
           "Model file should contain execution engine");
     }
 
-    @Test
-    void testModelFileWithParquetTable() {
+    @Test void testModelFileWithParquetTable() {
       File pf = tempDir.resolve("pdata.parquet").toFile();
-      boolean ok = createParquetFile(pf,
-          "SELECT 1 AS id, 'hello' AS msg");
+      boolean ok =
+          createParquetFile(pf, "SELECT 1 AS id, 'hello' AS msg");
       assertTrue(ok);
 
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("primeCache", false);
 
-      Schema schema = createSchema(parentSchema, "parquet_model_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "parquet_model_test", operand);
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       assertTrue(modelFile.exists());
     }
 
-    @Test
-    void testModelFileWithEmptySchema() {
+    @Test void testModelFileWithEmptySchema() {
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("primeCache", false);
 
@@ -1193,14 +1159,13 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       assertTrue(modelFile.exists(),
           "Model file should be generated even for empty schemas");
     }
 
-    @Test
-    void testModelFileContainsTableNameCasing() throws IOException {
+    @Test void testModelFileContainsTableNameCasing() throws IOException {
       writeJson(new File(tempDir.toFile(), "casing.json"),
           "[{\"id\":1}]");
 
@@ -1209,13 +1174,13 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("tableNameCasing", "LOWER");
       operand.put("columnNameCasing", "LOWER");
 
-      Schema schema = createSchema(parentSchema, "casing_model_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "casing_model_test", operand);
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("tableNameCasing"),
           "Model should contain tableNameCasing");
@@ -1223,8 +1188,7 @@ public class FileSchemaFeatureCoverageTest {
           "Model should contain columnNameCasing");
     }
 
-    @Test
-    void testModelFileWithMultipleTables() throws IOException {
+    @Test void testModelFileWithMultipleTables() throws IOException {
       writeJson(new File(tempDir.toFile(), "t1.json"),
           "[{\"id\":1}]");
       writeJson(new File(tempDir.toFile(), "t2.json"),
@@ -1240,8 +1204,8 @@ public class FileSchemaFeatureCoverageTest {
       Map<String, Table> tables = fs.getTableMap();
       assertTrue(tables.size() >= 3);
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       // Count table entries in model
       int count = 0;
@@ -1254,8 +1218,7 @@ public class FileSchemaFeatureCoverageTest {
           "Model should have at least 3 name entries for tables");
     }
 
-    @Test
-    void testModelFileContainsSchemaSection() throws IOException {
+    @Test void testModelFileContainsSchemaSection() throws IOException {
       writeJson(new File(tempDir.toFile(), "schema_sec.json"),
           "[{\"id\":1}]");
 
@@ -1266,8 +1229,8 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("\"schemas\""),
           "Model file should contain schemas array");
@@ -1275,8 +1238,7 @@ public class FileSchemaFeatureCoverageTest {
           "Model file should contain defaultSchema");
     }
 
-    @Test
-    void testModelFileContainsFactoryClass() throws IOException {
+    @Test void testModelFileContainsFactoryClass() throws IOException {
       writeJson(new File(tempDir.toFile(), "factory.json"),
           "[{\"id\":1}]");
 
@@ -1287,8 +1249,8 @@ public class FileSchemaFeatureCoverageTest {
       FileSchema fs = (FileSchema) schema;
       fs.getTableMap();
 
-      File modelFile = new File(fs.getOperatingCacheDirectory(),
-          ".generated-model.json");
+      File modelFile =
+          new File(fs.getOperatingCacheDirectory(), ".generated-model.json");
       String content = new String(Files.readAllBytes(modelFile.toPath()));
       assertTrue(content.contains("FileSchemaFactory"),
           "Model file should reference FileSchemaFactory");
@@ -1310,8 +1272,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testRefreshIntervalStartsPeriodicRefresh() throws IOException {
+    @Test void testRefreshIntervalStartsPeriodicRefresh() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -1319,15 +1280,14 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("refreshInterval", "60000");
       operand.put("primeCache", false);
 
-      Schema schema = createSchema(parentSchema, "refresh_interval_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "refresh_interval_test", operand);
       assertNotNull(schema);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testRefreshIntervalWithPartitionedTable() {
+    @Test void testRefreshIntervalWithPartitionedTable() {
       createHivePartitionedParquet(tempDir, "year", "2024",
           "SELECT 1 AS id");
 
@@ -1350,8 +1310,7 @@ public class FileSchemaFeatureCoverageTest {
       assertTrue(tables.containsKey("refresh_pt"));
     }
 
-    @Test
-    void testRefreshIntervalNullNoPeriodicRefresh() throws IOException {
+    @Test void testRefreshIntervalNullNoPeriodicRefresh() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -1364,8 +1323,7 @@ public class FileSchemaFeatureCoverageTest {
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testRefreshIntervalWithHumanReadableFormat() throws IOException {
+    @Test void testRefreshIntervalWithHumanReadableFormat() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -1373,13 +1331,12 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("refreshInterval", "5 minutes");
       operand.put("primeCache", false);
 
-      Schema schema = createSchema(parentSchema, "human_refresh_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "human_refresh_test", operand);
       assertNotNull(schema);
     }
 
-    @Test
-    void testRefreshIntervalShortDuration() throws IOException {
+    @Test void testRefreshIntervalShortDuration() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -1387,8 +1344,8 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("refreshInterval", "1000");
       operand.put("primeCache", false);
 
-      Schema schema = createSchema(parentSchema, "short_refresh_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "short_refresh_test", operand);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertFalse(tables.isEmpty());
     }
@@ -1409,8 +1366,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testLocalFileSystemFallbackMatching() {
+    @Test void testLocalFileSystemFallbackMatching() {
       createParquetFile(tempDir.resolve("a.parquet").toFile(),
           "SELECT 1 AS id");
       createParquetFile(tempDir.resolve("b.parquet").toFile(),
@@ -1425,8 +1381,7 @@ public class FileSchemaFeatureCoverageTest {
           "Expected at least 2 parquet tables, got: " + tables.keySet());
     }
 
-    @Test
-    void testRecursiveFileDiscovery() throws IOException {
+    @Test void testRecursiveFileDiscovery() throws IOException {
       File sub = tempDir.resolve("subdir").toFile();
       sub.mkdirs();
       writeJson(new File(sub, "nested.json"),
@@ -1445,8 +1400,7 @@ public class FileSchemaFeatureCoverageTest {
               + tables.keySet());
     }
 
-    @Test
-    void testGlobPatternMatching() {
+    @Test void testGlobPatternMatching() {
       createParquetFile(tempDir.resolve("data_2024.parquet").toFile(),
           "SELECT 1 AS id");
       createParquetFile(tempDir.resolve("data_2025.parquet").toFile(),
@@ -1460,8 +1414,7 @@ public class FileSchemaFeatureCoverageTest {
       assertTrue(tables.size() >= 2);
     }
 
-    @Test
-    void testNonExistentBaseDirectory() {
+    @Test void testNonExistentBaseDirectory() {
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory",
           tempDir.resolve("nonexistent").toString());
@@ -1473,8 +1426,7 @@ public class FileSchemaFeatureCoverageTest {
       assertTrue(tables.isEmpty());
     }
 
-    @Test
-    void testEmptyDirectoryMatching() {
+    @Test void testEmptyDirectoryMatching() {
       Map<String, Object> operand = baseOperand(tempDir);
       operand.put("primeCache", false);
 
@@ -1499,8 +1451,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testCsvFileDiscovery() throws IOException {
+    @Test void testCsvFileDiscovery() throws IOException {
       File csv = new File(tempDir.toFile(), "people.csv");
       try (FileWriter w = new FileWriter(csv)) {
         w.write("id,name,age\n1,alice,30\n2,bob,25\n");
@@ -1515,8 +1466,7 @@ public class FileSchemaFeatureCoverageTest {
           "Should discover CSV file as table");
     }
 
-    @Test
-    void testTsvFileDiscovery() throws IOException {
+    @Test void testTsvFileDiscovery() throws IOException {
       File tsv = new File(tempDir.toFile(), "data.tsv");
       try (FileWriter w = new FileWriter(tsv)) {
         w.write("id\tname\n1\talice\n2\tbob\n");
@@ -1531,8 +1481,7 @@ public class FileSchemaFeatureCoverageTest {
           "Should discover TSV file as table");
     }
 
-    @Test
-    void testCsvWithTableNameCasing() throws IOException {
+    @Test void testCsvWithTableNameCasing() throws IOException {
       File csv = new File(tempDir.toFile(), "MyTable.csv");
       try (FileWriter w = new FileWriter(csv)) {
         w.write("id\n1\n");
@@ -1550,8 +1499,7 @@ public class FileSchemaFeatureCoverageTest {
       }
     }
 
-    @Test
-    void testMixedCsvJsonParquet() throws IOException {
+    @Test void testMixedCsvJsonParquet() throws IOException {
       File csv = new File(tempDir.toFile(), "csv_data.csv");
       try (FileWriter w = new FileWriter(csv)) {
         w.write("id\n1\n");
@@ -1587,8 +1535,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testSchemaWithAllOperands() throws IOException {
+    @Test void testSchemaWithAllOperands() throws IOException {
       writeJson(new File(tempDir.toFile(), "data.json"),
           "[{\"id\":1}]");
 
@@ -1599,15 +1546,14 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("tableNameCasing", "UNCHANGED");
       operand.put("columnNameCasing", "UNCHANGED");
 
-      Schema schema = createSchema(parentSchema, "full_operand_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "full_operand_test", operand);
       assertNotNull(schema);
       Map<String, Table> tables = ((FileSchema) schema).getTableMap();
       assertFalse(tables.isEmpty());
     }
 
-    @Test
-    void testSchemaWithViews() throws IOException {
+    @Test void testSchemaWithViews() throws IOException {
       writeJson(new File(tempDir.toFile(), "base.json"),
           "[{\"id\":1,\"val\":10}]");
 
@@ -1626,8 +1572,7 @@ public class FileSchemaFeatureCoverageTest {
           "Expected view table, got: " + tables.keySet());
     }
 
-    @Test
-    void testEphemeralCacheTrue() throws IOException {
+    @Test void testEphemeralCacheTrue() throws IOException {
       writeJson(new File(tempDir.toFile(), "eph.json"),
           "[{\"id\":1}]");
 
@@ -1640,8 +1585,7 @@ public class FileSchemaFeatureCoverageTest {
       assertNotNull(fs.getOperatingCacheDirectory());
     }
 
-    @Test
-    void testEphemeralCacheFalse() throws IOException {
+    @Test void testEphemeralCacheFalse() throws IOException {
       writeJson(new File(tempDir.toFile(), "persist.json"),
           "[{\"id\":1}]");
 
@@ -1655,8 +1599,7 @@ public class FileSchemaFeatureCoverageTest {
       assertNotNull(fs.getOperatingCacheDirectory());
     }
 
-    @Test
-    void testSchemaGetTableMapCaching() throws IOException {
+    @Test void testSchemaGetTableMapCaching() throws IOException {
       writeJson(new File(tempDir.toFile(), "cached.json"),
           "[{\"id\":1}]");
 
@@ -1674,8 +1617,7 @@ public class FileSchemaFeatureCoverageTest {
           "Second getTableMap call should return cached result");
     }
 
-    @Test
-    void testSchemaWithComment() throws IOException {
+    @Test void testSchemaWithComment() throws IOException {
       writeJson(new File(tempDir.toFile(), "commented.json"),
           "[{\"id\":1}]");
 
@@ -1683,13 +1625,12 @@ public class FileSchemaFeatureCoverageTest {
       operand.put("primeCache", false);
       operand.put("comment", "This is my schema comment");
 
-      Schema schema = createSchema(parentSchema, "commented_schema_test",
-          operand);
+      Schema schema =
+          createSchema(parentSchema, "commented_schema_test", operand);
       assertNotNull(schema);
     }
 
-    @Test
-    void testSchemaWithRefreshIntervalString() throws IOException {
+    @Test void testSchemaWithRefreshIntervalString() throws IOException {
       writeJson(new File(tempDir.toFile(), "refresh.json"),
           "[{\"id\":1}]");
 
@@ -1717,8 +1658,7 @@ public class FileSchemaFeatureCoverageTest {
       parentSchema = createMockParentSchema();
     }
 
-    @Test
-    void testConversionMetadataCreated() throws IOException {
+    @Test void testConversionMetadataCreated() throws IOException {
       writeJson(new File(tempDir.toFile(), "meta.json"),
           "[{\"id\":1}]");
 
@@ -1734,8 +1674,7 @@ public class FileSchemaFeatureCoverageTest {
           "Operating cache directory should exist");
     }
 
-    @Test
-    void testXlsxConversionRecordedInMetadata() throws IOException {
+    @Test void testXlsxConversionRecordedInMetadata() throws IOException {
       createXlsx(new File(tempDir.toFile(), "recorded.xlsx"),
           new String[]{"id", "val"},
           new Object[][]{{1, "a"}});
@@ -1748,15 +1687,14 @@ public class FileSchemaFeatureCoverageTest {
       fs.getTableMap();
 
       // .conversions.json should be created
-      File conversionsFile = new File(fs.getOperatingCacheDirectory(),
-          ".conversions.json");
+      File conversionsFile =
+          new File(fs.getOperatingCacheDirectory(), ".conversions.json");
       // The conversions.json may or may not exist depending on implementation details,
       // but the conversion should have been processed
       assertNotNull(fs.getOperatingCacheDirectory());
     }
 
-    @Test
-    void testConvertedFilesPickedUpAsJson() throws IOException {
+    @Test void testConvertedFilesPickedUpAsJson() throws IOException {
       createXlsx(new File(tempDir.toFile(), "convert_me.xlsx"),
           new String[]{"x", "y"},
           new Object[][]{{1, 2}, {3, 4}});

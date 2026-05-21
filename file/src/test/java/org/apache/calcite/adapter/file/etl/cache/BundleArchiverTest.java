@@ -36,7 +36,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -90,8 +89,8 @@ public class BundleArchiverTest {
     assertTrue(provider.writtenFiles.containsKey("bundles/myschema/run-20260310T1423.idx.jsonl"));
 
     // Verify index content
-    String indexContent = new String(
-        provider.writtenFiles.get("bundles/myschema/run-20260310T1423.idx.jsonl"),
+    String indexContent =
+        new String(provider.writtenFiles.get("bundles/myschema/run-20260310T1423.idx.jsonl"),
         StandardCharsets.UTF_8);
     assertTrue(indexContent.contains("file1.csv"));
     assertTrue(indexContent.contains("file2.csv"));
@@ -124,8 +123,8 @@ public class BundleArchiverTest {
 
     // Index should contain the entry
     assertTrue(provider.writtenFiles.containsKey("bundles/schema/run-001.idx.jsonl"));
-    String indexContent = new String(
-        provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
+    String indexContent =
+        new String(provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
         StandardCharsets.UTF_8);
     assertTrue(indexContent.contains("large.shp"));
     assertTrue(indexContent.contains("\"storage\":\"object\""));
@@ -154,8 +153,8 @@ public class BundleArchiverTest {
     assertTrue(provider.writtenFiles.containsKey("objects/schema/big.shp"));
 
     // Index should contain both
-    String indexContent = new String(
-        provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
+    String indexContent =
+        new String(provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
         StandardCharsets.UTF_8);
     assertTrue(indexContent.contains("small.csv"));
     assertTrue(indexContent.contains("big.shp"));
@@ -174,8 +173,8 @@ public class BundleArchiverTest {
     BundleArchiver.archive(cacheDir.toString(), provider, "schema", "run-001");
 
     // Both files should be archived
-    String indexContent = new String(
-        provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
+    String indexContent =
+        new String(provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
         StandardCharsets.UTF_8);
     assertTrue(indexContent.contains("top.csv"));
     assertTrue(indexContent.contains("nested.csv"));
@@ -197,8 +196,8 @@ public class BundleArchiverTest {
 
     BundleArchiver.archive(cacheDir.toString(), provider, "schema", "run-001");
 
-    String indexContent = new String(
-        provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
+    String indexContent =
+        new String(provider.writtenFiles.get("bundles/schema/run-001.idx.jsonl"),
         StandardCharsets.UTF_8);
     // Only non-empty file should be archived
     assertFalse(indexContent.contains("\"key\":\"zerolen_file.dat\""),
@@ -213,8 +212,7 @@ public class BundleArchiverTest {
 
     // Provider that throws on write
     StorageProvider failingProvider = new RecordingStorageProvider() {
-      @Override
-      public void writeFile(String path, byte[] content) throws IOException {
+      @Override public void writeFile(String path, byte[] content) throws IOException {
         throw new IOException("Simulated write failure");
       }
     };
@@ -229,23 +227,19 @@ public class BundleArchiverTest {
   private static class RecordingStorageProvider implements StorageProvider {
     final Map<String, byte[]> writtenFiles = new HashMap<String, byte[]>();
 
-    @Override
-    public void writeFile(String path, byte[] content) throws IOException {
+    @Override public void writeFile(String path, byte[] content) throws IOException {
       writtenFiles.put(path, content);
     }
 
-    @Override
-    public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+    @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
       return new ArrayList<FileEntry>();
     }
 
-    @Override
-    public FileMetadata getMetadata(String path) throws IOException {
+    @Override public FileMetadata getMetadata(String path) throws IOException {
       throw new IOException("Not supported");
     }
 
-    @Override
-    public InputStream openInputStream(String path) throws IOException {
+    @Override public InputStream openInputStream(String path) throws IOException {
       byte[] content = writtenFiles.get(path);
       if (content == null) {
         throw new IOException("File not found: " + path);
@@ -253,28 +247,23 @@ public class BundleArchiverTest {
       return new ByteArrayInputStream(content);
     }
 
-    @Override
-    public Reader openReader(String path) throws IOException {
+    @Override public Reader openReader(String path) throws IOException {
       return new java.io.InputStreamReader(openInputStream(path), StandardCharsets.UTF_8);
     }
 
-    @Override
-    public boolean exists(String path) {
+    @Override public boolean exists(String path) {
       return writtenFiles.containsKey(path);
     }
 
-    @Override
-    public boolean isDirectory(String path) {
+    @Override public boolean isDirectory(String path) {
       return false;
     }
 
-    @Override
-    public String getStorageType() {
+    @Override public String getStorageType() {
       return "recording";
     }
 
-    @Override
-    public String resolvePath(String basePath, String relativePath) {
+    @Override public String resolvePath(String basePath, String relativePath) {
       return basePath + "/" + relativePath;
     }
   }

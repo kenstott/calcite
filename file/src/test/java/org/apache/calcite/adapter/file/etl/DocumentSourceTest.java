@@ -62,8 +62,8 @@ class DocumentSourceTest {
         .documentSource(docConfig)
         .build();
 
-    DocumentSource source = new DocumentSource(config, storageProvider,
-        tempDir.toString());
+    DocumentSource source =
+        new DocumentSource(config, storageProvider, tempDir.toString());
     assertNotNull(source);
   }
 
@@ -86,8 +86,8 @@ class DocumentSourceTest {
         .headers(headers)
         .build();
 
-    DocumentSource source = new DocumentSource(config, storageProvider,
-        tempDir.toString());
+    DocumentSource source =
+        new DocumentSource(config, storageProvider, tempDir.toString());
     assertNotNull(source);
   }
 
@@ -108,8 +108,8 @@ class DocumentSourceTest {
         .documentSource(docConfig)
         .build();
 
-    DocumentSource source = new DocumentSource(config, storageProvider,
-        cacheDir.toString());
+    DocumentSource source =
+        new DocumentSource(config, storageProvider, cacheDir.toString());
     assertNotNull(source);
   }
 

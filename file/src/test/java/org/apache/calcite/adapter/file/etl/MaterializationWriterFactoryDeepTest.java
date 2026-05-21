@@ -48,16 +48,16 @@ class MaterializationWriterFactoryDeepTest {
   }
 
   @Test void testCreateParquetWriter() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
 
     assertNotNull(writer);
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat());
   }
 
   @Test void testCreateIcebergWriter() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.ICEBERG, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.ICEBERG, storageProvider, tempDir.toString());
 
     assertNotNull(writer);
     assertEquals(MaterializeConfig.Format.ICEBERG, writer.getFormat());
@@ -93,8 +93,8 @@ class MaterializationWriterFactoryDeepTest {
   }
 
   @Test void testCreateWithIncrementalTracker() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString(),
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString(),
         IncrementalTracker.NOOP);
 
     assertNotNull(writer);
@@ -109,8 +109,8 @@ class MaterializationWriterFactoryDeepTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, tempDir.toString());
 
     assertNotNull(writer);
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat());
@@ -130,8 +130,8 @@ class MaterializationWriterFactoryDeepTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, tempDir.toString());
 
     assertNotNull(writer);
     // Default format is ICEBERG
@@ -146,8 +146,8 @@ class MaterializationWriterFactoryDeepTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, tempDir.toString(), IncrementalTracker.NOOP);
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, tempDir.toString(), IncrementalTracker.NOOP);
 
     assertNotNull(writer);
   }
@@ -163,8 +163,8 @@ class MaterializationWriterFactoryDeepTest {
             .build())
         .build();
 
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        config, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, tempDir.toString());
 
     assertNotNull(writer);
     assertEquals(MaterializeConfig.Format.ICEBERG, writer.getFormat());
@@ -173,16 +173,16 @@ class MaterializationWriterFactoryDeepTest {
   // --- MaterializationWriter interface default methods ---
 
   @Test void testMaterializationWriterDefaultStoreEtlProperties() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
 
     // Default implementation should not throw
     writer.storeEtlProperties("hash123", "sig456", 1000);
   }
 
   @Test void testMaterializationWriterDefaultGetEtlProperty() {
-    MaterializationWriter writer = MaterializationWriterFactory.create(
-        MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
+    MaterializationWriter writer =
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, tempDir.toString());
 
     // Default returns null
     assertEquals(null, writer.getEtlProperty("etl.config-hash"));

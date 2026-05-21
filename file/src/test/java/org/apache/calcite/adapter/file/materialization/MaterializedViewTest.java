@@ -188,8 +188,8 @@ public class MaterializedViewTest {
         + " FROM sales GROUP BY \\\"date\\\"\""
         + "}]";
 
-    String modelJson = buildModelJson("PARQUET_MV_TEST",
-        tempDir.toString(), materializationsJson);
+    String modelJson =
+        buildModelJson("PARQUET_MV_TEST", tempDir.toString(), materializationsJson);
 
     File modelFile = new File(tempDir.toFile(), "model.json");
     try (FileWriter writer =
@@ -216,8 +216,8 @@ public class MaterializedViewTest {
           "Schema should contain 'sales' table, found: " + tableNames);
 
       // Verify row count from the sales base table
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) FROM \"PARQUET_MV_TEST\".sales")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) FROM \"PARQUET_MV_TEST\".sales")) {
         assertTrue(rs.next(), "Should have a count result");
         long rowCount = rs.getLong(1);
         assertEquals(6L, rowCount,
@@ -300,8 +300,8 @@ public class MaterializedViewTest {
             "Materialized view 'daily_summary' should be registered");
 
         // Query the materialized view
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT * FROM parquet_mv_test.daily_summary "
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT * FROM parquet_mv_test.daily_summary "
                 + "ORDER BY \"date\"")) {
           int rowCount = 0;
           while (rs.next()) {
@@ -382,24 +382,24 @@ public class MaterializedViewTest {
 
       try (Statement stmt = connection.createStatement()) {
         // Verify base sales table has 6 rows
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) as cnt FROM \"MV_MULTI\".sales")) {
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"MV_MULTI\".sales")) {
           assertTrue(rs.next(), "Should have a count result");
           assertEquals(6, rs.getInt("cnt"),
               "Sales base table should have 6 rows");
         }
 
         // Verify base products table has 3 rows
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) as cnt FROM \"MV_MULTI\".products")) {
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"MV_MULTI\".products")) {
           assertTrue(rs.next(), "Should have a count result");
           assertEquals(3, rs.getInt("cnt"),
               "Products base table should have 3 rows");
         }
 
         // Daily sales aggregation: 3 distinct dates
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT \"date\", "
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT \"date\", "
                 + "COUNT(*) as transaction_count, "
                 + "SUM(\"quantity\") as total_quantity, "
                 + "SUM(\"quantity\" * \"price\") as total_revenue "
@@ -420,8 +420,8 @@ public class MaterializedViewTest {
         }
 
         // Product aggregation: 3 distinct products
-        try (ResultSet rs = stmt.executeQuery(
-            "SELECT \"product\", "
+        try (ResultSet rs =
+            stmt.executeQuery("SELECT \"product\", "
                 + "COUNT(*) as sales_count, "
                 + "SUM(\"quantity\") as total_quantity, "
                 + "SUM(\"quantity\" * \"price\") as total_revenue "

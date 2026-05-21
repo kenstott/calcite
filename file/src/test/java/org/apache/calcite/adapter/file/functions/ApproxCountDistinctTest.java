@@ -34,8 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ApproxCountDistinctTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(ApproxCountDistinctTest.class);
 
-  @Test
-  @DisplayName("HLLAccumulator with 100 distinct values estimates within 20%")
+  @Test @DisplayName("HLLAccumulator with 100 distinct values estimates within 20%")
   void testHllAccumulatorDistinctValues() {
     ApproxCountDistinct.HLLAccumulator acc = new ApproxCountDistinct.HLLAccumulator();
 
@@ -49,8 +48,7 @@ public class ApproxCountDistinctTest {
         "Estimate " + estimate + " should be within 20% of 100");
   }
 
-  @Test
-  @DisplayName("HLLAccumulator with duplicates estimates correctly")
+  @Test @DisplayName("HLLAccumulator with duplicates estimates correctly")
   void testHllAccumulatorDuplicateValues() {
     ApproxCountDistinct.HLLAccumulator acc = new ApproxCountDistinct.HLLAccumulator();
 
@@ -66,8 +64,7 @@ public class ApproxCountDistinctTest {
         "Estimate " + estimate + " should approximate 5");
   }
 
-  @Test
-  @DisplayName("HLLAccumulator ignores nulls")
+  @Test @DisplayName("HLLAccumulator ignores nulls")
   void testHllAccumulatorNullsIgnored() {
     ApproxCountDistinct.HLLAccumulator acc = new ApproxCountDistinct.HLLAccumulator();
 
@@ -84,8 +81,7 @@ public class ApproxCountDistinctTest {
         "Estimate " + estimate + " should approximate 50 (nulls ignored)");
   }
 
-  @Test
-  @DisplayName("HLLAccumulator empty returns zero")
+  @Test @DisplayName("HLLAccumulator empty returns zero")
   void testHllAccumulatorEmptyReturnsZero() {
     ApproxCountDistinct.HLLAccumulator acc = new ApproxCountDistinct.HLLAccumulator();
 
@@ -93,8 +89,7 @@ public class ApproxCountDistinctTest {
     assertEquals(0L, estimate, "Empty accumulator should return 0");
   }
 
-  @Test
-  @DisplayName("PrecomputedAccumulator ignores runtime adds and returns sketch estimate")
+  @Test @DisplayName("PrecomputedAccumulator ignores runtime adds and returns sketch estimate")
   void testPrecomputedAccumulatorIgnoresAdds() {
     HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(42L);
     ApproxCountDistinct.PrecomputedAccumulator acc =
@@ -109,8 +104,7 @@ public class ApproxCountDistinctTest {
         "PrecomputedAccumulator should return sketch estimate regardless of added values");
   }
 
-  @Test
-  @DisplayName("PrecomputedAccumulator returns sketch cardinality")
+  @Test @DisplayName("PrecomputedAccumulator returns sketch cardinality")
   void testPrecomputedAccumulatorReturnsSketchCardinality() {
     HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(999L);
     ApproxCountDistinct.PrecomputedAccumulator acc =
@@ -119,8 +113,7 @@ public class ApproxCountDistinctTest {
     assertEquals(999L, acc.getResult());
   }
 
-  @Test
-  @DisplayName("createAccumulator with null tableScan returns HLLAccumulator")
+  @Test @DisplayName("createAccumulator with null tableScan returns HLLAccumulator")
   void testCreateAccumulatorNullTableScan() {
     ApproxCountDistinct fn = new ApproxCountDistinct("col1", null);
 
@@ -130,16 +123,14 @@ public class ApproxCountDistinctTest {
             + acc.getClass().getSimpleName());
   }
 
-  @Test
-  @DisplayName("Return type is Long")
+  @Test @DisplayName("Return type is Long")
   void testReturnTypeIsLong() {
     ApproxCountDistinct fn = new ApproxCountDistinct("col1", null);
 
     assertEquals(Long.class, fn.getReturnType());
   }
 
-  @Test
-  @DisplayName("getParameters returns empty list")
+  @Test @DisplayName("getParameters returns empty list")
   void testGetParametersReturnsEmptyList() {
     ApproxCountDistinct fn = new ApproxCountDistinct("col1", null);
 
@@ -147,8 +138,7 @@ public class ApproxCountDistinctTest {
         "getParameters should return empty list");
   }
 
-  @Test
-  @DisplayName("Both accumulator types fulfill add/getResult contract")
+  @Test @DisplayName("Both accumulator types fulfill add/getResult contract")
   void testAccumulatorContract() {
     // HLLAccumulator contract
     ApproxCountDistinct.HLLAccumulator hll = new ApproxCountDistinct.HLLAccumulator();

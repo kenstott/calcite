@@ -24,7 +24,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.impl.AbstractSchema;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -36,8 +35,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -71,14 +68,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
         + "{\"id\": 2, \"name\": \"Bob\", \"salary\": 60000}]");
 
     // Build a model with a schema containing the employees table
-    String model = buildTestModel("myschema", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("myschema", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConn.getRootSchema();
@@ -95,8 +92,8 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
 
       // Create a MaterializedViewTable with a simple SELECT query
       File parquetOutput = new File(tempDir.toFile(), "mat_view.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          mySchema,
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(mySchema,
           "myschema",
           "mat_view",
           "SELECT id, name, salary FROM employees",
@@ -127,14 +124,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
         "[{\"pid\": 10, \"pname\": \"Widget\"},"
         + "{\"pid\": 20, \"pname\": \"Gadget\"}]");
 
-    String model = buildTestModel("suppliertest", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("suppliertest", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConn.getRootSchema();
@@ -143,8 +140,8 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
 
       // Create a MaterializedViewTable using the Supplier constructor
       File parquetOutput = new File(tempDir.toFile(), "supplier_mat.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          supplierSchema,
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(supplierSchema,
           "suppliertest",
           "supplier_mat",
           "SELECT pid, pname FROM products",
@@ -178,14 +175,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
     File jsonFile = new File(tempDir.toFile(), "items.json");
     writeJson(jsonFile, "[{\"item_id\": 1, \"description\": \"Test\"}]");
 
-    String model = buildTestModel("idempotent", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("idempotent", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("idempotent");
@@ -197,8 +194,8 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
       }
 
       File parquetOutput = new File(tempDir.toFile(), "idempotent_mat.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          schema, "idempotent", "idempotent_mat",
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(schema, "idempotent", "idempotent_mat",
           "SELECT item_id, description FROM items",
           parquetOutput, tables);
 
@@ -222,14 +219,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
     File jsonFile = new File(tempDir.toFile(), "dummy.json");
     writeJson(jsonFile, "[{\"val\": 1}]");
 
-    String model = buildTestModel("errtest", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("errtest", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("errtest");
@@ -241,16 +238,16 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
       }
 
       File parquetOutput = new File(tempDir.toFile(), "error_mat.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          schema, "errtest", "error_mat",
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(schema, "errtest", "error_mat",
           "SELECT nonexistent_column FROM nonexistent_table",
           parquetOutput, tables);
 
       JavaTypeFactory tf = new JavaTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
 
       // Should throw RuntimeException wrapping the SQL error
-      RuntimeException ex = assertThrows(RuntimeException.class,
-          () -> mvTable.getRowType(tf));
+      RuntimeException ex =
+          assertThrows(RuntimeException.class, () -> mvTable.getRowType(tf));
       assertTrue(ex.getMessage().contains("Failed to materialize view"),
           "Exception should mention materialization failure, got: " + ex.getMessage());
     }
@@ -265,14 +262,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
     File csvFile = new File(tempDir.toFile(), "typed_data.csv");
     writeCsv(csvFile, "int_col,float_col,text_col\n1,1.5,hello\n2,2.5,world\n");
 
-    String model = buildTestModel("typedschema", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("typedschema", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("typedschema");
@@ -284,8 +281,8 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
       }
 
       File parquetOutput = new File(tempDir.toFile(), "typed_mat.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          schema, "typedschema", "typed_mat",
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(schema, "typedschema", "typed_mat",
           "SELECT int_col, float_col, text_col FROM typed_data",
           parquetOutput, tables);
 
@@ -307,14 +304,14 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
     File jsonFile = new File(tempDir.toFile(), "flag_test.json");
     writeJson(jsonFile, "[{\"x\": 1, \"y\": \"hello\"}]");
 
-    String model = buildTestModel("flagtest", tempDir.toString(),
-        "executionEngine", "PARQUET");
+    String model =
+        buildTestModel("flagtest", tempDir.toString(), "executionEngine", "PARQUET");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
 
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=inline:" + model,
-        connectionProps);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model, connectionProps);
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("flagtest");
@@ -326,8 +323,8 @@ public class MaterializedViewTableCoverageTest extends BaseFileTest {
       }
 
       File parquetOutput = new File(tempDir.toFile(), "flag_mat.parquet");
-      MaterializedViewTable mvTable = new MaterializedViewTable(
-          schema, "flagtest", "flag_mat",
+      MaterializedViewTable mvTable =
+          new MaterializedViewTable(schema, "flagtest", "flag_mat",
           "SELECT x, y FROM flag_test",
           parquetOutput, tables);
 

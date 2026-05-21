@@ -560,8 +560,7 @@ public class CsvTypeInferenceTest {
   /**
    * Test to verify what types are inferred for the mixed-types.csv file with LINQ4J engine.
    */
-  @Test
-  void testListAllTables() throws Exception {
+  @Test void testListAllTables() throws Exception {
     // List all tables to see what's actually available
     String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     Properties info = new Properties();
@@ -592,8 +591,7 @@ public class CsvTypeInferenceTest {
     }
   }
 
-  @Test
-  void testMixedTypesColumnTypes() throws Exception {
+  @Test void testMixedTypesColumnTypes() throws Exception {
     String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     Properties info = new Properties();
     String modelJson = buildModelJson();

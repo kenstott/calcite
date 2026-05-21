@@ -214,8 +214,7 @@ public class CacheResolverTest {
 
     // Provider that fails on range reads
     MockBundleStorageProvider provider = new MockBundleStorageProvider() {
-      @Override
-      public byte[] readRange(String path, long offset, long length) throws IOException {
+      @Override public byte[] readRange(String path, long offset, long length) throws IOException {
         throw new IOException("Simulated network failure");
       }
     };
@@ -290,8 +289,7 @@ public class CacheResolverTest {
       rangeData.put(path + ":" + offset + ":" + length, data.getBytes(StandardCharsets.UTF_8));
     }
 
-    @Override
-    public byte[] readRange(String path, long offset, long length) throws IOException {
+    @Override public byte[] readRange(String path, long offset, long length) throws IOException {
       byte[] data = rangeData.get(path + ":" + offset + ":" + length);
       if (data != null) {
         return data;
@@ -309,21 +307,20 @@ public class CacheResolverTest {
       return result;
     }
 
-    @Override
-    public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+    @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
       List<FileEntry> entries = new ArrayList<FileEntry>();
       for (String filePath : files.keySet()) {
         if (filePath.startsWith(path)) {
           String name = filePath.substring(filePath.lastIndexOf('/') + 1);
-          entries.add(new FileEntry(filePath, name, false,
+          entries.add(
+              new FileEntry(filePath, name, false,
               files.get(filePath).length(), 0));
         }
       }
       return entries;
     }
 
-    @Override
-    public FileMetadata getMetadata(String path) throws IOException {
+    @Override public FileMetadata getMetadata(String path) throws IOException {
       String content = files.get(path);
       if (content == null) {
         throw new IOException("File not found: " + path);
@@ -331,8 +328,7 @@ public class CacheResolverTest {
       return new FileMetadata(path, content.length(), 0, "application/octet-stream", null);
     }
 
-    @Override
-    public InputStream openInputStream(String path) throws IOException {
+    @Override public InputStream openInputStream(String path) throws IOException {
       String content = files.get(path);
       if (content == null) {
         throw new IOException("File not found: " + path);
@@ -340,28 +336,23 @@ public class CacheResolverTest {
       return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     }
 
-    @Override
-    public Reader openReader(String path) throws IOException {
+    @Override public Reader openReader(String path) throws IOException {
       return new java.io.InputStreamReader(openInputStream(path), StandardCharsets.UTF_8);
     }
 
-    @Override
-    public boolean exists(String path) {
+    @Override public boolean exists(String path) {
       return files.containsKey(path);
     }
 
-    @Override
-    public boolean isDirectory(String path) {
+    @Override public boolean isDirectory(String path) {
       return false;
     }
 
-    @Override
-    public String getStorageType() {
+    @Override public String getStorageType() {
       return "mock-bundle";
     }
 
-    @Override
-    public String resolvePath(String basePath, String relativePath) {
+    @Override public String resolvePath(String basePath, String relativePath) {
       return basePath + "/" + relativePath;
     }
   }

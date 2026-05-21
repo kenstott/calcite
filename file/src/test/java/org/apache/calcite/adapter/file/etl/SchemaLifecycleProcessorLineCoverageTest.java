@@ -26,21 +26,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -82,8 +75,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
   /**
    * Tests the DelegatingTableListener with registered hooks for all lifecycle methods.
    */
-  @Test
-  void testDelegatingTableListenerWithHooks() throws Exception {
+  @Test void testDelegatingTableListenerWithHooks() throws Exception {
     AtomicBoolean beforeCalled = new AtomicBoolean(false);
     AtomicBoolean afterCalled = new AtomicBoolean(false);
     AtomicBoolean beforeSourceCalled = new AtomicBoolean(false);
@@ -157,8 +149,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
    * Tests the DelegatingTableListener when no hook is registered and it falls through
    * to the delegate (or defaults).
    */
-  @Test
-  void testDelegatingTableListenerWithoutHooks() throws Exception {
+  @Test void testDelegatingTableListenerWithoutHooks() throws Exception {
     AtomicBoolean delegateBeforeCalled = new AtomicBoolean(false);
 
     TableLifecycleListener delegate = new TableLifecycleListener() {
@@ -193,8 +184,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= DelegatingTableListener error hooks delegation =======
 
-  @Test
-  void testDelegatingTableListenerErrorHooksWithHook() throws Exception {
+  @Test void testDelegatingTableListenerErrorHooksWithHook() throws Exception {
     AtomicBoolean errorHookCalled = new AtomicBoolean(false);
     AtomicBoolean sourceErrorHookCalled = new AtomicBoolean(false);
     AtomicBoolean materializeErrorHookCalled = new AtomicBoolean(false);
@@ -234,8 +224,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= DelegatingTableListener fetchData/writeData hooks =======
 
-  @Test
-  void testDelegatingTableListenerDataHooks() throws Exception {
+  @Test void testDelegatingTableListenerDataHooks() throws Exception {
     AtomicBoolean fetchCalled = new AtomicBoolean(false);
     AtomicBoolean writeCalled = new AtomicBoolean(false);
 
@@ -272,8 +261,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= Builder validation tests =======
 
-  @Test
-  void testBuilderRequiresConfig() {
+  @Test void testBuilderRequiresConfig() {
     assertThrows(IllegalArgumentException.class, () ->
         SchemaLifecycleProcessor.builder()
             .storageProvider(storageProvider)
@@ -281,8 +269,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
             .build());
   }
 
-  @Test
-  void testBuilderRequiresStorageProvider() {
+  @Test void testBuilderRequiresStorageProvider() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.toString())
@@ -296,8 +283,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
             .build());
   }
 
-  @Test
-  void testBuilderRequiresMaterializeDirectory() {
+  @Test void testBuilderRequiresMaterializeDirectory() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .tables(Collections.<EtlPipelineConfig>emptyList())
@@ -312,8 +298,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= Builder all fluent methods =======
 
-  @Test
-  void testBuilderFluentMethods() {
+  @Test void testBuilderFluentMethods() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -335,8 +320,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  @SuppressWarnings("deprecation")
+  @Test @SuppressWarnings("deprecation")
   void testBuilderDeprecatedBaseDirectory() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
@@ -353,8 +337,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertNotNull(processor);
   }
 
-  @Test
-  @SuppressWarnings("deprecation")
+  @Test @SuppressWarnings("deprecation")
   void testBuilderDeprecatedShouldProcess() {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
@@ -378,8 +361,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= createVariableKey tests =======
 
-  @Test
-  void testCreateVariableKeyEmpty() throws Exception {
+  @Test void testCreateVariableKeyEmpty() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -399,8 +381,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertEquals("default", result);
   }
 
-  @Test
-  void testCreateVariableKeyNull() throws Exception {
+  @Test void testCreateVariableKeyNull() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -420,8 +401,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertEquals("default", result);
   }
 
-  @Test
-  void testCreateVariableKeyWithValues() throws Exception {
+  @Test void testCreateVariableKeyWithValues() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -449,8 +429,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= needsArchiveRetry tests =======
 
-  @Test
-  void testNeedsArchiveRetryNullOperatingDir() throws Exception {
+  @Test void testNeedsArchiveRetryNullOperatingDir() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -463,8 +442,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .materializeDirectory(tempDir.resolve("mat").toString())
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -477,8 +456,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertFalse(result, "Should return false when operating directory is null");
   }
 
-  @Test
-  void testNeedsArchiveRetryNoCacheDir() throws Exception {
+  @Test void testNeedsArchiveRetryNoCacheDir() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -492,8 +470,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .operatingDirectory(tempDir.resolve("op").toString())
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     // Operating directory exists but cache/raw does not
@@ -507,8 +485,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertFalse(result, "Should return false when cache/raw dir does not exist");
   }
 
-  @Test
-  void testNeedsArchiveRetryLocalStorageProvider() throws Exception {
+  @Test void testNeedsArchiveRetryLocalStorageProvider() throws Exception {
     String opDir = tempDir.resolve("op-archive").toString();
     // Create cache/raw directory
     java.io.File cacheDir = new java.io.File(opDir + "/cache/raw");
@@ -537,8 +514,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .operatingDirectory(opDir)
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("needsArchiveRetry", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -554,8 +531,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= archiveRawCache tests =======
 
-  @Test
-  void testArchiveRawCacheNullOperatingDir() throws Exception {
+  @Test void testArchiveRawCacheNullOperatingDir() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -568,8 +544,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .materializeDirectory(tempDir.resolve("mat").toString())
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -582,8 +558,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     m.invoke(processor, ctx);
   }
 
-  @Test
-  void testArchiveRawCacheNoCacheDir() throws Exception {
+  @Test void testArchiveRawCacheNoCacheDir() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.resolve("mat").toString())
@@ -597,8 +572,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .operatingDirectory(tempDir.resolve("no-cache-dir").toString())
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -611,8 +586,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     m.invoke(processor, ctx);
   }
 
-  @Test
-  void testArchiveRawCacheLocalStorageSkips() throws Exception {
+  @Test void testArchiveRawCacheLocalStorageSkips() throws Exception {
     String opDir = tempDir.resolve("op-archive2").toString();
     java.io.File cacheDir = new java.io.File(opDir + "/cache/raw");
     cacheDir.mkdirs();
@@ -638,8 +612,8 @@ class SchemaLifecycleProcessorLineCoverageTest {
         .operatingDirectory(opDir)
         .build();
 
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache",
-        SchemaContext.class);
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("archiveRawCache", SchemaContext.class);
     m.setAccessible(true);
 
     SchemaContext ctx = SchemaContext.builder()
@@ -655,10 +629,9 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= loadSchemaListener / loadDefaultTableListener / loadTableListener =======
 
-  @Test
-  void testLoadSchemaListenerNullHooks() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadSchemaListener",
-        SchemaConfig.class);
+  @Test void testLoadSchemaListenerNullHooks() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadSchemaListener", SchemaConfig.class);
     m.setAccessible(true);
 
     SchemaConfig noHooksConfig = SchemaConfig.builder()
@@ -672,10 +645,9 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertEquals(SchemaLifecycleListener.NOOP, result);
   }
 
-  @Test
-  void testLoadDefaultTableListenerNullHooks() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadDefaultTableListener",
-        SchemaConfig.class);
+  @Test void testLoadDefaultTableListenerNullHooks() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadDefaultTableListener", SchemaConfig.class);
     m.setAccessible(true);
 
     SchemaConfig noHooksConfig = SchemaConfig.builder()
@@ -689,10 +661,9 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertEquals(TableLifecycleListener.NOOP, result);
   }
 
-  @Test
-  void testLoadTableListenerNullHooks() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadTableListener",
-        EtlPipelineConfig.class, TableLifecycleListener.class);
+  @Test void testLoadTableListenerNullHooks() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadTableListener", EtlPipelineConfig.class, TableLifecycleListener.class);
     m.setAccessible(true);
 
     EtlPipelineConfig tableConfig = EtlPipelineConfig.builder()
@@ -708,10 +679,9 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= loadInstance tests =======
 
-  @Test
-  void testLoadInstanceWithInvalidClass() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadInstance",
-        String.class, Class.class);
+  @Test void testLoadInstanceWithInvalidClass() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadInstance", String.class, Class.class);
     m.setAccessible(true);
 
     try {
@@ -722,10 +692,9 @@ class SchemaLifecycleProcessorLineCoverageTest {
     }
   }
 
-  @Test
-  void testLoadInstanceWithWrongType() throws Exception {
-    Method m = SchemaLifecycleProcessor.class.getDeclaredMethod("loadInstance",
-        String.class, Class.class);
+  @Test void testLoadInstanceWithWrongType() throws Exception {
+    Method m =
+        SchemaLifecycleProcessor.class.getDeclaredMethod("loadInstance", String.class, Class.class);
     m.setAccessible(true);
 
     try {
@@ -739,8 +708,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= SchemaLifecycleListener NOOP tests =======
 
-  @Test
-  void testNoopSchemaListenerMethods() throws Exception {
+  @Test void testNoopSchemaListenerMethods() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.toString())
@@ -759,15 +727,14 @@ class SchemaLifecycleProcessorLineCoverageTest {
     SchemaLifecycleListener.NOOP.onSchemaError(ctx, new Exception("test"));
 
     // downloadBulkFile default returns null
-    String result = SchemaLifecycleListener.NOOP.downloadBulkFile(
-        ctx, null, Collections.<String, String>emptyMap(), "/tmp/target");
+    String result =
+        SchemaLifecycleListener.NOOP.downloadBulkFile(ctx, null, Collections.<String, String>emptyMap(), "/tmp/target");
     assertNull(result);
   }
 
   // ======= TableLifecycleListener NOOP tests =======
 
-  @Test
-  void testNoopTableListenerMethods() throws Exception {
+  @Test void testNoopTableListenerMethods() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test")
         .materializeDirectory(tempDir.toString())
@@ -813,14 +780,17 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertTrue(TableLifecycleListener.NOOP.onMaterializeError(tableCtx, new Exception("test")));
 
     // fetchData and writeData defaults
-    assertNull(TableLifecycleListener.NOOP.fetchData(tableCtx,
+    assertNull(
+        TableLifecycleListener.NOOP.fetchData(tableCtx,
         Collections.<String, String>emptyMap()));
-    assertEquals(-1, TableLifecycleListener.NOOP.writeData(tableCtx,
+    assertEquals(
+        -1, TableLifecycleListener.NOOP.writeData(tableCtx,
         Collections.<Map<String, Object>>emptyList().iterator(),
         Collections.<String, String>emptyMap()));
 
     // resolveDimensions default
-    assertNull(TableLifecycleListener.NOOP.resolveDimensions(tableCtx,
+    assertNull(
+        TableLifecycleListener.NOOP.resolveDimensions(tableCtx,
         Collections.<String, DimensionConfig>emptyMap()));
 
     // resolveApiKey default
@@ -832,31 +802,27 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= SourceResult and MaterializeResult factory methods =======
 
-  @Test
-  void testSourceResultSuccess() {
+  @Test void testSourceResultSuccess() {
     SourceResult result = SourceResult.success(100, 5, 1500, "test-path");
     assertNotNull(result);
     assertEquals(100, result.getRecordCount());
     assertEquals(1500, result.getDurationMs());
   }
 
-  @Test
-  void testSourceResultError() {
+  @Test void testSourceResultError() {
     SourceResult result = SourceResult.error("failed", 500, "path");
     assertNotNull(result);
     assertTrue(result.isError());
   }
 
-  @Test
-  void testMaterializeResultSuccess() {
+  @Test void testMaterializeResultSuccess() {
     MaterializeResult result = MaterializeResult.success(200, 1024, 2000);
     assertNotNull(result);
     assertEquals(200, result.getRowCount());
     assertEquals(2000, result.getElapsedMillis());
   }
 
-  @Test
-  void testMaterializeResultError() {
+  @Test void testMaterializeResultError() {
     MaterializeResult result = MaterializeResult.error("write failed", 300);
     assertNotNull(result);
     assertTrue(result.isError());
@@ -864,8 +830,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= EtlResult tests =======
 
-  @Test
-  void testEtlResultSkipped() {
+  @Test void testEtlResultSkipped() {
     EtlResult result = EtlResult.skipped("table1", 50);
     assertNotNull(result);
     assertTrue(result.isSkipped());
@@ -873,8 +838,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
     assertNotNull(result.toString());
   }
 
-  @Test
-  void testEtlResultFailed() {
+  @Test void testEtlResultFailed() {
     EtlResult result = EtlResult.builder()
         .pipelineName("failTable")
         .failed(true)
@@ -889,8 +853,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= SchemaResult tests =======
 
-  @Test
-  void testSchemaResultBuilder() {
+  @Test void testSchemaResultBuilder() {
     EtlResult success = EtlResult.builder()
         .pipelineName("t1")
         .failed(false)
@@ -923,8 +886,7 @@ class SchemaLifecycleProcessorLineCoverageTest {
 
   // ======= DelegatingTableListener wildcard isEnabled =======
 
-  @Test
-  void testDelegatingTableListenerWildcardIsEnabled() throws Exception {
+  @Test void testDelegatingTableListenerWildcardIsEnabled() throws Exception {
     SchemaConfig schemaConfig = SchemaConfig.builder()
         .name("test_schema")
         .materializeDirectory(tempDir.resolve("mat").toString())

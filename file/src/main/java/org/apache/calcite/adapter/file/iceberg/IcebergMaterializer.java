@@ -28,7 +28,10 @@ import org.apache.iceberg.io.CloseableIterable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -40,16 +43,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -929,8 +929,8 @@ public class IcebergMaterializer {
 
       // Try file-list chunking: avoids scanning 100k+ files via a single glob query.
       // Falls back to glob-based processing when S3 LIST data is unavailable.
-      List<String> newFilePaths = getNewSourceFilePaths(
-          config.getSourcePattern(), year, config.getRowFilter(), excludeAccessions);
+      List<String> newFilePaths =
+          getNewSourceFilePaths(config.getSourcePattern(), year, config.getRowFilter(), excludeAccessions);
 
       if (newFilePaths != null) {
         if (newFilePaths.isEmpty()) {
@@ -1262,8 +1262,8 @@ public class IcebergMaterializer {
       if (!storageProvider.exists(path)) {
         return 0;
       }
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(storageProvider.openInputStream(path), StandardCharsets.UTF_8))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(storageProvider.openInputStream(path), StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         if (line == null) {
           return 0;
@@ -2793,8 +2793,8 @@ public class IcebergMaterializer {
         // Endpoint hostname only (no https:// prefix) as required by DuckDB CREATE SECRET
         String endpointHost = endpoint != null ? endpoint.replaceFirst("^https?://", "") : null;
 
-        StringBuilder secret = new StringBuilder(
-            "CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
+        StringBuilder secret =
+            new StringBuilder("CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
         secret.append(", KEY_ID '").append(accessKey).append("'");
         secret.append(", SECRET '").append(secretKey).append("'");
         if (endpointHost != null) {

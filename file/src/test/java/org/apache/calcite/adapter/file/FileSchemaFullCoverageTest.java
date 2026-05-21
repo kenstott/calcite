@@ -24,7 +24,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,9 +39,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -50,7 +47,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Comprehensive integration tests for the root package classes:
@@ -118,7 +114,8 @@ public class FileSchemaFullCoverageTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"directory\": \"" + dir + "\""
-        + (extraOperands.isEmpty() ? "" : ",\n" + extraOperands)
+        + (extraOperands.isEmpty() ? "" : ",\n"
+  + extraOperands)
         + "\n      }\n"
         + "    }\n"
         + "  ]\n"
@@ -193,8 +190,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("TESTSCHEMA", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT product_id, product_name, price FROM products ORDER BY product_id")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT product_id, product_name, price FROM products ORDER BY product_id")) {
       assertTrue(rs.next());
       assertEquals(1, rs.getInt(1));
       assertEquals("Widget", rs.getString(2));
@@ -236,8 +233,8 @@ public class FileSchemaFullCoverageTest {
 
       // Query employees
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT emp_name FROM employees ORDER BY emp_id")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT emp_name FROM employees ORDER BY emp_id")) {
         assertTrue(rs.next());
         assertEquals("Alice", rs.getString(1));
         assertTrue(rs.next());
@@ -246,8 +243,8 @@ public class FileSchemaFullCoverageTest {
 
       // Query departments
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT dept_name FROM departments ORDER BY dept_id")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT dept_name FROM departments ORDER BY dept_id")) {
         assertTrue(rs.next());
         assertEquals("Engineering", rs.getString(1));
       }
@@ -311,8 +308,8 @@ public class FileSchemaFullCoverageTest {
         "col_a:int,col_b:string",
         "1,hello");
 
-    String model = buildModel("CASESCHEMA", tempDir.toFile().getAbsolutePath(),
-        "        \"tableNameCasing\": \"LOWER\",\n"
+    String model =
+        buildModel("CASESCHEMA", tempDir.toFile().getAbsolutePath(), "        \"tableNameCasing\": \"LOWER\",\n"
         + "        \"columnNameCasing\": \"LOWER\"");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
@@ -334,8 +331,8 @@ public class FileSchemaFullCoverageTest {
         "item_id:int,item_desc:string",
         "1,TestItem");
 
-    String model = buildModel("UPPERSCHEMA", tempDir.toFile().getAbsolutePath(),
-        "        \"tableNameCasing\": \"UPPER\",\n"
+    String model =
+        buildModel("UPPERSCHEMA", tempDir.toFile().getAbsolutePath(), "        \"tableNameCasing\": \"UPPER\",\n"
         + "        \"columnNameCasing\": \"UPPER\"");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
@@ -357,8 +354,8 @@ public class FileSchemaFullCoverageTest {
         "field_a:int,field_b:string",
         "1,value");
 
-    String model = buildModel("UNCHSCHEMA", tempDir.toFile().getAbsolutePath(),
-        "        \"tableNameCasing\": \"UNCHANGED\",\n"
+    String model =
+        buildModel("UNCHSCHEMA", tempDir.toFile().getAbsolutePath(), "        \"tableNameCasing\": \"UNCHANGED\",\n"
         + "        \"columnNameCasing\": \"UNCHANGED\"");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
@@ -429,8 +426,8 @@ public class FileSchemaFullCoverageTest {
       w.write("bid:int,bname:string\n1,BetaOne\n");
     }
 
-    String model = buildDualSchemaModel("S1", dir1.getAbsolutePath(),
-        "S2", dir2.getAbsolutePath());
+    String model =
+        buildDualSchemaModel("S1", dir1.getAbsolutePath(), "S2", dir2.getAbsolutePath());
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
 
@@ -445,15 +442,15 @@ public class FileSchemaFullCoverageTest {
 
       // Query from each schema
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT aname FROM \"S1\".alpha")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT aname FROM \"S1\".alpha")) {
         assertTrue(rs.next());
         assertEquals("AlphaOne", rs.getString(1));
       }
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT bname FROM \"S2\".beta")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT bname FROM \"S2\".beta")) {
         assertTrue(rs.next());
         assertEquals("BetaOne", rs.getString(1));
       }
@@ -525,12 +522,12 @@ public class FileSchemaFullCoverageTest {
         "1,99.5,true",
         "2,150.0,false");
 
-    String model = buildModel("TYPEINF", tempDir.toFile().getAbsolutePath(),
-        "        \"csvTypeInference\": { \"enabled\": true }");
+    String model =
+        buildModel("TYPEINF", tempDir.toFile().getAbsolutePath(), "        \"csvTypeInference\": { \"enabled\": true }");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT record_id, amount, is_active FROM inferred ORDER BY record_id")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT record_id, amount, is_active FROM inferred ORDER BY record_id")) {
       ResultSetMetaData rsmd = rs.getMetaData();
       LOGGER.debug("Column types: {}, {}, {}",
           rsmd.getColumnTypeName(1),
@@ -554,12 +551,12 @@ public class FileSchemaFullCoverageTest {
         "1,hello,true",
         "2,world,false");
 
-    String model = buildModel("NOINF", tempDir.toFile().getAbsolutePath(),
-        "        \"csvTypeInference\": { \"enabled\": false }");
+    String model =
+        buildModel("NOINF", tempDir.toFile().getAbsolutePath(), "        \"csvTypeInference\": { \"enabled\": false }");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT col_a, col_b FROM allstrings ORDER BY col_a")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT col_a, col_b FROM allstrings ORDER BY col_a")) {
       ResultSetMetaData rsmd = rs.getMetaData();
       LOGGER.debug("Column types with inference disabled: {}, {}",
           rsmd.getColumnTypeName(1),
@@ -580,8 +577,8 @@ public class FileSchemaFullCoverageTest {
         "1,FlatOne",
         "2,FlatTwo");
 
-    String model = buildModel("FLATSCHEMA", tempDir.toFile().getAbsolutePath(),
-        "        \"flatten\": true");
+    String model =
+        buildModel("FLATSCHEMA", tempDir.toFile().getAbsolutePath(), "        \"flatten\": true");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = cc.getRootSchema().getSubSchema("FLATSCHEMA");
@@ -593,8 +590,8 @@ public class FileSchemaFullCoverageTest {
 
       // Verify the CSV table is queryable
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT fname FROM flat_data ORDER BY fid")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT fname FROM flat_data ORDER BY fid")) {
         assertTrue(rs.next());
         assertEquals("FlatOne", rs.getString(1));
       }
@@ -611,12 +608,12 @@ public class FileSchemaFullCoverageTest {
       w.write("src_id:int,src_val:string\n1,SourceValue\n");
     }
 
-    String model = buildModel("SRCOVERRIDE",
-        sourceDir.getAbsolutePath());
+    String model =
+        buildModel("SRCOVERRIDE", sourceDir.getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT src_val FROM src_data")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT src_val FROM src_data")) {
       assertTrue(rs.next());
       assertEquals("SourceValue", rs.getString(1));
     }
@@ -631,8 +628,8 @@ public class FileSchemaFullCoverageTest {
         "cid:int,cval:string",
         "1,test");
 
-    String model = buildModel("COMMENTED", tempDir.toFile().getAbsolutePath(),
-        "        \"comment\": \"Test schema comment\"");
+    String model =
+        buildModel("COMMENTED", tempDir.toFile().getAbsolutePath(), "        \"comment\": \"Test schema comment\"");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = cc.getRootSchema().getSubSchema("COMMENTED");
@@ -654,8 +651,8 @@ public class FileSchemaFullCoverageTest {
       w.write("deep_id:int,deep_val:string\n1,DeepValue\n");
     }
 
-    String model = buildModel("RECURSE", tempDir.toFile().getAbsolutePath(),
-        "        \"recursive\": true");
+    String model =
+        buildModel("RECURSE", tempDir.toFile().getAbsolutePath(), "        \"recursive\": true");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = cc.getRootSchema().getSubSchema("RECURSE");
@@ -723,16 +720,16 @@ public class FileSchemaFullCoverageTest {
     try (Connection conn = connect(model)) {
       // COUNT
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) FROM scores")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) FROM scores")) {
         assertTrue(rs.next());
         assertEquals(4, rs.getInt(1));
       }
 
       // WHERE + ORDER BY
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT student_name FROM scores WHERE score > 90 ORDER BY score DESC")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT student_name FROM scores WHERE score > 90 ORDER BY score DESC")) {
         assertTrue(rs.next());
         assertEquals("Diana", rs.getString(1));
         assertTrue(rs.next());
@@ -757,8 +754,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("AGGTEST", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT category, SUM(metric_value) as total, AVG(metric_value) as avg_val "
+         ResultSet rs =
+             stmt.executeQuery("SELECT category, SUM(metric_value) as total, AVG(metric_value) as avg_val "
              + "FROM metrics GROUP BY category ORDER BY category")) {
       assertTrue(rs.next());
       assertEquals("A", rs.getString(1));
@@ -788,8 +785,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("JOINTEST", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT e.ename, d.dname "
+         ResultSet rs =
+             stmt.executeQuery("SELECT e.ename, d.dname "
              + "FROM proj_employees e "
              + "JOIN proj_departments d ON e.dept = d.did "
              + "ORDER BY e.eid")) {
@@ -818,12 +815,12 @@ public class FileSchemaFullCoverageTest {
       w.write("uid:int,role_name:string\n1,Admin\n2,Viewer\n");
     }
 
-    String model = buildDualSchemaModel("USERDB", dir1.getAbsolutePath(),
-        "ROLEDB", dir2.getAbsolutePath());
+    String model =
+        buildDualSchemaModel("USERDB", dir1.getAbsolutePath(), "ROLEDB", dir2.getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT u.uname, r.role_name "
+         ResultSet rs =
+             stmt.executeQuery("SELECT u.uname, r.role_name "
              + "FROM \"USERDB\".users u "
              + "JOIN \"ROLEDB\".user_roles r ON u.uid = r.uid "
              + "ORDER BY u.uid")) {
@@ -900,8 +897,8 @@ public class FileSchemaFullCoverageTest {
         "skey:int,sval:string",
         "1,test");
 
-    String model = buildModel("SNAKE", tempDir.toFile().getAbsolutePath(),
-        "        \"table_name_casing\": \"UPPER\",\n"
+    String model =
+        buildModel("SNAKE", tempDir.toFile().getAbsolutePath(), "        \"table_name_casing\": \"UPPER\",\n"
         + "        \"column_name_casing\": \"UPPER\"");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
@@ -924,8 +921,8 @@ public class FileSchemaFullCoverageTest {
         "1,ExplicitValue");
 
     String dir = tempDir.toFile().getAbsolutePath().replace("\\", "\\\\");
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        "{\n"
+    String model =
+        BaseFileTest.addEphemeralCacheToModel("{\n"
         + "  \"version\": \"1.0\",\n"
         + "  \"defaultSchema\": \"EXPLICIT\",\n"
         + "  \"schemas\": [\n"
@@ -966,8 +963,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("TYPED", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid, tname, tamt FROM typed ORDER BY tid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid, tname, tamt FROM typed ORDER BY tid")) {
       ResultSetMetaData rsmd = rs.getMetaData();
       assertEquals(3, rsmd.getColumnCount());
 
@@ -991,12 +988,12 @@ public class FileSchemaFullCoverageTest {
         "eid:int,eval:string",
         "1,EngineTest");
 
-    String model = buildModel("ENGINETEST", tempDir.toFile().getAbsolutePath(),
-        "        \"executionEngine\": \"PARQUET\"");
+    String model =
+        buildModel("ENGINETEST", tempDir.toFile().getAbsolutePath(), "        \"executionEngine\": \"PARQUET\"");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT eval FROM engine_test")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT eval FROM engine_test")) {
       assertTrue(rs.next());
       assertEquals("EngineTest", rs.getString(1));
     }
@@ -1012,12 +1009,12 @@ public class FileSchemaFullCoverageTest {
         "1,BatchA",
         "2,BatchB");
 
-    String model = buildModel("BATCHTEST", tempDir.toFile().getAbsolutePath(),
-        "        \"batchSize\": 512");
+    String model =
+        buildModel("BATCHTEST", tempDir.toFile().getAbsolutePath(), "        \"batchSize\": 512");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT bval FROM batch_test ORDER BY bid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT bval FROM batch_test ORDER BY bid")) {
       assertTrue(rs.next());
       assertEquals("BatchA", rs.getString(1));
       assertTrue(rs.next());
@@ -1034,12 +1031,12 @@ public class FileSchemaFullCoverageTest {
         "npid:int,npval:string",
         "1,NoPrimeValue");
 
-    String model = buildModel("NOPRIME", tempDir.toFile().getAbsolutePath(),
-        "        \"primeCache\": false");
+    String model =
+        buildModel("NOPRIME", tempDir.toFile().getAbsolutePath(), "        \"primeCache\": false");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT npval FROM no_prime")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT npval FROM no_prime")) {
       assertTrue(rs.next());
       assertEquals("NoPrimeValue", rs.getString(1));
     }
@@ -1054,12 +1051,12 @@ public class FileSchemaFullCoverageTest {
         "rfid:int,rfval:string",
         "1,RefreshValue");
 
-    String model = buildModel("REFRESH", tempDir.toFile().getAbsolutePath(),
-        "        \"refreshInterval\": \"5 minutes\"");
+    String model =
+        buildModel("REFRESH", tempDir.toFile().getAbsolutePath(), "        \"refreshInterval\": \"5 minutes\"");
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT rfval FROM refreshed")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT rfval FROM refreshed")) {
       assertTrue(rs.next());
       assertEquals("RefreshValue", rs.getString(1));
     }
@@ -1080,8 +1077,8 @@ public class FileSchemaFullCoverageTest {
     // Use subquery to exercise the same SQL paths that views would use
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT vname FROM "
+         ResultSet rs =
+             stmt.executeQuery("SELECT vname FROM "
              + "(SELECT vid, vname, vamount FROM base_tbl WHERE vamount >= 100) "
              + "ORDER BY vid")) {
       assertTrue(rs.next());
@@ -1134,8 +1131,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("SPECIALS", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT sp_desc FROM specials ORDER BY sp_id")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT sp_desc FROM specials ORDER BY sp_id")) {
       assertTrue(rs.next());
       String val = rs.getString(1);
       assertNotNull(val);
@@ -1155,8 +1152,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("PAGINATE", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT pval FROM paginated ORDER BY pid LIMIT 2 OFFSET 1")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT pval FROM paginated ORDER BY pid LIMIT 2 OFFSET 1")) {
       assertTrue(rs.next());
       assertEquals("B", rs.getString(1));
       assertTrue(rs.next());
@@ -1179,8 +1176,8 @@ public class FileSchemaFullCoverageTest {
     String model = buildModel("NULLTEST", tempDir.toFile().getAbsolutePath());
     try (Connection conn = connect(model);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT nid, nname, nval FROM nulls ORDER BY nid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT nid, nname, nval FROM nulls ORDER BY nid")) {
       assertTrue(rs.next());
       assertEquals("Alice", rs.getString("nname"));
       assertFalse(rs.wasNull());

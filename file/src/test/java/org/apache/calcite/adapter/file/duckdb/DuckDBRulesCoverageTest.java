@@ -30,15 +30,11 @@ import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
-
-import com.google.common.collect.ImmutableList;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -68,8 +64,7 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - INSTANCE
   // ====================================================================
 
-  @Test
-  void testIcebergCountStarRuleInstance() {
+  @Test void testIcebergCountStarRuleInstance() {
     assertNotNull(DuckDBIcebergCountStarRule.INSTANCE);
   }
 
@@ -77,74 +72,73 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - matches() tests
   // ====================================================================
 
-  @Test
-  void testIcebergMatchesSimpleCountStar() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testIcebergMatchesSimpleCountStar() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createCountStarAggCall())));
 
     assertTrue(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsGroupBy() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testIcebergMatchesRejectsGroupBy() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(0),
             Collections.singletonList(createCountStarAggCall())));
 
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsMultipleAggCalls() {
+  @Test void testIcebergMatchesRejectsMultipleAggCalls() {
     List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
     aggCalls.add(createCountStarAggCall());
     aggCalls.add(createCountStarAggCall());
 
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(ImmutableBitSet.of(), aggCalls));
+    RelOptRuleCall call =
+        mockCallWithAggregate(createMockAggregate(ImmutableBitSet.of(), aggCalls));
 
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsNoAggCalls() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testIcebergMatchesRejectsNoAggCalls() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.<AggregateCall>emptyList()));
 
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsDistinctCount() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testIcebergMatchesRejectsDistinctCount() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createDistinctCountAggCall())));
 
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsCountWithArgs() {
+  @Test void testIcebergMatchesRejectsCountWithArgs() {
     AggregateCall countWithArgs = createCountWithArgsAggCall();
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(countWithArgs)));
 
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testIcebergMatchesRejectsNonCountFunction() {
+  @Test void testIcebergMatchesRejectsNonCountFunction() {
     AggregateCall sumCall = createSumAggCall();
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(sumCall)));
 
@@ -155,20 +149,18 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - findTableScan (via reflection)
   // ====================================================================
 
-  @Test
-  void testIcebergFindTableScanNull() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testIcebergFindTableScanNull() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     method.setAccessible(true);
 
     Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, (RelNode) null);
     assertNull(result);
   }
 
-  @Test
-  void testIcebergFindTableScanDirectMatch() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testIcebergFindTableScanDirectMatch() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     method.setAccessible(true);
 
     TableScan mockScan = mock(TableScan.class);
@@ -176,10 +168,9 @@ public class DuckDBRulesCoverageTest {
     assertEquals(mockScan, result);
   }
 
-  @Test
-  void testIcebergFindTableScanInInputTree() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testIcebergFindTableScanInInputTree() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     method.setAccessible(true);
 
     // Create a relay node that has a TableScan as input
@@ -191,10 +182,9 @@ public class DuckDBRulesCoverageTest {
     assertEquals(mockScan, result);
   }
 
-  @Test
-  void testIcebergFindTableScanNoMatch() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "findTableScan", RelNode.class);
+  @Test void testIcebergFindTableScanNoMatch() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
     method.setAccessible(true);
 
     RelNode mockNode = mock(RelNode.class);
@@ -208,10 +198,9 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - getDuckDBSchema (via reflection)
   // ====================================================================
 
-  @Test
-  void testIcebergGetDuckDBSchemaNonJdbcScan() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "getDuckDBSchema", TableScan.class);
+  @Test void testIcebergGetDuckDBSchemaNonJdbcScan() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
     method.setAccessible(true);
 
     TableScan mockScan = mock(TableScan.class);
@@ -219,10 +208,9 @@ public class DuckDBRulesCoverageTest {
     assertNull(result);
   }
 
-  @Test
-  void testIcebergGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "getDuckDBSchema", TableScan.class);
+  @Test void testIcebergGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
     method.setAccessible(true);
 
     JdbcTableScan mockJdbcScan = mock(JdbcTableScan.class);
@@ -246,10 +234,9 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - createCountStarValues (via reflection)
   // ====================================================================
 
-  @Test
-  void testIcebergCreateCountStarValuesWithPartialMock() throws Exception {
-    Method method = DuckDBIcebergCountStarRule.class.getDeclaredMethod(
-        "createCountStarValues", Aggregate.class, long.class);
+  @Test void testIcebergCreateCountStarValuesWithPartialMock() throws Exception {
+    Method method =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
     method.setAccessible(true);
 
     // With a partial mock cluster that cannot provide traitSetOf, the method
@@ -266,8 +253,7 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - INSTANCE
   // ====================================================================
 
-  @Test
-  void testHLLRuleInstance() {
+  @Test void testHLLRuleInstance() {
     assertNotNull(DuckDBHLLCountDistinctRule.INSTANCE);
   }
 
@@ -275,64 +261,63 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - matches() tests
   // ====================================================================
 
-  @Test
-  void testHLLMatchesDistinctCount() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testHLLMatchesDistinctCount() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createDistinctCountAggCall())));
 
     assertTrue(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testHLLMatchesRejectsGroupBy() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testHLLMatchesRejectsGroupBy() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(0),
             Collections.singletonList(createDistinctCountAggCall())));
 
     assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testHLLMatchesRejectsNonDistinctCount() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testHLLMatchesRejectsNonDistinctCount() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createCountStarAggCall())));
 
     assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testHLLMatchesRejectsSumFunction() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testHLLMatchesRejectsSumFunction() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createSumAggCall())));
 
     assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testHLLMatchesNoAggCallsRejects() {
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(
+  @Test void testHLLMatchesNoAggCallsRejects() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
             ImmutableBitSet.of(),
             Collections.<AggregateCall>emptyList()));
 
     assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test
-  void testHLLMatchesMultipleCallsOneDistinct() {
+  @Test void testHLLMatchesMultipleCallsOneDistinct() {
     List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
     aggCalls.add(createCountStarAggCall());
     aggCalls.add(createDistinctCountAggCall());
 
-    RelOptRuleCall call = mockCallWithAggregate(
-        createMockAggregate(ImmutableBitSet.of(), aggCalls));
+    RelOptRuleCall call =
+        mockCallWithAggregate(createMockAggregate(ImmutableBitSet.of(), aggCalls));
 
     assertTrue(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
@@ -341,20 +326,18 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - findTableInfo (via reflection)
   // ====================================================================
 
-  @Test
-  void testHLLFindTableInfoNull() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "findTableInfo", RelNode.class);
+  @Test void testHLLFindTableInfoNull() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("findTableInfo", RelNode.class);
     method.setAccessible(true);
 
     Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, (RelNode) null);
     assertNull(result);
   }
 
-  @Test
-  void testHLLFindTableInfoDirectTableScan() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "findTableInfo", RelNode.class);
+  @Test void testHLLFindTableInfoDirectTableScan() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("findTableInfo", RelNode.class);
     method.setAccessible(true);
 
     TableScan mockScan = mock(TableScan.class);
@@ -366,10 +349,9 @@ public class DuckDBRulesCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  void testHLLFindTableInfoJdbcTableScan() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "findTableInfo", RelNode.class);
+  @Test void testHLLFindTableInfoJdbcTableScan() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("findTableInfo", RelNode.class);
     method.setAccessible(true);
 
     JdbcTableScan mockJdbcScan = mock(JdbcTableScan.class);
@@ -381,10 +363,9 @@ public class DuckDBRulesCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  void testHLLFindTableInfoInInputTree() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "findTableInfo", RelNode.class);
+  @Test void testHLLFindTableInfoInInputTree() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("findTableInfo", RelNode.class);
     method.setAccessible(true);
 
     TableScan mockScan = mock(TableScan.class);
@@ -399,10 +380,9 @@ public class DuckDBRulesCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  void testHLLFindTableInfoNoMatch() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "findTableInfo", RelNode.class);
+  @Test void testHLLFindTableInfoNoMatch() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("findTableInfo", RelNode.class);
     method.setAccessible(true);
 
     RelNode mockNode = mock(RelNode.class);
@@ -416,10 +396,9 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - getHLLEstimate (via reflection)
   // ====================================================================
 
-  @Test
-  void testHLLGetEstimateNoArgs() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "getHLLEstimate",
+  @Test void testHLLGetEstimateNoArgs() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("getHLLEstimate",
         getDuckDBTableInfoClass(),
         RelNode.class,
         AggregateCall.class);
@@ -429,20 +408,19 @@ public class DuckDBRulesCoverageTest {
     RelNode mockInput = mock(RelNode.class);
     AggregateCall emptyArgs = createCountStarAggCall(); // no args
 
-    Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE,
-        tableInfo, mockInput, emptyArgs);
+    Object result =
+        method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, tableInfo, mockInput, emptyArgs);
     assertNull(result);
   }
 
-  @Test
-  void testHLLGetEstimateWithSketchInCache() throws Exception {
+  @Test void testHLLGetEstimateWithSketchInCache() throws Exception {
     // Put a sketch in the cache
     HLLSketchCache cache = HLLSketchCache.getInstance();
     HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(42L);
     cache.putSketch("test_schema", "test_table", "test_col", sketch);
 
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "getHLLEstimate",
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("getHLLEstimate",
         getDuckDBTableInfoClass(),
         RelNode.class,
         AggregateCall.class);
@@ -458,17 +436,16 @@ public class DuckDBRulesCoverageTest {
 
     AggregateCall distinctCount = createDistinctCountAggCall();
 
-    Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE,
-        tableInfo, mockInput, distinctCount);
+    Object result =
+        method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, tableInfo, mockInput, distinctCount);
 
     assertNotNull(result);
     assertEquals(42L, result);
   }
 
-  @Test
-  void testHLLGetEstimateNoSketchInCache() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "getHLLEstimate",
+  @Test void testHLLGetEstimateNoSketchInCache() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("getHLLEstimate",
         getDuckDBTableInfoClass(),
         RelNode.class,
         AggregateCall.class);
@@ -483,8 +460,8 @@ public class DuckDBRulesCoverageTest {
 
     AggregateCall distinctCount = createDistinctCountAggCall();
 
-    Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE,
-        tableInfo, mockInput, distinctCount);
+    Object result =
+        method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, tableInfo, mockInput, distinctCount);
 
     assertNull(result);
   }
@@ -493,10 +470,9 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - createHLLValues (via reflection)
   // ====================================================================
 
-  @Test
-  void testHLLCreateValuesWithEstimatesPartialMock() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "createHLLValues", Aggregate.class, List.class);
+  @Test void testHLLCreateValuesWithEstimatesPartialMock() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("createHLLValues", Aggregate.class, List.class);
     method.setAccessible(true);
 
     Aggregate mockAggregate = createMockAggregateWithCluster(42L);
@@ -505,15 +481,14 @@ public class DuckDBRulesCoverageTest {
 
     // With a partial mock cluster that cannot provide traitSetOf,
     // EnumerableValues.create fails and the method catches the exception
-    Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE,
-        mockAggregate, estimates);
+    Object result =
+        method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, mockAggregate, estimates);
     assertNull(result);
   }
 
-  @Test
-  void testHLLCreateValuesWithNullEstimate() throws Exception {
-    Method method = DuckDBHLLCountDistinctRule.class.getDeclaredMethod(
-        "createHLLValues", Aggregate.class, List.class);
+  @Test void testHLLCreateValuesWithNullEstimate() throws Exception {
+    Method method =
+        DuckDBHLLCountDistinctRule.class.getDeclaredMethod("createHLLValues", Aggregate.class, List.class);
     method.setAccessible(true);
 
     Aggregate mockAggregate = createMockAggregateWithCluster(42L);
@@ -521,8 +496,8 @@ public class DuckDBRulesCoverageTest {
     estimates.add(null);
 
     // Same as above - mock cluster causes EnumerableValues.create to fail
-    Object result = method.invoke(DuckDBHLLCountDistinctRule.INSTANCE,
-        mockAggregate, estimates);
+    Object result =
+        method.invoke(DuckDBHLLCountDistinctRule.INSTANCE, mockAggregate, estimates);
     assertNull(result);
   }
 
@@ -530,8 +505,7 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - TableInfo inner class
   // ====================================================================
 
-  @Test
-  void testTableInfoCreation() throws Exception {
+  @Test void testTableInfoCreation() throws Exception {
     Object tableInfo = createTableInfo("my_schema", "my_table");
     assertNotNull(tableInfo);
 
@@ -549,11 +523,10 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - onMatch without table scan
   // ====================================================================
 
-  @Test
-  void testHLLOnMatchNoTableScan() {
+  @Test void testHLLOnMatchNoTableScan() {
     // Create a mock aggregate with no table scan in its input
-    Aggregate mockAggregate = createMockAggregate(
-        ImmutableBitSet.of(),
+    Aggregate mockAggregate =
+        createMockAggregate(ImmutableBitSet.of(),
         Collections.singletonList(createDistinctCountAggCall()));
 
     RelNode mockInput = mock(RelNode.class);
@@ -574,10 +547,9 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - onMatch without table scan
   // ====================================================================
 
-  @Test
-  void testIcebergOnMatchNoTableScan() {
-    Aggregate mockAggregate = createMockAggregate(
-        ImmutableBitSet.of(),
+  @Test void testIcebergOnMatchNoTableScan() {
+    Aggregate mockAggregate =
+        createMockAggregate(ImmutableBitSet.of(),
         Collections.singletonList(createCountStarAggCall()));
 
     RelNode mockInput = mock(RelNode.class);

@@ -21,7 +21,6 @@ import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.QueryProvider;
-
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -33,13 +32,11 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.AbstractTable;
-
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
 import com.google.common.collect.ImmutableList;
-
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -47,13 +44,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -170,8 +165,9 @@ public class InformationSchemaKeyColumnCoverageTest {
     @Override public Statistic getStatistic() {
       // Primary key on id, plus a foreign key from parent_id to parent.id
       List<ImmutableBitSet> keys = ImmutableList.of(ImmutableBitSet.of(0));
-      List<RelReferentialConstraint> fks = ImmutableList.<RelReferentialConstraint>of(
-          new TestForeignKey(
+      List<RelReferentialConstraint> fks =
+          ImmutableList.<RelReferentialConstraint>of(
+              new TestForeignKey(
               ImmutableList.of("test_schema", "fk_table"),
               ImmutableList.of("test_schema", "pk_table"),
               ImmutableList.of(IntPair.of(1, 0))));

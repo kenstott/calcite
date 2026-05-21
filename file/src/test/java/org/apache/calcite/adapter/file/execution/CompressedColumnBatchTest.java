@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,16 +64,14 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCreateAndClose() {
+  @Test public void testCreateAndClose() {
     VectorSchemaRoot root = createIntBatch(5);
     CompressedColumnBatch batch = new CompressedColumnBatch(root);
     batch.close();
     // No exception means success
   }
 
-  @Test
-  public void testGetCompressedIntColumn() {
+  @Test public void testGetCompressedIntColumn() {
     VectorSchemaRoot root = createIntBatch(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -83,8 +80,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testGetCompressedIntColumnOnNonIntThrows() {
+  @Test public void testGetCompressedIntColumnOnNonIntThrows() {
     VectorSchemaRoot root = createDoubleBatch(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       assertThrows(IllegalArgumentException.class,
@@ -92,8 +88,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressedIntSumReturnsValue() {
+  @Test public void testCompressedIntSumReturnsValue() {
     VectorSchemaRoot root = createIntBatch(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -109,8 +104,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressedFilterReturnsArray() {
+  @Test public void testCompressedFilterReturnsArray() {
     VectorSchemaRoot root = createIntBatch(10);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -123,8 +117,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressionAnalysisWithEmptyBatch() {
+  @Test public void testCompressionAnalysisWithEmptyBatch() {
     VectorSchemaRoot root = createIntBatch(0);
     // Should not throw even with no rows
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
@@ -132,16 +125,16 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressionAnalysisWithMixedTypes() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("intCol",
+  @Test public void testCompressionAnalysisWithMixedTypes() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("intCol",
             FieldType.nullable(new ArrowType.Int(32, true)), null),
         new Field("doubleCol",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
@@ -168,8 +161,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressedSumWithNulls() {
+  @Test public void testCompressedSumWithNulls() {
     VectorSchemaRoot root = createIntBatchWithNulls(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -181,8 +173,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressedFilterWithAllPassing() {
+  @Test public void testCompressedFilterWithAllPassing() {
     VectorSchemaRoot root = createIntBatch(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -193,8 +184,7 @@ public class CompressedColumnBatchTest {
     }
   }
 
-  @Test
-  public void testCompressedFilterWithNonePassing() {
+  @Test public void testCompressedFilterWithNonePassing() {
     VectorSchemaRoot root = createIntBatch(5);
     try (CompressedColumnBatch batch = new CompressedColumnBatch(root)) {
       CompressedColumnBatch.CompressedIntColumnReader reader =
@@ -208,9 +198,8 @@ public class CompressedColumnBatchTest {
   // --- Helper methods ---
 
   private VectorSchemaRoot createIntBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");
@@ -223,9 +212,8 @@ public class CompressedColumnBatchTest {
   }
 
   private VectorSchemaRoot createIntBatchWithNulls(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)
-    ));
+    Schema schema =
+        new Schema(Arrays.asList(new Field("id", FieldType.nullable(new ArrowType.Int(32, true)), null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     IntVector vector = (IntVector) root.getVector("id");
@@ -242,12 +230,13 @@ public class CompressedColumnBatchTest {
   }
 
   private VectorSchemaRoot createDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("value",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     Float8Vector vector = (Float8Vector) root.getVector("value");

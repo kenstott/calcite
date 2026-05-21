@@ -110,8 +110,8 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
     jsonToMap.setAccessible(true);
 
     @SuppressWarnings("unchecked")
-    Map<String, String> result = (Map<String, String>) jsonToMap.invoke(store,
-        "{\"year\":\"2020\",\"geo\":\"STATE\"}");
+    Map<String, String> result =
+        (Map<String, String>) jsonToMap.invoke(store, "{\"year\":\"2020\",\"geo\":\"STATE\"}");
     assertEquals("2020", result.get("year"));
     assertEquals("STATE", result.get("geo"));
   }
@@ -176,8 +176,8 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
   // ===== findClosingQuote via Reflection =====
 
   @Test void testFindClosingQuoteViaReflection() throws Exception {
-    Method findClosing = DuckDBPartitionStatusStore.class.getDeclaredMethod(
-        "findClosingQuote", String.class, int.class);
+    Method findClosing =
+        DuckDBPartitionStatusStore.class.getDeclaredMethod("findClosingQuote", String.class, int.class);
     findClosing.setAccessible(true);
 
     assertEquals(5, findClosing.invoke(store, "hello\"", 0));

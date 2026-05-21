@@ -81,10 +81,9 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- sanitizeOperand tests via reflection ---
 
-  @Test
-  void testSanitizeOperandMasksPasswordAndSecretFields() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandMasksPasswordAndSecretFields() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -104,10 +103,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNull(result.get("nullKey"));
   }
 
-  @Test
-  void testSanitizeOperandHandlesUnderscorePrefixedKeys() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesUnderscorePrefixedKeys() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -121,10 +119,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertEquals("String", result.get("_cacheStorageProvider"));
   }
 
-  @Test
-  void testSanitizeOperandHandlesS3Config() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesS3Config() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> s3Config = new HashMap<String, Object>();
@@ -149,10 +146,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertEquals("us-east-1", sanitizedS3.get("region"));
   }
 
-  @Test
-  void testSanitizeOperandHandlesS3ConfigShortAccessKey() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesS3ConfigShortAccessKey() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> s3Config = new HashMap<String, Object>();
@@ -169,10 +165,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertEquals("****", sanitizedS3.get("accessKeyId"));
   }
 
-  @Test
-  void testSanitizeOperandHandlesStorageConfig() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesStorageConfig() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> storageConfig = new HashMap<String, Object>();
@@ -200,10 +195,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNull(sanitizedStorage.get("_nullProvider"));
   }
 
-  @Test
-  void testSanitizeOperandHandlesModelUri() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesModelUri() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -222,10 +216,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertTrue(sanitizedUri.contains("\"secretAccessKey\": \"********\""));
   }
 
-  @Test
-  void testSanitizeOperandHandlesGenericNestedMap() throws Exception {
-    Method sanitize = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeOperand", Map.class);
+  @Test void testSanitizeOperandHandlesGenericNestedMap() throws Exception {
+    Method sanitize =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     sanitize.setAccessible(true);
 
     Map<String, Object> nestedMap = new HashMap<String, Object>();
@@ -251,10 +244,9 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- writeDebugModel tests via reflection ---
 
-  @Test
-  void testWriteDebugModelCreatesFile() throws Exception {
-    Method writeDebugModel = FileSchemaFactory.class.getDeclaredMethod(
-        "writeDebugModel", String.class, Map.class, String.class);
+  @Test void testWriteDebugModelCreatesFile() throws Exception {
+    Method writeDebugModel =
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
     writeDebugModel.setAccessible(true);
 
     String originalUserDir = System.getProperty("user.dir");
@@ -276,10 +268,9 @@ public class FileSchemaFactoryLineCoverageTest {
     }
   }
 
-  @Test
-  void testWriteDebugModelWithNullParent() throws Exception {
-    Method writeDebugModel = FileSchemaFactory.class.getDeclaredMethod(
-        "writeDebugModel", String.class, Map.class, String.class);
+  @Test void testWriteDebugModelWithNullParent() throws Exception {
+    Method writeDebugModel =
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
     writeDebugModel.setAccessible(true);
 
     String originalUserDir = System.getProperty("user.dir");
@@ -301,10 +292,9 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- parseBooleanValue tests via reflection ---
 
-  @Test
-  void testParseBooleanValueWithVariousTypes() throws Exception {
-    Method parse = FileSchemaFactory.class.getDeclaredMethod(
-        "parseBooleanValue", Object.class);
+  @Test void testParseBooleanValueWithVariousTypes() throws Exception {
+    Method parse =
+        FileSchemaFactory.class.getDeclaredMethod("parseBooleanValue", Object.class);
     parse.setAccessible(true);
 
     assertNull(parse.invoke(null, (Object) null));
@@ -318,13 +308,11 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- supportsConstraints and setTableConstraints ---
 
-  @Test
-  void testSupportsConstraintsReturnsTrue() {
+  @Test void testSupportsConstraintsReturnsTrue() {
     assertTrue(FileSchemaFactory.INSTANCE.supportsConstraints());
   }
 
-  @Test
-  void testSetTableConstraints() {
+  @Test void testSetTableConstraints() {
     Map<String, Map<String, Object>> constraints = new HashMap<String, Map<String, Object>>();
     Map<String, Object> tableConstraint = new HashMap<String, Object>();
     tableConstraint.put("primaryKey", Collections.singletonList("id"));
@@ -335,10 +323,9 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- rewriteForeignKeySchemaNames tests via reflection ---
 
-  @Test
-  void testRewriteForeignKeySchemaNames() throws Exception {
-    Method rewrite = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNames() throws Exception {
+    Method rewrite =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     rewrite.setAccessible(true);
 
     Map<String, Object> fk = new HashMap<String, Object>();
@@ -365,10 +352,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertEquals("ECON", rewrittenFKs.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNamesCrossSchemaFK() throws Exception {
-    Method rewrite = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNamesCrossSchemaFK() throws Exception {
+    Method rewrite =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     rewrite.setAccessible(true);
 
     Map<String, Object> fk = new HashMap<String, Object>();
@@ -394,10 +380,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertEquals("other_schema", rewrittenFKs.get(0).get("targetSchema"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameNoForeignKeys() throws Exception {
-    Method rewrite = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNoForeignKeys() throws Exception {
+    Method rewrite =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     rewrite.setAccessible(true);
 
     Map<String, Object> tableConstraint = new HashMap<String, Object>();
@@ -413,10 +398,9 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(result.get("simple_table"));
   }
 
-  @Test
-  void testRewriteForeignKeySchemaNameNullAndEmpty() throws Exception {
-    Method rewrite = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
+  @Test void testRewriteForeignKeySchemaNameNullAndEmpty() throws Exception {
+    Method rewrite =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteForeignKeySchemaNames", Map.class, String.class, String.class);
     rewrite.setAccessible(true);
 
     @SuppressWarnings("unchecked")
@@ -434,10 +418,9 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- sanitizeNestedMap tests via reflection ---
 
-  @Test
-  void testSanitizeNestedMapDirectly() throws Exception {
-    Method sanitizeNested = FileSchemaFactory.class.getDeclaredMethod(
-        "sanitizeNestedMap", Map.class);
+  @Test void testSanitizeNestedMapDirectly() throws Exception {
+    Method sanitizeNested =
+        FileSchemaFactory.class.getDeclaredMethod("sanitizeNestedMap", Map.class);
     sanitizeNested.setAccessible(true);
 
     Map<String, Object> nestedMap = new HashMap<String, Object>();
@@ -457,28 +440,27 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- rewriteSchemaReferencesInSql tests via reflection ---
 
-  @Test
-  void testRewriteSchemaReferencesInSql() throws Exception {
-    Method rewriteSql = FileSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+  @Test void testRewriteSchemaReferencesInSql() throws Exception {
+    Method rewriteSql =
+        FileSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     rewriteSql.setAccessible(true);
 
     // Rewrite with actually different schema names (not just case-different)
-    String result = (String) rewriteSql.invoke(null,
-        "SELECT * FROM econ.countries WHERE econ.countries.id > 0",
+    String result =
+        (String) rewriteSql.invoke(null, "SELECT * FROM econ.countries WHERE econ.countries.id > 0",
         "econ", "my_economy");
     assertTrue(result.contains("my_economy."),
         "Should rewrite 'econ.' to 'my_economy.'");
 
     // Case-insensitive match returns original (no rewrite when names match ignoring case)
-    String result2 = (String) rewriteSql.invoke(null,
-        "SELECT * FROM econ.countries", "econ", "ECON");
+    String result2 =
+        (String) rewriteSql.invoke(null, "SELECT * FROM econ.countries", "econ", "ECON");
     assertEquals("SELECT * FROM econ.countries", result2,
         "Should not rewrite when schema names match case-insensitively");
 
     // Identical names return original
-    String result3 = (String) rewriteSql.invoke(null,
-        "SELECT * FROM econ.countries", "econ", "econ");
+    String result3 =
+        (String) rewriteSql.invoke(null, "SELECT * FROM econ.countries", "econ", "econ");
     assertEquals("SELECT * FROM econ.countries", result3);
 
     // Null inputs
@@ -488,20 +470,18 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- validateUniqueSchemaName tests via reflection ---
 
-  @Test
-  void testValidateUniqueSchemaNameNullInputs() throws Exception {
-    Method validate = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameNullInputs() throws Exception {
+    Method validate =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     validate.setAccessible(true);
 
     validate.invoke(null, null, "test");
     validate.invoke(null, parentSchema, null);
   }
 
-  @Test
-  void testValidateUniqueSchemaNameDuplicate() throws Exception {
-    Method validate = FileSchemaFactory.class.getDeclaredMethod(
-        "validateUniqueSchemaName", SchemaPlus.class, String.class);
+  @Test void testValidateUniqueSchemaNameDuplicate() throws Exception {
+    Method validate =
+        FileSchemaFactory.class.getDeclaredMethod("validateUniqueSchemaName", SchemaPlus.class, String.class);
     validate.setAccessible(true);
 
     SchemaPlus dupParent = mock(SchemaPlus.class);
@@ -523,8 +503,7 @@ public class FileSchemaFactoryLineCoverageTest {
 
   // --- create() with operand combinations for line coverage ---
 
-  @Test
-  void testCreateWithTableConstraintsInOperand() {
+  @Test void testCreateWithTableConstraintsInOperand() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -540,8 +519,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithDeclaredSchemaNameDifferentTriggersRewrite() {
+  @Test void testCreateWithDeclaredSchemaNameDifferentTriggersRewrite() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -566,8 +544,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithComment() {
+  @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -577,8 +554,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithFlatten() {
+  @Test void testCreateWithFlatten() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -588,8 +564,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithCasingOptions() {
+  @Test void testCreateWithCasingOptions() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -600,8 +575,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithSnakeCaseCasingOptions() {
+  @Test void testCreateWithSnakeCaseCasingOptions() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -612,8 +586,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithBatchSizeAndMemoryThreshold() {
+  @Test void testCreateWithBatchSizeAndMemoryThreshold() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -624,8 +597,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithCsvTypeInference() {
+  @Test void testCreateWithCsvTypeInference() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -637,8 +609,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithDirectoryPattern() {
+  @Test void testCreateWithDirectoryPattern() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -648,8 +619,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithGlobPattern() {
+  @Test void testCreateWithGlobPattern() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -659,8 +629,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithRefreshInterval() {
+  @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -670,8 +639,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithCanonicalSchemaName() {
+  @Test void testCreateWithCanonicalSchemaName() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -681,8 +649,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithPrimeCacheFalse() {
+  @Test void testCreateWithPrimeCacheFalse() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -692,8 +659,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithPrimeCacheSnakeCase() {
+  @Test void testCreateWithPrimeCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -703,8 +669,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithBaseDirectoryAsFile() {
+  @Test void testCreateWithBaseDirectoryAsFile() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
@@ -714,8 +679,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithViewsDefinition() throws IOException {
+  @Test void testCreateWithViewsDefinition() throws IOException {
     File sourceDir = tempDir.resolve("views-lc").toFile();
     sourceDir.mkdirs();
     File csvFile = new File(sourceDir, "base_data.csv");
@@ -744,8 +708,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateWithMaterializations() throws IOException {
+  @Test void testCreateWithMaterializations() throws IOException {
     File sourceDir = tempDir.resolve("mat-lc").toFile();
     sourceDir.mkdirs();
     File csvFile = new File(sourceDir, "detail.csv");
@@ -779,8 +742,7 @@ public class FileSchemaFactoryLineCoverageTest {
     assertNotNull(schema);
   }
 
-  @Test
-  void testCreateAddsMetadataSchemas() {
+  @Test void testCreateAddsMetadataSchemas() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");

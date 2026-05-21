@@ -28,7 +28,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -92,8 +91,8 @@ class FileSchemaDeepLineCoverageTest2 {
   private File writeParquet(File d, String name) throws Exception {
     // Use DuckDB to create a test parquet file
     File parquetFile = new File(d, name);
-    ProcessBuilder pb = new ProcessBuilder(
-        "duckdb", "-c",
+    ProcessBuilder pb =
+        new ProcessBuilder("duckdb", "-c",
         "COPY (SELECT 1 AS id, 'alice' AS name UNION ALL SELECT 2, 'bob') "
             + "TO '" + parquetFile.getAbsolutePath() + "' (FORMAT PARQUET)");
     pb.redirectErrorStream(true);
@@ -1184,13 +1183,11 @@ class FileSchemaDeepLineCoverageTest2 {
           @Override public void onTableRefreshed(String tableName, File parquetFile) {
           }
 
-          @Override
-          public void onTableRefreshedWithPattern(String tableName, String pattern) {
+          @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
             capturedPattern[0] = pattern;
           }
 
-          @Override
-          public void onIcebergTableRefreshed(String tableName, String tableLocation) {
+          @Override public void onIcebergTableRefreshed(String tableName, String tableLocation) {
           }
         });
 
@@ -1214,12 +1211,10 @@ class FileSchemaDeepLineCoverageTest2 {
           @Override public void onTableRefreshed(String tableName, File parquetFile) {
           }
 
-          @Override
-          public void onTableRefreshedWithPattern(String tableName, String pattern) {
+          @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
           }
 
-          @Override
-          public void onIcebergTableRefreshed(String tableName, String tableLocation) {
+          @Override public void onIcebergTableRefreshed(String tableName, String tableLocation) {
             capturedLocation[0] = tableLocation;
           }
         });
@@ -1298,14 +1293,12 @@ class FileSchemaDeepLineCoverageTest2 {
     // Register a dummy converter
     fs.registerRawToParquetConverter(
         new org.apache.calcite.adapter.file.converters.RawToParquetConverter() {
-          @Override
-          public boolean canConvert(String sourcePath,
+          @Override public boolean canConvert(String sourcePath,
               org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata) {
             return false;
           }
 
-          @Override
-          public boolean convertToParquet(String sourcePath, String targetPath,
+          @Override public boolean convertToParquet(String sourcePath, String targetPath,
               org.apache.calcite.adapter.file.storage.StorageProvider provider) {
             return false;
           }

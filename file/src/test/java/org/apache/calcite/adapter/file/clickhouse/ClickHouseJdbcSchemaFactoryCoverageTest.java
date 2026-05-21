@@ -515,24 +515,24 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
 
   private String invokeResolveParquetPath(ConversionMetadata.ConversionRecord record)
       throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "resolveParquetPath", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("resolveParquetPath", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (String) method.invoke(null, record);
   }
 
   private void invokeRegisterSqlViews(Connection conn, String schema,
       Map<String, Object> operand) throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViewsInClickHouse", Connection.class, String.class, Map.class);
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInClickHouse", Connection.class, String.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, conn, schema, operand);
   }
 
   private void invokeConfigureS3Credentials(Connection conn, FileSchema fileSchema)
       throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "configureS3Credentials", Connection.class,
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("configureS3Credentials", Connection.class,
         org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
     method.invoke(null, conn, fileSchema);
@@ -540,8 +540,8 @@ class ClickHouseJdbcSchemaFactoryCoverageTest {
 
   private void invokeRegisterFilesAsViews(Connection conn, String directoryPath,
       boolean recursive, String clickhouseSchema, FileSchema fileSchema) throws Exception {
-    Method method = ClickHouseJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerFilesAsViews", Connection.class, String.class, boolean.class,
+    Method method =
+        ClickHouseJdbcSchemaFactory.class.getDeclaredMethod("registerFilesAsViews", Connection.class, String.class, boolean.class,
         String.class, org.apache.calcite.adapter.file.FileSchema.class);
     method.setAccessible(true);
     method.invoke(null, conn, directoryPath, recursive, clickhouseSchema, fileSchema);

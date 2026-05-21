@@ -32,7 +32,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -126,8 +125,8 @@ class TableConstraintsTest {
 
     List<String> columnNames = Arrays.asList("id", "dept_id", "name");
 
-    Statistic result = TableConstraints.fromConfig(
-        tableConfig, columnNames, null, "myschema", "employees");
+    Statistic result =
+        TableConstraints.fromConfig(tableConfig, columnNames, null, "myschema", "employees");
     assertNotNull(result);
     assertNotNull(result.getReferentialConstraints());
     assertEquals(1, result.getReferentialConstraints().size());
@@ -150,8 +149,8 @@ class TableConstraintsTest {
 
     List<String> columnNames = Arrays.asList("id", "dept_id");
 
-    Statistic result = TableConstraints.fromConfig(
-        tableConfig, columnNames, null, "myschema", "employees");
+    Statistic result =
+        TableConstraints.fromConfig(tableConfig, columnNames, null, "myschema", "employees");
     assertNotNull(result);
     assertNotNull(result.getReferentialConstraints());
     assertEquals(1, result.getReferentialConstraints().size());
@@ -205,8 +204,8 @@ class TableConstraintsTest {
   }
 
   @Test void testForeignKeyHelper() {
-    Map<String, Object> config = TableConstraints.foreignKey(
-        Arrays.asList("dept_id"),
+    Map<String, Object> config =
+        TableConstraints.foreignKey(Arrays.asList("dept_id"),
         "hr", "departments",
         Arrays.asList("id"));
 
@@ -232,27 +231,27 @@ class TableConstraintsTest {
     tableConfig.put("constraints", constraints);
 
     List<String> columnNames = Arrays.asList("id", "dept_id");
-    Statistic stat = TableConstraints.fromConfig(
-        tableConfig, columnNames, null, "myschema", "employees");
+    Statistic stat =
+        TableConstraints.fromConfig(tableConfig, columnNames, null, "myschema", "employees");
 
     // All tables exist
-    Statistic validated = TableConstraints.validateForeignKeys(
-        stat, "employees", (schema, table) -> true);
+    Statistic validated =
+        TableConstraints.validateForeignKeys(stat, "employees", (schema, table) -> true);
 
     assertNotNull(validated);
     assertSame(stat, validated); // No changes needed
   }
 
   @Test void testValidateForeignKeysNullStatistic() {
-    Statistic result = TableConstraints.validateForeignKeys(
-        null, "test", (s, t) -> true);
+    Statistic result =
+        TableConstraints.validateForeignKeys(null, "test", (s, t) -> true);
     assertEquals(null, result);
   }
 
   @Test void testValidateForeignKeysNoConstraints() {
     Statistic stat = Statistics.UNKNOWN;
-    Statistic result = TableConstraints.validateForeignKeys(
-        stat, "test", (s, t) -> true);
+    Statistic result =
+        TableConstraints.validateForeignKeys(stat, "test", (s, t) -> true);
     assertSame(stat, result);
   }
 

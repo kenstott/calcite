@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.execution.parquet.ParquetExecutionEngine.
 
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.Float8Vector;
-import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -33,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,8 +67,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testConvertToParquetWithSingleColumn() {
+  @Test public void testConvertToParquetWithSingleColumn() {
     VectorSchemaRoot batch = createSingleDoubleBatch(3);
     try {
       InMemoryParquetData data =
@@ -85,8 +82,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testConvertToParquetPreservesStringTable() {
+  @Test public void testConvertToParquetPreservesStringTable() {
     VectorSchemaRoot batch = createSingleDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -99,8 +95,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testConvertToParquetWithEmptyBatch() {
+  @Test public void testConvertToParquetWithEmptyBatch() {
     VectorSchemaRoot batch = createSingleDoubleBatch(0);
     try {
       InMemoryParquetData data =
@@ -115,8 +110,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testToArrowConvertsBack() {
+  @Test public void testToArrowConvertsBack() {
     VectorSchemaRoot originalBatch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -131,8 +125,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testAggregateSumOnFirstColumn() {
+  @Test public void testAggregateSumOnFirstColumn() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -145,8 +138,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testAggregateSumOnSecondColumn() {
+  @Test public void testAggregateSumOnSecondColumn() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -159,8 +151,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testFilterAllRows() {
+  @Test public void testFilterAllRows() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -183,8 +174,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testFilterNoRows() {
+  @Test public void testFilterNoRows() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -207,8 +197,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testGetMemoryUsagePositive() {
+  @Test public void testGetMemoryUsagePositive() {
     VectorSchemaRoot batch = createMultiDoubleBatch(10);
     try {
       InMemoryParquetData data =
@@ -221,8 +210,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testIsStreamableSmallData() {
+  @Test public void testIsStreamableSmallData() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -235,8 +223,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testProjectSingleColumn() {
+  @Test public void testProjectSingleColumn() {
     VectorSchemaRoot batch = createMultiDoubleBatch(5);
     try {
       InMemoryParquetData data =
@@ -250,8 +237,7 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testInMemoryParquetDataGetters() {
+  @Test public void testInMemoryParquetDataGetters() {
     VectorSchemaRoot batch = createMultiDoubleBatch(3);
     try {
       InMemoryParquetData data =
@@ -266,14 +252,14 @@ public class ParquetExecutionEngineExtendedTest {
     }
   }
 
-  @Test
-  public void testAggregateSumWithNulls() {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value",
+  @Test public void testAggregateSumWithNulls() {
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("value",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot batch = VectorSchemaRoot.create(schema, allocator);
     batch.allocateNew();
     Float8Vector vector = (Float8Vector) batch.getVector("value");
@@ -302,12 +288,13 @@ public class ParquetExecutionEngineExtendedTest {
   // --- Helper methods ---
 
   private VectorSchemaRoot createSingleDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("value",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("value",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     Float8Vector vector = (Float8Vector) root.getVector("value");
@@ -320,8 +307,10 @@ public class ParquetExecutionEngineExtendedTest {
   }
 
   private VectorSchemaRoot createMultiDoubleBatch(int numRows) {
-    Schema schema = new Schema(Arrays.asList(
-        new Field("id",
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
             null),
@@ -332,8 +321,7 @@ public class ParquetExecutionEngineExtendedTest {
         new Field("amount",
             FieldType.nullable(
                 new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-            null)
-    ));
+            null)));
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
     Float8Vector idV = (Float8Vector) root.getVector("id");

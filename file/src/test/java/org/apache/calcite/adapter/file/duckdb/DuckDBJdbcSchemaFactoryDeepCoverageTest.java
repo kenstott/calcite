@@ -84,8 +84,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   // ==========================================================================
 
   @Test void testCreateParquetViewBasic() throws Exception {
-    Path parquetFile = createParquetFile("basic",
-        "SELECT 1 AS id, 'hello' AS name");
+    Path parquetFile =
+        createParquetFile("basic", "SELECT 1 AS id, 'hello' AS name");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "v_basic", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT * FROM v_basic")) {
@@ -97,8 +97,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewMultipleRows() throws Exception {
-    Path parquetFile = createParquetFile("multi",
-        "SELECT * FROM (VALUES (1,'a'), (2,'b'), (3,'c')) AS t(id, val)");
+    Path parquetFile =
+        createParquetFile("multi", "SELECT * FROM (VALUES (1,'a'), (2,'b'), (3,'c')) AS t(id, val)");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "v_multi", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT count(*) AS cnt FROM v_multi")) {
@@ -122,8 +122,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewPreservesMixedCasing() throws Exception {
-    Path parquetFile = createParquetFile("casing",
-        "SELECT 42 AS \"MyColumn\"");
+    Path parquetFile =
+        createParquetFile("casing", "SELECT 42 AS \"MyColumn\"");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "CamelCaseView", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT * FROM \"CamelCaseView\"")) {
@@ -152,8 +152,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewWithSpecialCharsInName() throws Exception {
-    Path parquetFile = createParquetFile("special",
-        "SELECT 1 AS id");
+    Path parquetFile =
+        createParquetFile("special", "SELECT 1 AS id");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "table-with-dashes", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT * FROM \"table-with-dashes\"")) {
@@ -163,8 +163,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewWithMultipleColumns() throws Exception {
-    Path parquetFile = createParquetFile("cols",
-        "SELECT 1 AS a, 2.5 AS b, 'text' AS c, TRUE AS d, CAST('2024-01-01' AS DATE) AS e");
+    Path parquetFile =
+        createParquetFile("cols", "SELECT 1 AS a, 2.5 AS b, 'text' AS c, TRUE AS d, CAST('2024-01-01' AS DATE) AS e");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "v_cols", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT a, b, c, d FROM v_cols")) {
@@ -177,17 +177,17 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewThenJoinTwoViews() throws Exception {
-    Path pEmployees = createParquetFile("employees",
-        "SELECT * FROM (VALUES (1,'Alice',10), (2,'Bob',20)) AS t(id, name, dept_id)");
-    Path pDepts = createParquetFile("departments",
-        "SELECT * FROM (VALUES (10,'Engineering'), (20,'Marketing')) AS t(dept_id, dept_name)");
+    Path pEmployees =
+        createParquetFile("employees", "SELECT * FROM (VALUES (1,'Alice',10), (2,'Bob',20)) AS t(id, name, dept_id)");
+    Path pDepts =
+        createParquetFile("departments", "SELECT * FROM (VALUES (10,'Engineering'), (20,'Marketing')) AS t(dept_id, dept_name)");
 
     DuckDBJdbcSchemaFactory.createParquetView(conn, "emp", pEmployees.toString());
     DuckDBJdbcSchemaFactory.createParquetView(conn, "dept", pDepts.toString());
 
     try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT e.name, d.dept_name FROM emp e JOIN dept d ON e.dept_id = d.dept_id ORDER BY e.id")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT e.name, d.dept_name FROM emp e JOIN dept d ON e.dept_id = d.dept_id ORDER BY e.id")) {
       assertTrue(rs.next());
       assertEquals("Alice", rs.getString("name"));
       assertEquals("Engineering", rs.getString("dept_name"));
@@ -199,12 +199,12 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewAggregationQuery() throws Exception {
-    Path parquetFile = createParquetFile("agg",
-        "SELECT * FROM (VALUES (1,'A',100), (2,'A',200), (3,'B',150)) AS t(id, grp, amt)");
+    Path parquetFile =
+        createParquetFile("agg", "SELECT * FROM (VALUES (1,'A',100), (2,'A',200), (3,'B',150)) AS t(id, grp, amt)");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "v_agg", parquetFile.toString());
     try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT grp, SUM(amt) AS total FROM v_agg GROUP BY grp ORDER BY grp")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT grp, SUM(amt) AS total FROM v_agg GROUP BY grp ORDER BY grp")) {
       assertTrue(rs.next());
       assertEquals("A", rs.getString("grp"));
       assertEquals(300, rs.getInt("total"));
@@ -215,13 +215,13 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testCreateParquetViewInCustomSchema() throws Exception {
-    Path parquetFile = createParquetFile("schema_test",
-        "SELECT 99 AS result");
+    Path parquetFile =
+        createParquetFile("schema_test", "SELECT 99 AS result");
 
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("CREATE SCHEMA IF NOT EXISTS \"my_schema\"");
-      String sql = String.format(
-          "CREATE OR REPLACE VIEW \"my_schema\".\"v_test\" AS SELECT * FROM read_parquet('%s')",
+      String sql =
+          String.format("CREATE OR REPLACE VIEW \"my_schema\".\"v_test\" AS SELECT * FROM read_parquet('%s')",
           parquetFile.toString());
       stmt.execute(sql);
 
@@ -905,8 +905,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
     invokeRegisterSqlViewsInDuckDB(conn, "actual", operand);
 
-    try (ResultSet rs = conn.createStatement().executeQuery(
-        "SELECT * FROM \"actual\".rewritten")) {
+    try (ResultSet rs =
+        conn.createStatement().executeQuery("SELECT * FROM \"actual\".rewritten")) {
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("id"));
       assertEquals(50, rs.getInt("amount"));
@@ -919,8 +919,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
   @Test void testRegisterSimilarityFunctionsCosineSimilarity() throws Exception {
     invokeRegisterSimilarityFunctions(conn);
-    try (ResultSet rs = conn.createStatement().executeQuery(
-        "SELECT COSINE_SIMILARITY('1,0,0', '1,0,0') AS sim")) {
+    try (ResultSet rs =
+        conn.createStatement().executeQuery("SELECT COSINE_SIMILARITY('1,0,0', '1,0,0') AS sim")) {
       assertTrue(rs.next());
       assertEquals(1.0, rs.getDouble("sim"), 0.01);
     }
@@ -928,8 +928,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
   @Test void testRegisterSimilarityFunctionsCosineDistance() throws Exception {
     invokeRegisterSimilarityFunctions(conn);
-    try (ResultSet rs = conn.createStatement().executeQuery(
-        "SELECT COSINE_DISTANCE('1,0,0', '0,1,0') AS dist")) {
+    try (ResultSet rs =
+        conn.createStatement().executeQuery("SELECT COSINE_DISTANCE('1,0,0', '0,1,0') AS dist")) {
       assertTrue(rs.next());
       assertEquals(1.0, rs.getDouble("dist"), 0.01);
     }
@@ -937,8 +937,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
   @Test void testRegisterSimilarityFunctionsOrthogonalVectors() throws Exception {
     invokeRegisterSimilarityFunctions(conn);
-    try (ResultSet rs = conn.createStatement().executeQuery(
-        "SELECT COSINE_SIMILARITY('1,0,0', '0,1,0') AS sim")) {
+    try (ResultSet rs =
+        conn.createStatement().executeQuery("SELECT COSINE_SIMILARITY('1,0,0', '0,1,0') AS sim")) {
       assertTrue(rs.next());
       assertEquals(0.0, rs.getDouble("sim"), 0.01);
     }
@@ -994,44 +994,44 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
   @Test void testIntegrationCreateSchemaAndRegisterParquetViews() throws Exception {
     // Create parquet files
-    Path p1 = createParquetFile("orders",
-        "SELECT * FROM (VALUES (1,'laptop',999.99), (2,'mouse',29.99), (3,'keyboard',59.99)) "
+    Path p1 =
+        createParquetFile("orders", "SELECT * FROM (VALUES (1,'laptop',999.99), (2,'mouse',29.99), (3,'keyboard',59.99)) "
         + "AS t(order_id, product, price)");
-    Path p2 = createParquetFile("customers",
-        "SELECT * FROM (VALUES (1,'Alice','NY'), (2,'Bob','CA')) AS t(cust_id, name, state)");
+    Path p2 =
+        createParquetFile("customers", "SELECT * FROM (VALUES (1,'Alice','NY'), (2,'Bob','CA')) AS t(cust_id, name, state)");
 
     // Create schema and views
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("CREATE SCHEMA IF NOT EXISTS \"store\"");
 
-      String sql1 = String.format(
-          "CREATE VIEW \"store\".\"orders\" AS SELECT * FROM read_parquet('%s')",
+      String sql1 =
+          String.format("CREATE VIEW \"store\".\"orders\" AS SELECT * FROM read_parquet('%s')",
           p1.toString());
       stmt.execute(sql1);
 
-      String sql2 = String.format(
-          "CREATE VIEW \"store\".\"customers\" AS SELECT * FROM read_parquet('%s')",
+      String sql2 =
+          String.format("CREATE VIEW \"store\".\"customers\" AS SELECT * FROM read_parquet('%s')",
           p2.toString());
       stmt.execute(sql2);
     }
 
     // Verify views work and can be queried together
     try (Statement stmt = conn.createStatement()) {
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT count(*) AS cnt FROM \"store\".\"orders\"")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT count(*) AS cnt FROM \"store\".\"orders\"")) {
         assertTrue(rs.next());
         assertEquals(3, rs.getInt("cnt"));
       }
 
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT count(*) AS cnt FROM \"store\".\"customers\"")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT count(*) AS cnt FROM \"store\".\"customers\"")) {
         assertTrue(rs.next());
         assertEquals(2, rs.getInt("cnt"));
       }
 
       // Query with aggregation
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT SUM(price) AS total FROM \"store\".\"orders\"")) {
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT SUM(price) AS total FROM \"store\".\"orders\"")) {
         assertTrue(rs.next());
         assertEquals(1089.97, rs.getDouble("total"), 0.01);
       }
@@ -1058,13 +1058,13 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   @Test void testIntegrationParquetViewWithFilterPushdown() throws Exception {
-    Path parquetFile = createParquetFile("filterable",
-        "SELECT * FROM generate_series(1, 100) AS t(id)");
+    Path parquetFile =
+        createParquetFile("filterable", "SELECT * FROM generate_series(1, 100) AS t(id)");
     DuckDBJdbcSchemaFactory.createParquetView(conn, "v_filter", parquetFile.toString());
 
     try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT count(*) AS cnt FROM v_filter WHERE id > 50")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT count(*) AS cnt FROM v_filter WHERE id > 50")) {
       assertTrue(rs.next());
       assertEquals(50, rs.getInt("cnt"));
     }
@@ -1112,76 +1112,76 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   private boolean invokeIsTempDirectory(String path) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isTempDirectory", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isTempDirectory", String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, path);
   }
 
   private boolean invokeIsHivePartitioned(String fileList) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitioned", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitioned", String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, fileList);
   }
 
   private boolean invokeIsHivePartitionedFromConfig(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("isHivePartitionedFromConfig", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, record);
   }
 
   private boolean invokeShouldUseUnionByName(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("shouldUseUnionByName", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, record);
   }
 
   private String invokeDeriveGlobPattern(String fileList) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "deriveGlobPattern", String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("deriveGlobPattern", String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, fileList);
   }
 
   private String invokeFormatRecordForError(
       ConversionMetadata.ConversionRecord record) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "formatRecordForError", ConversionMetadata.ConversionRecord.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("formatRecordForError", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
     return (String) method.invoke(null, record);
   }
 
   private String invokeRewriteSchemaReferences(String viewDef, String declared,
       String actual) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "rewriteSchemaReferencesInSql", String.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("rewriteSchemaReferencesInSql", String.class, String.class, String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, viewDef, declared, actual);
   }
 
   private boolean invokeViewExists(Connection c, String schema, String tableName) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "viewExists", Connection.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewExists", Connection.class, String.class, String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, c, schema, tableName);
   }
 
   private String invokeGetViewSql(Connection c, String schema, String tableName) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "getViewSql", Connection.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("getViewSql", Connection.class, String.class, String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, c, schema, tableName);
   }
 
   private boolean invokeViewUsesIcebergScan(Connection c, String schema,
       String tableName) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "viewUsesIcebergScan", Connection.class, String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("viewUsesIcebergScan", Connection.class, String.class, String.class);
     method.setAccessible(true);
     return (Boolean) method.invoke(null, c, schema, tableName);
   }
@@ -1191,8 +1191,8 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   private void invokeRegisterSqlViewsInDuckDB(Connection c, String schema,
       Map<String, Object> operand) throws Exception {
     String dbPath = "test-db-" + System.nanoTime();
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSqlViewsInDuckDB", String.class, String.class, Map.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB", String.class, String.class, Map.class);
     method.setAccessible(true);
     method.invoke(null, dbPath, schema, operand);
     // Flush deferred views into the in-memory connection
@@ -1200,30 +1200,30 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
   }
 
   private void invokeRegisterSimilarityFunctions(Connection c) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "registerSimilarityFunctions", Connection.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSimilarityFunctions", Connection.class);
     method.setAccessible(true);
     method.invoke(null, c);
   }
 
   private void invokeLoadQueryExtensions(Connection c) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "loadQueryExtensions", Connection.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
     method.setAccessible(true);
     method.invoke(null, c);
   }
 
   private Object invokeCreateDuckDBDialect() throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "createDuckDBDialectWithCustomLex");
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("createDuckDBDialectWithCustomLex");
     method.setAccessible(true);
     return method.invoke(null);
   }
 
   private String invokeDetermineCatalogPath(String schemaName,
       String directoryPath) throws Exception {
-    Method method = DuckDBJdbcSchemaFactory.class.getDeclaredMethod(
-        "determineCatalogPath", String.class, String.class);
+    Method method =
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
     return (String) method.invoke(null, schemaName, directoryPath);
   }

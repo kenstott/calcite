@@ -1,33 +1,19 @@
 #!/usr/bin/env bash
-# Health ETL worker — parameterized by MODE.
 #
-# Usage:
-#   worker-health.sh <mode>
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Modes:
-#   initial   One-time setup: all 15 health tables, capped at GOVDATA_INCREMENTAL_START_YEAR-1.
-#             Run once before any recurring cadence workers.
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-#   daily     Incremental clinical trials delta from GOVDATA_INCREMENTAL_START_YEAR onward.
-#             Schedule: every 24 hours.
-#
-#   weekly    CDC COVID vaccinations delta + CDC mortality full refresh.
-#             Schedule: weekly (e.g., Monday 03:00 UTC).
-#
-#   monthly   Stable reference tables: BRFSS, Medicaid drug utilization, CMS, FDA, RxNorm.
-#             Schedule: monthly (e.g., 1st of month 02:00 UTC).
-#
-# Required env vars (set in .env.prod or equivalent):
-#   GOVDATA_PARQUET_DIR           Root parquet directory
-#   GOVDATA_CACHE_DIR             Root cache directory
-#   GOVDATA_INCREMENTAL_START_YEAR  Boundary year between historical and daily (default: 2026)
-#
-# Optional env vars:
-#   HEALTH_PARQUET_DIR            Overrides GOVDATA_PARQUET_DIR/health
-#   HEALTH_CACHE_DIR              Overrides GOVDATA_CACHE_DIR/health
-#   HEALTH_FDA_API_KEY            openFDA API key (improves rate limits)
-#   MEDICAID_SINCE_QUARTER        Quarter number (1-4) for Medicaid incremental start
-#   MEDICAID_DRUG_UTIL_DATASET_ID Medicaid dataset UUID (default: d890d3a9-...; 2023 data)
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 set -euo pipefail
 

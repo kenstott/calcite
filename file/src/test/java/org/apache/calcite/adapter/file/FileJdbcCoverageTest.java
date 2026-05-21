@@ -21,7 +21,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,8 +152,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testStatementExecuteQuery() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT rec_id, rec_name FROM jdbc_test ORDER BY rec_id")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT rec_id, rec_name FROM jdbc_test ORDER BY rec_id")) {
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("rec_id"));
       assertEquals("Alice", rs.getString("rec_name"));
@@ -166,8 +165,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementNoParams() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_id, rec_name FROM jdbc_test ORDER BY rec_id")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_id, rec_name FROM jdbc_test ORDER BY rec_id")) {
       try (ResultSet rs = pstmt.executeQuery()) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt(1));
@@ -185,8 +184,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementWithIntParam() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_name FROM jdbc_test WHERE rec_id = ?")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_name FROM jdbc_test WHERE rec_id = ?")) {
       pstmt.setInt(1, 2);
       try (ResultSet rs = pstmt.executeQuery()) {
         assertTrue(rs.next());
@@ -201,8 +200,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementWithStringParam() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_id FROM jdbc_test WHERE rec_name = ?")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_id FROM jdbc_test WHERE rec_name = ?")) {
       pstmt.setString(1, "Charlie");
       try (ResultSet rs = pstmt.executeQuery()) {
         assertTrue(rs.next());
@@ -217,8 +216,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementWithDoubleParam() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_name FROM jdbc_test WHERE rec_amount > ?")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_name FROM jdbc_test WHERE rec_amount > ?")) {
       pstmt.setDouble(1, 300.0);
       try (ResultSet rs = pstmt.executeQuery()) {
         List<String> names = new ArrayList<String>();
@@ -237,8 +236,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementWithBooleanParam() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_id FROM jdbc_test WHERE rec_active = ? ORDER BY rec_id")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_id FROM jdbc_test WHERE rec_active = ? ORDER BY rec_id")) {
       pstmt.setBoolean(1, true);
       try (ResultSet rs = pstmt.executeQuery()) {
         assertTrue(rs.next());
@@ -254,8 +253,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementMultipleParams() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_name FROM jdbc_test WHERE rec_id >= ? AND rec_id <= ? ORDER BY rec_id")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_name FROM jdbc_test WHERE rec_id >= ? AND rec_id <= ? ORDER BY rec_id")) {
       pstmt.setInt(1, 2);
       pstmt.setInt(2, 4);
       try (ResultSet rs = pstmt.executeQuery()) {
@@ -274,8 +273,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testPreparedStatementClearAndReuse() throws Exception {
-    try (PreparedStatement pstmt = connection.prepareStatement(
-        "SELECT rec_name FROM jdbc_test WHERE rec_id = ?")) {
+    try (PreparedStatement pstmt =
+        connection.prepareStatement("SELECT rec_name FROM jdbc_test WHERE rec_id = ?")) {
       // First execution
       pstmt.setInt(1, 1);
       try (ResultSet rs = pstmt.executeQuery()) {
@@ -299,8 +298,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetMetadataColumns() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT rec_id, rec_name, rec_amount FROM jdbc_test")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT rec_id, rec_name, rec_amount FROM jdbc_test")) {
       ResultSetMetaData rsmd = rs.getMetaData();
       assertNotNull(rsmd);
       assertEquals(3, rsmd.getColumnCount());
@@ -323,8 +322,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetMetadataColumnTypes() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid, tname, tprice FROM jdbc_types")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid, tname, tprice FROM jdbc_types")) {
       ResultSetMetaData rsmd = rs.getMetaData();
       int type1 = rsmd.getColumnType(1);
       int type2 = rsmd.getColumnType(2);
@@ -345,8 +344,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetIntByIndexAndName() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid, tcount FROM jdbc_types WHERE tid = 10")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid, tcount FROM jdbc_types WHERE tid = 10")) {
       assertTrue(rs.next());
       assertEquals(10, rs.getInt(1));
       assertEquals(10, rs.getInt("tid"));
@@ -361,8 +360,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetStringByIndexAndName() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tname FROM jdbc_types WHERE tid = 20")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tname FROM jdbc_types WHERE tid = 20")) {
       assertTrue(rs.next());
       assertEquals("Gadget", rs.getString(1));
       assertEquals("Gadget", rs.getString("tname"));
@@ -375,8 +374,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetDoubleByIndexAndName() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tprice FROM jdbc_types WHERE tid = 30")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tprice FROM jdbc_types WHERE tid = 30")) {
       assertTrue(rs.next());
       assertEquals(29.99, rs.getDouble(1), 0.001);
       assertEquals(29.99, rs.getDouble("tprice"), 0.001);
@@ -389,8 +388,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetObject() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid, tname, tprice FROM jdbc_types WHERE tid = 10")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid, tname, tprice FROM jdbc_types WHERE tid = 10")) {
       assertTrue(rs.next());
       Object id = rs.getObject(1);
       Object name = rs.getObject(2);
@@ -411,8 +410,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetNullHandling() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT nid, nstr, nnum FROM jdbc_nulls ORDER BY nid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT nid, nstr, nnum FROM jdbc_nulls ORDER BY nid")) {
       // First row: non-null
       assertTrue(rs.next());
       assertEquals(1, rs.getInt("nid"));
@@ -439,8 +438,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetNavigation() throws Exception {
     Statement stmt = connection.createStatement();
-    ResultSet rs = stmt.executeQuery(
-        "SELECT tid FROM jdbc_types ORDER BY tid");
+    ResultSet rs =
+        stmt.executeQuery("SELECT tid FROM jdbc_types ORDER BY tid");
 
     assertFalse(rs.isClosed(), "ResultSet should not be closed initially");
 
@@ -463,8 +462,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetRow() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types ORDER BY tid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types ORDER BY tid")) {
       // Before first row
       int rowBeforeFirst = rs.getRow();
       LOGGER.debug("Row before first: {}", rowBeforeFirst);
@@ -482,8 +481,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetFindColumn() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid, tname FROM jdbc_types")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid, tname FROM jdbc_types")) {
       int tidIdx = rs.findColumn("tid");
       int tnameIdx = rs.findColumn("tname");
       LOGGER.debug("findColumn: tid={}, tname={}", tidIdx, tnameIdx);
@@ -499,8 +498,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetFloatAndGetLong() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tprice, tcount FROM jdbc_types WHERE tid = 20")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tprice, tcount FROM jdbc_types WHERE tid = 20")) {
       assertTrue(rs.next());
       float price = rs.getFloat("tprice");
       long count = rs.getLong("tcount");
@@ -516,8 +515,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetShortAndGetByte() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types WHERE tid = 10")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types WHERE tid = 10")) {
       assertTrue(rs.next());
       short asShort = rs.getShort(1);
       byte asByte = rs.getByte(1);
@@ -533,8 +532,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetBigDecimal() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tprice FROM jdbc_types WHERE tid = 10")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tprice FROM jdbc_types WHERE tid = 10")) {
       assertTrue(rs.next());
       BigDecimal bd = rs.getBigDecimal("tprice");
       assertNotNull(bd);
@@ -550,8 +549,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetGetBoolean() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT rec_active FROM jdbc_test WHERE rec_id = 1")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT rec_active FROM jdbc_test WHERE rec_id = 1")) {
       assertTrue(rs.next());
       boolean active = rs.getBoolean("rec_active");
       assertTrue(active, "rec_active for id=1 should be true");
@@ -564,8 +563,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testResultSetWarningsAndStatementMeta() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types ORDER BY tid")) {
+         ResultSet rs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types ORDER BY tid")) {
       // Warnings may be null
       java.sql.SQLWarning warnings = rs.getWarnings();
       LOGGER.debug("Initial warnings: {}", warnings);
@@ -586,10 +585,10 @@ public class FileJdbcCoverageTest {
   @Test void testConcurrentResultSets() throws Exception {
     try (Statement stmt1 = connection.createStatement();
          Statement stmt2 = connection.createStatement()) {
-      try (ResultSet rs1 = stmt1.executeQuery(
-               "SELECT tid FROM jdbc_types ORDER BY tid");
-           ResultSet rs2 = stmt2.executeQuery(
-               "SELECT rec_id FROM jdbc_test ORDER BY rec_id")) {
+      try (ResultSet rs1 =
+               stmt1.executeQuery("SELECT tid FROM jdbc_types ORDER BY tid");
+           ResultSet rs2 =
+               stmt2.executeQuery("SELECT rec_id FROM jdbc_test ORDER BY rec_id")) {
         assertTrue(rs1.next());
         assertTrue(rs2.next());
         assertEquals(10, rs1.getInt(1));
@@ -605,8 +604,8 @@ public class FileJdbcCoverageTest {
   @Test void testFileResultSetWrapperImplDelegation() throws Exception {
     // Create a FileResultSetWrapperImpl manually and test delegation
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid, tname, tprice FROM jdbc_types ORDER BY tid")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid, tname, tprice FROM jdbc_types ORDER BY tid")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
 
       assertTrue(wrapper.next());
@@ -650,8 +649,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplStringByLabel() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tname, tprice FROM jdbc_types WHERE tid = 10")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tname, tprice FROM jdbc_types WHERE tid = 10")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
       assertTrue(wrapper.next());
       assertEquals("Widget", wrapper.getString("tname"));
@@ -666,8 +665,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplGetObject() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid, tname FROM jdbc_types WHERE tid = 20")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid, tname FROM jdbc_types WHERE tid = 20")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
       assertTrue(wrapper.next());
 
@@ -689,8 +688,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplFindColumn() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid, tname FROM jdbc_types")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid, tname FROM jdbc_types")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
       int tidIdx = wrapper.findColumn("tid");
       int tnameIdx = wrapper.findColumn("tname");
@@ -706,8 +705,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplNumericTypes() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid, tprice, tcount FROM jdbc_types WHERE tid = 30")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid, tprice, tcount FROM jdbc_types WHERE tid = 30")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
       assertTrue(wrapper.next());
 
@@ -736,8 +735,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplGetBoolean() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT rec_active FROM jdbc_test WHERE rec_id = 1")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT rec_active FROM jdbc_test WHERE rec_id = 1")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
       assertTrue(wrapper.next());
       boolean active = wrapper.getBoolean(1);
@@ -754,8 +753,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFilePreparedStatementWrapperDelegation() throws Exception {
     // Get the underlying prepared statement and wrap it
-    PreparedStatement underlying = connection.prepareStatement(
-        "SELECT rec_id, rec_name FROM jdbc_test WHERE rec_id = ?");
+    PreparedStatement underlying =
+        connection.prepareStatement("SELECT rec_id, rec_name FROM jdbc_test WHERE rec_id = ?");
     FilePreparedStatementWrapper wrapper =
         new FilePreparedStatementWrapper(underlying);
 
@@ -777,8 +776,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testFilePreparedStatementWrapperSetTypes() throws Exception {
-    PreparedStatement underlying = connection.prepareStatement(
-        "SELECT rec_id FROM jdbc_test WHERE rec_name = ? AND rec_amount > ?");
+    PreparedStatement underlying =
+        connection.prepareStatement("SELECT rec_id FROM jdbc_test WHERE rec_name = ? AND rec_amount > ?");
     FilePreparedStatementWrapper wrapper =
         new FilePreparedStatementWrapper(underlying);
 
@@ -796,8 +795,8 @@ public class FileJdbcCoverageTest {
   // ---------------------------------------------------------------------------
 
   @Test void testFilePreparedStatementWrapperSetObject() throws Exception {
-    PreparedStatement underlying = connection.prepareStatement(
-        "SELECT rec_name FROM jdbc_test WHERE rec_id = ?");
+    PreparedStatement underlying =
+        connection.prepareStatement("SELECT rec_name FROM jdbc_test WHERE rec_id = ?");
     FilePreparedStatementWrapper wrapper =
         new FilePreparedStatementWrapper(underlying);
 
@@ -817,8 +816,8 @@ public class FileJdbcCoverageTest {
     Statement underlying = connection.createStatement();
     FileStatementWrapper wrapper = new FileStatementWrapper(underlying);
 
-    try (ResultSet rs = wrapper.executeQuery(
-        "SELECT tname FROM jdbc_types WHERE tid = 10")) {
+    try (ResultSet rs =
+        wrapper.executeQuery("SELECT tname FROM jdbc_types WHERE tid = 10")) {
       assertTrue(rs instanceof FileResultSetWrapperImpl,
           "FileStatementWrapper.executeQuery should return FileResultSetWrapperImpl");
       assertTrue(rs.next());
@@ -839,8 +838,8 @@ public class FileJdbcCoverageTest {
         "createStatement should return FileStatementWrapper, got: "
             + stmt.getClass().getName());
 
-    PreparedStatement pstmt = connWrapper.prepareStatement(
-        "SELECT tid FROM jdbc_types");
+    PreparedStatement pstmt =
+        connWrapper.prepareStatement("SELECT tid FROM jdbc_types");
     assertTrue(pstmt instanceof FilePreparedStatementWrapper,
         "prepareStatement should return FilePreparedStatementWrapper, got: "
             + pstmt.getClass().getName());
@@ -873,8 +872,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplMetadata() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
 
       int holdability = wrapper.getHoldability();
@@ -898,8 +897,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplFetchSettings() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
 
       int fetchDir = wrapper.getFetchDirection();
@@ -920,8 +919,8 @@ public class FileJdbcCoverageTest {
 
   @Test void testFileResultSetWrapperImplUnwrap() throws Exception {
     try (Statement stmt = connection.createStatement();
-         ResultSet rawRs = stmt.executeQuery(
-             "SELECT tid FROM jdbc_types")) {
+         ResultSet rawRs =
+             stmt.executeQuery("SELECT tid FROM jdbc_types")) {
       FileResultSetWrapperImpl wrapper = new FileResultSetWrapperImpl(rawRs);
 
       // isWrapperFor should delegate

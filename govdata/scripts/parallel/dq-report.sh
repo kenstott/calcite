@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# ============================================================================
-# DQ Results Report — reads all Parquet DQ result files from S3 and prints
-# a schema-level pass/fail summary plus failing test details.
 #
-# Usage:
-#   dq-report.sh [--run-date YYYY-MM-DD] [--mode daily|historical]
-#                [--schemas s1,s2,...] [--show-warns] [--show-pass]
-#   dq-report.sh --help
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# --run-date YYYY-MM-DD   Read results for this date (default: today)
-# --mode daily|historical Filter by run type (default: show both)
-# --schemas s1,s2,...     Comma-separated schema subset (default: all)
-# --show-warns            Include warnings in the detail table
-# --show-pass             Include passing tests in the detail table
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# Reads:  s3://govdata-tracker-v1/dq-results/schema=*/run_date=*/type=*/results.parquet
-# ============================================================================
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

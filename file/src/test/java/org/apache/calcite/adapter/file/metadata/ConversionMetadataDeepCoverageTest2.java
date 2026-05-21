@@ -60,20 +60,17 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= Constructor tests =======
 
-  @Test
-  void testConstructorWithDirectory() {
+  @Test void testConstructorWithDirectory() {
     ConversionMetadata cm = new ConversionMetadata(tempDir.toFile());
     assertNotNull(cm);
   }
 
-  @Test
-  void testConstructorWithStringPath() {
+  @Test void testConstructorWithStringPath() {
     ConversionMetadata cm = new ConversionMetadata(tempDir.toString());
     assertNotNull(cm);
   }
 
-  @Test
-  void testConstructorWithS3Path() {
+  @Test void testConstructorWithS3Path() {
     // S3 path should not try to load metadata from disk
     ConversionMetadata cm = new ConversionMetadata("s3://my-bucket/data");
     assertNotNull(cm);
@@ -81,30 +78,26 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= Hint methods =======
 
-  @Test
-  void testSetAndGetHint() {
+  @Test void testSetAndGetHint() {
     metadata.setHint("cik", "0001234");
     assertEquals("0001234", metadata.getHint("cik"));
     assertNull(metadata.getHint("nonexistent"));
   }
 
-  @Test
-  void testSetHintNullValue() {
+  @Test void testSetHintNullValue() {
     metadata.setHint("key", null);
     assertNull(metadata.getHint("key"));
   }
 
   // ======= ConversionRecord constructors =======
 
-  @Test
-  void testConversionRecordDefaultConstructor() {
+  @Test void testConversionRecordDefaultConstructor() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertNull(record.tableName);
     assertNull(record.sourceFile);
   }
 
-  @Test
-  void testConversionRecordThreeArgConstructor() {
+  @Test void testConversionRecordThreeArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/src/file.xlsx", "/dst/file.json", "EXCEL_TO_JSON");
     assertEquals("/src/file.xlsx", record.originalFile);
@@ -113,15 +106,13 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(record.timestamp > 0);
   }
 
-  @Test
-  void testConversionRecordFourArgConstructor() {
+  @Test void testConversionRecordFourArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/src.xlsx", "/dst.json", "EXCEL_TO_JSON", "/cache.parquet");
     assertEquals("/cache.parquet", record.parquetCacheFile);
   }
 
-  @Test
-  void testConversionRecordSevenArgConstructor() {
+  @Test void testConversionRecordSevenArgConstructor() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/src.html", "/dst.json", "HTML_TO_JSON", "/cache.parquet",
             "etag123", 1024L, "text/html");
@@ -130,8 +121,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("text/html", record.contentType);
   }
 
-  @Test
-  void testConversionRecordComprehensiveConstructor() {
+  @Test void testConversionRecordComprehensiveConstructor() {
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     tableConfig.put("name", "test_table");
 
@@ -161,8 +151,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= ConversionRecord getter methods =======
 
-  @Test
-  void testConversionRecordGetters() {
+  @Test void testConversionRecordGetters() {
     ConversionMetadata.ConversionRecord record =
         new ConversionMetadata.ConversionRecord("/orig.xlsx", "/conv.json", "EXCEL_TO_JSON", "/cache.parquet");
     record.tableName = "my_table";
@@ -178,8 +167,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= isIcebergFormat =======
 
-  @Test
-  void testIsIcebergFormatTrue() {
+  @Test void testIsIcebergFormatTrue() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     Map<String, Object> tableConfig = new HashMap<String, Object>();
     Map<String, Object> materialize = new HashMap<String, Object>();
@@ -190,8 +178,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(record.isIcebergFormat());
   }
 
-  @Test
-  void testIsIcebergFormatFalse() {
+  @Test void testIsIcebergFormatFalse() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableConfig = null;
     assertFalse(record.isIcebergFormat());
@@ -213,8 +200,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= hasChanged =======
 
-  @Test
-  void testHasChangedLocalFile() throws IOException {
+  @Test void testHasChangedLocalFile() throws IOException {
     File sourceFile = tempDir.resolve("source.csv").toFile();
     try (FileWriter fw = new FileWriter(sourceFile)) {
       fw.write("test");
@@ -228,8 +214,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedLocalFileNonExistent() {
+  @Test void testHasChangedLocalFileNonExistent() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = tempDir.resolve("nonexistent.csv").toString();
 
@@ -237,8 +222,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertFalse(record.hasChanged());
   }
 
-  @Test
-  void testHasChangedRemoteFile() {
+  @Test void testHasChangedRemoteFile() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "https://example.com/data.csv";
 
@@ -248,14 +232,12 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= hasChangedViaMetadata =======
 
-  @Test
-  void testHasChangedViaMetadataNull() {
+  @Test void testHasChangedViaMetadataNull() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     assertTrue(record.hasChangedViaMetadata(null));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagMatch() {
+  @Test void testHasChangedViaMetadataEtagMatch() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "etag123";
 
@@ -265,8 +247,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertFalse(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataEtagChanged() {
+  @Test void testHasChangedViaMetadataEtagChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "etag123";
 
@@ -276,8 +257,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataSizeChanged() {
+  @Test void testHasChangedViaMetadataSizeChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.contentLength = 1024L;
 
@@ -288,8 +268,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampChanged() {
+  @Test void testHasChangedViaMetadataTimestampChanged() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.timestamp = 1000000L;
 
@@ -301,8 +280,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(record.hasChangedViaMetadata(currentMetadata));
   }
 
-  @Test
-  void testHasChangedViaMetadataTimestampWithinTolerance() {
+  @Test void testHasChangedViaMetadataTimestampWithinTolerance() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.timestamp = 1000000L;
 
@@ -316,8 +294,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= updateMetadata =======
 
-  @Test
-  void testUpdateMetadata() {
+  @Test void testUpdateMetadata() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.originalFile = "/test.csv";
 
@@ -334,8 +311,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(2000000L, record.timestamp);
   }
 
-  @Test
-  void testUpdateMetadataNull() {
+  @Test void testUpdateMetadataNull() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.etag = "old-etag";
 
@@ -345,8 +321,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= isLocalFile (via hasChanged) =======
 
-  @Test
-  void testIsLocalFileVariousProtocols() {
+  @Test void testIsLocalFileVariousProtocols() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
 
     // HTTP
@@ -372,8 +347,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= PartitionBaseline =======
 
-  @Test
-  void testPartitionBaselineEmpty() {
+  @Test void testPartitionBaselineEmpty() {
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     assertTrue(baseline.isEmpty());
 
@@ -386,65 +360,56 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= FileBaseline =======
 
-  @Test
-  void testFileBaselineDefaultConstructor() {
+  @Test void testFileBaselineDefaultConstructor() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline();
     assertNull(fb.size);
     assertNull(fb.etag);
     assertNull(fb.lastModified);
   }
 
-  @Test
-  void testFileBaselineParameterizedConstructor() {
+  @Test void testFileBaselineParameterizedConstructor() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, "etag1", 1000L);
     assertEquals(Long.valueOf(100L), fb.size);
     assertEquals("etag1", fb.etag);
     assertEquals(Long.valueOf(1000L), fb.lastModified);
   }
 
-  @Test
-  void testFileBaselineHasChangedNull() {
+  @Test void testFileBaselineHasChangedNull() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, "etag1", 1000L);
     assertTrue(fb.hasChanged(null));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagMatch() {
+  @Test void testFileBaselineHasChangedEtagMatch() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, "etag1", 1000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(100L, "etag1", 1000L);
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedEtagMismatch() {
+  @Test void testFileBaselineHasChangedEtagMismatch() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, "etag1", 1000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(100L, "etag2", 1000L);
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedSizeChanged() {
+  @Test void testFileBaselineHasChangedSizeChanged() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, null, 1000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(200L, null, 1000L);
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedTimestampChanged() {
+  @Test void testFileBaselineHasChangedTimestampChanged() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, null, 1000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(100L, null, 3000L);
     assertTrue(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedTimestampWithinTolerance() {
+  @Test void testFileBaselineHasChangedTimestampWithinTolerance() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(100L, null, 1000L);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(100L, null, 1500L);
     assertFalse(fb.hasChanged(current));
   }
 
-  @Test
-  void testFileBaselineHasChangedNoChange() {
+  @Test void testFileBaselineHasChangedNoChange() {
     ConversionMetadata.FileBaseline fb = new ConversionMetadata.FileBaseline(null, null, null);
     ConversionMetadata.FileBaseline current = new ConversionMetadata.FileBaseline(null, null, null);
     assertFalse(fb.hasChanged(current));
@@ -452,8 +417,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= recordConversion (File, File, String) =======
 
-  @Test
-  void testRecordConversion() throws IOException {
+  @Test void testRecordConversion() throws IOException {
     File original = createTempFile("original.xlsx");
     File converted = createTempFile("converted.json");
 
@@ -466,8 +430,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= recordConversion with parquet cache =======
 
-  @Test
-  void testRecordConversionWithParquetCache() throws IOException {
+  @Test void testRecordConversionWithParquetCache() throws IOException {
     File original = createTempFile("src.html");
     File converted = createTempFile("result.json");
     File parquetCache = createTempFile("cache.parquet");
@@ -479,8 +442,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(parquetCache.getCanonicalPath(), record.parquetCacheFile);
   }
 
-  @Test
-  void testRecordConversionWithNullParquetCache() throws IOException {
+  @Test void testRecordConversionWithNullParquetCache() throws IOException {
     File original = createTempFile("src2.html");
     File converted = createTempFile("result2.json");
 
@@ -493,8 +455,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= recordConversion with pre-built record =======
 
-  @Test
-  void testRecordConversionPreBuiltRecord() throws IOException {
+  @Test void testRecordConversionPreBuiltRecord() throws IOException {
     File converted = createTempFile("prebuilt.json");
 
     ConversionMetadata.ConversionRecord record =
@@ -509,8 +470,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= findOriginalSource =======
 
-  @Test
-  void testFindOriginalSource() throws IOException {
+  @Test void testFindOriginalSource() throws IOException {
     File original = createTempFile("findme.xlsx");
     File converted = createTempFile("found.json");
 
@@ -521,14 +481,12 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(original.getCanonicalPath(), found.getCanonicalPath());
   }
 
-  @Test
-  void testFindOriginalSourceNotFound() throws IOException {
+  @Test void testFindOriginalSourceNotFound() throws IOException {
     File converted = createTempFile("orphan.json");
     assertNull(metadata.findOriginalSource(converted));
   }
 
-  @Test
-  void testFindOriginalSourceDeletedOriginal() throws IOException {
+  @Test void testFindOriginalSourceDeletedOriginal() throws IOException {
     File original = createTempFile("deleted.xlsx");
     File converted = createTempFile("remaining.json");
 
@@ -543,8 +501,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= findDerivedFiles =======
 
-  @Test
-  void testFindDerivedFiles() throws IOException {
+  @Test void testFindDerivedFiles() throws IOException {
     File source = createTempFile("source.xlsx");
     File derived1 = createTempFile("derived1.json");
     File derived2 = createTempFile("derived2.json");
@@ -556,8 +513,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(2, derivedFiles.size());
   }
 
-  @Test
-  void testFindDerivedFilesEmpty() throws IOException {
+  @Test void testFindDerivedFilesEmpty() throws IOException {
     File source = createTempFile("nodeps.csv");
     List<File> derivedFiles = metadata.findDerivedFiles(source);
     assertTrue(derivedFiles.isEmpty());
@@ -565,8 +521,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= updateCachedFile =======
 
-  @Test
-  void testUpdateCachedFile() throws IOException {
+  @Test void testUpdateCachedFile() throws IOException {
     File original = createTempFile("updatecache_orig.xlsx");
     File converted = createTempFile("updatecache_conv.json");
     File parquet = createTempFile("updatecache.parquet");
@@ -579,8 +534,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(parquet.getCanonicalPath(), record.parquetCacheFile);
   }
 
-  @Test
-  void testUpdateCachedFileNotFound() throws IOException {
+  @Test void testUpdateCachedFileNotFound() throws IOException {
     File converted = createTempFile("notexist.json");
     File parquet = createTempFile("notexist.parquet");
 
@@ -588,8 +542,7 @@ class ConversionMetadataDeepCoverageTest2 {
     metadata.updateCachedFile(converted, parquet);
   }
 
-  @Test
-  void testUpdateCachedFileNull() throws IOException {
+  @Test void testUpdateCachedFileNull() throws IOException {
     File original = createTempFile("nullcache_orig.xlsx");
     File converted = createTempFile("nullcache_conv.json");
 
@@ -603,8 +556,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= getAllConversions =======
 
-  @Test
-  void testGetAllConversions() throws IOException {
+  @Test void testGetAllConversions() throws IOException {
     File orig = createTempFile("all_orig.csv");
     File conv = createTempFile("all_conv.json");
 
@@ -615,8 +567,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= hasTableMetadata =======
 
-  @Test
-  void testHasTableMetadata() {
+  @Test void testHasTableMetadata() {
     assertFalse(metadata.hasTableMetadata("nonexistent"));
 
     metadata.putConversionRecord("test_table", new ConversionMetadata.ConversionRecord());
@@ -625,8 +576,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= putConversionRecord =======
 
-  @Test
-  void testPutConversionRecord() {
+  @Test void testPutConversionRecord() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "put_table";
     record.sourceFile = "/data/test.parquet";
@@ -637,8 +587,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= updateMaterializationInfo =======
 
-  @Test
-  void testUpdateMaterializationInfoExistingRecord() {
+  @Test void testUpdateMaterializationInfoExistingRecord() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "mat_table";
     record.conversionType = "DIRECT";
@@ -657,8 +606,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertNull(updated.parquetCacheFile);
   }
 
-  @Test
-  void testUpdateMaterializationInfoNewRecord() {
+  @Test void testUpdateMaterializationInfoNewRecord() {
     metadata.updateMaterializationInfo("new_mat_table", "s3://bucket/new", "PARQUET", 500L);
 
     ConversionMetadata.ConversionRecord record = metadata.getAllConversions().get("new_mat_table");
@@ -668,8 +616,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(Long.valueOf(500L), record.rowCount);
   }
 
-  @Test
-  void testUpdateMaterializationInfoNullRowCount() {
+  @Test void testUpdateMaterializationInfoNullRowCount() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "keep_rc";
     record.rowCount = 999L;
@@ -682,8 +629,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals(Long.valueOf(999L), updated.rowCount);
   }
 
-  @Test
-  void testUpdateMaterializationInfoTwoArgs() {
+  @Test void testUpdateMaterializationInfoTwoArgs() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "two_arg";
     metadata.putConversionRecord("two_arg", record);
@@ -696,8 +642,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= updateRecordWithParquetFile =======
 
-  @Test
-  void testUpdateRecordWithParquetFile() throws IOException {
+  @Test void testUpdateRecordWithParquetFile() throws IOException {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
     record.tableName = "parq_update";
     metadata.putConversionRecord("parq_update", record);
@@ -710,8 +655,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("ParquetTranslatableTable", updated.tableType);
   }
 
-  @Test
-  void testUpdateRecordWithParquetFileNotFound() throws IOException {
+  @Test void testUpdateRecordWithParquetFileNotFound() throws IOException {
     File parquetFile = createTempFile("orphan.parquet");
     // Should not throw - just logs warning
     metadata.updateRecordWithParquetFile("nonexistent_table", parquetFile);
@@ -719,8 +663,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= recordConversionWithTableName =======
 
-  @Test
-  void testRecordConversionWithTableNameNew() throws IOException {
+  @Test void testRecordConversionWithTableNameNew() throws IOException {
     File source = createTempFile("tn_source.html");
     File converted = createTempFile("tn_converted.json");
 
@@ -732,8 +675,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("HTML_TO_JSON", record.conversionType);
   }
 
-  @Test
-  void testRecordConversionWithTableNameUpdate() throws IOException {
+  @Test void testRecordConversionWithTableNameUpdate() throws IOException {
     // Pre-populate with a record
     ConversionMetadata.ConversionRecord existing = new ConversionMetadata.ConversionRecord();
     existing.tableName = "upd_table";
@@ -753,8 +695,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= updateExistingRecord =======
 
-  @Test
-  void testUpdateExistingRecordFound() throws IOException {
+  @Test void testUpdateExistingRecordFound() throws IOException {
     File sourceFile = createTempFile("uer_source.html");
 
     ConversionMetadata.ConversionRecord existing = new ConversionMetadata.ConversionRecord();
@@ -775,8 +716,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("generated_name", updated.tableName);
   }
 
-  @Test
-  void testUpdateExistingRecordNotFoundCreatesNew() throws IOException {
+  @Test void testUpdateExistingRecordNotFoundCreatesNew() throws IOException {
     File sourceFile = createTempFile("uer_new_source.html");
     File convertedFile = createTempFile("uer_new_converted.json");
 
@@ -786,8 +726,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertTrue(metadata.hasTableMetadata("new_table_name"));
   }
 
-  @Test
-  void testUpdateExistingRecordNotFoundNoTableName() throws IOException {
+  @Test void testUpdateExistingRecordNotFoundNoTableName() throws IOException {
     File sourceFile = createTempFile("uer_noname_source.html");
     File convertedFile = createTempFile("uer_noname_converted.json");
 
@@ -799,8 +738,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertNotNull(record);
   }
 
-  @Test
-  void testUpdateExistingRecordTwoArgs() throws IOException {
+  @Test void testUpdateExistingRecordTwoArgs() throws IOException {
     File sourceFile = createTempFile("uer2_source.html");
     File convertedFile = createTempFile("uer2_converted.json");
 
@@ -808,8 +746,7 @@ class ConversionMetadataDeepCoverageTest2 {
     // Should call the 5-arg version with null generatedTableName
   }
 
-  @Test
-  void testUpdateExistingRecordPreservesTableName() throws IOException {
+  @Test void testUpdateExistingRecordPreservesTableName() throws IOException {
     File sourceFile = createTempFile("uer_preserve_source.html");
 
     ConversionMetadata.ConversionRecord existing = new ConversionMetadata.ConversionRecord();
@@ -831,8 +768,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= getConversionRecordByConvertedFile =======
 
-  @Test
-  void testGetConversionRecordByConvertedFile() throws IOException {
+  @Test void testGetConversionRecordByConvertedFile() throws IOException {
     File original = createTempFile("gcrbc_orig.xlsx");
     File converted = createTempFile("gcrbc_conv.json");
 
@@ -843,8 +779,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertNotNull(record);
   }
 
-  @Test
-  void testGetConversionRecordByConvertedFileNotFound() {
+  @Test void testGetConversionRecordByConvertedFileNotFound() {
     ConversionMetadata.ConversionRecord record =
         metadata.getConversionRecordByConvertedFile(tempDir.resolve("nonexistent.json").toString());
     assertNull(record);
@@ -852,8 +787,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= findRecordBySourceFile =======
 
-  @Test
-  void testFindRecordBySourceFile() throws IOException {
+  @Test void testFindRecordBySourceFile() throws IOException {
     File source = createTempFile("frbsf_source.xlsx");
     File converted = createTempFile("frbsf_converted.json");
 
@@ -864,16 +798,14 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("EXCEL_TO_JSON", record.conversionType);
   }
 
-  @Test
-  void testFindRecordBySourceFileNotFound() throws IOException {
+  @Test void testFindRecordBySourceFileNotFound() throws IOException {
     File source = createTempFile("not_recorded.xlsx");
     assertNull(metadata.findRecordBySourceFile(source));
   }
 
   // ======= clear =======
 
-  @Test
-  void testClear() throws IOException {
+  @Test void testClear() throws IOException {
     File orig = createTempFile("clear_orig.csv");
     File conv = createTempFile("clear_conv.json");
 
@@ -886,8 +818,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= reload =======
 
-  @Test
-  void testReload() throws IOException {
+  @Test void testReload() throws IOException {
     File orig = createTempFile("reload_orig.csv");
     File conv = createTempFile("reload_conv.json");
 
@@ -906,8 +837,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= saveMetadata and loadMetadata roundtrip =======
 
-  @Test
-  void testSaveAndLoadRoundtrip() throws IOException {
+  @Test void testSaveAndLoadRoundtrip() throws IOException {
     File orig = createTempFile("rt_orig.xlsx");
     File conv = createTempFile("rt_conv.json");
 
@@ -923,8 +853,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= Static file type detection methods =======
 
-  @Test
-  void testDetectConvertibleType() throws Exception {
+  @Test void testDetectConvertibleType() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
     method.setAccessible(true);
 
@@ -939,8 +868,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("unknown", method.invoke(null, "test.unknown"));
   }
 
-  @Test
-  void testDetectDirectType() throws Exception {
+  @Test void testDetectDirectType() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
     method.setAccessible(true);
 
@@ -954,8 +882,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("unknown", method.invoke(null, "test.unknown"));
   }
 
-  @Test
-  void testExtractExtension() throws Exception {
+  @Test void testExtractExtension() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
     method.setAccessible(true);
 
@@ -965,8 +892,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= isRemoteFile and isGlobPattern =======
 
-  @Test
-  void testIsRemoteFile() throws Exception {
+  @Test void testIsRemoteFile() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isRemoteFile", String.class);
     method.setAccessible(true);
 
@@ -979,8 +905,7 @@ class ConversionMetadataDeepCoverageTest2 {
     assertFalse((Boolean) method.invoke(metadata, (String) null));
   }
 
-  @Test
-  void testIsGlobPattern() throws Exception {
+  @Test void testIsGlobPattern() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isGlobPattern", String.class);
     method.setAccessible(true);
 
@@ -994,8 +919,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= isHivePartitioned =======
 
-  @Test
-  void testIsHivePartitioned() throws Exception {
+  @Test void testIsHivePartitioned() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
     method.setAccessible(true);
 
@@ -1024,8 +948,7 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= formatRecord =======
 
-  @Test
-  void testFormatRecord() throws Exception {
+  @Test void testFormatRecord() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("formatRecord", ConversionMetadata.ConversionRecord.class);
     method.setAccessible(true);
 
@@ -1050,22 +973,19 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= buildComprehensiveMapping =======
 
-  @Test
-  void testBuildComprehensiveMappingNullDir() {
+  @Test void testBuildComprehensiveMappingNullDir() {
     Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(null, new HashMap<String, String>());
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  void testBuildComprehensiveMappingNoAperioDir() {
+  @Test void testBuildComprehensiveMappingNoAperioDir() {
     Map<String, String> result = ConversionMetadata.buildComprehensiveMapping(tempDir.toFile(), new HashMap<String, String>());
     assertTrue(result.isEmpty());
   }
 
   // ======= detectSourceType =======
 
-  @Test
-  void testDetectSourceType() throws Exception {
+  @Test void testDetectSourceType() throws Exception {
     Method method = ConversionMetadata.class.getDeclaredMethod("detectSourceType", String.class);
     method.setAccessible(true);
 

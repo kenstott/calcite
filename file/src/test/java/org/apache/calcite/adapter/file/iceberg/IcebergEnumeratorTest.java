@@ -40,7 +40,6 @@ import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -66,21 +65,21 @@ public class IcebergEnumeratorTest {
     Configuration conf = new Configuration();
     HadoopCatalog catalog = new HadoopCatalog(conf, warehousePath);
 
-    schema = new Schema(
-        Types.NestedField.required(1, "id", Types.IntegerType.get()),
+    schema =
+        new Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.required(2, "name", Types.StringType.get()),
         Types.NestedField.optional(3, "score", Types.DoubleType.get()));
 
     // Empty table
-    emptyTable = catalog.createTable(
-        TableIdentifier.of("empty_table"), schema, PartitionSpec.unpartitioned());
+    emptyTable =
+        catalog.createTable(TableIdentifier.of("empty_table"), schema, PartitionSpec.unpartitioned());
 
     // Populated table with 3 records
-    populatedTable = catalog.createTable(
-        TableIdentifier.of("populated_table"), schema, PartitionSpec.unpartitioned());
+    populatedTable =
+        catalog.createTable(TableIdentifier.of("populated_table"), schema, PartitionSpec.unpartitioned());
 
-    OutputFile outputFile = populatedTable.io().newOutputFile(
-        populatedTable.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
+    OutputFile outputFile =
+        populatedTable.io().newOutputFile(populatedTable.location() + "/data/file-" + UUID.randomUUID() + ".parquet");
 
     DataWriter<Record> writer = Parquet.writeData(outputFile)
         .schema(schema)
@@ -116,21 +115,19 @@ public class IcebergEnumeratorTest {
     IcebergCatalogManager.clearCache();
   }
 
-  @Test
-  public void testEnumerateEmptyTable() {
+  @Test public void testEnumerateEmptyTable() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        emptyTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(emptyTable, null, null, cancelFlag);
 
     assertFalse(enumerator.moveNext());
     enumerator.close();
   }
 
-  @Test
-  public void testEnumeratePopulatedTable() {
+  @Test public void testEnumeratePopulatedTable() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag);
 
     int count = 0;
     while (enumerator.moveNext()) {
@@ -143,11 +140,10 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCurrentBeforeMoveNextThrows() {
+  @Test public void testCurrentBeforeMoveNextThrows() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        emptyTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(emptyTable, null, null, cancelFlag);
 
     assertThrows(IllegalStateException.class, new org.junit.jupiter.api.function.Executable() {
       @Override public void execute() {
@@ -157,11 +153,10 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCancelFlagStopsEnumeration() {
+  @Test public void testCancelFlagStopsEnumeration() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag);
 
     // Read first record
     assertTrue(enumerator.moveNext());
@@ -175,11 +170,10 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testResetThrowsUnsupported() {
+  @Test public void testResetThrowsUnsupported() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        emptyTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(emptyTable, null, null, cancelFlag);
 
     assertThrows(UnsupportedOperationException.class,
         new org.junit.jupiter.api.function.Executable() {
@@ -190,13 +184,12 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testColumnProjection() {
+  @Test public void testColumnProjection() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
     // Project only columns 0 (id) and 2 (score)
     int[] projectedColumns = new int[]{0, 2};
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag, projectedColumns);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag, projectedColumns);
 
     assertTrue(enumerator.moveNext());
     Object[] row = enumerator.current();
@@ -207,14 +200,13 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSnapshotIdQuery() {
+  @Test public void testSnapshotIdQuery() {
     // Get the current snapshot id
     long snapshotId = populatedTable.currentSnapshot().snapshotId();
 
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, snapshotId, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, snapshotId, null, cancelFlag);
 
     int count = 0;
     while (enumerator.moveNext()) {
@@ -225,8 +217,7 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testInvalidTimestampFormat() {
+  @Test public void testInvalidTimestampFormat() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
     assertThrows(IllegalArgumentException.class,
         new org.junit.jupiter.api.function.Executable() {
@@ -236,11 +227,10 @@ public class IcebergEnumeratorTest {
         });
   }
 
-  @Test
-  public void testNullValuesInRecords() {
+  @Test public void testNullValuesInRecords() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag);
 
     boolean foundNull = false;
     while (enumerator.moveNext()) {
@@ -253,23 +243,21 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCloseIsIdempotent() {
+  @Test public void testCloseIsIdempotent() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        emptyTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(emptyTable, null, null, cancelFlag);
 
     // Close multiple times should not throw
     enumerator.close();
     enumerator.close();
   }
 
-  @Test
-  public void testProjectionSingleColumn() {
+  @Test public void testProjectionSingleColumn() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
     int[] projectedColumns = new int[]{1}; // name only
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag, projectedColumns);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag, projectedColumns);
 
     assertTrue(enumerator.moveNext());
     Object[] row = enumerator.current();
@@ -278,11 +266,10 @@ public class IcebergEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testMoveNextAfterExhaustion() {
+  @Test public void testMoveNextAfterExhaustion() {
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
-    IcebergEnumerator enumerator = new IcebergEnumerator(
-        populatedTable, null, null, cancelFlag);
+    IcebergEnumerator enumerator =
+        new IcebergEnumerator(populatedTable, null, null, cancelFlag);
 
     // Exhaust all records
     while (enumerator.moveNext()) {

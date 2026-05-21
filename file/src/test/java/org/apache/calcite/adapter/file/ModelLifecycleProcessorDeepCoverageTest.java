@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
-import org.apache.calcite.schema.Schema;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -67,8 +66,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
 
   // === Constructor path tests ===
 
-  @Test
-  public void testProcessCreatesSchemaForSingleSchema() {
+  @Test public void testProcessCreatesSchemaForSingleSchema() {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
@@ -85,8 +83,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getSchema("TEST_SCHEMA"));
   }
 
-  @Test
-  public void testProcessWithOperatingDirectory() {
+  @Test public void testProcessWithOperatingDirectory() {
     String dir = tempDir.toString();
     String opDir = tempDir.resolve("operating").toString();
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -104,8 +101,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getRootSchema());
   }
 
-  @Test
-  public void testProcessCreatesOperatingDirectoryIfMissing() {
+  @Test public void testProcessCreatesOperatingDirectoryIfMissing() {
     String dir = tempDir.toString();
     // Use a new subdirectory that doesn't exist yet
     String opDir = tempDir.resolve("new_operating_dir").toString();
@@ -124,8 +120,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(new java.io.File(opDir).exists(), "Operating directory should be created");
   }
 
-  @Test
-  public void testProcessWithMultipleSchemas() {
+  @Test public void testProcessWithMultipleSchemas() {
     String dir = tempDir.toString();
     Map<String, Object> operand1 = new HashMap<String, Object>();
     operand1.put("directory", dir);
@@ -147,8 +142,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getSchema("SCHEMA_B"));
   }
 
-  @Test
-  public void testProcessWithHookOverrides() {
+  @Test public void testProcessWithHookOverrides() {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
@@ -166,8 +160,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertTrue(hookCalled[0], "Hook override should have been called");
   }
 
-  @Test
-  public void testProcessWithIncrementalTracker() {
+  @Test public void testProcessWithIncrementalTracker() {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
@@ -184,8 +177,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getSchema("TRACKER_SCHEMA"));
   }
 
-  @Test
-  public void testProcessWithNullOperatingDirectory() {
+  @Test public void testProcessWithNullOperatingDirectory() {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
@@ -202,8 +194,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getSchema("NULL_OPDIR"));
   }
 
-  @Test
-  public void testProcessSchemaWithSchemaSpecificOperatingDirectory() {
+  @Test public void testProcessSchemaWithSchemaSpecificOperatingDirectory() {
     String dir = tempDir.toString();
     String schemaOpDir = tempDir.resolve("schema_op_dir").toString();
     Map<String, Object> operand = new HashMap<String, Object>();
@@ -221,8 +212,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result.getSchema("OPDIR_SCHEMA2"));
   }
 
-  @Test
-  public void testProcessErrorPropagatesAsRuntimeException() {
+  @Test public void testProcessErrorPropagatesAsRuntimeException() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("ephemeralCache", Boolean.TRUE);
     // No directory - may cause exception inside factory
@@ -246,8 +236,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertThrows(RuntimeException.class, processor::process);
   }
 
-  @Test
-  public void testProcessResultGetSchemaReturnsNullForUnknown() {
+  @Test public void testProcessResultGetSchemaReturnsNullForUnknown() {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
@@ -262,8 +251,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNull(result.getSchema("UNKNOWN_SCHEMA"));
   }
 
-  @Test
-  public void testBuilderAddSchemaWithNullOperand() {
+  @Test public void testBuilderAddSchemaWithNullOperand() {
     String dir = tempDir.toString();
     // Null operand should be handled (converted to empty map)
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -287,8 +275,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     assertNotNull(result);
   }
 
-  @Test
-  public void testBuilderCapturesIncrementalTrackerPerSchema() {
+  @Test public void testBuilderCapturesIncrementalTrackerPerSchema() {
     String dir = tempDir.toString();
     Map<String, Object> operand1 = new HashMap<String, Object>();
     operand1.put("directory", dir);

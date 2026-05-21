@@ -31,7 +31,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -486,8 +485,7 @@ public class FileSchemaBuilderCoverageTest {
         .resolveDimensions("table1",
             new BiFunction<TableContext, Map<String, DimensionConfig>,
                 Map<String, DimensionConfig>>() {
-              @Override
-              public Map<String, DimensionConfig> apply(
+              @Override public Map<String, DimensionConfig> apply(
                   TableContext ctx, Map<String, DimensionConfig> dims) {
                 return dims;
               }

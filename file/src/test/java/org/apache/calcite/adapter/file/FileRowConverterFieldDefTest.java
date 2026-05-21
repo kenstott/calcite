@@ -23,7 +23,6 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.util.Sources;
 
 import org.jsoup.select.Elements;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -86,20 +85,18 @@ public class FileRowConverterFieldDefTest {
     return new FileReaderV2(Sources.of(htmlFile));
   }
 
-  @Test
-  void testWidthWithNoFieldConfigs() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age", "City"},
+  @Test void testWidthWithNoFieldConfigs() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age", "City"},
         new String[]{"Alice", "30", "Boston"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
     int width = converter.width();
     assertEquals(3, width, "Width should match number of header columns");
   }
 
-  @Test
-  void testWidthWithFieldConfigs() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age", "City"},
+  @Test void testWidthWithFieldConfigs() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age", "City"},
         new String[]{"Alice", "30", "Boston"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -119,10 +116,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(3, width, "Width should include configured fields plus non-configured headers");
   }
 
-  @Test
-  void testWidthWithSkippedField() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age", "City"},
+  @Test void testWidthWithSkippedField() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age", "City"},
         new String[]{"Alice", "30", "Boston"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -141,10 +137,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(2, width, "Skipped fields should not be counted");
   }
 
-  @Test
-  void testGetRowTypeWithStringFields() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "City"},
+  @Test void testGetRowTypeWithStringFields() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "City"},
         new String[]{"Alice", "Boston"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
     RelDataType rowType = converter.getRowType(typeFactory);
@@ -153,10 +148,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(2, rowType.getFieldCount(), "Should have 2 fields");
   }
 
-  @Test
-  void testGetRowTypeWithTypedFields() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age", "Active"},
+  @Test void testGetRowTypeWithTypedFields() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age", "Active"},
         new String[]{"Alice", "30", "true"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -182,10 +176,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(3, rowType.getFieldCount(), "Should have 3 typed fields");
   }
 
-  @Test
-  void testGetRowTypeWithFieldNameOverride() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age"},
+  @Test void testGetRowTypeWithFieldNameOverride() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age"},
         new String[]{"Alice", "30"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -208,16 +201,15 @@ public class FileRowConverterFieldDefTest {
     assertTrue(hasFullName, "Should have field named 'full_name'");
   }
 
-  @Test
-  void testToRowWithStringConversion() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "City"},
+  @Test void testToRowWithStringConversion() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "City"},
         new String[]{"Alice", "Boston"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
 
     // Get the first data row from the reader
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Name", "City"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Name", "City"},
         new String[]{"Alice", "Boston"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements row = it.next(); // first data row
@@ -233,10 +225,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals("Boston", rowArr[1], "Second cell should be 'Boston'");
   }
 
-  @Test
-  void testToRowWithBooleanType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Active"},
+  @Test void testToRowWithBooleanType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Active"},
         new String[]{"true"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -247,8 +238,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Active"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Active"},
         new String[]{"true"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -259,10 +250,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(Boolean.TRUE, rowArr[0], "Should parse 'true' as Boolean.TRUE");
   }
 
-  @Test
-  void testToRowWithByteType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Value"},
+  @Test void testToRowWithByteType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Value"},
         new String[]{"42"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -273,8 +263,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Value"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Value"},
         new String[]{"42"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -285,10 +275,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals((byte) 42, rowArr[0], "Should parse '42' as byte 42");
   }
 
-  @Test
-  void testToRowWithShortType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Value"},
+  @Test void testToRowWithShortType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Value"},
         new String[]{"1234"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -299,8 +288,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Value"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Value"},
         new String[]{"1234"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -311,10 +300,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals((short) 1234, rowArr[0], "Should parse '1234' as short");
   }
 
-  @Test
-  void testToRowWithIntType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Count"},
+  @Test void testToRowWithIntType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Count"},
         new String[]{"12345"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -325,8 +313,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Count"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Count"},
         new String[]{"12345"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -337,10 +325,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(12345, rowArr[0], "Should parse '12345' as int");
   }
 
-  @Test
-  void testToRowWithLongType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"BigNum"},
+  @Test void testToRowWithLongType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"BigNum"},
         new String[]{"9876543210"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -351,8 +338,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"BigNum"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"BigNum"},
         new String[]{"9876543210"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -363,10 +350,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(9876543210L, rowArr[0], "Should parse large number as long");
   }
 
-  @Test
-  void testToRowWithFloatType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Ratio"},
+  @Test void testToRowWithFloatType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Ratio"},
         new String[]{"3.14"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -377,8 +363,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Ratio"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Ratio"},
         new String[]{"3.14"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -390,10 +376,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(3.14f, ((Number) rowArr[0]).floatValue(), 0.01f);
   }
 
-  @Test
-  void testToRowWithDoubleType() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Amount"},
+  @Test void testToRowWithDoubleType() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Amount"},
         new String[]{"123.456"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -404,8 +389,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Amount"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Amount"},
         new String[]{"123.456"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -417,10 +402,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(123.456, ((Number) rowArr[0]).doubleValue(), 0.001);
   }
 
-  @Test
-  void testToRowWithDoubleParseFailure() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Value"},
+  @Test void testToRowWithDoubleParseFailure() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Value"},
         new String[]{"not_a_number"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -431,8 +415,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Value"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Value"},
         new String[]{"not_a_number"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -443,10 +427,9 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Unparseable double should return null");
   }
 
-  @Test
-  void testToRowWithDateIsoFormat() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Date"},
+  @Test void testToRowWithDateIsoFormat() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Date"},
         new String[]{"2024-01-15"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -457,8 +440,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Date"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Date"},
         new String[]{"2024-01-15"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -470,10 +453,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(java.sql.Date.valueOf("2024-01-15"), rowArr[0]);
   }
 
-  @Test
-  void testToRowWithDateNattyFormat() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Date"},
+  @Test void testToRowWithDateNattyFormat() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Date"},
         new String[]{"January 15, 2024"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -484,8 +466,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Date"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Date"},
         new String[]{"January 15, 2024"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -496,10 +478,9 @@ public class FileRowConverterFieldDefTest {
     assertNotNull(rowArr[0], "Natty-parsed date should not be null");
   }
 
-  @Test
-  void testToRowWithTimeHhMmSsFormat() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Time"},
+  @Test void testToRowWithTimeHhMmSsFormat() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Time"},
         new String[]{"14:30:00"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -510,8 +491,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Time"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Time"},
         new String[]{"14:30:00"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -524,10 +505,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(52200000, rowArr[0], "14:30:00 should be 52200000 millis since midnight");
   }
 
-  @Test
-  void testToRowWithTimestampIsoFormat() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Timestamp"},
+  @Test void testToRowWithTimestampIsoFormat() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Timestamp"},
         new String[]{"2024-01-15 14:30:00"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -538,8 +518,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Timestamp"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Timestamp"},
         new String[]{"2024-01-15 14:30:00"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -551,10 +531,9 @@ public class FileRowConverterFieldDefTest {
     assertTrue(rowArr[0] instanceof Long, "Timestamp should be Long (millis since epoch)");
   }
 
-  @Test
-  void testToRowWithTimestampWithLocalTimeZone() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Timestamp"},
+  @Test void testToRowWithTimestampWithLocalTimeZone() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Timestamp"},
         new String[]{"January 15, 2024"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -565,8 +544,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Timestamp"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Timestamp"},
         new String[]{"January 15, 2024"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -578,10 +557,9 @@ public class FileRowConverterFieldDefTest {
     assertTrue(rowArr[0] instanceof Long, "Should be millis since epoch");
   }
 
-  @Test
-  void testToRowWithNullValue() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Value"},
+  @Test void testToRowWithNullValue() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Value"},
         new String[]{""});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -592,8 +570,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Value"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Value"},
         new String[]{""});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -604,15 +582,14 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Empty string should convert to null for typed fields");
   }
 
-  @Test
-  void testToRowWithNullTypeReturnsString() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name"},
+  @Test void testToRowWithNullTypeReturnsString() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name"},
         new String[]{"hello"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Name"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Name"},
         new String[]{"hello"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -623,15 +600,14 @@ public class FileRowConverterFieldDefTest {
     assertEquals("hello", rowArr[0], "Null type should return string as-is");
   }
 
-  @Test
-  void testToRowWithProjection() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"A", "B", "C"},
+  @Test void testToRowWithProjection() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"A", "B", "C"},
         new String[]{"alpha", "beta", "gamma"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"A", "B", "C"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"A", "B", "C"},
         new String[]{"alpha", "beta", "gamma"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -644,10 +620,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals("gamma", rowArr[1], "Second projected value should be 'gamma'");
   }
 
-  @Test
-  void testInitializationIsIdempotent() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"A", "B"},
+  @Test void testInitializationIsIdempotent() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"A", "B"},
         new String[]{"x", "y"});
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
 
@@ -657,10 +632,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals(2, width1, "Width should be 2");
   }
 
-  @Test
-  void testDuplicateHeadingThrowsException() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Name"},
+  @Test void testDuplicateHeadingThrowsException() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Name"},
         new String[]{"A", "B"});
 
     FileRowConverter converter = new FileRowConverter(reader, null, "UNCHANGED");
@@ -668,10 +642,9 @@ public class FileRowConverterFieldDefTest {
         "Duplicate headings should throw RuntimeException");
   }
 
-  @Test
-  void testBadSourceColumnInFieldConfig() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age"},
+  @Test void testBadSourceColumnInFieldConfig() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age"},
         new String[]{"Alice", "30"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -684,10 +657,9 @@ public class FileRowConverterFieldDefTest {
         "Non-existent column reference should throw RuntimeException");
   }
 
-  @Test
-  void testDuplicateColumnNameInFieldConfig() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Name", "Age"},
+  @Test void testDuplicateColumnNameInFieldConfig() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Name", "Age"},
         new String[]{"Alice", "30"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -706,10 +678,9 @@ public class FileRowConverterFieldDefTest {
         "Duplicate column names should throw RuntimeException");
   }
 
-  @Test
-  void testCellReaderWithReplace() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Price"},
+  @Test void testCellReaderWithReplace() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Price"},
         new String[]{"$100"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -722,8 +693,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Price"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Price"},
         new String[]{"$100"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -734,10 +705,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals("100", rowArr[0], "Should strip dollar sign via replace pattern");
   }
 
-  @Test
-  void testCellReaderWithMatch() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Data"},
+  @Test void testCellReaderWithMatch() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Data"},
         new String[]{"abc 123 def 456"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -750,8 +720,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Data"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Data"},
         new String[]{"abc 123 def 456"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -762,10 +732,9 @@ public class FileRowConverterFieldDefTest {
     assertEquals("123", rowArr[0], "Should extract first matching number");
   }
 
-  @Test
-  void testCellReaderWithMatchNoMatch() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Data"},
+  @Test void testCellReaderWithMatchNoMatch() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Data"},
         new String[]{"no numbers here"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -777,8 +746,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Data"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Data"},
         new String[]{"no numbers here"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -789,10 +758,9 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "No match should return null");
   }
 
-  @Test
-  void testShortParseException() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Val"},
+  @Test void testShortParseException() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -803,8 +771,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Val"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -815,10 +783,9 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Unparseable short should return null");
   }
 
-  @Test
-  void testIntParseException() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Val"},
+  @Test void testIntParseException() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -829,8 +796,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Val"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -841,10 +808,9 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Unparseable int should return null");
   }
 
-  @Test
-  void testLongParseException() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Val"},
+  @Test void testLongParseException() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -855,8 +821,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Val"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -867,10 +833,9 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Unparseable long should return null");
   }
 
-  @Test
-  void testFloatParseException() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Val"},
+  @Test void testFloatParseException() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -881,8 +846,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Val"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Val"},
         new String[]{"not_a_number"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -893,8 +858,7 @@ public class FileRowConverterFieldDefTest {
     assertNull(rowArr[0], "Unparseable float should return null");
   }
 
-  @Test
-  void testGetRowTypeWithEmptyHeaders() throws IOException {
+  @Test void testGetRowTypeWithEmptyHeaders() throws IOException {
     // Edge case: table with no explicit th, only td - FileReaderV2 generates default col names
     StringBuilder html = new StringBuilder();
     html.append("<html><body><table>");
@@ -914,10 +878,9 @@ public class FileRowConverterFieldDefTest {
     assertTrue(rowType.getFieldCount() >= 1, "Should have at least 1 field");
   }
 
-  @Test
-  void testTimestampNattyFallback() throws IOException {
-    FileReaderV2 reader = createReader(
-        new String[]{"Timestamp"},
+  @Test void testTimestampNattyFallback() throws IOException {
+    FileReaderV2 reader =
+        createReader(new String[]{"Timestamp"},
         new String[]{"March 15 2024"});
 
     List<Map<String, Object>> fieldConfigs = new ArrayList<>();
@@ -928,8 +891,8 @@ public class FileRowConverterFieldDefTest {
 
     FileRowConverter converter = new FileRowConverter(reader, fieldConfigs, "UNCHANGED");
 
-    FileReaderV2 reader2 = createReader(
-        new String[]{"Timestamp"},
+    FileReaderV2 reader2 =
+        createReader(new String[]{"Timestamp"},
         new String[]{"March 15 2024"});
     java.util.Iterator<Elements> it = reader2.iterator();
     Elements dataRow = it.next();
@@ -940,8 +903,7 @@ public class FileRowConverterFieldDefTest {
     assertNotNull(rowArr[0], "Natty-parsed timestamp should not be null");
   }
 
-  @Test
-  void testCellReaderWithSelectedElement() throws IOException {
+  @Test void testCellReaderWithSelectedElement() throws IOException {
     // Create HTML with inner span elements inside a td
     StringBuilder html = new StringBuilder();
     html.append("<html><body><table>");

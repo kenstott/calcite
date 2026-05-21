@@ -23,28 +23,23 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeFieldImpl;
-import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.Table;
-import org.apache.calcite.sql.type.SqlTypeName;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -239,8 +234,8 @@ public class ConstraintAwareJdbcSchemaCoverageTest {
 
   @Test public void testGetCommentDelegateIsCommentable() {
     // Create a mock that implements both JdbcSchema and CommentableSchema
-    JdbcSchema commentableDelegate = mock(JdbcSchema.class,
-        Mockito.withSettings().extraInterfaces(CommentableSchema.class));
+    JdbcSchema commentableDelegate =
+        mock(JdbcSchema.class, Mockito.withSettings().extraInterfaces(CommentableSchema.class));
     when(((CommentableSchema) commentableDelegate).getComment()).thenReturn("My schema comment");
 
     ConstraintAwareJdbcSchema schema =
@@ -412,8 +407,8 @@ public class ConstraintAwareJdbcSchemaCoverageTest {
     constraintMetadata.put("users", tableConstraints);
 
     // Create a mock that is both JdbcTable and CommentableTable
-    JdbcTable mockJdbcTable = mock(JdbcTable.class,
-        Mockito.withSettings().extraInterfaces(CommentableTable.class));
+    JdbcTable mockJdbcTable =
+        mock(JdbcTable.class, Mockito.withSettings().extraInterfaces(CommentableTable.class));
     when(((CommentableTable) mockJdbcTable).getTableComment()).thenReturn("User table");
     when(((CommentableTable) mockJdbcTable).getColumnComment("id")).thenReturn("Primary key");
     when(mockDelegate.getTable("users")).thenReturn(mockJdbcTable);

@@ -402,8 +402,9 @@ public class DuckDBJdbcSchemaFactory {
             // spatial: Geospatial functions
             boolean isWin = System.getProperty("os.name", "").toLowerCase().contains("win");
             String[] baseExts = {"httpfs", "iceberg", "vss", "fts", "spatial"};
-            String[] allExts = isWin ? baseExts
-                : new String[]{"httpfs", "iceberg", "vss", "fts", "spatial", "cache_httpfs"};
+            String[] allExts =
+                isWin ? baseExts
+                    : new String[]{"httpfs", "iceberg", "vss", "fts", "spatial", "cache_httpfs"};
             for (String ext : allExts) {
               try {
                 stmt.execute("LOAD " + ext);

@@ -25,7 +25,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,11 +71,11 @@ public class CasingTest {
   @Test void testUppercaseTableAndColumnNames() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModel("UPPER", "UPPER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModel("UPPER", "UPPER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model)) {
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model)) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
 
@@ -86,8 +85,8 @@ public class CasingTest {
           "Expected TESTFILE in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"ID\", \"NAME\" FROM \"TESTFILE\" ORDER BY \"ID\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"ID\", \"NAME\" FROM \"TESTFILE\" ORDER BY \"ID\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("ID"));
         assertEquals("Alice", rs.getString("NAME"));
@@ -106,11 +105,11 @@ public class CasingTest {
   @Test void testLowercaseTableAndColumnNames() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModel("LOWER", "LOWER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModel("LOWER", "LOWER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model)) {
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model)) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
 
@@ -120,8 +119,8 @@ public class CasingTest {
           "Expected testfile in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"id\", \"name\" FROM \"testfile\" ORDER BY \"id\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"id\", \"name\" FROM \"testfile\" ORDER BY \"id\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("id"));
         assertEquals("Alice", rs.getString("name"));
@@ -140,11 +139,11 @@ public class CasingTest {
   @Test void testUnchangedTableAndColumnNames() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModel("UNCHANGED", "UNCHANGED"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModel("UNCHANGED", "UNCHANGED"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model)) {
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model)) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
 
@@ -154,8 +153,8 @@ public class CasingTest {
           "Expected TestFile in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"ID\", \"Name\" FROM \"TestFile\" ORDER BY \"ID\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"ID\", \"Name\" FROM \"TestFile\" ORDER BY \"ID\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("ID"));
         assertEquals("Alice", rs.getString("Name"));
@@ -174,11 +173,11 @@ public class CasingTest {
   @Test void testMixedTableAndColumnCasing() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModel("UPPER", "LOWER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModel("UPPER", "LOWER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model)) {
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model)) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
 
@@ -188,8 +187,8 @@ public class CasingTest {
           "Expected TESTFILE in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"id\", \"name\" FROM \"TESTFILE\" ORDER BY \"id\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"id\", \"name\" FROM \"TESTFILE\" ORDER BY \"id\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("id"));
         assertEquals("Alice", rs.getString("name"));
@@ -208,11 +207,11 @@ public class CasingTest {
   @Test void testDefaultSmartCasingBehavior() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModelNoCasing());
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModelNoCasing());
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model
             + ";lex=ORACLE;unquotedCasing=TO_LOWER")) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
@@ -223,8 +222,8 @@ public class CasingTest {
           "Expected test_file in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT id, name FROM test_file ORDER BY id")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT id, name FROM test_file ORDER BY id")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("id"));
         assertEquals("Alice", rs.getString("name"));
@@ -240,11 +239,11 @@ public class CasingTest {
   @Test void testSnakeCaseConfigurationKeys() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModelSnakeCase("UPPER", "UPPER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModelSnakeCase("UPPER", "UPPER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model)) {
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model)) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
 
@@ -254,8 +253,8 @@ public class CasingTest {
           "Expected TESTFILE in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"ID\", \"NAME\" FROM \"TESTFILE\" ORDER BY \"ID\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"ID\", \"NAME\" FROM \"TESTFILE\" ORDER BY \"ID\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("ID"));
         assertEquals("Alice", rs.getString("NAME"));
@@ -280,11 +279,11 @@ public class CasingTest {
     }
 
     // Only set column casing; leave table casing at default
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModelColumnCasingOnly("LOWER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModelColumnCasingOnly("LOWER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model
             + ";lex=ORACLE;unquotedCasing=TO_LOWER;caseSensitive=true")) {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("TEST");
@@ -304,8 +303,8 @@ public class CasingTest {
       assertTrue(tableName != null, "Expected a customers table in " + tableNames);
 
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"customer_id\", \"first_name\" FROM \"" + tableName
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"customer_id\", \"first_name\" FROM \"" + tableName
                    + "\" ORDER BY \"customer_id\"")) {
         assertTrue(rs.next());
         assertEquals(1, rs.getInt("customer_id"));
@@ -325,17 +324,17 @@ public class CasingTest {
   @Test void testCaseSensitiveTableAccess() throws Exception {
     createTestCsvFile(new File(tempDir.toFile(), "TestFile.csv"));
 
-    String model = BaseFileTest.addEphemeralCacheToModel(
-        buildModel("UPPER", "UPPER"));
+    String model =
+        BaseFileTest.addEphemeralCacheToModel(buildModel("UPPER", "UPPER"));
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=inline:" + model
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=inline:" + model
             + ";lex=ORACLE;unquotedCasing=TO_LOWER"
             + ";quotedCasing=UNCHANGED;caseSensitive=true")) {
       // Correct case should succeed
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"ID\" FROM \"TESTFILE\"")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"ID\" FROM \"TESTFILE\"")) {
         assertTrue(rs.next(), "Query with correct case should return rows");
         LOGGER.debug("Correct case query returned id={}", rs.getInt("ID"));
       }

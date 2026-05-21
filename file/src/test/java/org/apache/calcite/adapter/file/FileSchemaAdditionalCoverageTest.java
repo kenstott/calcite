@@ -28,7 +28,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -184,8 +183,8 @@ public class FileSchemaAdditionalCoverageTest {
     createYamlFile("config.yaml",
         "- key: alpha\n  value: 100\n- key: beta\n  value: 200\n");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "multi_types", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("multi_types", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("multi_types");
     assertNotNull(schema);
     Set<String> tableNames = schema.getTableNames();
@@ -217,8 +216,8 @@ public class FileSchemaAdditionalCoverageTest {
     createYamlFile("metrics.yml",
         "- metric: cpu\n  value: 42\n- metric: mem\n  value: 85\n");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "yml_schema", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("yml_schema", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("yml_schema");
     assertNotNull(schema);
     Set<String> tableNames = schema.getTableNames();
@@ -240,8 +239,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testWriteToStorageLocalFilesystem() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "storage_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("storage_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "storage_test");
 
     // Write using byte array
@@ -260,8 +259,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testWriteToStorageInputStream() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "stream_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("stream_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "stream_test");
 
     byte[] data = "stream content here".getBytes("UTF-8");
@@ -279,8 +278,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testExistsInStorageReturnsFalseForMissing() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "exists_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("exists_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "exists_test");
 
     assertFalse(fileSchema.existsInStorage("nonexistent/path/file.txt"),
@@ -294,8 +293,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testDeleteFromStorageCreatedFile() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "delete_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("delete_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "delete_test");
 
     // Create a file, then delete it
@@ -315,8 +314,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testDeleteFromStorageNonExistentReturnsFalse() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "del_miss_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("del_miss_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "del_miss_test");
 
     boolean deleted = fileSchema.deleteFromStorage("does_not_exist.txt");
@@ -330,8 +329,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testRefreshListenerNotification() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "refresh_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("refresh_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "refresh_test");
 
     // Track notifications
@@ -362,8 +361,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testMultipleRefreshListeners() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "multi_listen", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("multi_listen", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "multi_listen");
 
     final AtomicInteger callCount = new AtomicInteger(0);
@@ -395,8 +394,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testNotifyTableRefreshedWithPattern() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "pattern_listen", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("pattern_listen", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "pattern_listen");
 
     final AtomicReference<String> patternCaptured = new AtomicReference<String>(null);
@@ -424,8 +423,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testNotifyWithPatternIgnoresBasicListeners() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "basic_listen", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("basic_listen", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "basic_listen");
 
     final AtomicInteger basicCallCount = new AtomicInteger(0);
@@ -454,8 +453,8 @@ public class FileSchemaAdditionalCoverageTest {
         "1,10,99.99",
         "2,20,150.00");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "constraint_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("constraint_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "constraint_test");
 
     // Set constraint metadata
@@ -485,8 +484,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testSetConversionRecords() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "conv_rec_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("conv_rec_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "conv_rec_test");
 
     ConversionMetadata convMeta = fileSchema.getConversionMetadata();
@@ -519,8 +518,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testSetConversionRecordsNullAndEmpty() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "conv_null_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("conv_null_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "conv_null_test");
 
     // Null should not throw
@@ -539,8 +538,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testHasRefreshableTablesWithoutInterval() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "no_refresh", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("no_refresh", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "no_refresh");
 
     assertFalse(fileSchema.hasRefreshableTables(),
@@ -557,8 +556,8 @@ public class FileSchemaAdditionalCoverageTest {
     Map<String, Object> operand = buildOperand();
     operand.put("refreshInterval", "5 minutes");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "with_refresh", operand);
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("with_refresh", operand);
     FileSchema fileSchema = getFileSchema(calciteConn, "with_refresh");
 
     assertTrue(fileSchema.hasRefreshableTables(),
@@ -572,8 +571,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testBaseDirectoryAndCacheDirectory() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "dir_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("dir_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "dir_test");
 
     String baseDir = fileSchema.getBaseDirectory();
@@ -599,8 +598,8 @@ public class FileSchemaAdditionalCoverageTest {
     Map<String, Object> operand = buildOperand();
     operand.put("ephemeralCache", true);
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "ephemeral_test", operand);
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("ephemeral_test", operand);
     FileSchema fileSchema = getFileSchema(calciteConn, "ephemeral_test");
 
     File cacheDir = fileSchema.getOperatingCacheDirectory();
@@ -629,8 +628,8 @@ public class FileSchemaAdditionalCoverageTest {
         "1,100",
         "2,200");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "csv_get_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("csv_get_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("csv_get_test");
     assertNotNull(schema);
 
@@ -647,8 +646,8 @@ public class FileSchemaAdditionalCoverageTest {
         "[{\"account_id\": 1, \"balance\": 1000.00},"
         + "{\"account_id\": 2, \"balance\": 2500.00}]");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "json_get_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("json_get_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("json_get_test");
     assertNotNull(schema);
 
@@ -665,8 +664,8 @@ public class FileSchemaAdditionalCoverageTest {
     createCsvFile("beta.csv", "id:int", "2");
     createJsonFile("gamma.json", "[{\"val\": 1}]");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "names_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("names_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("names_test");
     assertNotNull(schema);
 
@@ -685,8 +684,8 @@ public class FileSchemaAdditionalCoverageTest {
     Map<String, Object> operand = buildOperand();
     operand.put("comment", "This is a test schema comment");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "comment_test", operand);
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("comment_test", operand);
     FileSchema fileSchema = getFileSchema(calciteConn, "comment_test");
 
     assertEquals("This is a test schema comment", fileSchema.getComment(),
@@ -700,8 +699,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testSchemaNoComment() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "no_comment_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("no_comment_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "no_comment_test");
 
     assertNull(fileSchema.getComment(),
@@ -715,8 +714,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetConversionMetadataNotNull() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "meta_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("meta_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "meta_test");
 
     ConversionMetadata metadata = fileSchema.getConversionMetadata();
@@ -730,8 +729,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testClearTableCacheRecomputes() throws Exception {
     createCsvFile("items.csv", "id:int,name:string", "1,Widget");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "cache_clear_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("cache_clear_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "cache_clear_test");
 
     // Access tables to populate cache
@@ -756,8 +755,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetStorageProviderLocalByDefault() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "sp_local_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("sp_local_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "sp_local_test");
 
     // FileSchemaFactory auto-detects storageType="local" for local directories
@@ -773,8 +772,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testCreateStorageDirectories() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "mkdir_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("mkdir_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "mkdir_test");
 
     fileSchema.createStorageDirectories("nested/deep/dir");
@@ -794,13 +793,13 @@ public class FileSchemaAdditionalCoverageTest {
         "2,Bob,60000.00",
         "3,Charlie,70000.00");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "query_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("query_test", buildOperand());
 
     Statement stmt = calciteConn.createStatement();
     try {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT emp_name, salary FROM query_test.staff ORDER BY emp_id");
+      ResultSet rs =
+          stmt.executeQuery("SELECT emp_name, salary FROM query_test.staff ORDER BY emp_id");
       try {
         assertTrue(rs.next());
         assertEquals("Alice", rs.getString("emp_name"));
@@ -830,13 +829,13 @@ public class FileSchemaAdditionalCoverageTest {
         "[{\"product_id\": 10, \"product_name\": \"Widget\", \"price\": 9.99},"
         + "{\"product_id\": 20, \"product_name\": \"Gadget\", \"price\": 19.99}]");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "json_query_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("json_query_test", buildOperand());
 
     Statement stmt = calciteConn.createStatement();
     try {
-      ResultSet rs = stmt.executeQuery(
-          "SELECT product_name FROM json_query_test.products ORDER BY product_id");
+      ResultSet rs =
+          stmt.executeQuery("SELECT product_name FROM json_query_test.products ORDER BY product_id");
       try {
         assertTrue(rs.next());
         assertEquals("Widget", rs.getString(1));
@@ -858,8 +857,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testRefreshListenerExceptionContained() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "err_listen_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("err_listen_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "err_listen_test");
 
     final AtomicInteger secondListenerCalled = new AtomicInteger(0);
@@ -892,8 +891,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testEmptyDirectoryNoTables() throws Exception {
     // tempDir is empty - no files created
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "empty_dir", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("empty_dir", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("empty_dir");
     assertNotNull(schema);
 
@@ -909,8 +908,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetAllTableRecords() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "records_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("records_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "records_test");
 
     // Force table discovery
@@ -931,8 +930,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetAlternatePartitionRegistry() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "alt_part_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("alt_part_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "alt_part_test");
 
     assertNotNull(fileSchema.getAlternatePartitionRegistry(),
@@ -954,8 +953,8 @@ public class FileSchemaAdditionalCoverageTest {
       writer.close();
     }
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "ignore_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("ignore_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("ignore_test");
     assertNotNull(schema);
 
@@ -981,8 +980,8 @@ public class FileSchemaAdditionalCoverageTest {
       writer.close();
     }
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "tsv_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("tsv_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("tsv_test");
     assertNotNull(schema);
 
@@ -1011,8 +1010,8 @@ public class FileSchemaAdditionalCoverageTest {
       writer.close();
     }
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "fork_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("fork_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("fork_test");
     assertNotNull(schema);
 
@@ -1030,8 +1029,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testNotifyIcebergTableRefreshed() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "iceberg_notify", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("iceberg_notify", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "iceberg_notify");
 
     final AtomicReference<String> capturedLocation = new AtomicReference<String>(null);
@@ -1061,8 +1060,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetStorageConfigNullWithoutExplicit() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "sconfig_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("sconfig_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "sconfig_test");
 
     // Storage config is only set if explicitly provided in operand
@@ -1152,8 +1151,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testRegisterRawToParquetConverter() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "converter_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("converter_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "converter_test");
 
     // Register a custom converter (no-op for this test)
@@ -1183,8 +1182,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testGetTableBaselineNullWhenMissing() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "baseline_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("baseline_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "baseline_test");
 
     ConversionMetadata.PartitionBaseline baseline =
@@ -1202,8 +1201,8 @@ public class FileSchemaAdditionalCoverageTest {
     createCsvFile("items.csv", "id:int", "1");
     createJsonFile("items.json", "[{\"id\": 2}]");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "dup_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("dup_test", buildOperand());
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("dup_test");
     assertNotNull(schema);
 
@@ -1225,8 +1224,8 @@ public class FileSchemaAdditionalCoverageTest {
     Map<String, Object> operand = buildOperand();
     operand.put("primeCache", false);
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "no_prime", operand);
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("no_prime", operand);
     SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("no_prime");
     assertNotNull(schema);
 
@@ -1243,8 +1242,8 @@ public class FileSchemaAdditionalCoverageTest {
   @Test void testSetFunctionMultimap() throws Exception {
     createCsvFile("data.csv", "id:int", "1");
 
-    CalciteConnection calciteConn = createCalciteConnectionWithSchema(
-        "func_test", buildOperand());
+    CalciteConnection calciteConn =
+        createCalciteConnectionWithSchema("func_test", buildOperand());
     FileSchema fileSchema = getFileSchema(calciteConn, "func_test");
 
     // Set an empty function multimap (just verifying the method works)

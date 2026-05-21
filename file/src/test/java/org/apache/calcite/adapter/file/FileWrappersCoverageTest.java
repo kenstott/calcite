@@ -39,9 +39,7 @@ import java.sql.Ref;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.RowId;
-import java.sql.SQLClientInfoException;
 import java.sql.SQLException;
-import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
@@ -55,14 +53,12 @@ import java.util.Properties;
 import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -433,8 +429,8 @@ class FileWrappersCoverageTest {
     when(mockConn.createStatement(anyInt(), anyInt())).thenReturn(mockStmt);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    Statement result = wrapper.createStatement(
-        ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+    Statement result =
+        wrapper.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
     assertTrue(result instanceof FileStatementWrapper);
   }
 
@@ -444,8 +440,8 @@ class FileWrappersCoverageTest {
     when(mockConn.createStatement(anyInt(), anyInt(), anyInt())).thenReturn(mockStmt);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    Statement result = wrapper.createStatement(
-        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY,
+    Statement result =
+        wrapper.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY,
         ResultSet.HOLD_CURSORS_OVER_COMMIT);
     assertTrue(result instanceof FileStatementWrapper);
   }
@@ -466,8 +462,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareStatement(anyString(), anyInt(), anyInt())).thenReturn(mockPS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    PreparedStatement result = wrapper.prepareStatement("SELECT 1",
-        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+    PreparedStatement result =
+        wrapper.prepareStatement("SELECT 1", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
     assertTrue(result instanceof FilePreparedStatementWrapper);
   }
 
@@ -477,8 +473,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareStatement(anyString(), anyInt(), anyInt(), anyInt())).thenReturn(mockPS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    PreparedStatement result = wrapper.prepareStatement("SELECT 1",
-        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY,
+    PreparedStatement result =
+        wrapper.prepareStatement("SELECT 1", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY,
         ResultSet.HOLD_CURSORS_OVER_COMMIT);
     assertTrue(result instanceof FilePreparedStatementWrapper);
   }
@@ -489,8 +485,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareStatement(anyString(), anyInt())).thenReturn(mockPS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    PreparedStatement result = wrapper.prepareStatement("INSERT INTO t VALUES (1)",
-        Statement.RETURN_GENERATED_KEYS);
+    PreparedStatement result =
+        wrapper.prepareStatement("INSERT INTO t VALUES (1)", Statement.RETURN_GENERATED_KEYS);
     assertTrue(result instanceof FilePreparedStatementWrapper);
   }
 
@@ -500,8 +496,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareStatement(anyString(), any(int[].class))).thenReturn(mockPS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    PreparedStatement result = wrapper.prepareStatement("INSERT INTO t VALUES (1)",
-        new int[]{1});
+    PreparedStatement result =
+        wrapper.prepareStatement("INSERT INTO t VALUES (1)", new int[]{1});
     assertTrue(result instanceof FilePreparedStatementWrapper);
   }
 
@@ -511,8 +507,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareStatement(anyString(), any(String[].class))).thenReturn(mockPS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    PreparedStatement result = wrapper.prepareStatement("INSERT INTO t VALUES (1)",
-        new String[]{"id"});
+    PreparedStatement result =
+        wrapper.prepareStatement("INSERT INTO t VALUES (1)", new String[]{"id"});
     assertTrue(result instanceof FilePreparedStatementWrapper);
   }
 
@@ -531,7 +527,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareCall(anyString(), anyInt(), anyInt())).thenReturn(mockCS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    assertEquals(mockCS, wrapper.prepareCall("CALL proc()",
+    assertEquals(
+        mockCS, wrapper.prepareCall("CALL proc()",
         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY));
   }
 
@@ -541,7 +538,8 @@ class FileWrappersCoverageTest {
     when(mockConn.prepareCall(anyString(), anyInt(), anyInt(), anyInt())).thenReturn(mockCS);
 
     FileConnectionWrapper wrapper = new FileConnectionWrapper(mockConn);
-    assertEquals(mockCS, wrapper.prepareCall("CALL proc()",
+    assertEquals(
+        mockCS, wrapper.prepareCall("CALL proc()",
         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY,
         ResultSet.HOLD_CURSORS_OVER_COMMIT));
   }

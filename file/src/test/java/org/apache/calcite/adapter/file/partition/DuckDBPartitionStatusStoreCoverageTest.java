@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -136,12 +135,14 @@ public class DuckDBPartitionStatusStoreCoverageTest {
     store.markProcessed("alt_ttl", "source_ttl", keyValues, "/output.parquet");
 
     // Within TTL should return true
-    assertTrue(store.isProcessedWithTtl("alt_ttl", "source_ttl",
+    assertTrue(
+        store.isProcessedWithTtl("alt_ttl", "source_ttl",
         keyValues, 60000)); // 60 second TTL
 
     // Very short TTL that has already expired
     Thread.sleep(50);
-    assertFalse(store.isProcessedWithTtl("alt_ttl", "source_ttl",
+    assertFalse(
+        store.isProcessedWithTtl("alt_ttl", "source_ttl",
         keyValues, 1)); // 1ms TTL - should be expired
   }
 
@@ -154,12 +155,14 @@ public class DuckDBPartitionStatusStoreCoverageTest {
         keyValues, "/output.parquet", 0);
 
     // Within TTL should return true
-    assertTrue(store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
+    assertTrue(
+        store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
         keyValues, 60000));
 
     // With very short TTL
     Thread.sleep(50);
-    assertFalse(store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
+    assertFalse(
+        store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
         keyValues, 1));
   }
 
@@ -172,7 +175,8 @@ public class DuckDBPartitionStatusStoreCoverageTest {
         keyValues, "/output.parquet", 100);
 
     // Non-empty results should always be considered processed regardless of TTL
-    assertTrue(store.isProcessedWithEmptyTtl("alt_nonempty", "source_nonempty",
+    assertTrue(
+        store.isProcessedWithEmptyTtl("alt_nonempty", "source_nonempty",
         keyValues, 1));
   }
 
@@ -231,8 +235,8 @@ public class DuckDBPartitionStatusStoreCoverageTest {
     store.markProcessed("alt_filter", "source_filter",
         combinations.get(3), "/out.parquet");
 
-    Set<Integer> unprocessed = store.filterUnprocessed(
-        "alt_filter", "source_filter", combinations);
+    Set<Integer> unprocessed =
+        store.filterUnprocessed("alt_filter", "source_filter", combinations);
 
     assertNotNull(unprocessed);
     // Indices 0, 2, 4 should be unprocessed
@@ -245,15 +249,15 @@ public class DuckDBPartitionStatusStoreCoverageTest {
   }
 
   @Test void testFilterUnprocessedEmptyList() {
-    Set<Integer> result = store.filterUnprocessed(
-        "alt_empty_list", "source", Collections.emptyList());
+    Set<Integer> result =
+        store.filterUnprocessed("alt_empty_list", "source", Collections.emptyList());
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
 
   @Test void testFilterUnprocessedNullList() {
-    Set<Integer> result = store.filterUnprocessed(
-        "alt_null_list", "source", null);
+    Set<Integer> result =
+        store.filterUnprocessed("alt_null_list", "source", null);
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }

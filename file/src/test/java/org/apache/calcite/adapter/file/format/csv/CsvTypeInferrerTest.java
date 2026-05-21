@@ -56,8 +56,7 @@ public class CsvTypeInferrerTest {
 
   // --- TypeInferenceConfig tests ---
 
-  @Test
-  @DisplayName("defaultConfig returns expected defaults")
+  @Test @DisplayName("defaultConfig returns expected defaults")
   void testDefaultConfigReturnsExpectedDefaults() {
     TypeInferenceConfig config = TypeInferenceConfig.defaultConfig();
 
@@ -72,8 +71,7 @@ public class CsvTypeInferrerTest {
     assertEquals(0.0, config.getNullableThreshold(), 0.001);
   }
 
-  @Test
-  @DisplayName("disabled config zeroes everything")
+  @Test @DisplayName("disabled config zeroes everything")
   void testDisabledConfigZeroesEverything() {
     TypeInferenceConfig config = TypeInferenceConfig.disabled();
 
@@ -88,8 +86,7 @@ public class CsvTypeInferrerTest {
     assertFalse(config.isMakeAllNullable());
   }
 
-  @Test
-  @DisplayName("fromMap with null returns disabled config with blankStringsAsNull=true")
+  @Test @DisplayName("fromMap with null returns disabled config with blankStringsAsNull=true")
   void testFromMapNullReturnsDisabledWithBlankStringsAsNull() {
     TypeInferenceConfig config = TypeInferenceConfig.fromMap(null);
 
@@ -97,8 +94,7 @@ public class CsvTypeInferrerTest {
     assertTrue(config.isBlankStringsAsNull());
   }
 
-  @Test
-  @DisplayName("fromMap with custom sampling rate and max rows")
+  @Test @DisplayName("fromMap with custom sampling rate and max rows")
   void testFromMapCustomSamplingRateAndMaxRows() {
     Map<String, Object> map = new HashMap<>();
     map.put("enabled", Boolean.TRUE);
@@ -112,8 +108,7 @@ public class CsvTypeInferrerTest {
     assertEquals(500, config.getMaxSampleRows());
   }
 
-  @Test
-  @DisplayName("fromMap clamps samplingRate > 1.0 to 1.0")
+  @Test @DisplayName("fromMap clamps samplingRate > 1.0 to 1.0")
   void testFromMapClampsSamplingRateAboveOne() {
     Map<String, Object> map = new HashMap<>();
     map.put("enabled", Boolean.TRUE);
@@ -124,8 +119,7 @@ public class CsvTypeInferrerTest {
     assertEquals(1.0, config.getSamplingRate(), 0.001);
   }
 
-  @Test
-  @DisplayName("fromMap clamps negative confidence to 0.0")
+  @Test @DisplayName("fromMap clamps negative confidence to 0.0")
   void testFromMapClampsNegativeConfidence() {
     Map<String, Object> map = new HashMap<>();
     map.put("enabled", Boolean.TRUE);
@@ -136,8 +130,7 @@ public class CsvTypeInferrerTest {
     assertEquals(0.0, config.getConfidenceThreshold(), 0.001);
   }
 
-  @Test
-  @DisplayName("fromMap with custom null equivalents")
+  @Test @DisplayName("fromMap with custom null equivalents")
   void testFromMapCustomNullEquivalents() {
     Map<String, Object> map = new HashMap<>();
     map.put("enabled", Boolean.TRUE);
@@ -152,8 +145,7 @@ public class CsvTypeInferrerTest {
     assertFalse(config.getNullEquivalents().contains("na"));
   }
 
-  @Test
-  @DisplayName("blank strings as null behavior when enabled")
+  @Test @DisplayName("blank strings as null behavior when enabled")
   void testBlankStringsAsNullWhenEnabled() {
     Map<String, Object> map = new HashMap<>();
     map.put("enabled", Boolean.TRUE);
@@ -164,14 +156,13 @@ public class CsvTypeInferrerTest {
 
   // --- inferTypes tests ---
 
-  @Test
-  @DisplayName("inferTypes with integer column returns INTEGER")
+  @Test @DisplayName("inferTypes with integer column returns INTEGER")
   void testInferTypesIntegerColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("id\n1\n2\n3\n42\n100\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.INTEGER, result.get(0).inferredType);
@@ -179,134 +170,126 @@ public class CsvTypeInferrerTest {
         result.get(0).inferredType, result.get(0).confidence);
   }
 
-  @Test
-  @DisplayName("inferTypes with double column returns DOUBLE")
+  @Test @DisplayName("inferTypes with double column returns DOUBLE")
   void testInferTypesDoubleColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("price\n1.5\n2.99\n3.14\n0.01\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.DOUBLE, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes with boolean column returns BOOLEAN")
+  @Test @DisplayName("inferTypes with boolean column returns BOOLEAN")
   void testInferTypesBooleanColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("active\ntrue\nfalse\nTRUE\nFALSE\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes with date column returns DATE")
+  @Test @DisplayName("inferTypes with date column returns DATE")
   void testInferTypesDateColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("dt\n2024-01-15\n2024-02-20\n2024-03-25\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.DATE, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes with timestamp column returns TIMESTAMP")
+  @Test @DisplayName("inferTypes with timestamp column returns TIMESTAMP")
   void testInferTypesTimestampColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("ts\n2024-01-15 10:30:00\n2024-02-20 14:45:00\n2024-03-25 08:00:00\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.TIMESTAMP, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes with mixed types falls back to VARCHAR")
+  @Test @DisplayName("inferTypes with mixed types falls back to VARCHAR")
   void testInferTypesMixedTypesFallsBackToVarchar() throws IOException, CsvValidationException {
     File csv = writeCsv("val\n42\nhello\ntrue\n2024-01-15\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.VARCHAR, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes with all nulls defaults to nullable VARCHAR")
+  @Test @DisplayName("inferTypes with all nulls defaults to nullable VARCHAR")
   void testInferTypesAllNullsDefaultsToVarchar() throws IOException, CsvValidationException {
     File csv = writeCsv("val\nNULL\nNULL\nNULL\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.VARCHAR, result.get(0).inferredType);
     assertTrue(result.get(0).nullable);
   }
 
-  @Test
-  @DisplayName("inferTypes with some nulls sets nullable=true")
+  @Test @DisplayName("inferTypes with some nulls sets nullable=true")
   void testInferTypesNullabilityDetection() throws IOException, CsvValidationException {
     // makeAllNullable=false so only real nulls trigger nullable
-    TypeInferenceConfig config = new TypeInferenceConfig(
-        true, 1.0, 1000, 0.95, true, true, true, false, 0.0);
+    TypeInferenceConfig config =
+        new TypeInferenceConfig(true, 1.0, 1000, 0.95, true, true, true, false, 0.0);
     File csv = writeCsv("id\n1\n2\nNULL\n4\n");
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertTrue(result.get(0).nullable, "column with null values should be nullable");
     assertTrue(result.get(0).nullCount > 0);
   }
 
-  @Test
-  @DisplayName("inferTypes with empty source returns empty list")
+  @Test @DisplayName("inferTypes with empty source returns empty list")
   void testInferTypesEmptySource() throws IOException, CsvValidationException {
     File csv = writeCsv("");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  @DisplayName("inferTypes with disabled config returns immediately with empty list")
+  @Test @DisplayName("inferTypes with disabled config returns immediately with empty list")
   void testInferTypesDisabledReturnsEmpty() throws IOException, CsvValidationException {
     File csv = writeCsv("id\n1\n2\n3\n");
     TypeInferenceConfig config = TypeInferenceConfig.disabled();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertTrue(result.isEmpty());
   }
 
-  @Test
-  @DisplayName("Integer vs BIGINT threshold - values > MAX_INT become BIGINT")
+  @Test @DisplayName("Integer vs BIGINT threshold - values > MAX_INT become BIGINT")
   void testIntegerVsBigintThreshold() throws IOException, CsvValidationException {
     long bigValue = (long) Integer.MAX_VALUE + 100L;
-    File csv = writeCsv("val\n" + bigValue + "\n" + (bigValue + 1) + "\n");
+    File csv = writeCsv("val\n"
+  + bigValue + "\n"
+  + (bigValue + 1) + "\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     assertEquals(1, result.size());
     assertEquals(SqlTypeName.BIGINT, result.get(0).inferredType);
@@ -314,14 +297,13 @@ public class CsvTypeInferrerTest {
         bigValue, result.get(0).inferredType);
   }
 
-  @Test
-  @DisplayName("inferTypes header-only CSV returns empty type list with no data rows")
+  @Test @DisplayName("inferTypes header-only CSV returns empty type list with no data rows")
   void testInferTypesHeaderOnlyCsv() throws IOException, CsvValidationException {
     File csv = writeCsv("id,name\n");
     TypeInferenceConfig config = fullSamplingConfig();
 
-    List<ColumnTypeInfo> result = CsvTypeInferrer.inferTypes(
-        Sources.of(csv), config, "TO_LOWER");
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
 
     // We get column entries but all values are null since no data rows
     assertEquals(2, result.size());

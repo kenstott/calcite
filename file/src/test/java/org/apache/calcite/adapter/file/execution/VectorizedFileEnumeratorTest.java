@@ -24,15 +24,12 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -50,8 +47,8 @@ public class VectorizedFileEnumeratorTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(VectorizedFileEnumeratorTest.class);
 
-  private final RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(
-      org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+  private final RelDataTypeFactory typeFactory =
+      new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
   private RelDataType createRowType(SqlTypeName... types) {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
@@ -61,8 +58,7 @@ public class VectorizedFileEnumeratorTest {
     return builder.build();
   }
 
-  @Test
-  public void testBasicEnumeration() {
+  @Test public void testBasicEnumeration() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1, "Alice"});
     data.add(new Object[]{2, "Bob"});
@@ -83,8 +79,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSmallBatchSize() {
+  @Test public void testSmallBatchSize() {
     List<Object[]> data = new ArrayList<>();
     for (int i = 0; i < 10; i++) {
       data.add(new Object[]{i, "name" + i});
@@ -105,8 +100,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testEmptyIterator() {
+  @Test public void testEmptyIterator() {
     List<Object[]> data = new ArrayList<>();
 
     RelDataType rowType = createRowType(SqlTypeName.INTEGER);
@@ -118,13 +112,12 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSingleRow() {
+  @Test public void testSingleRow() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{42, 3.14, true, "test"});
 
-    RelDataType rowType = createRowType(
-        SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
+    RelDataType rowType =
+        createRowType(SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
     VectorizedFileEnumerator enumerator =
         new VectorizedFileEnumerator(data.iterator(), rowType, 1024);
 
@@ -137,8 +130,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testGetStats() {
+  @Test public void testGetStats() {
     List<Object[]> data = new ArrayList<>();
     for (int i = 0; i < 50; i++) {
       data.add(new Object[]{i, (double) i * 1.5});
@@ -167,8 +159,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testVectorizedStatsToString() {
+  @Test public void testVectorizedStatsToString() {
     VectorizedFileEnumerator.VectorizedStats stats =
         new VectorizedFileEnumerator.VectorizedStats(5, 1000, 250);
 
@@ -177,8 +168,7 @@ public class VectorizedFileEnumeratorTest {
     assertTrue(str.contains("rows=1000"));
   }
 
-  @Test
-  public void testVectorizedStatsZeroBatches() {
+  @Test public void testVectorizedStatsZeroBatches() {
     VectorizedFileEnumerator.VectorizedStats stats =
         new VectorizedFileEnumerator.VectorizedStats(0, 0, 0);
 
@@ -187,8 +177,7 @@ public class VectorizedFileEnumeratorTest {
     assertTrue(str.contains("rows=0"));
   }
 
-  @Test
-  public void testResetThrowsUnsupportedOperation() {
+  @Test public void testResetThrowsUnsupportedOperation() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1});
 
@@ -200,8 +189,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testNullValuesInRows() {
+  @Test public void testNullValuesInRows() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1, null});
     data.add(new Object[]{null, "test"});
@@ -221,14 +209,13 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testMultipleDataTypes() {
+  @Test public void testMultipleDataTypes() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1, 2.5, true, "text"});
     data.add(new Object[]{2, 3.7, false, "more"});
 
-    RelDataType rowType = createRowType(
-        SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
+    RelDataType rowType =
+        createRowType(SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.BOOLEAN, SqlTypeName.VARCHAR);
     VectorizedFileEnumerator enumerator =
         new VectorizedFileEnumerator(data.iterator(), rowType, 1024);
 
@@ -244,8 +231,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testBatchBoundary() {
+  @Test public void testBatchBoundary() {
     // Create exactly batch-size rows to test boundary condition
     List<Object[]> data = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
@@ -265,8 +251,7 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCloseHandlesNonAutoCloseable() {
+  @Test public void testCloseHandlesNonAutoCloseable() {
     List<Object[]> data = new ArrayList<>();
     data.add(new Object[]{1});
 
@@ -283,15 +268,14 @@ public class VectorizedFileEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testLargeDataset() {
+  @Test public void testLargeDataset() {
     List<Object[]> data = new ArrayList<>();
     for (int i = 0; i < 1000; i++) {
       data.add(new Object[]{i, (double) i * 0.5, "name" + i});
     }
 
-    RelDataType rowType = createRowType(
-        SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.VARCHAR);
+    RelDataType rowType =
+        createRowType(SqlTypeName.INTEGER, SqlTypeName.DOUBLE, SqlTypeName.VARCHAR);
     VectorizedFileEnumerator enumerator =
         new VectorizedFileEnumerator(data.iterator(), rowType, 100);
 

@@ -56,8 +56,8 @@ class DocumentSourceDeepCoverageTest {
     variables.put("cik", "0001234567");
     variables.put("year", "2020");
 
-    String result = source.substituteVariables(
-        "https://api.example.com/{cik}/filings/{year}", variables);
+    String result =
+        source.substituteVariables("https://api.example.com/{cik}/filings/{year}", variables);
     assertEquals("https://api.example.com/0001234567/filings/2020", result);
   }
 
@@ -71,15 +71,15 @@ class DocumentSourceDeepCoverageTest {
     Map<String, String> variables = new HashMap<String, String>();
     variables.put("cik", "123");
 
-    String result = source.substituteVariables(
-        "https://api.example.com/{cik}/filings/{missing}", variables);
+    String result =
+        source.substituteVariables("https://api.example.com/{cik}/filings/{missing}", variables);
     assertEquals("https://api.example.com/123/filings/", result);
   }
 
   @Test void testSubstituteVariablesNoPlaceholders() {
     DocumentSource source = createDocumentSource(null);
-    String result = source.substituteVariables(
-        "https://api.example.com/static", Collections.<String, String>emptyMap());
+    String result =
+        source.substituteVariables("https://api.example.com/static", Collections.<String, String>emptyMap());
     assertEquals("https://api.example.com/static", result);
   }
 
@@ -90,8 +90,8 @@ class DocumentSourceDeepCoverageTest {
     // Set a system property for env: prefix test
     System.setProperty("TEST_COVERAGE_VAR", "test_value");
     try {
-      String result = source.substituteVariables(
-          "https://api.example.com/{env:TEST_COVERAGE_VAR}/data", variables);
+      String result =
+          source.substituteVariables("https://api.example.com/{env:TEST_COVERAGE_VAR}/data", variables);
       assertEquals("https://api.example.com/test_value/data", result);
     } finally {
       System.clearProperty("TEST_COVERAGE_VAR");
@@ -102,8 +102,8 @@ class DocumentSourceDeepCoverageTest {
     DocumentSource source = createDocumentSource(null);
     Map<String, String> variables = new HashMap<String, String>();
 
-    String result = source.substituteVariables(
-        "https://api.example.com/{env:NONEXISTENT_COVERAGE_TEST_VAR}/data", variables);
+    String result =
+        source.substituteVariables("https://api.example.com/{env:NONEXISTENT_COVERAGE_TEST_VAR}/data", variables);
     assertEquals("https://api.example.com//data", result);
   }
 
@@ -160,8 +160,8 @@ class DocumentSourceDeepCoverageTest {
 
   @Test void testDocumentIteratorReturnsEmpty() {
     DocumentSource source = createDocumentSource(null);
-    Iterator<Map<String, String>> iter = source.documentIterator(
-        "{}", Collections.<String, String>emptyMap());
+    Iterator<Map<String, String>> iter =
+        source.documentIterator("{}", Collections.<String, String>emptyMap());
     assertNotNull(iter);
     assertFalse(iter.hasNext());
   }
@@ -193,8 +193,8 @@ class DocumentSourceDeepCoverageTest {
   // ===== isRetryableHttpStatus via Reflection =====
 
   @Test void testIsRetryableHttpStatusViaReflection() throws Exception {
-    Method isRetryable = DocumentSource.class.getDeclaredMethod(
-        "isRetryableHttpStatus", int.class);
+    Method isRetryable =
+        DocumentSource.class.getDeclaredMethod("isRetryableHttpStatus", int.class);
     isRetryable.setAccessible(true);
 
     assertTrue((Boolean) isRetryable.invoke(null, 429));
@@ -210,8 +210,8 @@ class DocumentSourceDeepCoverageTest {
   // ===== isRetryableException via Reflection =====
 
   @Test void testIsRetryableExceptionViaReflection() throws Exception {
-    Method isRetryable = DocumentSource.class.getDeclaredMethod(
-        "isRetryableException", java.io.IOException.class);
+    Method isRetryable =
+        DocumentSource.class.getDeclaredMethod("isRetryableException", java.io.IOException.class);
     isRetryable.setAccessible(true);
 
     assertTrue((Boolean) isRetryable.invoke(null, new java.io.IOException("connection reset")));

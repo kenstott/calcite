@@ -129,8 +129,8 @@ class FileSchemaLineCoverageTest {
       List<Map<String, Object>> views) {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, schemaName, sourceDir, null,
-        null, engineConfig, recursive, materializations, views, null, null,
+    FileSchema schema =
+        new FileSchema(parent, schemaName, sourceDir, null, null, engineConfig, recursive, materializations, views, null, null,
         "LOWER", "LOWER", null, null, flatten, null, false);
     schemasToClose.add(schema);
     return schema;
@@ -140,8 +140,7 @@ class FileSchemaLineCoverageTest {
   // 1. Recursive directory scanning
   // ---------------------------------------------------------------
 
-  @Test
-  void testRecursiveDirectoryScanningWithSubdirectories() throws Exception {
+  @Test void testRecursiveDirectoryScanningWithSubdirectories() throws Exception {
     File d = dir("recursive_scan");
     writeCsv(d, "top.csv", "id,name\n1,Alice\n");
 
@@ -160,8 +159,7 @@ class FileSchemaLineCoverageTest {
         + " tables: " + tableMap.keySet());
   }
 
-  @Test
-  void testRecursiveDirectoryWithMixedFileTypes() throws Exception {
+  @Test void testRecursiveDirectoryWithMixedFileTypes() throws Exception {
     File d = dir("mixed_recursive");
     writeCsv(d, "data.csv", "a,b\n1,2\n");
     writeJson(d, "items.json", "[{\"x\":1},{\"x\":2}]");
@@ -185,8 +183,7 @@ class FileSchemaLineCoverageTest {
   // 2. processJsonFlattening with JSON files containing nested objects
   // ---------------------------------------------------------------
 
-  @Test
-  void testJsonFlatteningWithNestedObjects() throws Exception {
+  @Test void testJsonFlatteningWithNestedObjects() throws Exception {
     File d = dir("flatten_json");
     writeJson(d, "nested.json",
         "[{\"id\":1,\"info\":{\"name\":\"Alice\",\"age\":30},"
@@ -200,8 +197,7 @@ class FileSchemaLineCoverageTest {
     Map<String, Table> tableMap = schema.getTableMap();
     assertNotNull(tableMap, "Table map should not be null after flatten processing");  }
 
-  @Test
-  void testJsonFlatteningDisabledByDefault() throws Exception {
+  @Test void testJsonFlatteningDisabledByDefault() throws Exception {
     File d = dir("no_flatten_json");
     writeJson(d, "simple.json", "[{\"id\":1,\"name\":\"Bob\"}]");
 
@@ -214,8 +210,7 @@ class FileSchemaLineCoverageTest {
         "Expected table from JSON file");
   }
 
-  @Test
-  void testJsonFlatteningWithSchemaLevelFlatten() throws Exception {
+  @Test void testJsonFlatteningWithSchemaLevelFlatten() throws Exception {
     File d = dir("schema_flatten");
     writeJson(d, "deep.json",
         "[{\"id\":1,\"address\":{\"city\":\"NYC\",\"zip\":\"10001\"}}]");
@@ -233,8 +228,7 @@ class FileSchemaLineCoverageTest {
   // 3. Materialization setup when materializedViews operand is set
   // ---------------------------------------------------------------
 
-  @Test
-  void testMaterializationWithParquetEngine() throws Exception {
+  @Test void testMaterializationWithParquetEngine() throws Exception {
     File d = dir("mat_view_test");
     writeCsv(d, "src.csv", "id,amount\n1,100\n2,200\n3,300\n");
 
@@ -253,8 +247,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  void testMaterializationWithNonParquetEngineLogsError() throws Exception {
+  @Test void testMaterializationWithNonParquetEngineLogsError() throws Exception {
     File d = dir("mat_view_linq");
     writeCsv(d, "data.csv", "id,val\n1,10\n");
 
@@ -278,8 +271,7 @@ class FileSchemaLineCoverageTest {
   // 4. Views operand
   // ---------------------------------------------------------------
 
-  @Test
-  void testViewDefinitions() throws Exception {
+  @Test void testViewDefinitions() throws Exception {
     File d = dir("views_test");
     writeCsv(d, "base.csv", "id,value\n1,100\n2,200\n");
 
@@ -302,8 +294,7 @@ class FileSchemaLineCoverageTest {
   // 5. close() method paths for cleanup of refresh scheduler
   // ---------------------------------------------------------------
 
-  @Test
-  void testCloseWithNoRefreshScheduler() throws Exception {
+  @Test void testCloseWithNoRefreshScheduler() throws Exception {
     File d = dir("close_no_refresh");
     writeCsv(d, "data.csv", "a,b\n1,2\n");
 
@@ -312,15 +303,14 @@ class FileSchemaLineCoverageTest {
     schema.close();
   }
 
-  @Test
-  void testCloseWithRefreshScheduler() throws Exception {
+  @Test void testCloseWithRefreshScheduler() throws Exception {
     File d = dir("close_with_refresh");
     writeCsv(d, "data.csv", "a,b\n1,2\n");
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "close_refresh_test", d, null,
-        null, engineConfig, false, null, null, null, "30 seconds",
+    FileSchema schema =
+        new FileSchema(parent, "close_refresh_test", d, null, null, engineConfig, false, null, null, null, "30 seconds",
         "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schema);
 
@@ -328,8 +318,7 @@ class FileSchemaLineCoverageTest {
     schema.close();
   }
 
-  @Test
-  void testCloseAllStaticMethod() throws Exception {
+  @Test void testCloseAllStaticMethod() throws Exception {
     File d = dir("close_all_test");
     writeCsv(d, "data.csv", "a,b\n1,2\n");
 
@@ -342,8 +331,7 @@ class FileSchemaLineCoverageTest {
   // 6. addTable() with duplicate table name handling
   // ---------------------------------------------------------------
 
-  @Test
-  void testDuplicateTableNameFromSameExtension() throws Exception {
+  @Test void testDuplicateTableNameFromSameExtension() throws Exception {
     File d = dir("dup_tables");
     writeJson(d, "report.json", "[{\"id\":1}]");
     writeCsv(d, "report.csv", "id\n1\n");
@@ -357,8 +345,7 @@ class FileSchemaLineCoverageTest {
         + tableMap.size() + " tables: " + tableMap.keySet());
   }
 
-  @Test
-  void testMultipleJsonFilesWithSameBaseName() throws Exception {
+  @Test void testMultipleJsonFilesWithSameBaseName() throws Exception {
     File d = dir("multi_json");
     writeJson(d, "data.json", "[{\"a\":1}]");
     File sub = new File(d, "sub");
@@ -378,8 +365,7 @@ class FileSchemaLineCoverageTest {
   // 7. notifyTableRefreshed() listener notification path
   // ---------------------------------------------------------------
 
-  @Test
-  void testNotifyTableRefreshedWithListener() throws Exception {
+  @Test void testNotifyTableRefreshedWithListener() throws Exception {
     File d = dir("notify_test");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -390,8 +376,7 @@ class FileSchemaLineCoverageTest {
     final AtomicReference<File> notifiedFile = new AtomicReference<>();
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         notified.set(true);
         notifiedTableName.set(tableName);
         notifiedFile.set(parquetFile);
@@ -406,8 +391,7 @@ class FileSchemaLineCoverageTest {
     assertEquals(dummyFile, notifiedFile.get());
   }
 
-  @Test
-  void testNotifyTableRefreshedWithMultipleListeners() throws Exception {
+  @Test void testNotifyTableRefreshedWithMultipleListeners() throws Exception {
     File d = dir("notify_multi");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -416,15 +400,13 @@ class FileSchemaLineCoverageTest {
     final List<String> notifications = Collections.synchronizedList(new ArrayList<String>());
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         notifications.add("listener1:" + tableName);
       }
     });
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         notifications.add("listener2:" + tableName);
       }
     });
@@ -437,8 +419,7 @@ class FileSchemaLineCoverageTest {
     assertTrue(notifications.contains("listener2:my_table"));
   }
 
-  @Test
-  void testNotifyTableRefreshedWithExceptionInListener() throws Exception {
+  @Test void testNotifyTableRefreshedWithExceptionInListener() throws Exception {
     File d = dir("notify_error");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -447,15 +428,13 @@ class FileSchemaLineCoverageTest {
     final AtomicBoolean secondListenerCalled = new AtomicBoolean(false);
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         throw new RuntimeException("Simulated listener error");
       }
     });
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         secondListenerCalled.set(true);
       }
     });
@@ -467,8 +446,7 @@ class FileSchemaLineCoverageTest {
         "Second listener should still be called after first one throws");
   }
 
-  @Test
-  void testNotifyTableRefreshedWithNoListeners() throws Exception {
+  @Test void testNotifyTableRefreshedWithNoListeners() throws Exception {
     File d = dir("notify_empty");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -480,8 +458,7 @@ class FileSchemaLineCoverageTest {
   // 8. notifyTableRefreshedWithPattern path
   // ---------------------------------------------------------------
 
-  @Test
-  void testNotifyTableRefreshedWithPattern() throws Exception {
+  @Test void testNotifyTableRefreshedWithPattern() throws Exception {
     File d = dir("notify_pattern");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -491,18 +468,15 @@ class FileSchemaLineCoverageTest {
     final AtomicReference<String> notifiedPattern = new AtomicReference<>();
 
     schema.addRefreshListener(new PatternAwareRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
       }
 
-      @Override
-      public void onTableRefreshedWithPattern(String tableName, String pattern) {
+      @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
         patternNotified.set(true);
         notifiedPattern.set(pattern);
       }
 
-      @Override
-      public void onIcebergTableRefreshed(String tableName, String tableLocation) {
+      @Override public void onIcebergTableRefreshed(String tableName, String tableLocation) {
       }
     });
 
@@ -512,8 +486,7 @@ class FileSchemaLineCoverageTest {
     assertEquals("/data/**/*.parquet", notifiedPattern.get());
   }
 
-  @Test
-  void testNotifyTableRefreshedWithPatternSkipsNonPatternAware() throws Exception {
+  @Test void testNotifyTableRefreshedWithPatternSkipsNonPatternAware() throws Exception {
     File d = dir("notify_skip_pattern");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -522,8 +495,7 @@ class FileSchemaLineCoverageTest {
     final AtomicBoolean regularCalled = new AtomicBoolean(false);
 
     schema.addRefreshListener(new TableRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
         regularCalled.set(true);
       }
     });
@@ -537,8 +509,7 @@ class FileSchemaLineCoverageTest {
   // 9. notifyIcebergTableRefreshed path
   // ---------------------------------------------------------------
 
-  @Test
-  void testNotifyIcebergTableRefreshed() throws Exception {
+  @Test void testNotifyIcebergTableRefreshed() throws Exception {
     File d = dir("notify_iceberg");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
 
@@ -548,16 +519,13 @@ class FileSchemaLineCoverageTest {
     final AtomicReference<String> notifiedLocation = new AtomicReference<>();
 
     schema.addRefreshListener(new PatternAwareRefreshListener() {
-      @Override
-      public void onTableRefreshed(String tableName, File parquetFile) {
+      @Override public void onTableRefreshed(String tableName, File parquetFile) {
       }
 
-      @Override
-      public void onTableRefreshedWithPattern(String tableName, String pattern) {
+      @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
       }
 
-      @Override
-      public void onIcebergTableRefreshed(String tableName, String tableLocation) {
+      @Override public void onIcebergTableRefreshed(String tableName, String tableLocation) {
         icebergNotified.set(true);
         notifiedLocation.set(tableLocation);
       }
@@ -573,8 +541,7 @@ class FileSchemaLineCoverageTest {
   // 10. Various getter methods and utility methods
   // ---------------------------------------------------------------
 
-  @Test
-  void testGetBaseDirectory() throws Exception {
+  @Test void testGetBaseDirectory() throws Exception {
     File d = dir("getbase");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -583,8 +550,7 @@ class FileSchemaLineCoverageTest {
         "Base directory should not be null");
   }
 
-  @Test
-  void testGetOperatingCacheDirectory() throws Exception {
+  @Test void testGetOperatingCacheDirectory() throws Exception {
     File d = dir("getcache");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -592,8 +558,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getOperatingCacheDirectory());
   }
 
-  @Test
-  void testGetStorageProviderReturnsNull() throws Exception {
+  @Test void testGetStorageProviderReturnsNull() throws Exception {
     File d = dir("getstorage");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -602,8 +567,7 @@ class FileSchemaLineCoverageTest {
         "Storage provider should be null when not configured");
   }
 
-  @Test
-  void testGetStorageConfigReturnsNull() throws Exception {
+  @Test void testGetStorageConfigReturnsNull() throws Exception {
     File d = dir("getstorageconfig");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -612,8 +576,7 @@ class FileSchemaLineCoverageTest {
         "Storage config should be null when not configured");
   }
 
-  @Test
-  void testHasRefreshableTables() throws Exception {
+  @Test void testHasRefreshableTables() throws Exception {
     File d = dir("has_refresh");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -622,15 +585,14 @@ class FileSchemaLineCoverageTest {
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schemaWithRefresh = new FileSchema(parent, "withrefresh", d, null,
-        null, engineConfig, false, null, null, null, "5 minutes",
+    FileSchema schemaWithRefresh =
+        new FileSchema(parent, "withrefresh", d, null, null, engineConfig, false, null, null, null, "5 minutes",
         "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schemaWithRefresh);
     assertTrue(schemaWithRefresh.hasRefreshableTables());
   }
 
-  @Test
-  void testGetCommentReturnsNull() throws Exception {
+  @Test void testGetCommentReturnsNull() throws Exception {
     File d = dir("comment_null");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -638,8 +600,7 @@ class FileSchemaLineCoverageTest {
     assertNull(schema.getComment());
   }
 
-  @Test
-  void testGetCommentWithValue() throws Exception {
+  @Test void testGetCommentWithValue() throws Exception {
     File d = dir("comment_val");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -650,8 +611,7 @@ class FileSchemaLineCoverageTest {
     assertEquals("This is a test schema", schema.getComment());
   }
 
-  @Test
-  void testGetConversionMetadata() throws Exception {
+  @Test void testGetConversionMetadata() throws Exception {
     File d = dir("conv_meta");
     writeCsv(d, "data.csv", "a\n1\n");
 
@@ -659,8 +619,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getConversionMetadata());
   }
 
-  @Test
-  void testGetAllTableRecordsEmpty() throws Exception {
+  @Test void testGetAllTableRecordsEmpty() throws Exception {
     File d = dir("all_records");
     Map<String, Object> operand = baseOperand(d);
     FileSchema schema = createSchemaViaFactory("allrec_test", operand);
@@ -668,8 +627,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(records);
   }
 
-  @Test
-  void testGetAllTableRecordsWithTables() throws Exception {
+  @Test void testGetAllTableRecordsWithTables() throws Exception {
     File d = dir("all_records_tables");
     writeCsv(d, "data.csv", "id,name\n1,Alice\n");
     writeJson(d, "items.json", "[{\"x\":1}]");
@@ -685,8 +643,7 @@ class FileSchemaLineCoverageTest {
   // 11. ClearTableCache and getTableMap caching
   // ---------------------------------------------------------------
 
-  @Test
-  void testClearTableCacheForcesRecomputation() throws Exception {
+  @Test void testClearTableCacheForcesRecomputation() throws Exception {
     File d = dir("cache_clear");
     writeCsv(d, "data.csv", "id,val\n1,100\n");
 
@@ -708,8 +665,7 @@ class FileSchemaLineCoverageTest {
   // 12. Directory pattern (glob) scanning
   // ---------------------------------------------------------------
 
-  @Test
-  void testDirectoryPatternWithGlob() throws Exception {
+  @Test void testDirectoryPatternWithGlob() throws Exception {
     File d = dir("glob_pattern");
     writeCsv(d, "alpha.csv", "id\n1\n");
     writeCsv(d, "beta.csv", "id\n2\n");
@@ -724,8 +680,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(tableMap);
   }
 
-  @Test
-  void testDirectoryPatternRecursiveGlob() throws Exception {
+  @Test void testDirectoryPatternRecursiveGlob() throws Exception {
     File d = dir("rec_glob");
     writeCsv(d, "top.csv", "id\n1\n");
     File sub = new File(d, "folder");
@@ -746,8 +701,7 @@ class FileSchemaLineCoverageTest {
   // 13. Table name casing configurations
   // ---------------------------------------------------------------
 
-  @Test
-  void testTableNameCasingUpper() throws Exception {
+  @Test void testTableNameCasingUpper() throws Exception {
     File d = dir("casing_upper");
     writeCsv(d, "mydata.csv", "id\n1\n");
 
@@ -767,8 +721,7 @@ class FileSchemaLineCoverageTest {
         "Expected upper-cased table name, got: " + tableMap.keySet());
   }
 
-  @Test
-  void testTableNameCasingLower() throws Exception {
+  @Test void testTableNameCasingLower() throws Exception {
     File d = dir("casing_lower");
     writeCsv(d, "MyData.csv", "id\n1\n");
 
@@ -787,8 +740,7 @@ class FileSchemaLineCoverageTest {
   // 14. Explicit table definitions via operand
   // ---------------------------------------------------------------
 
-  @Test
-  void testExplicitTableDefinitionWithUrl() throws Exception {
+  @Test void testExplicitTableDefinitionWithUrl() throws Exception {
     File d = dir("explicit_table");
     File csvFile = writeCsv(d, "employees.csv", "id,name\n1,Alice\n2,Bob\n");
 
@@ -806,8 +758,7 @@ class FileSchemaLineCoverageTest {
         "Expected explicit table 'emp', got: " + tableMap.keySet());
   }
 
-  @Test
-  void testExplicitTableDefinitionWithViewType() throws Exception {
+  @Test void testExplicitTableDefinitionWithViewType() throws Exception {
     File d = dir("view_type_table");
     writeCsv(d, "data.csv", "id,val\n1,10\n");
 
@@ -829,8 +780,7 @@ class FileSchemaLineCoverageTest {
   // 15. Schema with empty directory
   // ---------------------------------------------------------------
 
-  @Test
-  void testSchemaWithEmptyDirectory() throws Exception {
+  @Test void testSchemaWithEmptyDirectory() throws Exception {
     File d = dir("empty_dir");
 
     Map<String, Object> operand = baseOperand(d);
@@ -845,8 +795,7 @@ class FileSchemaLineCoverageTest {
   // 16. Glob pattern recognition (isGlobPattern) via table URL
   // ---------------------------------------------------------------
 
-  @Test
-  void testGlobPatternInTableUrl() throws Exception {
+  @Test void testGlobPatternInTableUrl() throws Exception {
     File d = dir("glob_url");
     writeCsv(d, "file1.csv", "id\n1\n");
     writeCsv(d, "file2.csv", "id\n2\n");
@@ -869,8 +818,7 @@ class FileSchemaLineCoverageTest {
   // 17. JSON file detection
   // ---------------------------------------------------------------
 
-  @Test
-  void testJsonFileDiscovery() throws Exception {
+  @Test void testJsonFileDiscovery() throws Exception {
     File d = dir("json_discovery");
     writeJson(d, "users.json", "[{\"id\":1,\"name\":\"Alice\"}]");
     writeJson(d, "orders.json", "[{\"order_id\":10,\"amount\":99.99}]");
@@ -887,8 +835,7 @@ class FileSchemaLineCoverageTest {
   // 18. CSV file with type inference
   // ---------------------------------------------------------------
 
-  @Test
-  void testCsvWithTypeInference() throws Exception {
+  @Test void testCsvWithTypeInference() throws Exception {
     File d = dir("csv_inference");
     writeCsv(d, "typed.csv", "id,price,active\n1,19.99,true\n2,29.99,false\n");
 
@@ -906,8 +853,7 @@ class FileSchemaLineCoverageTest {
   // 19. getTableBaseline and updateTableBaseline
   // ---------------------------------------------------------------
 
-  @Test
-  void testGetTableBaselineReturnsNull() throws Exception {
+  @Test void testGetTableBaselineReturnsNull() throws Exception {
     File d = dir("baseline_null");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -919,8 +865,7 @@ class FileSchemaLineCoverageTest {
   // 20. registerRawToParquetConverter
   // ---------------------------------------------------------------
 
-  @Test
-  void testRegisterRawToParquetConverter() throws Exception {
+  @Test void testRegisterRawToParquetConverter() throws Exception {
     File d = dir("raw_converter");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -928,13 +873,11 @@ class FileSchemaLineCoverageTest {
 
     schema.registerRawToParquetConverter(
         new org.apache.calcite.adapter.file.converters.RawToParquetConverter() {
-          @Override
-          public boolean canConvert(String rawFilePath, org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata) {
+          @Override public boolean canConvert(String rawFilePath, org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata) {
             return false;
           }
 
-          @Override
-          public boolean convertToParquet(String rawFilePath, String targetParquetPath,
+          @Override public boolean convertToParquet(String rawFilePath, String targetParquetPath,
               org.apache.calcite.adapter.file.storage.StorageProvider storageProvider)
               throws IOException {
             return false;
@@ -945,8 +888,7 @@ class FileSchemaLineCoverageTest {
   // 21. setFunctionMultimap and getFunctionMultimap
   // ---------------------------------------------------------------
 
-  @Test
-  void testSetAndGetFunctionMultimap() throws Exception {
+  @Test void testSetAndGetFunctionMultimap() throws Exception {
     File d = dir("func_multimap");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -963,12 +905,11 @@ class FileSchemaLineCoverageTest {
   // 22. Parquet file creation via DuckDB for integration
   // ---------------------------------------------------------------
 
-  @Test
-  void testParquetFileDiscovery() throws Exception {
+  @Test void testParquetFileDiscovery() throws Exception {
     File d = dir("parquet_discovery");
     File parquetFile = new File(d, "test_data.parquet");
-    ProcessBuilder pb = new ProcessBuilder(
-        "duckdb", "-c",
+    ProcessBuilder pb =
+        new ProcessBuilder("duckdb", "-c",
         "COPY (SELECT 1 AS id, 'hello' AS name) TO '" + parquetFile.getAbsolutePath()
         + "' (FORMAT PARQUET)");
     pb.redirectErrorStream(true);
@@ -991,8 +932,7 @@ class FileSchemaLineCoverageTest {
   // 23. Multiple constructors coverage
   // ---------------------------------------------------------------
 
-  @Test
-  void testMinimalConstructor() throws Exception {
+  @Test void testMinimalConstructor() throws Exception {
     File d = dir("minimal_ctor");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1003,8 +943,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getTableMap());
   }
 
-  @Test
-  void testConstructorWithEngineConfig() throws Exception {
+  @Test void testConstructorWithEngineConfig() throws Exception {
     File d = dir("engine_ctor");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1015,8 +954,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getTableMap());
   }
 
-  @Test
-  void testConstructorWithRecursive() throws Exception {
+  @Test void testConstructorWithRecursive() throws Exception {
     File d = dir("recursive_ctor");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1027,8 +965,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getTableMap());
   }
 
-  @Test
-  void testConstructorWithViewsAndMaterializations() throws Exception {
+  @Test void testConstructorWithViewsAndMaterializations() throws Exception {
     File d = dir("views_ctor");
     writeCsv(d, "data.csv", "id,val\n1,10\n");
 
@@ -1041,8 +978,8 @@ class FileSchemaLineCoverageTest {
     view.put("sql", "SELECT * FROM \"data\"");
     views.add(view);
 
-    FileSchema schema = new FileSchema(parent, "views_ctor_test", d,
-        null, config, false, null, views);
+    FileSchema schema =
+        new FileSchema(parent, "views_ctor_test", d, null, config, false, null, views);
     schemasToClose.add(schema);
     Map<String, Table> tableMap = schema.getTableMap();
     assertTrue(tableMap.containsKey("v1"),
@@ -1053,8 +990,7 @@ class FileSchemaLineCoverageTest {
   // 24. Schema with null source directory (fallback to cwd)
   // ---------------------------------------------------------------
 
-  @Test
-  void testSchemaWithNullSourceDirectory() throws Exception {
+  @Test void testSchemaWithNullSourceDirectory() throws Exception {
     SchemaPlus parent = rootSchema();
     FileSchema schema = new FileSchema(parent, "null_src_test", (File) null, null);
     schemasToClose.add(schema);
@@ -1066,8 +1002,7 @@ class FileSchemaLineCoverageTest {
   // 25. CSV and JSON table building with different casing
   // ---------------------------------------------------------------
 
-  @Test
-  void testCsvTableWithSmartCasing() throws Exception {
+  @Test void testCsvTableWithSmartCasing() throws Exception {
     File d = dir("smart_casing_csv");
     writeCsv(d, "My Table Data.csv", "id,Full Name\n1,Alice\n");
 
@@ -1081,8 +1016,7 @@ class FileSchemaLineCoverageTest {
         "Expected table from CSV file with smart casing");
   }
 
-  @Test
-  void testJsonTableWithUnchangedCasing() throws Exception {
+  @Test void testJsonTableWithUnchangedCasing() throws Exception {
     File d = dir("unchanged_casing");
     writeJson(d, "MyItems.json", "[{\"ID\":1,\"Name\":\"Alice\"}]");
 
@@ -1099,8 +1033,7 @@ class FileSchemaLineCoverageTest {
   // 26. Schema with ephemeral vs persistent cache
   // ---------------------------------------------------------------
 
-  @Test
-  void testEphemeralCacheTrue() throws Exception {
+  @Test void testEphemeralCacheTrue() throws Exception {
     File d = dir("ephemeral_true");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1112,8 +1045,7 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getBaseDirectory());
   }
 
-  @Test
-  void testEphemeralCacheFalse() throws Exception {
+  @Test void testEphemeralCacheFalse() throws Exception {
     File d = dir("ephemeral_false");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1131,8 +1063,7 @@ class FileSchemaLineCoverageTest {
   // 27. Local storage provider via operand
   // ---------------------------------------------------------------
 
-  @Test
-  void testLocalStorageProviderViaOperand() throws Exception {
+  @Test void testLocalStorageProviderViaOperand() throws Exception {
     File d = dir("local_storage");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1152,8 +1083,7 @@ class FileSchemaLineCoverageTest {
   // 28. TSV file handling
   // ---------------------------------------------------------------
 
-  @Test
-  void testTsvFileDiscovery() throws Exception {
+  @Test void testTsvFileDiscovery() throws Exception {
     File d = dir("tsv_test");
     writeCsv(d, "tab_data.tsv", "id\tname\n1\tAlice\n2\tBob\n");
 
@@ -1168,8 +1098,7 @@ class FileSchemaLineCoverageTest {
   // 29. YAML file handling
   // ---------------------------------------------------------------
 
-  @Test
-  void testYamlFileDiscovery() throws Exception {
+  @Test void testYamlFileDiscovery() throws Exception {
     File d = dir("yaml_test");
     writeCsv(d, "config.yaml", "- id: 1\n  name: Alice\n- id: 2\n  name: Bob\n");
 
@@ -1180,8 +1109,7 @@ class FileSchemaLineCoverageTest {
         "Expected table from YAML file");
   }
 
-  @Test
-  void testYmlFileDiscovery() throws Exception {
+  @Test void testYmlFileDiscovery() throws Exception {
     File d = dir("yml_test");
     writeCsv(d, "config.yml", "- id: 1\n  name: Alice\n");
 
@@ -1196,8 +1124,7 @@ class FileSchemaLineCoverageTest {
   // 30. getTableConstraints
   // ---------------------------------------------------------------
 
-  @Test
-  void testGetTableConstraintsReturnsNull() throws Exception {
+  @Test void testGetTableConstraintsReturnsNull() throws Exception {
     File d = dir("constraints_null");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1209,15 +1136,14 @@ class FileSchemaLineCoverageTest {
   // 31. Constructor with canonical schema name
   // ---------------------------------------------------------------
 
-  @Test
-  void testConstructorWithCanonicalSchemaName() throws Exception {
+  @Test void testConstructorWithCanonicalSchemaName() throws Exception {
     File d = dir("canonical_name");
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "USER_NAME", d, null, null, null,
-        null, config, false, null, null, null, null,
+    FileSchema schema =
+        new FileSchema(parent, "USER_NAME", d, null, null, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false, null, "canonical_name");
     schemasToClose.add(schema);
 
@@ -1231,8 +1157,7 @@ class FileSchemaLineCoverageTest {
   // 32. Schema with multiple file types in same directory
   // ---------------------------------------------------------------
 
-  @Test
-  void testMixedFileTypesInDirectory() throws Exception {
+  @Test void testMixedFileTypesInDirectory() throws Exception {
     File d = dir("mixed_types");
     writeCsv(d, "sales.csv", "id,amount\n1,100\n2,200\n");
     writeJson(d, "products.json", "[{\"pid\":1,\"name\":\"Widget\"}]");
@@ -1251,8 +1176,7 @@ class FileSchemaLineCoverageTest {
   // 33. Non-recursive scanning (verifying subdirectories are skipped)
   // ---------------------------------------------------------------
 
-  @Test
-  void testNonRecursiveScanSkipsSubdirectories() throws Exception {
+  @Test void testNonRecursiveScanSkipsSubdirectories() throws Exception {
     File d = dir("non_recursive");
     writeCsv(d, "top_level.csv", "id\n1\n");
 
@@ -1273,8 +1197,7 @@ class FileSchemaLineCoverageTest {
   // 34. Hidden and metadata files are skipped
   // ---------------------------------------------------------------
 
-  @Test
-  void testHiddenFilesAreSkipped() throws Exception {
+  @Test void testHiddenFilesAreSkipped() throws Exception {
     File d = dir("hidden_files");
     writeCsv(d, "visible.csv", "id\n1\n");
     writeCsv(d, ".hidden.csv", "id\n2\n");
@@ -1293,8 +1216,7 @@ class FileSchemaLineCoverageTest {
   // 35. Partitioned tables operand
   // ---------------------------------------------------------------
 
-  @Test
-  void testPartitionedTablesOperand() throws Exception {
+  @Test void testPartitionedTablesOperand() throws Exception {
     File d = dir("partitioned");
     File yearDir = new File(d, "year=2024");
     yearDir.mkdirs();
@@ -1319,8 +1241,7 @@ class FileSchemaLineCoverageTest {
   // 36. JSON with array at root
   // ---------------------------------------------------------------
 
-  @Test
-  void testJsonWithArrayAtRoot() throws Exception {
+  @Test void testJsonWithArrayAtRoot() throws Exception {
     File d = dir("json_array_root");
     writeJson(d, "items.json",
         "[{\"id\":1,\"color\":\"red\"},{\"id\":2,\"color\":\"blue\"}]");
@@ -1331,8 +1252,7 @@ class FileSchemaLineCoverageTest {
     assertFalse(tableMap.isEmpty());
   }
 
-  @Test
-  void testJsonWithObjectAtRoot() throws Exception {
+  @Test void testJsonWithObjectAtRoot() throws Exception {
     File d = dir("json_object_root");
     writeJson(d, "config.json",
         "{\"settings\":{\"theme\":\"dark\"},\"version\":1}");
@@ -1347,11 +1267,10 @@ class FileSchemaLineCoverageTest {
   // 37. Flatten with table-level definition
   // ---------------------------------------------------------------
 
-  @Test
-  void testFlattenWithTableLevelDefinition() throws Exception {
+  @Test void testFlattenWithTableLevelDefinition() throws Exception {
     File d = dir("table_flatten");
-    File jsonFile = writeJson(d, "nested.json",
-        "[{\"id\":1,\"details\":{\"a\":10,\"b\":20}}]");
+    File jsonFile =
+        writeJson(d, "nested.json", "[{\"id\":1,\"details\":{\"a\":10,\"b\":20}}]");
 
     Map<String, Object> operand = baseOperand(d);
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -1371,8 +1290,7 @@ class FileSchemaLineCoverageTest {
   // 38. Materialization with missing parquet file
   // ---------------------------------------------------------------
 
-  @Test
-  void testMaterializationWithMissingParquetFile() throws Exception {
+  @Test void testMaterializationWithMissingParquetFile() throws Exception {
     File d = dir("mat_missing");
     writeCsv(d, "source.csv", "id,amount\n1,100\n2,200\n");
 
@@ -1395,8 +1313,7 @@ class FileSchemaLineCoverageTest {
   // 39. Multiple JSON files and duplicate name resolution
   // ---------------------------------------------------------------
 
-  @Test
-  void testJsonAndYamlWithSameBaseName() throws Exception {
+  @Test void testJsonAndYamlWithSameBaseName() throws Exception {
     File d = dir("json_yaml_dup");
     writeJson(d, "data.json", "[{\"a\":1}]");
     writeCsv(d, "data.yaml", "- a: 2\n");
@@ -1413,15 +1330,14 @@ class FileSchemaLineCoverageTest {
   // 40. Full constructor with all parameters
   // ---------------------------------------------------------------
 
-  @Test
-  void testFullConstructorWithComment() throws Exception {
+  @Test void testFullConstructorWithComment() throws Exception {
     File d = dir("full_ctor");
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "full_test", d, null, null, null,
-        null, config, false, null, null, null, null,
+    FileSchema schema =
+        new FileSchema(parent, "full_test", d, null, null, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false, "Test comment");
     schemasToClose.add(schema);
 
@@ -1429,16 +1345,15 @@ class FileSchemaLineCoverageTest {
     assertNotNull(schema.getTableMap());
   }
 
-  @Test
-  void testConstructorWithUserConfiguredBaseDirectory() throws Exception {
+  @Test void testConstructorWithUserConfiguredBaseDirectory() throws Exception {
     File d = dir("user_basedir");
     File baseDir = dir("custom_base");
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "basedir_test", d, baseDir, null,
-        null, config, false, null, null, null, null,
+    FileSchema schema =
+        new FileSchema(parent, "basedir_test", d, baseDir, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false, null);
     schemasToClose.add(schema);
 
@@ -1449,8 +1364,7 @@ class FileSchemaLineCoverageTest {
   // 41. Table name null URL handling
   // ---------------------------------------------------------------
 
-  @Test
-  void testTableDefinitionWithNullUrl() throws Exception {
+  @Test void testTableDefinitionWithNullUrl() throws Exception {
     File d = dir("null_url");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1470,8 +1384,7 @@ class FileSchemaLineCoverageTest {
   // 42. Calcite model file detection (should be skipped)
   // ---------------------------------------------------------------
 
-  @Test
-  void testCalciteModelFileIsSkipped() throws Exception {
+  @Test void testCalciteModelFileIsSkipped() throws Exception {
     File d = dir("model_skip");
     writeCsv(d, "real_data.csv", "id\n1\n");
     writeJson(d, "model.json",
@@ -1487,8 +1400,7 @@ class FileSchemaLineCoverageTest {
   // 43. Test with deeply nested directories (recursive)
   // ---------------------------------------------------------------
 
-  @Test
-  void testDeeplyNestedRecursiveScanning() throws Exception {
+  @Test void testDeeplyNestedRecursiveScanning() throws Exception {
     File d = dir("deep_nested");
     File level1 = new File(d, "a");
     level1.mkdirs();
@@ -1516,8 +1428,7 @@ class FileSchemaLineCoverageTest {
   // 44. Large JSON file with many records
   // ---------------------------------------------------------------
 
-  @Test
-  void testLargeJsonFile() throws Exception {
+  @Test void testLargeJsonFile() throws Exception {
     File d = dir("large_json");
     StringBuilder sb = new StringBuilder("[");
     for (int i = 0; i < 100; i++) {
@@ -1542,8 +1453,7 @@ class FileSchemaLineCoverageTest {
   // 45. getTableNames (delegates to getTableMap)
   // ---------------------------------------------------------------
 
-  @Test
-  void testGetTableNames() throws Exception {
+  @Test void testGetTableNames() throws Exception {
     File d = dir("table_names");
     writeCsv(d, "alpha.csv", "id\n1\n");
     writeJson(d, "beta.json", "[{\"id\":2}]");
@@ -1560,8 +1470,7 @@ class FileSchemaLineCoverageTest {
   // 46. File with spaces in name
   // ---------------------------------------------------------------
 
-  @Test
-  void testFileNameWithSpaces() throws Exception {
+  @Test void testFileNameWithSpaces() throws Exception {
     File d = dir("spaces_name");
     writeCsv(d, "my data file.csv", "id\n1\n");
 
@@ -1576,8 +1485,7 @@ class FileSchemaLineCoverageTest {
   // 47. Alternate partition registry
   // ---------------------------------------------------------------
 
-  @Test
-  void testGetAlternatePartitionRegistry() throws Exception {
+  @Test void testGetAlternatePartitionRegistry() throws Exception {
     File d = dir("alt_partition");
     writeCsv(d, "data.csv", "id\n1\n");
 
@@ -1589,11 +1497,10 @@ class FileSchemaLineCoverageTest {
   // 48. JSON flattening with flatten separator
   // ---------------------------------------------------------------
 
-  @Test
-  void testJsonFlatteningWithCustomSeparator() throws Exception {
+  @Test void testJsonFlatteningWithCustomSeparator() throws Exception {
     File d = dir("flat_sep");
-    File jsonFile = writeJson(d, "nested_sep.json",
-        "[{\"id\":1,\"addr\":{\"city\":\"NY\",\"zip\":\"10001\"}}]");
+    File jsonFile =
+        writeJson(d, "nested_sep.json", "[{\"id\":1,\"addr\":{\"city\":\"NY\",\"zip\":\"10001\"}}]");
 
     Map<String, Object> operand = baseOperand(d);
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -1614,15 +1521,14 @@ class FileSchemaLineCoverageTest {
   // 49. Schema with primeCache disabled
   // ---------------------------------------------------------------
 
-  @Test
-  void testSchemaNoPrimeCacheDoesNotStartThread() throws Exception {
+  @Test void testSchemaNoPrimeCacheDoesNotStartThread() throws Exception {
     File d = dir("no_prime");
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "noprime_test", d, null, null,
-        null, config, false, null, null, null, null,
+    FileSchema schema =
+        new FileSchema(parent, "noprime_test", d, null, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schema);
 
@@ -1633,8 +1539,7 @@ class FileSchemaLineCoverageTest {
   // 50. Multiple views and materializations together
   // ---------------------------------------------------------------
 
-  @Test
-  void testMultipleViewsAndMaterializationsTogether() throws Exception {
+  @Test void testMultipleViewsAndMaterializationsTogether() throws Exception {
     File d = dir("multi_views_mat");
     writeCsv(d, "orders.csv", "id,amount,region\n1,100,US\n2,200,EU\n3,150,US\n");
 

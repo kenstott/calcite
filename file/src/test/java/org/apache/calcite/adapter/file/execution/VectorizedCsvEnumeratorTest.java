@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.file.execution;
 import org.apache.calcite.adapter.file.execution.vectorized.VectorizedCsvEnumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.sql.type.BasicSqlType;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Sources;
@@ -27,7 +26,6 @@ import org.apache.calcite.util.Sources;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +58,8 @@ public class VectorizedCsvEnumeratorTest {
   @TempDir
   Path tempDir;
 
-  private RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(
-      org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+  private RelDataTypeFactory typeFactory =
+      new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
   private File createCsvFile(String name, String... lines) throws Exception {
     File csv = tempDir.resolve(name).toFile();
@@ -81,16 +79,15 @@ public class VectorizedCsvEnumeratorTest {
     return fieldTypes;
   }
 
-  @Test
-  public void testBasicEnumeration() throws Exception {
-    File csv = createCsvFile("basic.csv",
-        "NAME:string,AGE:int,SCORE:double",
+  @Test public void testBasicEnumeration() throws Exception {
+    File csv =
+        createCsvFile("basic.csv", "NAME:string,AGE:int,SCORE:double",
         "Alice,30,95.5",
         "Bob,25,88.0",
         "Charlie,35,92.3");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER, SqlTypeName.DOUBLE);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER, SqlTypeName.DOUBLE);
     List<Integer> fields = Arrays.asList(0, 1, 2);
 
     VectorizedCsvEnumerator<Object[]> enumerator =
@@ -109,18 +106,17 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSmallBatchSize() throws Exception {
-    File csv = createCsvFile("small_batch.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testSmallBatchSize() throws Exception {
+    File csv =
+        createCsvFile("small_batch.csv", "NAME:string,VALUE:int",
         "A,1",
         "B,2",
         "C,3",
         "D,4",
         "E,5");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     // Use batch size of 2 to force multiple batches
@@ -138,16 +134,15 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCancelFlag() throws Exception {
-    File csv = createCsvFile("cancel.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testCancelFlag() throws Exception {
+    File csv =
+        createCsvFile("cancel.csv", "NAME:string,VALUE:int",
         "A,1",
         "B,2",
         "C,3");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
     AtomicBoolean cancelFlag = new AtomicBoolean(false);
 
@@ -163,13 +158,12 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testEmptyFile() throws Exception {
-    File csv = createCsvFile("empty.csv",
-        "NAME:string,VALUE:int");
+  @Test public void testEmptyFile() throws Exception {
+    File csv =
+        createCsvFile("empty.csv", "NAME:string,VALUE:int");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     VectorizedCsvEnumerator<Object[]> enumerator =
@@ -180,16 +174,15 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testGetStats() throws Exception {
-    File csv = createCsvFile("stats.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testGetStats() throws Exception {
+    File csv =
+        createCsvFile("stats.csv", "NAME:string,VALUE:int",
         "A,10",
         "B,20",
         "C,30");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     VectorizedCsvEnumerator<Object[]> enumerator =
@@ -214,16 +207,15 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testSumColumn() throws Exception {
-    File csv = createCsvFile("sum.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testSumColumn() throws Exception {
+    File csv =
+        createCsvFile("sum.csv", "NAME:string,VALUE:int",
         "A,10",
         "B,20",
         "C,30");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     VectorizedCsvEnumerator<Object[]> enumerator =
@@ -241,16 +233,15 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testResetThrowsUnsupportedOperation() throws Exception {
-    File csv = createCsvFile("reset.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testResetThrowsUnsupportedOperation() throws Exception {
+    File csv =
+        createCsvFile("reset.csv", "NAME:string,VALUE:int",
         "A,1",
         "B,2",
         "C,3");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     VectorizedCsvEnumerator<Object[]> enumerator =
@@ -269,10 +260,9 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testCurrentReturnsNullWhenDone() throws Exception {
-    File csv = createCsvFile("done.csv",
-        "NAME:string",
+  @Test public void testCurrentReturnsNullWhenDone() throws Exception {
+    File csv =
+        createCsvFile("done.csv", "NAME:string",
         "A");
 
     List<RelDataType> types = createFieldTypes(SqlTypeName.VARCHAR);
@@ -293,11 +283,10 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testBatchBoundaryWithExactMultiple() throws Exception {
+  @Test public void testBatchBoundaryWithExactMultiple() throws Exception {
     // Create exactly 6 rows with batch size 3 - tests exact batch boundary
-    File csv = createCsvFile("boundary.csv",
-        "VALUE:int",
+    File csv =
+        createCsvFile("boundary.csv", "VALUE:int",
         "1", "2", "3", "4", "5", "6");
 
     List<RelDataType> types = createFieldTypes(SqlTypeName.INTEGER);
@@ -316,8 +305,7 @@ public class VectorizedCsvEnumeratorTest {
     enumerator.close();
   }
 
-  @Test
-  public void testVectorizedStatsToString() {
+  @Test public void testVectorizedStatsToString() {
     VectorizedCsvEnumerator.VectorizedStats stats =
         new VectorizedCsvEnumerator.VectorizedStats(100, 50, 3, 2048);
 
@@ -327,14 +315,13 @@ public class VectorizedCsvEnumeratorTest {
     assertTrue(str.contains("columns=3"));
   }
 
-  @Test
-  public void testCloseReleasesResources() throws Exception {
-    File csv = createCsvFile("close.csv",
-        "NAME:string,VALUE:int",
+  @Test public void testCloseReleasesResources() throws Exception {
+    File csv =
+        createCsvFile("close.csv", "NAME:string,VALUE:int",
         "A,1");
 
-    List<RelDataType> types = createFieldTypes(
-        SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
+    List<RelDataType> types =
+        createFieldTypes(SqlTypeName.VARCHAR, SqlTypeName.INTEGER);
     List<Integer> fields = Arrays.asList(0, 1);
 
     VectorizedCsvEnumerator<Object[]> enumerator =

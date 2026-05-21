@@ -133,8 +133,8 @@ class ModelLifecycleProcessorDeepTest {
   }
 
   @Test void testSchemaRefWithDependencies() {
-    ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of(
-        "econ", "/econ.yaml", "reference", "common");
+    ModelConfig.SchemaRef ref =
+        ModelConfig.SchemaRef.of("econ", "/econ.yaml", "reference", "common");
 
     assertEquals("econ", ref.getName());
     assertEquals(2, ref.getDependsOn().size());
@@ -143,8 +143,8 @@ class ModelLifecycleProcessorDeepTest {
   }
 
   @Test void testSchemaRefDependsOnImmutable() {
-    ModelConfig.SchemaRef ref = ModelConfig.SchemaRef.of(
-        "schema", "/path", "dep1");
+    ModelConfig.SchemaRef ref =
+        ModelConfig.SchemaRef.of("schema", "/path", "dep1");
 
     try {
       ref.getDependsOn().add("sneaky");
@@ -403,7 +403,8 @@ class ModelLifecycleProcessorDeepTest {
     listener.beforeTable(tableContext);
     listener.afterTable(tableContext,
         EtlResult.success("table", 100, 5, 500));
-    assertTrue(listener.onTableError(tableContext,
+    assertTrue(
+        listener.onTableError(tableContext,
         new RuntimeException("test")));
     assertTrue(listener.isTableEnabled(tableContext));
 
