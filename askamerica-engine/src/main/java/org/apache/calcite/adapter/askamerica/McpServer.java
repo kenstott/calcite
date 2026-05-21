@@ -183,7 +183,7 @@ public class McpServer {
         body.set("capabilities", capabilities);
         body.set("serverInfo", serverInfo);
         body.put("instructions",
-            "Query US government data using SQL. "
+            "Query US government data using PostgreSQL-compatible SQL. "
             + "Schemas: sec (SEC filings/XBRL), geo (TIGER/FIPS), "
             + "econ (BLS/BEA), census (ACS), crime (FBI UCR), "
             + "weather (NOAA GHCND), ref (NAICS/SIC), fec (campaign finance), "
@@ -224,7 +224,7 @@ public class McpServer {
         ObjectNode queryProps = MAPPER.createObjectNode();
         queryProps.set(
             "sql", prop("string",
-            "Calcite SQL. Reference tables as schema.table "
+            "PostgreSQL-compatible SQL. Reference tables as schema.table "
             + "(e.g. sec.filing_metadata). Always include FETCH FIRST N ROWS ONLY."));
         queryProps.set(
             "limit", prop("integer",
@@ -240,8 +240,10 @@ public class McpServer {
     }
 
     private static void awaitConnection() throws Exception {
-        if (!connReady.await(120, TimeUnit.SECONDS)) {
-            throw new RuntimeException("Database still initializing — please retry in a moment");
+        if (!connReady.await(600, TimeUnit.SECONDS)) {
+            throw new RuntimeException(
+                "Database initialization is taking longer than expected "
+                + "(first launch can take several minutes). Please retry.");
         }
         if (connError != null) {
             throw new RuntimeException("Connection failed: " + connError.getMessage(), connError);
