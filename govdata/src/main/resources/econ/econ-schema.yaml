@@ -39,7 +39,7 @@ column_templates:
 
   date_column: &date_column
     name: date
-    type: string
+    type: date
     nullable: true
     comment: Observation date (ISO 8601 format)
 
@@ -457,7 +457,7 @@ partitionedTables:
         nullable: true
         comment: BLS series identifier (e.g., 'LNS14000000' for unemployment rate)
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Data year from BLS API
       - name: period
@@ -575,7 +575,7 @@ partitionedTables:
         nullable: true
         comment: BLS series identifier (e.g., 'CUUR0000SA0' for CPI All Urban, 'WPUFD49207' for PPI)
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Data year from BLS API
       - name: period
@@ -957,7 +957,7 @@ partitionedTables:
         nullable: true
         comment: BLS series ID (e.g., SMS01000000000000001 encodes Alabama total employment)
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Data year from BLS API
       - name: period
@@ -1190,7 +1190,7 @@ partitionedTables:
         nullable: true
         comment: BLS series ID (e.g., SMU36935610000000001 encodes NYC total employment)
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Data year from BLS API
       - name: period
@@ -1712,7 +1712,7 @@ partitionedTables:
       # BLS TSV columns: series_id, year, period, value, footnote_codes
       # Series ID format: JTU{region}{industry}{dataelement} (e.g., JTU00000000JOR)
       - name: date
-        type: string
+        type: date
         nullable: true
         comment: Observation date (ISO 8601 format)
         # Construct date from year + period (e.g., 2020 + M01 -> 2020-01-01)
@@ -2171,7 +2171,7 @@ partitionedTables:
     # Columns match Treasury Fiscal Data API response fields
     columns:
       - name: record_date
-        type: string
+        type: date
         nullable: true
         comment: Date of the interest rate record (YYYY-MM-DD format)
       - name: security_type_desc
@@ -2272,7 +2272,7 @@ partitionedTables:
     # Columns match Treasury Fiscal Data debt_to_penny API response fields
     columns:
       - name: record_date
-        type: string
+        type: date
         nullable: true
         comment: Date of the debt record (YYYY-MM-DD format)
       - name: debt_held_public_amt
@@ -2389,9 +2389,9 @@ partitionedTables:
         nullable: true
         comment: ISO 3-letter country code (e.g., 'USA', 'CHN')
       - name: date
-        type: string
+        type: integer
         nullable: true
-        comment: Year of observation as string (e.g., '2022')
+        comment: Year of observation (e.g., 2022)
       - name: value
         type: double
         nullable: true
@@ -2863,7 +2863,7 @@ partitionedTables:
         nullable: true
         comment: Unit of measurement
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Year (unpivoted from column headers)
       - name: data_value
@@ -2981,7 +2981,7 @@ partitionedTables:
         nullable: true
         comment: Unit of measurement
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Year (unpivoted from column headers)
       - name: data_value
@@ -3323,7 +3323,7 @@ partitionedTables:
         nullable: true
         comment: Unit of measurement
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Year (unpivoted from column headers)
       - name: data_value
@@ -3944,10 +3944,10 @@ partitionedTables:
         expression: "NULL"
         comment: Percent change from previous period (not available in raw NIPA data)
       - name: seasonally_adjusted
-        type: string
+        type: boolean
         nullable: true
-        expression: "CASE WHEN NoteRef IS NOT NULL AND NoteRef LIKE '%SA%' THEN 'Yes' ELSE 'No' END"
-        comment: Whether the data is seasonally adjusted ('Yes' or 'No')
+        expression: "CASE WHEN NoteRef IS NOT NULL AND NoteRef LIKE '%SA%' THEN TRUE ELSE FALSE END"
+        comment: Whether the data is seasonally adjusted
 
     # HTTP Source configuration for EtlPipeline
     source:
