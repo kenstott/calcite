@@ -96,6 +96,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
     implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
+    implementation("org.apache.iceberg:iceberg-core:1.4.0")
+    implementation("org.apache.hadoop:hadoop-aws:3.3.6")
     testImplementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
     testImplementation("org.apache.hadoop:hadoop-aws:3.3.6")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
@@ -105,6 +107,15 @@ dependencies {
     // Runtime logging for ETL runner (included in shadow JAR)
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
+}
+
+tasks.register<JavaExec>("repairFec") {
+    group = "govdata"
+    description = "Fix FEC table column types in-place on R2 Iceberg (year→INT, dates→DATE)"
+    mainClass.set("org.apache.calcite.adapter.govdata.FecDataRepair")
+    classpath = sourceSets["main"].runtimeClasspath
+    val tables = project.findProperty("tables") as String?
+    if (tables != null) args = tables.split(",")
 }
 
 tasks.register("cleanTestLogs") {
