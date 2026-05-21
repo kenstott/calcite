@@ -137,17 +137,32 @@ public class FecDataRepair {
     boolean yearPartitioned = existing.spec().fields().stream()
         .anyMatch(pf -> oldSchema.findField(pf.sourceId()).name().equals("year"));
 
-    // 2. Write corrected Parquet to temp S3 via DuckDB CLI
-    System.out.println("  Transforming → temp...");
-    String sql = buildSql(s3Src, tempDir, oldSchema, dateCols,
-                           yearPartitioned, accessKey, secretKey, endpoint);
-    execDuckDb(sql);
+    // 2. Write corrected Parquet to temp S3 via DuckDB CLI.
+    // Resume from existing temp only if all files are valid Parquet (magic number check).
+    List<S3ObjectSummary> existingTemp = listObjects(s3, BUCKET, tempKey)
+        .stream().filter(o -> o.getKey().endsWith(".parquet"))
+        .collect(Collectors.<S3ObjectSummary>toList());
+    boolean validTemp = !existingTemp.isEmpty() && tempFilesValid(existingTemp, hadoopConf);
+    if (validTemp) {
+      System.out.println("  Temp already has " + existingTemp.size()
+          + " valid files — skipping transform (resuming from prior run)");
+    } else {
+      if (!existingTemp.isEmpty()) {
+        System.out.println("  Temp has " + existingTemp.size()
+            + " corrupt/incomplete files — clearing and re-transforming");
+        deletePrefix(s3, BUCKET, TEMP_PREFIX + table + "/");
+      }
+      System.out.println("  Transforming → temp...");
+      String sql = buildSql(s3Src, tempDir, oldSchema, dateCols,
+                             yearPartitioned, accessKey, secretKey, endpoint);
+      execDuckDb(sql);
+    }
 
     // 3. List temp Parquet files
     List<S3ObjectSummary> tempFiles = listObjects(s3, BUCKET, tempKey)
         .stream().filter(o -> o.getKey().endsWith(".parquet"))
         .collect(Collectors.<S3ObjectSummary>toList());
-    System.out.println("  " + tempFiles.size() + " Parquet files written");
+    System.out.println("  " + tempFiles.size() + " Parquet files in temp");
 
     // 4. Build corrected schema + partition spec
     Schema newSchema = buildSchema(oldSchema, dateCols);
@@ -200,14 +215,21 @@ public class FecDataRepair {
     List<String> excludes = new ArrayList<String>();
 
     // year → INTEGER
-    if (schema.findField("year") != null) {
+    // year → INTEGER (skip if source already integer — table was previously repaired)
+    Types.NestedField yearField = schema.findField("year");
+    if (yearField != null && !(yearField.type() instanceof Types.IntegerType)
+        && !(yearField.type() instanceof Types.LongType)) {
       selects.add("CAST(year AS INTEGER) AS year");
       excludes.add("year");
     }
 
-    // date columns → DATE
+    // date columns → DATE (skip if source already DATE — table was previously repaired)
     for (Map.Entry<String, DateParseFormat> e : dateCols.entrySet()) {
-      String col  = e.getKey();
+      String col = e.getKey();
+      Types.NestedField f = schema.findField(col);
+      if (f != null && f.type() instanceof Types.DateType) {
+        continue; // already DATE, passes through via * EXCLUDE
+      }
       String expr = e.getValue().toExpression(col);
       selects.add(expr + " AS " + col);
       excludes.add(col);
@@ -227,10 +249,13 @@ public class FecDataRepair {
     sb.append("SET s3_secret_access_key='").append(sk).append("';");
     sb.append("SET s3_endpoint='").append(host).append("';");
     sb.append("SET s3_url_style='path';");
+    sb.append("SET http_timeout=300000;");
+    sb.append("SET s3_uploader_max_parts_per_file=100;");
+    sb.append("SET s3_uploader_max_filesize='500MB';");
     sb.append("COPY (SELECT ").append(join(selects));
     sb.append(" FROM iceberg_scan('").append(src).append("'))");
     sb.append(" TO '").append(dest).append("'");
-    sb.append(" (FORMAT PARQUET");
+    sb.append(" (FORMAT PARQUET, OVERWRITE TRUE");
     if (partByYear) {
       sb.append(", PARTITION_BY (year)");
     }
@@ -273,6 +298,18 @@ public class FecDataRepair {
     return b.build();
   }
 
+  private static boolean tempFilesValid(List<S3ObjectSummary> files, Configuration conf) {
+    for (S3ObjectSummary obj : files) {
+      try {
+        readRowCount(conf, new Path("s3a://" + BUCKET + "/" + obj.getKey()));
+      } catch (Exception e) {
+        System.out.println("    Invalid temp file: " + obj.getKey() + " — " + e.getMessage());
+        return false;
+      }
+    }
+    return true;
+  }
+
   @SuppressWarnings("deprecation")
   private static long readRowCount(Configuration conf, Path path) throws Exception {
     ParquetMetadata footer = ParquetFileReader.readFooter(
@@ -308,11 +345,16 @@ public class FecDataRepair {
   }
 
   private static AmazonS3 buildS3Client(String ak, String sk, String endpoint) {
+    com.amazonaws.ClientConfiguration clientConfig = new com.amazonaws.ClientConfiguration()
+        .withSocketTimeout(300_000)       // 5 min — server-side copy on large files
+        .withConnectionTimeout(30_000)
+        .withMaxErrorRetry(3);
     return AmazonS3ClientBuilder.standard()
         .withEndpointConfiguration(
             new AwsClientBuilder.EndpointConfiguration(endpoint, "auto"))
         .withCredentials(
             new AWSStaticCredentialsProvider(new BasicAWSCredentials(ak, sk)))
+        .withClientConfiguration(clientConfig)
         .withPathStyleAccessEnabled(true)
         .build();
   }
