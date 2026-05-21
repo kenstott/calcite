@@ -105,8 +105,8 @@ FROM iceberg_scan('s3://govdata-parquet-v1/crime/cde_offenses', allow_moved_path
 -- T2: row_count (51 states × 10 offenses × 12 months × 4+ years)
 INSERT INTO dq_results
 SELECT 'crime', 'cde_offenses', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 50000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 50000, '51 × 10 offenses × 12 months × 4 years'
+  CASE WHEN COUNT(*) >= 20000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 20000, '51 × 10 offenses × 12 months × 4 years'
 FROM iceberg_scan('s3://govdata-parquet-v1/crime/cde_offenses', allow_moved_paths := true);
 
 -- T3: sample

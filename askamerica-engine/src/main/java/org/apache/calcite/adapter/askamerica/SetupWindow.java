@@ -19,6 +19,8 @@ package org.apache.calcite.adapter.askamerica;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.Collections;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -36,6 +38,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -64,6 +67,7 @@ public class SetupWindow {
 
     private JFrame frame;
     private JPasswordField apiKeyField;
+    private JCheckBox telemetryCheckbox;
     private JLabel statusLabel;
     private JButton configureBtn;
 
@@ -161,8 +165,19 @@ public class SetupWindow {
             BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         apiKeyField.setEchoChar((char) 0); // show text
         apiKeyField.setPreferredSize(new Dimension(400, 36));
-        c.gridy = 1; c.insets = new Insets(0, 0, 20, 0);
+        c.gridy = 1; c.insets = new Insets(0, 0, 16, 0);
         p.add(apiKeyField, c);
+
+        // Telemetry opt-in checkbox
+        telemetryCheckbox = new JCheckBox(
+            "Share anonymous usage telemetry to improve AskAmerica");
+        telemetryCheckbox.setSelected(loadTelemetryOptIn());
+        telemetryCheckbox.setBackground(BG);
+        telemetryCheckbox.setForeground(DIM);
+        telemetryCheckbox.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        telemetryCheckbox.setFocusPainted(false);
+        c.gridy = 2; c.insets = new Insets(0, 0, 16, 0);
+        p.add(telemetryCheckbox, c);
 
         // Configure button — use BasicButtonUI so setBackground(AMBER) is respected
         // on macOS Aqua L&F, which otherwise paints buttons natively and ignores fill.
@@ -177,7 +192,7 @@ public class SetupWindow {
         configureBtn.setPreferredSize(new Dimension(400, 40));
         configureBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         configureBtn.addActionListener(e -> onConfigure());
-        c.gridy = 2; c.insets = new Insets(0, 0, 12, 0);
+        c.gridy = 3; c.insets = new Insets(0, 0, 12, 0);
         p.add(configureBtn, c);
 
         // Status label
@@ -185,7 +200,7 @@ public class SetupWindow {
         statusLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         statusLabel.setForeground(DIM);
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        c.gridy = 3; c.insets = new Insets(0, 0, 0, 0);
+        c.gridy = 4; c.insets = new Insets(0, 0, 0, 0);
         p.add(statusLabel, c);
 
         // Config preview (collapsible — shown after success)
@@ -234,6 +249,7 @@ public class SetupWindow {
         try {
             Path configPath = claudeConfigPath();
             writeClaudeConfig(configPath, apiKey);
+            saveTelemetryOptIn(telemetryCheckbox.isSelected());
             setStatus("Done! Restart Claude Desktop to activate.", true);
             configureBtn.setText("Configure again");
         } catch (Exception ex) {
@@ -241,6 +257,31 @@ public class SetupWindow {
         } finally {
             configureBtn.setEnabled(true);
         }
+    }
+
+    // ── Telemetry helpers ─────────────────────────────────────────────────────
+
+    private static boolean loadTelemetryOptIn() {
+        try {
+            java.io.File f = new java.io.File(
+                System.getProperty("user.home"), ".askamerica/telemetry.json");
+            if (!f.exists()) {
+                return true;
+            }
+            return MAPPER.readTree(f).path("optIn").asBoolean(true);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private static void saveTelemetryOptIn(boolean optIn) throws IOException {
+        java.io.File dir = new java.io.File(
+            System.getProperty("user.home"), ".askamerica");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        java.io.File f = new java.io.File(dir, "telemetry.json");
+        MAPPER.writeValue(f, Collections.singletonMap("optIn", optIn));
     }
 
     // ── Config writer ─────────────────────────────────────────────────────────

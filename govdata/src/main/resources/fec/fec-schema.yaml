@@ -214,10 +214,11 @@ column_templates:
 
   transaction_date_column: &transaction_date_column
     name: transaction_date
-    type: string
+    type: date
     nullable: true
-    comment: Transaction date (MMDDYYYY format in source)
+    comment: Transaction date
     source: TRANSACTION_DT
+    expression: "CASE WHEN TRANSACTION_DT IS NULL OR TRIM(TRANSACTION_DT) = '' THEN NULL WHEN TRANSACTION_DT LIKE '%/%/%' THEN STRPTIME(TRANSACTION_DT, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(TRANSACTION_DT, 8, '0'), '%m%d%Y')::DATE END"
 
   amount_column: &amount_column
     name: amount
@@ -1329,10 +1330,11 @@ partitionedTables:
         comment: Payee name
         source: pay
       - name: transaction_date
-        type: string
+        type: date
         nullable: true
         comment: Expenditure date
         source: exp_date
+        expression: "CASE WHEN exp_date IS NULL OR TRIM(exp_date) = '' THEN NULL WHEN exp_date LIKE '%/%/%' THEN STRPTIME(exp_date, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(exp_date, 8, '0'), '%m%d%Y')::DATE END"
       - name: amount
         type: double
         nullable: true
@@ -1647,10 +1649,11 @@ partitionedTables:
         comment: Communication class
         source: COMMUNICATION_CLASS
       - name: transaction_date
-        type: string
+        type: date
         nullable: true
         comment: Transaction date
         source: TRANSACTION_DT
+        expression: "CASE WHEN TRANSACTION_DT IS NULL OR TRIM(TRANSACTION_DT) = '' THEN NULL WHEN TRANSACTION_DT LIKE '%/%/%' THEN STRPTIME(TRANSACTION_DT, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(TRANSACTION_DT, 8, '0'), '%m%d%Y')::DATE END"
       - name: amount
         type: double
         nullable: true
@@ -2286,6 +2289,25 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: active_candidates
+    comment: >
+      Active federal candidates from the most recent election cycle.
+      Filters fec.candidates to rows where candidate_status = 'C' (certified active).
+      Single-schema view using only fec tables.
+    sql: >
+      SELECT
+        candidate_id,
+        candidate_name,
+        party,
+        office,
+        state,
+        district,
+        incumbent_challenger,
+        election_year,
+        year
+      FROM candidates
+      WHERE candidate_status = 'C'
 
   - name: candidate_district_profile
     comment: >

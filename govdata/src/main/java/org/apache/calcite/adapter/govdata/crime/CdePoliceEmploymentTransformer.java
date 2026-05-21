@@ -59,47 +59,55 @@ public class CdePoliceEmploymentTransformer implements ResponseTransformer {
       ArrayNode result = MAPPER.createArrayNode();
 
       if (root.isArray()) {
-        // Direct array of records
         for (JsonNode item : root) {
-          ObjectNode row = buildRow(item, stateAbbr);
-          result.add(row);
+          result.add(buildRow(item, stateAbbr));
         }
       } else if (root.isObject()) {
-        // Check for "results" wrapper
-        JsonNode results = root.get("results");
-        if (results != null && results.isArray()) {
-          for (JsonNode item : results) {
-            ObjectNode row = buildRow(item, stateAbbr);
-            result.add(row);
-          }
-        } else {
-          // Interpret as year-keyed data
-          Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
-          while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
-            String key = entry.getKey();
-            JsonNode value = entry.getValue();
-
-            if ("pagination".equals(key) || "message".equals(key)) {
-              continue;
+        // Section-based response: rates / actuals / populations / tooltips / cde_properties
+        if (root.has("rates") || root.has("actuals")) {
+          ObjectNode row = MAPPER.createObjectNode();
+          row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+          if (yearDim != null) {
+            try {
+              row.put("year", Integer.parseInt(yearDim));
+            } catch (NumberFormatException e) {
+              // year stays absent; injected by partition
             }
-
-            if (value.isObject()) {
-              ObjectNode row = MAPPER.createObjectNode();
-              row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
-
-              // Try to parse key as year
-              try {
-                int year = Integer.parseInt(key);
-                row.put("year", year);
-              } catch (NumberFormatException e) {
-                if (yearDim != null) {
-                  row.put("year", Integer.parseInt(yearDim));
-                }
+          }
+          extractSectionedFields(row, root, yearDim);
+          result.add(row);
+        } else {
+          JsonNode results = root.get("results");
+          if (results != null && results.isArray()) {
+            for (JsonNode item : results) {
+              result.add(buildRow(item, stateAbbr));
+            }
+          } else {
+            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+            while (fields.hasNext()) {
+              Map.Entry<String, JsonNode> entry = fields.next();
+              String key = entry.getKey();
+              JsonNode value = entry.getValue();
+              if ("pagination".equals(key) || "message".equals(key)) {
+                continue;
               }
-
-              extractEmploymentFields(row, value);
-              result.add(row);
+              if (value.isObject()) {
+                ObjectNode row = MAPPER.createObjectNode();
+                row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+                try {
+                  row.put("year", Integer.parseInt(key));
+                } catch (NumberFormatException e) {
+                  if (yearDim != null) {
+                    try {
+                      row.put("year", Integer.parseInt(yearDim));
+                    } catch (NumberFormatException e2) {
+                      // omit
+                    }
+                  }
+                }
+                extractFlatFields(row, value);
+                result.add(row);
+              }
             }
           }
         }
@@ -128,11 +136,49 @@ public class CdePoliceEmploymentTransformer implements ResponseTransformer {
       row.put("year", yearNode.asInt());
     }
 
-    extractEmploymentFields(row, item);
+    extractFlatFields(row, item);
     return row;
   }
 
-  private void extractEmploymentFields(ObjectNode row, JsonNode source) {
+  /** Handles section-based response: rates/actuals/populations keyed by label → year → value. */
+  private void extractSectionedFields(ObjectNode row, JsonNode root, String year) {
+    JsonNode rates = root.get("rates");
+    if (rates != null && rates.isObject() && year != null) {
+      JsonNode rateEntry = rates.get("Law Enforcement Employees per 1,000 People");
+      if (rateEntry != null && rateEntry.isObject() && rateEntry.has(year)) {
+        row.put("officers_per_1000", rateEntry.get(year).doubleValue());
+      } else {
+        row.putNull("officers_per_1000");
+      }
+    } else {
+      row.putNull("officers_per_1000");
+    }
+
+    JsonNode actuals = root.get("actuals");
+    extractLongFromSection(row, "male_officers", actuals, "Male Officers", year);
+    extractLongFromSection(row, "female_officers", actuals, "Female Officers", year);
+    extractLongFromSection(row, "male_civilians", actuals, "Male Civilians", year);
+    extractLongFromSection(row, "female_civilians", actuals, "Female Civilians", year);
+
+    JsonNode populations = root.get("populations");
+    extractLongFromSection(row, "participated_population", populations,
+        "Participated Population", year);
+  }
+
+  private static void extractLongFromSection(ObjectNode row, String targetKey,
+      JsonNode section, String label, String year) {
+    if (section != null && section.isObject() && year != null) {
+      JsonNode labelNode = section.get(label);
+      if (labelNode != null && labelNode.isObject() && labelNode.has(year)) {
+        row.put(targetKey, labelNode.get(year).longValue());
+        return;
+      }
+    }
+    row.putNull(targetKey);
+  }
+
+  /** Handles flat key-value source (original flat API format). */
+  private void extractFlatFields(ObjectNode row, JsonNode source) {
     putDoubleOrNull(row, "officers_per_1000", source,
         "pe_ct_per_1000", "officers_per_1000", "rate");
     putLongOrNull(row, "male_officers", source,

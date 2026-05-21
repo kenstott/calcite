@@ -3989,7 +3989,57 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         // Create the partitioned table - use refreshable version if interval configured
         Table table;
-        if (this.refreshInterval != null) {
+        if (isIcebergFormat) {
+          // Register as IcebergTable so getRowType() reads schema from the Iceberg catalog.
+          // PartitionedParquetTable with empty filePaths would return 0 columns since file
+          // enumeration is skipped for Iceberg tables.
+          @SuppressWarnings("unchecked")
+          Map<String, Object> materializeConf = (Map<String, Object>) partTableConfig.get("materialize");
+          @SuppressWarnings("unchecked")
+          Map<String, Object> icebergConf = materializeConf != null
+              ? (Map<String, Object>) materializeConf.get("iceberg") : null;
+
+          String warehousePath = icebergConf != null ? (String) icebergConf.get("warehousePath") : null;
+          if (warehousePath == null && baseDirectory != null) {
+            String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
+            warehousePath = baseDirectory + "/" + schemaSegment;
+          }
+          if (warehousePath == null) {
+            throw new RuntimeException("Cannot create IcebergTable for '" + config.getName()
+                + "': no warehousePath and no baseDirectory");
+          }
+
+          String icebergTableName = icebergConf != null ? (String) icebergConf.get("tableName") : null;
+          if (icebergTableName == null) {
+            icebergTableName = config.getName();
+          }
+
+          String tablePath = warehousePath.endsWith("/")
+              ? warehousePath + icebergTableName
+              : warehousePath + "/" + icebergTableName;
+
+          Map<String, Object> tableConfig = new HashMap<>();
+          if (storageProvider != null) {
+            Map<String, String> s3Creds = storageProvider.getS3Config();
+            if (s3Creds != null && !s3Creds.isEmpty()) {
+              Map<String, String> hadoopConfig = new HashMap<>();
+              if (s3Creds.containsKey("accessKeyId")) {
+                hadoopConfig.put("fs.s3a.access.key", s3Creds.get("accessKeyId"));
+              }
+              if (s3Creds.containsKey("secretAccessKey")) {
+                hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
+              }
+              if (s3Creds.containsKey("endpoint")) {
+                hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
+                hadoopConfig.put("fs.s3a.path.style.access", "true");
+              }
+              tableConfig.put("hadoopConfig", hadoopConfig);
+            }
+          }
+
+          Source icebergSource = Sources.of(tablePath);
+          table = new IcebergTable(icebergSource, tableConfig);
+        } else if (this.refreshInterval != null) {
           // Get constraint configuration from FileSchema's constraint metadata
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());
           if (constraintConfig != null) {

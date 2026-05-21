@@ -79,7 +79,7 @@ public class CdeAgencyTransformer implements ResponseTransformer {
           row.put("county_name", countyName);
 
           // NIBRS fields
-          JsonNode nibrs = agency.get("nibrs");
+          JsonNode nibrs = agency.get("is_nibrs");
           if (nibrs != null && nibrs.isBoolean()) {
             row.put("is_nibrs", nibrs.booleanValue());
           } else {

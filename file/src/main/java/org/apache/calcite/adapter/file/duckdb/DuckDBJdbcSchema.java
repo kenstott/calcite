@@ -209,6 +209,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   @Override public Set<String> getTableNames() {
+    // Flush deferred views before querying DuckDB metadata so SQL views appear in the result
+    if (catalogPath != null && DuckDBPendingViews.hasPending(catalogPath)) {
+      DuckDBPendingViews.flush(catalogPath, persistentConnection);
+    }
     Set<String> tableNames = new java.util.LinkedHashSet<>(super.getTableNames());
     // Always include tables defined in FileSchema YAML regardless of DuckDB view state.
     // This ensures JDBC metadata (getTables/getColumns) works even when iceberg views
@@ -217,11 +221,9 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       tableNames.addAll(fileSchema.tables()
           .getNames(org.apache.calcite.schema.lookup.LikePattern.any()));
     }
-    // Exclude SQL views (YAML views: section) — queryable but hidden from JDBC metadata.
-    // Covers views in DuckDB catalog when their cross-schema deps are available.
-    if (catalogPath != null) {
-      tableNames.removeIf(n -> DuckDBPendingViews.isSqlView(catalogPath, schemaName, n));
-    }
+    // SQL views from YAML views: section are included if DuckDB registered them.
+    // Cross-schema views that failed to register won't be in super.getTableNames() — no exclusion needed.
+    // Views that ARE in DuckDB appear with TABLE_TYPE=VIEW so getTables(type=TABLE) correctly skips them.
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;
   }
@@ -338,6 +340,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
 
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+      // For Iceberg-backed tables, use IcebergTable's Calcite SQL types (not DuckDB native types)
+      if (commentableTable instanceof IcebergTable) {
+        return ((IcebergTable) commentableTable).getRowType(typeFactory);
+      }
       return jdbcTable.getRowType(typeFactory);
     }
 
@@ -353,6 +359,11 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
 
     @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
+      // Iceberg-backed tables are always TABLE type, regardless of how DuckDB registered them
+      // (DuckDB uses CREATE VIEW for iceberg_scan wrappers, but they are semantically tables)
+      if (commentableTable instanceof IcebergTable) {
+        return org.apache.calcite.schema.Schema.TableType.TABLE;
+      }
       return jdbcTable.getJdbcTableType();
     }
 

@@ -23,6 +23,26 @@ dependencies {
     implementation(project(":driver-base"))
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
+
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
+}
+
+tasks.test {
+    useJUnitPlatform {
+        val tags = project.findProperty("includeTags") as String?
+        if (tags != null) {
+            includeTags(tags)
+        }
+    }
+    // Tests spawn the shadow JAR as a subprocess — ensure it's built first
+    dependsOn(tasks.shadowJar)
+    // Working directory must be the module root so build/libs is resolvable
+    workingDir = projectDir
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+    }
 }
 
 // ─── Shadow JAR ──────────────────────────────────────────────────────────────

@@ -162,11 +162,18 @@ public abstract class AbstractGovDataDownloader {
     private final Connection duckdbConn;
     private final String cacheTableName;
     private final List<String> partitionKeys;
+    private final Map<String, String> partitionKeyTypes;
 
     public PrefetchHelper(Connection duckdbConn, String cacheTableName, List<String> partitionKeys) {
+      this(duckdbConn, cacheTableName, partitionKeys, Collections.emptyMap());
+    }
+
+    public PrefetchHelper(Connection duckdbConn, String cacheTableName, List<String> partitionKeys,
+        Map<String, String> partitionKeyTypes) {
       this.duckdbConn = duckdbConn;
       this.cacheTableName = cacheTableName;
       this.partitionKeys = partitionKeys;
+      this.partitionKeyTypes = partitionKeyTypes;
     }
 
     /**
@@ -178,7 +185,7 @@ public abstract class AbstractGovDataDownloader {
       try (Statement stmt = duckdbConn.createStatement()) {
         stmt.execute("CREATE TEMP TABLE IF NOT EXISTS json_raw (idx INTEGER, data VARCHAR)");
         stmt.execute("CREATE TEMP TABLE IF NOT EXISTS partition_lookup ("
-            + String.join(" VARCHAR, ", partitionKeys) + " VARCHAR, json_idx INTEGER)");
+            + buildPartitionLookupDdl(partitionKeys, partitionKeyTypes) + ", json_idx INTEGER)");
       }
 
       // Insert JSON strings
@@ -221,7 +228,7 @@ public abstract class AbstractGovDataDownloader {
       try (Statement stmt = duckdbConn.createStatement()) {
         stmt.execute("CREATE TEMP TABLE IF NOT EXISTS csv_raw (idx INTEGER, data VARCHAR)");
         stmt.execute("CREATE TEMP TABLE IF NOT EXISTS partition_lookup_csv ("
-            + String.join(" VARCHAR, ", partitionKeys) + " VARCHAR, csv_idx INTEGER)");
+            + buildPartitionLookupDdl(partitionKeys, partitionKeyTypes) + ", csv_idx INTEGER)");
       }
 
       // Insert CSV strings
@@ -401,6 +408,18 @@ public abstract class AbstractGovDataDownloader {
         }
         ps.executeBatch();
       }
+    }
+
+    /** Builds the DDL fragment for partition key columns, using declared types. */
+    private static String buildPartitionLookupDdl(List<String> keys, Map<String, String> types) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < keys.size(); i++) {
+        if (i > 0) {
+          sb.append(", ");
+        }
+        sb.append(keys.get(i)).append(" ").append(types.getOrDefault(keys.get(i), "VARCHAR"));
+      }
+      return sb.toString();
     }
   }
 
@@ -4622,12 +4641,14 @@ public abstract class AbstractGovDataDownloader {
         Map<String, Object> metadata = loadTableMetadata(tableName);
         String pattern = (String) metadata.get("pattern");
         List<String> partitionKeys = extractPartitionKeysFromPattern(pattern);
+        Map<String, String> partitionKeyTypes = buildPartitionKeyTypes(metadata, partitionKeys);
 
         // Auto-create prefetch cache table
         createPrefetchCacheTable(localPrefetchDb, tableName, partitionKeys, metadata);
 
         // Create helper
-        localPrefetchHelper = new PrefetchHelper(localPrefetchDb, tableName + "_prefetch", partitionKeys);
+        localPrefetchHelper = new PrefetchHelper(localPrefetchDb, tableName + "_prefetch",
+            partitionKeys, partitionKeyTypes);
 
         LOGGER.info("Prefetch enabled for {} with {} partition keys", tableName, partitionKeys.size());
 
@@ -5039,12 +5060,15 @@ public abstract class AbstractGovDataDownloader {
     // Load column metadata
     List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
 
+    // Build partition key type map from columnDefinitions (defaults to VARCHAR)
+    Map<String, String> partitionKeyTypes = buildPartitionKeyTypes(metadata, partitionKeys);
+
     StringBuilder sql = new StringBuilder("CREATE TABLE ");
     sql.append(tableName).append("_prefetch (");
 
-    // Add partition key columns
+    // Add partition key columns with declared types
     for (String key : partitionKeys) {
-      sql.append(key).append(" VARCHAR, ");
+      sql.append(key).append(" ").append(partitionKeyTypes.getOrDefault(key, "VARCHAR")).append(", ");
     }
 
     // Add schema data columns (excluding partition keys)
@@ -5064,6 +5088,34 @@ public abstract class AbstractGovDataDownloader {
       stmt.execute(sql.toString());
       LOGGER.debug("Created prefetch cache table: {}", sql);
     }
+  }
+
+  /** Extracts partition column name→DuckDB type from metadata.partitions.columnDefinitions. */
+  @SuppressWarnings("unchecked")
+  protected Map<String, String> buildPartitionKeyTypes(Map<String, Object> metadata,
+      List<String> partitionKeys) {
+    Map<String, String> types = new java.util.LinkedHashMap<>();
+    try {
+      Object partitionObj = metadata.get("partitions");
+      if (partitionObj instanceof Map) {
+        Object colDefsObj = ((Map<String, Object>) partitionObj).get("columnDefinitions");
+        if (colDefsObj instanceof java.util.List) {
+          for (Object colDef : (java.util.List<?>) colDefsObj) {
+            if (colDef instanceof Map) {
+              Map<String, Object> col = (Map<String, Object>) colDef;
+              String name = (String) col.get("name");
+              String type = (String) col.get("type");
+              if (name != null && type != null) {
+                types.put(name, javaToDuckDbType(type));
+              }
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not read partition columnDefinitions: {}", e.getMessage());
+    }
+    return types;
   }
 
   // ===== SQL RESOURCE LOADING =====

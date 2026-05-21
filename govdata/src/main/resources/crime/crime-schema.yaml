@@ -570,7 +570,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeUseOfForceTransformer"
 
     materialize:
       format: iceberg

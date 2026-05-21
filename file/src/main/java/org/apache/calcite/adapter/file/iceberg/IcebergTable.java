@@ -30,6 +30,8 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Source;
 
+import org.apache.hadoop.conf.Configuration;
+
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
@@ -94,9 +96,33 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
 
     // Initialize the Iceberg table
     String tablePath = source.path();
-    // Direct path access using HadoopTables
-    HadoopTables tables = new HadoopTables();
-    this.icebergTable = tables.load(tablePath);
+    // Translate s3:// to s3a:// for Hadoop S3A filesystem compatibility
+    String hadoopPath = tablePath.startsWith("s3://")
+        ? "s3a://" + tablePath.substring(5)
+        : tablePath;
+
+    Configuration hadoopConf = new Configuration();
+    // When loaded via URLClassLoader (McpServerLauncher), the thread context classloader is
+    // the system classloader and cannot see classes inside the engine JAR. Hadoop's
+    // Configuration.getClassByName() uses getClassLoader(), which defaults to the context
+    // classloader. Explicitly set it to IcebergTable's own loader so S3AFileSystem
+    // (which is in the same JAR) is always resolvable regardless of launch mode.
+    hadoopConf.setClassLoader(IcebergTable.class.getClassLoader());
+    // Register S3A filesystem explicitly — core-default.xml registration is unreliable in fat JARs
+    hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+    // Use SimpleAWSCredentialsProvider to avoid EC2 instance metadata lookups on non-AWS hosts
+    hadoopConf.set("fs.s3a.aws.credentials.provider",
+        "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider");
+    // Apply S3 credentials from config if present
+    @SuppressWarnings("unchecked")
+    Map<String, String> hadoopConfig = (Map<String, String>) config.get("hadoopConfig");
+    if (hadoopConfig != null) {
+      for (Map.Entry<String, String> entry : hadoopConfig.entrySet()) {
+        hadoopConf.set(entry.getKey(), entry.getValue());
+      }
+    }
+    HadoopTables tables = new HadoopTables(hadoopConf);
+    this.icebergTable = tables.load(hadoopPath);
   }
 
   /**
