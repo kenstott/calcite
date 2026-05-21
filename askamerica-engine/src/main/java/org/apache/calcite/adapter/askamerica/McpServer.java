@@ -30,9 +30,9 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -64,9 +64,14 @@ public class McpServer {
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference";
 
-    private static volatile Connection conn;
-    private static volatile Exception connError;
-    private static final CountDownLatch connReady = new CountDownLatch(1);
+    // Lazy per-schema connections — initialized on first use, not all upfront.
+    private static final ConcurrentHashMap<String, Connection> schemaConns =
+        new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, CountDownLatch> schemaLatches =
+        new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Exception> schemaErrors =
+        new ConcurrentHashMap<>();
+
     private static PrintStream log;
 
     public static void main(String[] args) throws Exception {
@@ -94,23 +99,6 @@ public class McpServer {
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting...");
-
-        // Initialize the DB connection in the background so the MCP handshake
-        // (initialize / tools/list) can complete immediately without timing out.
-        Thread connThread = new Thread(() -> {
-            try {
-                initConnection();
-                log.println("[askamerica-mcp] Connected.");
-            } catch (Exception e) {
-                connError = e;
-                log.println("[askamerica-mcp] Connection failed: " + e.getMessage());
-            } finally {
-                connReady.countDown();
-            }
-        }, "conn-init");
-        connThread.setDaemon(true);
-        connThread.start();
-
         log.println("[askamerica-mcp] Listening for MCP requests.");
 
         BufferedReader in =
@@ -248,19 +236,58 @@ public class McpServer {
         return result(id, body);
     }
 
-    private static void awaitConnection() throws Exception {
-        if (!connReady.await(600, TimeUnit.SECONDS)) {
+    /**
+     * Get (or start initializing) a per-schema connection.
+     * Returns the connection once ready, or throws if init failed/timed out.
+     */
+    private static Connection getSchemaConnection(final String schemaName) throws Exception {
+        Connection existing = schemaConns.get(schemaName);
+        if (existing != null) {
+            return existing;
+        }
+
+        // Atomically start initialization the first time this schema is requested.
+        schemaLatches.computeIfAbsent(schemaName, k -> {
+            final CountDownLatch latch = new CountDownLatch(1);
+            Thread t = new Thread(() -> {
+                try {
+                    log.println("[askamerica-mcp] Initializing schema: " + k);
+                    GovDataDriver driver = new GovDataDriver();
+                    Connection c = driver.connect("jdbc:govdata:source=" + k, new Properties());
+                    if (c == null) {
+                        throw new IllegalStateException(
+                            "GovDataDriver returned null for schema: " + k);
+                    }
+                    schemaConns.put(k, c);
+                    log.println("[askamerica-mcp] Schema ready: " + k);
+                } catch (Exception e) {
+                    schemaErrors.put(k, e);
+                    log.println("[askamerica-mcp] Schema init failed: " + k
+                        + " — " + e.getMessage());
+                } finally {
+                    latch.countDown();
+                }
+            }, "conn-init-" + k);
+            t.setDaemon(true);
+            t.start();
+            return latch;
+        });
+
+        CountDownLatch latch = schemaLatches.get(schemaName);
+        if (!latch.await(600, TimeUnit.SECONDS)) {
             throw new RuntimeException(
-                "Database initialization is taking longer than expected "
-                + "(first launch can take several minutes). Please retry.");
+                "Schema '" + schemaName + "' is still initializing "
+                + "(first use can take several minutes). Please retry.");
         }
-        if (connError != null) {
-            throw new RuntimeException("Connection failed: " + connError.getMessage(), connError);
+        Exception err = schemaErrors.get(schemaName);
+        if (err != null) {
+            throw new RuntimeException(
+                "Schema '" + schemaName + "' failed to initialize: " + err.getMessage(), err);
         }
+        return schemaConns.get(schemaName);
     }
 
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
-        awaitConnection();
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
 
@@ -329,20 +356,23 @@ public class McpServer {
 
     // ── Tool implementations ──────────────────────────────────────────────────
 
-    private static String listSchemas() throws SQLException {
-        DatabaseMetaData meta = conn.getMetaData();
-        ResultSet rs = meta.getSchemas();
-        ArrayNode arr = MAPPER.createArrayNode();
-        while (rs.next()) {
-            arr.add(rs.getString("TABLE_SCHEM"));
+    private static String listSchemas() {
+        String allowed = System.getenv("ASKAMERICA_SCHEMAS");
+        if (allowed == null || allowed.trim().isEmpty()) {
+            allowed = DEFAULT_SCHEMAS;
         }
-        rs.close();
+        ArrayNode arr = MAPPER.createArrayNode();
+        for (String s : allowed.split(",")) {
+            arr.add(s.trim());
+        }
         return arr.toString();
     }
 
-    private static String listTables(String schema) throws SQLException {
-        DatabaseMetaData meta = conn.getMetaData();
-        ResultSet rs = meta.getTables(null, schema.toUpperCase(), "%", null);
+    private static String listTables(String schema) throws Exception {
+        String lower = schema.toLowerCase();
+        Connection c = getSchemaConnection(lower);
+        DatabaseMetaData meta = c.getMetaData();
+        ResultSet rs = meta.getTables(null, lower, "%", null);
         ArrayNode arr = MAPPER.createArrayNode();
         while (rs.next()) {
             ObjectNode row = MAPPER.createObjectNode();
@@ -354,9 +384,11 @@ public class McpServer {
         return arr.toString();
     }
 
-    private static String describeTable(String schema, String table) throws SQLException {
-        DatabaseMetaData meta = conn.getMetaData();
-        ResultSet rs = meta.getColumns(null, schema.toUpperCase(), table.toUpperCase(), "%");
+    private static String describeTable(String schema, String table) throws Exception {
+        String lower = schema.toLowerCase();
+        Connection c = getSchemaConnection(lower);
+        DatabaseMetaData meta = c.getMetaData();
+        ResultSet rs = meta.getColumns(null, lower, table.toLowerCase(), "%");
         ArrayNode arr = MAPPER.createArrayNode();
         while (rs.next()) {
             ObjectNode col = MAPPER.createObjectNode();
@@ -369,14 +401,50 @@ public class McpServer {
         return arr.toString();
     }
 
-    private static String query(String sql, int limit) throws SQLException {
-        String effective = sql;
-        String lower = sql.toLowerCase();
+    // Calcite Oracle-lex treats these schema names as reserved words; quote them.
+    private static final java.util.regex.Pattern RESERVED_SCHEMA_PAT =
+        java.util.regex.Pattern.compile(
+            "(?i)\\b(ref)\\.([a-zA-Z_][a-zA-Z0-9_]*)");
+
+    private static String quoteReservedSchemas(String sql) {
+        return RESERVED_SCHEMA_PAT.matcher(sql).replaceAll("\"$1\".$2");
+    }
+
+    // Extract the first govdata schema name from a SQL query (e.g. "FROM sec.filings" → "sec").
+    private static final java.util.regex.Pattern SQL_SCHEMA_PAT =
+        java.util.regex.Pattern.compile(
+            "(?i)\\b(?:FROM|JOIN)\\s+(?:\")?([a-zA-Z_][a-zA-Z0-9_]*)(?:\")?\\.");
+    private static final java.util.Set<String> META_SCHEMAS =
+        new java.util.HashSet<>(
+            java.util.Arrays.asList(
+            "information_schema", "pg_catalog", "metadata"));
+
+    private static String extractSchema(String sql) {
+        java.util.regex.Matcher m = SQL_SCHEMA_PAT.matcher(sql);
+        while (m.find()) {
+            String s = m.group(1).toLowerCase();
+            if (!META_SCHEMAS.contains(s)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    private static String query(String sql, int limit) throws Exception {
+        String effective = quoteReservedSchemas(sql);
+        String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
-            effective = sql.replaceAll(";\\s*$", "")
+            effective = effective.replaceAll(";\\s*$", "")
                 + " FETCH FIRST " + limit + " ROWS ONLY";
         }
-        Statement stmt = conn.createStatement();
+        String schema = extractSchema(sql);
+        if (schema == null) {
+            throw new RuntimeException(
+                "Cannot determine schema from SQL. "
+                + "Reference tables as schema.table, e.g. SELECT * FROM sec.filing_metadata.");
+        }
+        Connection c = getSchemaConnection(schema);
+        Statement stmt = c.createStatement();
         try {
             ResultSet rs = stmt.executeQuery(effective);
             ResultSetMetaData meta = rs.getMetaData();
@@ -407,22 +475,9 @@ public class McpServer {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static void initConnection() throws Exception {
-        String schemas = System.getenv("ASKAMERICA_SCHEMAS");
-        if (schemas == null || schemas.trim().isEmpty()) {
-            schemas = DEFAULT_SCHEMAS;
-        }
-        GovDataDriver driver = new GovDataDriver();
-        Properties props = new Properties();
-        conn = driver.connect("jdbc:govdata:source=" + schemas, props);
-        if (conn == null) {
-            throw new IllegalStateException(
-                "GovDataDriver returned null — check credentials and schema names.");
-        }
-    }
-
     private static void suppressFrameworkLogging() {
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error");
+        System.setProperty("org.slf4j.simpleLogger.log.org.apache.calcite.adapter.govdata", "info");
         System.setProperty("log4j.rootLogger", "ERROR");
 
         // Logback ignores the above properties — configure it via reflection.
@@ -436,12 +491,18 @@ public class McpServer {
                 return;
             }
             Object errorLevel = levelClass.getField("ERROR").get(null);
+            Object infoLevel  = levelClass.getField("INFO").get(null);
 
-            // Set root logger to ERROR.
+            // Set root logger to ERROR; govdata adapter to INFO for init diagnostics.
             Object rootLogger = contextClass.getMethod("getLogger", String.class)
                 .invoke(context, "ROOT");
             rootLogger.getClass().getMethod("setLevel", levelClass)
                 .invoke(rootLogger, errorLevel);
+
+            Object govdataLogger = contextClass.getMethod("getLogger", String.class)
+                .invoke(context, "org.apache.calcite.adapter.govdata");
+            govdataLogger.getClass().getMethod("setLevel", levelClass)
+                .invoke(govdataLogger, infoLevel);
 
             // Re-point every ConsoleAppender to System.err.
             java.util.List<?> loggers = (java.util.List<?>)
