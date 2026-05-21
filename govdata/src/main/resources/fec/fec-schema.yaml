@@ -218,7 +218,7 @@ column_templates:
     nullable: true
     comment: Transaction date
     source: TRANSACTION_DT
-    expression: "CASE WHEN TRANSACTION_DT IS NULL OR TRIM(TRANSACTION_DT) = '' THEN NULL WHEN TRANSACTION_DT LIKE '%/%/%' THEN STRPTIME(TRANSACTION_DT, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(TRANSACTION_DT, 8, '0'), '%m%d%Y')::DATE END"
+    dateFormat: MMDDYYYY_OR_SLASH
 
   amount_column: &amount_column
     name: amount
@@ -1334,7 +1334,7 @@ partitionedTables:
         nullable: true
         comment: Expenditure date
         source: exp_date
-        expression: "CASE WHEN exp_date IS NULL OR TRIM(exp_date) = '' THEN NULL WHEN exp_date LIKE '%/%/%' THEN STRPTIME(exp_date, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(exp_date, 8, '0'), '%m%d%Y')::DATE END"
+        dateFormat: SLASH
       - name: amount
         type: double
         nullable: true
@@ -1500,15 +1500,17 @@ partitionedTables:
         comment: Description of the communication/disbursement
         source: DISBURSEMENT_DESCRIPTION
       - name: disbursement_date
-        type: string
+        type: date
         nullable: true
         comment: Disbursement date
         source: DISBURSEMENT_DATE
+        dateFormat: DD_MON_YY
       - name: communication_date
-        type: string
+        type: date
         nullable: true
         comment: Communication date
         source: COMMUNICATION_DATE
+        dateFormat: DD_MON_YY
       - name: amount
         type: double
         nullable: true
@@ -1653,7 +1655,7 @@ partitionedTables:
         nullable: true
         comment: Transaction date
         source: TRANSACTION_DT
-        expression: "CASE WHEN TRANSACTION_DT IS NULL OR TRIM(TRANSACTION_DT) = '' THEN NULL WHEN TRANSACTION_DT LIKE '%/%/%' THEN STRPTIME(TRANSACTION_DT, '%m/%d/%Y')::DATE ELSE STRPTIME(LPAD(TRANSACTION_DT, 8, '0'), '%m%d%Y')::DATE END"
+        dateFormat: DD_MON_YY
       - name: amount
         type: double
         nullable: true
@@ -1851,10 +1853,11 @@ partitionedTables:
         comment: Contributions from other political committees
         source: Other_Committee_Contribution
       - name: coverage_end_date
-        type: string
+        type: date
         nullable: true
         comment: Coverage end date
         source: Coverage_End_Date
+        dateFormat: SLASH
       - name: refunds_individual
         type: double
         nullable: true
@@ -2058,10 +2061,11 @@ partitionedTables:
         comment: Nonfederal share of expenditures
         source: Non_Fed_Share_Exp
       - name: coverage_end_date
-        type: string
+        type: date
         nullable: true
         comment: Coverage end date
         source: Cvg_End_Dt
+        dateFormat: YYYYMMDD
       - name: connected_org_name
         type: string
         nullable: true

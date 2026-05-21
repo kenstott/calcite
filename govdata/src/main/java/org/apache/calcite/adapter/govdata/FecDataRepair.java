@@ -70,40 +70,22 @@ public class FecDataRepair {
   private static final String FEC_PREFIX  = "fec/";
   private static final String TEMP_PREFIX = "fec-repair-temp/";
 
-  // NULL-safe date format templates; COL is replaced with the actual column name.
-  private static final String DUAL =
-      "CASE WHEN COL IS NULL OR TRIM(COL) = '' THEN NULL "
-      + "WHEN COL LIKE '%/%' THEN TRY_STRPTIME(COL, '%m/%d/%Y')::DATE "
-      + "ELSE TRY_STRPTIME(LPAD(COL, 8, '0'), '%m%d%Y')::DATE END";
-  private static final String SLASH =
-      "CASE WHEN COL IS NULL OR TRIM(COL) = '' THEN NULL "
-      + "ELSE TRY_STRPTIME(COL, '%m/%d/%Y')::DATE END";
-  private static final String MON_DD_YY =
-      "CASE WHEN COL IS NULL OR TRIM(COL) = '' THEN NULL "
-      + "ELSE TRY_STRPTIME(COL, '%d-%b-%y')::DATE END";
-  private static final String YYYYMMDD =
-      "CASE WHEN COL IS NULL OR TRIM(COL) = '' THEN NULL "
-      + "ELSE TRY_STRPTIME(COL, '%Y%m%d')::DATE END";
-  private static final String MMDDYYYY =
-      "CASE WHEN COL IS NULL OR TRIM(COL) = '' THEN NULL "
-      + "ELSE TRY_STRPTIME(LPAD(COL, 8, '0'), '%m%d%Y')::DATE END";
-
-  // Per-table: date columns → format template key.
+  // Per-table: date columns → DateParseFormat.
   // All tables also get year VARCHAR→INTEGER regardless of this map.
-  private static final Map<String, Map<String, String>> SPECS = new LinkedHashMap<>();
+  private static final Map<String, Map<String, DateParseFormat>> SPECS = new LinkedHashMap<>();
   static {
-    SPECS.put("candidates",                   Collections.<String, String>emptyMap());
-    SPECS.put("committees",                   Collections.<String, String>emptyMap());
-    SPECS.put("candidate_committee_linkages", Collections.<String, String>emptyMap());
-    SPECS.put("individual_contributions",     map("transaction_date",  DUAL));
-    SPECS.put("committee_contributions",      map("transaction_date",  MMDDYYYY));
-    SPECS.put("operating_expenditures",       map("transaction_date",  SLASH));
-    SPECS.put("independent_expenditures",     map("transaction_date",  MON_DD_YY));
-    SPECS.put("intercommittee_transactions",  map("transaction_date",  MMDDYYYY));
+    SPECS.put("candidates",                   Collections.<String, DateParseFormat>emptyMap());
+    SPECS.put("committees",                   Collections.<String, DateParseFormat>emptyMap());
+    SPECS.put("candidate_committee_linkages", Collections.<String, DateParseFormat>emptyMap());
+    SPECS.put("individual_contributions",     map("transaction_date",  DateParseFormat.MMDDYYYY_OR_SLASH));
+    SPECS.put("committee_contributions",      map("transaction_date",  DateParseFormat.MMDDYYYY));
+    SPECS.put("operating_expenditures",       map("transaction_date",  DateParseFormat.SLASH));
+    SPECS.put("independent_expenditures",     map("transaction_date",  DateParseFormat.DD_MON_YY));
+    SPECS.put("intercommittee_transactions",  map("transaction_date",  DateParseFormat.MMDDYYYY));
     SPECS.put("electioneering_communications",
-        map("disbursement_date", MON_DD_YY, "communication_date", MON_DD_YY));
-    SPECS.put("candidate_summaries",          map("coverage_end_date", SLASH));
-    SPECS.put("committee_summaries",          map("coverage_end_date", YYYYMMDD));
+        map("disbursement_date", DateParseFormat.DD_MON_YY, "communication_date", DateParseFormat.DD_MON_YY));
+    SPECS.put("candidate_summaries",          map("coverage_end_date", DateParseFormat.SLASH));
+    SPECS.put("committee_summaries",          map("coverage_end_date", DateParseFormat.YYYYMMDD));
   }
 
   public static void main(String[] args) throws Exception {
@@ -139,7 +121,7 @@ public class FecDataRepair {
 
   // ── Core repair logic ────────────────────────────────────────────────────────
 
-  private static void repair(String table, Map<String, String> dateCols,
+  private static void repair(String table, Map<String, DateParseFormat> dateCols,
       AmazonS3 s3, Configuration hadoopConf, HadoopTables hadoopTables,
       String accessKey, String secretKey, String endpoint) throws Exception {
 
@@ -211,7 +193,7 @@ public class FecDataRepair {
   // ── SQL builder ──────────────────────────────────────────────────────────────
 
   private static String buildSql(String src, String dest,
-      Schema schema, Map<String, String> dateCols, boolean partByYear,
+      Schema schema, Map<String, DateParseFormat> dateCols, boolean partByYear,
       String ak, String sk, String ep) {
 
     List<String> selects = new ArrayList<String>();
@@ -224,9 +206,9 @@ public class FecDataRepair {
     }
 
     // date columns → DATE
-    for (Map.Entry<String, String> e : dateCols.entrySet()) {
+    for (Map.Entry<String, DateParseFormat> e : dateCols.entrySet()) {
       String col  = e.getKey();
-      String expr = e.getValue().replace("COL", col);
+      String expr = e.getValue().toExpression(col);
       selects.add(expr + " AS " + col);
       excludes.add(col);
     }
@@ -258,7 +240,7 @@ public class FecDataRepair {
 
   // ── Iceberg helpers ──────────────────────────────────────────────────────────
 
-  private static Schema buildSchema(Schema old, Map<String, String> dateCols) {
+  private static Schema buildSchema(Schema old, Map<String, DateParseFormat> dateCols) {
     Set<String> dateColNames = dateCols.keySet();
     List<Types.NestedField> fields = new ArrayList<Types.NestedField>();
     for (Types.NestedField f : old.columns()) {
@@ -380,11 +362,17 @@ public class FecDataRepair {
     return sb.toString();
   }
 
-  private static Map<String, String> map(String... pairs) {
-    Map<String, String> m = new LinkedHashMap<String, String>();
-    for (int i = 0; i + 1 < pairs.length; i += 2) {
-      m.put(pairs[i], pairs[i + 1]);
-    }
+  private static Map<String, DateParseFormat> map(String k1, DateParseFormat v1) {
+    Map<String, DateParseFormat> m = new LinkedHashMap<String, DateParseFormat>();
+    m.put(k1, v1);
+    return m;
+  }
+
+  private static Map<String, DateParseFormat> map(
+      String k1, DateParseFormat v1, String k2, DateParseFormat v2) {
+    Map<String, DateParseFormat> m = new LinkedHashMap<String, DateParseFormat>();
+    m.put(k1, v1);
+    m.put(k2, v2);
     return m;
   }
 }

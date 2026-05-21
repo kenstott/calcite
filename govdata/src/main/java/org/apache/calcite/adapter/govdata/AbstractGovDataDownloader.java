@@ -2052,6 +2052,12 @@ public abstract class AbstractGovDataDownloader {
       boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
       String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
       String expression = colNode.has("expression") ? colNode.get("expression").asText() : null;
+      if (expression == null && colNode.has("dateFormat")) {
+        String fmt = colNode.get("dateFormat").asText().trim();
+        String sourceName = colNode.has("source") ? colNode.get("source").asText()
+            : colNode.has("sourceName") ? colNode.get("sourceName").asText() : colName;
+        expression = DateParseFormat.valueOf(fmt).toExpression(sourceName);
+      }
 
       if (colName != null) {
         columns.add(
