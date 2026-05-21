@@ -276,6 +276,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     try (Statement stmt = connection.createStatement()) {
       stmt.execute("INSTALL httpfs");
       stmt.execute("LOAD httpfs");
+      stmt.execute("SET memory_limit='1GB'");
 
       String accessKey = config.get("accessKeyId");
       String secretKey = config.get("secretAccessKey");
