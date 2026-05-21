@@ -7,15 +7,21 @@
  * the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.calcite.adapter.askamerica;
+
+import org.apache.calcite.adapter.govdata.GovDataDriver;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import org.apache.calcite.adapter.govdata.GovDataDriver;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -27,6 +33,8 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * AskAmerica MCP server — implements the Model Context Protocol over stdio.
@@ -56,7 +64,9 @@ public class McpServer {
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference";
 
-    private static Connection conn;
+    private static volatile Connection conn;
+    private static volatile Exception connError;
+    private static final CountDownLatch connReady = new CountDownLatch(1);
     private static PrintStream log;
 
     public static void main(String[] args) throws Exception {
@@ -84,11 +94,27 @@ public class McpServer {
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting...");
-        initConnection();
-        log.println("[askamerica-mcp] Connected. Listening for MCP requests.");
 
-        BufferedReader in = new BufferedReader(
-            new InputStreamReader(System.in, "UTF-8"));
+        // Initialize the DB connection in the background so the MCP handshake
+        // (initialize / tools/list) can complete immediately without timing out.
+        Thread connThread = new Thread(() -> {
+            try {
+                initConnection();
+                log.println("[askamerica-mcp] Connected.");
+            } catch (Exception e) {
+                connError = e;
+                log.println("[askamerica-mcp] Connection failed: " + e.getMessage());
+            } finally {
+                connReady.countDown();
+            }
+        }, "conn-init");
+        connThread.setDaemon(true);
+        connThread.start();
+
+        log.println("[askamerica-mcp] Listening for MCP requests.");
+
+        BufferedReader in =
+            new BufferedReader(new InputStreamReader(System.in, "UTF-8"));
         PrintStream out = mcpOut;
 
         String line;
@@ -171,46 +197,59 @@ public class McpServer {
     private static ObjectNode handleToolsList(JsonNode id) {
         ArrayNode tools = MAPPER.createArrayNode();
 
-        tools.add(tool("list_schemas",
+        tools.add(
+            tool("list_schemas",
             "List all available US government data schemas.",
             MAPPER.createObjectNode()
                 .put("type", "object")
-                .<ObjectNode>set("properties", MAPPER.createObjectNode())
-        ));
+                .<ObjectNode>set("properties", MAPPER.createObjectNode())));
 
         ObjectNode listTablesProps = MAPPER.createObjectNode();
-        listTablesProps.set("schema", prop("string",
+        listTablesProps.set(
+            "schema", prop("string",
             "Schema name, e.g. 'sec', 'geo', 'census'. Case-insensitive."));
-        tools.add(tool("list_tables",
+        tools.add(
+            tool("list_tables",
             "List all tables and views in a schema.",
-            schema(listTablesProps, new String[]{"schema"})
-        ));
+            schema(listTablesProps, new String[]{"schema"})));
 
         ObjectNode describeProps = MAPPER.createObjectNode();
         describeProps.set("schema", prop("string", "Schema name, e.g. 'sec'."));
         describeProps.set("table", prop("string", "Table name, e.g. 'filing_metadata'."));
-        tools.add(tool("describe_table",
+        tools.add(
+            tool("describe_table",
             "Get column names, types, and nullability for a table.",
-            schema(describeProps, new String[]{"schema", "table"})
-        ));
+            schema(describeProps, new String[]{"schema", "table"})));
 
         ObjectNode queryProps = MAPPER.createObjectNode();
-        queryProps.set("sql", prop("string",
+        queryProps.set(
+            "sql", prop("string",
             "Calcite SQL. Reference tables as schema.table "
             + "(e.g. sec.filing_metadata). Always include FETCH FIRST N ROWS ONLY."));
-        queryProps.set("limit", prop("integer",
+        queryProps.set(
+            "limit", prop("integer",
             "Max rows to return (default 500, max 5000)."));
-        tools.add(tool("query",
+        tools.add(
+            tool("query",
             "Execute SQL against US government data. Returns a JSON array of row objects.",
-            schema(queryProps, new String[]{"sql"})
-        ));
+            schema(queryProps, new String[]{"sql"})));
 
         ObjectNode body = MAPPER.createObjectNode();
         body.set("tools", tools);
         return result(id, body);
     }
 
+    private static void awaitConnection() throws Exception {
+        if (!connReady.await(120, TimeUnit.SECONDS)) {
+            throw new RuntimeException("Database still initializing — please retry in a moment");
+        }
+        if (connError != null) {
+            throw new RuntimeException("Connection failed: " + connError.getMessage(), connError);
+        }
+    }
+
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
+        awaitConnection();
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
 
@@ -223,8 +262,8 @@ public class McpServer {
                 text = listTables(args.path("schema").asText());
                 break;
             case "describe_table":
-                text = describeTable(
-                    args.path("schema").asText(),
+                text =
+                    describeTable(args.path("schema").asText(),
                     args.path("table").asText());
                 break;
             case "query":
