@@ -103,6 +103,30 @@ public class McpServer {
             return;
         }
 
+        // Pin operating dir for this process: MCP_DATA_DIR env var, or ~/.mcp_askamerica.
+        // Must be set before any GovDataDriver connection so the property is stable.
+        if (System.getProperty("govdata.operating.dir.base") == null) {
+            String dataDir = System.getenv("MCP_DATA_DIR");
+            if (dataDir == null || dataDir.isEmpty()) {
+                String home = System.getProperty("user.home");
+                if (home != null && !home.isEmpty()) {
+                    dataDir = home + "/.mcp_askamerica";
+                }
+            }
+            if (dataDir != null && !dataDir.isEmpty()) {
+                System.setProperty("govdata.operating.dir.base", dataDir);
+                // All schemas share one DuckDB catalog file so cross-schema joins work.
+                // duckdb.catalog.path is the existing mechanism — overrides per-schema defaults.
+                if (System.getProperty("duckdb.catalog.path") == null
+                        && System.getenv("DUCKDB_CATALOG_PATH") == null) {
+                    java.io.File duckdbDir = new java.io.File(dataDir, ".duckdb");
+                    duckdbDir.mkdirs();
+                    System.setProperty("duckdb.catalog.path",
+                        new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
+                }
+            }
+        }
+
         // Capture the real stdout before any framework can write to it, then
         // replace System.out with stderr so all logging goes there instead.
         // MCP JSON is written exclusively to the saved mcpOut stream.

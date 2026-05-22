@@ -66,6 +66,20 @@ public class GovDataDriver extends Driver {
     return "jdbc:govdata:";
   }
 
+  /**
+   * Returns the operating directory base for this driver.
+   *
+   * <p>Default: {@code GOVDATA_DATA_DIR} env var, or {@code ~/.govdata}.
+   * Product drivers (e.g. AskAmericaDriver) override this to check their own env var.
+   */
+  protected String resolveOperatingDirBase(String home) {
+    String envDir = System.getenv("GOVDATA_DATA_DIR");
+    if (envDir != null && !envDir.isEmpty()) {
+      return envDir;
+    }
+    return home + "/.govdata";
+  }
+
   @Override public Connection connect(String url, Properties info) throws SQLException {
     if (!acceptsURL(url)) {
       return null;
@@ -73,20 +87,17 @@ public class GovDataDriver extends Driver {
 
     LOGGER.info("Connecting to government data source: {}", url);
 
-    // JDBC connections pin operating dirs and cache to ~/.govdata (stable regardless of cwd).
-    // ETL/DQ processes don't go through this driver and continue to use user.dir/.aperio.
-    // AskAmericaDriver overrides both properties to ~/.askamerica before calling connect().
-    if (System.getProperty("govdata.operating.dir.base") == null) {
-      String home = System.getProperty("user.home");
-      if (home != null && !home.isEmpty()) {
-        System.setProperty("govdata.operating.dir.base", home + "/.govdata");
+    // Pin operating dir and httpfs cache per-process. Resolution order:
+    //   1. System property already set (product driver set it before calling us)
+    //   2. resolveOperatingDirBase() — checks product env var or falls back to ~/.govdata
+    String home = System.getProperty("user.home");
+    if (home != null && !home.isEmpty()) {
+      if (System.getProperty("govdata.operating.dir.base") == null) {
+        System.setProperty("govdata.operating.dir.base", resolveOperatingDirBase(home));
       }
-    }
-    if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
-      String home = System.getProperty("user.home");
-      if (home != null && !home.isEmpty()) {
+      if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
         System.setProperty("duckdb.cache_httpfs.directory",
-            home + "/.govdata/.duckdb_httpfs_cache");
+            resolveOperatingDirBase(home) + "/.duckdb_httpfs_cache");
       }
     }
 
@@ -213,7 +224,7 @@ public class GovDataDriver extends Driver {
         + engineJson
         + "      \"autoDownload\": false,\n"
         + "      \"testMode\": false,\n"
-        + "      \"ephemeralCache\": true" + directoryJson + s3ConfigJson + "\n"
+        + "      \"ephemeralCache\": false" + directoryJson + s3ConfigJson + "\n"
         + "    }\n"
         + "  }]\n"
         + "}";

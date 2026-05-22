@@ -188,6 +188,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     Map<String, Object> enrichedOperand = enrichOperand(operand, dataSource, name);
     enrichedOperand.put("operatingDirectory", operatingDirectory);
+    if (tableConstraints != null && !tableConstraints.isEmpty()) {
+      enrichedOperand.put("tableConstraints", tableConstraints);
+    }
 
     processorBuilder
         .operatingDirectory(operatingDirectory)

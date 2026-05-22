@@ -172,54 +172,85 @@ public class JdbcMetadataIntegrationTest {
   // ── getPrimaryKeys ──────────────────────────────────────────────────────────
 
   @Test
-  void getPrimaryKeys_doesNotThrow() throws Exception {
+  void getPrimaryKeys_candidatesHasKnownPrimaryKey() throws Exception {
+    // fec-schema.yaml declares: candidates.primaryKey = [type, year, candidate_id]
+    // This verifies the full wiring: YAML constraints → GovDataSchemaFactory.setTableConstraints()
+    // → enrichedOperand → FileSchemaFactory → PartitionedParquetTable.getStatistic() → JDBC metadata
     try (Connection c = openConnection()) {
       DatabaseMetaData meta = c.getMetaData();
-
-      List<String> tables = new ArrayList<>();
-      try (ResultSet rs = meta.getTables(null, SCHEMA, "%", null)) {
-        while (rs.next()) {
-          tables.add(rs.getString("TABLE_NAME"));
-        }
-      }
-      assertFalse(tables.isEmpty(), "Need at least one table to test getPrimaryKeys()");
-
-      // Check first table — not all tables have PKs, but method must not throw
-      String firstTable = tables.get(0);
       List<String> pks = new ArrayList<>();
-      try (ResultSet rs = meta.getPrimaryKeys(null, SCHEMA, firstTable)) {
+      try (ResultSet rs = meta.getPrimaryKeys(null, SCHEMA, "candidates")) {
         while (rs.next()) {
-          pks.add(rs.getString("COLUMN_NAME"));
+          pks.add(rs.getString("COLUMN_NAME").toLowerCase(java.util.Locale.ROOT));
         }
       }
-      LOGGER.info("Primary keys for {}.{}: {}", SCHEMA, firstTable, pks);
-      // No assertion on count — PKs may or may not be defined
+      LOGGER.info("Primary keys for {}.candidates: {}", SCHEMA, pks);
+      assertFalse(pks.isEmpty(),
+          "getPrimaryKeys() returned no rows for fec.candidates. "
+          + "primaryKey is declared in fec-schema.yaml — constraints must flow through "
+          + "GovDataSchemaFactory.enrichedOperand to FileSchemaFactory.");
+      assertTrue(pks.contains("candidate_id"),
+          "fec.candidates PK must include candidate_id; got: " + pks);
+    }
+  }
+
+  @Test
+  void getPrimaryKeys_committeesHasKnownPrimaryKey() throws Exception {
+    // fec-schema.yaml declares: committees.primaryKey = [type, year, committee_id]
+    try (Connection c = openConnection()) {
+      DatabaseMetaData meta = c.getMetaData();
+      List<String> pks = new ArrayList<>();
+      try (ResultSet rs = meta.getPrimaryKeys(null, SCHEMA, "committees")) {
+        while (rs.next()) {
+          pks.add(rs.getString("COLUMN_NAME").toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+      LOGGER.info("Primary keys for {}.committees: {}", SCHEMA, pks);
+      assertFalse(pks.isEmpty(),
+          "getPrimaryKeys() returned no rows for fec.committees (declared in fec-schema.yaml)");
+      assertTrue(pks.contains("committee_id"),
+          "fec.committees PK must include committee_id; got: " + pks);
     }
   }
 
   // ── getImportedKeys ─────────────────────────────────────────────────────────
 
   @Test
-  void getImportedKeys_doesNotThrow() throws Exception {
+  void getImportedKeys_committeesHasFkToCandidates() throws Exception {
+    // fec-schema.yaml: committees has FK candidate_id → candidates.candidate_id
     try (Connection c = openConnection()) {
       DatabaseMetaData meta = c.getMetaData();
-
-      List<String> tables = new ArrayList<>();
-      try (ResultSet rs = meta.getTables(null, SCHEMA, "%", null)) {
+      List<String> fkCols = new ArrayList<>();
+      try (ResultSet rs = meta.getImportedKeys(null, SCHEMA, "committees")) {
         while (rs.next()) {
-          tables.add(rs.getString("TABLE_NAME"));
+          String fkCol = rs.getString("FKCOLUMN_NAME").toLowerCase(java.util.Locale.ROOT);
+          String pkTable = rs.getString("PKTABLE_NAME").toLowerCase(java.util.Locale.ROOT);
+          fkCols.add(fkCol + "->" + pkTable);
         }
       }
-      assertFalse(tables.isEmpty(), "Need at least one table to test getImportedKeys()");
+      LOGGER.info("Imported keys for {}.committees: {}", SCHEMA, fkCols);
+      assertFalse(fkCols.isEmpty(),
+          "getImportedKeys() returned no rows for fec.committees "
+          + "(FK candidate_id→candidates declared in fec-schema.yaml)");
+      assertTrue(fkCols.stream().anyMatch(e -> e.startsWith("candidate_id")),
+          "fec.committees must have FK on candidate_id; got: " + fkCols);
+    }
+  }
 
-      String firstTable = tables.get(0);
+  @Test
+  void getImportedKeys_doesNotThrowForTableWithNoFk() throws Exception {
+    // candidates has no FKs to other fec tables — getImportedKeys must return empty, not throw
+    try (Connection c = openConnection()) {
+      DatabaseMetaData meta = c.getMetaData();
       List<String> fks = new ArrayList<>();
-      try (ResultSet rs = meta.getImportedKeys(null, SCHEMA, firstTable)) {
+      try (ResultSet rs = meta.getImportedKeys(null, SCHEMA, "candidates")) {
         while (rs.next()) {
-          fks.add(rs.getString("FKCOLUMN_NAME") + "->" + rs.getString("PKCOLUMN_NAME"));
+          fks.add(rs.getString("FKCOLUMN_NAME"));
         }
       }
-      LOGGER.info("Foreign keys for {}.{}: {}", SCHEMA, firstTable, fks);
+      LOGGER.info("Imported keys for {}.candidates: {}", SCHEMA, fks);
+      // candidates has no intra-fec FKs (only cross-schema FKs to geo which may not be wired)
+      // assertion: method completes without exception, result set closed cleanly
     }
   }
 

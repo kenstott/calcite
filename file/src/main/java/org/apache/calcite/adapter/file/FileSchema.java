@@ -496,14 +496,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Determine operating cache directory - ALWAYS local filesystem for .conversions.json and file locks
     // This is separate from the parquet output directory which may be remote (S3, etc.)
     File operatingCacheRoot;
-    if (userConfiguredBaseDirectory != null
-        && (userConfiguredBaseDirectory.getPath().contains(System.getProperty("java.io.tmpdir"))
-            || userConfiguredBaseDirectory.getPath().contains("/tmp/"))) {
-      // Ephemeral cache - use the provided temp directory
+    if (userConfiguredBaseDirectory != null) {
+      // Caller explicitly provided a base directory — use it for the .aperio root.
+      // This covers both temp dirs (ephemeral tests) and stable product dirs (e.g. ~/.askamerica/data/ref).
       operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
-      LOGGER.debug("Using ephemeral temp directory for operating cache: {}", operatingCacheRoot);
+      LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
     } else {
-      // Always use working directory for .aperio (even if parquet directory is remote)
+      // No explicit base directory — fall back to working directory.
       String userDir = System.getProperty("user.dir");
 
       // Safety check: if user.dir is root, use temp directory instead

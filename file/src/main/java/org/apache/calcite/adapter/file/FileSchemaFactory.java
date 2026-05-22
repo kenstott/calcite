@@ -369,9 +369,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         LOGGER.error("Failed to create ephemeral cache directory", e);
       }
     } else {
-      // User-configurable baseDirectory for cache/conversions (optional)
-      // Handle both String and File types for baseDirectory
-      final Object baseDirObj = operand.get("baseDirectory");
+      // User-configurable baseDirectory for cache/conversions (optional).
+      // Fall back to operatingDirectory (set by GovDataSchemaFactory from govdata.operating.dir.base)
+      // so the DuckDB catalog lands under the product data dir, not user.dir.
+      final Object baseDirObj = operand.get("baseDirectory") != null
+          ? operand.get("baseDirectory")
+          : operand.get("operatingDirectory");
       final String baseDirConfig;
       if (baseDirObj instanceof String) {
         baseDirConfig = (String) baseDirObj;
