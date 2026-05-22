@@ -71,7 +71,7 @@ case "$MODE" in
     ;;
   dq-rebuild)
     export GOVDATA_RUN_MODE="historical"
-    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical --rebuild
+    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical --rebuild --include-daily
     ;;
 esac
 

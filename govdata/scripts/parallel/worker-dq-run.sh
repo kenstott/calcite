@@ -31,6 +31,7 @@ fi
 MODE="daily"
 DRY_RUN=false
 REBUILD=false
+INCLUDE_DAILY=false
 REBUILD_START_YEAR=""
 shift
 while [[ $# -gt 0 ]]; do
@@ -44,6 +45,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --rebuild)
       REBUILD=true
+      ;;
+    --include-daily)
+      INCLUDE_DAILY=true
       ;;
     --start-year)
       shift
@@ -110,20 +114,33 @@ if $REBUILD; then
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
   rclone purge "r2:govdata-tracker-v1/dq-results/schema=$SCHEMA" 2>/dev/null || true
 
-  # 4. Run the Calcite ETL to rebuild Iceberg tables.
-  log_info "$WORKER_ID: --rebuild: running ETL for schema=$SCHEMA"
+  # 4. Run historical ETL pass.
+  log_info "$WORKER_ID: --rebuild: running historical ETL for schema=$SCHEMA"
   REBUILD_MODEL="$RUN_DIR/models/rebuild_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
   mkdir -p "$(dirname "$REBUILD_MODEL")"
-  # Override run mode and start year so generate_single_schema_model uses the correct range.
-  # --start-year truncates historical rebuilds (e.g. smoke tests); omitting it uses GOVDATA_START_YEAR.
-  export GOVDATA_RUN_MODE="$MODE"
+  export GOVDATA_RUN_MODE="historical"
   [ -n "$REBUILD_START_YEAR" ] && export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
   if ! generate_single_schema_model "$SCHEMA" "$REBUILD_MODEL" 2>/dev/null; then
     log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
-    log_info "$WORKER_ID: --rebuild: supported schemas: econ, census, edu, geo, crime, weather, fec, fedregister, lands"
     exit 1
   fi
   run_etl "$REBUILD_MODEL" "$WORKER_ID"
+  log_info "$WORKER_ID: --rebuild: historical ETL complete"
+
+  # 5. Optionally run daily (current-year) ETL pass before DQ.
+  if $INCLUDE_DAILY; then
+    log_info "$WORKER_ID: --include-daily: running daily ETL pass for schema=$SCHEMA"
+    DAILY_MODEL="$RUN_DIR/models/daily_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
+    export GOVDATA_RUN_MODE="daily"
+    unset GOVDATA_START_YEAR
+    if generate_single_schema_model "$SCHEMA" "$DAILY_MODEL" 2>/dev/null; then
+      run_etl "$DAILY_MODEL" "${WORKER_ID}-daily"
+      log_info "$WORKER_ID: --include-daily: daily ETL complete"
+    else
+      log_info "$WORKER_ID: --include-daily: no daily model for schema=$SCHEMA — skipping"
+    fi
+  fi
+
   log_info "$WORKER_ID: --rebuild: ETL complete — proceeding to DQ"
 fi
 
