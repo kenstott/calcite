@@ -70,35 +70,6 @@ done
 SCHEMA_FILTER="${SCHEMA_FILTER:-}"
 RUN_EMBEDDINGS=false
 
-# Map schema name → worker numbers (for use with --schema filter)
-schema_workers() {
-  local s
-  s=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-  case "$s" in
-    sec|sec_primary)         echo "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17" ;;
-    sec_secondary|secondary) echo "23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39" ;;
-    stock|stock_prices|stocks|stooq) echo "40" ;;
-    econ|economic)           echo "18" ;;
-    census|acs)              echo "19" ;;
-    geo|geographic)          echo "20" ;;
-    crime|fbi)               echo "21" ;;
-    weather|climate)         echo "22" ;;
-    ref|reference|gleif|figi) echo "41" ;;
-    fec|campaign_finance)    echo "60" ;;
-    fedregister|federal_register|fr) echo "61" ;;
-    cyber|cyber_vuln|cyber_threat)   echo "62 63 64 65 66" ;;
-    health)                  echo "67 68 69 70" ;;
-    edu|education)           echo "71 72 73" ;;
-    energy|eia)              echo "74 75 76 77" ;;
-    patents|uspto)           echo "80 81" ;;
-    lands)      echo "82 83" ;;
-    econ_reference|econ-reference) echo "84" ;;
-    *)
-      echo "ERROR: unknown schema '$1'. Known: sec, sec_secondary, stock, econ, census, geo, crime, weather, ref, fec, fedregister, cyber, health, edu, energy, patents, lands, econ_reference" >&2
-      exit 1 ;;
-  esac
-}
-
 TIMEOUT_SECS=$((TIMEOUT_MINS * 60))
 
 # Export flags so worker scripts pass them to EtlRunner
@@ -107,79 +78,124 @@ if [ "$PARALLEL_THREADS" -gt 0 ]; then
 fi
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [--schema name] <worker-numbers|alias...>"
-  echo "  $0 18-26                  — auto-fit workers to available memory"
-  echo "  $0 -j 4 1-20              — hard cap at 4 concurrent (+ memory gate)"
-  echo "  $0 -t 90 1 5 10-15        — 90min inactivity timeout"
-  echo "  $0 -r 2000 18-26          — reserve 2GB for OS (default: ${OS_RESERVE_MB}MB)"
-  echo "  $0 -p 4 18-26             — 4 parallel entity threads per worker"
-  echo "  $0 1-10                   — default: auto-fit, ${TIMEOUT_MINS}min timeout"
-  echo "  $0 1-7,23-40              — discontinuous ranges (SEC primary + secondary)"
-  echo "  $0 --force daily          — bypass all release-window checks (backfill/testing)"
+  echo "Usage: $0 [-j max_concurrent] [-t timeout_mins] [-r os_reserve_mb] [-p threads] [--schema name] <alias|schema:mode...>"
+  echo "  $0 daily                   — all recurring workers"
+  echo "  $0 historical              — all initial/backfill workers (run once)"
+  echo "  $0 all                     — everything (historical + daily)"
+  echo "  $0 --schema fec daily      — run only fec from the daily set"
+  echo "  $0 sec_primary:current     — single job"
+  echo "  $0 sec_primary:2025 fec:daily econ:daily   — explicit list"
+  echo "  $0 -j 4 daily              — hard cap at 4 concurrent"
+  echo "  $0 -p 4 historical         — 4 parallel entity threads per worker"
+  echo "  $0 --force daily           — bypass release-window checks (backfill/testing)"
   echo ""
-  echo "  Named aliases:"
-  echo "  $0 all                    — all workers (1-41, 60-77, 80-83)"
-  echo "  $0 daily                  — all recurring workers; run this every day (1,18-23,40,41,60-61,63-65,68-70,72-73,75-77,81,83-84)"
-  echo "  $0 historical             — all initial/backfill workers; run once on the ingest device (1-41,60-62,67,71,74,80,82)"
-  echo "  $0 stock-quotes           — stock prices alone (40); pool-share is wasteful due to Stooq rate limits"
+  echo "  Aliases:"
+  echo "    daily      — recurring workers: one SEC year (current), all non-SEC schemas (daily mode)"
+  echo "    historical — backfill workers: all SEC years (2010→current), all schemas (historical/initial)"
+  echo "    all        — union of historical + daily"
   echo ""
-  echo "  Schema filter (combine with any alias or range):"
-  echo "  $0 --schema energy daily  — run only the energy workers from the daily set"
-  echo "  $0 --schema sec historical — run only the SEC workers from the historical set"
-  echo "  Known schemas: sec, sec_secondary, stock, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, cyber, health, edu, energy, patents, lands"
+  echo "  Valid schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime, weather,"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands"
   exit 1
 fi
 
-# Expand arguments into worker numbers (supports: 5, 1-10, 1-10,15-20, all)
+# Build queue of "schema:mode" slots
 queue=()
-for arg in "$@"; do
-  # Split on commas to support discontinuous ranges like "1-10,15-20"
-  IFS=',' read -ra parts <<< "$arg"
-  for part in "${parts[@]}"; do
-    if [ "$part" = "all" ]; then
-      # All workers — exactly what exists: 1-41, 60-77, 80-83
-      for i in $(seq 1 41); do queue+=("$i"); done
-      for i in $(seq 60 77) 80 81 82 83 84; do queue+=("$i"); done
-    elif [ "$part" = "historical" ]; then
-      # All initial/backfill workers — run once on the ingest device.
-      # Excludes all recurring workers (63-66, 68-70, 72-73, 75-77, 83); use 'daily' for those.
-      export GOVDATA_RUN_MODE="historical"
-      for i in $(seq 1 41); do queue+=("$i"); done
-      for i in 60 61 62 67 71 74 80 82; do queue+=("$i"); done
-    elif [ "$part" = "daily" ]; then
-      # All recurring workers — run this every day on the production server.
-      # Workers skip rows already materialized; each handles its own data-lag / release window.
-      export GOVDATA_RUN_MODE="daily"
-      for i in 1 $(seq 18 23) 40 41 60 61 63 64 65 68 69 70 72 73 75 76 77 81 83 84; do queue+=("$i"); done
-      [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
-    elif [ "$part" = "stock-quotes" ]; then
-      # Stock prices alone — Stooq rate limits make pool-sharing with other workers wasteful.
-      queue+=(40)
-    elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-      for i in $(seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"); do queue+=("$i"); done
-    elif [[ "$part" =~ ^[0-9]+$ ]]; then
-      queue+=("$part")
-    else
-      echo "ERROR: invalid argument '$part' (from '$arg')" >&2
-      exit 1
-    fi
+
+# Helper: append all historical SEC primary year slots (current year down to 2010)
+_add_sec_primary_years() {
+  local cy
+  cy=$(date +%Y)
+  queue+=("sec_primary:${cy}")
+  local y=$((cy - 1))
+  while [ "$y" -ge 2010 ]; do
+    queue+=("sec_primary:${y}")
+    y=$((y - 1))
   done
+}
+
+# Helper: append all historical SEC secondary year slots
+_add_sec_secondary_years() {
+  local cy
+  cy=$(date +%Y)
+  queue+=("sec_secondary:${cy}")
+  local y=$((cy - 1))
+  while [ "$y" -ge 2010 ]; do
+    queue+=("sec_secondary:${y}")
+    y=$((y - 1))
+  done
+}
+
+for arg in "$@"; do
+  case "$arg" in
+
+    all)
+      # All workers: full historical pass + all recurring modes
+      _add_sec_primary_years
+      queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
+      _add_sec_secondary_years
+      queue+=(sec_prices:historical ref:daily fec:historical fedregister:historical)
+      queue+=(cyber_vuln:initial cyber_threat:initial cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly cyber_threat:static)
+      queue+=(health:initial health:daily health:weekly health:monthly)
+      queue+=(edu:initial edu:annual edu:biennial)
+      queue+=(energy:initial energy:weekly energy:monthly energy:annual)
+      queue+=(patents:historical patents:daily lands:historical lands:daily)
+      queue+=(econ_reference:daily)
+      ;;
+
+    historical)
+      # Initial/backfill workers — run once on the ingest device.
+      export GOVDATA_RUN_MODE="historical"
+      _add_sec_primary_years
+      queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
+      _add_sec_secondary_years
+      queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
+      queue+=(cyber_vuln:initial cyber_threat:initial health:initial edu:initial energy:initial)
+      queue+=(patents:historical lands:historical)
+      ;;
+
+    daily)
+      # Recurring workers — run every day on the production server.
+      export GOVDATA_RUN_MODE="daily"
+      _cy=$(date +%Y)
+      queue+=(
+        "sec_primary:${_cy}"
+        econ:daily census:daily geo:daily crime:daily weather:daily
+        "sec_secondary:${_cy}"
+        sec_prices:daily ref:daily
+        fec:daily fedregister:daily
+        cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly
+        health:daily health:weekly health:monthly
+        edu:annual edu:biennial
+        energy:weekly energy:monthly energy:annual
+        patents:daily lands:daily
+        econ_reference:daily
+      )
+      [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
+      ;;
+
+    *:*)
+      # Explicit "schema:mode" slot
+      queue+=("$arg")
+      ;;
+
+    *)
+      echo "ERROR: invalid argument '$arg'" >&2
+      echo "  Use an alias (daily, historical, all) or 'schema:mode' (e.g. fec:daily)" >&2
+      exit 1
+      ;;
+  esac
 done
 
-# Apply --schema filter: keep only workers that belong to the requested schema
+# Apply --schema filter: keep only slots whose schema matches
 if [ -n "$SCHEMA_FILTER" ]; then
-  allowed=$(schema_workers "$SCHEMA_FILTER")
   filtered=()
-  for w in "${queue[@]}"; do
-    for a in $allowed; do
-      if [ "$w" -eq "$a" ]; then
-        filtered+=("$w")
-        break
-      fi
-    done
+  for slot in "${queue[@]}"; do
+    if [ "${slot%%:*}" = "$SCHEMA_FILTER" ]; then
+      filtered+=("$slot")
+    fi
   done
-  log_info "Schema filter '$SCHEMA_FILTER': ${#queue[@]} → ${#filtered[@]} workers (${filtered[*]:-none})"
+  log_info "Schema filter '$SCHEMA_FILTER': ${#queue[@]} → ${#filtered[@]} slots (${filtered[*]:-none})"
   queue=("${filtered[@]+"${filtered[@]}"}")
 fi
 
@@ -225,9 +241,9 @@ echo ""
 active_pids=()
 active_labels=()
 active_starts=()
-active_nums=()
-active_heap_mb=()     # Max heap in MB for each active worker
-committed_mb=0        # Sum of max heaps of all active workers
+active_slots=()      # "schema:mode" for each active worker (used for re-queuing)
+active_heap_mb=()    # Max heap in MB for each active worker
+committed_mb=0       # Sum of max heaps of all active workers
 
 # Counters
 queue_idx=0
@@ -236,7 +252,7 @@ failed_count=0
 failed_list=()
 restart_count=0
 
-# Convert a heap size string (e.g., "3g", "2048m", "2g") to MB
+# Convert a heap size string (e.g., "3g", "2048m") to MB
 heap_to_mb() {
   local val=$1
   val=$(echo "$val" | tr '[:upper:]' '[:lower:]')
@@ -249,42 +265,43 @@ heap_to_mb() {
   fi
 }
 
-# Get the max heap in MB for a given worker number
+# Get max heap in MB for a schema:mode slot
 get_worker_heap_mb() {
-  local num=$1
-  local id
-  id=$(printf "worker-%02d" "$num")
+  local slot="$1"
+  local schema="${slot%%:*}"
+  local mode="${slot#*:}"
+  local id="worker-${schema}-${mode}"
   local _HEAP_MIN _HEAP_MAX
   get_heap_config "$id"
   heap_to_mb "$_HEAP_MAX"
 }
 
-# Launch a single worker by number, append to active arrays
+# Launch a single schema:mode slot, append to active arrays
 launch_worker() {
-  local num=$1
-  local id
-  id=$(printf "worker-%02d" "$num")
-  local script="$SCRIPT_DIR/${id}.sh"
+  local slot="$1"
+  local schema="${slot%%:*}"
+  local mode="${slot#*:}"
+  local id="worker-${schema}-${mode}"
+  local script="$SCRIPT_DIR/worker.sh"
 
   if [ ! -f "$script" ]; then
-    echo "WARNING: $script not found, skipping" >&2
+    echo "ERROR: $script not found" >&2
     return 1
   fi
 
   local heap_mb
-  heap_mb=$(get_worker_heap_mb "$num")
+  heap_mb=$(get_worker_heap_mb "$slot")
 
   local log_dir="$SCRIPT_DIR/runs/${id}"
   local log_file="$log_dir/launch.log"
   mkdir -p "$log_dir"
 
   # Give each worker its own process group so 'kill 0' in the worker
-  # trap only kills that worker's processes, not the pool runner or other workers.
-  # macOS lacks setsid; use a subshell trick to create a new process group instead.
+  # trap only kills that worker's processes, not the pool runner or siblings.
   if command -v setsid >/dev/null 2>&1; then
-    setsid nohup bash "$script" >> "$log_file" 2>&1 &
+    setsid nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1 &
   else
-    (exec nohup bash "$script" >> "$log_file" 2>&1) &
+    (exec nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1) &
   fi
   local pid=$!
   echo "$pid" > "$PID_DIR/${id}.pid"
@@ -292,7 +309,7 @@ launch_worker() {
   active_pids+=("$pid")
   active_labels+=("$id")
   active_starts+=("$(date +%s)")
-  active_nums+=("$num")
+  active_slots+=("$slot")
   active_heap_mb+=("$heap_mb")
   committed_mb=$((committed_mb + heap_mb))
 
@@ -303,7 +320,6 @@ launch_worker() {
 # Check available system memory in MB
 get_available_mb() {
   if [ "$(uname)" = "Darwin" ]; then
-    # Parse vm_stat pages free + inactive, multiply by page size
     local page_size=$(sysctl -n hw.pagesize)
     local free_pages=$(vm_stat | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
     local inactive_pages=$(vm_stat | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}')
@@ -314,24 +330,21 @@ get_available_mb() {
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
-# A worker is only launched if its max heap fits within the remaining budget.
-# Workers that can never fit (heap > budget) are skipped with a warning.
 fill_pool() {
   local scan_idx=$queue_idx
   while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$scan_idx" -lt "$total" ]; do
-    local next_num="${queue[$scan_idx]}"
+    local next_slot="${queue[$scan_idx]}"
     local next_heap_mb
-    next_heap_mb=$(get_worker_heap_mb "$next_num")
-    local next_id
-    next_id=$(printf "worker-%02d" "$next_num")
+    next_heap_mb=$(get_worker_heap_mb "$next_slot")
+    local next_schema="${next_slot%%:*}"
+    local next_mode="${next_slot#*:}"
+    local next_id="worker-${next_schema}-${next_mode}"
 
-    # Check: Would this worker's heap exceed the total memory budget even alone?
-    # If so, skip permanently — it can never run on this machine.
+    # Skip if this worker's heap exceeds total budget — can never run on this machine
     if [ "$next_heap_mb" -gt "$budget_mb" ]; then
-      log_info "SKIPPING ${next_id}: needs ${next_heap_mb}MB but budget is only ${budget_mb}MB — cannot run on this machine"
+      log_info "SKIPPING ${next_id}: needs ${next_heap_mb}MB but budget is only ${budget_mb}MB"
       ((done_count++)) || true
       ((failed_count++)) || true
-      # Advance queue past this worker
       if [ "$scan_idx" -eq "$queue_idx" ]; then
         ((queue_idx++)) || true
       fi
@@ -339,16 +352,14 @@ fill_pool() {
       continue
     fi
 
-    # Check 1: Would this worker's heap exceed remaining budget?
+    # Check 1: committed budget
     local projected=$((committed_mb + next_heap_mb))
     if [ "$projected" -gt "$budget_mb" ]; then
       log_info "Memory budget: ${next_id} needs ${next_heap_mb}MB, committed=${committed_mb}MB, budget=${budget_mb}MB — holding"
       break
     fi
 
-    # Check 2: Is actual available memory sufficient? (belt + suspenders)
-    # When no workers are running, trust the budget check — JVM doesn't allocate
-    # max heap immediately and Linux reclaims page cache under pressure.
+    # Check 2: actual available memory (belt + suspenders, skip when no workers active)
     if [ "${#active_pids[@]}" -gt 0 ]; then
       local avail_mb
       avail_mb=$(get_available_mb)
@@ -358,7 +369,6 @@ fill_pool() {
       fi
     fi
 
-    # Advance queue_idx to match scan_idx if we skipped any
     queue_idx=$scan_idx
     launch_worker "${queue[$queue_idx]}" || true
     ((queue_idx++)) || true
@@ -369,38 +379,36 @@ fill_pool() {
 # Remove a finished worker from active arrays by index
 remove_active() {
   local idx=$1
-  # Release this worker's heap reservation
   committed_mb=$((committed_mb - active_heap_mb[$idx]))
   if [ "$committed_mb" -lt 0 ]; then committed_mb=0; fi
 
-  local new_pids=() new_labels=() new_starts=() new_nums=() new_heaps=()
+  local new_pids=() new_labels=() new_starts=() new_slots=() new_heaps=()
   for i in "${!active_pids[@]}"; do
     if [ "$i" -ne "$idx" ]; then
       new_pids+=("${active_pids[$i]}")
       new_labels+=("${active_labels[$i]}")
       new_starts+=("${active_starts[$i]}")
-      new_nums+=("${active_nums[$i]}")
+      new_slots+=("${active_slots[$i]}")
       new_heaps+=("${active_heap_mb[$i]}")
     fi
   done
   active_pids=("${new_pids[@]+"${new_pids[@]}"}")
   active_labels=("${new_labels[@]+"${new_labels[@]}"}")
   active_starts=("${new_starts[@]+"${new_starts[@]}"}")
-  active_nums=("${new_nums[@]+"${new_nums[@]}"}")
+  active_slots=("${new_slots[@]+"${new_slots[@]}"}")
   active_heap_mb=("${new_heaps[@]+"${new_heaps[@]}"}")
 }
 
-# Kill a stuck worker and re-queue it
+# Kill a stuck worker and re-queue its slot
 kill_and_requeue() {
   local idx=$1
   local pid="${active_pids[$idx]}"
   local id="${active_labels[$idx]}"
-  local num="${active_nums[$idx]}"
+  local slot="${active_slots[$idx]}"
   local elapsed_mins=$(( ($(date +%s) - active_starts[$idx]) / 60 ))
 
-  log_info "$id inactive (${elapsed_mins}m since last log output > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
+  log_info "$id inactive (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
 
-  # Kill the worker's process group (setsid gives each worker its own group)
   kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   sleep 2
   kill -KILL -"$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
@@ -409,8 +417,7 @@ kill_and_requeue() {
   remove_active "$idx"
   ((restart_count++)) || true
 
-  # Re-queue: append worker number back to the queue
-  queue+=("$num")
+  queue+=("$slot")
   ((total++)) || true
 }
 
@@ -443,15 +450,12 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       fi
 
       remove_active "$i"
-      # Don't increment i — array shifted
       continue
     fi
     ((i++)) || true
   done
 
-  # Check for stuck workers — kill if log has no new output for TIMEOUT_MINS
-  # Grace period: don't check until the worker has been running for at least TIMEOUT_SECS,
-  # since the log file may have a stale mtime from a previous run.
+  # Check for stuck workers
   i=0
   while [ "$i" -lt "${#active_pids[@]}" ]; do
     id="${active_labels[$i]}"
@@ -470,7 +474,6 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     fi
     if [ "$idle_secs" -ge "$TIMEOUT_SECS" ]; then
       kill_and_requeue "$i"
-      # Don't increment i — array shifted
       continue
     fi
     ((i++)) || true
@@ -479,7 +482,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   # Fill any open slots
   fill_pool
 
-  # Print status — use \n so output is visible in logs, nohup, and pipes
+  # Status line
   remaining=$((total - done_count - failed_count - ${#active_pids[@]}))
   active_str=""
   if [ "${#active_labels[@]}" -gt 0 ]; then
@@ -490,7 +493,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     "$(date '+%H:%M:%S')" "${#active_pids[@]}" "$done_count" "$failed_count" "$remaining" "$restart_count" \
     "$committed_mb" "$budget_mb" "$mem_avail" "$active_str"
 
-  # Per-worker detail: elapsed time + last activity from log
+  # Per-worker detail
   now=$(date +%s)
   for idx in "${!active_pids[@]}"; do
     id="${active_labels[$idx]}"
@@ -506,14 +509,12 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       elapsed_str="${secs}s"
     fi
 
-    # Extract last meaningful activity from the worker's log
     log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     activity=""
     if [ -f "$log_file" ]; then
-      # Match progress patterns across all worker types (SEC, econ, census, geo, crime)
       activity=$(grep -E "File chunk [0-9]+/[0-9]+|Chunk commit:|File chunking completed:|File chunking:|File-list optimization:|Tracked [0-9]+ newly materialized|Fast skip:|Row batch [0-9]+:|Row batching enabled|Processed entity|Converted|Processing [0-9]+ CIKs|Downloaded|INLINE CONVERSION|Filing (skipped|needs)|Writing Iceberg chunk|Processing batch|Expanded .* dimensions|Streaming from|Fetched [0-9]+ records|phase .* items processed|Downloading .* from|Processing table [0-9]+/[0-9]+:|ETL pipeline .* complete:|Bulk filtering:.*cached|SKIPPED \(table complete\)|Iceberg commit complete:|Materialization complete:|Streaming compaction:|Processing [0-9]+ unprocessed batches|Processing [0-9]+ bulk downloads|marked complete but no data found|Preload.* table completion|Preloaded tracker state|Bulk load|getCachedCompletion|Initialized S3 httpfs|Building accession list|Collected .* accessions|Loaded .* filings from|Phase [0-9]|Starting schema lifecycle|complete \(fast-path|Scanning full tracker|Scanned tracker year|Compacted tracker year|Narrowed CIK list|Processing 13F-HR|Converted 13F-HR|institutional holdings|Processing SC 13[DG]|Converted SC 13|beneficial ownership|13D/G filing detected|13F filing detected|GLEIF:|FIGI:|Extracted [0-9]+ records from|Extracted [0-9]+ holdings|Extracted [0-9]+ ownership|Extracted [0-9]+ instrument|OpenFIGI|gleif_entities|gleif_cik_mapping|figi_instruments|vectorized chunks from 13D|No data returned for|Skipping ticker|Marked ticker|appears to have no data" "$log_file" 2>/dev/null | tail -1 | sed 's/^.*INFO  [^ ]* - //; s/^.*WARN  [^ ]* - //' | cut -c1-120 || true)
     fi
-    printf "  %-12s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
+    printf "  %-28s [%s] %s\n" "$id" "$elapsed_str" "${activity:-starting...}"
   done
 
   sleep 10

@@ -57,7 +57,7 @@ load_env() {
   # yearRange returns empty list when start > end, so tables with no data in the
   # incremental window are skipped cleanly rather than processing all historical years.
   if [ "${GOVDATA_RUN_MODE:-}" = "daily" ]; then
-    export GOVDATA_START_YEAR="${GOVDATA_INCREMENTAL_START_YEAR:-2026}"
+    export GOVDATA_START_YEAR="${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}"
   fi
 
   # Default tracker to s3 for parallel operation
@@ -454,7 +454,7 @@ generate_single_schema_model() {
   local schema_name=$1 output_file=$2
   local operand_body
 
-  local _INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+  local _INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
   local _START_YEAR=${GOVDATA_START_YEAR:-2010}
 
   # historical mode: cap at INCREMENTAL_YEAR-1; daily mode: start from INCREMENTAL_YEAR
@@ -744,9 +744,8 @@ table_in_window() {
   fi
 }
 
-# Determine heap sizes for a worker based on its type.
-# Crime worker (worker-21) needs more memory for large dimension expansion;
-# SEC workers (worker-23+) are lighter and can run with less.
+# Determine heap sizes for a worker based on its schema/mode.
+# Worker IDs follow the pattern worker-SCHEMA-MODE (e.g., worker-fec-daily).
 # Usage: get_heap_config <worker_id>
 # Sets: _HEAP_MIN, _HEAP_MAX
 get_heap_config() {
@@ -759,74 +758,83 @@ get_heap_config() {
     return
   fi
 
-  # Extract worker number (e.g., "worker-21" -> 21)
-  local num
-  num=$(echo "$worker_id" | grep -oE '[0-9]+' | head -1 || true)
+  # Extract schema from worker-SCHEMA-MODE pattern.
+  # Strip "worker-" prefix, then peel off the last "-mode" suffix.
+  local _id="${worker_id#worker-}"      # e.g. "fec-daily" or "cyber_threat-initial"
+  local _schema="${_id%-*}"             # everything before the last dash
+  local _mode="${_id##*-}"              # everything after the last dash
 
-  if [ -z "$num" ]; then
-    # Named historical workers get large heap; unrecognized non-numeric IDs get standard heap
-    case "$worker_id" in
-      *edu*historical*|*edu*initial*)
-        _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
-      *)
-        _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
-    esac
-    return
+  case "$_schema" in
+    geo)
+      # TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing
+      _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
+    ref)
+      # GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows
+      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
+    fec)
+      # Individual contributions: 3M+ rows/year, streaming to Iceberg
+      _HEAP_MIN="4g"; _HEAP_MAX="5g" ;;
+    cyber_threat|cyber_vuln)
+      case "$_mode" in
+        initial) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;  # full NVD ~350k CVEs + OTX backfill
+        *)       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;  # delta/incremental
+      esac ;;
+    health)
+      case "$_mode" in
+        initial) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;  # all 15 tables, cursor pagination
+        *)       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+      esac ;;
+    edu)
+      case "$_mode" in
+        initial) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;  # full K-12 + IPEDS + Scorecard
+        *)       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+      esac ;;
+    crime)
+      # Large dimension expansion (type × year × state × offense × ori)
+      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
+    *)
+      _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+  esac
+}
+
+# Build an inline Calcite model JSON string for a govdata schema.
+# All storage and credential config uses ${VAR} patterns resolved by Java's VariableResolver.
+# Integer fields (startYear, endYear) are resolved from env vars at call time.
+#
+# Usage: build_inline_model <schema_name> [extra_operand_json]
+#   schema_name        The govdata dataSource name (fec, econ, sec, etc.)
+#   extra_operand_json Optional additional JSON fields (no leading comma), e.g.:
+#                      '"filingTypes":["10-K","10-Q"],"chunksBackfill":true'
+#
+# Outputs the complete inline JSON string to stdout.
+build_inline_model() {
+  local schema_name=$1
+  local extra_operand=${2:-}
+
+  local _INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
+  local _START_YEAR=${GOVDATA_START_YEAR:-}
+  local _END_YEAR=${GOVDATA_END_YEAR:-}
+
+  local year_json=""
+  if [ -n "$_START_YEAR" ]; then
+    year_json="${year_json}\"startYear\":${_START_YEAR},"
+  fi
+  if [ -n "$_END_YEAR" ]; then
+    year_json="${year_json}\"endYear\":${_END_YEAR},"
   fi
 
-  if [ "$num" -eq 20 ]; then
-    # GEO (20): TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing
-    _HEAP_MIN="4g"
-    _HEAP_MAX="6g"
-  elif [ "$num" -eq 41 ]; then
-    # REF (41): GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows, needs more heap
-    _HEAP_MIN="3g"
-    _HEAP_MAX="4g"
-  elif [ "$num" -eq 60 ]; then
-    # FEC (60): Individual contributions has 3M+ rows/year, streaming to Iceberg
-    _HEAP_MIN="4g"
-    _HEAP_MAX="5g"
-  elif [ "$num" -eq 61 ]; then
-    # FedRegister (61): 4 doc_types x 16 years x ~85 pages/partition pagination
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
-  elif [ "$num" -eq 62 ]; then
-    # Cyber initial (62): full NVD catalog ~350k CVEs + OTX backfill needs extra heap
-    _HEAP_MIN="4g"
-    _HEAP_MAX="6g"
-  elif [ "$num" -ge 63 ] && [ "$num" -le 66 ]; then
-    # Cyber recurring (63=daily, 64=weekly, 65=hourly, 66=static): delta/incremental, lighter
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
-  elif [ "$num" -eq 67 ]; then
-    # Health initial (67): all 15 tables including clinical trials cursor pagination
-    _HEAP_MIN="4g"
-    _HEAP_MAX="6g"
-  elif [ "$num" -ge 68 ] && [ "$num" -le 70 ]; then
-    # Health recurring (68=daily, 69=weekly, 70=monthly): incremental/delta loads
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
-  elif [ "$num" -eq 71 ]; then
-    # EDU initial (71): full historical K-12 + IPEDS + College Scorecard across all years
-    _HEAP_MIN="4g"
-    _HEAP_MAX="6g"
-  elif [ "$num" -ge 72 ] && [ "$num" -le 73 ]; then
-    # EDU recurring (72=annual, 73=biennial): incremental since-year loads
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
-  elif [ "$num" -eq 21 ]; then
-    # Crime (21): large dimension expansion (type × year × state × offense × ori), long-running
-    _HEAP_MIN="3g"
-    _HEAP_MAX="4g"
-  elif [ "$num" -ge 23 ] && [ "$num" -le 58 ]; then
-    # SEC Secondary (23-39), prices (40), compact (42-58): tracker preload needs ~2.5GB
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
-  else
-    # SEC Primary (1-17: 10-K/10-Q), non-SEC data (18-22): standard heap
-    _HEAP_MIN="2g"
-    _HEAP_MAX="3g"
+  local extra_json=""
+  if [ -n "$extra_operand" ]; then
+    extra_json=",${extra_operand}"
   fi
+
+  # data-fix.sh sets FORCE_FRESH=true to trigger freshStart (calls clearAllCompletions on the tracker)
+  if [ "${FORCE_FRESH:-false}" = true ]; then
+    extra_json="${extra_json},\"freshStart\":true"
+  fi
+
+  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}","trackerBackend":"s3","trackerConfig":{"bucket":"${CALCITE_TRACKER_S3_BUCKET}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"},"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
+    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$extra_json"
 }
 
 # Run the ETL with a given model file
@@ -878,12 +886,11 @@ run_etl() {
   return $exit_code
 }
 
-# Usage: run_etl_source <schema_name> <worker_id> [extra etl args...]
-# Runs ETL for a schema driven entirely by env vars.
-# Set GOVDATA_START_YEAR, GOVDATA_END_YEAR, GOVDATA_RUN_MODE, GOVDATA_AUTO_DOWNLOAD etc.
-# before calling; no model file is generated.
-run_etl_source() {
-  local schema_name=$1 worker_id=$2
+# Usage: run_etl_inline <inline_json> <worker_id> [extra etl args...]
+# Runs ETL with an inline model JSON string — no temp file created.
+# The caller builds the JSON (with ${VAR} patterns for Java resolution) and passes it.
+run_etl_inline() {
+  local inline_json=$1 worker_id=$2
   shift 2
 
   local jar
@@ -900,7 +907,7 @@ run_etl_source() {
   get_heap_config "$worker_id"
 
   local extra_flags=""
-  echo "[$worker_id] Starting ETL for schema: $schema_name (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  echo "[$worker_id] Starting ETL (inline model, heap: ${_HEAP_MIN}/${_HEAP_MAX})"
   if [ -n "${ETL_PARALLEL_THREADS:-}" ] && [ "${ETL_PARALLEL_THREADS:-0}" -gt 1 ]; then
     extra_flags="$extra_flags --threads $ETL_PARALLEL_THREADS"
     echo "[$worker_id] Parallel entity threads: $ETL_PARALLEL_THREADS"
@@ -914,7 +921,7 @@ run_etl_source() {
     -Xmx"${_HEAP_MAX}" \
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
-    --source "$schema_name" \
+    --model "inline:${inline_json}" \
     --verbose \
     $extra_flags \
     "$@" \

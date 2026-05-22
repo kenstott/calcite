@@ -110,7 +110,7 @@ public class EtlRunner {
    */
   public int run() {
     log("ETL Runner starting");
-    log("Model: " + config.getModelFile().getAbsolutePath());
+    log("Model: " + (config.isInline() ? "(inline)" : config.getModelFile().getAbsolutePath()));
 
     List<EtlRunConfig.SchemaConfig> schemas = config.getSchemas();
     log("Schemas to process: " + schemas.size());
@@ -127,7 +127,7 @@ public class EtlRunner {
 
     try {
       manifest = new EtlRunManifest(manifestFile);
-      runEntry = manifest.startRun(config.getModelFile().getName());
+      runEntry = manifest.startRun(config.isInline() ? "inline" : config.getModelFile().getName());
       log("Run ID: " + runEntry.runId);
     } catch (Exception e) {
       logWarn("Failed to initialize manifest: " + e.getMessage());
@@ -341,16 +341,21 @@ public class EtlRunner {
       // Load the GovData driver
       Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
 
-      // Create connection using the model file
-      // This triggers the full ETL process via GovDataSchemaFactory
-      String modelPath = config.getModelFile().getAbsolutePath();
+      final Connection conn;
+      if (config.isInline()) {
+        verbose("Creating Calcite connection with inline model");
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty("lex", "ORACLE");
+        props.setProperty("unquotedCasing", "TO_LOWER");
+        props.setProperty("model", "inline:" + config.getInlineJson());
+        conn = DriverManager.getConnection("jdbc:calcite:", props);
+      } else {
+        String modelPath = config.getModelFile().getAbsolutePath();
+        verbose("Creating Calcite connection with model: " + modelPath);
+        conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath);
+      }
 
-      verbose("Creating Calcite connection with model: " + modelPath);
-
-      // Use standard Calcite connection with our model
-      String url = "jdbc:calcite:model=" + modelPath;
-
-      try (Connection conn = DriverManager.getConnection(url)) {
+      try (Connection ignored = conn) {
         // Connection creation triggers schema creation, which triggers ETL
         // Just opening the connection is enough to run the ETL
         verbose("Connection established, ETL triggered for schema: " + schema.getName());

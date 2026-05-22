@@ -42,6 +42,7 @@ import java.util.Map;
 public class EtlRunConfig {
 
   private final File modelFile;
+  private final String inlineJson;
   private final boolean compact;
   private final boolean compactOnly;
   private final boolean noCompact;
@@ -54,6 +55,7 @@ public class EtlRunConfig {
 
   private EtlRunConfig(Builder builder) throws IOException {
     this.modelFile = builder.modelFile;
+    this.inlineJson = builder.inlineJson;
     this.compact = builder.compact;
     this.compactOnly = builder.compactOnly;
     this.noCompact = builder.noCompact;
@@ -61,8 +63,20 @@ public class EtlRunConfig {
     this.verbose = builder.verbose;
     this.parallelThreads = builder.parallelThreads;
     this.manifestFile = builder.manifestFile;
-    this.modelJson = parseModelFile(builder.modelFile);
+    this.modelJson = inlineJson != null
+        ? new ObjectMapper().readTree(inlineJson)
+        : parseModelFile(builder.modelFile);
     this.schemas = extractSchemas(this.modelJson);
+  }
+
+  /** Returns true when the model was supplied inline rather than as a file path. */
+  public boolean isInline() {
+    return inlineJson != null;
+  }
+
+  /** Returns the raw inline JSON string, or null if a model file is used. */
+  public String getInlineJson() {
+    return inlineJson;
   }
 
   /**
@@ -81,9 +95,14 @@ public class EtlRunConfig {
       switch (arg) {
         case "--model":
           if (i + 1 >= args.length) {
-            throw new IllegalArgumentException("--model requires a file path");
+            throw new IllegalArgumentException("--model requires a file path or inline:JSON");
           }
-          builder.modelFile(new File(args[++i]));
+          String modelArg = args[++i];
+          if (modelArg.startsWith("inline:")) {
+            builder.inlineJson(modelArg.substring("inline:".length()));
+          } else {
+            builder.modelFile(new File(modelArg));
+          }
           break;
         case "--compact":
           builder.compact(true);
@@ -134,10 +153,12 @@ public class EtlRunConfig {
   }
 
   private static void printUsage() {
-    System.out.println("Usage: etl-runner [OPTIONS] --model <file>");
+    System.out.println("Usage: etl-runner [OPTIONS] (--model <file> | --source <schema>)");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  --model <file>    Model JSON file (required)");
+    System.out.println("  --model <file>    Model JSON file");
+    System.out.println("  --source <schema> Schema name; reads all config from env vars");
+    System.out.println("                    (GOVDATA_PARQUET_DIR, GOVDATA_START_YEAR, etc.)");
     System.out.println("  --compact         Minimal output for scripting");
     System.out.println("  --compact-only    Scan and compact tracker data only (no ETL)");
     System.out.println("  --no-compact      Disable compaction on first read (for parallel workers)");
@@ -312,6 +333,7 @@ public class EtlRunConfig {
    */
   public static class Builder {
     private File modelFile;
+    private String inlineJson;
     private boolean compact = false;
     private boolean compactOnly = false;
     private boolean noCompact = false;
@@ -322,6 +344,11 @@ public class EtlRunConfig {
 
     public Builder modelFile(File modelFile) {
       this.modelFile = modelFile;
+      return this;
+    }
+
+    public Builder inlineJson(String json) {
+      this.inlineJson = json;
       return this;
     }
 
@@ -361,14 +388,17 @@ public class EtlRunConfig {
     }
 
     public EtlRunConfig build() throws IOException {
-      if (modelFile == null) {
-        throw new IllegalArgumentException("Model file is required (--model <file>)");
+      if (modelFile == null && inlineJson == null) {
+        throw new IllegalArgumentException(
+            "Either --model <file> or --model inline:{json} is required");
       }
-      if (!modelFile.exists()) {
-        throw new IllegalArgumentException("Model file not found: " + modelFile);
-      }
-      if (!modelFile.isFile()) {
-        throw new IllegalArgumentException("Model path is not a file: " + modelFile);
+      if (modelFile != null) {
+        if (!modelFile.exists()) {
+          throw new IllegalArgumentException("Model file not found: " + modelFile);
+        }
+        if (!modelFile.isFile()) {
+          throw new IllegalArgumentException("Model path is not a file: " + modelFile);
+        }
       }
       return new EtlRunConfig(this);
     }

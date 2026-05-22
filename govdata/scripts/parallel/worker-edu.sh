@@ -84,7 +84,7 @@ ENDJSON
 
 # ── modes ─────────────────────────────────────────────────────────────────────
 
-INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026}
+INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
 case "$MODE" in
 

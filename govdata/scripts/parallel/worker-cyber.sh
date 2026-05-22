@@ -23,17 +23,28 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|daily|weekly|hourly|static> [--force]" >&2
+  echo "Usage: $0 <initial|daily|weekly|hourly|static> [cyber_threat|cyber_vuln] [--force]" >&2
   exit 1
 fi
 
+# Optional second arg restricts which schema runs in this invocation.
+SCHEMA_FILTER="${2:-both}"
+case "$SCHEMA_FILTER" in
+  cyber_threat|cyber_vuln|both) ;;
+  --force) SCHEMA_FILTER="both" ;;  # handle caller passing --force as $2
+  *) echo "Usage: $0 <mode> [cyber_threat|cyber_vuln] [--force]" >&2; exit 1 ;;
+esac
+
 FORCE=${FORCE:-false}
-for arg in "${@:2}"; do
+for arg in "$@"; do
   [ "$arg" = "--force" ] && FORCE=true
 done
 export FORCE
 
-WORKER_ID="worker-cyber-${MODE}"
+# Returns true if the given schema should run given SCHEMA_FILTER.
+should_run() { [ "$SCHEMA_FILTER" = "both" ] || [ "$SCHEMA_FILTER" = "$1" ]; }
+
+WORKER_ID="worker-${SCHEMA_FILTER}-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
@@ -95,38 +106,44 @@ case "$MODE" in
 
   initial)
     # Full NVD catalog + KEV + CWE + junction tables
-    run_cyber_model "cyber_vuln" "vuln-full" \
-      '"vulnerabilities", "vulnerability_cwes", "kev_catalog", "kev_cwes", "cwe_catalog"'
+    if should_run "cyber_vuln"; then
+      run_cyber_model "cyber_vuln" "vuln-full" \
+        '"vulnerabilities", "vulnerability_cwes", "kev_catalog", "kev_cwes", "cwe_catalog"'
+    fi
 
     # Static standards: fetch once; change only when NIST/CIS/OWASP publish new versions
-    run_cyber_model "cyber_threat" "threat-static" \
-      '"nist_controls", "nist_csf_functions", "cis_controls", "owasp_top10", "attack_to_nist_mappings"'
+    if should_run "cyber_threat"; then
+      run_cyber_model "cyber_threat" "threat-static" \
+        '"nist_controls", "nist_csf_functions", "cis_controls", "owasp_top10", "attack_to_nist_mappings"'
 
-    # OTX full backfill: no CYBER_OTX_DELTA_DAYS → retrieves all available pulses
-    if [ -n "${CYBER_OTX_API_KEY:-}" ]; then
-      unset CYBER_OTX_DELTA_DAYS 2>/dev/null || true
-      run_cyber_model "cyber_threat" "threat-otx-initial" '"threat_pulses"'
-    else
-      log_info "$WORKER_ID: CYBER_OTX_API_KEY not set — skipping threat_pulses initial load"
+      # OTX full backfill: no CYBER_OTX_DELTA_DAYS → retrieves all available pulses
+      if [ -n "${CYBER_OTX_API_KEY:-}" ]; then
+        unset CYBER_OTX_DELTA_DAYS 2>/dev/null || true
+        run_cyber_model "cyber_threat" "threat-otx-initial" '"threat_pulses"'
+      else
+        log_info "$WORKER_ID: CYBER_OTX_API_KEY not set — skipping threat_pulses initial load"
+      fi
     fi
     ;;
 
   daily)
     # NVD delta: last 1 day of modified/published CVEs; also refreshes KEV
-    run_cyber_model "cyber_vuln" "vuln-daily" \
-      '"vulnerabilities", "kev_catalog"' \
-      '"nvdDeltaDays": 1'
+    if should_run "cyber_vuln"; then
+      run_cyber_model "cyber_vuln" "vuln-daily" \
+        '"vulnerabilities", "kev_catalog"' \
+        '"nvdDeltaDays": 1'
+    fi
     ;;
 
   weekly)
     # Windows read from each table's releaseWindow in the schema YAML (dow: Sunday).
     # cwe_catalog is representative for the vuln group; attack_techniques for the threat group.
-    if table_in_window "$CYBER_VULN_SCHEMA_YAML" "cwe_catalog"; then
+    if should_run "cyber_vuln" && table_in_window "$CYBER_VULN_SCHEMA_YAML" "cwe_catalog"; then
       run_cyber_model "cyber_vuln" "vuln-weekly" \
         '"cwe_catalog", "osv_vulnerabilities", "vuln_cross_refs", "advisories"'
     fi
 
-    if table_in_window "$CYBER_THREAT_SCHEMA_YAML" "attack_techniques"; then
+    if should_run "cyber_threat" && table_in_window "$CYBER_THREAT_SCHEMA_YAML" "attack_techniques"; then
       run_cyber_model "cyber_threat" "threat-weekly" \
         '"attack_techniques", "attack_to_nist_mappings"'
     fi
@@ -134,14 +151,18 @@ case "$MODE" in
 
   hourly)
     # Live IOC feeds
-    run_cyber_model "cyber_threat" "threat-hourly" \
-      '"ioc_urls", "ioc_hashes", "ioc_ips", "ioc_mixed", "threat_pulses"'
+    if should_run "cyber_threat"; then
+      run_cyber_model "cyber_threat" "threat-hourly" \
+        '"ioc_urls", "ioc_hashes", "ioc_ips", "ioc_mixed", "threat_pulses"'
+    fi
     ;;
 
   static)
     # Re-run static standards only (safe to re-run at any time; idempotent)
-    run_cyber_model "cyber_threat" "threat-static" \
-      '"nist_controls", "nist_csf_functions", "cis_controls", "owasp_top10", "attack_to_nist_mappings"'
+    if should_run "cyber_threat"; then
+      run_cyber_model "cyber_threat" "threat-static" \
+        '"nist_controls", "nist_csf_functions", "cis_controls", "owasp_top10", "attack_to_nist_mappings"'
+    fi
     ;;
 
   *)
