@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-20
+Last updated: 2026-05-22
 
 ## How to Read This
 
@@ -22,14 +22,14 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | Schema | Slots | Historical | Daily | Static/Replace tables | Incremental tables | Release gates |
 |--------|-------|-----------|-------|----------------------|-------------------|---------------|
 | weather | `weather:historical` / `weather:daily` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 13 tables | Current year only (`START_YEAR=INCREMENTAL_YEAR`); tracker skips already-complete year-partitions | `nws_stations`, `cdo_stations`, `ghcnd_stations_with_county`, `climate_normals_monthly` | `ghcnd_daily`, `cdo_monthly/annual`, `epa_*_aqi`, `drought_monitor_weekly`, `hms_smoke_*` | None |
-| edu | `edu:initial` / `edu:annual` / `edu:biennial` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; K-12 from 2010, IPEDS from 1986 | Annual sub-runs (Jul–Nov/Jan) and biennial sub-runs (NAEP odd-year Jan–Mar; CRDC even-year Oct–Dec); out-of-window sub-runs exit immediately with no I/O | None | All 10 tables (append-by-year) | Per-table `releaseWindow` in YAML; checked by `check-release-window.py` |
-| lands | `lands:historical` / `lands:daily` | All years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 8 tables | Current year only; static reference tables refresh annually; time-series append current year | `national_forests`, `nps_units`, `blm_field_offices` (full-replace annually) | `timber_sales`, `forest_inventory`, `forest_metrics`, `nps_visitation`, `onrr_revenues` | Per-table `releaseWindow`; ONRR ~3 months in arrears |
+| edu | `edu:initial` / `edu:annual` / `edu:biennial` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; K-12 from 2010, IPEDS from 1986 | Annual sub-runs (Jul–Nov/Jan) and biennial sub-runs (NAEP odd-year Jan–Mar; CRDC even-year Oct–Dec); out-of-window sub-runs exit immediately with no I/O | None | All 10 tables (append-by-year) | Release gated by `dataLag` + `releaseMonth` on yearRange dimension |
+| lands | `lands:historical` / `lands:daily` | All years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 8 tables | Current year only; static reference tables refresh annually; time-series append current year | `national_forests`, `nps_units`, `blm_field_offices` (full-replace annually) | `timber_sales`, `forest_inventory`, `forest_metrics`, `nps_visitation`, `onrr_revenues` | ONRR ~3 months in arrears; gated by `dataLag` + `releaseMonth` on yearRange |
 | health | `health:initial` / `health:daily` / `health:weekly` / `health:monthly` | All 15 tables, full fetch | Daily: clinical trials delta; Weekly: CDC vaccinations/mortality delta; Monthly: FDA catalogs + gated BRFSS/Medicaid/CMS tables | `rxnorm_drugs` (continuous reference refresh) | All other 14 tables (SINCE_DATE delta or append-by-year) | Monthly sub-runs gated by `releaseWindow` per table |
-| fec | `fec:historical` / `fec:daily` | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); `incrementalTtlDays: 30` expires tracker entries monthly to re-fetch in-progress cycle data | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
-| econ_reference | `econ_reference:daily` | Same as daily (single-mode; no historical/initial split) | TTL-gated: each table refreshes only when `incrementalTtlDays` expires; outside release window tables skip silently | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Per-table `incrementalTtlDays` + `releaseWindow` in YAML |
-| geo | `geo:daily` | Same as daily (single-mode; no historical/daily split) | TTL-gated: `incrementalTtlDays: 365` in `materializationDefaults`; re-fetches only after 1 year. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
-| fedregister | `fedregister:historical` / `fedregister:daily` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` partitioned by year × month (96 batches per 8-year range) | Current year only; `fr_documents` re-fetched monthly (`incrementalTtlDays: 30`) | None | `fr_documents` (year+month-partitioned; `batchPartitionColumns: [year, month]`) | None |
-| ref | `ref:daily` | Same as daily (single-mode; no historical/initial split) | TTL-gated: GLEIF tables `incrementalTtlDays: 365`, `sec_company_tickers` monthly (30d), `figi_instruments` annual (365d). `figi_instruments` only runs when `OPENFIGI_API_KEY` is set; uses `FigiDataProvider` to batch 100 tickers/request (~104 requests, 6 min vs 7 hr per-ticker approach) | All 4 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
+| fec | `fec:historical` / `fec:daily` | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); GOVDATA_CURRENT_YEAR dimension busts rawCache monthly so in-progress cycle data is re-fetched | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
+| econ_reference | `econ_reference:daily` | Same as daily (single-mode; no historical/initial split) | Year + quarter dimensions (GOVDATA_CURRENT_YEAR/QUARTER) bust rawCache on schedule; tables only re-process when dimension value advances | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Release gated by `dataLag` + `releaseMonth` per table |
+| geo | `geo:daily` | Same as daily (single-mode; no historical/daily split) | Year dimension (GOVDATA_CURRENT_YEAR) busts rawCache annually. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
+| fedregister | `fedregister:historical` / `fedregister:daily` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` partitioned by year × month (96 batches per 8-year range) | Current year only; month dimension (GOVDATA_CURRENT_MONTH) busts rawCache monthly so current-year batches re-fetch | None | `fr_documents` (year+month-partitioned; `batchPartitionColumns: [year, month]`) | None |
+| ref | `ref:daily` | Same as daily (single-mode; no historical/initial split) | Year dimension (GOVDATA_CURRENT_YEAR) busts rawCache annually for GLEIF/FIGI; month dimension (GOVDATA_CURRENT_MONTH) busts sec_company_tickers monthly. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set; uses `FigiDataProvider` to batch 100 tickers/request (~104 requests, 6 min vs 7 hr per-ticker approach) | All 4 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
 
 ### How daily efficiency works per schema
 
@@ -41,7 +41,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 
 **Health:** Separate workers per cadence (daily/weekly/monthly) so the daily clinical-trials delta doesn't block monthly FDA refreshes. `GOVDATA_SINCE_DATE` filters API requests to records newer than the last successful run. Monthly workers gate on per-table `releaseWindow` to avoid polling APIs that publish quarterly or annually.
 
-**FEC:** `fec:daily` passes `startYear=INCREMENTAL_YEAR` to `generate_fec_model`, then unsets `GOVDATA_START_YEAR` so `GovDataSchemaFactory`'s system property governs. `DimensionIterator` resolves `fec_election_cycles` with `minYear=INCREMENTAL_YEAR`, producing a single cycle. `incrementalTtlDays: 30` causes tracker entries for the current cycle to expire monthly, forcing a re-fetch of bulk ZIPs that FEC updates throughout the active cycle. Historical cycles (2010–2024) remain `complete` in the tracker and are never re-processed.
+**FEC:** `fec:daily` passes `startYear=INCREMENTAL_YEAR` to `generate_fec_model`, then unsets `GOVDATA_START_YEAR` so `GovDataSchemaFactory`'s system property governs. `DimensionIterator` resolves `fec_election_cycles` with `minYear=INCREMENTAL_YEAR`, producing a single cycle. `GOVDATA_CURRENT_YEAR` dimension advances the rawCache key each calendar year, forcing a re-fetch of bulk ZIPs that FEC updates throughout the active cycle. Historical cycles (2010–2024) remain `complete` in the tracker and are never re-processed.
 - **STALE** — last run > 30 days ago
 
 Results are stored at: `r2:govdata-tracker-v1/dq-results/schema={schema}/run_date=.../type=.../results.parquet`
@@ -59,23 +59,51 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 
 | Schema       | Last Run   | Result  | Fails | Warns | Notes |
 |--------------|------------|---------|-------|-------|-------|
-| weather      | 2026-05-11 | WARN    | 0     | 2     | See details below |
-| edu          | 2026-05-13 | WARN    | 0     | 2     | See details below |
-| census       | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| econ         | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| crime        | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| geo          | 2026-05-19 | PASS    | 0     | 0     | See details below |
-| fec          | 2026-05-17 | WARN    | 0     | 6     | See details below |
-| fedregister  | 2026-05-19 | PASS    | 0     | 0     | See details below |
-| lands        | 2026-05-16 | PASS    | 0     | 0     | See details below |
-| health       | 2026-05-15 | WARN    | 0     | 7     | See details below |
-| patents      | 2026-05-19 | WARN    | 0     | 9     | See details below |
-| ref          | 2026-05-20 | WARN    | 0     | 1     | See details below |
-| sec          | —          | PENDING | —     | —     | Data in R2; DQ not yet run |
-| energy       | 2026-05-20 | PASS    | 0     | 0     | See details below |
-| econ_reference | 2026-05-18 | PASS  | 0     | 0     | See details below |
-| cyber_threat | 2026-05-17 | WARN    | 0     | 3     | See details below |
-| cyber_vuln   | 2026-05-18 | WARN    | 0     | 1     | See details below |
+| weather      | —          | PENDING | —     | —     | Schema changes pending re-run |
+| edu          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| census       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
+| crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
+| geo          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
+| lands        | —          | PENDING | —     | —     | Schema changes pending re-run |
+| health       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| patents      | —          | PENDING | —     | —     | Schema changes pending re-run |
+| ref          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| econ_reference | —        | PENDING | —     | —     | Schema changes pending re-run |
+| cyber_threat | —          | PENDING | —     | —     | Schema changes pending re-run |
+| cyber_vuln   | —          | PENDING | —     | —     | Schema changes pending re-run |
+
+---
+
+## Estimated DQ Run Time
+
+Time estimates assume a full historical re-run (all years) where applicable, followed by DQ test execution. Schemas already fully in R2 with prior runs only need a DQ re-run (shorter). Schemas with schema changes need a full re-ingest.
+
+| Schema | Re-ingest needed? | Est. ETL time | Est. DQ time | Total |
+|--------|------------------|---------------|--------------|-------|
+| weather | Yes (rawCache + dimension changes) | 2–3 h | 10 min | ~3 h |
+| edu | Yes (dimension changes) | 3–5 h | 15 min | ~5 h |
+| census | Yes (never run) | 4–8 h | 20 min | ~8 h |
+| econ | Yes (dimension changes) | 2–4 h | 10 min | ~4 h |
+| crime | Yes (dimension changes) | 1–2 h | 10 min | ~2 h |
+| geo | Yes (rawCache changes) | 3–5 h | 20 min | ~5 h |
+| fec | Yes (dimension changes) | 2–4 h | 15 min | ~4 h |
+| fedregister | Yes (dimension changes) | 1–2 h | 5 min | ~2 h |
+| lands | Yes (dimension + rawCache changes) | 1–2 h | 10 min | ~2 h |
+| health | Yes (dimension changes) | 3–6 h | 15 min | ~6 h |
+| patents | DQ re-run only | 0 | 10 min | 10 min |
+| ref | Yes (dimension changes) | 1–2 h | 5 min | ~2 h |
+| sec | Yes (never fully run) | 6–12 h | 30 min | ~12 h |
+| energy | DQ re-run only | 0 | 10 min | 10 min |
+| econ_reference | Yes (dimension changes) | 30 min | 5 min | ~35 min |
+| cyber_threat | Yes (dimension + ttl_days removal) | 1–2 h | 5 min | ~2 h |
+| cyber_vuln | Yes (dimension + ttl_days removal) | 2–4 h | 10 min | ~4 h |
+
+**Total (sequential):** ~65–75 h. With full parallelism across run-pool slots: ~12–16 h wall clock (bottleneck: sec + census + health running in parallel).
 
 ---
 
@@ -207,11 +235,11 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 - `fred_series`: 5 of 7 configured FRED categories return data; categories 1 (Production & Business Activity) and 3 (Discontinued/Legacy) are capped at 1,000 rows each by the FRED API per-category limit. T7 threshold set to ≥5 categories to account for this.
 - `nipa_tables` and `regional_linecodes`: `type` and `section`/`tablename` partition columns excluded from T5 single-value check (expected constant per partition).
 
-**TTL / Release windows configured (as of 2026-05-18):**
-- `jolts_industries`, `jolts_dataelements`, `naics_sectors`: `incrementalTtlDays: 365` (annual refresh; BLS rarely revises)
-- `bls_geographies`: `incrementalTtlDays: 365`, `releaseWindow: {months: [1, 2, 3]}` (Q1; annual BLS geography updates)
-- `nipa_tables`, `regional_linecodes`: `incrementalTtlDays: 180`, `releaseWindow: {months: [7, 8, 9]}` (Q3; BEA mid-year benchmark revisions)
-- `fred_series`: `incrementalTtlDays: 30` (monthly; FRED actively adds series)
+**Freshness / release gates (as of 2026-05-22):**
+- `jolts_industries`, `jolts_dataelements`, `naics_sectors`: year dimension (GOVDATA_CURRENT_YEAR) → annual cache bust
+- `bls_geographies`: year dimension + `releaseMonth` Q1 gate (annual BLS geography updates)
+- `nipa_tables`, `regional_linecodes`: year + quarter dimensions (GOVDATA_CURRENT_QUARTER) + `releaseMonth` Q3 gate (BEA mid-year benchmark revisions)
+- `fred_series`: year + month dimensions (GOVDATA_CURRENT_MONTH) → monthly cache bust
 
 ---
 
@@ -236,9 +264,9 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 - `FigiDataProvider`: replaces per-ticker HttpSource calls (10,354 requests, ~7 hours) with batched DataProvider (100 tickers/request, 104 requests, ~6 minutes). Tickers sourced from `sec_company_tickers` Iceberg table via DuckDB.
 - `sec_company_tickers`: new table sourcing ~10,354 active US exchange-listed companies from SEC EDGAR `company_tickers.json`. Feeds `figi_instruments` via `FigiDataProvider`.
 
-**TTL configured (as of 2026-05-20):**
-- `gleif_entities`, `gleif_cik_mapping`, `figi_instruments`: `incrementalTtlDays: 365`, `overwritePartitions: true` (full replace on each annual refresh).
-- `sec_company_tickers`: `incrementalTtlDays: 30`, `overwritePartitions: true` (monthly refresh to catch new listings).
+**Freshness / release gates (as of 2026-05-22):**
+- `gleif_entities`, `gleif_cik_mapping`, `figi_instruments`: year dimension (GOVDATA_CURRENT_YEAR) → annual cache bust; `overwritePartitions: true`
+- `sec_company_tickers`: month dimension (GOVDATA_CURRENT_MONTH) → monthly cache bust; `overwritePartitions: true`
 
 ---
 
@@ -258,8 +286,8 @@ Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{y
 | fr_documents | T7_document_number_format | PASS | All document numbers match YYYY-NNNNN |
 | fr_documents | T7_publication_date_format | PASS | All dates match YYYY-MM-DD |
 
-**TTL / Release windows configured (as of 2026-05-19):**
-- `fr_documents`: `incrementalTtlDays: 30`; `batchPartitionColumns: [year, month]`, `incrementalKeys: [year, month]`
+**Freshness (as of 2026-05-22):**
+- `fr_documents`: month dimension (GOVDATA_CURRENT_MONTH) → monthly cache bust; `batchPartitionColumns: [year, month]`, `incrementalKeys: [year, month]`
 
 ---
 
@@ -325,8 +353,8 @@ Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{y
 
 TIGER/Line 2010 annual shapefiles use `{field}10`-suffixed column names (`GEOID10`, `STATEFP10`, etc.) for boundary tables. `TigerDataProvider` hardcodes the non-suffixed names; all year=2010 attribute columns ingest as null. The DQ T6 pk_nulls checks exclude `year='2010'` to avoid false failures. Fixing requires extending `TigerFieldNormalizer` to all TIGER boundary tables and re-ingesting year=2010.
 
-**TTL / Release windows configured (as of 2026-05-19):**
-- All tables: `incrementalTtlDays: 365` (annual TIGER release cycle), `releaseWindow: all months` (via `materializationDefaults.iceberg`)
+**Freshness (as of 2026-05-22):**
+- All tables: year dimension (GOVDATA_CURRENT_YEAR) → annual cache bust aligned to TIGER annual release cycle
 
 ---
 
