@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "defaultSchema": "fec",
+  "schemas": [{
+    "name": "fec",
+    "type": "custom",
+    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+    "operand": {
+      "dataSource": "fec",
+      "autoDownload": true,
+      "directory": "s3://govdata-parquet-v1",
+      "startYear": 2024,
+      "cacheDirectory": "s3://govdata-raw-v1",
+      "forceReprocessTables": ["committee_contributions"],
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "s3://govdata-tracker-v1",
+        "endpoint": "https://21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com"
+      },
+      "s3Config": {
+        "accessKeyId": "${AWS_ACCESS_KEY_ID}",
+        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+      }
+    }
+  }]
+}

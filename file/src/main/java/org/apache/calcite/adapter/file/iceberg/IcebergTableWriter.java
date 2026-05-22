@@ -711,8 +711,8 @@ public class IcebergTableWriter {
         if (value instanceof java.time.LocalDate) {
           return value;
         }
-        if (value instanceof Integer) {
-          return java.time.LocalDate.ofEpochDay((Integer) value);
+        if (value instanceof Number) {
+          return java.time.LocalDate.ofEpochDay(((Number) value).longValue());
         }
         if (value instanceof java.sql.Date) {
           return ((java.sql.Date) value).toLocalDate();
