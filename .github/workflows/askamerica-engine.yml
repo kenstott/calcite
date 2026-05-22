@@ -452,7 +452,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Bump versions in Python package
-        working-directory: askamerica-python
+        working-directory: askamerica-python/python
         env:
           VERSION: ${{ steps.pyver.outputs.version }}
         run: |
@@ -476,7 +476,7 @@ jobs:
           EOF
 
       - name: Commit and push version bump
-        working-directory: askamerica-python
+        working-directory: askamerica-python/python
         env:
           VERSION: ${{ steps.pyver.outputs.version }}
         run: |
@@ -492,13 +492,13 @@ jobs:
           python-version: '3.11'
 
       - name: Build Python package
-        working-directory: askamerica-python
+        working-directory: askamerica-python/python
         run: |
           pip install build
           python -m build
 
       - name: Publish to PyPI
-        working-directory: askamerica-python
+        working-directory: askamerica-python/python
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
