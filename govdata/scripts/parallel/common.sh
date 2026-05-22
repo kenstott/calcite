@@ -463,10 +463,14 @@ generate_single_schema_model() {
     _YEAR_RANGE="\"startYear\": ${_START_YEAR},
       \"endYear\": $((_INCREMENTAL_YEAR - 1))"
   else
-    local _CURRENT_MONTH
+    local _CURRENT_MONTH _CURRENT_YEAR _CURRENT_QUARTER
     _CURRENT_MONTH=$(date +%m)
+    _CURRENT_YEAR=$(date +%Y)
+    _CURRENT_QUARTER=$(( ($(date +%-m) - 1) / 3 + 1 ))
     _YEAR_RANGE="\"startYear\": ${_INCREMENTAL_YEAR},
-      \"currentMonth\": \"${_CURRENT_MONTH}\""
+      \"currentMonth\": \"${_CURRENT_MONTH}\",
+      \"currentYear\": \"${_CURRENT_YEAR}\",
+      \"currentQuarter\": \"${_CURRENT_QUARTER}\""
   fi
 
   case "$schema_name" in

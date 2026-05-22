@@ -12,6 +12,19 @@ comment: >
   tables: NDC product catalog, drug approvals, drug recalls, adverse events
   (FAERS), and device recalls. All sourced from api.fda.gov.
 
+# ============================================================================
+# DIMENSION TEMPLATES
+# ============================================================================
+
+dimension_templates:
+
+  # Year range for health data
+  # Override: HEALTH_START_YEAR for health-only, GOVDATA_START_YEAR for all schemas
+  health_year_range: &health_year_range
+    type: yearRange
+    start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    end: current
+
 partitionedTables:
 
   # ==========================================================================
@@ -116,6 +129,7 @@ partitionedTables:
       ndc_prefix: ["0","1","2","3","4","5","60","61","62","63","64","65","66","67","68","69","7","8","9"]
       type:
         - fda_ndc_products
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -223,6 +237,7 @@ partitionedTables:
     dimensions:
       type:
         - fda_drug_approvals
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -342,6 +357,7 @@ partitionedTables:
     dimensions:
       type:
         - fda_drug_recalls
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -427,7 +443,14 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/drug/event.json?search=receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+20251231]"
+      # TODO: Parameterize the TO date using {year}/{month} dimensions so the rawCache key
+      # is busted each month. The openFDA search param uses YYYYMMDD format; a correct
+      # parameterized form would be something like:
+      #   receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+{year}{month}01]
+      # Requires the ETL engine to zero-pad month and support date arithmetic in URL templates.
+      # For now the TO date is left as the env-var default (end of current year) and the
+      # year+month dimensions act as cache-busters only.
+      url: "https://api.fda.gov/drug/event.json?search=receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+${HEALTH_FAERS_END_DATE:20991231}]"
       method: GET
       parameters:
         api_key: "${HEALTH_FDA_API_KEY:}"
@@ -452,6 +475,8 @@ partitionedTables:
     dimensions:
       type:
         - fda_adverse_events
+      year: *health_year_range
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -569,6 +594,7 @@ partitionedTables:
     dimensions:
       type:
         - fda_device_recalls
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -684,6 +710,9 @@ partitionedTables:
     dimensions:
       type:
         - clinical_trials
+      # sinceDate/untilDate in the incremental block do not bust rawCache;
+      # month dimension ensures cache is invalidated each month.
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -1070,6 +1099,9 @@ partitionedTables:
     dimensions:
       type:
         - cms_hospital_quality
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+      # month is not in the URL; these values are cache-busters for the annual release window
+      month: ["7","8","9"]
 
     materialize:
       enabled: true
@@ -1190,6 +1222,7 @@ partitionedTables:
     dimensions:
       type:
         - medicaid_drug_utilization
+      year: *health_year_range
 
     materialize:
       enabled: true
@@ -1273,6 +1306,7 @@ partitionedTables:
       source_type:
         - annual
         - weekly
+      year: *health_year_range
 
     materialize:
       enabled: true
@@ -1363,6 +1397,11 @@ partitionedTables:
     dimensions:
       type:
         - cdc_brfss
+      year:
+        type: yearRange
+        start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 1
 
     materialize:
       enabled: true
@@ -1439,6 +1478,12 @@ partitionedTables:
     source:
       type: http
       # CMS bulk CSV downloads — direct from download.cms.gov, streamed in batches.
+      # TODO: Parameterize PGYR{year} and the publication-date path segments so the URL
+      # updates automatically when a new program year is released (typically June each year).
+      # The path format is: /openpayments/PGYR{year}_P{pubdate}_{reldate}/OP_DTL_{type}_PGYR{year}_P{pubdate}_{reldate}.csv
+      # Publication/release dates are not predictable in advance; consider a metadata lookup
+      # step or a urlRules mapping keyed on year dimension.
+      # For now, update PGYR manually each June when CMS releases the new program year.
       # PGYR2023 is the most recent full year as of 2026. Update path when CMS releases PGYR2024.
       url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_GNRL_PGYR2023_P01232026_01102026.csv"
       method: GET
@@ -1470,6 +1515,12 @@ partitionedTables:
         - general
         - research
         - ownership
+      year:
+        type: yearRange
+        start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        end: current
+        dataLag: 1
+        releaseMonth: 6
 
     materialize:
       enabled: true
@@ -1525,6 +1576,7 @@ partitionedTables:
     dimensions:
       type:
         - rxnorm_drugs
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true

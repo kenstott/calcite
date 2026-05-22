@@ -791,6 +791,18 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("Set GOVDATA_CURRENT_MONTH={}", currentMonthObj);
     }
 
+    Object currentYearObj = operand.get("currentYear");
+    if (currentYearObj != null) {
+      System.setProperty("GOVDATA_CURRENT_YEAR", String.valueOf(currentYearObj));
+      LOGGER.debug("Set GOVDATA_CURRENT_YEAR={}", currentYearObj);
+    }
+
+    Object currentQuarterObj = operand.get("currentQuarter");
+    if (currentQuarterObj != null) {
+      System.setProperty("GOVDATA_CURRENT_QUARTER", String.valueOf(currentQuarterObj));
+      LOGGER.debug("Set GOVDATA_CURRENT_QUARTER={}", currentQuarterObj);
+    }
+
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
   }
 

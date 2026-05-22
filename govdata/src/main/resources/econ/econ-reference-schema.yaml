@@ -111,6 +111,13 @@ column_templates:
 # These can be referenced in table dimension definitions using *anchor_name
 # ============================================================================
 
+dimension_values:
+
+  econ_reference_year_range: &econ_reference_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    end: current
+    dataLag: 0
 
 partitionedTables:
 
@@ -161,6 +168,7 @@ partitionedTables:
     dimensions:
       type:
         - jolts_industries
+      year: *econ_reference_year_range
 
     # Materialization configuration
     materialize:
@@ -178,7 +186,6 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
@@ -226,6 +233,7 @@ partitionedTables:
     dimensions:
       type:
         - jolts_dataelements
+      year: *econ_reference_year_range
 
     # Materialization configuration
     materialize:
@@ -243,7 +251,6 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
@@ -303,6 +310,7 @@ partitionedTables:
     dimensions:
       type:
         - bls_geographies
+      year: *econ_reference_year_range
 
     # Materialization configuration (reference data)
     materialize:
@@ -320,9 +328,6 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
-        releaseWindow:
-          months: [1, 2, 3]
 
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: naics_sectors
@@ -359,6 +364,7 @@ partitionedTables:
     dimensions:
       type:
         - naics_sectors
+      year: *econ_reference_year_range
 
     # Materialization configuration (reference data)
     materialize:
@@ -376,7 +382,6 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
 
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
@@ -463,6 +468,12 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
 
+    # Dimension for ETL iteration
+    dimensions:
+      type:
+        - nipa_tables
+      year: *econ_reference_year_range
+
     # Materialization configuration
     materialize:
       enabled: true
@@ -479,9 +490,6 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 180
-        releaseWindow:
-          months: [7, 8, 9]
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: regional_linecodes
@@ -691,6 +699,7 @@ partitionedTables:
         - CAGDP8
         - CAGDP9
         - CAGDP11
+      year: *econ_reference_year_range
 
     # Custom hooks for BEA response handling
     hooks:
@@ -714,9 +723,6 @@ partitionedTables:
         incrementalKeys: [tablename]
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 180
-        releaseWindow:
-          months: [7, 8, 9]
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
@@ -854,7 +860,6 @@ partitionedTables:
         incrementalKeys: [category]
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 30
 
 
 # ============================================================================

@@ -150,7 +150,6 @@ partitionedTables:
       overwritePartitions: true
       runMaintenance: true
       snapshotRetentionDays: 7
-      incrementalTtlDays: 30
 
     materialize:
       format: iceberg

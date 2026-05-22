@@ -4,9 +4,6 @@
 # Threat intelligence, exploit data, IOC feeds, ATT&CK taxonomy, and
 # standards/compliance mappings.
 #
-# TTL strategy:
-#   - ioc_urls, ioc_hashes, ioc_ips, ioc_mixed: ttl_days driven by
-#     CYBER_IOC_TTL_DAYS env var (default 90); per-table override via ttl_days
 #   - attack_techniques, attack_tactics, etc.: no TTL (versioned releases)
 #   - exploits: no TTL (append-only with date_published for windowing)
 #   - nist_controls, cis_controls, owasp_top10: no TTL (version-pinned)
@@ -115,6 +112,11 @@ partitionedTables:
     dimensions:
       type:
         - attack_techniques
+      year:
+        - "${GOVDATA_CURRENT_YEAR}"
+      month:
+        - "4"
+        - "10"
 
     materialize:
       enabled: true
@@ -135,7 +137,6 @@ partitionedTables:
   # ==========================================================================
   - name: ioc_urls
     pattern: "type=ioc_urls/first_seen=${first_seen}.parquet"
-    ttl_days: 90
     partitions:
       style: hive
       columnDefinitions:
@@ -242,7 +243,6 @@ partitionedTables:
   # ==========================================================================
   - name: ioc_hashes
     pattern: "type=ioc_hashes/first_seen=${first_seen}.parquet"
-    ttl_days: 90
     partitions:
       style: hive
       columnDefinitions:
@@ -371,7 +371,6 @@ partitionedTables:
   # ==========================================================================
   - name: ioc_ips
     pattern: "type=ioc_ips/first_seen=${first_seen}.parquet"
-    ttl_days: 90
     partitions:
       style: hive
       columnDefinitions:
@@ -470,7 +469,6 @@ partitionedTables:
   # ==========================================================================
   - name: ioc_mixed
     pattern: "type=ioc_mixed/first_seen=${first_seen}.parquet"
-    ttl_days: 90
     enabled: "${CYBER_THREATFOX_API_KEY:}"
     partitions:
       style: hive
@@ -1041,7 +1039,6 @@ partitionedTables:
   # ==========================================================================
   - name: threat_pulses
     pattern: "type=threat_pulses/first_seen=${first_seen}.parquet"
-    ttl_days: 90
     enabled: "${CYBER_OTX_API_KEY:}"
     partitions:
       style: hive

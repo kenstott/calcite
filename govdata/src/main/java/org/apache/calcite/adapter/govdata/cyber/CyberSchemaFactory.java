@@ -13,10 +13,8 @@ package org.apache.calcite.adapter.govdata.cyber;
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
-import org.apache.calcite.adapter.govdata.cyber.threat.CyberThreatCacheManifest;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevDownloader;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CweDownloader;
-import org.apache.calcite.adapter.govdata.cyber.vuln.CyberVulnCacheManifest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -212,13 +210,4 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
     });
   }
 
-  /**
-   * Returns the cache manifest for the configured data source.
-   */
-  public AbstractCyberCacheManifest createCacheManifest() {
-    if ("cyber_threat".equals(dataSource)) {
-      return new CyberThreatCacheManifest();
-    }
-    return new CyberVulnCacheManifest();
-  }
 }

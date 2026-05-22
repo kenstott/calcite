@@ -7,7 +7,6 @@
 #
 # TTL strategy:
 #   - vulnerabilities, affected_products, cve_references: no TTL (immutable once published)
-#   - kev_catalog: ttl_days: 1 (force daily re-ingest; single file, diff on catalogVersion)
 #   - osv_vulnerabilities, osv_advisories: no TTL (updated via delta by modified date)
 #
 # Partition note: all tables partition by the dimension columns defined below.
@@ -102,6 +101,10 @@ partitionedTables:
     dimensions:
       type:
         - cwe_catalog
+      year:
+        - "${GOVDATA_CURRENT_YEAR}"
+      quarter:
+        - "${GOVDATA_CURRENT_QUARTER}"
 
     materialize:
       enabled: true
@@ -297,7 +300,6 @@ partitionedTables:
   # ==========================================================================
   - name: kev_catalog
     pattern: "type=kev_catalog.parquet"
-    ttl_days: 1
     partitions:
       style: hive
       columnDefinitions:
@@ -370,7 +372,7 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevResponseTransformer"
@@ -397,7 +399,6 @@ partitionedTables:
   # ==========================================================================
   - name: kev_cwes
     pattern: "type=kev_cwes.parquet"
-    ttl_days: 1
     partitions:
       style: hive
       columnDefinitions:
@@ -429,7 +430,7 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevCwesResponseTransformer"

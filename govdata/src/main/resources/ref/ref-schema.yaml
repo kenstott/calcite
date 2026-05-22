@@ -88,6 +88,18 @@ column_templates:
     comment: Trading ticker symbol
 
 # ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  ref_year_range: &ref_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    end: current
+    dataLag: 0
+
+# ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
 
@@ -196,6 +208,7 @@ partitionedTables:
     dimensions:
       type:
         - gleif_entities
+      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -214,7 +227,6 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -268,6 +280,7 @@ partitionedTables:
     dimensions:
       type:
         - gleif_cik_mapping
+      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -286,7 +299,6 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -344,6 +356,7 @@ partitionedTables:
     dimensions:
       type:
         - sec_company_tickers
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -362,7 +375,6 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 30
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -453,6 +465,7 @@ partitionedTables:
     dimensions:
       type:
         - figi_instruments
+      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -471,7 +484,6 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        incrementalTtlDays: 365
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

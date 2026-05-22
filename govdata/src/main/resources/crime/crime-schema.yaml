@@ -241,6 +241,7 @@ partitionedTables:
       type:
         - agency
       state_abbr: *all_state_abbrs
+      year: *crime_year_range
 
     columns:
       - name: ori
@@ -895,6 +896,7 @@ partitionedTables:
     dimensions:
       type:
         - trends
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     columns:
       - name: offense_name
@@ -1026,6 +1028,7 @@ partitionedTables:
       type:
         - nibrs
       endpoint_id: *bjs_nibrs_endpoints
+      year: *crime_year_range
 
     columns:
       - name: endpoint_id

@@ -373,7 +373,8 @@ bulkDownloads:
   bea_sainc_bulk:
     cachePattern: "type=bea_bulk/dataset=SAINC/SAINC.zip"
     url: "https://apps.bea.gov/regional/zip/SAINC.zip"
-    dimensions: {}  # No dimensions - single static file containing all years
+    dimensions:
+      year: *year_range_default
     comment: >
       BEA State Annual Personal Income (SAINC) bulk download ~16.4MB.
       Contains all SAINC tables (SAINC1-SAINC91) for all states, all years from 1929-present.
@@ -382,7 +383,8 @@ bulkDownloads:
   bea_sagdp_bulk:
     cachePattern: "type=bea_bulk/dataset=SAGDP/SAGDP.zip"
     url: "https://apps.bea.gov/regional/zip/SAGDP.zip"
-    dimensions: {}
+    dimensions:
+      year: *year_range_default
     comment: >
       BEA State Annual GDP (SAGDP) bulk download ~9.5MB.
       Contains all SAGDP tables for all states, all years.
@@ -391,7 +393,8 @@ bulkDownloads:
   bea_sqinc_bulk:
     cachePattern: "type=bea_bulk/dataset=SQINC/SQINC.zip"
     url: "https://apps.bea.gov/regional/zip/SQINC.zip"
-    dimensions: {}
+    dimensions:
+      year: *year_range_default
     comment: >
       BEA State Quarterly Personal Income (SQINC) bulk download ~16.7MB.
       Contains all SQINC tables for all states.
@@ -400,7 +403,8 @@ bulkDownloads:
   bea_sqgdp_bulk:
     cachePattern: "type=bea_bulk/dataset=SQGDP/SQGDP.zip"
     url: "https://apps.bea.gov/regional/zip/SQGDP.zip"
-    dimensions: {}
+    dimensions:
+      year: *year_range_default
     comment: >
       BEA State Quarterly GDP (SQGDP) bulk download ~3.2MB.
       Contains all SQGDP tables for all states.
@@ -409,7 +413,8 @@ bulkDownloads:
   bea_sapce_bulk:
     cachePattern: "type=bea_bulk/dataset=SAPCE/SAPCE.zip"
     url: "https://apps.bea.gov/regional/zip/SAPCE.zip"
-    dimensions: {}
+    dimensions:
+      year: *year_range_default
     comment: >
       BEA State Personal Consumption Expenditures (SAPCE) bulk download ~3.7MB.
       Contains all SAPCE tables for all states.
@@ -3730,8 +3735,6 @@ partitionedTables:
         # Incremental keys - only process new values of these columns
         incremental_keys:
           - year
-        # TTL for current year reprocessing (7 days - weekly refresh for new data)
-        current_year_ttl_days: 7
         # Batch reorganization by year and geo_fips_set to avoid OOM on 700K+ files
         batch_partition_columns:
           - year
@@ -3749,7 +3752,6 @@ partitionedTables:
               type: INTEGER
         incremental_keys:
           - year
-        current_year_ttl_days: 7
         # Batch by geo_fips_set to reduce memory usage
         batch_partition_columns:
           - year
@@ -3769,7 +3771,6 @@ partitionedTables:
               type: INTEGER
         incremental_keys:
           - year
-        current_year_ttl_days: 7
         # Batch by year and geo_fips_set for large datasets
         threads: 4
         batch_partition_columns:
