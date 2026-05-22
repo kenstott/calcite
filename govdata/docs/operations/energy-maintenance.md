@@ -2,10 +2,12 @@
 
 ## Quick Reference
 
-| Worker | Mode | Workers |
-|---|---|---|
-| worker-74 | initial/backfill | included in `./run-pool.sh historical` |
-| worker-75–77 | recurring | included in `./run-pool.sh daily` |
+| Slot | When to run |
+|---|---|
+| `energy:initial` | First-time setup — full historical load |
+| `energy:weekly` | Daily pool — EIA weekly storage and stock data |
+| `energy:monthly` | Daily pool — monthly EIA series refresh |
+| `energy:annual` | Daily pool — annual survey releases |
 
 ```bash
 cd scripts/parallel
@@ -145,17 +147,17 @@ This is already correct in `energy-schema.yaml` but verify if you see `HTTP 400`
 
 ## Data Freshness Summary
 
-| Table | Source cadence | Typical data lag | Recommended worker |
+| Table | Source cadence | Typical data lag | Slot |
 |---|---|---|---|
-| `eia_electricity_generation` | Monthly | 2 months | worker-76 (monthly) |
-| `eia_electricity_prices` | Monthly | 2 months | worker-76 (monthly) |
-| `eia_utility_annual` | Annual | 1 year | worker-77 (annual) |
-| `eia_power_plants` | Annual | 1 year | worker-77 (annual) |
-| `eia_capacity_changes` | Monthly | 1 month | worker-76 (monthly) |
-| `eia_fossil_fuel_production` | Monthly | 2 months | worker-76 (monthly) |
-| `eia_state_energy_consumption` | Annual | 2 years | worker-77 (annual) |
-| `eia_natural_gas_storage` | Weekly | 1 week | worker-75 (weekly) |
-| `eia_petroleum_stocks` | Weekly | 1 week | worker-75 (weekly) |
-| `eia_crude_oil_imports` | Monthly | 2 months | worker-76 (monthly) |
-| `eia_refinery_operations` | Monthly | 2 months | worker-76 (monthly) |
-| `eia_coal_mines` | Annual | 1 year | worker-77 (annual) |
+| `eia_electricity_generation` | Monthly | 2 months | `energy:monthly` |
+| `eia_electricity_prices` | Monthly | 2 months | `energy:monthly` |
+| `eia_utility_annual` | Annual | 1 year | `energy:annual` |
+| `eia_power_plants` | Annual | 1 year | `energy:annual` |
+| `eia_capacity_changes` | Monthly | 1 month | `energy:monthly` |
+| `eia_fossil_fuel_production` | Monthly | 2 months | `energy:monthly` |
+| `eia_state_energy_consumption` | Annual | 2 years | `energy:annual` |
+| `eia_natural_gas_storage` | Weekly | 1 week | `energy:weekly` |
+| `eia_petroleum_stocks` | Weekly | 1 week | `energy:weekly` |
+| `eia_crude_oil_imports` | Monthly | 2 months | `energy:monthly` |
+| `eia_refinery_operations` | Monthly | 2 months | `energy:monthly` |
+| `eia_coal_mines` | Annual | 1 year | `energy:annual` |

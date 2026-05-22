@@ -2,10 +2,12 @@
 
 ## Quick Reference
 
-| Worker | Mode | Workers |
-|---|---|---|
-| worker-67 | initial/backfill | included in `./run-pool.sh historical` |
-| worker-68–70 | recurring | included in `./run-pool.sh daily` |
+| Slot | When to run |
+|---|---|
+| `health:initial` | First-time setup — all 15 tables, full fetch |
+| `health:daily` | Daily pool — clinical trials delta |
+| `health:weekly` | Daily pool — CDC COVID vaccinations + mortality |
+| `health:monthly` | Daily pool — stable reference tables |
 
 ```bash
 cd scripts/parallel
@@ -37,9 +39,7 @@ cd scripts/parallel
 Set these in `.env.prod` (or the environment used by your cron/scheduler):
 
 ```bash
-# Required
-export HEALTH_PARQUET_DIR=/data/health          # or s3://your-bucket/govdata/source=health
-export HEALTH_CACHE_DIR=/data/health-cache      # or s3://your-bucket/health-cache
+# Health data uses GOVDATA_PARQUET_DIR and GOVDATA_CACHE_DIR — no schema-specific path overrides needed
 
 # Global incremental cutoffs — set by run-pool.sh from GOVDATA_INCREMENTAL_START_YEAR automatically.
 # Override only for manual one-off runs:
@@ -105,11 +105,6 @@ export GOVDATA_SINCE_DATE=2024-01-01
 ./scripts/parallel/worker-health.sh daily
 ```
 
-Cron example (run via pool — no manual env var needed):
-```
-30 6 * * * cd /path/to/govdata/scripts/parallel && ./run-pool.sh --schema health daily
-```
-
 ---
 
 ### `weekly` — CDC COVID vaccinations delta + CDC mortality refresh
@@ -124,11 +119,6 @@ Cron example (run via pool — no manual env var needed):
 ```bash
 export GOVDATA_SINCE_DATE=2024-01-01
 ./scripts/parallel/worker-health.sh weekly
-```
-
-Cron example (run via pool — no manual env var needed):
-```
-0 3 * * 1 cd /path/to/govdata/scripts/parallel && ./run-pool.sh --schema health daily
 ```
 
 ---
@@ -159,33 +149,21 @@ export MEDICAID_SINCE_QUARTER=1
 ./scripts/parallel/worker-health.sh monthly
 ```
 
-Cron example:
-```
-0 2 1 * * /path/to/govdata/scripts/parallel/worker-health.sh monthly
-```
-
 ---
 
 ## Cron Schedule
 
-Health workers run as part of `./run-pool.sh daily` — no separate cron entry needed.
+Health workers run as part of the perpetual runner (`run-scheduled.sh`) or `./run-pool.sh daily` — no separate cron entry needed. See the main operations guide for setup.
 
-```cron
-# All recurring workers including health — run once per day
-0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
-```
+To run health workers in isolation:
 
-To run health workers in isolation (e.g. after a manual backfill):
-
-```bash
-./run-pool.sh --schema health daily
-```
+    ./run-pool.sh --schema health daily
 
 ---
 
 ## Release-Window Checks
 
-Workers 69–70 gate sub-runs to known release windows. Each check exits in milliseconds —
+The weekly and monthly slots gate sub-runs to known release windows. Each check exits in milliseconds —
 no network I/O, no model file written, pool slot released immediately for historical workers.
 
 | Mode | Sub-run | Window | Mechanism | Notes |
@@ -212,7 +190,7 @@ run concurrently or back-to-back, add a delay between them:
 
 ```bash
 # Run CDC sources after a brief gap following the daily clinical trials run
-./run-pool.sh 68 && sleep 120 && ./run-pool.sh 69
+./run-pool.sh health:daily && sleep 120 && ./run-pool.sh health:weekly
 ```
 
 The `unquotedNumericYearFilter` integration test also uses `Thread.sleep(2000)` and

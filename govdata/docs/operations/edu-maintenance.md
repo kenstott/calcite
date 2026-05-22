@@ -2,10 +2,11 @@
 
 ## Quick Reference
 
-| Worker | Mode | Workers |
-|---|---|---|
-| worker-71 | initial/backfill | included in `./run-pool.sh historical` |
-| worker-72–73 | recurring | included in `./run-pool.sh daily` |
+| Slot | When to run |
+|---|---|
+| `edu:initial` | First-time setup — full historical load |
+| `edu:annual` | Daily pool — annual source refresh |
+| `edu:biennial` | Daily pool — biennial source refresh (NAEP, CRDC) |
 
 ```bash
 cd scripts/parallel
@@ -16,7 +17,7 @@ cd scripts/parallel
 ./run-pool.sh --schema edu historical
 
 # Recurring — edu workers run automatically as part of the daily pool
-# Workers 72–73 use release-window checks: each sub-run skips instantly
+# edu:annual and edu:biennial use release-window checks: each sub-run skips instantly
 # if today's date is outside that source's known release window.
 ./run-pool.sh daily
 # — or edu only —
@@ -39,9 +40,7 @@ cd scripts/parallel
 Set these in `.env.prod` (or the environment used by your cron/scheduler):
 
 ```bash
-# Recommended — output paths (fall back to GOVDATA_PARQUET_DIR/source=edu and GOVDATA_CACHE_DIR/edu)
-export EDU_PARQUET_DIR=/data/edu           # or s3://your-bucket/govdata/source=edu
-export EDU_CACHE_DIR=/data/edu-cache
+# Education data uses GOVDATA_PARQUET_DIR and GOVDATA_CACHE_DIR — no schema-specific path overrides needed
 
 # Required for College Scorecard tables (free key at api.data.gov/signup)
 export COLLEGE_SCORECARD_API_KEY=your_key_here
@@ -76,7 +75,7 @@ Understanding release windows helps schedule annual cron jobs. The recurring wor
 | NAEP Assessments | January–March (odd years) | `naep_scores` | Biennial NAEP cycles: grades 4/8 reading/math |
 | CRDC Civil Rights Data | ~18 months after survey year | `crdc_schools` | Even-year surveys; e.g., 2020-21 survey released late 2022 |
 
-**Practical implication for worker 72:**
+**Practical implication for `edu:annual`:**
 - Run once in November to pick up IPEDS institutions/completions/tuition + College Scorecard
 - Re-run in January to pick up IPEDS financials (same worker, idempotent — only the finance
   tables will have new data)
@@ -85,7 +84,7 @@ Understanding release windows helps schedule annual cron jobs. The recurring wor
 
 ## Table Inventory
 
-### K-12 Tables (worker-72 annual, worker-73 biennial)
+### K-12 Tables
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
@@ -94,7 +93,7 @@ Understanding release windows helps schedule annual cron jobs. The recurring wor
 | `naep_scores` | NCES NAEP | Biennial | `GOVDATA_SINCE_YEAR` | 1990–present |
 | `crdc_schools` | Dept of Ed CRDC | Biennial | `GOVDATA_SINCE_YEAR` | 2009–present |
 
-### Higher Education Tables (worker-72 annual)
+### Higher Education Tables (Annual tables (edu:annual mode))
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
@@ -120,23 +119,23 @@ tail -f scripts/parallel/runs/worker-edu-annual/etl_*.log
 grep -r "ERROR\|FAILED\|Exception" scripts/parallel/runs/worker-edu-*/
 
 # Verify output — check a recent year of CCD districts
-duckdb -c "DESCRIBE SELECT * FROM read_parquet('${EDU_PARQUET_DIR}/source=edu/ccd_districts/year=2022/*.parquet')"
+duckdb -c "DESCRIBE SELECT * FROM read_parquet('${GOVDATA_PARQUET_DIR}/edu/ccd_districts/year=2022/*.parquet')"
 ```
 
 ### Release-Window Checks
 
-Workers 72 and 73 gate each sub-run to its source's known release window. On a daily pool
+The `edu:annual` and `edu:biennial` slots gate each sub-run to its source's known release window. On a daily pool
 run, a sub-run outside its window exits in milliseconds (no network I/O, no model file),
 freeing its pool slot for historical workers immediately.
 
-| Sub-run | Window | Year constraint | Worker |
+| Sub-run | Window | Year constraint | Mode |
 |---|---|---|---|
-| CCD districts/schools | July–August (months 7–8) | Any | 72 |
-| College Scorecard | October (month 10) | Any | 72 |
-| IPEDS institutions/completions/tuition | November (month 11) | Any | 72 |
-| IPEDS financials | January (month 1) | Any | 72 |
-| NAEP assessments | January–March (months 1–3) | Odd years only | 73 |
-| CRDC civil rights data | October–December (months 10–12) | Odd years only (publication year) | 73 |
+| CCD districts/schools | July–August (months 7–8) | Any | `edu:annual` |
+| College Scorecard | October (month 10) | Any | `edu:annual` |
+| IPEDS institutions/completions/tuition | November (month 11) | Any | `edu:annual` |
+| IPEDS financials | January (month 1) | Any | `edu:annual` |
+| NAEP assessments | January–March (months 1–3) | Odd years only | `edu:biennial` |
+| CRDC civil rights data | October–December (months 10–12) | Odd years only (publication year) | `edu:biennial` |
 
 To bypass all checks for a manual run:
 ```bash
@@ -159,7 +158,7 @@ To bypass all checks for a manual run:
 
 **IPEDS financials not updated after November run**
 - Finance survey releases in January, not November
-- Re-run worker 72 in January; the run is idempotent (only finance tables will have new data)
+- Re-run `edu:annual` in January; the run is idempotent (only finance tables will have new data)
 
 **Urban Institute API rate limiting**
 - The API is unauthenticated but rate-limited (~60 req/min)
@@ -172,14 +171,14 @@ To bypass all checks for a manual run:
 
 ```bash
 # Initial load: allow longer timeout for full IPEDS history (4+ hours)
-./run-pool.sh -t 240 71
+./run-pool.sh -t 240 edu:initial
 
 # Annual refresh: standard timeout is sufficient
-./run-pool.sh -t 90 72
+./run-pool.sh -t 90 edu:annual
 
 # On a memory-constrained machine (16 GB): reserve more for OS
-./run-pool.sh -r 2000 -t 240 71
+./run-pool.sh -r 2000 -t 240 edu:initial
 
 # Run edu initial alongside health recurring (pool manages memory automatically)
-./run-pool.sh 68,69,70,71
+./run-pool.sh health:daily health:weekly health:monthly edu:initial
 ```
