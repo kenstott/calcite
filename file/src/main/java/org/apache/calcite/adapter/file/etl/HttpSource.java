@@ -379,6 +379,11 @@ public class HttpSource implements DataSource {
           return streamDelimitedFromRawCache(rawCacheFilePath, delimiter, url, params, variables,
               (PerRecordResponseTransformer) responseTransformer);
         }
+        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.FIXED_WIDTH
+            && responseTransformer == null) {
+          LOGGER.info("Streaming fixed-width from raw cache: {}", rawCacheFilePath);
+          return parseFixedWidthResponseStreaming(rawCacheFilePath);
+        }
         // For JSON with a per-record transformer, stream directly from cache file
         if (responseTransformer instanceof PerRecordResponseTransformer
             && respConfig.getFormat() == HttpSourceConfig.ResponseFormat.JSON) {
@@ -426,6 +431,10 @@ public class HttpSource implements DataSource {
         char delimiter = resolveDelimiter(respConfig);
         return streamDelimitedFromRawCache(cachePath, delimiter, url, params, variables,
             (PerRecordResponseTransformer) responseTransformer);
+      }
+      if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.FIXED_WIDTH
+          && responseTransformer == null) {
+        return parseFixedWidthResponseStreaming(cachePath);
       }
 
       // For JSON, read from cache, transform, and parse
@@ -1650,6 +1659,11 @@ public class HttpSource implements DataSource {
       return parseDelimitedResponse(body, resolveDelimiter(respConfig));
     }
 
+    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.FIXED_WIDTH
+        && responseTransformer == null) {
+      throw new IOException(
+          "FIXED_WIDTH format must be served from raw cache; raw cache must be enabled");
+    }
     if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON
         && respConfig.getFormat() != HttpSourceConfig.ResponseFormat.TEXT
         && responseTransformer == null) {
@@ -1761,6 +1775,117 @@ public class HttpSource implements DataSource {
     return new LazyCSVIterator(inputStream, cachePath, delimiter,
         config.getRowFilter(), config.getWideToNarrow(),
         respConfig.isHasHeader(), respConfig.getColumnNames());
+  }
+
+  private Iterator<Map<String, Object>> parseFixedWidthResponseStreaming(String cachePath)
+      throws IOException {
+    LOGGER.info("Streaming fixed-width from cache: {}", cachePath);
+    HttpSourceConfig.FixedWidthConfig fwConfig = config.getFixedWidth();
+    if (fwConfig == null || fwConfig.getColumns().isEmpty()) {
+      throw new IOException(
+          "FIXED_WIDTH format requires fixedWidth.columns configuration");
+    }
+    InputStream inputStream;
+    if (isLocalPath(cachePath)) {
+      inputStream = new FileInputStream(cachePath);
+    } else {
+      inputStream = storageProvider.openInputStream(cachePath);
+    }
+    return new LazyFixedWidthIterator(inputStream, cachePath, fwConfig);
+  }
+
+  /**
+   * Lazy iterator that reads fixed-width (positional) records one line at a time.
+   * Each line is sliced into fields using the start+length column definitions.
+   * Leading/trailing whitespace is trimmed from each field value.
+   */
+  private static class LazyFixedWidthIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
+    private final BufferedReader reader;
+    private final List<HttpSourceConfig.FixedWidthConfig.Column> columns;
+    private Map<String, Object> nextRow;
+    private boolean exhausted;
+    private int lineNumber;
+
+    LazyFixedWidthIterator(InputStream inputStream, String cachePath,
+        HttpSourceConfig.FixedWidthConfig fwConfig) throws IOException {
+      this.columns = fwConfig.getColumns();
+      this.exhausted = false;
+      this.lineNumber = 0;
+      java.nio.charset.Charset charset;
+      try {
+        charset = java.nio.charset.Charset.forName(fwConfig.getEncoding());
+      } catch (Exception e) {
+        throw new IOException("Unknown encoding: " + fwConfig.getEncoding(), e);
+      }
+      this.reader = new BufferedReader(new InputStreamReader(inputStream, charset));
+      // Skip header/trailer lines
+      for (int i = 0; i < fwConfig.getSkipLines(); i++) {
+        if (reader.readLine() == null) {
+          exhausted = true;
+          return;
+        }
+        lineNumber++;
+      }
+      advance();
+    }
+
+    private void advance() {
+      nextRow = null;
+      try {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          lineNumber++;
+          if (line.isEmpty()) {
+            continue;
+          }
+          Map<String, Object> row = new LinkedHashMap<String, Object>();
+          for (HttpSourceConfig.FixedWidthConfig.Column col : columns) {
+            int end = col.getStart() + col.getLength();
+            String value;
+            if (col.getStart() >= line.length()) {
+              value = "";
+            } else {
+              value = line.substring(col.getStart(), Math.min(end, line.length())).trim();
+            }
+            row.put(col.getName(), value);
+          }
+          nextRow = row;
+          return;
+        }
+        exhausted = true;
+      } catch (IOException e) {
+        exhausted = true;
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return nextRow != null && !exhausted;
+    }
+
+    @Override
+    public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new java.util.NoSuchElementException();
+      }
+      Map<String, Object> row = nextRow;
+      advance();
+      return row;
+    }
+
+    @Override
+    public void remove() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void close() {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        // ignore
+      }
+    }
   }
 
   /**

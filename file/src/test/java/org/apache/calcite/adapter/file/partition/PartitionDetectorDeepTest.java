@@ -68,7 +68,7 @@ public class PartitionDetectorDeepTest {
   @Test void testDetectPartitionSchemeMixedStyles() {
     List<String> paths =
         Arrays.asList("/data/year=2020/file.parquet",
-        "/data/2021/file.parquet" // Not Hive-style);
+        "/data/2021/file.parquet"); // Not Hive-style
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNull(info); // Mixed styles -> null
   }
@@ -76,7 +76,7 @@ public class PartitionDetectorDeepTest {
   @Test void testDetectPartitionSchemeInconsistentColumns() {
     List<String> paths =
         Arrays.asList("/data/year=2020/file.parquet",
-        "/data/region=US/file.parquet" // Different partition columns);
+        "/data/region=US/file.parquet"); // Different partition columns
     PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(paths);
     assertNull(info); // Inconsistent columns -> null
   }

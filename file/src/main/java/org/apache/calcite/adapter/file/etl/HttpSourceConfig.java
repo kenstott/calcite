@@ -83,7 +83,7 @@ public class HttpSourceConfig {
    * Response format types.
    */
   public enum ResponseFormat {
-    JSON, CSV, XML, TSV, TEXT
+    JSON, CSV, XML, TSV, TEXT, FIXED_WIDTH
   }
 
   /**
@@ -142,6 +142,9 @@ public class HttpSourceConfig {
   // Wide-to-narrow transformation for CSV files with years as columns
   private final WideToNarrowConfig wideToNarrow;
 
+  // Fixed-width column layout for FIXED_WIDTH format
+  private final FixedWidthConfig fixedWidth;
+
   // Document source configuration for document-based ETL (SEC filings, etc.)
   private final DocumentSourceConfig documentSource;
 
@@ -187,6 +190,7 @@ public class HttpSourceConfig {
     this.rowFilter = builder.rowFilter;
     this.responsePartitioning = builder.responsePartitioning;
     this.wideToNarrow = builder.wideToNarrow;
+    this.fixedWidth = builder.fixedWidth;
     this.documentSource = builder.documentSource;
     this.sourceType = builder.sourceType != null ? builder.sourceType : determineSourceType(builder);
     this.urlRules = builder.urlRules != null
@@ -450,6 +454,13 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Returns the fixed-width column layout config, or null if not configured.
+   */
+  public FixedWidthConfig getFixedWidth() {
+    return fixedWidth;
+  }
+
+  /**
    * Returns the document source configuration for document-based ETL.
    *
    * <p>Document sources are used for SEC EDGAR filings where documents
@@ -612,6 +623,11 @@ public class HttpSourceConfig {
     Object wideToNarrowObj = map.get("wideToNarrow");
     if (wideToNarrowObj instanceof Map) {
       builder.wideToNarrow(WideToNarrowConfig.fromMap((Map<String, Object>) wideToNarrowObj));
+    }
+
+    Object fixedWidthObj = map.get("fixedWidth");
+    if (fixedWidthObj instanceof Map) {
+      builder.fixedWidth(FixedWidthConfig.fromMap((Map<String, Object>) fixedWidthObj));
     }
 
     // Parse URL rules for year-dependent URL selection
@@ -1925,6 +1941,84 @@ public class HttpSourceConfig {
    *   responseTransformer: "org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer"
    * }</pre>
    */
+  /**
+   * Fixed-width column layout for parsing fixed-width (positional) flat files.
+   *
+   * <p>YAML usage:
+   * <pre>{@code
+   * response:
+   *   format: fixed_width
+   * fixedWidth:
+   *   encoding: ISO-8859-1   # optional, defaults to UTF-8
+   *   skipLines: 0           # header/trailer lines to skip at start, default 0
+   *   columns:
+   *     - name: ori
+   *       start: 0
+   *       length: 9
+   *     - name: agency_name
+   *       start: 9
+   *       length: 60
+   * }</pre>
+   */
+  public static class FixedWidthConfig {
+
+    /** Single column definition: name, 0-based start position, field length. */
+    public static class Column {
+      private final String name;
+      private final int start;
+      private final int length;
+
+      public Column(String name, int start, int length) {
+        this.name = name;
+        this.start = start;
+        this.length = length;
+      }
+
+      public String getName() { return name; }
+      public int getStart() { return start; }
+      public int getLength() { return length; }
+
+      @SuppressWarnings("unchecked")
+      public static Column fromMap(Map<String, Object> map) {
+        String name = (String) map.get("name");
+        int start = ((Number) map.get("start")).intValue();
+        int length = ((Number) map.get("length")).intValue();
+        return new Column(name, start, length);
+      }
+    }
+
+    private final List<Column> columns;
+    private final String encoding;
+    private final int skipLines;
+
+    private FixedWidthConfig(List<Column> columns, String encoding, int skipLines) {
+      this.columns = Collections.unmodifiableList(new ArrayList<Column>(columns));
+      this.encoding = encoding != null ? encoding : "UTF-8";
+      this.skipLines = skipLines;
+    }
+
+    public List<Column> getColumns() { return columns; }
+    public String getEncoding() { return encoding; }
+    public int getSkipLines() { return skipLines; }
+
+    @SuppressWarnings("unchecked")
+    public static FixedWidthConfig fromMap(Map<String, Object> map) {
+      List<Column> columns = new ArrayList<Column>();
+      Object colsObj = map.get("columns");
+      if (colsObj instanceof List) {
+        for (Object colObj : (List<?>) colsObj) {
+          if (colObj instanceof Map) {
+            columns.add(Column.fromMap((Map<String, Object>) colObj));
+          }
+        }
+      }
+      String encoding = (String) map.get("encoding");
+      Object skipObj = map.get("skipLines");
+      int skipLines = skipObj != null ? ((Number) skipObj).intValue() : 0;
+      return new FixedWidthConfig(columns, encoding, skipLines);
+    }
+  }
+
   public static class DocumentSourceConfig {
     private final String metadataUrl;
     private final String documentUrl;
@@ -2275,6 +2369,7 @@ public class HttpSourceConfig {
     private RowFilterConfig rowFilter;
     private ResponsePartitioningConfig responsePartitioning;
     private WideToNarrowConfig wideToNarrow;
+    private FixedWidthConfig fixedWidth;
     private DocumentSourceConfig documentSource;
     private String sourceType;
     private List<UrlRule> urlRules;
@@ -2374,6 +2469,11 @@ public class HttpSourceConfig {
 
     public Builder wideToNarrow(WideToNarrowConfig wideToNarrow) {
       this.wideToNarrow = wideToNarrow;
+      return this;
+    }
+
+    public Builder fixedWidth(FixedWidthConfig fixedWidth) {
+      this.fixedWidth = fixedWidth;
       return this;
     }
 

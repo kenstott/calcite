@@ -851,6 +851,7 @@ public class EtlPipeline {
             final int neededCountFinal = neededCount;
             final int piFinal = pi;
             final int partCountFinal = partCount;
+            final long startTimeFinal = startTime;
 
             ExecutorService partExecutor = Executors.newFixedThreadPool(partThreadCount);
             List<Future<Void>> partFutures = new ArrayList<Future<Void>>();
@@ -863,8 +864,10 @@ public class EtlPipeline {
                 @Override public Void call() {
                   int currentBatch = partProcessed.incrementAndGet();
                   try {
-                    LOGGER.info("Processing batch {} (partition {}/{}): {}",
-                        currentBatch, piFinal + 1, partCountFinal, variables);
+                    LOGGER.info("Processing batch {} (partition {}/{}) {}: {}",
+                        currentBatch, piFinal + 1, partCountFinal,
+                        formatProgress(currentBatch, neededCountFinal, startTimeFinal),
+                        variables);
                     long batchRows =
                         processSingleBatch(cfgFinal, variables, dsFinal, writerFinal, currentBatch, neededCountFinal, pipelineNameFinal);
                     partRows.addAndGet(batchRows);
@@ -950,8 +953,10 @@ public class EtlPipeline {
               }
 
               try {
-                LOGGER.info("Processing batch {} (partition {}/{}): {}",
-                    processedCount, pi + 1, partCount, variables);
+                LOGGER.info("Processing batch {} (partition {}/{}) {}: {}",
+                    processedCount, pi + 1, partCount,
+                    formatProgress(processedCount, neededCount, startTime),
+                    variables);
                 long batchRows =
                     processSingleBatch(config, variables, dataSource, writer, processedCount, neededCount, pipelineName);
                 totalRows += batchRows;
@@ -1457,6 +1462,35 @@ public class EtlPipeline {
    *
    * @return Number of rows written
    */
+  /** Returns a compact rate+ETA string for progress log lines, e.g. {@code "at 73.2/s ~1h24m remaining"}. */
+  private static String formatProgress(int done, int total, long startTimeMs) {
+    if (done <= 0) {
+      return "";
+    }
+    long elapsedMs = System.currentTimeMillis() - startTimeMs;
+    if (elapsedMs < 1000) {
+      return "";
+    }
+    double rate = (double) done / (elapsedMs / 1000.0);
+    int remaining = total - done;
+    long etaSeconds = remaining > 0 && rate > 0 ? (long) (remaining / rate) : 0;
+
+    String rateStr = rate >= 10 ? String.format("%.0f/s", rate) : String.format("%.1f/s", rate);
+    String etaStr;
+    if (etaSeconds <= 0) {
+      etaStr = "done";
+    } else if (etaSeconds < 60) {
+      etaStr = etaSeconds + "s remaining";
+    } else if (etaSeconds < 3600) {
+      etaStr = (etaSeconds / 60) + "m remaining";
+    } else {
+      long h = etaSeconds / 3600;
+      long m = (etaSeconds % 3600) / 60;
+      etaStr = m > 0 ? h + "h" + m + "m remaining" : h + "h remaining";
+    }
+    return "at " + rateStr + " ~" + etaStr;
+  }
+
   private long processSingleBatch(EtlPipelineConfig config, Map<String, String> variables,
       DataSource dataSource, MaterializationWriter writer,
       int processedCount, int neededCount, String pipelineName) throws IOException {

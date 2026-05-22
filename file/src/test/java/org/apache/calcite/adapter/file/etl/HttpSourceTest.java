@@ -783,4 +783,86 @@ public class HttpSourceTest {
     assertEquals("cursor", response.getPagination().getCursorParam());
     assertEquals(250, response.getPagination().getPageSize());
   }
+
+  @Test void testFixedWidthConfigFromMap() {
+    Map<String, Object> col1 = new HashMap<String, Object>();
+    col1.put("name", "ori");
+    col1.put("start", 0);
+    col1.put("length", 9);
+
+    Map<String, Object> col2 = new HashMap<String, Object>();
+    col2.put("name", "state_fips");
+    col2.put("start", 9);
+    col2.put("length", 2);
+
+    Map<String, Object> col3 = new HashMap<String, Object>();
+    col3.put("name", "agency_name");
+    col3.put("start", 11);
+    col3.put("length", 60);
+
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columns", Arrays.asList(col1, col2, col3));
+    map.put("encoding", "ISO-8859-1");
+    map.put("skipLines", 1);
+
+    HttpSourceConfig.FixedWidthConfig config = HttpSourceConfig.FixedWidthConfig.fromMap(map);
+
+    assertEquals(3, config.getColumns().size());
+    assertEquals("ori", config.getColumns().get(0).getName());
+    assertEquals(0, config.getColumns().get(0).getStart());
+    assertEquals(9, config.getColumns().get(0).getLength());
+    assertEquals("state_fips", config.getColumns().get(1).getName());
+    assertEquals(9, config.getColumns().get(1).getStart());
+    assertEquals("agency_name", config.getColumns().get(2).getName());
+    assertEquals(11, config.getColumns().get(2).getStart());
+    assertEquals("ISO-8859-1", config.getEncoding());
+    assertEquals(1, config.getSkipLines());
+  }
+
+  @Test void testFixedWidthConfigDefaults() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columns", Arrays.asList());
+
+    HttpSourceConfig.FixedWidthConfig config = HttpSourceConfig.FixedWidthConfig.fromMap(map);
+
+    assertEquals("UTF-8", config.getEncoding());
+    assertEquals(0, config.getSkipLines());
+    assertTrue(config.getColumns().isEmpty());
+  }
+
+  @Test void testFixedWidthFormatInResponseConfig() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "fixed_width");
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.FIXED_WIDTH, response.getFormat());
+  }
+
+  @Test void testFixedWidthConfigViaTopLevelFromMap() {
+    Map<String, Object> col = new HashMap<String, Object>();
+    col.put("name", "record_type");
+    col.put("start", 0);
+    col.put("length", 2);
+
+    Map<String, Object> fwMap = new HashMap<String, Object>();
+    fwMap.put("columns", Arrays.asList(col));
+
+    Map<String, Object> responseMap = new HashMap<String, Object>();
+    responseMap.put("format", "fixed_width");
+
+    Map<String, Object> topMap = new HashMap<String, Object>();
+    topMap.put("url", "https://example.gov/data.dat");
+    topMap.put("response", responseMap);
+    topMap.put("fixedWidth", fwMap);
+
+    HttpSourceConfig config = HttpSourceConfig.fromMap(topMap);
+
+    assertEquals(HttpSourceConfig.ResponseFormat.FIXED_WIDTH, config.getResponse().getFormat());
+    assertNotNull(config.getFixedWidth());
+    assertEquals(1, config.getFixedWidth().getColumns().size());
+    assertEquals("record_type", config.getFixedWidth().getColumns().get(0).getName());
+    assertEquals(0, config.getFixedWidth().getColumns().get(0).getStart());
+    assertEquals(2, config.getFixedWidth().getColumns().get(0).getLength());
+  }
 }
