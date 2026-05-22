@@ -439,7 +439,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://cde.ucr.cjis.gov/LATEST/pe?stateAbbr={state_abbr}&from={year}&to={year}"
+      url: "https://cde.ucr.cjis.gov/LATEST/pe/{state_abbr}?from={year}&to={year}"
       method: GET
       response:
         format: json
