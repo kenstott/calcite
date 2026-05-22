@@ -96,8 +96,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private AmazonS3 s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   private Boolean hasAnyTrackerData;
-  /** Cached processed keys per table from single S3 scan. null = not yet scanned. */
-  private volatile Map<String, Set<String>> processedKeysCache;
+  /** Processed keys per table, loaded on demand (absent key = not yet loaded for that table). */
+  private final ConcurrentHashMap<String, Set<String>> processedKeysCache =
+      new ConcurrentHashMap<String, Set<String>>();
   /** In-memory cache of table completions for the duration of this tracker instance. */
   private final Map<String, CachedCompletion> completionCache =
       new ConcurrentHashMap<String, CachedCompletion>();
@@ -1349,9 +1350,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
 
-    // Scan tracker S3 bucket once, cache results for all tables
-    if (processedKeysCache == null) {
-      processedKeysCache = loadAllProcessedKeys();
+    // Load tracker data for this table on demand — avoids full-bucket scan across all schemas
+    if (!processedKeysCache.containsKey(alternateName)) {
+      processedKeysCache.put(alternateName, loadProcessedKeysForTable(alternateName));
     }
 
     Set<String> processedKeys = processedKeysCache.get(alternateName);
@@ -1375,50 +1376,41 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return unprocessed;
   }
 
-  /** Scan all tracker batch files once and return processed keys grouped by table name. */
-  private Map<String, Set<String>> loadAllProcessedKeys() {
-    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+  /** Scan tracker batch files for a single table and return its processed source keys. */
+  private Set<String> loadProcessedKeysForTable(String tableName) {
+    Set<String> result = new HashSet<String>();
     String globPath = bucketPath + "/year=*/source_key=_batch_*/*.parquet";
 
-    String sql = "SELECT table_name, source_key FROM ("
-        + "  SELECT table_name, source_key, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY table_name, source_key ORDER BY as_of DESC) AS rn "
+    // WHERE table_name = ? scopes the scan to this table — no cross-schema full-bucket reads
+    String sql = "SELECT source_key FROM ("
+        + "  SELECT source_key, state, ROW_NUMBER() OVER "
+        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
         + "  FROM read_parquet('" + globPath + "', "
         + "hive_partitioning=false, union_by_name=true) "
-        + "  WHERE phase = 'incremental'"
+        + "  WHERE phase = 'incremental' AND table_name = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
 
     long start = System.currentTimeMillis();
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql);
-         ResultSet rs = stmt.executeQuery()) {
-      while (rs.next()) {
-        String tableName = rs.getString("table_name");
-        String sourceKey = rs.getString("source_key");
-        Set<String> keys = result.get(tableName);
-        if (keys == null) {
-          keys = new HashSet<String>();
-          result.put(tableName, keys);
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          result.add(rs.getString("source_key"));
         }
-        keys.add(sourceKey);
       }
-      hasAnyTrackerData = !result.isEmpty();
       long elapsed = System.currentTimeMillis() - start;
-      int totalKeys = 0;
-      for (Set<String> v : result.values()) {
-        totalKeys += v.size();
-      }
-      LOGGER.info("Tracker scan complete: {} tables, {} processed keys in {}ms",
-          result.size(), totalKeys, elapsed);
+      LOGGER.info("Tracker scan for {}: {} processed keys in {}ms",
+          tableName, result.size(), elapsed);
     } catch (SQLException e) {
       String msg = e.getMessage();
       if (msg != null && (msg.contains("No files found")
           || msg.contains("Could not find")
           || msg.contains("HTTP 404"))) {
-        LOGGER.info("No tracker batch files found ({}ms)",
-            System.currentTimeMillis() - start);
+        LOGGER.info("No tracker batch files found for {} ({}ms)",
+            tableName, System.currentTimeMillis() - start);
         return result;
       }
-      LOGGER.debug("Error loading tracker data: {}", msg);
+      LOGGER.debug("Error loading tracker data for {}: {}", tableName, msg);
     }
     return result;
   }
@@ -2069,6 +2061,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         hasAnyTrackerData = null;
         completionCache.clear();
         stageCache.clear();
+        processedKeysCache.clear();
         scannedYears.clear();
         fullyScannedYears.clear();
       }
