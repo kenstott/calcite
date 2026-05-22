@@ -29,6 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiPredicate;
@@ -248,12 +250,12 @@ public class TableConstraints {
         // If targetSchema is specified separately, use it
         String targetSchema = (String) fkDef.get("targetSchema");
         if (targetSchema != null) {
-          targetTable = List.of(targetSchema, (String) targetTableObj);
+          targetTable = Arrays.asList(targetSchema, (String) targetTableObj);
         } else if (schemaName != null) {
           // Default to same schema as source table
-          targetTable = List.of(schemaName, (String) targetTableObj);
+          targetTable = Arrays.asList(schemaName, (String) targetTableObj);
         } else {
-          targetTable = List.of((String) targetTableObj);
+          targetTable = Arrays.asList((String) targetTableObj);
         }
       } else if (targetTableObj instanceof List) {
         targetTable = (List<String>) targetTableObj;
@@ -285,7 +287,7 @@ public class TableConstraints {
         if (sourceTable == null) {
           // If not specified, use the provided schema and table names
           if (schemaName != null && tableName != null) {
-            sourceTable = List.of(schemaName, tableName);
+            sourceTable = Arrays.asList(schemaName, tableName);
           } else {
             // Fallback to empty list if names not provided
             sourceTable = new ArrayList<>();
@@ -295,7 +297,7 @@ public class TableConstraints {
         // If target table doesn't have a schema, assume same schema as source
         if (targetTable.size() == 1 && schemaName != null) {
           // Only table name provided, prepend the schema
-          targetTable = List.of(schemaName, targetTable.get(0));
+          targetTable = Arrays.asList(schemaName, targetTable.get(0));
         }
 
         RelReferentialConstraint fk =
@@ -329,7 +331,9 @@ public class TableConstraints {
    * @return A configuration map with the primary key
    */
   public static Map<String, Object> primaryKey(String... keyColumns) {
-    return Map.of("primaryKey", List.of(keyColumns));
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("primaryKey", Arrays.asList(keyColumns));
+    return m;
   }
 
   /**
@@ -346,10 +350,11 @@ public class TableConstraints {
       String targetSchema,
       String targetTable,
       List<String> targetColumns) {
-    return Map.of(
-        "columns", columns,
-        "targetTable", List.of(targetSchema, targetTable),
-        "targetColumns", targetColumns);
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("columns", columns);
+    m.put("targetTable", Arrays.asList(targetSchema, targetTable));
+    m.put("targetColumns", targetColumns);
+    return m;
   }
 
   /**

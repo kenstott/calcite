@@ -21,11 +21,14 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
+import org.apache.calcite.adapter.file.metadata.TableConstraints;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 
@@ -39,6 +42,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -867,6 +871,27 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
   }
 
   // CommentableTable implementation
+  @Override public Statistic getStatistic() {
+    // Delegate to inner table when available — it has column names needed for bit-set mapping.
+    if (currentTable != null) {
+      return currentTable.getStatistic();
+    }
+    // Inner table not yet initialized (no parquet files discovered). Build from constraint config
+    // directly so that getPrimaryKeys() / getImportedKeys() still work during schema introspection.
+    if (constraintConfig == null || constraintConfig.isEmpty()) {
+      return Statistics.UNKNOWN;
+    }
+    Map<String, Object> tableConfig = new LinkedHashMap<>();
+    tableConfig.put("constraints", constraintConfig);
+    List<String> columnNames = new ArrayList<>();
+    if (config != null && config.getColumns() != null) {
+      for (PartitionedTableConfig.TableColumn col : config.getColumns()) {
+        columnNames.add(col.getName());
+      }
+    }
+    return TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
+  }
+
   // Return comments directly from config, not from currentTable, to support lazy initialization.
   // During schema introspection (e.g., INFORMATION_SCHEMA queries), currentTable may be null.
 
