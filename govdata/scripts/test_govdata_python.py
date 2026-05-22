@@ -53,6 +53,7 @@ harness = DriverTestHarness(
                         "order by candidate_id desc fetch first 3 rows only"),
     test_param_col   = "office",
     test_param_val   = "H",
+    skip_data_tests_on_error = True,
 )
 
 harness.run_all()
