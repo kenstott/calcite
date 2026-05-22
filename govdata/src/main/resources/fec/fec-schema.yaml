@@ -44,16 +44,11 @@ comment: >
 
 dimension_templates:
 
-  fec_election_cycles: &fec_election_cycles
-    - "2026"
-    - "2024"
-    - "2022"
-    - "2020"
-    - "2018"
-    - "2016"
-    - "2014"
-    - "2012"
-    - "2010"
+  fec_year_dimension: &fec_year_dimension
+    type: yearRange
+    cadenceStart: 2010
+    cadenceLength: 2
+    minYear: "${GOVDATA_START_YEAR}"
 
 # ============================================================================
 # BULK DOWNLOADS
@@ -67,8 +62,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cn{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Committees master file — all political committees
   fec_committees:
@@ -76,8 +70,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/cm{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Candidate-Committee linkages
   fec_linkages:
@@ -85,8 +78,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/ccl{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Individual contributions (largest file, ~1-2GB per cycle)
   fec_individual:
@@ -94,8 +86,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/indiv{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Committee-to-candidate contributions
   fec_pas2:
@@ -103,8 +94,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/pas2{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Inter-committee transactions (other)
   fec_oth:
@@ -112,8 +102,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oth{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
   # Operating expenditures
   fec_oppexp:
@@ -121,8 +110,7 @@ bulkDownloads:
     url: "https://www.fec.gov/files/bulk-downloads/{year}/oppexp{yearSuffix}.zip"
     dimensions:
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -351,8 +339,7 @@ partitionedTables:
       type:
         - candidates
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -486,8 +473,7 @@ partitionedTables:
       type:
         - committees
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -569,8 +555,7 @@ partitionedTables:
       type:
         - candidate_committee_linkages
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -724,8 +709,7 @@ partitionedTables:
       type:
         - individual_contributions
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -887,8 +871,7 @@ partitionedTables:
       type:
         - committee_contributions
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1050,8 +1033,7 @@ partitionedTables:
       type:
         - intercommittee_transactions
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1232,8 +1214,7 @@ partitionedTables:
       type:
         - operating_expenditures
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1402,8 +1383,7 @@ partitionedTables:
       type:
         - independent_expenditures
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1543,8 +1523,7 @@ partitionedTables:
       type:
         - electioneering_communications
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1688,8 +1667,7 @@ partitionedTables:
       type:
         - communication_costs
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -1885,8 +1863,7 @@ partitionedTables:
       type:
         - candidate_summaries
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true
@@ -2098,8 +2075,7 @@ partitionedTables:
       type:
         - committee_summaries
       year:
-        values: *fec_election_cycles
-        minYear: "${GOVDATA_START_YEAR}"
+        <<: *fec_year_dimension
 
     materialize:
       enabled: true

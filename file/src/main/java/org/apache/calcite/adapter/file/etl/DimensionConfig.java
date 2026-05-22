@@ -85,6 +85,8 @@ public class DimensionConfig {
   private final String effectiveYearField;
   private final String effectiveMonthField;
   private final boolean descending;
+  private final Integer cadenceStart;
+  private final Integer cadenceLength;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -111,6 +113,8 @@ public class DimensionConfig {
     this.effectiveYearField = builder.effectiveYearField;
     this.effectiveMonthField = builder.effectiveMonthField;
     this.descending = builder.descending;
+    this.cadenceStart = builder.cadenceStart;
+    this.cadenceLength = builder.cadenceLength;
   }
 
   /**
@@ -217,6 +221,23 @@ public class DimensionConfig {
    */
   public boolean isDescending() {
     return descending;
+  }
+
+  /**
+   * Returns the cadence anchor year for YEAR_RANGE cadence dimensions.
+   * When set alongside cadenceLength, years are generated as cadenceStart + n*cadenceLength
+   * filtered to the [start, effectiveEnd] window. Keeps cycle alignment independent of
+   * GOVDATA_START_YEAR (e.g. FEC biennial cycles anchored at 2010).
+   */
+  public Integer getCadenceStart() {
+    return cadenceStart;
+  }
+
+  /**
+   * Returns the cadence interval in years (e.g. 2 for biennial, 4 for quadrennial).
+   */
+  public Integer getCadenceLength() {
+    return cadenceLength;
   }
 
   /**
@@ -485,6 +506,26 @@ public class DimensionConfig {
       builder.descending(Boolean.parseBoolean((String) descendingObj));
     }
 
+    Object cadenceStartObj = map.get("cadenceStart");
+    if (cadenceStartObj instanceof Number) {
+      builder.cadenceStart(((Number) cadenceStartObj).intValue());
+    } else if (cadenceStartObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) cadenceStartObj);
+      if (resolved != null) {
+        builder.cadenceStart(resolved);
+      }
+    }
+
+    Object cadenceLengthObj = map.get("cadenceLength");
+    if (cadenceLengthObj instanceof Number) {
+      builder.cadenceLength(((Number) cadenceLengthObj).intValue());
+    } else if (cadenceLengthObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) cadenceLengthObj);
+      if (resolved != null) {
+        builder.cadenceLength(resolved);
+      }
+    }
+
     // Parse custom properties (for CUSTOM type dimensions)
     // Properties are stored as-is; variable resolution happens at runtime
     Object propsObj = map.get("properties");
@@ -601,6 +642,8 @@ public class DimensionConfig {
     private String effectiveYearField;
     private String effectiveMonthField;
     private boolean descending;
+    private Integer cadenceStart;
+    private Integer cadenceLength;
 
     public Builder name(String name) {
       this.name = name;
@@ -689,6 +732,16 @@ public class DimensionConfig {
 
     public Builder descending(boolean descending) {
       this.descending = descending;
+      return this;
+    }
+
+    public Builder cadenceStart(Integer cadenceStart) {
+      this.cadenceStart = cadenceStart;
+      return this;
+    }
+
+    public Builder cadenceLength(Integer cadenceLength) {
+      this.cadenceLength = cadenceLength;
       return this;
     }
 

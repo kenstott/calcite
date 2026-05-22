@@ -649,13 +649,33 @@ public class DimensionIterator {
 
     List<Integer> excludeYears = config.getExcludeYears();
     List<String> values = new ArrayList<String>();
-    // Always descend: process most recent year first so incremental runs yield recent data faster.
-    for (int year = effectiveEnd; year >= start; year -= step) {
-      if (excludeYears != null && excludeYears.contains(year)) {
-        LOGGER.debug("Year range dimension '{}' excluding year {}", config.getName(), year);
-        continue;
+
+    Integer cadenceStart = config.getCadenceStart();
+    Integer cadenceLength = config.getCadenceLength();
+
+    if (cadenceStart != null && cadenceLength != null && cadenceLength > 0) {
+      // Cadence mode: generate years anchored at cadenceStart with cadenceLength interval,
+      // filtered to [start, effectiveEnd]. Descending so most recent cycle processes first.
+      if (effectiveEnd >= cadenceStart) {
+        int stepsToEnd = (effectiveEnd - cadenceStart) / cadenceLength;
+        int latestCadenceYear = cadenceStart + stepsToEnd * cadenceLength;
+        for (int year = latestCadenceYear; year >= start && year >= cadenceStart; year -= cadenceLength) {
+          if (excludeYears != null && excludeYears.contains(year)) {
+            LOGGER.debug("Year range dimension '{}' excluding cadence year {}", config.getName(), year);
+            continue;
+          }
+          values.add(String.valueOf(year));
+        }
       }
-      values.add(String.valueOf(year));
+    } else {
+      // Standard contiguous range, always descend.
+      for (int year = effectiveEnd; year >= start; year -= step) {
+        if (excludeYears != null && excludeYears.contains(year)) {
+          LOGGER.debug("Year range dimension '{}' excluding year {}", config.getName(), year);
+          continue;
+        }
+        values.add(String.valueOf(year));
+      }
     }
 
     return values;
