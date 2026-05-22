@@ -103,7 +103,7 @@ Time estimates assume a full historical re-run (all years) where applicable, fol
 | cyber_threat | Yes (dimension + ttl_days removal) | 1–2 h | 5 min | ~2 h |
 | cyber_vuln | Yes (dimension + ttl_days removal) | 2–4 h | 10 min | ~4 h |
 
-**Total (sequential):** ~65–75 h. With full parallelism across run-pool slots: ~12–16 h wall clock (bottleneck: sec + census + health running in parallel).
+**Total (sequential):** ~65–75 h. With 4 parallel workers (longest-first scheduling): ~22 h wall clock. Breakdown: batch 1 sec+census+health+edu = 12 h, batch 2 geo+econ+fec+cyber_vuln = 5 h, batch 3 weather+ref+crime+fedregister = 3 h, batch 4 lands+cyber_threat+econ_ref+patents = 2 h.
 
 ---
 
