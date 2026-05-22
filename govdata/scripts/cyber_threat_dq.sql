@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- ============================================================
 -- DQ script: cyber_threat schema
 -- Tables: attack_techniques, ioc_urls, ioc_hashes, ioc_ips,

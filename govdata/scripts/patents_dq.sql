@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- U.S. Patents and Trademarks Data Quality Checks
 -- Schema: patents
 -- Tables: patent_grants, patent_assignees, patent_inventors, patent_cpc_classes,

@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- ============================================================================
 -- Data Quality Script: cyber_vuln schema
 -- Sources: NVD CVE 2.0, CISA KEV, OSV, GitHub Security Advisories, MITRE CWE

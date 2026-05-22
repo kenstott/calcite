@@ -1,3 +1,4 @@
+-- dq-lookback: 2
 -- Crime Data Quality Check
 -- Sources: FBI Crime Data Explorer (CDE) + Bureau of Justice Statistics (BJS)
 -- Tables: 16 partitioned tables (11 CDE + 5 BJS)

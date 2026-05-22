@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- Economic Reference Data Quality Checks
 -- Schema: econ_reference
 -- Tables: jolts_industries, jolts_dataelements, bls_geographies, naics_sectors,

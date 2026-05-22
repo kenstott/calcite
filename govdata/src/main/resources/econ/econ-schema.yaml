@@ -2516,17 +2516,46 @@ partitionedTables:
         series_id:
           type: iteration
           source: seriesList
-      seriesList:  # API series codes to fetch
-        - "DFF"
-        - "UNRATE"
-        - "GDP"
-        - "CPIAUCSL"
-        - "FEDFUNDS"
-        - "T10Y2Y"
-        - "MORTGAGE30US"
-        - "UMCSENT"
-        - "PAYEMS"
-        - "INDPRO"
+      seriesList:  # Curated FRED series — covers all SQL view dependencies
+        # Rates & monetary policy
+        - "DFF"          # Federal funds rate (effective)
+        - "FEDFUNDS"     # Federal funds target rate
+        - "DGS10"        # 10-year Treasury yield
+        - "DGS3MO"       # 3-month Treasury yield
+        - "T10Y2Y"       # 10Y-2Y yield spread
+        - "BAMLC0A0CM"   # Investment-grade corporate bond spread
+        # Monetary aggregates
+        - "M1SL"         # M1 money supply
+        - "M2SL"         # M2 money supply
+        - "BOGMBASE"     # Monetary base
+        # GDP & national accounts
+        - "GDP"          # Nominal GDP
+        # Employment & labor
+        - "UNRATE"       # Unemployment rate
+        - "PAYEMS"       # Nonfarm payrolls
+        - "CES0000000001" # Total nonfarm employees
+        - "LNS14000000"  # Unemployment level
+        - "LNS11300000"  # Labor force participation rate
+        # Inflation
+        - "CPIAUCSL"     # CPI all items
+        - "CUUR0000SA0"  # CPI urban consumers
+        - "CUUR0000SA0L1E" # CPI ex-food-and-energy
+        - "WPUFD49207"   # PPI finished goods
+        # Production & activity
+        - "INDPRO"       # Industrial production index
+        - "TCU"          # Capacity utilization
+        - "RSXFS"        # Advance retail sales
+        - "TOTBKCR"      # Total bank credit
+        - "DRTSCILM"     # Loan officer survey: lending standards
+        # Housing
+        - "HOUST"        # Housing starts (total)
+        - "HOUST1F"      # Housing starts (single-family)
+        - "PERMIT"       # Building permits
+        - "EXHOSLUSM495S" # Existing home sales
+        - "CSUSHPISA"    # S&P/Case-Shiller national home price index
+        - "MSPUS"        # Median sales price of houses sold
+        - "RRVRUSQ156N"  # Rental vacancy rate
+        - "MORTGAGE30US" # 30-year fixed mortgage rate
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
@@ -2574,16 +2603,47 @@ partitionedTables:
       type:
         - fred_indicators
       series:
+        # Rates & monetary policy
         - "DFF"
-        - "UNRATE"
-        - "GDP"
-        - "CPIAUCSL"
         - "FEDFUNDS"
+        - "DGS10"
+        - "DGS3MO"
         - "T10Y2Y"
-        - "MORTGAGE30US"
-        - "UMCSENT"
+        - "BAMLC0A0CM"
+        # Monetary aggregates
+        - "M1SL"
+        - "M2SL"
+        - "BOGMBASE"
+        # GDP & national accounts
+        - "GDP"
+        # Employment & labor
+        - "UNRATE"
         - "PAYEMS"
+        - "CES0000000001"
+        - "LNS14000000"
+        - "LNS11300000"
+        # Inflation
+        - "CPIAUCSL"
+        - "CUUR0000SA0"
+        - "CUUR0000SA0L1E"
+        - "WPUFD49207"
+        # Production & activity
         - "INDPRO"
+        - "TCU"
+        - "RSXFS"
+        - "TOTBKCR"
+        - "DRTSCILM"
+        # Housing
+        - "HOUST"
+        - "HOUST1F"
+        - "PERMIT"
+        - "EXHOSLUSM495S"
+        - "CSUSHPISA"
+        - "MSPUS"
+        - "RRVRUSQ156N"
+        - "MORTGAGE30US"
+        # Sentiment
+        - "UMCSENT"
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"

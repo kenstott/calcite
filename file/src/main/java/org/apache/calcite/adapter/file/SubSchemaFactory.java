@@ -100,6 +100,10 @@ public interface SubSchemaFactory {
     if (autoDownload instanceof String) {
       return Boolean.parseBoolean((String) autoDownload);
     }
+    String envVal = System.getenv("GOVDATA_AUTO_DOWNLOAD");
+    if (envVal != null) {
+      return Boolean.parseBoolean(envVal);
+    }
     return true;
   }
 

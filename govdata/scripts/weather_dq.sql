@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- weather_dq.sql — Weather Schema Data Quality
 -- Follows the 7-test reference template established in edu_dq.sql.
 -- Usage: source .env.prod && envsubst < scripts/weather_dq.sql | duckdb

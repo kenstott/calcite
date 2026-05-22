@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- ============================================================
 -- DQ script: energy schema
 -- Run: source .env.prod && envsubst < scripts/energy_dq.sql | duckdb

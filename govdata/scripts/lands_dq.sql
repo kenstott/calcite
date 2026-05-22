@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- U.S. Federal Lands Data Quality Checks
 -- Schema: lands
 -- Tables: national_forests, timber_sales, forest_inventory, forest_metrics,

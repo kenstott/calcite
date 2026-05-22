@@ -1,3 +1,4 @@
+-- dq-lookback: 4
 -- edu_dq.sql — Education Schema Data Quality
 -- Reference template: implements all 7 DQ test categories.
 -- Usage: source .env.prod && envsubst < scripts/edu_dq.sql | duckdb

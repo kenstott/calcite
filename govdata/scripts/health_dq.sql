@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- Health Data Quality Checks
 -- Schema: health
 -- Tables: fda_ndc_products, fda_drug_approvals, fda_drug_recalls, fda_adverse_events,

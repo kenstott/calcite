@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- Reference Data Quality Checks
 -- Schema: ref
 -- Tables: gleif_entities, gleif_cik_mapping, sec_company_tickers, figi_instruments

@@ -1,3 +1,4 @@
+-- dq-lookback: 1
 -- Federal Register Data Quality Checks
 -- Schema: fedregister
 -- Tables: fr_documents

@@ -1477,7 +1477,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // Table was explicitly invalidated — treat as not complete regardless of cache state.
     // invalidateTableCompletion writes "cleared" asynchronously; this guards against
     // preloadAllCompletions reading stale "complete" state from S3 before the flush arrives.
-    if (clearedTables.contains(pipelineName)) {
+    // "_all" is written by clearAllCompletions() and acts as a wildcard for the whole schema.
+    if (clearedTables.contains(pipelineName) || clearedTables.contains("_all")) {
       return null;
     }
 

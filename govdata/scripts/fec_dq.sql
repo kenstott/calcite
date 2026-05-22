@@ -1,3 +1,4 @@
+-- dq-lookback: 2
 -- FEC Data Quality Checks
 -- Schema: fec
 -- Tables: candidates, committees, candidate_committee_linkages, individual_contributions,
