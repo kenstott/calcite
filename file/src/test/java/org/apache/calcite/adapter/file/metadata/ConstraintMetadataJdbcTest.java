@@ -150,7 +150,7 @@ public class ConstraintMetadataJdbcTest {
     // query succeeds (smoke test — deeper plan assertions belong in query-plan tests).
     try (Connection conn = openConnection();
          Statement stmt = conn.createStatement()) {
-      ResultSet rs = stmt.executeQuery("SELECT customer_id FROM test.customers ORDER BY customer_id");
+      ResultSet rs = stmt.executeQuery("SELECT \"customer_id\" FROM \"customers\" ORDER BY 1");
       int count = 0;
       int prev = Integer.MIN_VALUE;
       while (rs.next()) {
@@ -160,6 +160,77 @@ public class ConstraintMetadataJdbcTest {
         count++;
       }
       assertEquals(5, count, "Should return all 5 customer rows");
+    }
+  }
+
+  /**
+   * Verifies the partitionedTables path: when primaryKey/foreignKeys are declared
+   * as top-level fields on partitionedTables entries (the YAML schema pattern),
+   * FileSchemaFactory extracts them into tableConstraints so getPrimaryKeys() works.
+   *
+   * <p>This covers the fix in FileSchemaFactory.create() that extracts constraints
+   * from partitionedTables when no explicit tableConstraints operand is provided.
+   */
+  @Test
+  void getPrimaryKeys_fromPartitionedTablesPrimaryKeyField() throws Exception {
+    createParquet("pt_customers.parquet",
+        "SELECT CAST(i AS INTEGER) AS customer_id, 'n' || CAST(i AS VARCHAR) AS name "
+        + "FROM generate_series(1, 3) AS t(i)");
+    createParquet("pt_orders.parquet",
+        "SELECT CAST(i AS INTEGER) AS order_id, CAST(i AS INTEGER) AS customer_id "
+        + "FROM generate_series(1, 5) AS t(i)");
+
+    String dir = tempDir.toFile().getAbsolutePath().replace("\\", "\\\\");
+    // Use partitionedTables with top-level primaryKey — no tableConstraints key
+    String model = "{"
+        + "\"version\":\"1.0\","
+        + "\"defaultSchema\":\"pttest\","
+        + "\"schemas\":[{"
+        + "  \"name\":\"pttest\","
+        + "  \"type\":\"custom\","
+        + "  \"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
+        + "  \"operand\":{"
+        + "    \"directory\":\"" + dir + "\","
+        + "    \"storageType\":\"local\","
+        + "    \"partitionedTables\":["
+        + "      {"
+        + "        \"name\":\"pt_customers\","
+        + "        \"pattern\":\"pt_customers*.parquet\","
+        + "        \"primaryKey\":[\"customer_id\"]"
+        + "      },"
+        + "      {"
+        + "        \"name\":\"pt_orders\","
+        + "        \"pattern\":\"pt_orders*.parquet\","
+        + "        \"primaryKey\":[\"order_id\"],"
+        + "        \"foreignKeys\":[{"
+        + "          \"columns\":[\"customer_id\"],"
+        + "          \"targetTable\":\"pt_customers\","
+        + "          \"targetColumns\":[\"customer_id\"]"
+        + "        }]"
+        + "      }"
+        + "    ]"
+        + "  }"
+        + "}]}";
+
+    Properties props = new Properties();
+    props.put("model", "inline:" + model);
+    try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
+      DatabaseMetaData meta = conn.getMetaData();
+
+      List<String> custPk = readPkColumns(meta, "pttest", "pt_customers");
+      assertEquals(Arrays.asList("customer_id"), custPk,
+          "pt_customers PK should be [customer_id] when declared via partitionedTables.primaryKey");
+
+      List<String> ordersPk = readPkColumns(meta, "pttest", "pt_orders");
+      assertEquals(Arrays.asList("order_id"), ordersPk,
+          "pt_orders PK should be [order_id] when declared via partitionedTables.primaryKey");
+
+      // Also verify FK is surfaced
+      try (ResultSet fks = meta.getImportedKeys(null, "pttest", "pt_orders")) {
+        assertTrue(fks.next(), "pt_orders should have an imported key to pt_customers");
+        assertEquals("customer_id", fks.getString("FKCOLUMN_NAME"));
+        assertEquals("pt_customers", fks.getString("PKTABLE_NAME"));
+      }
     }
   }
 

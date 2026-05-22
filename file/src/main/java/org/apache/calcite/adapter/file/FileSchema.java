@@ -3878,10 +3878,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           LOGGER.info("Table '{}' will use lazy initialization - skipping file enumeration during schema loading", config.getName());
           matchingFiles = java.util.Collections.emptyList();
         } else {
-          // Check if ConversionMetadata already has this table's files cached
-          // Note: For ECON tables, refresh/TTL logic is handled upstream by CacheManifest
-          // before table creation, so ConversionMetadata presence means files are already current
-          if (conversionMetadata != null && conversionMetadata.hasTableMetadata(config.getName())) {
+          // Check if ConversionMetadata already has this table's files cached.
+          // When the partitioned table config declares an explicit pattern, always enumerate
+          // files via findMatchingFiles so the file list stays accurate for this base directory.
+          // The metadata-cache skip only applies when there is no explicit pattern (the table
+          // relies purely on conversion records from a prior ETL run, e.g. ECON/S3 tables).
+          boolean hasExplicitPattern = config.getPattern() != null && !config.getPattern().isEmpty();
+          if (!hasExplicitPattern && conversionMetadata != null
+              && conversionMetadata.hasTableMetadata(config.getName())) {
             // Trust the cached metadata - avoid expensive S3 listing
             LOGGER.info("Table '{}' found in conversion metadata cache - skipping file enumeration", config.getName());
             matchingFiles = java.util.Collections.emptyList();
@@ -5060,8 +5064,37 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                     WHITESPACE_PATTERN.matcher(sourceSansParquet.relative(baseSource).path()
                     .replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
+            // Skip if this table is managed by an explicit partitionedTables entry —
+            // processPartitionedTables will add it with the correct constraint config.
+            if (partitionedTables != null) {
+              boolean coveredByPartitionedTable = false;
+              for (Map<String, Object> ptConfig : partitionedTables) {
+                Object ptName = ptConfig.get("name");
+                if (tableName.equals(ptName)) {
+                  coveredByPartitionedTable = true;
+                  break;
+                }
+              }
+              if (coveredByPartitionedTable) {
+                LOGGER.debug("[processStorageProviderFiles] Skipping parquet file '{}' - "
+                    + "covered by partitionedTables entry '{}'", entry.getName(), tableName);
+                continue;
+              }
+            }
             try {
-              Table parquetTable = new ParquetTranslatableTable(source.file(), name);
+              // If tableConstraints metadata is configured for this table, wrap it in a
+              // PartitionedParquetTable so getStatistic() exposes PK/FK to JDBC and the CBO.
+              Map<String, Object> constraintConfig = getTableConstraints(tableName);
+              Table parquetTable;
+              if (constraintConfig != null) {
+                List<String> filePaths = java.util.Collections.singletonList(
+                    source.file().getAbsolutePath());
+                parquetTable = new org.apache.calcite.adapter.file.table.PartitionedParquetTable(
+                    filePaths, null, engineConfig, null, null, null,
+                    constraintConfig, name, tableName, storageProvider, null);
+              } else {
+                parquetTable = new ParquetTranslatableTable(source.file(), name);
+              }
               builder.put(tableName, parquetTable);
               recordTableMetadata(tableName, parquetTable, source, null);
             } catch (Exception e) {

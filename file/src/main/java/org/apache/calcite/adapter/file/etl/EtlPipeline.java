@@ -410,33 +410,6 @@ public class EtlPipeline {
       }
       LOGGER.debug("Memory after_dim_expansion: {}", dimSnap);
 
-      // Compute incremental TTL and release window from iceberg config (0 = disabled)
-      long incrementalTtlMs = 0;
-      boolean isInReleaseWindow = true;
-      if (materializeConfig != null && materializeConfig.getIceberg() != null) {
-        MaterializeConfig.IcebergConfig icebergCfg = materializeConfig.getIceberg();
-        if (icebergCfg.getIncrementalTtlDays() > 0) {
-          incrementalTtlMs = icebergCfg.getIncrementalTtlMillis();
-          MaterializeConfig.IcebergConfig.ReleaseWindowConfig rwCfg = icebergCfg.getReleaseWindow();
-          if (rwCfg != null) {
-            isInReleaseWindow = rwCfg.isWithinWindow();
-            if (!isInReleaseWindow) {
-              LOGGER.info("Pipeline '{}': incrementalTtl={}d but outside release window (months={}) "
-                  + "— TTL refresh suppressed",
-                  pipelineName, icebergCfg.getIncrementalTtlDays(), rwCfg.getMonths());
-            }
-          }
-        }
-      }
-      // When TTL refresh is active, bypass the completion fast-path so per-partition
-      // TTL checks run against the tracker timestamps.
-      if (incrementalTtlMs > 0 && isInReleaseWindow) {
-        LOGGER.info("Pipeline '{}': incrementalTtl={}ms within release window — "
-            + "bypassing completion fast-path for TTL refresh",
-            pipelineName, incrementalTtlMs);
-        incrementalTracker.invalidateTableCompletion(pipelineName);
-      }
-
       // Fast-path: Check if entire pipeline was already completed with same dimensions
       if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
         // Verify data actually exists - completion marker may be stale if bucket was cleared
@@ -579,15 +552,9 @@ public class EtlPipeline {
               standardUnprocessedIndices.size(), totalBatches);
         } else {
           LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
-          if (incrementalTtlMs > 0 && isInReleaseWindow) {
-            standardUnprocessedIndices =
-                incrementalTracker.filterUnprocessedWithSuccessTtl(
-                    pipelineName, pipelineName, combinations, incrementalTtlMs);
-          } else {
-            standardUnprocessedIndices =
-                incrementalTracker.filterUnprocessedWithEmptyTtl(
-                    pipelineName, pipelineName, combinations, emptyResultTtlMillis);
-          }
+          standardUnprocessedIndices =
+              incrementalTracker.filterUnprocessedWithEmptyTtl(
+                  pipelineName, pipelineName, combinations, emptyResultTtlMillis);
         }
         long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
@@ -782,10 +749,6 @@ public class EtlPipeline {
           Set<Integer> unprocessedIndices;
           if (forceReprocessAll) {
             unprocessedIndices = allIndicesSet(partCombos.size());
-          } else if (incrementalTtlMs > 0 && isInReleaseWindow) {
-            unprocessedIndices =
-                incrementalTracker.filterUnprocessedWithSuccessTtl(
-                    pipelineName, pipelineName, partCombos, incrementalTtlMs);
           } else {
             unprocessedIndices =
                 incrementalTracker.filterUnprocessedWithEmptyTtl(

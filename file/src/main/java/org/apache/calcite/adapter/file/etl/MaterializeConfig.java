@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -538,6 +537,70 @@ public class MaterializeConfig {
       this.releaseWindow = builder.releaseWindow;
     }
 
+    /**
+     * Release-window guard for incremental TTL: restricts which calendar months
+     * (and optionally whether the year is odd or even) trigger re-ingestion.
+     */
+    public static class ReleaseWindowConfig {
+      private final List<Integer> months;
+      private final String yearParity;
+
+      private ReleaseWindowConfig(List<Integer> months, String yearParity) {
+        this.months = months != null
+            ? Collections.unmodifiableList(new ArrayList<Integer>(months))
+            : Collections.<Integer>emptyList();
+        this.yearParity = yearParity;
+      }
+
+      public List<Integer> getMonths() {
+        return months;
+      }
+
+      public String getYearParity() {
+        return yearParity;
+      }
+
+      /** Returns true if today falls within this release window. */
+      public boolean isWithinWindow() {
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        int currentMonth = now.get(java.util.Calendar.MONTH) + 1; // 1-based
+        int currentYear = now.get(java.util.Calendar.YEAR);
+
+        if (!months.isEmpty() && !months.contains(currentMonth)) {
+          return false;
+        }
+        if ("odd".equals(yearParity) && currentYear % 2 == 0) {
+          return false;
+        }
+        if ("even".equals(yearParity) && currentYear % 2 != 0) {
+          return false;
+        }
+        return true;
+      }
+
+      @SuppressWarnings("unchecked")
+      public static ReleaseWindowConfig fromMap(Map<String, Object> map) {
+        if (map == null) {
+          return null;
+        }
+        List<Integer> months = new ArrayList<Integer>();
+        Object monthsObj = map.get("months");
+        if (monthsObj instanceof List) {
+          for (Object m : (List<?>) monthsObj) {
+            if (m instanceof Number) {
+              months.add(((Number) m).intValue());
+            }
+          }
+        }
+        String yearParity = null;
+        Object parityObj = map.get("yearParity");
+        if (parityObj instanceof String) {
+          yearParity = (String) parityObj;
+        }
+        return new ReleaseWindowConfig(months, yearParity);
+      }
+    }
+
     public CatalogType getCatalogType() {
       return catalogType;
     }
@@ -603,7 +666,7 @@ public class MaterializeConfig {
     }
 
     public long getIncrementalTtlMillis() {
-      return incrementalTtlDays * 24L * 60L * 60L * 1000L;
+      return incrementalTtlDays * 24L * 60 * 60 * 1000;
     }
 
     public ReleaseWindowConfig getReleaseWindow() {
@@ -714,14 +777,9 @@ public class MaterializeConfig {
         builder.incrementalTtlDays(((Number) ttlObj).intValue());
       }
 
-      Object releaseWindowObj = map.get("releaseWindow");
-      if (releaseWindowObj instanceof Map) {
-        @SuppressWarnings("unchecked")
-        ReleaseWindowConfig rwc =
-            ReleaseWindowConfig.fromMap((Map<String, Object>) releaseWindowObj);
-        if (rwc != null) {
-          builder.releaseWindow(rwc);
-        }
+      Object rwObj = map.get("releaseWindow");
+      if (rwObj instanceof Map) {
+        builder.releaseWindow(ReleaseWindowConfig.fromMap((Map<String, Object>) rwObj));
       }
 
       return builder.build();
@@ -760,7 +818,7 @@ public class MaterializeConfig {
       private long compactionTargetFileSizeBytes;
       private int compactionMinFiles;
       private long compactionSmallFileSizeBytes;
-      private boolean overwritePartitions;
+      private boolean overwritePartitions = true;
       private int incrementalTtlDays;
       private ReleaseWindowConfig releaseWindow;
 
@@ -854,76 +912,5 @@ public class MaterializeConfig {
       }
     }
 
-    /**
-     * Configuration for release-window gating of TTL-based re-ingestion.
-     *
-     * <p>When {@code incrementalTtlDays} is set, a partition whose tracker entry is older
-     * than the TTL is eligible for re-ingest. {@code ReleaseWindowConfig} further gates
-     * that re-ingest: it only fires when the current calendar month is in the allowed
-     * {@code months} list (and, optionally, the year has the right parity).
-     *
-     * <h3>YAML Example</h3>
-     * <pre>
-     * iceberg:
-     *   incrementalTtlDays: 365
-     *   releaseWindow:
-     *     months: [6, 7, 8, 9]
-     *     yearParity: odd   # optional: "odd", "even", or omit for any year
-     * </pre>
-     */
-    public static class ReleaseWindowConfig {
-      private final List<Integer> months;
-      private final String yearParity;
-
-      private ReleaseWindowConfig(List<Integer> months, String yearParity) {
-        this.months = months != null
-            ? Collections.unmodifiableList(new ArrayList<Integer>(months))
-            : Collections.<Integer>emptyList();
-        this.yearParity = yearParity;
-      }
-
-      public List<Integer> getMonths() {
-        return months;
-      }
-
-      public String getYearParity() {
-        return yearParity;
-      }
-
-      /** Returns true if today falls within this release window. */
-      public boolean isWithinWindow() {
-        LocalDate today = LocalDate.now();
-        int currentMonth = today.getMonthValue();
-        int currentYear = today.getYear();
-        if (!months.isEmpty() && !months.contains(currentMonth)) {
-          return false;
-        }
-        if ("odd".equalsIgnoreCase(yearParity) && currentYear % 2 == 0) {
-          return false;
-        }
-        if ("even".equalsIgnoreCase(yearParity) && currentYear % 2 != 0) {
-          return false;
-        }
-        return true;
-      }
-
-      @SuppressWarnings("unchecked")
-      public static ReleaseWindowConfig fromMap(Map<String, Object> map) {
-        if (map == null) {
-          return null;
-        }
-        List<Integer> months = new ArrayList<Integer>();
-        Object monthsObj = map.get("months");
-        if (monthsObj instanceof List) {
-          for (Object m : (List<?>) monthsObj) {
-            if (m instanceof Number) {
-              months.add(((Number) m).intValue());
-            }
-          }
-        }
-        String yearParity = (String) map.get("yearParity");
-        return new ReleaseWindowConfig(months, yearParity);
-      }
-    }
   }
 }

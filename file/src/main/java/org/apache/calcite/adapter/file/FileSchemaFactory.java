@@ -49,6 +49,7 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -479,6 +480,40 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get table constraints configuration
     @SuppressWarnings("unchecked") Map<String, Map<String, Object>> operandTableConstraints =
         (Map<String, Map<String, Object>>) operand.get("tableConstraints");
+
+    // If no explicit tableConstraints, extract primaryKey/foreignKeys from partitionedTables.
+    // YAML schema files declare these as top-level fields on each table entry (not nested under
+    // a "constraints" sub-key), so they are present in the partitionedTables config maps but
+    // are never transferred to the tableConstraints map that FileSchema/PartitionedParquetTable
+    // use to build Statistic.getKeys() for JDBC getPrimaryKeys() metadata.
+    if ((operandTableConstraints == null || operandTableConstraints.isEmpty())
+        && partitionedTables != null && !partitionedTables.isEmpty()) {
+      Map<String, Map<String, Object>> extracted = new LinkedHashMap<>();
+      for (Map<String, Object> tableConfig : partitionedTables) {
+        Object nameObj = tableConfig.get("name");
+        if (!(nameObj instanceof String)) {
+          continue;
+        }
+        String tblName = (String) nameObj;
+        Map<String, Object> constraints = new LinkedHashMap<>();
+        Object pk = tableConfig.get("primaryKey");
+        if (pk != null) {
+          constraints.put("primaryKey", pk);
+        }
+        Object fks = tableConfig.get("foreignKeys");
+        if (fks != null) {
+          constraints.put("foreignKeys", fks);
+        }
+        if (!constraints.isEmpty()) {
+          extracted.put(tblName, constraints);
+        }
+      }
+      if (!extracted.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: extracted constraints for {} tables from partitionedTables",
+            extracted.size());
+        operandTableConstraints = extracted;
+      }
+    }
 
     // Get storage provider configuration
     String storageType = (String) operand.get("storageType");
