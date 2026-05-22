@@ -64,6 +64,17 @@ for arg in "${@:3}"; do
 done
 export FORCE
 
+# DQ modes — schema-agnostic; delegate directly to worker-dq-run.sh
+case "$MODE" in
+  dq)
+    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical
+    ;;
+  dq-rebuild)
+    export GOVDATA_RUN_MODE="historical"
+    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical --rebuild
+    ;;
+esac
+
 WORKER_ID="worker-${SCHEMA}-${MODE}"
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 

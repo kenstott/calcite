@@ -520,6 +520,28 @@ generate_single_schema_model() {
     econ_reference)
       operand_body="\"dataSource\": \"econ_reference\""
       ;;
+    ref)
+      generate_ref_model "$output_file"
+      return
+      ;;
+    health)
+      operand_body="\"dataSource\": \"health\",
+      ${_YEAR_RANGE}"
+      ;;
+    patents)
+      operand_body="\"dataSource\": \"patents\",
+      ${_YEAR_RANGE}"
+      ;;
+    energy)
+      operand_body="\"dataSource\": \"energy\",
+      ${_YEAR_RANGE}"
+      ;;
+    cyber_vuln)
+      operand_body="\"dataSource\": \"cyber_vuln\""
+      ;;
+    cyber_threat)
+      operand_body="\"dataSource\": \"cyber_threat\""
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1
@@ -754,6 +776,19 @@ table_in_window() {
 # Sets: _HEAP_MIN, _HEAP_MAX
 get_heap_config() {
   local worker_id=$1
+
+  # DQ compound modes: handle before schema extraction to avoid "-dq" corrupting _schema
+  if [[ "$worker_id" == *-dq-rebuild ]]; then
+    local _base="${worker_id%-dq-rebuild}"
+    _base="${_base#worker-}"
+    get_heap_config "worker-${_base}-initial"
+    return
+  fi
+  if [[ "$worker_id" == *-dq ]]; then
+    # DuckDB-only DQ: no JVM; use 2g as memory-budget placeholder
+    _HEAP_MIN="1g"; _HEAP_MAX="2g"
+    return
+  fi
 
   # Allow env overrides to take precedence
   if [ -n "${ETL_HEAP_MIN:-}" ] && [ -n "${ETL_HEAP_MAX:-}" ]; then
