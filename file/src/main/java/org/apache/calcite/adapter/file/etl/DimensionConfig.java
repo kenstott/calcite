@@ -84,6 +84,7 @@ public class DimensionConfig {
   private final Integer maxYear;
   private final String effectiveYearField;
   private final String effectiveMonthField;
+  private final boolean descending;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -109,6 +110,7 @@ public class DimensionConfig {
     this.maxYear = builder.maxYear;
     this.effectiveYearField = builder.effectiveYearField;
     this.effectiveMonthField = builder.effectiveMonthField;
+    this.descending = builder.descending;
   }
 
   /**
@@ -207,6 +209,14 @@ public class DimensionConfig {
    */
   public String getEffectiveMonthField() {
     return effectiveMonthField;
+  }
+
+  /**
+   * Returns whether dimension values should be iterated in descending order.
+   * YEAR_RANGE always descends regardless of this flag.
+   */
+  public boolean isDescending() {
+    return descending;
   }
 
   /**
@@ -468,6 +478,13 @@ public class DimensionConfig {
       builder.effectiveMonthField((String) effectiveMonthFieldObj);
     }
 
+    Object descendingObj = map.get("descending");
+    if (descendingObj instanceof Boolean) {
+      builder.descending((Boolean) descendingObj);
+    } else if (descendingObj instanceof String) {
+      builder.descending(Boolean.parseBoolean((String) descendingObj));
+    }
+
     // Parse custom properties (for CUSTOM type dimensions)
     // Properties are stored as-is; variable resolution happens at runtime
     Object propsObj = map.get("properties");
@@ -583,6 +600,7 @@ public class DimensionConfig {
     private Integer maxYear;
     private String effectiveYearField;
     private String effectiveMonthField;
+    private boolean descending;
 
     public Builder name(String name) {
       this.name = name;
@@ -666,6 +684,11 @@ public class DimensionConfig {
 
     public Builder effectiveMonthField(String effectiveMonthField) {
       this.effectiveMonthField = effectiveMonthField;
+      return this;
+    }
+
+    public Builder descending(boolean descending) {
+      this.descending = descending;
       return this;
     }
 

@@ -1240,7 +1240,10 @@ partitionedTables:
       type:
         - hms_smoke
       year: *ghcnd_year_range
-      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+      month:
+        type: list
+        values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+        descending: true
 
     columns:
       - name: county_fips
@@ -1319,7 +1322,10 @@ partitionedTables:
       type:
         - hms_smoke_polygon
       year: *ghcnd_year_range
-      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+      month:
+        type: list
+        values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+        descending: true
 
     columns:
       - name: date
@@ -1387,7 +1393,10 @@ partitionedTables:
       type:
         - climate_normals
       state_fips: *all_state_fips
-      month: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+      month:
+        type: list
+        values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+        descending: true
 
     columns:
       - name: station_id

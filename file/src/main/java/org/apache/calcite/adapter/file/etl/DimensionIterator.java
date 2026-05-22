@@ -507,29 +507,37 @@ public class DimensionIterator {
       effectiveMax = Math.min(effectiveMax, lagYear);
     }
     boolean hasFilter = minYear != null || effectiveMax != Integer.MAX_VALUE;
+    List<String> result;
     if (!hasFilter) {
-      return values;
-    }
-    List<String> filtered = new ArrayList<String>();
-    for (String value : values) {
-      try {
-        int year = Integer.parseInt(value.trim());
-        if (minYear != null && year < minYear) {
-          LOGGER.warn("List dimension '{}': value {} predates data floor {} — skipping",
-              config.getName(), year, minYear);
-          continue;
+      result = values;
+    } else {
+      List<String> filtered = new ArrayList<String>();
+      for (String value : values) {
+        try {
+          int year = Integer.parseInt(value.trim());
+          if (minYear != null && year < minYear) {
+            LOGGER.warn("List dimension '{}': value {} predates data floor {} — skipping",
+                config.getName(), year, minYear);
+            continue;
+          }
+          if (effectiveMax != Integer.MAX_VALUE && year > effectiveMax) {
+            LOGGER.warn("List dimension '{}': value {} exceeds data ceiling {} — skipping",
+                config.getName(), year, effectiveMax);
+            continue;
+          }
+          filtered.add(value);
+        } catch (NumberFormatException e) {
+          filtered.add(value);
         }
-        if (effectiveMax != Integer.MAX_VALUE && year > effectiveMax) {
-          LOGGER.warn("List dimension '{}': value {} exceeds data ceiling {} — skipping",
-              config.getName(), year, effectiveMax);
-          continue;
-        }
-        filtered.add(value);
-      } catch (NumberFormatException e) {
-        filtered.add(value);
       }
+      result = filtered;
     }
-    return filtered;
+    if (config.isDescending()) {
+      List<String> reversed = new ArrayList<String>(result);
+      Collections.reverse(reversed);
+      return reversed;
+    }
+    return result;
   }
 
   /**
@@ -560,6 +568,9 @@ public class DimensionIterator {
       }
     }
 
+    if (config.isDescending()) {
+      Collections.reverse(values);
+    }
     return values;
   }
 
@@ -638,7 +649,8 @@ public class DimensionIterator {
 
     List<Integer> excludeYears = config.getExcludeYears();
     List<String> values = new ArrayList<String>();
-    for (int year = start; year <= effectiveEnd; year += step) {
+    // Always descend: process most recent year first so incremental runs yield recent data faster.
+    for (int year = effectiveEnd; year >= start; year -= step) {
       if (excludeYears != null && excludeYears.contains(year)) {
         LOGGER.debug("Year range dimension '{}' excluding year {}", config.getName(), year);
         continue;
@@ -681,6 +693,9 @@ public class DimensionIterator {
           "Failed to resolve query dimension '" + config.getName() + "'", e);
     }
 
+    if (config.isDescending()) {
+      Collections.reverse(values);
+    }
     return values;
   }
 
