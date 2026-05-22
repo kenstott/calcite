@@ -162,7 +162,7 @@ for arg in "$@"; do
         "sec_primary:${_cy}"
         econ:daily census:daily geo:daily crime:daily weather:daily
         "sec_secondary:${_cy}"
-        sec_prices:daily ref:daily
+        ref:daily
         fec:daily fedregister:daily
         cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly
         health:daily health:weekly health:monthly

@@ -2,11 +2,15 @@
 
 ## Quick Reference
 
-| Worker | Mode | Workers |
-|---|---|---|
-| worker-62 | initial/backfill | included in `./run-pool.sh historical` |
-| worker-63–65 | recurring | included in `./run-pool.sh daily` |
-| worker-66 | static standards refresh | `./run-pool.sh 66` (on-demand only) |
+| Slot | When to run |
+|---|---|
+| `cyber_vuln:initial` | First-time setup — full NVD + KEV + CWE catalog |
+| `cyber_threat:initial` | First-time setup — NIST/CIS/OWASP standards + OTX backfill |
+| `cyber_vuln:daily` | Daily — NVD delta + KEV refresh |
+| `cyber_vuln:weekly` | Weekly — CWE, OSV, cross-refs, advisories |
+| `cyber_threat:weekly` | Weekly — ATT&CK techniques + NIST mappings |
+| `cyber_threat:hourly` | Hourly — live IOC feeds |
+| `cyber_threat:static` | On-demand — re-run static standards after framework update |
 
 ```bash
 cd scripts/parallel
@@ -14,22 +18,25 @@ cd scripts/parallel
 # First-time setup — cyber runs as part of the full historical load
 ./run-pool.sh historical
 # — or cyber initial only —
-./run-pool.sh --schema cyber historical
+./run-pool.sh --schema cyber_threat historical
+./run-pool.sh --schema cyber_vuln historical
 
 # Recurring — cyber workers run automatically as part of the daily pool
 ./run-pool.sh daily
 # — or cyber only —
-./run-pool.sh --schema cyber daily
+./run-pool.sh --schema cyber_threat daily
+./run-pool.sh --schema cyber_vuln daily
 
 # On-demand: re-run static standards after a NIST/CIS/OWASP update
-./run-pool.sh 66
+./run-pool.sh --schema cyber_threat historical
 
 # Force all sub-runs regardless of release window (backfill / manual refresh)
 # Via run-pool (preferred — memory management, logging, pool coordination)
-./run-pool.sh --force --schema cyber daily
+./run-pool.sh --force --schema cyber_threat daily
+./run-pool.sh --force --schema cyber_vuln daily
 # Direct worker invocation (bypasses pool; useful for isolated testing)
-./worker-cyber.sh weekly --force
-./worker-cyber.sh daily --force
+./worker-cyber.sh weekly cyber_vuln --force
+./worker-cyber.sh daily cyber_vuln --force
 ```
 
 ---
@@ -38,13 +45,11 @@ cd scripts/parallel
 
 ### Environment Variables
 
-Set these in `.env.prod` (or the environment used by your cron/scheduler):
+Set these in `.env.prod` (or the environment used by your scheduler):
+
+Cyber schemas use `GOVDATA_PARQUET_DIR` and `GOVDATA_CACHE_DIR` — set these globally, no schema-specific path overrides needed.
 
 ```bash
-# Required
-export CYBER_PARQUET_DIR=/data/cyber          # or s3://your-bucket/cyber
-export CYBER_CACHE_DIR=/data/cyber-cache      # or s3://your-bucket/cyber-cache
-
 # Optional but recommended
 export CYBER_NVD_API_KEY=your-nvd-api-key     # register at nvd.nist.gov/developers
 export CYBER_OTX_API_KEY=your-otx-key         # register at otx.alienvault.com
@@ -67,18 +72,25 @@ The worker script requires the govdata shadow JAR. Build it with:
 
 ### `initial` — Run once on first setup
 
-Downloads the full datasets that are too large or slow for delta loads:
+Downloads the full datasets that are too large or slow for delta loads.
+
+For `cyber_vuln:initial`:
 
 1. **Full NVD CVE catalog** (~350k CVEs via paginated API; takes 15–60 min depending on rate limit)
 2. **CISA KEV catalog** and **CWE catalog**
-3. **Static standards**: NIST 800-53 Rev 5, NIST CSF 2.0, CIS Controls v8, OWASP Top 10, ATT&CK→NIST mappings
-4. **OTX full backfill** (only if `CYBER_OTX_API_KEY` is set; cursor-paginates all available pulses)
+
+For `cyber_threat:initial`:
+
+1. **Static standards**: NIST 800-53 Rev 5, NIST CSF 2.0, CIS Controls v8, OWASP Top 10, ATT&CK→NIST mappings
+2. **OTX full backfill** (only if `CYBER_OTX_API_KEY` is set; cursor-paginates all available pulses)
 
 After initial completes, switch to the recurring cadence workers. Do not re-run `initial` routinely —
 it fetches the entire NVD catalog each time.
 
 ```bash
-./scripts/parallel/worker-cyber.sh initial
+# Runs both schemas; for schema-specific:
+./scripts/parallel/worker-cyber.sh initial cyber_vuln
+./scripts/parallel/worker-cyber.sh initial cyber_threat
 ```
 
 ---
@@ -86,46 +98,43 @@ it fetches the entire NVD catalog each time.
 ### `daily` — Incremental CVE and KEV refresh
 
 Downloads only CVEs modified or published in the last 24 hours (NVD's `lastModStartDate` filter),
-plus a fresh copy of the CISA KEV list.
+plus a fresh copy of the CISA KEV list. Applies to `cyber_vuln`.
 
 **When to run:** Once per day. A common schedule is 06:00 UTC.
 
 ```bash
-./scripts/parallel/worker-cyber.sh daily
-```
-
-Cron example:
-```
-0 6 * * * /path/to/govdata/scripts/parallel/worker-cyber.sh daily
+./scripts/parallel/worker-cyber.sh daily cyber_vuln
 ```
 
 ---
 
 ### `weekly` — Broader vulnerability ecosystem refresh
 
-Refreshes sources that change less frequently:
+Refreshes sources that change less frequently.
+
+For `cyber_vuln:weekly`:
 
 - **CWE catalog** (MITRE publishes updates periodically)
 - **OSV vulnerabilities** (per-ecosystem advisories; requires `CYBER_OSV_ECOSYSTEMS`)
+- Cross-references and advisories
+
+For `cyber_threat:weekly`:
+
 - **MITRE ATT&CK techniques** (major releases twice per year; minor updates more often)
 - **ATT&CK→NIST mappings** (CISA publishes updates with each ATT&CK release)
 
 **When to run:** Weekly. A common schedule is Sunday 02:00 UTC.
 
 ```bash
-./scripts/parallel/worker-cyber.sh weekly
-```
-
-Cron example:
-```
-0 2 * * 0 /path/to/govdata/scripts/parallel/worker-cyber.sh weekly
+./scripts/parallel/worker-cyber.sh weekly cyber_vuln --force
+./scripts/parallel/worker-cyber.sh weekly cyber_threat --force
 ```
 
 ---
 
 ### `hourly` — Live IOC and threat intelligence feeds
 
-Fetches the most current threat intelligence from live sources:
+Applies to `cyber_threat`. Fetches the most current threat intelligence from live sources:
 
 | Table | Source | Notes |
 |---|---|---|
@@ -142,50 +151,42 @@ ThreatFox and OTX require API keys.
 ```bash
 # Set delta window for OTX before running
 export CYBER_OTX_DELTA_DAYS=1
-./scripts/parallel/worker-cyber.sh hourly
-```
-
-Cron example (every 2 hours):
-```
-0 */2 * * * CYBER_OTX_DELTA_DAYS=1 /path/to/govdata/scripts/parallel/worker-cyber.sh hourly
+./scripts/parallel/worker-cyber.sh hourly cyber_threat
 ```
 
 ---
 
 ### `static` — Re-run static standards
 
-Refreshes NIST 800-53, NIST CSF 2.0, CIS Controls, OWASP Top 10, and ATT&CK→NIST mappings.
-These sources only change when frameworks publish new versions (roughly annually).
+Applies to `cyber_threat`. Refreshes NIST 800-53, NIST CSF 2.0, CIS Controls, OWASP Top 10,
+and ATT&CK→NIST mappings. These sources only change when frameworks publish new versions
+(roughly annually).
 
 **When to run:** After a framework publishes a new version, or when you add new ecosystems.
 Not needed in routine schedules.
 
 ```bash
-./scripts/parallel/worker-cyber.sh static
+./scripts/parallel/worker-cyber.sh static cyber_threat
 ```
 
 ---
 
 ## Cron Schedule
 
-Cyber workers run as part of `./run-pool.sh daily` — no separate cron entry needed.
-
-```cron
-# All recurring workers including cyber — run once per day
-0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
-```
+Cyber workers run as part of `run-scheduled.sh` (the perpetual runner) or `./run-pool.sh daily`. No separate cron entry is needed. See the main operations guide for systemd setup.
 
 To run cyber workers in isolation (e.g. after a manual NVD backfill):
 
 ```bash
-./run-pool.sh --schema cyber daily
+./run-pool.sh --schema cyber_threat daily
+./run-pool.sh --schema cyber_vuln daily
 ```
 
 ---
 
 ## Release-Window Checks
 
-Workers 63–64 gate their sub-runs to avoid running when no new data is expected.
+Cyber workers gate their sub-runs to avoid running when no new data is expected.
 Each check exits in milliseconds — no network I/O, no model file written.
 
 | Mode | Window | Mechanism | Notes |
@@ -195,7 +196,7 @@ Each check exits in milliseconds — no network I/O, no model file written.
 | `hourly` | Every run | No gate — live IOC feeds | Always runs |
 | `static` | On-demand | No gate — manual trigger | Run after framework version releases |
 
-To bypass: `./run-pool.sh --force --schema cyber daily` (preferred) or `./worker-cyber.sh weekly --force` (direct).
+To bypass: `./run-pool.sh --force --schema cyber_threat daily` (preferred) or `./worker-cyber.sh weekly cyber_vuln --force` (direct).
 `--force` skips window checks only — year bounds are unchanged.
 
 ---
@@ -221,8 +222,10 @@ is absent — they do not error. Check that the corresponding env var is set and
 
 ### Log location
 
-Logs are written to `scripts/parallel/runs/worker-cyber-<mode>/etl_<timestamp>.log`.
+Logs are written to `scripts/parallel/runs/worker-{schema}-{mode}/etl_{timestamp}.log`.
 
 ```bash
-tail -f scripts/parallel/runs/worker-cyber-hourly/etl_*.log
+tail -f scripts/parallel/runs/worker-cyber_threat-hourly/etl_*.log
+tail -f scripts/parallel/runs/worker-cyber_vuln-initial/etl_*.log
+tail -f scripts/parallel/runs/worker-cyber_threat-initial/etl_*.log
 ```

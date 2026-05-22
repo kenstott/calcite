@@ -1,65 +1,110 @@
 # GovData Pipeline Operations Guide
 
-This guide explains how to set up and maintain the full GovData pipeline across all 12 schemas.
-The core orchestrator is `scripts/parallel/run-pool.sh`, which manages memory-aware concurrent
-execution of numbered worker scripts on a single machine.
+The pipeline is fully automated. The only routine human action required is a daily review of
+`runs/errors.log` to catch any worker failures.
 
 ---
 
-## ETL Orchestrator
+## Normal operation: the perpetual runner
 
-`scripts/parallel/run-pool.sh` is the single entry point for all ETL operations.
-It manages memory-aware concurrent worker execution and accepts named aliases:
+`run-scheduled.sh` is the production process. It runs continuously, cycling between `historical`
+and `daily` run-pool windows. Each window runs for up to 12 hours. If run-pool crashes mid-window,
+the runner waits 30 seconds and relaunches it for the remaining window time. When the window
+ends the mode flips and the next window starts immediately.
+
+Mode selection when no argument given: hours 08:00–19:59 → `daily`; 20:00–07:59 → `historical`.
+
+**Install as a systemd user service (Linux production):**
 
 ```bash
-cd scripts/parallel
+systemd/install.sh                   # install and enable govdata-pool.service
+systemd/install.sh --uninstall
+```
 
-./run-pool.sh daily               # Run all recurring workers + embeddings refresh (production server)
-./run-pool.sh historical          # Run all initial/backfill workers (ingest device, run once)
-./run-pool.sh stock-quotes        # Stock prices alone (Stooq rate limits; may take 1–3 days)
+```bash
+systemctl --user status govdata-pool.service
+systemctl --user stop govdata-pool.service
+```
 
-# Flags (combinable with any alias or range)
-./run-pool.sh -j 4 daily          # Hard cap at 4 concurrent workers regardless of memory budget
-                                  # Use when memory isn't the constraint: API rate limits, CPU
-                                  # contention, shared machines, or cleaner sequential logs.
-                                  # Prefer -r when the goal is tighter OOM protection.
-./run-pool.sh -t 120 historical   # Extend inactivity timeout to 120 min
-./run-pool.sh -r 4000 daily       # Reserve 4GB for OS so the budget is more conservative
-                                  # Use when heap estimates understate real RSS (off-heap buffers,
-                                  # native libs) or when other processes compete for memory.
-                                  # Prefer -j when concurrency itself is the concern, not memory.
+The service starts at login and restarts automatically on failure.
+
+**Daily error review:**
+
+```bash
+tail -f runs/errors.log              # live errors
+tail runs/errors.log                 # last N lines
+grep "$(date +%Y-%m-%d)" runs/errors.log   # today only
+```
+
+**Logs:**
+- Crash/error lines: `runs/errors.log`
+- Per-window detail: `runs/scheduled-{mode}-{timestamp}.log`
+- Pool output: `runs/pool-service.log` (when running via systemd)
+
+**Direct launch (foreground, for testing only):**
+
+```bash
+./run-scheduled.sh            # auto-select mode by hour
+./run-scheduled.sh daily
+./run-scheduled.sh historical
+```
+
+---
+
+## Separate scheduled jobs (TBD)
+
+Two jobs run on their own schedules outside the perpetual runner. Both are deferred — schedules
+and tooling are not yet finalized.
+
+**Stock prices** (`sec_prices`) — fetches Stooq prices for all EDGAR tickers. Always does a
+full 2010–present scan; takes 1–3 days. Whether this becomes part of the offering at all is
+still under evaluation.
+
+```bash
+./run-pool.sh sec_prices:historical   # run manually for now
+```
+
+**Embeddings / VSS cache** — generates SEC filing embeddings and uploads the DuckDB HNSW index.
+Likely runs weekly on a Vultr CPU instance. Schedule and automation not yet defined.
+See [Embeddings & VSS Cache](#embeddings--vss-cache) for the manual pipeline.
+
+**Cron reference (if not using systemd):**
+
+```cron
+# Perpetual runner — manages historical/daily cycling automatically
+@reboot  cd /path/to/govdata/scripts/parallel && ./run-scheduled.sh
+```
+
+---
+
+## Manual operations (run-pool.sh)
+
+`run-pool.sh` is the underlying worker pool. The perpetual runner calls it continuously;
+use it directly for one-off runs, schema-specific reruns, or troubleshooting.
+
+```bash
+./run-pool.sh daily               # all recurring schemas
+./run-pool.sh historical          # all initial/backfill schemas (run once on first setup)
+
+# Run one schema only
+./run-pool.sh --schema fec daily
+./run-pool.sh --schema sec_primary historical
+
+# Explicit schema:mode slots
+./run-pool.sh fec:daily econ:daily
+./run-pool.sh sec_primary:2024
+
+# Flags
+./run-pool.sh -j 4 daily          # hard cap at 4 concurrent workers
+./run-pool.sh -t 120 historical   # extend inactivity timeout to 120 min
+./run-pool.sh -r 4000 daily       # reserve 4GB more for OS (useful when other processes compete)
 ./run-pool.sh -p 4 daily          # 4 entity-level parallel threads per worker
-./run-pool.sh --force daily       # Bypass all release-window checks (backfill / manual refresh)
-
-# Schema filter — run one domain from the daily or historical set
-./run-pool.sh --schema energy daily
-./run-pool.sh --schema sec historical
-./run-pool.sh --schema health daily
-# Known schemas: sec, sec_secondary, stock, econ, census, geo, crime,
-#                weather, ref, fec, fedregister, cyber, health, edu, energy
-
-# Combine flags freely
-./run-pool.sh --force --schema edu daily     # edu workers only, skip release-window checks
-./run-pool.sh --force --schema energy daily  # energy workers only, skip release-window checks
+./run-pool.sh --force daily       # bypass release-window checks (backfill / manual refresh)
 ```
 
-## Worker Map
-
-```
-SEC Primary (10-K/10-Q)         workers  1 – 17    (worker-01 = 2026+, workers 02–17 = 2025–2010)
-SEC Secondary (8-K/Proxy/etc.)  workers 23 – 39    (worker-23 = 2026+, workers 24–39 = 2025–2010)
-SEC Stock Prices                worker  40
-Non-SEC schemas                 workers 18 – 22, 41, 60, 61
-Cyber                           workers 62 – 66    (worker-62 = initial, 63-66 = recurring)
-Health                          workers 67 – 70    (worker-67 = initial, 68-70 = recurring)
-Education                       workers 71 – 73    (worker-71 = initial, 72-73 = recurring)
-Energy                          workers 74 – 77    (worker-74 = initial, 75-77 = recurring)
-Patents                         worker  80 – 81    (worker-80 = initial, 81 = recurring)
-Lands (public lands)            workers 82 – 83    (worker-82 = initial, 83 = recurring)
-```
-
-The `daily` alias covers workers: 1, 18–23, 40, 41, 60–61, 63–65, 68–70, 72–73, 75–77, 81, 83
-The `historical` alias covers workers: 1–41, 60–62, 67, 71, 74, 80, 82
+Valid schemas: `sec_primary`, `sec_secondary`, `sec_prices`, `econ`, `census`, `geo`, `crime`,
+`weather`, `ref`, `fec`, `fedregister`, `econ_reference`, `cyber_threat`, `cyber_vuln`,
+`health`, `edu`, `energy`, `patents`, `lands`
 
 ---
 
@@ -80,12 +125,6 @@ Create `govdata/.env.prod` with at minimum:
 # Storage
 GOVDATA_PARQUET_DIR=/data/govdata          # or s3://your-bucket/govdata
 GOVDATA_CACHE_DIR=/data/govdata-cache
-
-CYBER_PARQUET_DIR=/data/cyber
-CYBER_CACHE_DIR=/data/cyber-cache
-
-HEALTH_PARQUET_DIR=/data/health          # or s3://your-bucket/govdata/source=health
-HEALTH_CACHE_DIR=/data/health-cache
 
 # SEC / EDGAR
 SEC_EDGAR_USER_AGENT="Your Name your@email.com"
@@ -116,27 +155,27 @@ On 16GB, expect 3 concurrent; on 64GB, 8–10.
 
 Approximate per-worker runtimes (order of magnitude, varies significantly with network and I/O):
 
-| Worker | What it loads | Heap | Est. runtime |
+| Schema / Mode | What it loads | Heap | Est. runtime |
 |---|---|---|---|
-| 1 | SEC primary 2026+ | 3g | 1–3 h |
-| 18 | Economic (BLS/FRED/BEA) | 3g | 3–6 h |
-| 19 | Census ACS 2010–2026 | 3g | 1–3 h |
-| 20 | Geographic (TIGER shapefiles) | 6g | 3–8 h |
-| 21 | Crime (FBI/BJS) | 4g | 4–10 h |
-| 22 | Weather (NWS/NOAA/EPA) | 3g | 2–5 h |
-| 23 | SEC secondary 2026+ | 3g | 1–4 h |
-| 40 | Stock prices 2010–2026 | 3g | 1–3 days ⚠️ |
-| 41 | Reference (GLEIF/CIK/FIGI) | 4g | 1–2 h |
-| 60 | FEC campaign finance | 5g | 4–8 h |
-| 61 | Federal Register 2010+ | 3g | 3–6 h |
-| 62 | Cyber initial (NVD full + standards + OTX) | 6g | 2–5 h |
-| 67 | Health initial (all 15 tables, full fetch) | 6g | 3–8 h |
-| 71 | Education initial (CCD, IPEDS, NAEP, CRDC, Scorecard) | 6g | 2–6 h |
-| 2–17 | SEC primary per year (×16) | 3g | 2–8 h each |
-| 24–39 | SEC secondary per year (×16) | 3g | 1–4 h each |
+| sec_primary:current | SEC primary 2026+ | 3g | 1–3 h |
+| econ:historical | Economic (BLS/FRED/BEA) | 3g | 3–6 h |
+| census:historical | Census ACS 2010–2026 | 3g | 1–3 h |
+| geo:historical | Geographic (TIGER shapefiles) | 6g | 3–8 h |
+| crime:historical | Crime (FBI/BJS) | 4g | 4–10 h |
+| weather:historical | Weather (NWS/NOAA/EPA) | 3g | 2–5 h |
+| sec_secondary:current | SEC secondary 2026+ | 3g | 1–4 h |
+| sec_prices:historical | Stock prices 2010–2026 | 3g | 1–3 days ⚠️ |
+| ref:daily | Reference (GLEIF/CIK/FIGI) | 4g | 1–2 h |
+| fec:historical | FEC campaign finance | 5g | 4–8 h |
+| fedregister:historical | Federal Register 2010+ | 3g | 3–6 h |
+| cyber_vuln:initial | NVD full + KEV + CWE catalog | 6g | 2–5 h |
+| health:initial | All 15 tables, full fetch | 6g | 3–8 h |
+| edu:initial | CCD, IPEDS, NAEP, CRDC, Scorecard | 6g | 2–6 h |
+| sec_primary:historical (×16 years) | SEC primary per year | 3g | 2–8 h each |
+| sec_secondary:historical (×16 years) | SEC secondary per year | 3g | 1–4 h each |
 
 With 4 concurrent workers, the 12 Phase 1 workers form roughly 3 batches → **~1 day**.
-The 32 historical SEC workers (2–17, 24–39) running 4 at a time → **3–5 days**.
+The 32 historical SEC workers running 4 at a time → **3–5 days**.
 Total wall-clock time for a complete load from scratch: **4–6 days**.
 
 ---
@@ -156,63 +195,62 @@ immediately useful data.
 ```bash
 cd scripts/parallel
 
-# Worker 41 (ref) first — GLEIF/CIK/OpenFIGI identifiers used by SEC cross-references
-# Workers 1, 23 — SEC primary and secondary for 2026+
+# ref:daily first — GLEIF/CIK/OpenFIGI identifiers used by SEC cross-references
+# sec_primary:current, sec_secondary:current — SEC primary and secondary for 2026+
 # Workers are listed in priority order; pool fills slots as they complete
-./run-pool.sh 41,1,23
+./run-pool.sh ref:daily sec_primary:current sec_secondary:current
 ```
 
-Expected wall time: **2–6 hours** (workers 1 and 23 run concurrently once 41 finishes
-or a slot opens; all three fit within 10g combined heap).
+Expected wall time: **2–6 hours** (sec_primary:current and sec_secondary:current run
+concurrently once ref:daily finishes or a slot opens; all three fit within 10g combined heap).
 
 ### Step 2 — Non-SEC schemas + cyber + health (run while Step 1 is finishing or immediately after)
 
 These are independent of SEC and cover their full historical ranges in a single run —
 they are not year-sharded. Ordered so fast workers fill early slots and heavy-heap workers
-(20, 60, 62, 67) land last.
+(geo, fec, cyber_vuln:initial, health:initial) land last.
 
 ```bash
-./run-pool.sh 19,22,61,18,21,62,67,71,60,20
+./run-pool.sh econ:historical census:historical geo:historical crime:historical weather:historical fec:historical fedregister:historical cyber_vuln:initial cyber_threat:initial health:initial edu:initial energy:initial lands:historical
 ```
 
-| Worker | Schema | Est. runtime | Note |
+| Schema / Mode | What it covers | Est. runtime | Note |
 |---|---|---|---|
-| 19 | Census ACS | 1–3 h | Fast; full 2010–2026 in one run |
-| 22 | Weather | 2–5 h | Moderate |
-| 61 | Federal Register | 3–6 h | Moderate |
-| 18 | Economic | 3–6 h | BLS/FRED/BEA, many API calls |
-| 21 | Crime | 4–10 h | Large dimension expansion (4g heap) |
-| 62 | Cyber initial | 2–5 h | Full NVD catalog; faster with `CYBER_NVD_API_KEY` |
-| 67 | Health initial | 3–8 h | All 15 health tables; clinical trials cursor pagination |
-| 71 | Education initial | 2–6 h | CCD, IPEDS, NAEP, CRDC, College Scorecard; set `COLLEGE_SCORECARD_API_KEY` for scorecard tables |
-| 60 | FEC | 4–8 h | 3M+ rows/year (5g heap) |
-| 20 | Geographic | 3–8 h | TIGER shapefiles (6g heap); placed last as it's the heaviest |
+| census:historical | Census ACS | 1–3 h | Fast; full 2010–2026 in one run |
+| weather:historical | Weather | 2–5 h | Moderate |
+| fedregister:historical | Federal Register | 3–6 h | Moderate |
+| econ:historical | Economic | 3–6 h | BLS/FRED/BEA, many API calls |
+| crime:historical | Crime | 4–10 h | Large dimension expansion (4g heap) |
+| cyber_vuln:initial | Cyber vulnerabilities | 2–5 h | Full NVD catalog; faster with `CYBER_NVD_API_KEY` |
+| cyber_threat:initial | Cyber threats | 2–5 h | NIST/CIS/OWASP standards + OTX backfill |
+| health:initial | Health | 3–8 h | All 15 health tables; clinical trials cursor pagination |
+| edu:initial | Education | 2–6 h | CCD, IPEDS, NAEP, CRDC, College Scorecard |
+| fec:historical | FEC | 4–8 h | 3M+ rows/year (5g heap) |
+| geo:historical | Geographic | 3–8 h | TIGER shapefiles (6g heap); placed last as it's the heaviest |
 
 Expected wall time: **~1–2 days**. After Steps 1 and 2 the pipeline is fully queryable with
 SEC coverage from 2026 onward and all non-SEC schemas populated.
 
 ### Step 3 — SEC primary historical backfill (2025–2010)
 
-Workers 2–17 each cover one calendar year of 10-K/10-Q filings. Run most-recent-first so
-recent history is available as early as possible. Primary filings are the analytical backbone
-(financial_line_items, balance sheets) and are completed before secondary to ensure a fully
-usable SEC corpus exists.
+SEC primary covers one calendar year of 10-K/10-Q filings per slot. Run most-recent-first so
+recent history is available as early as possible.
 
 ```bash
-./run-pool.sh 2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+./run-pool.sh --schema sec_primary historical
 ```
 
-Expected wall time: **~3–5 days** on a 32GB machine with 4 concurrent slots. Safe to restart
-— the tracker marks each filing individually and skips completed work.
+The `--schema` filter keeps only `sec_primary:*` slots from the historical queue. Expected
+wall time: **~3–5 days** on a 32GB machine with 4 concurrent slots. Safe to restart — the
+tracker marks each filing individually and skips completed work.
 
 ### Step 4 — SEC secondary historical backfill (2025–2010)
 
-Workers 24–39 cover one calendar year each of 8-K, proxy, insider, and 13F filings. These
-run after primary because secondary volume per year is substantially higher, and interleaving
-with primary would cause slow secondary workers to stall primary-year progress.
+SEC secondary covers one calendar year each of 8-K, proxy, insider, and 13F filings. Run
+after primary because secondary volume per year is substantially higher.
 
 ```bash
-./run-pool.sh 24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39
+./run-pool.sh --schema sec_secondary historical
 ```
 
 Expected wall time: **several days**; 8-K/proxy/13F filing counts dwarf 10-K/10-Q volumes.
@@ -220,12 +258,12 @@ Safe to restart at any point.
 
 ### Step 5 — Stock prices (run last, alone)
 
-Worker 40 fetches daily prices for every ticker in `_ALL_EDGAR_FILERS` (thousands of symbols)
-from Stooq, which enforces strict per-request rate limits. Run it alone so it does not compete
-with other workers for pool slots or network bandwidth.
+The `sec_prices:historical` worker fetches daily prices for every ticker in `_ALL_EDGAR_FILERS` (thousands
+of symbols) from Stooq, which enforces strict per-request rate limits. Run it alone so it does
+not compete with other workers for pool slots or network bandwidth.
 
 ```bash
-./run-pool.sh 40
+./run-pool.sh sec_prices:historical
 ```
 
 The full 2010–2026 backfill takes **1–3 days** of throttled requests. The tracker persists
@@ -237,14 +275,14 @@ to function.
 
 ```
 Day 0   ./run-pool.sh historical
-        ├── Workers 41,1,23 complete in ~6h → 2026 SEC is queryable
+        ├── ref:daily, sec_primary:current, sec_secondary:current complete in ~6h → 2026 SEC is queryable
         └── All other historical workers running in background via memory-aware pool
 Day 1   Non-SEC schemas complete → all schemas queryable
         └── Run GPU embeddings for 2026: vss-gpu-runner.sh && vss.sh refresh 2026 && vss.sh upload
-Day 4   SEC primary historical (2–17) finishes → full primary SEC 2010–2026 complete
+Day 4   SEC primary historical finishes → full primary SEC 2010–2026 complete
         └── Run full embedding backfill: vss-gpu-runner.sh && vss-rebuild-full.sh && vss.sh upload
-Day 8   SEC secondary historical (24–39) finishes → full secondary SEC 2010–2026 complete
-Day 8   ./run-pool.sh stock-quotes      (runs alone; takes 1–3 more days)
+Day 8   SEC secondary historical finishes → full secondary SEC 2010–2026 complete
+Day 8   ./run-pool.sh sec_prices:historical      (runs alone; takes 1–3 more days)
 Day 10  Complete corpus → switch to: ./run-pool.sh daily  (run every day going forward)
 ```
 
@@ -291,70 +329,96 @@ is needed after the secondary historical backfill.
 
 ### Recurring embeddings
 
-The daily `run-pool.sh daily` command automatically runs the embeddings pipeline after the
-ETL pool completes — no separate cron entry needed. To control which years are embedded:
+Schedule and automation are not yet defined — run manually for now. Likely cadence is weekly.
 
 ```bash
-# Default: embeds current year only
-./run-pool.sh daily
+cd scripts
+
+# Incremental: embed current year only, then upload
+./vss-gpu-runner.sh && ./vss.sh refresh 2026 && ./vss.sh upload
 
 # Embed a specific year
-VSS_YEARS=2025 ./run-pool.sh daily
-
-# Skip embeddings (ETL only)
-./run-pool.sh daily  # embeddings are skipped if vss-gpu-runner.sh is not found
+VSS_YEARS=2025 ./vss-gpu-runner.sh && ./vss.sh refresh 2025 && ./vss.sh upload
 ```
-
-> **Note:** `vss-gpu-runner.sh` spins up a Vultr GPU instance and terminates it on completion.
-> Daily cost is proportional to new filing volume — typically a few minutes of GPU time for
-> an incremental run.
 
 ---
 
 ## Recurring Updates
 
-Once the initial load is complete, run this every day on the production server:
+Once the initial load is complete, three jobs run on separate schedules on the production server:
 
+**1. Daily ETL (all schemas except stock prices)**
 ```bash
 cd scripts/parallel
 ./run-pool.sh daily
 ```
+All recurring workers run in a single memory-aware pool. Workers skip already-materialized rows;
+each schema handles its own data-lag window internally.
 
-That's it. All recurring workers run in a single memory-aware pool. Workers skip already-
-materialized rows; each schema handles its own data-lag window internally. The embeddings
-pipeline runs automatically after the pool completes.
+**2. Stock prices (separate schedule)**
 
-### Stock prices
-
-Stock prices are excluded from `daily` because Stooq rate limits make sharing pool slots
-with other workers wasteful. Run it separately (it can overlap with `daily` on another terminal
-or cron slot):
+Stock prices run on their own cron entry because Stooq rate limits make them too slow to share
+pool slots with other workers. A full run can take 1–3 days; the tracker deduplicates per-ticker
+so stopping and restarting is safe.
 
 ```bash
-./run-pool.sh stock-quotes
+./run-pool.sh sec_prices:historical
 ```
+
+**3. Embeddings / VSS cache (separate schedule)**
+
+The embeddings pipeline runs independently of the ETL pool — see the [Embeddings & VSS Cache](#embeddings--vss-cache) section for commands and timing.
 
 ### Re-running a single schema
 
 ```bash
 ./run-pool.sh --schema energy daily       # energy workers only
-./run-pool.sh --schema sec daily          # SEC current-year workers only
+./run-pool.sh --schema sec_primary daily   # SEC primary current-year only
 ./run-pool.sh --schema health daily       # health recurring workers only
 ```
 
+### Re-ingesting from scratch (data-fix.sh)
+
+Use `data-fix.sh` when a schema or table has corrupt, missing, or stale data that a normal daily run won't fix. It deletes R2 data via `rclone purge`, invalidates the tracker, then re-ingests via run-pool.
+
+    ./data-fix.sh <schema> <mode>                   # all tables in schema
+    ./data-fix.sh <schema> <mode> <table>           # one table
+    ./data-fix.sh <schema> <mode> <t1> <t2> ...     # multiple tables
+    ./data-fix.sh fec daily --dry-run               # preview without deleting
+    ./data-fix.sh weather daily --force             # bypass release-window checks
+
+Both R2 data and the tracker must be cleared — clearing the tracker alone is insufficient because the ETL detects existing parquet and marks it complete without re-downloading.
+
+### Running data quality checks (dq.sh)
+
+`dq.sh` re-ingests the DQ year window for a schema, then runs `{schema}_dq.sql` through DuckDB and writes results to `s3://govdata-tracker-v1/dq-results/`.
+
+    dq.sh --schema fec                        # current year + 1 prior year
+    dq.sh --schema crime --lookback 2         # override year window
+    dq.sh --schema edu --no-reingest          # re-run SQL only, skip data-fix
+    dq.sh --schema econ --dry-run
+
+Default lookback by schema: `census`=5, `edu`=4, `crime`=2, `fec`=2, all others=1. The lookback can also be set in the SQL file header with `-- dq-lookback: N`.
+
+View results:
+    dq-report.sh --schemas fec --run-date 2026-05-22
+    run-all-dq.sh                             # run DQ for all schemas
+
 ### Bypassing release-window checks
 
-Recurring workers (edu, energy, health, cyber) gate sub-runs to their source's known release
-window — a sub-run outside its window exits in milliseconds with no network I/O. Pass
-`--force` to bypass all window checks and run every sub-run regardless of today's date.
-Year bounds (`GOVDATA_SINCE_YEAR`, `startYear`, `endYear`) are unaffected by `--force`.
+Recurring workers (edu, energy, health, cyber_threat, cyber_vuln) gate sub-runs to their
+source's known release window — a sub-run outside its window exits in milliseconds with no
+network I/O. Pass `--force` to bypass all window checks and run every sub-run regardless of
+today's date. Year bounds (`GOVDATA_SINCE_YEAR`, `startYear`, `endYear`) are unaffected by
+`--force`.
 
 ```bash
-./run-pool.sh --force daily                  # all recurring workers, no window checks
-./run-pool.sh --force --schema edu daily     # edu only, no window checks
-./run-pool.sh --force --schema energy daily  # energy only, no window checks
-./run-pool.sh --force --schema health daily  # health only, no window checks
-./run-pool.sh --force --schema cyber daily   # cyber only, no window checks
+./run-pool.sh --force daily                        # all recurring workers, no window checks
+./run-pool.sh --force --schema edu daily           # edu only, no window checks
+./run-pool.sh --force --schema energy daily        # energy only, no window checks
+./run-pool.sh --force --schema health daily        # health only, no window checks
+./run-pool.sh --force --schema cyber_threat daily  # cyber_threat only, no window checks
+./run-pool.sh --force --schema cyber_vuln daily    # cyber_vuln only, no window checks
 ```
 
 `--force` propagates automatically to all worker scripts via the environment — no changes
@@ -362,12 +426,13 @@ to individual worker invocations are needed.
 
 ### Cron reference
 
+In production the preferred approach is the systemd perpetual runner (`run-scheduled.sh`) — it handles crash recovery and mode cycling automatically. If using cron instead:
+
 ```cron
-# Daily — all recurring workers + embeddings
+# Daily ETL — all schemas (stock prices excluded)
 0 6 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh daily
 
-# Stock prices — run alone; may take 1–3 days; safe to overlap with daily
-0 7 * * *   cd /path/to/govdata/scripts/parallel && ./run-pool.sh stock-quotes
+# Stock prices and embeddings — schedules TBD; run manually for now
 ```
 
 ---
@@ -376,32 +441,34 @@ to individual worker invocations are needed.
 
 All schemas in the table below run as part of `./run-pool.sh daily`. Each worker skips
 already-complete rows, so running daily is always safe regardless of the source's release
-cadence. Stock prices (40) are the only exception — run via `./run-pool.sh stock-quotes`.
+cadence. Stock prices are the only exception — run via `./run-pool.sh sec_prices:historical`.
 
-| Schema | Worker | Source cadence | Mechanism |
-|---|---|---|---|
-| SEC primary filings | 1 | Daily | Re-runs 2026–present window; skips already-materialized accessions |
-| SEC secondary filings | 23 | Daily | Same as above for 8-K/proxy/insider/13F |
-| SEC stock prices | 40 | Daily (run alone) | Full 2010–2026 re-run via Stooq; rate-limited per ticker; tracker deduplicates |
-| Economic (BLS/FRED/BEA) | 18 | Daily (data lags weekly) | Full re-run; incremental by series/period |
-| Census ACS | 19 | Daily (data lags annually) | Full re-run; ACS releases annually |
-| Geographic (TIGER/HUD) | 20 | Daily (data lags annually) | TIGER year is pinned; picks up new vintage when published |
-| Crime (FBI/BJS) | 21 | Daily (data lags ~12 months) | Full re-run; FBI releases lag ~12 months |
-| Weather (NWS/NOAA/EPA) | 22 | Daily | Full re-run; picks up new observation periods |
-| Reference (GLEIF/CIK/FIGI) | 41 | Daily | GLEIF discovers current golden copy URL on each run |
-| FEC campaign finance | 60 | Daily | Bulk file re-download; FEC updates files in-place |
-| Federal Register | 61 | Daily | Auto-discovers current year; append-only |
-| Cyber CVE (NVD/KEV) | 63 | Daily | 1-day delta window via NVD API `lastModStartDate` |
-| Cyber standards/ATT&CK | 64 | Daily (data lags weekly) | Full re-fetch; sources publish infrequently; skips if unchanged |
-| Cyber IOC feeds | 65 | Daily | URLhaus/MalwareBazaar/Feodo/ThreatFox/OTX fresh each run |
-| Health clinical trials | 68 | Daily | `lastUpdatePostDate.gte` filter via `GOVDATA_SINCE_DATE` |
-| Health CDC COVID/mortality | 69 | Daily (data lags weekly) | CDC vaccinations delta + mortality full refresh |
-| Health BRFSS/Medicaid/CMS/FDA | 70 | Daily (data lags monthly) | Stable reference tables; incremental via `GOVDATA_SINCE_DATE`/`GOVDATA_SINCE_YEAR` |
-| Education CCD/IPEDS/Scorecard | 72 | Daily (data lags annually) | Bulk releases; incremental via `GOVDATA_SINCE_YEAR` |
-| Education NAEP/CRDC | 73 | Daily (data lags biennially) | Returns unchanged data in off-cycle years; safe to run daily |
-| Energy electricity/refinery | 75,76 | Daily (data lags weekly/monthly) | EIA API; skips years with no new data |
-| Energy surveys/coal | 77 | Daily (data lags annually) | EIA-861/EIA-860/MSHA; skips if no new release |
-| Lands visitation/revenues | 83 | Daily (data lags 1–3 months) | NPS IRMA XML + ONRR bulk CSV; other tables gated by release window |
+| Schema | Source cadence | Mechanism |
+|---|---|---|
+| SEC primary filings | Daily | Re-runs 2026–present window; skips already-materialized accessions |
+| SEC secondary filings | Daily | Same as above for 8-K/proxy/insider/13F |
+| SEC stock prices | Daily (run alone) | Full 2010–2026 re-run via Stooq; rate-limited per ticker; tracker deduplicates |
+| Economic (BLS/FRED/BEA) | Daily (data lags weekly) | Full re-run; incremental by series/period |
+| Census ACS | Daily (data lags annually) | Full re-run; ACS releases annually |
+| Geographic (TIGER/HUD) | Daily (data lags annually) | TIGER year is pinned; picks up new vintage when published |
+| Crime (FBI/BJS) | Daily (data lags ~12 months) | Full re-run; FBI releases lag ~12 months |
+| Weather (NWS/NOAA/EPA) | Daily | Full re-run; picks up new observation periods |
+| Reference (GLEIF/CIK/FIGI) | Daily | GLEIF discovers current golden copy URL on each run |
+| FEC campaign finance | Daily | Bulk file re-download; FEC updates files in-place |
+| Federal Register | Daily | Auto-discovers current year; append-only |
+| cyber_vuln (NVD/KEV delta) | Daily | 1-day delta window via NVD API `lastModStartDate` |
+| cyber_vuln (CWE/OSV/cross-refs) | Weekly | CWE/OSV/advisories; skips if unchanged |
+| cyber_threat (ATT&CK/NIST) | Weekly | Full re-fetch; sources publish infrequently; skips if unchanged |
+| cyber_threat (IOC feeds) | Hourly | URLhaus/MalwareBazaar/Feodo/ThreatFox/OTX fresh each run |
+| cyber_threat (static standards) | On-demand | NIST 800-53, NIST CSF, CIS Controls, OWASP Top 10 |
+| Health clinical trials | Daily | `lastUpdatePostDate.gte` filter via `GOVDATA_SINCE_DATE` |
+| Health CDC COVID/mortality | Daily (data lags weekly) | CDC vaccinations delta + mortality full refresh |
+| Health BRFSS/Medicaid/CMS/FDA | Daily (data lags monthly) | Stable reference tables; incremental via `GOVDATA_SINCE_DATE`/`GOVDATA_SINCE_YEAR` |
+| Education CCD/IPEDS/Scorecard | Daily (data lags annually) | Bulk releases; incremental via `GOVDATA_SINCE_YEAR` |
+| Education NAEP/CRDC | Daily (data lags biennially) | Returns unchanged data in off-cycle years; safe to run daily |
+| Energy electricity/refinery | Daily (data lags weekly/monthly) | EIA API; skips years with no new data |
+| Energy surveys/coal | Daily (data lags annually) | EIA-861/EIA-860/MSHA; skips if no new release |
+| Lands visitation/revenues | Daily (data lags 1–3 months) | NPS IRMA XML + ONRR bulk CSV; other tables gated by release window |
 
 ---
 
@@ -410,8 +477,8 @@ cadence. Stock prices (40) are the only exception — run via `./run-pool.sh sto
 Each worker writes a timestamped log to `scripts/parallel/runs/<worker-id>/`:
 
 ```bash
-# Follow a specific worker
-tail -f scripts/parallel/runs/worker-01/launch.log
+# Follow a specific worker (log dir is worker-{schema}-{mode})
+tail -f scripts/parallel/runs/worker-fec-daily/launch.log
 
 # Pool-level log (all workers interleaved)
 ls -t scripts/parallel/runs/pool-*.log | head -1 | xargs tail -f
@@ -431,16 +498,16 @@ By default the pool fills to the available memory budget (total RAM minus 1.5GB 
 
 ```bash
 # Hard cap at 4 concurrent workers regardless of memory
-./run-pool.sh -j 4 2-17,24-39
+./run-pool.sh -j 4 historical
 
 # Reserve more memory for OS (useful when other processes are running)
-./run-pool.sh -r 4000 2-17,24-39
+./run-pool.sh -r 4000 historical
 
 # Entity-level parallelism within each worker (trades memory for speed)
-./run-pool.sh -p 4 2-17,24-39
+./run-pool.sh -p 4 historical
 
 # Extend inactivity timeout for very large workers (default: 60 min)
-./run-pool.sh -t 120 20,60,62
+./run-pool.sh -t 120 historical
 ```
 
 See [cyber-maintenance.md](cyber-maintenance.md) for cyber-specific operational details.
