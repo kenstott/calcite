@@ -46,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -267,6 +268,130 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   // when they are requested as main schemas (avoids double processing)
   private static final Map<String, Schema> schemaCache =
       Collections.synchronizedMap(new HashMap<>());
+
+  /**
+   * Enrich the operand map with env var fallbacks for keys not already set by the caller.
+   * All env vars that previously had to be baked into generated model JSON files are now
+   * readable here so workers can drop JSON generation entirely.
+   */
+  private Map<String, Object> enrichFromEnv(Map<String, Object> op) {
+    // Storage locations
+    setFromEnv(op, "directory",      "GOVDATA_PARQUET_DIR");
+    setFromEnv(op, "cacheDirectory", "GOVDATA_CACHE_DIR");
+
+    // Tracker
+    if (!op.containsKey("trackerBackend")) {
+      op.put("trackerBackend", "s3");
+    }
+    if (!op.containsKey("trackerConfig")) {
+      String bucket   = System.getenv("CALCITE_TRACKER_S3_BUCKET");
+      String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+      if (bucket != null && !bucket.isEmpty()) {
+        Map<String, Object> tc = new HashMap<>();
+        tc.put("bucket", bucket);
+        if (endpoint != null && !endpoint.isEmpty()) {
+          tc.put("endpoint", endpoint);
+        }
+        op.put("trackerConfig", tc);
+      }
+    }
+
+    // S3 credentials
+    if (!op.containsKey("s3Config")) {
+      String ak  = System.getenv("AWS_ACCESS_KEY_ID");
+      String sk  = System.getenv("AWS_SECRET_ACCESS_KEY");
+      String ep  = System.getenv("AWS_ENDPOINT_OVERRIDE");
+      if (ak != null && !ak.isEmpty() && sk != null && !sk.isEmpty()) {
+        Map<String, Object> s3 = new HashMap<>();
+        s3.put("accessKeyId",     ak);
+        s3.put("secretAccessKey", sk);
+        if (ep != null && !ep.isEmpty()) {
+          s3.put("endpoint", ep);
+        }
+        op.put("s3Config", s3);
+      }
+    }
+
+    // Year range
+    if (!op.containsKey("startYear")) {
+      String v = getEnvOrProp("GOVDATA_START_YEAR");
+      if (v != null && !v.isEmpty()) {
+        op.put("startYear", Integer.parseInt(v));
+      }
+    }
+    if (!op.containsKey("endYear")) {
+      String v = getEnvOrProp("GOVDATA_END_YEAR");
+      if (v != null && !v.isEmpty()) {
+        op.put("endYear", Integer.parseInt(v));
+      }
+    }
+
+    // ETL control flags
+    if (!op.containsKey("freshStart")
+        && "true".equalsIgnoreCase(System.getenv("GOVDATA_FRESH_START"))) {
+      op.put("freshStart", Boolean.TRUE);
+    }
+    if (!op.containsKey("forceReprocessTables")) {
+      setListFromEnv(op, "forceReprocessTables", "GOVDATA_FORCE_REPROCESS_TABLES");
+    }
+
+    // Schema-specific table/source subsets
+    if (!op.containsKey("enabledTables")) {
+      setListFromEnv(op, "enabledTables", "GOVDATA_ENABLED_TABLES");
+    }
+    if (!op.containsKey("enabledSources")) {
+      setListFromEnv(op, "enabledSources", "GOVDATA_ENABLED_SOURCES");
+    }
+
+    // SEC-specific
+    if (!op.containsKey("filingTypes")) {
+      setListFromEnv(op, "filingTypes", "GOVDATA_FILING_TYPES");
+    }
+    if (!op.containsKey("ciks")) {
+      setFromEnv(op, "ciks", "GOVDATA_CIKS");
+    }
+    if (!op.containsKey("chunksBackfill")
+        && "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"))) {
+      op.put("chunksBackfill", Boolean.TRUE);
+    }
+    if (!op.containsKey("forceAccessions")) {
+      setListFromEnv(op, "forceAccessions", "GOVDATA_FORCE_ACCESSIONS");
+    }
+
+    // Cyber-specific
+    if (!op.containsKey("nvdDeltaDays")) {
+      String v = System.getenv("GOVDATA_NVD_DELTA_DAYS");
+      if (v != null && !v.isEmpty()) {
+        op.put("nvdDeltaDays", Integer.parseInt(v));
+      }
+    }
+
+    return op;
+  }
+
+  private void setFromEnv(Map<String, Object> op, String key, String envVar) {
+    if (!op.containsKey(key)) {
+      String v = System.getenv(envVar);
+      if (v != null && !v.isEmpty()) {
+        op.put(key, v);
+      }
+    }
+  }
+
+  private void setListFromEnv(Map<String, Object> op, String key, String envVar) {
+    String v = System.getenv(envVar);
+    if (v != null && !v.isEmpty()) {
+      op.put(key, Arrays.asList(v.trim().split(",")));
+    }
+  }
+
+  private String getEnvOrProp(String name) {
+    String v = System.getProperty(name);
+    if (v != null && !v.isEmpty()) {
+      return v;
+    }
+    return System.getenv(name);
+  }
 
   /**
    * Get the sub-schema factory for the given data source.
@@ -658,6 +783,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         System.setProperty("SEC_END_YEAR", endYear);
       }
       LOGGER.debug("Set GOVDATA_END_YEAR={}", endYear);
+    }
+
+    Object currentMonthObj = operand.get("currentMonth");
+    if (currentMonthObj != null) {
+      System.setProperty("GOVDATA_CURRENT_MONTH", String.valueOf(currentMonthObj));
+      LOGGER.debug("Set GOVDATA_CURRENT_MONTH={}", currentMonthObj);
     }
 
     LOGGER.debug("Set cross-schema properties for {}", dataSource);

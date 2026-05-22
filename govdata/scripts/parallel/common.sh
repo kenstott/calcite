@@ -463,7 +463,10 @@ generate_single_schema_model() {
     _YEAR_RANGE="\"startYear\": ${_START_YEAR},
       \"endYear\": $((_INCREMENTAL_YEAR - 1))"
   else
-    _YEAR_RANGE="\"startYear\": ${_INCREMENTAL_YEAR}"
+    local _CURRENT_MONTH
+    _CURRENT_MONTH=$(date +%m)
+    _YEAR_RANGE="\"startYear\": ${_INCREMENTAL_YEAR},
+      \"currentMonth\": \"${_CURRENT_MONTH}\""
   fi
 
   case "$schema_name" in
@@ -864,6 +867,54 @@ run_etl() {
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "$model_file" \
+    --verbose \
+    $extra_flags \
+    "$@" \
+    2>&1 | tee "$log_file"
+
+  local exit_code=${PIPESTATUS[0]}
+  trap - INT TERM
+  echo "[$worker_id] ETL finished with exit code: $exit_code"
+  return $exit_code
+}
+
+# Usage: run_etl_source <schema_name> <worker_id> [extra etl args...]
+# Runs ETL for a schema driven entirely by env vars.
+# Set GOVDATA_START_YEAR, GOVDATA_END_YEAR, GOVDATA_RUN_MODE, GOVDATA_AUTO_DOWNLOAD etc.
+# before calling; no model file is generated.
+run_etl_source() {
+  local schema_name=$1 worker_id=$2
+  shift 2
+
+  local jar
+  jar=$(resolve_classpath)
+
+  local log_dir="$SCRIPT_DIR/runs/$worker_id"
+  mkdir -p "$log_dir"
+
+  local timestamp
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  local log_file="$log_dir/etl_${timestamp}.log"
+
+  local _HEAP_MIN _HEAP_MAX
+  get_heap_config "$worker_id"
+
+  local extra_flags=""
+  echo "[$worker_id] Starting ETL for schema: $schema_name (heap: ${_HEAP_MIN}/${_HEAP_MAX})"
+  if [ -n "${ETL_PARALLEL_THREADS:-}" ] && [ "${ETL_PARALLEL_THREADS:-0}" -gt 1 ]; then
+    extra_flags="$extra_flags --threads $ETL_PARALLEL_THREADS"
+    echo "[$worker_id] Parallel entity threads: $ETL_PARALLEL_THREADS"
+  fi
+  echo "[$worker_id] Log: $log_file"
+
+  trap 'kill 0' INT TERM
+
+  java \
+    -Xms"${_HEAP_MIN}" \
+    -Xmx"${_HEAP_MAX}" \
+    -cp "$jar" \
+    org.apache.calcite.adapter.govdata.etl.EtlRunner \
+    --source "$schema_name" \
     --verbose \
     $extra_flags \
     "$@" \
