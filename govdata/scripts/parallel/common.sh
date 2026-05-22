@@ -836,6 +836,22 @@ get_heap_config() {
   esac
 }
 
+# Return the per-schema default GOVDATA_START_YEAR for dq-rebuild runs.
+# Encodes the minimum lookback needed to cover at least one full data cycle.
+# Used when GOVDATA_START_YEAR is not set in the environment.
+# Usage: get_dq_start_year <schema>  → prints year to stdout
+get_dq_start_year() {
+  local schema=$1
+  case "$schema" in
+    energy)   echo 2022 ;;  # SEDS 2-year publication lag
+    edu)      echo 2023 ;;  # NAEP + CRDC biennial cycles
+    lands)    echo 2023 ;;  # forest inventory biennial
+    census)   echo 2022 ;;  # ACS 5-year span
+    patents)  echo 2025 ;;  # only current year published
+    *)        echo 2024 ;;  # annual/sub-annual: 1-year lookback sufficient
+  esac
+}
+
 # Build an inline Calcite model JSON string for a govdata schema.
 # All storage and credential config uses ${VAR} patterns resolved by Java's VariableResolver.
 # Integer fields (startYear, endYear) are resolved from env vars at call time.

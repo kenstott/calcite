@@ -119,7 +119,12 @@ if $REBUILD; then
   REBUILD_MODEL="$RUN_DIR/models/rebuild_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
   mkdir -p "$(dirname "$REBUILD_MODEL")"
   export GOVDATA_RUN_MODE="historical"
-  [ -n "$REBUILD_START_YEAR" ] && export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
+  if [ -n "$REBUILD_START_YEAR" ]; then
+    export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
+  elif [ -z "${GOVDATA_START_YEAR:-}" ]; then
+    export GOVDATA_START_YEAR="$(get_dq_start_year "$SCHEMA")"
+    log_info "$WORKER_ID: --rebuild: using per-schema DQ start year $GOVDATA_START_YEAR"
+  fi
   if ! generate_single_schema_model "$SCHEMA" "$REBUILD_MODEL" 2>/dev/null; then
     log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
     exit 1
