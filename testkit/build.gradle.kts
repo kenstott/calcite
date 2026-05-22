@@ -47,4 +47,11 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    doFirst {
+        // macOS creates AppleDouble (._*) metadata files on external drives that ASM cannot parse,
+        // causing ClasspathEntrySnapshotTransform to fail with IllegalArgumentException.
+        rootProject.projectDir.walkTopDown()
+            .filter { it.name.startsWith("._") && it.name.endsWith(".class") }
+            .forEach { it.delete() }
+    }
 }
