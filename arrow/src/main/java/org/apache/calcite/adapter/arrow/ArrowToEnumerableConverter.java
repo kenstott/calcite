@@ -107,12 +107,6 @@ class ArrowToEnumerableConverter
   /** Callback for the implementation of a child node. */
   protected void implementChild(EnumerableRelImplementor implementor,
       EnumerableRel child, int ordinal, Prefer prefer) {
-    final Result result = implementor.visitChild(this, ordinal, child, prefer);
-    // The ARG keyword in the comment tells IntelliJ that this is a formatter
-    // directive, and prevents it from re-formatting the following code.
-    //noinspection Annotator
-    PhysType physType =
-        PhysTypeImpl.of(
-            implementor.getTypeFactory(), child.getRowType(), prefer.prefer(result.format));
+    implementor.visitChild(this, ordinal, child, prefer);
   }
 }

@@ -87,7 +87,7 @@ class ArrowProjectEnumerator extends AbstractArrowEnumerator {
     }
   }
 
-  private boolean moveNextParquet() throws IOException {
+  private static boolean moveNextParquet() throws IOException {
     return true;
   }
 
