@@ -85,6 +85,18 @@ S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${R
 # ── error handler + EXIT trap (must be defined before rebuild block) ──────────
 _SCRIPT_COMPLETE=false
 
+_collect_log_tail() {
+  local log="$1" lines="${2:-50}"
+  if [ -f "$log" ] && [ -s "$log" ]; then
+    echo "\`$log\`"
+    echo '```'
+    tail -n "$lines" "$log"
+    echo '```'
+  else
+    echo "\`$log\` (not found or empty)"
+  fi
+}
+
 _file_script_error_issue() {
   _SCRIPT_COMPLETE=true
   local detail="$1"
@@ -102,6 +114,28 @@ _file_script_error_issue() {
   fi
   gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
   gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
+
+  # Collect log tails for inline diagnostics
+  local dq_log_section etl_log_section latest_etl
+  dq_log_section=$(_collect_log_tail "$LOG_FILE" 50)
+  latest_etl=$(ls -t "$RUN_DIR"/etl_*.log 2>/dev/null | head -1 || true)
+  if [ -n "$latest_etl" ]; then
+    etl_log_section=$(_collect_log_tail "$latest_etl" 50)
+  else
+    etl_log_section=""
+  fi
+
+  local log_section="### DQ Log (last 50 lines)
+
+${dq_log_section}"
+  if [ -n "$etl_log_section" ]; then
+    log_section="${log_section}
+
+### ETL Log (last 50 lines)
+
+${etl_log_section}"
+  fi
+
   local open_issue
   open_issue=$(gh issue list \
     --repo kenstott/calcite \
@@ -114,7 +148,9 @@ _file_script_error_issue() {
   if [ -n "$open_issue" ] && [[ "$open_issue" =~ ^[0-9]+$ ]]; then
     gh issue comment "$open_issue" \
       --repo kenstott/calcite \
-      --body "**Script error ${RUN_DATE}** — ${detail}" \
+      --body "**Script error ${RUN_DATE}** — ${detail}
+
+${log_section}" \
       && log_info "$WORKER_ID: commented on DQ issue #${open_issue}" \
       || log_info "$WORKER_ID: WARNING: failed to comment on issue #${open_issue}"
   else
@@ -132,9 +168,9 @@ _file_script_error_issue() {
 
 ${detail}
 
-## Log
+## Logs
 
-\`${LOG_FILE}\`" \
+${log_section}" \
       && log_info "$WORKER_ID: created DQ error issue" \
       || log_info "$WORKER_ID: WARNING: gh issue create failed"
   fi
