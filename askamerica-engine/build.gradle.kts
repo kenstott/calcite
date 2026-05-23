@@ -22,9 +22,12 @@ plugins {
 description = "AskAmerica MCP server — query US government data from Claude Desktop"
 
 // BSL module uses Google Java Format (4-space) and has legitimate System.exit() in the launcher.
-// Exempt from Apache Calcite's forbidden-APIs checks.
+// Exempt from Apache Calcite style checks (checkstyle, forbiddenApis).
 afterEvaluate {
     tasks.withType<de.thetaphi.forbiddenapis.gradle.CheckForbiddenApis>().configureEach {
+        enabled = false
+    }
+    tasks.withType<Checkstyle>().configureEach {
         enabled = false
     }
 }

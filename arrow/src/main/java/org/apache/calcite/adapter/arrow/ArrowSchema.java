@@ -134,9 +134,7 @@ class ArrowSchema extends AbstractSchema {
           AvroParquetReader.<GenericRecord>builder(inputFile);
       return new ParquetTable(file.getAbsolutePath(), builder, null);
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new RuntimeException("Failed to create ParquetTable for " + file, e);
     }
-    return new ParquetTable(file.getAbsolutePath(), null, null); // Pass null for
-    // RelProtoDataType
   }
 }
