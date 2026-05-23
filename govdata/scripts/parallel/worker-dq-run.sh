@@ -168,6 +168,48 @@ if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
 fi
 
+# ── helper: file a GitHub issue for script-level failures ────────────────────
+_file_script_error_issue() {
+  local detail="$1"
+  if ! command -v gh >/dev/null 2>&1; then return; fi
+  gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
+  gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
+  local open_issue
+  open_issue=$(gh issue list \
+    --repo kenstott/calcite \
+    --state open \
+    --label dq \
+    --limit 200 \
+    --json number,title \
+    --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
+    2>/dev/null | head -1)
+  if [ -n "$open_issue" ]; then
+    gh issue comment "$open_issue" \
+      --repo kenstott/calcite \
+      --body "**Script error ${RUN_DATE}** — ${detail}" \
+      2>/dev/null || true
+  else
+    gh issue create \
+      --repo kenstott/calcite \
+      --title "[DQ] ${SCHEMA}: ERROR — script failed" \
+      --label "dq" \
+      --label "dq-fail" \
+      --body "## DQ Script Error: \`${SCHEMA}\`
+
+**Date:** ${RUN_DATE}
+**Mode:** ${MODE}
+
+## Detail
+
+${detail}
+
+## Log
+
+\`${LOG_FILE}\`" \
+      2>/dev/null || true
+  fi
+}
+
 # ── run DQ ────────────────────────────────────────────────────────────────────
 TMP_DIR=$(mktemp -d)
 RESULT_LOCAL="$TMP_DIR/results.parquet"
@@ -225,12 +267,14 @@ SQL
 if [ $DQ_EXIT -ne 0 ]; then
   log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT — table likely missing or schema misconfigured"
   log_info "$WORKER_ID: SCHEMA RESULT: FAIL (script error)"
+  _file_script_error_issue "DuckDB exited with code ${DQ_EXIT} — table likely missing or schema misconfigured. Check log: \`${LOG_FILE}\`"
   exit 1
 fi
 
 # ── verdict ───────────────────────────────────────────────────────────────────
 if [ ! -f "$RESULT_LOCAL" ]; then
   log_info "$WORKER_ID: result Parquet not written — DQ script may have failed silently"
+  _file_script_error_issue "Result Parquet not written — DQ script may have failed silently. Check log: \`${LOG_FILE}\`"
   exit 1
 fi
 
