@@ -196,21 +196,21 @@ public class ParquetTable extends AbstractTable
     if (parquetType.isPrimitive()) {
       PrimitiveType primitiveType = parquetType.asPrimitiveType();
       switch (primitiveType.getPrimitiveTypeName()) {
-      case BOOLEAN:
-        return typeFactory.createJavaType(Boolean.class);
-      case INT32:
-        return typeFactory.createJavaType(Integer.class);
-      case INT64:
-        return typeFactory.createJavaType(Long.class);
-      case FLOAT:
-        return typeFactory.createJavaType(Float.class);
-      case DOUBLE:
-        return typeFactory.createJavaType(Double.class);
-      case BINARY:
-      case FIXED_LEN_BYTE_ARRAY:
-        return typeFactory.createJavaType(String.class);
-      default:
-        throw new UnsupportedOperationException("Unsupported Parquet type: " + parquetType);
+        case BOOLEAN:
+          return typeFactory.createJavaType(Boolean.class);
+        case INT32:
+          return typeFactory.createJavaType(Integer.class);
+        case INT64:
+          return typeFactory.createJavaType(Long.class);
+        case FLOAT:
+          return typeFactory.createJavaType(Float.class);
+        case DOUBLE:
+          return typeFactory.createJavaType(Double.class);
+        case BINARY:
+        case FIXED_LEN_BYTE_ARRAY:
+          return typeFactory.createJavaType(String.class);
+        default:
+          throw new UnsupportedOperationException("Unsupported Parquet type: " + parquetType);
       }
     } else {
       throw new UnsupportedOperationException(

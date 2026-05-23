@@ -177,15 +177,15 @@ class ArrowTranslator {
     }
     final RexLiteral rightLiteral = (RexLiteral) right;
     switch (left.getKind()) {
-    case INPUT_REF:
-      final RexInputRef left1 = (RexInputRef) left;
-      String name = fieldNames.get(left1.getIndex());
-      return translateOp2(op, name, rightLiteral);
-    case CAST:
-      // FIXME This will not work in all cases (for example, we ignore string encoding)
-      return translateBinary2(op, ((RexCall) left).operands.get(0), right);
-    default:
-      return null;
+      case INPUT_REF:
+        final RexInputRef left1 = (RexInputRef) left;
+        String name = fieldNames.get(left1.getIndex());
+        return translateOp2(op, name, rightLiteral);
+      case CAST:
+        // FIXME This will not work in all cases (for example, we ignore string encoding)
+        return translateBinary2(op, ((RexCall) left).operands.get(0), right);
+      default:
+        return null;
     }
   }
 

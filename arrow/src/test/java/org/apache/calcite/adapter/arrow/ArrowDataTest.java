@@ -205,20 +205,20 @@ public class ArrowDataTest {
       for (Field field : vectorSchemaRoot.getSchema().getFields()) {
         FieldVector vector = vectorSchemaRoot.getVector(field.getName());
         switch (vector.getMinorType()) {
-        case INT:
-          intField(vector, numRows);
-          break;
-        case FLOAT4:
-          floatField(vector, numRows);
-          break;
-        case VARCHAR:
-          varCharField(vector, numRows);
-          break;
-        case BIGINT:
-          longField(vector, numRows);
-          break;
-        default:
-          throw new IllegalStateException("Not supported type yet: " + vector.getMinorType());
+          case INT:
+            intField(vector, numRows);
+            break;
+          case FLOAT4:
+            floatField(vector, numRows);
+            break;
+          case VARCHAR:
+            varCharField(vector, numRows);
+            break;
+          case BIGINT:
+            longField(vector, numRows);
+            break;
+          default:
+            throw new IllegalStateException("Not supported type yet: " + vector.getMinorType());
         }
       }
       arrowFileWriter.writeBatch();
@@ -246,44 +246,44 @@ public class ArrowDataTest {
       for (Field field : vectorSchemaRoot.getSchema().getFields()) {
         FieldVector vector = vectorSchemaRoot.getVector(field.getName());
         switch (field.getName()) {
-        case "tinyIntField":
-          tinyIntField(vector, numRows);
-          break;
-        case "smallIntField":
-          smallIntFiled(vector, numRows);
-          break;
-        case "intField":
-          intField(vector, numRows);
-          break;
-        case "floatField":
-          floatField(vector, numRows);
-          break;
-        case "stringField":
-          varCharField(vector, numRows);
-          break;
-        case "longField":
-          longField(vector, numRows);
-          break;
-        case "doubleField":
-          doubleField(vector, numRows);
-          break;
-        case "booleanField":
-          booleanField(vector, numRows);
-          break;
-        case "decimalField":
-          decimalField(vector, numRows);
-          break;
-        case "decimalField2":
-          decimalField2(vector, numRows);
-          break;
-        case "dateField":
-          dateField(vector, numRows);
-          break;
-        case "timeField":
-          timeField(vector, numRows);
-          break;
-        default:
-          throw new IllegalStateException("Not supported type yet: " + vector.getMinorType());
+          case "tinyIntField":
+            tinyIntField(vector, numRows);
+            break;
+          case "smallIntField":
+            smallIntFiled(vector, numRows);
+            break;
+          case "intField":
+            intField(vector, numRows);
+            break;
+          case "floatField":
+            floatField(vector, numRows);
+            break;
+          case "stringField":
+            varCharField(vector, numRows);
+            break;
+          case "longField":
+            longField(vector, numRows);
+            break;
+          case "doubleField":
+            doubleField(vector, numRows);
+            break;
+          case "booleanField":
+            booleanField(vector, numRows);
+            break;
+          case "decimalField":
+            decimalField(vector, numRows);
+            break;
+          case "decimalField2":
+            decimalField2(vector, numRows);
+            break;
+          case "dateField":
+            dateField(vector, numRows);
+            break;
+          case "timeField":
+            timeField(vector, numRows);
+            break;
+          default:
+            throw new IllegalStateException("Not supported type yet: " + vector.getMinorType());
         }
       }
       arrowFileWriter.writeBatch();

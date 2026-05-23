@@ -46,44 +46,44 @@ public class ArrowFieldTypeFactory {
    */
   private static RelDataType of(ArrowType arrowType, JavaTypeFactory typeFactory) {
     switch (arrowType.getTypeID()) {
-    case Int:
-      int bitWidth = ((ArrowType.Int) arrowType).getBitWidth();
-      switch (bitWidth) {
-      case 64:
-        return typeFactory.createSqlType(SqlTypeName.BIGINT);
-      case 32:
-        return typeFactory.createSqlType(SqlTypeName.INTEGER);
-      case 16:
-        return typeFactory.createSqlType(SqlTypeName.SMALLINT);
-      case 8:
-        return typeFactory.createSqlType(SqlTypeName.TINYINT);
+      case Int:
+        int bitWidth = ((ArrowType.Int) arrowType).getBitWidth();
+        switch (bitWidth) {
+          case 64:
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
+          case 32:
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+          case 16:
+            return typeFactory.createSqlType(SqlTypeName.SMALLINT);
+          case 8:
+            return typeFactory.createSqlType(SqlTypeName.TINYINT);
+          default:
+            throw new IllegalArgumentException("Unsupported Int bit width: " + bitWidth);
+        }
+      case Bool:
+        return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      case Utf8:
+        return typeFactory.createSqlType(SqlTypeName.VARCHAR);
+      case FloatingPoint:
+        FloatingPointPrecision precision = ((ArrowType.FloatingPoint) arrowType).getPrecision();
+        switch (precision) {
+          case SINGLE:
+            return typeFactory.createSqlType(SqlTypeName.REAL);
+          case DOUBLE:
+            return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+          default:
+            throw new IllegalArgumentException("Unsupported Floating point precision: " + precision);
+        }
+      case Date:
+        return typeFactory.createSqlType(SqlTypeName.DATE);
+      case Decimal:
+        return typeFactory.createSqlType(SqlTypeName.DECIMAL,
+            ((ArrowType.Decimal) arrowType).getPrecision(),
+            ((ArrowType.Decimal) arrowType).getScale());
+      case Time:
+        return typeFactory.createSqlType(SqlTypeName.TIME);
       default:
-        throw new IllegalArgumentException("Unsupported Int bit width: " + bitWidth);
-      }
-    case Bool:
-      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
-    case Utf8:
-      return typeFactory.createSqlType(SqlTypeName.VARCHAR);
-    case FloatingPoint:
-      FloatingPointPrecision precision = ((ArrowType.FloatingPoint) arrowType).getPrecision();
-      switch (precision) {
-      case SINGLE:
-        return typeFactory.createSqlType(SqlTypeName.REAL);
-      case DOUBLE:
-        return typeFactory.createSqlType(SqlTypeName.DOUBLE);
-      default:
-        throw new IllegalArgumentException("Unsupported Floating point precision: " + precision);
-      }
-    case Date:
-      return typeFactory.createSqlType(SqlTypeName.DATE);
-    case Decimal:
-      return typeFactory.createSqlType(SqlTypeName.DECIMAL,
-          ((ArrowType.Decimal) arrowType).getPrecision(),
-          ((ArrowType.Decimal) arrowType).getScale());
-    case Time:
-      return typeFactory.createSqlType(SqlTypeName.TIME);
-    default:
-      throw new IllegalArgumentException("Unsupported type: " + arrowType);
+        throw new IllegalArgumentException("Unsupported type: " + arrowType);
     }
   }
 }
