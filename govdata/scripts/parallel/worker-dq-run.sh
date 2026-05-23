@@ -187,10 +187,10 @@ if $REBUILD; then
   export GOVDATA_RUN_MODE="historical"
   if [ -n "$REBUILD_START_YEAR" ]; then
     export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
-  elif [ -z "${GOVDATA_START_YEAR:-}" ]; then
+  else
     export GOVDATA_START_YEAR="$(get_dq_start_year "$SCHEMA")"
-    log_info "$WORKER_ID: --rebuild: using per-schema DQ start year $GOVDATA_START_YEAR"
   fi
+  log_info "$WORKER_ID: --rebuild: using start year $GOVDATA_START_YEAR for schema=$SCHEMA"
   if ! generate_single_schema_model "$SCHEMA" "$REBUILD_MODEL" 2>/dev/null; then
     log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
     exit 1

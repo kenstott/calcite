@@ -844,7 +844,7 @@ get_dq_start_year() {
   local schema=$1
   case "$schema" in
     energy)   echo 2022 ;;  # SEDS 2-year publication lag
-    edu)      echo 2023 ;;  # NAEP + CRDC biennial cycles
+    edu)      echo 2025 ;;  # NAEP + CRDC biennial cycles; 2025 covers current release
     lands)    echo 2023 ;;  # forest inventory biennial
     census)   echo 2022 ;;  # ACS 5-year span
     patents)  echo 2025 ;;  # only current year published
