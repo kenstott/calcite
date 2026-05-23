@@ -69,14 +69,12 @@ import static java.util.Objects.requireNonNull;
 public class ParquetTable extends AbstractTable
     implements TranslatableTable, QueryableTable {
 
-  private final String filePath;
   private final AvroParquetReader.Builder<GenericRecord> readerBuilder;
   private final @Nullable RelProtoDataType protoRowType;
   private MessageType schema;
 
   ParquetTable(String filePath, AvroParquetReader.Builder<GenericRecord> readerBuilder,
           @Nullable RelProtoDataType protoRowType) {
-    this.filePath = filePath;
     this.readerBuilder = readerBuilder;
     this.protoRowType = protoRowType;
     try {
@@ -96,15 +94,13 @@ public class ParquetTable extends AbstractTable
     return new MessageType(schema.getName(), selectedTypes);
   }
 
-  private MessageType getSchemaFromFile(String filePath) throws IOException {
+  private static MessageType getSchemaFromFile(String filePath) throws IOException {
     Configuration conf = new Configuration();
     Path path = new Path(filePath);
-    InputFile inputFile = HadoopInputFile.fromPath(path, new Configuration());
+    InputFile inputFile = HadoopInputFile.fromPath(path, conf);
     try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
       ParquetMetadata metadata = reader.getFooter();
-      MessageType schema = metadata.getFileMetaData().getSchema();
-      System.out.println(schema);
-      return schema;
+      return metadata.getFileMetaData().getSchema();
     }
   }
 
