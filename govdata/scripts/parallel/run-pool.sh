@@ -231,6 +231,27 @@ resolve_classpath > /dev/null
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# Kill all processes in a setsid'd worker session.
+# $pid is the session leader PID (== SID, written by the setsid wrapper).
+# pkill -s kills by session ID — catches all processes regardless of process
+# group, including java (which ignores SIGTERM and may be in a pipeline sub-group)
+# and rclone. Falls back to process-group and individual kills on systems that
+# lack pkill.
+_kill_worker_session() {
+  local pid=$1
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -TERM -s "$pid" 2>/dev/null || true
+  else
+    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  fi
+  sleep 2
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -KILL -s "$pid" 2>/dev/null || true
+  else
+    kill -KILL -"$pid" 2>/dev/null || true
+  fi
+}
+
 # On Ctrl-C or SIGTERM, kill all active workers before exiting
 cleanup() {
   echo ""
@@ -238,12 +259,9 @@ cleanup() {
   for i in "${!active_pids[@]}"; do
     local pid="${active_pids[$i]}"
     local id="${active_labels[$i]}"
-    echo "  Killing $id (PID $pid)"
-    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-    sleep 0.5
-    kill -KILL -"$pid" 2>/dev/null || true
+    echo "  Killing $id (session $pid)"
+    _kill_worker_session "$pid"
   done
-  wait 2>/dev/null || true
   echo "=== All workers terminated ==="
   exit 130
 }
@@ -457,12 +475,8 @@ kill_and_requeue() {
   local slot="${active_slots[$idx]}"
   local elapsed_mins=$(( ($(date +%s) - active_starts[$idx]) / 60 ))
 
-  log_info "$id inactive (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing PID $pid and re-queuing"
-
-  kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-  sleep 2
-  kill -KILL -"$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
+  log_info "$id inactive (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing session $pid and re-queuing"
+  _kill_worker_session "$pid"
 
   remove_active "$idx"
   ((restart_count++)) || true
