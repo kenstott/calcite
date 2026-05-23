@@ -263,6 +263,86 @@ else
   log_info "$WORKER_ID: results written to $S3_RESULT_PATH"
 fi
 
+# ── GitHub issue filing ───────────────────────────────────────────────────────
+if command -v gh >/dev/null 2>&1; then
+  # Ensure labels exist (no-op if already present)
+  gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
+  gh label create "dq-warn" --color "#e4e669" --description "DQ warning"      --repo kenstott/calcite 2>/dev/null || true
+  gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
+
+  # Find existing open DQ issue for this schema
+  OPEN_ISSUE=$(gh issue list \
+    --repo kenstott/calcite \
+    --state open \
+    --label dq \
+    --limit 200 \
+    --json number,title \
+    --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
+    2>/dev/null | head -1)
+
+  if [ "$VERDICT" = "PASS" ]; then
+    if [ -n "$OPEN_ISSUE" ]; then
+      gh issue close "$OPEN_ISSUE" \
+        --repo kenstott/calcite \
+        --comment "DQ passed on ${RUN_DATE} (${MODE} mode). Closing." \
+        2>/dev/null && log_info "$WORKER_ID: closed DQ issue #${OPEN_ISSUE}" || \
+        log_info "$WORKER_ID: WARNING: failed to close DQ issue #${OPEN_ISSUE}"
+    fi
+  else
+    case "$VERDICT" in
+      FAIL) VERDICT_LABEL="dq-fail" ;;
+      *)    VERDICT_LABEL="dq-warn" ;;
+    esac
+
+    FINDINGS_TABLE=$(duckdb -noheader -list -c "
+      SELECT '| ' || tbl || ' | ' || test || ' | ' || status || ' | ' ||
+             COALESCE(CAST(value AS VARCHAR), '—') || ' | ' ||
+             COALESCE(CAST(threshold AS VARCHAR), '—') || ' | ' ||
+             COALESCE(REPLACE(detail, '|', '/'), '') || ' |'
+      FROM read_parquet('${RESULT_LOCAL}')
+      WHERE status != 'pass'
+      ORDER BY status DESC, tbl, test
+      LIMIT 50;" 2>/dev/null || echo "| (could not read findings) | | | | | |")
+
+    FINDINGS_MD="| Table | Test | Status | Value | Threshold | Detail |
+|-------|------|--------|-------|-----------|--------|
+${FINDINGS_TABLE}"
+
+    if [ -n "$OPEN_ISSUE" ]; then
+      gh issue comment "$OPEN_ISSUE" \
+        --repo kenstott/calcite \
+        --body "**Re-run ${RUN_DATE}** — ${VERDICT}: ${FAIL_COUNT} fails, ${WARN_COUNT} warns
+
+${FINDINGS_MD}
+
+Results: \`${S3_RESULT_PATH}\`" \
+        2>/dev/null && log_info "$WORKER_ID: commented on DQ issue #${OPEN_ISSUE}" || \
+        log_info "$WORKER_ID: WARNING: failed to comment on DQ issue #${OPEN_ISSUE}"
+    else
+      gh issue create \
+        --repo kenstott/calcite \
+        --title "[DQ] ${SCHEMA}: ${VERDICT} — ${FAIL_COUNT} fails, ${WARN_COUNT} warns" \
+        --label "dq" \
+        --label "$VERDICT_LABEL" \
+        --body "## DQ ${VERDICT}: \`${SCHEMA}\`
+
+**Date:** ${RUN_DATE}
+**Mode:** ${MODE}
+**Fails:** ${FAIL_COUNT} | **Warns:** ${WARN_COUNT}
+
+## Findings
+
+${FINDINGS_MD}
+
+## Results
+
+\`${S3_RESULT_PATH}\`" \
+        2>/dev/null && log_info "$WORKER_ID: created DQ issue for ${VERDICT}" || \
+        log_info "$WORKER_ID: WARNING: failed to create DQ issue (gh not authenticated?)"
+    fi
+  fi
+fi
+
 log_info "$WORKER_ID complete"
 
 [ "$VERDICT" = "FAIL" ] && exit 1
