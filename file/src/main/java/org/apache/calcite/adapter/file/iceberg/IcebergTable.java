@@ -254,7 +254,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
    */
   @Override public Statistic getStatistic() {
     if (cachedRowCount != null) {
-      return Statistics.of(cachedRowCount, ImmutableList.of());
+      return buildStatistic(cachedRowCount);
     }
 
     try {
@@ -263,7 +263,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
         // Empty table - no snapshots yet
         LOGGER.debug("Iceberg table has no snapshot, returning 0 row count");
         cachedRowCount = 0.0;
-        return Statistics.of(0.0, ImmutableList.of());
+        return buildStatistic(0.0);
       }
 
       // Sum record counts from all data files
