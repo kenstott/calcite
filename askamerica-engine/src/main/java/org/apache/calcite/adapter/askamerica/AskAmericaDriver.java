@@ -52,30 +52,25 @@ public class AskAmericaDriver extends BaseDriverWrapper {
     @Override protected Driver innerDriver() { return INNER; }
 
     @Override public Connection connect(String url, Properties info) throws SQLException {
-        // Resolve operating dir: ASKAMERICA_DATA_DIR env var, or ~/.askamerica.
-        // Set system properties before delegating so GovDataDriver finds them already set.
-        if (System.getProperty("govdata.operating.dir.base") == null) {
-            String base = resolveAskAmericaDataDir();
-            if (base != null) {
-                System.setProperty("govdata.operating.dir.base", base);
-                if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
-                    System.setProperty("duckdb.cache_httpfs.directory",
-                        base + "/.duckdb_httpfs_cache");
-                }
+        // ASKAMERICA_DATA_DIR: env var takes priority, then system property (set by McpServer),
+        // then fall back to ~/.askamerica. Always wins over any previously pinned value so that
+        // a user-supplied env var is never silently ignored.
+        String dataDir = System.getenv("ASKAMERICA_DATA_DIR");
+        if (dataDir == null || dataDir.isEmpty()) {
+            dataDir = System.getProperty("ASKAMERICA_DATA_DIR");
+        }
+        if (dataDir == null || dataDir.isEmpty()) {
+            String home = System.getProperty("user.home");
+            dataDir = (home != null && !home.isEmpty()) ? home + "/.askamerica" : null;
+        }
+        if (dataDir != null && !dataDir.isEmpty()) {
+            System.setProperty("govdata.operating.dir.base", dataDir);
+            if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
+                System.setProperty("duckdb.cache_httpfs.directory",
+                    dataDir + "/.duckdb_httpfs_cache");
             }
         }
         return super.connect(url, info);
     }
 
-    private static String resolveAskAmericaDataDir() {
-        String envDir = System.getenv("ASKAMERICA_DATA_DIR");
-        if (envDir != null && !envDir.isEmpty()) {
-            return envDir;
-        }
-        String home = System.getProperty("user.home");
-        if (home != null && !home.isEmpty()) {
-            return home + "/.askamerica";
-        }
-        return null;
-    }
 }

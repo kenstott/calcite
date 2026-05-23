@@ -103,9 +103,12 @@ public class McpServer {
             return;
         }
 
-        // Pin operating dir for this process: MCP_DATA_DIR env var, or ~/.mcp_askamerica.
-        // Must be set before any GovDataDriver connection so the property is stable.
-        if (System.getProperty("govdata.operating.dir.base") == null) {
+        // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
+        // Pin it as the ASKAMERICA_DATA_DIR system property so AskAmericaDriver.connect() picks it
+        // up via the same path used for direct JDBC connections. govdata.operating.dir.base is set
+        // in exactly one place — AskAmericaDriver — regardless of entry point.
+        if (System.getenv("ASKAMERICA_DATA_DIR") == null
+                && System.getProperty("ASKAMERICA_DATA_DIR") == null) {
             String dataDir = System.getenv("MCP_DATA_DIR");
             if (dataDir == null || dataDir.isEmpty()) {
                 String home = System.getProperty("user.home");
@@ -114,17 +117,21 @@ public class McpServer {
                 }
             }
             if (dataDir != null && !dataDir.isEmpty()) {
-                System.setProperty("govdata.operating.dir.base", dataDir);
-                // All schemas share one DuckDB catalog file so cross-schema joins work.
-                // duckdb.catalog.path is the existing mechanism — overrides per-schema defaults.
-                if (System.getProperty("duckdb.catalog.path") == null
-                        && System.getenv("DUCKDB_CATALOG_PATH") == null) {
-                    java.io.File duckdbDir = new java.io.File(dataDir, ".duckdb");
-                    duckdbDir.mkdirs();
-                    System.setProperty("duckdb.catalog.path",
-                        new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
-                }
+                System.setProperty("ASKAMERICA_DATA_DIR", dataDir);
             }
+        }
+        // Set the shared DuckDB catalog path under whichever data dir was resolved.
+        String resolvedDataDir = System.getenv("ASKAMERICA_DATA_DIR");
+        if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
+            resolvedDataDir = System.getProperty("ASKAMERICA_DATA_DIR");
+        }
+        if (resolvedDataDir != null && !resolvedDataDir.isEmpty()
+                && System.getProperty("duckdb.catalog.path") == null
+                && System.getenv("DUCKDB_CATALOG_PATH") == null) {
+            java.io.File duckdbDir = new java.io.File(resolvedDataDir, ".duckdb");
+            duckdbDir.mkdirs();
+            System.setProperty("duckdb.catalog.path",
+                new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
         }
 
         // Capture the real stdout before any framework can write to it, then

@@ -120,8 +120,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("No dataSource specified, defaulting to 'sec'");
     }
 
-    // Check if this schema was already created (e.g., as a dependency of another schema)
-    String cacheKey = dataSource.toLowerCase();
+    // Check if this schema was already created (e.g., as a dependency of another schema).
+    // Include the operating-dir base in the key so connections with different ASKAMERICA_DATA_DIR
+    // values get separate cache entries rather than reusing a stale schema from the wrong dir.
+    String cacheKey = dataSource.toLowerCase()
+        + "@" + System.getProperty("govdata.operating.dir.base", "");
     Schema cachedSchema = schemaCache.get(cacheKey);
     if (cachedSchema != null) {
       LOGGER.info("Schema '{}' (dataSource={}) already created as dependency, returning cached",
@@ -223,11 +226,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Cache dependency schemas so they can be returned if requested later
+    String operatingBase = System.getProperty("govdata.operating.dir.base", "");
     for (String depDataSource : factory.getDependencies()) {
       String depSchemaName = depDataSource.toLowerCase();
       Schema depSchema = result.getSchema(depSchemaName);
       if (depSchema != null) {
-        schemaCache.put(depSchemaName, depSchema);
+        schemaCache.put(depSchemaName + "@" + operatingBase, depSchema);
         LOGGER.debug("Cached dependency schema '{}'", depSchemaName);
       }
     }
