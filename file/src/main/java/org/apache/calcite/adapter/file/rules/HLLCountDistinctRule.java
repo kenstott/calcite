@@ -16,15 +16,31 @@
  */
 package org.apache.calcite.adapter.file.rules;
 
+import org.apache.calcite.adapter.file.statistics.HLLSketchCache;
+import org.apache.calcite.adapter.file.statistics.HyperLogLogSketch;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
+import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.rel.logical.LogicalValues;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.type.SqlTypeName;
+
 import org.immutables.value.Value;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Rule that replaces COUNT(DISTINCT) operations with pre-computed HLL sketch lookups.
  * This provides instant responses for cardinality queries without scanning data.
+ * Only handles simple aggregates without GROUP BY.
  */
 @Value.Enclosing
 public class HLLCountDistinctRule extends RelRule<HLLCountDistinctRule.Config> {
@@ -37,9 +53,98 @@ public class HLLCountDistinctRule extends RelRule<HLLCountDistinctRule.Config> {
   }
 
   @Override public void onMatch(RelOptRuleCall call) {
-    // TODO: Temporarily disabled due to AggregateCall API changes
-    // The HLL optimization rule needs to be updated to match the current Calcite API
-    return;
+    final Aggregate aggregate = call.rel(0);
+    final RelNode input = aggregate.getInput();
+
+    // Only handle simple aggregates without GROUP BY
+    if (!aggregate.getGroupSet().isEmpty()) {
+      return;
+    }
+
+    boolean hasOptimizableAgg = false;
+    List<Long> hllEstimates = new ArrayList<>();
+
+    for (AggregateCall aggCall : aggregate.getAggCallList()) {
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
+        Long estimate = getHLLEstimate(input, aggCall);
+        if (estimate != null) {
+          hasOptimizableAgg = true;
+          hllEstimates.add(estimate);
+        } else {
+          hllEstimates.add(null);
+        }
+      } else {
+        hllEstimates.add(null);
+      }
+    }
+
+    if (!hasOptimizableAgg) {
+      return;
+    }
+
+    RelNode valuesNode = createHLLValues(aggregate, hllEstimates);
+    if (valuesNode != null) {
+      call.transformTo(valuesNode, com.google.common.collect.ImmutableMap.of());
+    }
+  }
+
+  private Long getHLLEstimate(RelNode input, AggregateCall aggCall) {
+    TableScan tableScan = findTableScan(input);
+    if (tableScan == null || aggCall.getArgList().isEmpty()) {
+      return null;
+    }
+
+    int columnIndex = aggCall.getArgList().get(0);
+    String columnName = input.getRowType().getFieldNames().get(columnIndex);
+
+    List<String> qualifiedName = tableScan.getTable().getQualifiedName();
+    String schemaName = qualifiedName.size() >= 2 ? qualifiedName.get(qualifiedName.size() - 2) : "";
+    String tableName = qualifiedName.get(qualifiedName.size() - 1);
+
+    HLLSketchCache cache = HLLSketchCache.getInstance();
+    HyperLogLogSketch sketch = cache.getSketch(schemaName, tableName, columnName);
+    return sketch != null ? sketch.getEstimate() : null;
+  }
+
+  private static TableScan findTableScan(RelNode node) {
+    if (node instanceof TableScan) {
+      return (TableScan) node;
+    }
+    for (RelNode input : node.getInputs()) {
+      TableScan scan = findTableScan(input);
+      if (scan != null) {
+        return scan;
+      }
+    }
+    return null;
+  }
+
+  private static RelNode createHLLValues(Aggregate aggregate, List<Long> hllEstimates) {
+    RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
+    RelDataTypeFactory typeFactory = aggregate.getCluster().getTypeFactory();
+
+    RelDataTypeFactory.Builder typeBuilder = typeFactory.builder();
+    List<RexLiteral> values = new ArrayList<>();
+
+    for (int i = 0; i < aggregate.getAggCallList().size(); i++) {
+      Long estimate = hllEstimates.get(i);
+      if (estimate != null) {
+        RelDataType bigIntType = typeFactory.createSqlType(SqlTypeName.BIGINT);
+        AggregateCall aggCall = aggregate.getAggCallList().get(i);
+        String fieldName = aggCall.getName() != null ? aggCall.getName() : "EXPR$" + i;
+        typeBuilder.add(fieldName, bigIntType);
+        values.add((RexLiteral) rexBuilder.makeLiteral(estimate, bigIntType, true));
+      } else {
+        return null;
+      }
+    }
+
+    RelDataType rowType = typeBuilder.build();
+    return LogicalValues.create(
+        aggregate.getCluster(),
+        rowType,
+        com.google.common.collect.ImmutableList.of(
+            com.google.common.collect.ImmutableList.copyOf(values)));
   }
 
   /** Configuration for HLLCountDistinctRule. */
