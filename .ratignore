@@ -50,3 +50,64 @@ site/favicon.ico
 
 # jenv
 .jenv-version
+
+# BSL-licensed modules — not Apache-licensed, RAT does not apply
+govdata/**
+salesforce/**
+sharepoint-list/**
+splunk/**
+cloud-ops/**
+askamerica-engine/**
+
+# Data schema YAML/SQL files (BSL project data)
+bls/**
+census/**
+crime/**
+cyber/**
+econ/**
+edu/**
+fec/**
+fedregister/**
+geo/**
+health/**
+lands/**
+patents/**
+ref/**
+sec/**
+sql/**
+weather/**
+
+# Root-level BSL/dev project files
+LICENSE-BSL.txt
+README.md
+CLAUDE.md
+CLAUDE-ADAPTERS.ref
+CLAUDE-CORE.ref
+CLAUDE-TEAMS.ref
+CLAUDE-TESTING.ref
+CLAUDE-TROUBLESHOOTING.ref
+.claudeignore
+.env
+.env.*
+.conversions.json.*
+ARCHITECTURE_SUMMARY.txt
+CYBER_SCHEMA_PLAN.md
+GOVDATA_ANALYSIS_INDEX.md
+GOVDATA_ETL_ARCHITECTURE.md
+MINIO-SETUP.md
+djia-production-README.md
+djia-production-verification.sql
+test-*.sql
+
+# file module: docs and dev files
+file/CLAUDE.md
+file/README.md
+file/TESTING.md
+file/raw-cache.md
+file/docs/**
+file/src/main/resources/org/apache/calcite/adapter/file/partition/create_partition_status.sql
+file/src/test/resources/etl-test/test-constants.yaml
+file/src/test/resources/test/minimal-schema.yaml
+
+# driver-base Python files
+driver-base/src/main/python/**
