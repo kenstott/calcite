@@ -140,12 +140,14 @@ plugins.withType<JavaPlugin> {
 
 // SIMDColumnBatch and AdaptiveColumnBatch use jdk.incubator.vector (JDK 16+).
 // On older JDKs we exclude them from compilation; they are SIMD optimizations only.
+// The incubating-module warning would be treated as an error by -Werror, so we
+// suppress it with -Xlint:-incubating on JDK 16+.
 if (JavaVersion.current() >= JavaVersion.VERSION_16) {
     tasks.named<JavaCompile>("compileJava") {
-        options.compilerArgs.add("--add-modules=jdk.incubator.vector")
+        options.compilerArgs.addAll(listOf("--add-modules=jdk.incubator.vector", "-Xlint:-incubating"))
     }
     tasks.named<JavaCompile>("compileTestJava") {
-        options.compilerArgs.add("--add-modules=jdk.incubator.vector")
+        options.compilerArgs.addAll(listOf("--add-modules=jdk.incubator.vector", "-Xlint:-incubating"))
     }
 } else {
     sourceSets.main.get().java.exclude("**/execution/arrow/SIMDColumnBatch.java")
