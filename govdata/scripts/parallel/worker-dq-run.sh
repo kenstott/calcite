@@ -171,7 +171,14 @@ fi
 # ── helper: file a GitHub issue for script-level failures ────────────────────
 _file_script_error_issue() {
   local detail="$1"
-  if ! command -v gh >/dev/null 2>&1; then return; fi
+  if ! command -v gh >/dev/null 2>&1; then
+    log_info "$WORKER_ID: gh not found in PATH ($(echo $PATH)) — skipping issue filing"
+    return
+  fi
+  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    log_info "$WORKER_ID: gh not authenticated — skipping issue filing"
+    return
+  fi
   gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
   gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
   local open_issue
@@ -182,12 +189,13 @@ _file_script_error_issue() {
     --limit 200 \
     --json number,title \
     --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
-    2>/dev/null | head -1)
-  if [ -n "$open_issue" ]; then
+    2>&1 | head -1)
+  if [ -n "$open_issue" ] && [[ "$open_issue" =~ ^[0-9]+$ ]]; then
     gh issue comment "$open_issue" \
       --repo kenstott/calcite \
       --body "**Script error ${RUN_DATE}** — ${detail}" \
-      2>/dev/null || true
+      && log_info "$WORKER_ID: commented on DQ issue #${open_issue}" \
+      || log_info "$WORKER_ID: WARNING: failed to comment on issue #${open_issue}"
   else
     gh issue create \
       --repo kenstott/calcite \
@@ -206,7 +214,8 @@ ${detail}
 ## Log
 
 \`${LOG_FILE}\`" \
-      2>/dev/null || true
+      && log_info "$WORKER_ID: created DQ error issue" \
+      || log_info "$WORKER_ID: WARNING: gh issue create failed"
   fi
 }
 
