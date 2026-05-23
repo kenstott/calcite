@@ -157,6 +157,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource, operand);
         SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
         Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource);
+        String depResource = depFactory.getSchemaResourceName();
+        if (depResource != null) {
+          Map<String, Map<String, Object>> depConstraints =
+              GovDataUtils.loadTableConstraints(depFactory.getClass(), depResource);
+          if (!depConstraints.isEmpty()) {
+            depOperand.put("tableConstraints", depConstraints);
+          }
+        }
 
         processorBuilder
             .operatingDirectory(depOperatingDir)
@@ -193,6 +201,20 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     enrichedOperand.put("operatingDirectory", operatingDirectory);
     if (tableConstraints != null && !tableConstraints.isEmpty()) {
       enrichedOperand.put("tableConstraints", tableConstraints);
+    } else {
+      // Load constraints from the schema YAML's constraints: section.
+      // setTableConstraints() is only called when constraints are passed via model JSON;
+      // YAML-declared constraints must be loaded here so all engines see them.
+      String resource = factory.getSchemaResourceName();
+      if (resource != null) {
+        Map<String, Map<String, Object>> yamlConstraints =
+            GovDataUtils.loadTableConstraints(factory.getClass(), resource);
+        if (!yamlConstraints.isEmpty()) {
+          enrichedOperand.put("tableConstraints", yamlConstraints);
+          LOGGER.info("Loaded {} table constraints from YAML for schema '{}'",
+              yamlConstraints.size(), dataSource);
+        }
+      }
     }
 
     processorBuilder
