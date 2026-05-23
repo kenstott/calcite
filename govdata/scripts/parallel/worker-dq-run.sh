@@ -82,6 +82,72 @@ LOG_FILE="$RUN_DIR/dq_${TIMESTAMP}.log"
 
 S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
 
+# ── error handler + EXIT trap (must be defined before rebuild block) ──────────
+_SCRIPT_COMPLETE=false
+
+_file_script_error_issue() {
+  _SCRIPT_COMPLETE=true
+  local detail="$1"
+  if ! command -v gh >/dev/null 2>&1; then
+    log_info "$WORKER_ID: gh not found in PATH ($PATH) — skipping issue filing"
+    return
+  fi
+  # Prefer GH_TOKEN/GITHUB_TOKEN (sourced from .env.prod); only do a live
+  # auth-status check when neither is set, so nohup runs don't hit network.
+  if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
+    if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+      log_info "$WORKER_ID: gh not authenticated (no GH_TOKEN, no stored credential) — skipping issue filing"
+      return
+    fi
+  fi
+  gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
+  gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
+  local open_issue
+  open_issue=$(gh issue list \
+    --repo kenstott/calcite \
+    --state open \
+    --label dq \
+    --limit 200 \
+    --json number,title \
+    --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
+    2>&1 | head -1)
+  if [ -n "$open_issue" ] && [[ "$open_issue" =~ ^[0-9]+$ ]]; then
+    gh issue comment "$open_issue" \
+      --repo kenstott/calcite \
+      --body "**Script error ${RUN_DATE}** — ${detail}" \
+      && log_info "$WORKER_ID: commented on DQ issue #${open_issue}" \
+      || log_info "$WORKER_ID: WARNING: failed to comment on issue #${open_issue}"
+  else
+    gh issue create \
+      --repo kenstott/calcite \
+      --title "[DQ] ${SCHEMA}: ERROR — script failed" \
+      --label "dq" \
+      --label "dq-fail" \
+      --body "## DQ Script Error: \`${SCHEMA}\`
+
+**Date:** ${RUN_DATE}
+**Mode:** ${MODE}
+
+## Detail
+
+${detail}
+
+## Log
+
+\`${LOG_FILE}\`" \
+      && log_info "$WORKER_ID: created DQ error issue" \
+      || log_info "$WORKER_ID: WARNING: gh issue create failed"
+  fi
+}
+
+_on_exit() {
+  local code=$?
+  [ -n "${TMP_DIR:-}" ] && rm -rf "$TMP_DIR"
+  if [ "$code" -ne 0 ] && ! $_SCRIPT_COMPLETE; then
+    _file_script_error_issue "Script exited unexpectedly with code ${code} — see log: \`${LOG_FILE}\`"
+  fi
+}
+trap '_on_exit' EXIT
 
 # ── rebuild: teardown + ETL before DQ ────────────────────────────────────────
 if $REBUILD; then
@@ -168,61 +234,9 @@ if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
 fi
 
-# ── helper: file a GitHub issue for script-level failures ────────────────────
-_file_script_error_issue() {
-  local detail="$1"
-  if ! command -v gh >/dev/null 2>&1; then
-    log_info "$WORKER_ID: gh not found in PATH ($(echo $PATH)) — skipping issue filing"
-    return
-  fi
-  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-    log_info "$WORKER_ID: gh not authenticated — skipping issue filing"
-    return
-  fi
-  gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
-  gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
-  local open_issue
-  open_issue=$(gh issue list \
-    --repo kenstott/calcite \
-    --state open \
-    --label dq \
-    --limit 200 \
-    --json number,title \
-    --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
-    2>&1 | head -1)
-  if [ -n "$open_issue" ] && [[ "$open_issue" =~ ^[0-9]+$ ]]; then
-    gh issue comment "$open_issue" \
-      --repo kenstott/calcite \
-      --body "**Script error ${RUN_DATE}** — ${detail}" \
-      && log_info "$WORKER_ID: commented on DQ issue #${open_issue}" \
-      || log_info "$WORKER_ID: WARNING: failed to comment on issue #${open_issue}"
-  else
-    gh issue create \
-      --repo kenstott/calcite \
-      --title "[DQ] ${SCHEMA}: ERROR — script failed" \
-      --label "dq" \
-      --label "dq-fail" \
-      --body "## DQ Script Error: \`${SCHEMA}\`
-
-**Date:** ${RUN_DATE}
-**Mode:** ${MODE}
-
-## Detail
-
-${detail}
-
-## Log
-
-\`${LOG_FILE}\`" \
-      && log_info "$WORKER_ID: created DQ error issue" \
-      || log_info "$WORKER_ID: WARNING: gh issue create failed"
-  fi
-}
-
 # ── run DQ ────────────────────────────────────────────────────────────────────
 TMP_DIR=$(mktemp -d)
 RESULT_LOCAL="$TMP_DIR/results.parquet"
-trap 'rm -rf "$TMP_DIR"' EXIT
 
 log_info "$WORKER_ID: running DQ for schema=$SCHEMA mode=$MODE"
 log_info "$WORKER_ID: DQ script: $DQ_SQL"
@@ -317,7 +331,12 @@ else
 fi
 
 # ── GitHub issue filing ───────────────────────────────────────────────────────
-if command -v gh >/dev/null 2>&1; then
+_gh_available() {
+  command -v gh >/dev/null 2>&1 || return 1
+  [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] && return 0
+  gh auth status --hostname github.com >/dev/null 2>&1
+}
+if _gh_available; then
   # Ensure labels exist (no-op if already present)
   gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
   gh label create "dq-warn" --color "#e4e669" --description "DQ warning"      --repo kenstott/calcite 2>/dev/null || true
@@ -396,6 +415,7 @@ ${FINDINGS_MD}
   fi
 fi
 
+_SCRIPT_COMPLETE=true
 log_info "$WORKER_ID complete"
 
 [ "$VERDICT" = "FAIL" ] && exit 1
