@@ -40,6 +40,8 @@ import org.apache.iceberg.hadoop.HadoopTables;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Types;
 
+import org.apache.calcite.adapter.file.metadata.TableConstraints;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
@@ -77,6 +79,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
   private @Nullable RelDataType rowType;
   private @Nullable Double cachedRowCount;
   private @Nullable Map<String, String> cachedColumnComments;
+  private @Nullable Map<String, Object> constraintConfig;
 
   /**
    * Creates an IcebergTable from a path.
@@ -137,6 +140,11 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     this.config = new java.util.HashMap<>();
     this.snapshotId = null;
     this.asOfTimestamp = null;
+  }
+
+  /** Sets PK/FK constraint config from the schema YAML's tableConstraints section. */
+  public void setConstraintConfig(Map<String, Object> constraintConfig) {
+    this.constraintConfig = constraintConfig;
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
@@ -269,12 +277,28 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
 
       cachedRowCount = (double) totalRecords;
       LOGGER.debug("Iceberg table row count from metadata: {}", totalRecords);
-      return Statistics.of(cachedRowCount, ImmutableList.of());
+      return buildStatistic(cachedRowCount);
 
     } catch (Exception e) {
       LOGGER.warn("Failed to get Iceberg statistics: {}", e.getMessage());
-      return Statistics.UNKNOWN;
+      return constraintConfig != null ? buildStatistic(null) : Statistics.UNKNOWN;
     }
+  }
+
+  private Statistic buildStatistic(@Nullable Double rowCount) {
+    if (constraintConfig == null || constraintConfig.isEmpty()) {
+      return rowCount != null
+          ? Statistics.of(rowCount, ImmutableList.of())
+          : Statistics.UNKNOWN;
+    }
+    List<String> columnNames = new ArrayList<>();
+    for (Types.NestedField field : icebergTable.schema().columns()) {
+      columnNames.add(field.name());
+    }
+    java.util.Map<String, Object> tableConfig = new java.util.LinkedHashMap<>();
+    tableConfig.put("constraints", constraintConfig);
+    Statistic constraintStat = TableConstraints.fromConfig(tableConfig, columnNames, rowCount, null, null);
+    return constraintStat;
   }
 
   /**

@@ -348,23 +348,16 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
 
     @Override public Statistic getStatistic() {
-      // Use IcebergTable statistics if available (for row count optimization)
-      if (commentableTable instanceof IcebergTable) {
-        Statistic icebergStats = ((IcebergTable) commentableTable).getStatistic();
-        LOGGER.info("CommentableJdbcTableWrapper.getStatistic() using IcebergTable stats: rowCount={}",
-                    icebergStats.getRowCount());
-        return icebergStats;
-      }
-      return jdbcTable.getStatistic();
+      // FileSchema table is the metadata authority for statistics (row counts, PKs, FKs).
+      // DuckDB views carry no constraint metadata, so jdbcTable.getStatistic() is always empty.
+      return commentableTable.getStatistic();
     }
 
     @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
-      // Iceberg-backed tables are always TABLE type, regardless of how DuckDB registered them
-      // (DuckDB uses CREATE VIEW for iceberg_scan wrappers, but they are semantically tables)
-      if (commentableTable instanceof IcebergTable) {
-        return org.apache.calcite.schema.Schema.TableType.TABLE;
-      }
-      return jdbcTable.getJdbcTableType();
+      // FileSchema table is the metadata authority — DuckDB is execution-only.
+      // DuckDB always registers iceberg_scan/parquet_scan wrappers as VIEWs internally,
+      // so jdbcTable.getJdbcTableType() always returns VIEW regardless of actual semantics.
+      return commentableTable.getJdbcTableType();
     }
 
     @Override public boolean isRolledUp(String column) {

@@ -4041,7 +4041,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           Source icebergSource = Sources.of(tablePath);
-          table = new IcebergTable(icebergSource, tableConfig);
+          IcebergTable icebergTableObj = new IcebergTable(icebergSource, tableConfig);
+          Map<String, Object> constraintConfig = getTableConstraints(config.getName());
+          if (constraintConfig != null) {
+            icebergTableObj.setConstraintConfig(constraintConfig);
+          }
+          table = icebergTableObj;
         } else if (this.refreshInterval != null) {
           // Get constraint configuration from FileSchema's constraint metadata
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());

@@ -69,6 +69,14 @@ public class AskAmericaDriver extends BaseDriverWrapper {
                 System.setProperty("duckdb.cache_httpfs.directory",
                     dataDir + "/.duckdb_httpfs_cache");
             }
+            if (System.getProperty("duckdb.catalog.path") == null) {
+                java.io.File duckdbDir = new java.io.File(dataDir, ".duckdb");
+                if (!duckdbDir.exists()) {
+                    duckdbDir.mkdirs();
+                }
+                System.setProperty("duckdb.catalog.path",
+                    new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
+            }
         }
         return super.connect(url, info);
     }
