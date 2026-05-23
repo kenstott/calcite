@@ -178,7 +178,7 @@ public class ParquetTable extends AbstractTable
         }
       }
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new RuntimeException("Failed to build Parquet reader", e);
     }
     return Linq4j.asEnumerable(records);
   }

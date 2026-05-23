@@ -51,6 +51,7 @@ public class DimensionPartitionPlan {
    *
    * @deprecated Use the multi-custom constructor instead
    */
+  @Deprecated
   DimensionPartitionPlan(String contextKey, List<String> contextValues,
       String customDimName, DimensionConfig customDimConfig,
       Map<String, List<Map<String, String>>> prefixByContext) {
