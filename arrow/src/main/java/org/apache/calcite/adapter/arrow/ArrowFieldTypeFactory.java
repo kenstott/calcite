@@ -72,7 +72,8 @@ public class ArrowFieldTypeFactory {
           case DOUBLE:
             return typeFactory.createSqlType(SqlTypeName.DOUBLE);
           default:
-            throw new IllegalArgumentException("Unsupported Floating point precision: " + precision);
+            throw new IllegalArgumentException(
+                "Unsupported Floating point precision: " + precision);
         }
       case Date:
         return typeFactory.createSqlType(SqlTypeName.DATE);
