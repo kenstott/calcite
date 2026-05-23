@@ -28,6 +28,10 @@ POOL_LOG="$POOL_LOG_DIR/pool-$(date '+%Y%m%d-%H%M%S').log"
 exec > >(tee -a "$POOL_LOG") 2>&1
 echo "Pool log: $POOL_LOG"
 
+# Ignore SIGPIPE: when Ctrl+C kills tee (above), subsequent writes to stdout
+# would otherwise raise SIGPIPE and kill bash before the INT trap can run.
+trap '' PIPE
+
 MAX_WORKERS=99       # Effectively unlimited — memory budget is the real constraint
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
@@ -231,6 +235,16 @@ resolve_classpath > /dev/null
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# All cleanup output goes to /dev/tty (direct terminal) AND the pool log.
+# This is necessary because Ctrl+C kills tee (which is in the same foreground
+# process group as run-pool.sh). After tee dies, stdout is a broken pipe; any
+# echo to stdout would raise SIGPIPE and kill bash before the kills run.
+_cleanup_log() {
+  local msg="[CLEANUP] $*"
+  echo "$msg" >> "$POOL_LOG" 2>/dev/null || true
+  echo "$msg" > /dev/tty 2>/dev/null || true
+}
+
 # Kill all processes in a setsid'd worker session.
 # $pid is the session leader PID (== SID, written by the setsid wrapper).
 # pkill -s kills by session ID — catches all processes regardless of process
@@ -239,30 +253,46 @@ mkdir -p "$PID_DIR"
 # lack pkill.
 _kill_worker_session() {
   local pid=$1
-  if command -v pkill >/dev/null 2>&1; then
-    pkill -TERM -s "$pid" 2>/dev/null || true
+  local procs
+  # List what's in this session before killing (diagnostic)
+  procs=$(ps -s "$pid" -o pid=,comm= 2>/dev/null | tr '\n' ' ' || true)
+  if [ -z "$procs" ]; then
+    _cleanup_log "  session $pid: no processes found (already dead or invalid SID)"
   else
-    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-  fi
-  sleep 2
-  if command -v pkill >/dev/null 2>&1; then
-    pkill -KILL -s "$pid" 2>/dev/null || true
-  else
-    kill -KILL -"$pid" 2>/dev/null || true
+    _cleanup_log "  session $pid: killing PIDs — $procs"
+    if command -v pkill >/dev/null 2>&1; then
+      pkill -TERM -s "$pid" 2>/dev/null || true
+    else
+      kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    fi
+    sleep 2
+    procs=$(ps -s "$pid" -o pid=,comm= 2>/dev/null | tr '\n' ' ' || true)
+    if [ -n "$procs" ]; then
+      _cleanup_log "  session $pid: still alive after TERM, sending KILL — $procs"
+      if command -v pkill >/dev/null 2>&1; then
+        pkill -KILL -s "$pid" 2>/dev/null || true
+      else
+        kill -KILL -"$pid" 2>/dev/null || true
+      fi
+    else
+      _cleanup_log "  session $pid: all processes terminated after TERM"
+    fi
   fi
 }
 
 # On Ctrl-C or SIGTERM, kill all active workers before exiting
 cleanup() {
-  echo ""
-  echo "=== Interrupted — killing active workers ==="
-  for i in "${!active_pids[@]}"; do
-    local pid="${active_pids[$i]}"
-    local id="${active_labels[$i]}"
-    echo "  Killing $id (session $pid)"
+  _cleanup_log "=== INT/TERM trapped — killing ${#active_pids[@]} active worker(s) ==="
+  _cleanup_log "  active_pids=(${active_pids[*]:-<none>})"
+  _cleanup_log "  active_labels=(${active_labels[*]:-<none>})"
+  local _i
+  for _i in "${!active_pids[@]}"; do
+    local pid="${active_pids[$_i]}"
+    local id="${active_labels[$_i]}"
+    _cleanup_log "  Killing $id (session leader PID=$pid)"
     _kill_worker_session "$pid"
   done
-  echo "=== All workers terminated ==="
+  _cleanup_log "=== All workers terminated ==="
   exit 130
 }
 trap cleanup INT TERM
@@ -504,7 +534,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
 
       # Use exit code file rather than wait() — the worker may not be a direct
       # child of this shell when setsid forked internally.
-      local exit_code
+      # NOTE: no 'local' here — 'local' is invalid outside a function and causes
+      # bash to exit under set -e, silently killing the pool.
       exit_code=$(cat "$PID_DIR/${id}.exit" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
       [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
 
@@ -514,9 +545,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       else
         ((failed_count++)) || true
         failed_list+=("$id")
-        local log_file="$SCRIPT_DIR/runs/${id}/launch.log"
-        local last_err
-        last_err=$(grep -i -E "error|exception|fatal" "$log_file" 2>/dev/null | tail -1 | cut -c1-120 || true)
+        _log_file="$SCRIPT_DIR/runs/${id}/launch.log"
+        last_err=$(grep -i -E "error|exception|fatal" "$_log_file" 2>/dev/null | tail -1 | cut -c1-120 || true)
         log_info "$id FAILED (${mins}m): ${last_err:-check log}"
       fi
 
