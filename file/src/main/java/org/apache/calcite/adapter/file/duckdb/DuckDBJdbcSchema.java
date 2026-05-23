@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
+import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.rel.type.RelDataType;
@@ -243,13 +244,40 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       // already implements CommentableTable (the JDBC implementation doesn't have our metadata)
       if (fileSchema != null) {
         Table originalTable = fileSchema.tables().get(name);
+        if (originalTable == null) {
+          originalTable = fileSchema.tables().get(name.toLowerCase());
+        }
         LOGGER.info("Found original table for '{}': {} (CommentableTable: {})",
                     name, originalTable != null ? originalTable.getClass().getSimpleName() : "null",
                     originalTable instanceof CommentableTable);
         if (originalTable instanceof CommentableTable) {
           LOGGER.info("Wrapping DuckDB table '{}' with CommentableTable delegation for metadata access", name);
-          // Wrap the JDBC table to delegate comment methods to the original table
           return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
+        }
+        if (originalTable != null) {
+          // FileSchema has the table but it is not a CommentableTable.
+          // Use FileSchema's table type as the authoritative type (e.g. ViewTable returns VIEW,
+          // other non-comment tables return TABLE). Correct DuckDB's VIEW if FileSchema says TABLE.
+          if (originalTable.getJdbcTableType() != org.apache.calcite.schema.Schema.TableType.VIEW) {
+            LOGGER.info("Correcting TABLE_TYPE for '{}': FileSchema says {}, DuckDB says VIEW",
+                        name, originalTable.getJdbcTableType());
+            return new TableTypeCorrectingWrapper(table);
+          }
+          // FileSchema says VIEW — DuckDB's VIEW type is correct, return as-is.
+          return table;
+        }
+        // originalTable is null: IcebergTable failed to load. Check conversionMetadata.
+        if (fileSchema.getConversionMetadata() != null) {
+          ConversionMetadata.ConversionRecord record =
+              fileSchema.getConversionMetadata().getAllConversions().get(name);
+          if (record == null) {
+            record = fileSchema.getConversionMetadata().getAllConversions()
+                .get(name.toLowerCase());
+          }
+          if (record != null && "ICEBERG_PARQUET".equals(record.conversionType)) {
+            LOGGER.info("Correcting TABLE_TYPE for '{}': conversionMetadata says ICEBERG_PARQUET", name);
+            return new TableTypeCorrectingWrapper(table);
+          }
         }
       } else {
         LOGGER.info("fileSchema is null for table '{}'", name);
@@ -261,7 +289,6 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       if (table != null) {
         LOGGER.info("Found table with lowercase name: '{}'", name.toLowerCase());
 
-        // Apply same wrapping logic for lowercase lookup
         if (table instanceof CommentableTable) {
           return table;
         }
@@ -270,6 +297,12 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
           Table originalTable = fileSchema.tables().get(name.toLowerCase());
           if (originalTable instanceof CommentableTable) {
             return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
+          }
+          if (originalTable != null) {
+            if (originalTable.getJdbcTableType() != org.apache.calcite.schema.Schema.TableType.VIEW) {
+              return new TableTypeCorrectingWrapper(table);
+            }
+            return table;
           }
         }
       }
@@ -383,6 +416,56 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       String comment = commentableTable.getColumnComment(columnName);
       LOGGER.debug("CommentableJdbcTableWrapper.getColumnComment({}) returning: {}", columnName, comment);
       return comment;
+    }
+  }
+
+  /**
+   * Minimal wrapper that corrects TABLE_TYPE from VIEW to TABLE.
+   *
+   * <p>Used when the DuckDB catalog has a view for an iceberg_scan/parquet_scan table
+   * but the corresponding FileSchema table is unavailable (e.g. IcebergTable init failed
+   * due to Hadoop/Kerberos issues). The view is an execution-layer detail; all such
+   * tables are semantically base tables and must report TABLE_TYPE = TABLE.
+   */
+  private static class TableTypeCorrectingWrapper
+      implements Table, org.apache.calcite.schema.TranslatableTable {
+    private final Table delegate;
+
+    TableTypeCorrectingWrapper(Table delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override public org.apache.calcite.rel.RelNode toRel(
+        org.apache.calcite.plan.RelOptTable.ToRelContext context,
+        org.apache.calcite.plan.RelOptTable relOptTable) {
+      if (delegate instanceof org.apache.calcite.schema.TranslatableTable) {
+        return ((org.apache.calcite.schema.TranslatableTable) delegate).toRel(context, relOptTable);
+      }
+      throw new IllegalStateException("Delegate is not TranslatableTable: " + delegate.getClass());
+    }
+
+    @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
+      return org.apache.calcite.schema.Schema.TableType.TABLE;
+    }
+
+    @Override public org.apache.calcite.rel.type.RelDataType getRowType(
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
+      return delegate.getRowType(typeFactory);
+    }
+
+    @Override public org.apache.calcite.schema.Statistic getStatistic() {
+      return delegate.getStatistic();
+    }
+
+    @Override public boolean isRolledUp(String column) {
+      return delegate.isRolledUp(column);
+    }
+
+    @Override public boolean rolledUpColumnValidInsideAgg(String column,
+        org.apache.calcite.sql.SqlCall call,
+        org.apache.calcite.sql.SqlNode parent,
+        org.apache.calcite.config.CalciteConnectionConfig config) {
+      return delegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
     }
   }
 }

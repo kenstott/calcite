@@ -130,6 +130,57 @@ public class DuckDBMetadataAuthorityTest {
     }
   }
 
+  /**
+   * When the parquet table IS in DuckDB's catalog (as a VIEW) but FileSchema returns a
+   * non-CommentableTable for it, the TABLE_TYPE must still be TABLE.
+   *
+   * <p>Regression for the production scenario where IcebergTable init fails (Hadoop/Kerberos
+   * {@code getSubject is not supported}) leaving the FileSchema table slot null while the
+   * DuckDB view is still registered.  In that case {@link
+   * org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchema#getTable} previously returned the raw
+   * {@link org.apache.calcite.adapter.jdbc.JdbcTable} (type=VIEW).  Now it falls through to
+   * {@code TableTypeCorrectingWrapper} which always reports TABLE.
+   *
+   * <p>This test verifies the fallback by using a parquet table where FileSchema still builds
+   * a real table (but even when the CommentableTable wrapping path is skipped, TABLE_TYPE
+   * must survive through the correcting wrapper).
+   */
+  @Test
+  void getTables_tableTypeIsTable_whenFileSchemaHasNonCommentableTable() throws Exception {
+    // Use a table name not in tableConstraints — no ConstraintAwareJdbcTable wrapping.
+    // The table goes straight through DuckDBJdbcSchema.getTable() and its fallback path.
+    createParquet("events.parquet",
+        "SELECT CAST(i AS INTEGER) AS event_id FROM generate_series(1, 2) AS t(i)");
+
+    // Model without tableConstraints for "events" — exercises the plain DuckDB->FileSchema path
+    String dir = tempDir.toFile().getAbsolutePath().replace("\\", "\\\\");
+    String model = "{"
+        + "\"version\":\"1.0\","
+        + "\"defaultSchema\":\"test\","
+        + "\"schemas\":[{"
+        + "  \"name\":\"test\","
+        + "  \"type\":\"custom\","
+        + "  \"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
+        + "  \"operand\":{"
+        + "    \"directory\":\"" + dir + "\","
+        + "    \"ephemeralCache\":true,"
+        + "    \"executionEngine\":\"duckdb\""
+        + "  }"
+        + "}]}";
+    Properties props = new Properties();
+    props.put("model", "inline:" + model);
+    BaseFileTest.applyEngineDefaults(props);
+    try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
+      DatabaseMetaData meta = conn.getMetaData();
+      try (ResultSet rs = meta.getTables(null, "test", "events", new String[]{"TABLE"})) {
+        assertTrue(rs.next(),
+            "events must appear as TABLE_TYPE=TABLE even without tableConstraints");
+        assertEquals("TABLE", rs.getString("TABLE_TYPE"),
+            "DuckDB view wrapper must report TABLE, not VIEW");
+      }
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
