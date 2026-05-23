@@ -789,6 +789,13 @@ get_heap_config() {
     _HEAP_MIN="1g"; _HEAP_MAX="2g"
     return
   fi
+  if [[ "$worker_id" == worker-dq-*-* ]]; then
+    # DQ rebuild workers: worker-dq-<schema>-<mode> → use schema's initial heap
+    local _dq_rest="${worker_id#worker-dq-}"  # e.g. "edu-historical"
+    local _dq_schema="${_dq_rest%-*}"          # e.g. "edu"
+    get_heap_config "worker-${_dq_schema}-initial"
+    return
+  fi
 
   # Allow env overrides to take precedence
   if [ -n "${ETL_HEAP_MIN:-}" ] && [ -n "${ETL_HEAP_MAX:-}" ]; then

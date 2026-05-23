@@ -79,6 +79,7 @@ fi
 RUN_DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$RUN_DIR/dq_${TIMESTAMP}.log"
+ETL_LOG_DIR=""  # set after rebuild ETL so error handler finds the right log
 
 S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
 
@@ -86,14 +87,30 @@ S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${R
 _SCRIPT_COMPLETE=false
 
 _collect_log_tail() {
-  local log="$1" lines="${2:-50}"
+  local log="$1" lines="${2:-30}"
   if [ -f "$log" ] && [ -s "$log" ]; then
-    echo "\`$log\`"
+    echo "<details><summary>\`$(basename "$log")\` — last ${lines} lines</summary>"
+    echo ""
     echo '```'
     tail -n "$lines" "$log"
     echo '```'
+    echo "</details>"
   else
-    echo "\`$log\` (not found or empty)"
+    echo "_\`$(basename "$log")\` not found or empty_"
+  fi
+}
+
+# Extract a one-line root-cause summary from a log file.
+# Greps for the first Exception/Error/OOM line and returns it.
+_extract_root_cause() {
+  local log="$1"
+  [ -f "$log" ] || { echo "(log not found)"; return; }
+  local line
+  line=$(grep -m1 -E "OutOfMemoryError|Exception|ERROR |FATAL |BUILD FAILURE" "$log" 2>/dev/null || true)
+  if [ -n "$line" ]; then
+    echo "${line:0:200}"
+  else
+    echo "(no error pattern found in log)"
   fi
 }
 
@@ -104,8 +121,6 @@ _file_script_error_issue() {
     log_info "$WORKER_ID: gh not found in PATH ($PATH) — skipping issue filing"
     return
   fi
-  # Prefer GH_TOKEN/GITHUB_TOKEN (sourced from .env.prod); only do a live
-  # auth-status check when neither is set, so nohup runs don't hit network.
   if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
     if ! gh auth status --hostname github.com >/dev/null 2>&1; then
       log_info "$WORKER_ID: gh not authenticated (no GH_TOKEN, no stored credential) — skipping issue filing"
@@ -115,26 +130,31 @@ _file_script_error_issue() {
   gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
   gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
 
-  # Collect log tails for inline diagnostics
-  local dq_log_section etl_log_section latest_etl
-  dq_log_section=$(_collect_log_tail "$LOG_FILE" 50)
-  latest_etl=$(ls -t "$RUN_DIR"/etl_*.log 2>/dev/null | head -1 || true)
+  # Locate the ETL log — it lands in runs/worker-<schema>-initial/, not in RUN_DIR
+  local latest_etl=""
+  if [ -n "${ETL_LOG_DIR:-}" ]; then
+    latest_etl=$(ls -t "${ETL_LOG_DIR}"/etl_*.log 2>/dev/null | head -1 || true)
+  fi
+  # Fallback: also check RUN_DIR in case a future code path writes there
+  if [ -z "$latest_etl" ]; then
+    latest_etl=$(ls -t "$RUN_DIR"/etl_*.log 2>/dev/null | head -1 || true)
+  fi
+
+  # Extract root cause from the most relevant log
+  local root_cause_log="${latest_etl:-$LOG_FILE}"
+  local root_cause
+  root_cause=$(_extract_root_cause "$root_cause_log")
+
+  # Build log sections (collapsible so the issue is readable without scrolling)
+  local log_sections=""
   if [ -n "$latest_etl" ]; then
-    etl_log_section=$(_collect_log_tail "$latest_etl" 50)
-  else
-    etl_log_section=""
+    log_sections="$(_collect_log_tail "$latest_etl" 40)"$'\n\n'
+  fi
+  if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+    log_sections="${log_sections}$(_collect_log_tail "$LOG_FILE" 30)"
   fi
 
-  local log_section="### DQ Log (last 50 lines)
-
-${dq_log_section}"
-  if [ -n "$etl_log_section" ]; then
-    log_section="${log_section}
-
-### ETL Log (last 50 lines)
-
-${etl_log_section}"
-  fi
+  local issue_title="[DQ] ${SCHEMA}: ERROR — ${root_cause:0:80}"
 
   local open_issue
   open_issue=$(gh issue list \
@@ -150,19 +170,28 @@ ${etl_log_section}"
       --repo kenstott/calcite \
       --body "**Script error ${RUN_DATE}** — ${detail}
 
-${log_section}" \
+**Root cause:** \`${root_cause}\`
+
+${log_sections}" \
       && log_info "$WORKER_ID: commented on DQ issue #${open_issue}" \
       || log_info "$WORKER_ID: WARNING: failed to comment on issue #${open_issue}"
   else
     gh issue create \
       --repo kenstott/calcite \
-      --title "[DQ] ${SCHEMA}: ERROR — script failed" \
+      --title "${issue_title}" \
       --label "dq" \
       --label "dq-fail" \
       --body "## DQ Script Error: \`${SCHEMA}\`
 
 **Date:** ${RUN_DATE}
 **Mode:** ${MODE}
+**Worker:** \`${WORKER_ID}\`
+
+## Root Cause
+
+\`\`\`
+${root_cause}
+\`\`\`
 
 ## Detail
 
@@ -170,7 +199,7 @@ ${detail}
 
 ## Logs
 
-${log_section}" \
+${log_sections}" \
       && log_info "$WORKER_ID: created DQ error issue" \
       || log_info "$WORKER_ID: WARNING: gh issue create failed"
   fi
@@ -233,6 +262,7 @@ if $REBUILD; then
     exit 1
   fi
   run_etl "$REBUILD_MODEL" "worker-${SCHEMA}-initial"
+  ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-initial"
   log_info "$WORKER_ID: --rebuild: historical ETL complete"
 
   # 5. Optionally run daily (current-year) ETL pass before DQ.
@@ -243,6 +273,7 @@ if $REBUILD; then
     unset GOVDATA_START_YEAR
     if generate_single_schema_model "$SCHEMA" "$DAILY_MODEL" 2>/dev/null; then
       run_etl "$DAILY_MODEL" "worker-${SCHEMA}-daily"
+      ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-daily"
       log_info "$WORKER_ID: --include-daily: daily ETL complete"
     else
       log_info "$WORKER_ID: --include-daily: no daily model for schema=$SCHEMA — skipping"

@@ -242,6 +242,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
     end: current
+    dataLag: 1
 
   # EPA AQS pollutant parameter codes
   aqi_pollutants: &aqi_pollutants

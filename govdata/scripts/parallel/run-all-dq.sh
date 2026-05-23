@@ -27,6 +27,7 @@ DRY_RUN=false
 REBUILD=false
 SCHEMA_FILTER=""
 START_YEAR=""
+FROM_SCHEMA=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,6 +48,10 @@ while [[ $# -gt 0 ]]; do
     --schemas)
       shift
       SCHEMA_FILTER="${1:?--schemas requires a comma-separated list}"
+      ;;
+    --from-schema)
+      shift
+      FROM_SCHEMA="${1:?--from-schema requires a schema name}"
       ;;
     --help|-h)
       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -87,6 +92,22 @@ fi
 if [ ${#ALL_SCHEMAS[@]} -eq 0 ]; then
   echo "ERROR: no *_dq.sql scripts found in $SCRIPTS_DIR" >&2
   exit 1
+fi
+
+# Apply --from-schema: drop all schemas before the named one
+if [ -n "$FROM_SCHEMA" ]; then
+  found=false
+  filtered=()
+  for s in "${ALL_SCHEMAS[@]}"; do
+    if [ "$s" = "$FROM_SCHEMA" ]; then found=true; fi
+    $found && filtered+=("$s")
+  done
+  if ! $found; then
+    echo "ERROR: --from-schema '$FROM_SCHEMA' not found in schema list: ${ALL_SCHEMAS[*]}" >&2
+    exit 1
+  fi
+  ALL_SCHEMAS=("${filtered[@]}")
+  log_info "run-all-dq: --from-schema=$FROM_SCHEMA — running ${#ALL_SCHEMAS[@]} schema(s): ${ALL_SCHEMAS[*]}"
 fi
 
 log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD schemas=${ALL_SCHEMAS[*]}"
