@@ -25,17 +25,8 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableScan;
-import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexLiteral;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.tools.RelBuilder;
-
 import org.immutables.value.Value;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -102,78 +93,6 @@ public class HLLCountDistinctRule extends RelRule<HLLCountDistinctRule.Config> {
     return null;
   }
 
-  @SuppressWarnings("deprecation")
-  private AggregateCall createConstantAgg(AggregateCall original, long value,
-      RexBuilder rexBuilder, RelDataTypeFactory typeFactory) {
-    // Disabled - use SimpleHLLCountDistinctRule instead
-    return original;
-  }
-
-  private RelNode createHLLAggregate(Aggregate original, List<AggregateCall> newAggCalls,
-      RelNode input, RelBuilder builder) {
-
-    // Check if we have any HLL optimizations available
-    boolean hasHLLOptimization = false;
-    List<Long> hllEstimates = new ArrayList<>();
-
-    for (AggregateCall aggCall : original.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
-        Long estimate = getHLLEstimate(input, aggCall);
-        if (estimate != null) {
-          hasHLLOptimization = true;
-          hllEstimates.add(estimate);
-        } else {
-          hllEstimates.add(null);
-        }
-      } else {
-        hllEstimates.add(null);
-      }
-    }
-
-    if (!hasHLLOptimization) {
-      return null; // No HLL sketches available
-    }
-
-    // For simple aggregates without GROUP BY, create a VALUES node with the HLL results
-    if (original.getGroupSet().isEmpty()) {
-      RexBuilder rexBuilder = original.getCluster().getRexBuilder();
-      RelDataTypeFactory typeFactory = original.getCluster().getTypeFactory();
-
-      // Build row type for the VALUES node
-      RelDataTypeFactory.Builder typeBuilder = typeFactory.builder();
-      List<RexLiteral> values = new ArrayList<>();
-
-      for (int i = 0; i < original.getAggCallList().size(); i++) {
-        Long estimate = hllEstimates.get(i);
-        if (estimate != null) {
-          RelDataType bigIntType = typeFactory.createSqlType(SqlTypeName.BIGINT);
-          AggregateCall aggCall = original.getAggCallList().get(i);
-          String fieldName = aggCall.getName() != null ? aggCall.getName() : "EXPR$" + i;
-
-          typeBuilder.add(fieldName, bigIntType);
-          values.add((RexLiteral) rexBuilder.makeLiteral(estimate, bigIntType, true));
-        } else {
-          // Fallback - can't optimize this query
-          return null;
-        }
-      }
-
-      RelDataType rowType = typeBuilder.build();
-
-      // Create VALUES node with single tuple containing HLL estimates
-      org.apache.calcite.rel.logical.LogicalValues valuesNode =
-          org.apache.calcite.rel.logical.LogicalValues.create(
-              original.getCluster(),
-              rowType,
-              com.google.common.collect.ImmutableList.of(
-                  com.google.common.collect.ImmutableList.copyOf(values)));
-
-      return valuesNode;
-    }
-
-    // For GROUP BY queries, this is more complex - return null for now
-    return null;
-  }
 
   /** Configuration for HLLCountDistinctRule. */
   @Value.Immutable(singleton = false)
