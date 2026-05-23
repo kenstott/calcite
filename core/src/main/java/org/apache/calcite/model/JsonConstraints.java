@@ -27,6 +27,8 @@ import org.apache.calcite.util.mapping.IntPair;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -240,7 +242,7 @@ public class JsonConstraints {
         if (sourceTable == null) {
           // If not specified, use the provided schema and table names
           if (schemaName != null && tableName != null) {
-            sourceTable = List.of(schemaName, tableName);
+            sourceTable = Arrays.asList(schemaName, tableName);
           } else {
             // Fallback to empty list if names not provided
             sourceTable = new ArrayList<>();
@@ -252,7 +254,7 @@ public class JsonConstraints {
         List<String> resolvedTargetTable = targetTable;
         if (targetTable.size() == 1 && schemaName != null) {
           // Only table name provided, prepend the schema
-          resolvedTargetTable = List.of(schemaName, targetTable.get(0));
+          resolvedTargetTable = Arrays.asList(schemaName, targetTable.get(0));
         }
 
         RelReferentialConstraint fk =
@@ -286,7 +288,9 @@ public class JsonConstraints {
    * @return A configuration map with the primary key
    */
   public static Map<String, Object> primaryKey(String... keyColumns) {
-    return Map.of("primaryKey", List.of(keyColumns));
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("primaryKey", Arrays.asList(keyColumns));
+    return map;
   }
 
   /**
@@ -303,9 +307,10 @@ public class JsonConstraints {
       String targetSchema,
       String targetTable,
       List<String> targetColumns) {
-    return Map.of(
-        "columns", columns,
-        "targetTable", List.of(targetSchema, targetTable),
-        "targetColumns", targetColumns);
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("columns", columns);
+    map.put("targetTable", Arrays.asList(targetSchema, targetTable));
+    map.put("targetColumns", targetColumns);
+    return map;
   }
 }
