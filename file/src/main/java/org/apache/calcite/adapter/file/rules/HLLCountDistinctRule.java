@@ -16,18 +16,11 @@
  */
 package org.apache.calcite.adapter.file.rules;
 
-// Removed unused imports
-import org.apache.calcite.adapter.file.statistics.HLLSketchCache;
-import org.apache.calcite.adapter.file.statistics.HyperLogLogSketch;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
-import org.apache.calcite.rel.core.AggregateCall;
-import org.apache.calcite.rel.core.TableScan;
 import org.immutables.value.Value;
-
-import java.util.List;
 
 /**
  * Rule that replaces COUNT(DISTINCT) operations with pre-computed HLL sketch lookups.
@@ -48,51 +41,6 @@ public class HLLCountDistinctRule extends RelRule<HLLCountDistinctRule.Config> {
     // The HLL optimization rule needs to be updated to match the current Calcite API
     return;
   }
-
-  private Long getHLLEstimate(RelNode input, AggregateCall aggCall) {
-    // Find the table scan in the input
-    TableScan tableScan = findTableScan(input);
-    if (tableScan == null) {
-      return null;
-    }
-
-    // Get column name from the aggregate call
-    if (aggCall.getArgList().isEmpty()) {
-      return null;
-    }
-
-    int columnIndex = aggCall.getArgList().get(0);
-    String columnName = input.getRowType().getFieldNames().get(columnIndex);
-
-    // Get schema and table names from qualified name
-    List<String> qualifiedName = tableScan.getTable().getQualifiedName();
-    String schemaName = qualifiedName.size() >= 2 ? qualifiedName.get(qualifiedName.size() - 2) : "";
-    String tableName = qualifiedName.get(qualifiedName.size() - 1);
-
-    // Use HLL sketch cache for fast retrieval with fully qualified name
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = cache.getSketch(schemaName, tableName, columnName);
-
-    if (sketch != null) {
-      return sketch.getEstimate();
-    }
-
-    return null;
-  }
-
-  private TableScan findTableScan(RelNode node) {
-    if (node instanceof TableScan) {
-      return (TableScan) node;
-    }
-    for (RelNode input : node.getInputs()) {
-      TableScan scan = findTableScan(input);
-      if (scan != null) {
-        return scan;
-      }
-    }
-    return null;
-  }
-
 
   /** Configuration for HLLCountDistinctRule. */
   @Value.Immutable(singleton = false)
