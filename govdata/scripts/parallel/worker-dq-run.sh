@@ -196,7 +196,7 @@ if $REBUILD; then
     log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
     exit 1
   fi
-  run_etl "$REBUILD_MODEL" "$WORKER_ID"
+  run_etl "$REBUILD_MODEL" "worker-${SCHEMA}-initial"
   log_info "$WORKER_ID: --rebuild: historical ETL complete"
 
   # 5. Optionally run daily (current-year) ETL pass before DQ.
@@ -206,7 +206,7 @@ if $REBUILD; then
     export GOVDATA_RUN_MODE="daily"
     unset GOVDATA_START_YEAR
     if generate_single_schema_model "$SCHEMA" "$DAILY_MODEL" 2>/dev/null; then
-      run_etl "$DAILY_MODEL" "${WORKER_ID}-daily"
+      run_etl "$DAILY_MODEL" "worker-${SCHEMA}-daily"
       log_info "$WORKER_ID: --include-daily: daily ETL complete"
     else
       log_info "$WORKER_ID: --include-daily: no daily model for schema=$SCHEMA — skipping"
