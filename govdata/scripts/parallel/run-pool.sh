@@ -320,17 +320,41 @@ launch_worker() {
 
   local log_dir="$SCRIPT_DIR/runs/${id}"
   local log_file="$log_dir/launch.log"
+  local pid_file="$PID_DIR/${id}.pid"
+  local exit_file="$PID_DIR/${id}.exit"
   mkdir -p "$log_dir"
+  rm -f "$pid_file" "$exit_file"
 
-  # Give each worker its own process group so 'kill 0' in the worker
-  # trap only kills that worker's processes, not the pool runner or siblings.
+  # Launch in a new session so workers survive terminal disconnect.
+  # The wrapper writes its own $$ before exec'ing so cleanup() gets the real
+  # PGID — setsid may fork internally when the caller is a session leader,
+  # making $! the dead parent rather than the actual worker.
   if command -v setsid >/dev/null 2>&1; then
-    setsid nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1 &
+    setsid bash -c '
+      echo $$ > "$1"
+      nohup bash "$2" "$3" "$4" >> "$5" 2>&1
+      echo $? > "$6"
+    ' -- "$pid_file" "$script" "$schema" "$mode" "$log_file" "$exit_file" &
   else
-    (exec nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1) &
+    # macOS / no setsid: subshell gives its own PGID via job control
+    ( echo $BASHPID > "$pid_file"
+      exec nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1
+    ) &
+    echo $? > "$exit_file"
   fi
-  local pid=$!
-  echo "$pid" > "$PID_DIR/${id}.pid"
+
+  # Wait up to 2s for the worker to write its actual PID
+  local pid="" _i=0
+  while [ -z "$pid" ] && [ "$_i" -lt 20 ]; do
+    sleep 0.1
+    pid=$(cat "$pid_file" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
+    [[ "$pid" =~ ^[0-9]+$ ]] || pid=""
+    _i=$((_i + 1))
+  done
+  if [ -z "$pid" ]; then
+    log_info "WARNING: could not read PID for $id — falling back to \$!"
+    pid=$!
+  fi
 
   active_pids+=("$pid")
   active_labels+=("$id")
@@ -464,13 +488,20 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       elapsed=$(( now - start ))
       mins=$((elapsed / 60))
 
-      if wait "$pid" 2>/dev/null; then
+      # Use exit code file rather than wait() — the worker may not be a direct
+      # child of this shell when setsid forked internally.
+      local exit_code
+      exit_code=$(cat "$PID_DIR/${id}.exit" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
+      [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
+
+      if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
       else
         ((failed_count++)) || true
         failed_list+=("$id")
-        log_file="$SCRIPT_DIR/runs/${id}/launch.log"
+        local log_file="$SCRIPT_DIR/runs/${id}/launch.log"
+        local last_err
         last_err=$(grep -i -E "error|exception|fatal" "$log_file" 2>/dev/null | tail -1 | cut -c1-120 || true)
         log_info "$id FAILED (${mins}m): ${last_err:-check log}"
       fi
