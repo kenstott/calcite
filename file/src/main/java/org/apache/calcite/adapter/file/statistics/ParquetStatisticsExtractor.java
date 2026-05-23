@@ -140,7 +140,6 @@ public class ParquetStatisticsExtractor {
     private Object maxValue;
     private long nullCount = 0;
     private long totalCount = 0;
-    private Long exactDistinctCount; // From Parquet metadata if available
     private HyperLogLogSketch hllSketch;
 
     public ColumnStatsBuilder(String columnName) {

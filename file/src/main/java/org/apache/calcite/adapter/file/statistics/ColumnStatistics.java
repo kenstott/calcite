@@ -169,7 +169,7 @@ public class ColumnStatistics {
   }
 
   @SuppressWarnings("unchecked")
-  private double calculateRelativePosition(Object min, Object max, Object value) {
+  private static double calculateRelativePosition(Object min, Object max, Object value) {
     // Handle different data types
     if (min instanceof Number && max instanceof Number && value instanceof Number) {
       double minNum = ((Number) min).doubleValue();

@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -84,7 +85,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
   // Store constraint metadata from model files
   private Map<String, Map<String, Object>> tableConstraints;
-  private List<JsonTable> tableDefinitions;
 
   /** Name of the column that is implicitly created in a CSV stream table
    * to hold the data arrival time. */
@@ -132,7 +132,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       File debugFile = new File(aperioRoot, "debug-model-" + schemaName.toLowerCase() + ".json");
       ObjectMapper mapper = new ObjectMapper();
       mapper.enable(SerializationFeature.INDENT_OUTPUT);
-      try (FileWriter writer = new FileWriter(debugFile)) {
+      try (FileWriter writer = new FileWriter(debugFile, StandardCharsets.UTF_8)) {
         writer.write(mapper.writeValueAsString(debugModel));
       }
       LOGGER.debug("Wrote debug model to: {}", debugFile.getAbsolutePath());
@@ -1422,7 +1422,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
-    this.tableDefinitions = tableDefinitions;
     LOGGER.debug("Received constraint metadata for {} tables",
         tableConstraints != null ? tableConstraints.size() : 0);
   }

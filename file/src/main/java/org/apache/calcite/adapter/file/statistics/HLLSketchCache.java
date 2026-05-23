@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -155,7 +156,7 @@ public class HLLSketchCache {
     // Cache miss or expired - load from disk
     stats.recordMiss();
     LOGGER.debug("Cache miss for HLL sketch: {}", fullKey);
-    return loadFromDisk(fullKey, tableName, columnName);
+    return loadFromDisk(tableName, columnName);
   }
 
   /**
@@ -292,7 +293,7 @@ public class HLLSketchCache {
     }
   }
 
-  private HyperLogLogSketch loadFromDisk(String key, String tableName, String columnName) {
+  private static HyperLogLogSketch loadFromDisk(String tableName, String columnName) {
     // Get cache directory from system property
     String cacheDirPath = System.getProperty("calcite.file.statistics.cache.directory");
     if (cacheDirPath == null) {
@@ -344,44 +345,44 @@ public class HLLSketchCache {
    * Cache statistics tracking.
    */
   public static class CacheStats {
-    private volatile long hits = 0;
-    private volatile long misses = 0;
+    private final AtomicLong hits = new AtomicLong(0);
+    private final AtomicLong misses = new AtomicLong(0);
 
     void recordHit() {
-      hits++;
+      hits.incrementAndGet();
     }
 
     void recordMiss() {
-      misses++;
+      misses.incrementAndGet();
     }
 
     public long getHits() {
-      return hits;
+      return hits.get();
     }
 
     public long getMisses() {
-      return misses;
+      return misses.get();
     }
 
     public long getRequests() {
-      return hits + misses;
+      return hits.get() + misses.get();
     }
 
     public double getHitRate() {
       long total = getRequests();
-      return total == 0 ? 0.0 : (double) hits / total;
+      return total == 0 ? 0.0 : (double) hits.get() / total;
     }
 
     CacheStats snapshot() {
       CacheStats copy = new CacheStats();
-      copy.hits = this.hits;
-      copy.misses = this.misses;
+      copy.hits.set(this.hits.get());
+      copy.misses.set(this.misses.get());
       return copy;
     }
 
     @Override public String toString() {
       return String.format("CacheStats{hits=%d, misses=%d, hitRate=%.2f%%}",
-                          hits, misses, getHitRate() * 100);
+                          hits.get(), misses.get(), getHitRate() * 100);
     }
   }
 }

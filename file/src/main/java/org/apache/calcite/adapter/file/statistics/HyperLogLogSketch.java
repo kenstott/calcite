@@ -258,7 +258,7 @@ public class HyperLogLogSketch implements Serializable {
     return count;
   }
 
-  private double calculateAlpha(int m) {
+  private static double calculateAlpha(int m) {
     switch (m) {
       case 16:
         return 0.673;

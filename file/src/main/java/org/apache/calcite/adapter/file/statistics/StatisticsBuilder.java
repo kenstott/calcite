@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -198,7 +199,8 @@ public class StatisticsBuilder {
     Map<String, HyperLogLogSketch> hllSketches = new HashMap<>();
     long totalRows = 0;
 
-    try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(csvFile))) {
+    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+        new java.io.InputStreamReader(new java.io.FileInputStream(csvFile), StandardCharsets.UTF_8))) {
       String headerLine = reader.readLine();
       if (headerLine == null) {
         return TableStatistics.createBasicEstimate(0);
@@ -289,30 +291,12 @@ public class StatisticsBuilder {
     return new TableStatistics(totalRows, fileSize, finalColumnStats, sourceHash);
   }
 
-  private boolean shouldGenerateHLL(ColumnStatsBuilder builder, long totalRows) {
-    // Only generate HLL if enabled in configuration
-    if (!config.isHllEnabled()) {
-      return false;
-    }
-
-    // Generate HLL if:
-    // 1. Estimated distinct count is above threshold
-    // 2. Column doesn't have precise distinct count from Parquet metadata
-    long estimatedDistinct = builder.getEstimatedDistinctCount(totalRows);
-    // For tests, use a lower threshold or check column names
-    String columnName = builder.columnName;
-    boolean isHighCardinalityColumn = columnName.contains("id") || columnName.contains("name");
-
-    return (estimatedDistinct > config.getHllThreshold() || isHighCardinalityColumn)
-           && !builder.hasPreciseDistinctCount();
-  }
-
-  private String calculateSourceHash(File sourceFile) {
+  private static String calculateSourceHash(File sourceFile) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(sourceFile.getAbsolutePath().getBytes());
-      md.update(Long.toString(sourceFile.lastModified()).getBytes());
-      md.update(Long.toString(sourceFile.length()).getBytes());
+      md.update(sourceFile.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+      md.update(Long.toString(sourceFile.lastModified()).getBytes(StandardCharsets.UTF_8));
+      md.update(Long.toString(sourceFile.length()).getBytes(StandardCharsets.UTF_8));
 
       byte[] hash = md.digest();
       StringBuilder sb = new StringBuilder();
@@ -325,7 +309,7 @@ public class StatisticsBuilder {
     }
   }
 
-  private File getStatisticsFile(File sourceFile, File cacheDir) {
+  private static File getStatisticsFile(File sourceFile, File cacheDir) {
     // Stats should go in .aperio/<schema>/.stats, not under .parquet_cache
     // The cacheDir passed in is .aperio/<schema>/.parquet_cache, so we need to go up one level
     File aperioSchemaDir = cacheDir.getParentFile(); // This gives us .aperio/<schema>/

@@ -186,7 +186,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * If an explicit name is provided, use it as-is.
    * If the name is derived from a file path, apply casing transformations.
    */
-  private String getTableName(String explicitName, String derivedName, String casing) {
+  private static String getTableName(String explicitName, String derivedName, String casing) {
     if (explicitName != null) {
       // Explicit name - use as-is without casing transformation
       LOGGER.debug("getTableName: preserving explicit name '{}' (derivedName='{}', casing='{}')",
@@ -220,7 +220,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final @Nullable StorageProvider storageProvider;
   private final @Nullable Boolean flatten;
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
-  private final boolean primeCache;
   private final @Nullable String comment;
   private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
   // Cache directories use schema name for stable, predictable paths
@@ -565,7 +564,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     this.storageConfig = storageConfig;
     this.flatten = flatten;
     this.csvTypeInferenceConfig = CsvTypeInferrer.TypeInferenceConfig.fromMap(csvTypeInference);
-    this.primeCache = primeCache;
     this.comment = comment;
 
     // Schema name is used for cache directory naming to ensure stable, predictable paths
@@ -619,6 +617,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * This is needed because DUCKDB bypasses the FileSchema table layer and reads
    * files directly, so the normal refresh-on-scan mechanism doesn't work.
    */
+  @SuppressWarnings("FutureReturnValueIgnored")
   private void startPeriodicRefresh() {
     Duration interval = RefreshInterval.parse(refreshInterval);
     if (interval == null) {
@@ -810,7 +809,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    *
    * @param parentSchema    Parent schema
    * @param name            Schema name
-   * @param baseDirectory   Base directory to look for relative files, or null
+   * @param sourceDirectory Source directory to look for relative files, or null
    * @param tables          List containing table identifiers, or null
    * @param engineConfig    Execution engine configuration
    * @param recursive       Whether to recursively scan subdirectories
@@ -837,7 +836,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    *
    * @param parentSchema    Parent schema
    * @param name            Schema name
-   * @param baseDirectory   Base directory to look for relative files, or null
+   * @param sourceDirectory Source directory to look for relative files, or null
    * @param tables          List containing table identifiers, or null
    * @param engineConfig    Execution engine configuration
    * @param recursive       Whether to recursively scan subdirectories
@@ -903,16 +902,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
-   * Looks for a suffix on a string and returns
-   * either the string with the suffix removed
-   * or the original string.
-   */
-  private static String trim(String s, String suffix) {
-    String trimmed = trimOrNull(s, suffix);
-    return trimmed != null ? trimmed : s;
-  }
-
-  /**
    * Applies the configured casing transformation and sanitization to an identifier.
    */
   private String applyCasing(String identifier, String casing) {
@@ -926,11 +915,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * either the string with the suffix removed
    * or null.
    */
-  private static @Nullable String trimOrNull(String s, String suffix) {
-    return s.endsWith(suffix)
-        ? s.substring(0, s.length() - suffix.length())
-        : null;
-  }
+
 
 
   /**
@@ -1136,7 +1121,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       org.apache.calcite.jdbc.JavaTypeFactoryImpl typeFactory =
           new org.apache.calcite.jdbc.JavaTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
       List<Object> flattenedData = jsonTable.getDataList(typeFactory);
-      org.apache.calcite.rel.type.RelDataType rowType = jsonTable.getRowType(typeFactory);
 
       // Create the flattened JSON filename
       // Use the original filename so it replaces the original file in the conversion pipeline
@@ -1185,7 +1169,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         File conversionsFile = new File(operatingCacheDirectory, ".conversions.json");
         if (conversionsFile.exists()) {
           LOGGER.info("Contents of .conversions.json after flattening:");
-          java.nio.file.Files.lines(conversionsFile.toPath()).forEach(line -> LOGGER.info("  {}", line));
+          try (java.util.stream.Stream<String> lines = java.nio.file.Files.lines(conversionsFile.toPath())) {
+            lines.forEach(line -> LOGGER.info("  {}", line));
+          }
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to log conversions.json content: {}", e.getMessage());
@@ -1224,6 +1210,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   /**
    * Converts local supported file types to JSON.
    */
+  @SuppressWarnings("unused")
   private void convertLocalSupportedFilesToJson(File sourceDir) {
     // Build glob pattern for all convertible file types
     // We need to search separately for root and recursive patterns due to glob syntax limitations
@@ -1345,7 +1332,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         File conversionsFile = new File(operatingCacheDirectory, ".conversions.json");
         if (conversionsFile.exists()) {
           LOGGER.info("Contents of .conversions.json after bulk conversion:");
-          java.nio.file.Files.lines(conversionsFile.toPath()).forEach(line -> LOGGER.info("  {}", line));
+          try (java.util.stream.Stream<String> lines = java.nio.file.Files.lines(conversionsFile.toPath())) {
+            lines.forEach(line -> LOGGER.info("  {}", line));
+          }
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to log conversions.json content after bulk conversion: {}", e.getMessage());
@@ -1515,6 +1504,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * @param recursive Whether to search recursively
    * @return Glob pattern string
    */
+  @SuppressWarnings("unused")
   private String buildConvertibleFilesGlobPattern(boolean recursive) {
     // Remove dots from extensions and join with commas
     StringBuilder extensions = new StringBuilder();
@@ -1754,9 +1744,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       // Get files using glob or regular directory scanning
       File[] files = getFilesForProcessing();
       LOGGER.debug("[FileSchema] Found {} files for processing", files.length);
-      // Track table names to handle conflicts
-      Map<String, String> tableNameToFileType = new HashMap<>();
-
       // Build a map from table name to table; each file becomes a table.
       for (File file : files) {
         // Skip files that were already processed during tableDef processing
@@ -2045,7 +2032,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           LOGGER.debug("CSV file {} -> table name: {}", source.path(), tableName);
-          tableNameToFileType.put(tableName, "csv");
           if (addTable(builder, source, tableName, null)) {
             registeredTableNames.add(tableName);
           }
@@ -2065,7 +2051,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             LOGGER.debug("Table name '{}' already exists, using disambiguated name '{}'",
                 baseName, tableName);
           }
-          tableNameToFileType.put(tableName, "tsv");
           if (addTable(builder, source, tableName, null)) {
             registeredTableNames.add(tableName);
           }
@@ -2767,10 +2752,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Check if JSONPath extraction is configured
         if (tableDef != null && tableDef.containsKey("jsonSearchPaths")) {
           LOGGER.info("Using JSONPath extraction for source: {}", source.path());
-
-          // Get refresh interval if configured
-          String jsonRefreshInterval = (String) tableDef.get("refreshInterval");
-          Duration jsonEffectiveInterval = RefreshInterval.getEffectiveInterval(jsonRefreshInterval, this.refreshInterval);
 
           // Create JsonSearchConfig from table definition
           JsonSearchConfig config = JsonSearchConfig.fromTableDefinition(tableDef);
@@ -3505,15 +3486,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
-   * Creates an enhanced CSV table with execution engine support.
-   */
-  private org.apache.calcite.schema.Table createEnhancedCsvTable(
-      Source source,
-      org.apache.calcite.rel.type.@Nullable RelProtoDataType protoRowType) {
-    return createEnhancedCsvTable(source, protoRowType, null, null);
-  }
-
-  /**
    * Creates an enhanced CSV table with execution engine and refresh support.
    */
   private org.apache.calcite.schema.Table createEnhancedCsvTable(
@@ -3565,23 +3537,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
       return new CsvTranslatableTable(source, protoRowType, columnNameCasing, csvTypeInferenceConfig);
     }
-  }
-
-  /**
-   * Creates an enhanced JSON table with execution engine support.
-   */
-  private org.apache.calcite.schema.Table createEnhancedJsonTable(
-      Source source) {
-    return createEnhancedJsonTable(source, null, null, null);
-  }
-
-  /**
-   * Creates an enhanced JSON table with execution engine and refresh support.
-   */
-  private org.apache.calcite.schema.Table createEnhancedJsonTable(
-      Source source,
-      String tableName, @Nullable String tableRefreshInterval) {
-    return createEnhancedJsonTable(source, tableName, tableRefreshInterval, null);
   }
 
   /**
@@ -3804,7 +3759,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Use the AlternatePartitionMaterializer to create the data files
     // Note: Uses operatingCacheDirectory for local operations (incremental tracker, etc.)
-    int currentYear = java.time.Year.now().getValue();
+    int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     int startYear = 2000;  // Default start year for partition materialization
     int endYear = currentYear;
     org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer materializer =
@@ -4434,15 +4389,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern.substring(3));
         }
         final PathMatcher finalRootMatcher = rootMatcher;
-        java.nio.file.Files.walk(basePath)
-            .filter(java.nio.file.Files::isRegularFile)
-            .forEach(p -> {
-              java.nio.file.Path relativePath = basePath.relativize(p);
-              if (matcher.matches(relativePath)
-                  || (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
-                result.add(p.toString());
-              }
-            });
+        try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(basePath)) {
+          walk.filter(java.nio.file.Files::isRegularFile)
+              .forEach(p -> {
+                java.nio.file.Path relativePath = basePath.relativize(p);
+                if (matcher.matches(relativePath)
+                    || (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
+                  result.add(p.toString());
+                }
+              });
+        }
         LOGGER.debug("findMatchingFiles: local fallback found {} files", result.size());
         return result;
       } catch (IOException e) {
@@ -5368,7 +5324,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     File modelFile = new File(operatingCacheDirectory, ".generated-model.json");
 
-    try (FileWriter writer = new FileWriter(modelFile)) {
+    try (FileWriter writer = new FileWriter(modelFile, java.nio.charset.StandardCharsets.UTF_8)) {
       writer.write("{\n");
       writer.write("  \"version\": \"1.0\",\n");
       writer.write("  \"defaultSchema\": \"" + name + "\",\n");
@@ -5479,19 +5435,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       LOGGER.warn("Failed to store explicit table mapping for '{}': {}", explicitTableName, e.getMessage());
     }
   }
-
-  /**
-   * Gets the explicit table name for a source file, if any.
-   */
-  private String getExplicitTableName(File sourceFile) {
-    try {
-      String sourceFilePath = sourceFile.getCanonicalPath();
-      return explicitTableMappings.get(sourceFilePath);
-    } catch (Exception e) {
-      return null;
-    }
-  }
-
 
   /**
    * Gets the base directory for this schema.
@@ -5878,7 +5821,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * @param tableName the table name for logging
    * @return the list of field configurations or null if none found
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "unused"})
   private static List<Map<String, Object>> extractFieldConfigurations(Map<String, Object> tableDef, String tableName) {
     if (tableDef == null) {
       return null;
