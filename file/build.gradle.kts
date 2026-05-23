@@ -129,6 +129,21 @@ val annotationProcessorMain by tasks.registering(JavaCompile::class) {
     configureAnnotationSet(sourceSets.main.get())
 }
 
+// SIMDColumnBatch and AdaptiveColumnBatch use jdk.incubator.vector (JDK 16+).
+// On older JDKs we exclude them from compilation; they are SIMD optimizations only.
+if (JavaVersion.current() >= JavaVersion.VERSION_16) {
+    tasks.named<JavaCompile>("compileJava") {
+        options.compilerArgs.add("--add-modules=jdk.incubator.vector")
+    }
+    tasks.named<JavaCompile>("compileTestJava") {
+        options.compilerArgs.add("--add-modules=jdk.incubator.vector")
+    }
+} else {
+    sourceSets.main.get().java.exclude("**/execution/arrow/SIMDColumnBatch.java")
+    sourceSets.main.get().java.exclude("**/execution/arrow/AdaptiveColumnBatch.java")
+    sourceSets.test.get().java.exclude("**/execution/AdaptiveColumnBatchTest.java")
+}
+
 ide {
     fun generatedSource(compile: TaskProvider<JavaCompile>) {
         project.rootProject.configure<org.gradle.plugins.ide.idea.model.IdeaModel> {
