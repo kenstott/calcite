@@ -290,9 +290,12 @@ public class McpServer {
 
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
-        reportProps.set("body", prop("string",
-            "Full issue description: include the query that failed, the error message, "
-            + "schema and table names, and any relevant context."));
+        reportProps.set(
+            "body",
+            prop(
+                "string",
+                "Full issue description: include the query that failed, the error message, "
+                    + "schema and table names, and any relevant context."));
         tools.add(
             tool("report_issue",
             "Record a data quality issue, query error, or missing data to a local issue log. "
@@ -301,8 +304,11 @@ public class McpServer {
             schema(reportProps, new String[]{"subject", "body"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
-        telemetryProps.set("enabled", prop("boolean",
-            "true to opt in to sharing anonymized tool-call telemetry; false to opt out."));
+        telemetryProps.set(
+            "enabled",
+            prop(
+                "boolean",
+                "true to opt in to sharing anonymized tool-call telemetry; false to opt out."));
         tools.add(
             tool("set_telemetry",
             "Opt in or out of sharing anonymized usage telemetry. "
@@ -557,8 +563,8 @@ public class McpServer {
         // Diagnostic: get column count from SELECT * FETCH FIRST 0 ROWS ONLY
         try {
             Statement diagStmt = c.createStatement();
-            ResultSet diagRs = diagStmt.executeQuery(
-                "SELECT * FROM " + lowerSchema + "." + lowerTable + " FETCH FIRST 0 ROWS ONLY");
+            ResultSet diagRs =
+                diagStmt.executeQuery("SELECT * FROM " + lowerSchema + "." + lowerTable + " FETCH FIRST 0 ROWS ONLY");
             int colCount = diagRs.getMetaData().getColumnCount();
             log.println("[askamerica-mcp] describe_table SELECT* colCount=" + colCount);
             diagRs.close();
@@ -734,8 +740,8 @@ public class McpServer {
             ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
             pb.redirectErrorStream(true);
             Process p = pb.start();
-            String out = new java.io.BufferedReader(
-                new java.io.InputStreamReader(p.getInputStream()))
+            String out =
+                new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))
                 .lines().collect(java.util.stream.Collectors.joining("\n"));
             p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS);
 
@@ -754,8 +760,8 @@ public class McpServer {
     private static String setTelemetry(boolean enabled) {
         telemetryOptIn = enabled;
         try {
-            java.io.File dir = new java.io.File(
-                System.getProperty("user.home"), ".askamerica");
+            java.io.File dir =
+                new java.io.File(System.getProperty("user.home"), ".askamerica");
             if (!dir.exists()) {
                 dir.mkdirs();
             }
@@ -771,8 +777,8 @@ public class McpServer {
 
     private static boolean loadTelemetryOptIn() {
         try {
-            java.io.File f = new java.io.File(
-                System.getProperty("user.home"), ".askamerica/telemetry.json");
+            java.io.File f =
+                new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
             if (!f.exists()) {
                 return true;
             }

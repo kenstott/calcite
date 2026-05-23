@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
@@ -97,8 +97,8 @@ public class McpServerIntegrationTest {
   @BeforeEach
   void startServer() throws Exception {
     // Shadow JAR has no Main-Class — invoke McpServer directly via -cp with --mcp flag
-    ProcessBuilder pb = new ProcessBuilder(
-        System.getProperty("java.home") + "/bin/java",
+    ProcessBuilder pb =
+        new ProcessBuilder(System.getProperty("java.home") + "/bin/java",
         "-cp", shadowJar.getAbsolutePath(),
         "org.apache.calcite.adapter.askamerica.McpServer",
         "--mcp");
@@ -139,8 +139,7 @@ public class McpServerIntegrationTest {
 
   // ── list_schemas ──────────────────────────────────────────────────────────
 
-  @Test
-  void listSchemas_includesRefAndFec() throws Exception {
+  @Test void listSchemas_includesRefAndFec() throws Exception {
     String resp = callTool("list_schemas", "{}", TOOL_TIMEOUT_MS);
     String text = extractText(resp);
     assertTrue(text.contains("ref"),
@@ -151,12 +150,11 @@ public class McpServerIntegrationTest {
 
   // ── list_tables ───────────────────────────────────────────────────────────
 
-  @Test
-  void listTables_notEmpty() throws Exception {
+  @Test void listTables_notEmpty() throws Exception {
     // PRIMARY SHADOW-JAR REGRESSION: if fs.s3a.impl is missing, IcebergTable init
     // fails silently and list_tables returns []. This test catches it.
-    String resp = callTool("list_tables",
-        "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
+    String resp =
+        callTool("list_tables", "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertFalse(text.equals("[]"),
         "list_tables(" + TEST_SCHEMA + ") returned []. "
@@ -166,10 +164,9 @@ public class McpServerIntegrationTest {
         TEST_SCHEMA + " table list must include '" + TEST_TABLE + "'; got: " + text);
   }
 
-  @Test
-  void listTables_tableTypeIsTable() throws Exception {
-    String resp = callTool("list_tables",
-        "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
+  @Test void listTables_tableTypeIsTable() throws Exception {
+    String resp =
+        callTool("list_tables", "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     int idx = text.indexOf("\"" + TEST_TABLE + "\"");
     assertTrue(idx >= 0, TEST_TABLE + " not found in: " + text);
@@ -178,11 +175,10 @@ public class McpServerIntegrationTest {
         TEST_SCHEMA + "." + TEST_TABLE + " must have type=TABLE (IcebergTable regression); context: " + slice);
   }
 
-  @Test
-  void listTables_includesView() throws Exception {
+  @Test void listTables_includesView() throws Exception {
     // ref schema has ticker_instrument_map as a SQL VIEW
-    String resp = callTool("list_tables",
-        "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
+    String resp =
+        callTool("list_tables", "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertTrue(text.contains("ticker_instrument_map"),
         TEST_SCHEMA + " must include ticker_instrument_map view; got: " + text);
@@ -194,11 +190,10 @@ public class McpServerIntegrationTest {
 
   // ── describe_table ────────────────────────────────────────────────────────
 
-  @Test
-  void describeTable_returnsColumns() throws Exception {
+  @Test void describeTable_returnsColumns() throws Exception {
     // THE CORE MCP REGRESSION: describe_table was returning [] for all Iceberg tables
-    String resp = callTool("describe_table",
-        "{\"schema\":\"" + TEST_SCHEMA + "\",\"table\":\"" + TEST_TABLE + "\"}",
+    String resp =
+        callTool("describe_table", "{\"schema\":\"" + TEST_SCHEMA + "\",\"table\":\"" + TEST_TABLE + "\"}",
         SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertFalse(text.equals("[]"),
@@ -208,10 +203,9 @@ public class McpServerIntegrationTest {
         TEST_TABLE + " must have " + TEST_COLUMN + " column; got: " + text);
   }
 
-  @Test
-  void describeTable_viewReturnsColumns() throws Exception {
-    String resp = callTool("describe_table",
-        "{\"schema\":\"" + TEST_SCHEMA + "\",\"table\":\"ticker_instrument_map\"}",
+  @Test void describeTable_viewReturnsColumns() throws Exception {
+    String resp =
+        callTool("describe_table", "{\"schema\":\"" + TEST_SCHEMA + "\",\"table\":\"ticker_instrument_map\"}",
         SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertFalse(text.equals("[]"),
@@ -222,10 +216,9 @@ public class McpServerIntegrationTest {
 
   // ── query ─────────────────────────────────────────────────────────────────
 
-  @Test
-  void query_executesAndReturnsRows() throws Exception {
-    String resp = callTool("query",
-        "{\"sql\":\"SELECT ticker, title FROM ref.sec_company_tickers FETCH FIRST 3 ROWS ONLY\","
+  @Test void query_executesAndReturnsRows() throws Exception {
+    String resp =
+        callTool("query", "{\"sql\":\"SELECT ticker, title FROM ref.sec_company_tickers FETCH FIRST 3 ROWS ONLY\","
             + "\"limit\":10}",
         SCHEMA_INIT_TIMEOUT_MS);
     assertFalse(resp.contains("\"isError\":true"),

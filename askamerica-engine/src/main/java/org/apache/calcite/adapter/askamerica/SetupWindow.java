@@ -19,8 +19,6 @@ package org.apache.calcite.adapter.askamerica;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.util.Collections;
-
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -36,6 +34,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -169,8 +168,8 @@ public class SetupWindow {
         p.add(apiKeyField, c);
 
         // Telemetry opt-in checkbox
-        telemetryCheckbox = new JCheckBox(
-            "Share anonymous usage telemetry to improve AskAmerica");
+        telemetryCheckbox =
+            new JCheckBox("Share anonymous usage telemetry to improve AskAmerica");
         telemetryCheckbox.setSelected(loadTelemetryOptIn());
         telemetryCheckbox.setBackground(BG);
         telemetryCheckbox.setForeground(DIM);
@@ -263,8 +262,8 @@ public class SetupWindow {
 
     private static boolean loadTelemetryOptIn() {
         try {
-            java.io.File f = new java.io.File(
-                System.getProperty("user.home"), ".askamerica/telemetry.json");
+            java.io.File f =
+                new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
             if (!f.exists()) {
                 return true;
             }
@@ -275,8 +274,8 @@ public class SetupWindow {
     }
 
     private static void saveTelemetryOptIn(boolean optIn) throws IOException {
-        java.io.File dir = new java.io.File(
-            System.getProperty("user.home"), ".askamerica");
+        java.io.File dir =
+            new java.io.File(System.getProperty("user.home"), ".askamerica");
         if (!dir.exists()) {
             dir.mkdirs();
         }

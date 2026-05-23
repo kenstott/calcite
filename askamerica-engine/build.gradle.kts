@@ -7,6 +7,12 @@
  * the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 plugins {
     id("com.github.johnrengelman.shadow")
@@ -123,9 +129,9 @@ val publishVersion: String =
 publishing {
     publications {
         create<MavenPublication>("askamericaEngine") {
-            groupId    = "ai.askamerica"
+            groupId = "ai.askamerica"
             artifactId = "askamerica-engine"
-            version    = publishVersion
+            version = publishVersion
 
             artifact(tasks.shadowJar) {
                 classifier = ""
@@ -160,7 +166,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url  = uri("https://maven.pkg.github.com/kenstott/calcite")
+            url = uri("https://maven.pkg.github.com/kenstott/calcite")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
                 password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
@@ -207,9 +213,9 @@ tasks.register<Exec>("jpackage") {
     val os = System.getProperty("os.name").lowercase()
     val isMac = os.contains("mac")
     val packageType = when {
-        isMac            -> "app-image"
+        isMac -> "app-image"
         os.contains("win") -> "msi"
-        else             -> "deb"
+        else -> "deb"
     }
     val version = project.version.toString().replace("-SNAPSHOT", "")
         .replace("[^0-9.]".toRegex(), "")
@@ -219,26 +225,28 @@ tasks.register<Exec>("jpackage") {
 
     commandLine(
         jpackageTool,
-        "--type",              packageType,
-        "--name",              "AskAmerica MCP",
-        "--app-version",       version,
-        "--vendor",            "AskAmerica",
-        "--description",       "AskAmerica MCP — query US government data from Claude",
-        "--input",             jpackageInputDir.get().asFile.absolutePath,
-        "--main-jar",          launcherJar.get().archiveFileName.get(),
-        "--main-class",        "org.apache.calcite.adapter.askamerica.McpServerLauncher",
-        "--dest",              jpackageDir.get().asFile.absolutePath,
-        "--java-options",      "-Xms256m -Xmx2g",
-        "--java-options",      "-Dfile.encoding=UTF-8",
+        "--type", packageType,
+        "--name", "AskAmerica MCP",
+        "--app-version", version,
+        "--vendor", "AskAmerica",
+        "--description", "AskAmerica MCP — query US government data from Claude",
+        "--input", jpackageInputDir.get().asFile.absolutePath,
+        "--main-jar", launcherJar.get().archiveFileName.get(),
+        "--main-class", "org.apache.calcite.adapter.askamerica.McpServerLauncher",
+        "--dest", jpackageDir.get().asFile.absolutePath,
+        "--java-options", "-Xms256m -Xmx2g",
+        "--java-options", "-Dfile.encoding=UTF-8",
         // macOS-specific options
         *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
         *(if (isMac && !System.getenv("ASKAMERICA_SIGN_IDENTITY").isNullOrEmpty())
-            arrayOf("--mac-sign",
-                    "--mac-signing-key-user-name", System.getenv("ASKAMERICA_SIGN_IDENTITY"))
-          else emptyArray()),
+            arrayOf(
+                "--mac-sign",
+                "--mac-signing-key-user-name",
+                System.getenv("ASKAMERICA_SIGN_IDENTITY"))
+        else emptyArray()),
         *(if (isMac && !System.getenv("ASKAMERICA_SIGN_KEYCHAIN").isNullOrEmpty())
             arrayOf("--mac-signing-keychain", System.getenv("ASKAMERICA_SIGN_KEYCHAIN"))
-          else emptyArray())
+        else emptyArray())
     )
 
     doFirst {

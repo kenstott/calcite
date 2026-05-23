@@ -101,14 +101,12 @@ public class AskAmericaDriverSystemPropertiesTest {
     }
   }
 
-  @Test
-  void connect_setsGovdataOperatingDirToDataDir(@TempDir Path tmpDir) {
+  @Test void connect_setsGovdataOperatingDirToDataDir(@TempDir Path tmpDir) {
     invokeConnect(tmpDir.toString());
     assertEquals(tmpDir.toString(), System.getProperty(PROP_OPERATING_DIR));
   }
 
-  @Test
-  void connect_setsCatalogPathUnderDotDuckdb(@TempDir Path tmpDir) {
+  @Test void connect_setsCatalogPathUnderDotDuckdb(@TempDir Path tmpDir) {
     invokeConnect(tmpDir.toString());
     String catalogPath = System.getProperty(PROP_CATALOG_PATH);
     assertNotNull(catalogPath);
@@ -118,22 +116,19 @@ public class AskAmericaDriverSystemPropertiesTest {
     assertFalse(catalogPath.contains(".aperio"), "catalog path must not use .aperio");
   }
 
-  @Test
-  void connect_setsCacheHttpfsDirUnderDataDir(@TempDir Path tmpDir) {
+  @Test void connect_setsCacheHttpfsDirUnderDataDir(@TempDir Path tmpDir) {
     invokeConnect(tmpDir.toString());
     assertEquals(tmpDir + "/.duckdb_httpfs_cache", System.getProperty(PROP_CACHE_DIR));
   }
 
-  @Test
-  void connect_doesNotOverwritePreexistingCatalogPath(@TempDir Path tmpDir) {
+  @Test void connect_doesNotOverwritePreexistingCatalogPath(@TempDir Path tmpDir) {
     System.setProperty(PROP_CATALOG_PATH, "/custom/path/catalog.duckdb");
     invokeConnect(tmpDir.toString());
     assertEquals("/custom/path/catalog.duckdb", System.getProperty(PROP_CATALOG_PATH),
         "Pre-existing duckdb.catalog.path must not be overwritten");
   }
 
-  @Test
-  void connect_doesNotOverwritePreexistingCacheDir(@TempDir Path tmpDir) {
+  @Test void connect_doesNotOverwritePreexistingCacheDir(@TempDir Path tmpDir) {
     System.setProperty(PROP_CACHE_DIR, "/custom/cache");
     invokeConnect(tmpDir.toString());
     assertEquals("/custom/cache", System.getProperty(PROP_CACHE_DIR),
