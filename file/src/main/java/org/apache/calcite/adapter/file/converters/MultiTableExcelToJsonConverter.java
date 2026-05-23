@@ -37,8 +37,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -188,8 +189,8 @@ public final class MultiTableExcelToJsonConverter {
 
           LOGGER.trace("Writing JSON file: " + jsonFileName);
           File jsonFile = new File(outputDir, jsonFileName);
-          try (FileWriter fileWriter =
-              new FileWriter(jsonFile, StandardCharsets.UTF_8)) {
+          try (OutputStreamWriter fileWriter =
+              new OutputStreamWriter(new FileOutputStream(jsonFile), StandardCharsets.UTF_8)) {
             mapper.writerWithDefaultPrettyPrinter()
                 .writeValue(fileWriter, table.jsonData);
           }

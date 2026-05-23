@@ -129,6 +129,15 @@ val annotationProcessorMain by tasks.registering(JavaCompile::class) {
     configureAnnotationSet(sourceSets.main.get())
 }
 
+// The file module requires Java 11+ (uses List.of, Map.of, FileWriter(File,Charset), etc.).
+// Override the root build's Java 8 compatibility setting for this module only.
+plugins.withType<JavaPlugin> {
+    configure<JavaPluginExtension> {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
 // SIMDColumnBatch and AdaptiveColumnBatch use jdk.incubator.vector (JDK 16+).
 // On older JDKs we exclude them from compilation; they are SIMD optimizations only.
 if (JavaVersion.current() >= JavaVersion.VERSION_16) {

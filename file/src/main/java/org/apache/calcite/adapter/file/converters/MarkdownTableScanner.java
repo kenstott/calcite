@@ -27,9 +27,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -113,7 +114,7 @@ public final class MarkdownTableScanner {
         File jsonFile = new File(outputDir, jsonFileName);
         LOGGER.debug("Writing JSON file: " + jsonFileName);
 
-        try (FileWriter writer = new FileWriter(jsonFile, StandardCharsets.UTF_8)) {
+        try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(jsonFile), StandardCharsets.UTF_8)) {
           mapper.writerWithDefaultPrettyPrinter().writeValue(writer, table.data);
 
           // Record the conversion for refresh tracking - use schema directory for metadata

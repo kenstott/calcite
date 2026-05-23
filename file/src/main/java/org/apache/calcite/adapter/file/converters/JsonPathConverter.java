@@ -23,8 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -67,7 +68,7 @@ public class JsonPathConverter {
     // Write to temporary file first for atomic operation
     File tempFile = new File(outputFile.getAbsolutePath() + ".tmp." + Thread.currentThread().hashCode());
 
-    try (FileWriter writer = new FileWriter(tempFile, StandardCharsets.UTF_8)) {
+    try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
       writer.write(jsonOutput);
       writer.flush();
     }

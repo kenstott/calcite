@@ -37,8 +37,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
@@ -137,8 +138,8 @@ public final class ExcelToJsonConverter {
       String sheetName = SmartCasing.applyCasing(rawSheetName, tableNameCasing);
       String jsonFileName = baseName + "__" + sheetName + ".json";
       File jsonFile = new File(outputDir, jsonFileName);
-      FileWriter fileWriter =
-          new FileWriter(jsonFile, StandardCharsets.UTF_8);
+      OutputStreamWriter fileWriter =
+          new OutputStreamWriter(new FileOutputStream(jsonFile), StandardCharsets.UTF_8);
       mapper.writerWithDefaultPrettyPrinter().writeValue(fileWriter, sheetData);
       fileWriter.close();
 
