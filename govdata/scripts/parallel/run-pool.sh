@@ -308,16 +308,17 @@ echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}
 if [ "$MAX_WORKERS" -lt 99 ]; then
   echo "    Hard cap: max $MAX_WORKERS concurrent"
 fi
-echo "    Timeout: ${TIMEOUT_MINS}min inactivity"
+echo "    Timeout: ${TIMEOUT_MINS}min inactivity (default; large schemas use per-schema override)"
 echo ""
 
 # Active worker tracking: parallel arrays
 active_pids=()
 active_labels=()
 active_starts=()
-active_slots=()      # "schema:mode" for each active worker (used for re-queuing)
-active_heap_mb=()    # Max heap in MB for each active worker
-committed_mb=0       # Sum of max heaps of all active workers
+active_slots=()         # "schema:mode" for each active worker (used for re-queuing)
+active_heap_mb=()       # Max heap in MB for each active worker
+active_timeout_secs=()  # Per-worker idle timeout in seconds
+committed_mb=0          # Sum of max heaps of all active workers
 
 # Counters
 queue_idx=0
@@ -404,14 +405,19 @@ launch_worker() {
     pid=$!
   fi
 
+  local timeout_mins timeout_secs
+  timeout_mins=$(get_timeout_config "$id")
+  timeout_secs=$((timeout_mins * 60))
+
   active_pids+=("$pid")
   active_labels+=("$id")
   active_starts+=("$(date +%s)")
   active_slots+=("$slot")
   active_heap_mb+=("$heap_mb")
+  active_timeout_secs+=("$timeout_secs")
   committed_mb=$((committed_mb + heap_mb))
 
-  log_info "Launched $id (PID $pid, heap ${heap_mb}MB) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
+  log_info "Launched $id (PID $pid, heap ${heap_mb}MB, timeout ${timeout_mins}min) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
   return 0
 }
 
@@ -480,7 +486,7 @@ remove_active() {
   committed_mb=$((committed_mb - active_heap_mb[$idx]))
   if [ "$committed_mb" -lt 0 ]; then committed_mb=0; fi
 
-  local new_pids=() new_labels=() new_starts=() new_slots=() new_heaps=()
+  local new_pids=() new_labels=() new_starts=() new_slots=() new_heaps=() new_timeouts=()
   for i in "${!active_pids[@]}"; do
     if [ "$i" -ne "$idx" ]; then
       new_pids+=("${active_pids[$i]}")
@@ -488,6 +494,7 @@ remove_active() {
       new_starts+=("${active_starts[$i]}")
       new_slots+=("${active_slots[$i]}")
       new_heaps+=("${active_heap_mb[$i]}")
+      new_timeouts+=("${active_timeout_secs[$i]}")
     fi
   done
   active_pids=("${new_pids[@]+"${new_pids[@]}"}")
@@ -495,6 +502,7 @@ remove_active() {
   active_starts=("${new_starts[@]+"${new_starts[@]}"}")
   active_slots=("${new_slots[@]+"${new_slots[@]}"}")
   active_heap_mb=("${new_heaps[@]+"${new_heaps[@]}"}")
+  active_timeout_secs=("${new_timeouts[@]+"${new_timeouts[@]}"}")
 }
 
 # Kill a stuck worker and re-queue its slot
@@ -561,8 +569,9 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   while [ "$i" -lt "${#active_pids[@]}" ]; do
     id="${active_labels[$i]}"
     now=$(date +%s)
+    worker_timeout_secs="${active_timeout_secs[$i]:-$TIMEOUT_SECS}"
     uptime_secs=$(( now - active_starts[$i] ))
-    if [ "$uptime_secs" -lt "$TIMEOUT_SECS" ]; then
+    if [ "$uptime_secs" -lt "$worker_timeout_secs" ]; then
       ((i++)) || true
       continue
     fi
@@ -573,7 +582,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     else
       idle_secs=$uptime_secs
     fi
-    if [ "$idle_secs" -ge "$TIMEOUT_SECS" ]; then
+    if [ "$idle_secs" -ge "$worker_timeout_secs" ]; then
       kill_and_requeue "$i"
       continue
     fi

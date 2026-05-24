@@ -859,6 +859,36 @@ get_dq_start_year() {
   esac
 }
 
+# Return the idle-timeout in minutes for a worker.
+# A worker is killed and re-queued only when BOTH conditions hold:
+#   1. It has been running for at least this many minutes
+#   2. Its log file has been idle (no new output) for at least this many minutes
+# Usage: get_timeout_config <worker_id>  → prints minutes to stdout
+get_timeout_config() {
+  local worker_id=$1
+  local _id="${worker_id#worker-}"
+  local _schema="${_id%-*}"
+
+  # DQ rebuild workers: worker-dq-<schema>-<mode> → use the inner schema
+  if [[ "$worker_id" == worker-dq-*-* ]]; then
+    local _dq_rest="${worker_id#worker-dq-}"
+    _schema="${_dq_rest%-*}"
+  fi
+
+  case "$_schema" in
+    edu)          echo 360 ;;  # K-12 + IPEDS + Scorecard — many sub-pipelines
+    weather)      echo 360 ;;  # GHCND × 51 states × years — large volume
+    geo)          echo 360 ;;  # TIGER shapefiles, geometry parsing
+    fec)          echo 240 ;;  # individual contributions 3M+ rows/year
+    crime)        echo 240 ;;  # large dimension expansion × state × offense
+    health)       echo 240 ;;  # 15 tables with cursor pagination
+    lands)        echo 240 ;;  # forest inventory biennial, large parcels
+    census)       echo 240 ;;  # ACS 5-year span
+    energy)       echo 180 ;;  # SEDS multi-year
+    *)            echo 60  ;;  # default: 1 hour idle
+  esac
+}
+
 # Build an inline Calcite model JSON string for a govdata schema.
 # All storage and credential config uses ${VAR} patterns resolved by Java's VariableResolver.
 # Integer fields (startYear, endYear) are resolved from env vars at call time.
