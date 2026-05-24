@@ -57,7 +57,14 @@ public class JdbcMetadataIntegrationTest {
   // Use fec: DQ-tracked, Iceberg format, confirmed working against R2
   private static final String SCHEMA = "fec";
 
+  // Tracks whether the FEC schema is accessible; set by @BeforeAll.
+  // Some FEC Iceberg tables (e.g. committee_contributions) may be transiently
+  // corrupted; when FEC init fails, FEC-specific tests skip but ref tests still run.
+  private static volatile boolean fecAvailable = false;
+
   private static Connection openConnection() throws Exception {
+    Assumptions.assumeTrue(fecAvailable,
+        "FEC schema unavailable — skipping FEC test (committee_contributions or other Iceberg table may be corrupted)");
     Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
@@ -65,20 +72,36 @@ public class JdbcMetadataIntegrationTest {
     return DriverManager.getConnection("jdbc:govdata:source=" + SCHEMA, props);
   }
 
+  private static Connection openRefConnection() throws Exception {
+    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+    return DriverManager.getConnection("jdbc:govdata:source=ref", props);
+  }
+
   @BeforeAll
-  static void checkEnvironment() {
-    // GovDataDriver defaults to s3://govdata-parquet-v1 when GOVDATA_PARQUET_DIR is unset.
-    // Verify R2 is reachable by attempting a connection; skip if it fails.
+  static void checkEnvironment() throws Exception {
+    // Gate the entire class on ref being accessible (ref is always required for PK regression tests).
+    // Also probe FEC; fecAvailable controls whether FEC-specific tests run or skip.
+    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
     try {
-      Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
-      Properties props = new Properties();
-      props.setProperty("lex", "ORACLE");
-      props.setProperty("unquotedCasing", "TO_LOWER");
-      Connection c = DriverManager.getConnection("jdbc:govdata:source=" + SCHEMA, props);
+      Connection c = DriverManager.getConnection("jdbc:govdata:source=ref", props);
       c.close();
-      LOGGER.info("R2 reachable — running JDBC metadata integration tests");
+      LOGGER.info("R2 reachable (ref) — running JDBC metadata integration tests");
     } catch (Exception e) {
-      Assumptions.assumeTrue(false, "R2 not reachable, skipping: " + e.getMessage());
+      Assumptions.assumeTrue(false, "R2 not reachable (ref), skipping: " + e.getMessage());
+    }
+    try {
+      Connection c = DriverManager.getConnection("jdbc:govdata:source=fec", props);
+      c.close();
+      fecAvailable = true;
+      LOGGER.info("FEC schema accessible — FEC-specific tests will run");
+    } catch (Exception e) {
+      LOGGER.warn("FEC schema unavailable ({}); FEC-specific tests will be skipped", e.getMessage());
     }
   }
 
@@ -380,11 +403,7 @@ public class JdbcMetadataIntegrationTest {
     // Regression guard for issue #19: IcebergTable-backed tables were returning empty PKs
     // because ConstraintAwareJdbcTable.getStatistic() used DuckDB column indices while
     // CalciteMetaImpl.getPrimaryKeys() mapped them using IcebergTable column order.
-    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
-    Properties props = new Properties();
-    props.setProperty("lex", "ORACLE");
-    props.setProperty("unquotedCasing", "TO_LOWER");
-    try (Connection c = DriverManager.getConnection("jdbc:govdata:source=ref", props)) {
+    try (Connection c = openRefConnection()) {
       DatabaseMetaData meta = c.getMetaData();
       List<String> pks = new ArrayList<>();
       try (ResultSet rs = meta.getPrimaryKeys(null, "ref", "gleif_entities")) {
@@ -405,11 +424,7 @@ public class JdbcMetadataIntegrationTest {
   @Test
   void ref_secCompanyTickers_hasKnownPrimaryKey() throws Exception {
     // ref-schema.yaml declares: sec_company_tickers.primaryKey = [type, cik]
-    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
-    Properties props = new Properties();
-    props.setProperty("lex", "ORACLE");
-    props.setProperty("unquotedCasing", "TO_LOWER");
-    try (Connection c = DriverManager.getConnection("jdbc:govdata:source=ref", props)) {
+    try (Connection c = openRefConnection()) {
       DatabaseMetaData meta = c.getMetaData();
       List<String> pks = new ArrayList<>();
       try (ResultSet rs = meta.getPrimaryKeys(null, "ref", "sec_company_tickers")) {
@@ -432,7 +447,8 @@ public class JdbcMetadataIntegrationTest {
   void fec_individualContributions_hasColumns() throws Exception {
     // FEC is a DQ-tracked Iceberg schema — spot-check that getColumns() works
     // for a known Iceberg table (this was the original failing case)
-
+    Assumptions.assumeTrue(fecAvailable,
+        "FEC schema unavailable — skipping fec_individualContributions_hasColumns");
     Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
