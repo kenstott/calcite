@@ -198,7 +198,7 @@ public class JdbcMetadataIntegrationTest {
   void getPrimaryKeys_candidatesHasKnownPrimaryKey() throws Exception {
     // fec-schema.yaml declares: candidates.primaryKey = [type, year, candidate_id]
     // This verifies the full wiring: YAML constraints → GovDataSchemaFactory.setTableConstraints()
-    // → enrichedOperand → FileSchemaFactory → PartitionedParquetTable.getStatistic() → JDBC metadata
+    // → enrichedOperand → FileSchemaFactory → IcebergTable.getStatistic() → JDBC metadata
     try (Connection c = openConnection()) {
       DatabaseMetaData meta = c.getMetaData();
       List<String> pks = new ArrayList<>();
