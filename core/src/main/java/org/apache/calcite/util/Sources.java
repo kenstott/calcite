@@ -506,7 +506,7 @@ public abstract class Sources {
         byte[] bytes = requireNonNull(fileCache.get(file.getPath()), "cache returned null for file path");
         return new ByteArrayInputStream(bytes);
       } else {
-        byte[] bytes = requireNonNull(fileCache.get(url.toString()), "cache returned null for url");
+        byte[] bytes = requireNonNull(fileCache.get(requireNonNull(url, "url").toString()), "cache returned null for url");
         return new ByteArrayInputStream(bytes);
       }
     }

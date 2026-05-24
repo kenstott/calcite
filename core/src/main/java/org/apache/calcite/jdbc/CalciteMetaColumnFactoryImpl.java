@@ -76,7 +76,7 @@ public class CalciteMetaColumnFactoryImpl
    * Avatica's reflection-based result set reads the column comment. */
   public static final class MetaColumnWithRemarks extends MetaColumn {
     /** Shadows {@link MetaColumn#remarks}. */
-    public final String remarks;
+    public final @Nullable String remarks;
 
     public MetaColumnWithRemarks(
         String tableCat,

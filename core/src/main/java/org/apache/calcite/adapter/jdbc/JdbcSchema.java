@@ -385,7 +385,7 @@ public class JdbcSchema implements Schema, Wrapper {
    * @param tableName The table name
    * @return Constraint metadata or null if none defined in model file
    */
-  public Map<String, Object> getTableConstraints(String tableName) {
+  public @Nullable Map<String, Object> getTableConstraints(String tableName) {
     return constraintMetadata.get(tableName);
   }
 
@@ -619,9 +619,9 @@ public class JdbcSchema implements Schema, Wrapper {
     public static final Factory INSTANCE = new Factory();
 
     // Store constraint metadata from model files
-    private Map<String, Map<String, Object>> tableConstraints;
+    private @Nullable Map<String, Map<String, Object>> tableConstraints;
     @SuppressWarnings("unused")
-    private List<JsonTable> tableDefinitions;
+    private @Nullable List<JsonTable> tableDefinitions;
 
     private Factory() {}
 

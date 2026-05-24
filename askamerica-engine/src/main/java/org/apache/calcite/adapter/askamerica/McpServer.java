@@ -741,7 +741,8 @@ public class McpServer {
             pb.redirectErrorStream(true);
             Process p = pb.start();
             String out =
-                new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))
+                new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream(),
+                    java.nio.charset.StandardCharsets.UTF_8))
                 .lines().collect(java.util.stream.Collectors.joining("\n"));
             p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS);
 
