@@ -21,6 +21,15 @@ plugins {
 
 description = "AskAmerica MCP server — query US government data from Claude Desktop"
 
+// askamerica-engine depends on govdata which requires Java 11+. Skip on JDK 8 so the upstream
+// Calcite JDK 8 CI jobs don't fail on missing govdata classes.
+if (JavaVersion.current() < JavaVersion.VERSION_11) {
+    afterEvaluate {
+        tasks.withType<JavaCompile>().configureEach { enabled = false }
+        tasks.withType<Test>().configureEach { enabled = false }
+    }
+}
+
 // BSL module uses Google Java Format (4-space) and has legitimate System.exit() in the launcher.
 // Exempt from Apache Calcite style checks (checkstyle, forbiddenApis).
 afterEvaluate {
@@ -197,10 +206,25 @@ publishing {
 // native xattr support, so macOS stores code-signing xattrs as AppleDouble (._*) sidecar
 // files. jpackage calls `codesign --remove-signature` on every file it writes, including
 // the non-Mach-O ._* sidecars, which makes codesign exit 1.
-// Fix: redirect jpackage and jlink output to ~/.gradle/askamerica-engine-build/ which
-// lives on the internal APFS disk (native xattrs, no ._* files). CI is Linux — no issue.
+// ExFAT + macOS: ExFAT has no native xattr support, so macOS stores code-signing xattrs as
+// AppleDouble (._*) sidecar files. jpackage calls `codesign --remove-signature` on every file
+// it writes, including the non-Mach-O ._* sidecars, which makes codesign exit 1.
+// Fix: redirect jpackage and jlink output to ~/.gradle/askamerica-engine-build/ which lives on
+// the internal APFS disk (native xattrs, no ._* files).
+// On macOS CI runners (APFS) and Linux CI, always use layout.buildDirectory.
 val isMacOs = System.getProperty("os.name").lowercase().contains("mac")
-val jpackageBuildBase: File = if (isMacOs) {
+
+fun isExFat(path: File): Boolean {
+    if (!isMacOs) return false
+    return try {
+        val output = ProcessBuilder("diskutil", "info", path.absolutePath)
+            .redirectErrorStream(true).start()
+            .inputStream.bufferedReader().readText()
+        output.contains("ExFAT", ignoreCase = true)
+    } catch (e: Exception) { false }
+}
+
+val jpackageBuildBase: File = if (isMacOs && isExFat(projectDir)) {
     File(System.getProperty("user.home"), ".gradle/askamerica-engine-build")
 } else {
     layout.buildDirectory.asFile.get()
