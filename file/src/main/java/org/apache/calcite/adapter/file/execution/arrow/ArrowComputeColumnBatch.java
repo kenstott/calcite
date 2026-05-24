@@ -239,6 +239,7 @@ public class ArrowComputeColumnBatch implements AutoCloseable {
       return sum;
     }
 
+    @SuppressWarnings("UnusedVariable")
     private IntVector simulateGPUFilter(int threshold) {
       // Simulate GPU filtering
       return vector; // Placeholder
@@ -273,6 +274,7 @@ public class ArrowComputeColumnBatch implements AutoCloseable {
       return sum;
     }
 
+    @SuppressWarnings("UnusedVariable")
     private IntVector fallbackFilter(int threshold) {
       // Basic filtering fallback
       return vector; // Placeholder

@@ -233,7 +233,6 @@ public class ParquetEnumerableFactory {
             } else if ("timestamp-millis".equals(logicalTypeName)) {
               if (value instanceof Long) {
                 long milliseconds = (Long) value;
-                String fieldName = field.name();
 
                 // For Parquet engine, return long values for timestamps to avoid casting issues
                 // in ORDER BY and WHERE clauses. The timestamp display formatting is handled
@@ -394,7 +393,6 @@ public class ParquetEnumerableFactory {
               } else if ("timestamp-millis".equals(logicalTypeName)) {
                 if (value instanceof Long) {
                   long milliseconds = (Long) value;
-                  String fieldName = field.name();
 
                   // For Parquet engine, return long values for timestamps to avoid casting issues
                   // in ORDER BY and WHERE clauses. The timestamp display formatting is handled
@@ -565,7 +563,6 @@ public class ParquetEnumerableFactory {
               } else if ("timestamp-millis".equals(logicalTypeName)) {
                 if (value instanceof Long) {
                   long milliseconds = (Long) value;
-                  String fieldName = field.name();
 
                   // For Parquet engine, return long values for timestamps to avoid casting issues
                   // in ORDER BY and WHERE clauses. The timestamp display formatting is handled

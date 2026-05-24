@@ -1361,6 +1361,7 @@ public class DocumentETLProcessor {
    */
   private static class SecSubmissionsIterator implements Iterator<Map<String, String>> {
 
+    @SuppressWarnings("UnusedVariable")
     private final String cik;
     private final HttpSourceConfig config;
     private final List<Map<String, String>> documents;

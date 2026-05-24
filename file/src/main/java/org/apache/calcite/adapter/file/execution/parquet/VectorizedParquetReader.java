@@ -58,6 +58,7 @@ public class VectorizedParquetReader implements AutoCloseable {
   private final MessageType schema;
   private final ParquetMetadata metadata;
   private final int batchSize;
+  @SuppressWarnings("UnusedVariable")
   private final List<ColumnDescriptor> columns;
   private final Map<String, Boolean> timestampAdjustedMap;
 
@@ -69,6 +70,7 @@ public class VectorizedParquetReader implements AutoCloseable {
 
   // Batch data storage - pre-allocate for efficiency
   private final List<Object[]> batchData;
+  @SuppressWarnings("UnusedVariable")
   private int batchPosition = 0;
   private boolean hasMoreData = true;
 

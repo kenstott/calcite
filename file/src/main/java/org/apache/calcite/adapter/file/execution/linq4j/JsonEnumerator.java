@@ -77,6 +77,7 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
   }
 
   public static void replaceArrayLists(Map<String, Object> map) throws IllegalAccessException {
+    Map<String, Object> replacements = new LinkedHashMap<String, Object>();
     for (Map.Entry<String, Object> entry : map.entrySet()) {
       String key = entry.getKey();
       Object value = entry.getValue();
@@ -85,16 +86,17 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
         ArrayList listValue = (ArrayList) value;
         ComparableArrayList comparableList = new ComparableArrayList();
         comparableList.addAll(listValue);
-        map.put(key, comparableList);
+        replacements.put(key, comparableList);
       } else if (value instanceof LinkedHashMap) {
         LinkedHashMap listValue = (LinkedHashMap) value;
         ComparableLinkedHashMap comparableList = new ComparableLinkedHashMap();
         comparableList.putAll(listValue);
-        map.put(key, comparableList);
+        replacements.put(key, comparableList);
       } else if (value instanceof Map) {
         replaceArrayLists((Map<String, Object>) value);
       }
     }
+    map.putAll(replacements);
   }
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source) {
@@ -151,7 +153,6 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source,
           String dataType, Map<String, Object> options, String columnNameCasing) {
-    final ObjectMapper objectMapper = new ObjectMapper();
     ObjectMapper jsonMapper = new ObjectMapper();
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 //    yamlMapper.findAndRegisterModules();

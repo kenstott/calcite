@@ -428,7 +428,7 @@ public class DimensionIterator {
 
       if (newResult.isEmpty()) {
         LOGGER.warn("Dimension '{}' resulted in no valid combinations", name);
-        return Collections.emptyList();
+        return new ArrayList<Map<String, String>>();
       }
 
       result = newResult;
@@ -550,7 +550,7 @@ public class DimensionIterator {
 
     if (start == null || end == null) {
       LOGGER.warn("Range dimension '{}' missing start or end", config.getName());
-      return Collections.emptyList();
+      return new ArrayList<String>();
     }
 
     if (step == null || step == 0) {
@@ -593,7 +593,7 @@ public class DimensionIterator {
 
     if (start == null) {
       LOGGER.warn("Year range dimension '{}' missing start", config.getName());
-      return Collections.emptyList();
+      return new ArrayList<String>();
     }
 
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
@@ -644,7 +644,7 @@ public class DimensionIterator {
     if (start > effectiveEnd) {
       LOGGER.warn("Year range dimension '{}': no years in range [{}, {}] — skipping",
           config.getName(), start, effectiveEnd);
-      return Collections.emptyList();
+      return new ArrayList<String>();
     }
 
     List<Integer> excludeYears = config.getExcludeYears();
@@ -693,7 +693,7 @@ public class DimensionIterator {
     String sql = config.getSql();
     if (sql == null || sql.isEmpty()) {
       LOGGER.warn("Query dimension '{}' has no SQL", config.getName());
-      return Collections.emptyList();
+      return new ArrayList<String>();
     }
 
     List<String> values = new ArrayList<String>();

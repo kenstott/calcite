@@ -52,7 +52,9 @@ import javax.sql.DataSource;
 public class TrinoJdbcSchema extends JdbcSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(TrinoJdbcSchema.class);
 
+  @SuppressWarnings("UnusedVariable")
   private final String directoryPath;
+  @SuppressWarnings("UnusedVariable")
   private final boolean recursive;
   private final Connection persistentConnection;
   private final org.apache.calcite.adapter.file.FileSchema fileSchema;

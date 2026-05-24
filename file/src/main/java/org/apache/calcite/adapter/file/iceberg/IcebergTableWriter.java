@@ -422,10 +422,10 @@ public class IcebergTableWriter {
       entries = storageProvider.listFiles(dataDir, true);
     } catch (IOException e) {
       LOGGER.debug("Self-heal: no files at {}: {}", dataDir, e.getMessage());
-      return java.util.Collections.emptyList();
+      return new ArrayList<DataFile>();
     }
     if (entries == null || entries.isEmpty()) {
-      return java.util.Collections.emptyList();
+      return new ArrayList<DataFile>();
     }
 
     // Build set of paths already tracked by the current snapshot so we don't double-register.
@@ -610,6 +610,7 @@ public class IcebergTableWriter {
   /**
    * Sets partition key values from the partition variables map.
    */
+  @SuppressWarnings("UnusedVariable")
   private void setPartitionKeyValues(PartitionKey partitionKey, PartitionSpec spec,
       Schema schema, Map<String, String> partitionValues) {
     if (partitionValues == null) {

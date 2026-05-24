@@ -475,8 +475,7 @@ public interface IncrementalTracker {
    * Computes a signature for a list of dimension combinations.
    * The signature changes when dimension values change.
    *
-   * @param dimensions List of dimension configurations
-   * @param combinations All expanded combinations
+   * @param combinations All expanded dimension combinations
    * @return Signature string for comparison
    */
   static String computeDimensionSignature(List<Map<String, String>> combinations) {

@@ -120,7 +120,6 @@ public class TrinoDialect implements JdbcDialect {
   @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     // For Trino with Iceberg connector, register the Iceberg table location
     // This requires the iceberg catalog to be configured
-    String qualifiedName = qualifyName(schemaName, viewName);
     return String.format(
         "CALL iceberg.system.register_table('%s', '%s', '%s')",
         schemaName != null ? schemaName : "default",

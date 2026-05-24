@@ -98,8 +98,6 @@ public class AlternatePartitionSelectionRule extends RelRule<AlternatePartitionS
       return;
     }
 
-    PartitionedParquetTable parquetTable = (PartitionedParquetTable) table;
-
     // Check if this table has alternate partitions registered
     List<AlternatePartitionInfo> alternates = getAlternatePartitions(scan.getTable());
     if (alternates.isEmpty()) {
@@ -332,6 +330,7 @@ public class AlternatePartitionSelectionRule extends RelRule<AlternatePartitionS
   /**
    * Finds an alternate table by name in the same schema.
    */
+  @SuppressWarnings("UnusedVariable")
   private RelOptTable findAlternateTable(TableScan originalScan, String alternateName,
       RelOptRuleCall call) {
     List<String> qualifiedName = originalScan.getTable().getQualifiedName();

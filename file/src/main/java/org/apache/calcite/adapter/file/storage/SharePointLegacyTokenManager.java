@@ -76,8 +76,7 @@ public class SharePointLegacyTokenManager extends SharePointTokenManager {
       effectiveRealm = discoverRealm();
     }
 
-    // Extract SharePoint resource from site URL
-    URI uri = URI.create(getSiteUrl());
+    // Build SharePoint resource identifier
     String sharePointResource =
         String.format("%s@%s", "00000003-0000-0ff1-ce00-000000000000", // SharePoint principal ID
         effectiveRealm);

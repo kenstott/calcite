@@ -94,7 +94,7 @@ public class SimpleFileJoinReorderRule extends RelRule<SimpleFileJoinReorderRule
 
       // Try ParquetTranslatableTable
       ParquetTranslatableTable parquetTable = table.unwrap(ParquetTranslatableTable.class);
-      if (parquetTable != null && parquetTable instanceof StatisticsProvider) {
+      if (parquetTable != null) {
         return ((StatisticsProvider) parquetTable).getTableStatistics(table);
       }
     }

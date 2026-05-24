@@ -717,7 +717,6 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
         return SqlTypeName.VARCHAR;
       }
       // Check using ConvertedType instead of deprecated OriginalType
-      org.apache.parquet.schema.Type.Repetition repetition = primitiveType.getRepetition();
       if (primitiveType.getId() != null
           && primitiveType.getName() != null
           && primitiveType.getPrimitiveTypeName()
@@ -890,6 +889,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     private final List<String> effectivePartitionColumns;  // Pre-computed columns to add
     private final Map<String, String> partitionColumnTypes;
     private final AtomicBoolean cancelFlag;
+    @SuppressWarnings("UnusedVariable")
     private final long memoryThreshold;
     private final String customRegex;
     private final List<PartitionedTableConfig.ColumnMapping> columnMappings;

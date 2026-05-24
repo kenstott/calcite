@@ -76,9 +76,13 @@ public class CsvEnumerator<E> implements Enumerator<E> {
   private @Nullable E current;
   private final SourceFileLockManager.@Nullable LockHandle lockHandle;
 
+  @SuppressWarnings("UnusedVariable")
   private static final ThreadLocal<SimpleDateFormat> TIME_FORMAT_DATE;
+  @SuppressWarnings("UnusedVariable")
   private static final ThreadLocal<SimpleDateFormat> TIME_FORMAT_TIME;
+  @SuppressWarnings("UnusedVariable")
   private static final ThreadLocal<SimpleDateFormat> TIME_FORMAT_TIMESTAMP;
+  @SuppressWarnings("UnusedVariable")
   private static final ThreadLocal<SimpleDateFormat> TIME_FORMAT_TIMESTAMP_UTC;
   private static final Pattern DECIMAL_TYPE_PATTERN = Pattern
       .compile("\"decimal\\(([0-9]+),([0-9]+)\\)");
@@ -644,6 +648,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
    * - UTC indicator: Z
    * - Named timezones: EST, PST, GMT, etc.
    */
+  @SuppressWarnings("UnusedMethod")
   private static boolean hasTimezoneInfo(String timestampStr) {
     return TIMEZONE_PATTERN.matcher(timestampStr).matches();
   }
@@ -675,6 +680,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
   private static class SingleColumnRowConverter extends RowConverter<Object> {
     private final RelDataType fieldType;
     private final int fieldIndex;
+    @SuppressWarnings("UnusedVariable")
     private final boolean blankStringsAsNull;
     private final CsvTypeConverter typeConverter;
 

@@ -24,8 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -473,7 +471,8 @@ public class SchemaLifecycleProcessor {
       return;
     }
     String schemaName = config.getName();
-    String bundleId = "run-" + new SimpleDateFormat("yyyyMMdd'T'HHmm").format(new Date());
+    String bundleId = "run-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmm")
+        .format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
     try {
       BundleArchiver.archive(localCacheDir, source, schemaName, bundleId);
     } catch (Exception e) {
@@ -486,6 +485,7 @@ public class SchemaLifecycleProcessor {
    *
    * @param schemaContext Schema context
    */
+  @SuppressWarnings("UnusedVariable")
   private void executeSchemaPostProcessing(SchemaContext schemaContext) {
     List<PostProcessConfig> postProcessConfigs = config.getPostProcess();
     if (postProcessConfigs == null || postProcessConfigs.isEmpty()) {

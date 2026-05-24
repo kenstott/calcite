@@ -305,7 +305,8 @@ public class ParquetReorganizer {
     String fullTargetBase = storageProvider.resolvePath(baseDirectory, config.getTargetBase());
 
     // Temp location with timestamp to isolate each run
-    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        .format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
     String tempBase = fullTargetBase + "/_temp_reorg/" + timestamp;
     String tempPrefix = config.getTargetBase() + "/_temp_reorg/" + timestamp + "/";
 
@@ -631,9 +632,10 @@ public class ParquetReorganizer {
   private List<Map<String, String>> buildBatchCombinations(Connection conn, ReorgConfig config) {
     List<String> batchPartitionColumns = config.getBatchPartitionColumns();
     if (batchPartitionColumns == null || batchPartitionColumns.isEmpty()) {
-      return Collections.emptyList();
+      return new ArrayList<Map<String, String>>();
     }
 
+    @SuppressWarnings("UnusedVariable")
     String sourceGlobTemplate = config.getSourcePattern();
     int startYear = config.getStartYear();
     int endYear = config.getEndYear();
@@ -657,7 +659,7 @@ public class ParquetReorganizer {
 
       if (values.isEmpty()) {
         LOGGER.warn("No values found for batch column '{}', skipping batching", col);
-        return Collections.emptyList();
+        return new ArrayList<Map<String, String>>();
       }
 
       columnNames.add(col);
@@ -1059,7 +1061,7 @@ public class ParquetReorganizer {
     if (incrementalKeyValues == null || incrementalKeyValues.isEmpty()) {
       return false;
     }
-    int currentYear = java.time.Year.now().getValue();
+    int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     String currentYearStr = String.valueOf(currentYear);
     // Check if any key named "year" has the current year value
     String yearValue = incrementalKeyValues.get("year");

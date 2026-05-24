@@ -76,6 +76,7 @@ public abstract class CsvTable extends AbstractTable {
    * Create a default type inference configuration for consistent processing.
    * This ensures we always use the same inference logic even when type inference is disabled.
    */
+  @SuppressWarnings("UnusedMethod")
   private CsvTypeInferrer.TypeInferenceConfig createDefaultInferenceConfig() {
     return new CsvTypeInferrer.TypeInferenceConfig(
         false, // enabled = false (but we'll still run the inference for consistency)

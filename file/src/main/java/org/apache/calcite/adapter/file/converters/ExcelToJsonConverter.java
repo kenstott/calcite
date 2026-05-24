@@ -165,6 +165,7 @@ public final class ExcelToJsonConverter {
     return false;
   }
 
+  @SuppressWarnings("JavaUtilDate")
   private static String getCellValue(Cell cell, FormulaEvaluator evaluator) {
     if (cell == null) {
       return "";
@@ -218,6 +219,7 @@ public final class ExcelToJsonConverter {
     }
   }
 
+  @SuppressWarnings("UnusedMethod")
   private static String toPascalCase(String input) {
     if (input == null || input.isEmpty()) {
       return input;

@@ -72,7 +72,7 @@ public class ApproxCountDistinct { // Temporarily disabled - implements Aggregat
       RelOptTable table = tableScan.getTable();
       ParquetTranslatableTable parquetTable = table.unwrap(ParquetTranslatableTable.class);
 
-      if (parquetTable instanceof StatisticsProvider) {
+      if (parquetTable != null) {
         StatisticsProvider provider = (StatisticsProvider) parquetTable;
         TableStatistics stats = provider.getTableStatistics(table);
 
@@ -115,13 +115,13 @@ public class ApproxCountDistinct { // Temporarily disabled - implements Aggregat
       this.sketch = new HyperLogLogSketch(HLL_PRECISION);
     }
 
-    public void add(Object value) {
+    @Override public void add(Object value) {
       if (value != null) {
         sketch.add(value.toString());
       }
     }
 
-    public long getResult() {
+    @Override public long getResult() {
       long estimate = sketch.getEstimate();
       LOGGER.debug("HLL accumulator returning estimate: {}", estimate);
       return estimate;
@@ -139,7 +139,7 @@ public class ApproxCountDistinct { // Temporarily disabled - implements Aggregat
       this.sketch = sketch;
     }
 
-    public void add(Object value) {
+    @Override public void add(Object value) {
       // Ignore values - we're using the precomputed sketch
       if (!used) {
         LOGGER.debug("Using precomputed HLL sketch, ignoring runtime values");
@@ -147,7 +147,7 @@ public class ApproxCountDistinct { // Temporarily disabled - implements Aggregat
       }
     }
 
-    public long getResult() {
+    @Override public long getResult() {
       long estimate = sketch.getEstimate();
       LOGGER.info("Precomputed HLL returning estimate: {} (98%+ accuracy expected)", estimate);
       return estimate;

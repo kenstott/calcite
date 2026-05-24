@@ -102,6 +102,7 @@ public class ParquetConfig {
   public static int computeOptimalBatchSize() {
     Runtime runtime = Runtime.getRuntime();
     long maxHeapBytes = runtime.maxMemory();
+    @SuppressWarnings("UnusedVariable")
     long availableBytes = runtime.freeMemory();
     int availableCores = runtime.availableProcessors();
 

@@ -120,7 +120,8 @@ public class TrinoJdbcSchemaFactory {
       // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
       // dispatch to the wrong driver. Direct driver.connect() is deterministic.
       final java.sql.Driver trinoDriver =
-          (java.sql.Driver) Class.forName("io.trino.jdbc.TrinoDriver")
+          Class.forName("io.trino.jdbc.TrinoDriver")
+              .asSubclass(java.sql.Driver.class)
               .getDeclaredConstructor().newInstance();
 
       // Build JDBC URL via TrinoDialect
@@ -288,6 +289,7 @@ public class TrinoJdbcSchemaFactory {
   /**
    * Registers tables from the FileSchema's conversion registry as Trino external tables.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void registerFilesAsTables(Connection conn, String directoryPath,
       boolean recursive, String trinoSchema,
       org.apache.calcite.adapter.file.FileSchema fileSchema,
@@ -398,6 +400,7 @@ public class TrinoJdbcSchemaFactory {
   /**
    * Registers SQL views defined in the operand configuration.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void registerSqlViewsInTrino(Connection conn, String trinoSchema,
       TrinoConfig config, Map<String, Object> operand) {
     if (operand == null) {

@@ -51,6 +51,7 @@ public class HDFSStorageProvider implements StorageProvider {
   private final String defaultUri;
 
   // Persistent cache for restart-survivable caching
+  @SuppressWarnings("UnusedVariable")
   private final PersistentStorageCache persistentCache;
 
   /**

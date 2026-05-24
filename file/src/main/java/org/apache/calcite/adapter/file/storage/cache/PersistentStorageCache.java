@@ -69,6 +69,7 @@ public class PersistentStorageCache {
   private static final ObjectMapper MAPPER = new ObjectMapper()
       .enable(SerializationFeature.INDENT_OUTPUT);
 
+  @SuppressWarnings("UnusedVariable")
   private final File cacheDirectory;
   private final String storageType;
   private final long defaultTtlMs;
@@ -369,7 +370,7 @@ public class PersistentStorageCache {
   private String generateHash(String input) {
     try {
       MessageDigest md = MessageDigest.getInstance("SHA-256");
-      byte[] hash = md.digest(input.getBytes());
+      byte[] hash = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
       StringBuilder hexString = new StringBuilder();
       for (byte b : hash) {
         String hex = Integer.toHexString(0xff & b);

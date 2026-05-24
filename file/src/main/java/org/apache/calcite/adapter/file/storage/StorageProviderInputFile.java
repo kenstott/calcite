@@ -64,7 +64,9 @@ public class StorageProviderInputFile implements InputFile {
    * Parquet requires seekable streams to read file metadata and data pages.
    */
   private static class StorageProviderSeekableInputStream extends SeekableInputStream {
+    @SuppressWarnings("UnusedVariable")
     private final StorageProvider storageProvider;
+    @SuppressWarnings("UnusedVariable")
     private final String path;
     private byte[] cachedContent;
     private int position;

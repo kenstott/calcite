@@ -94,6 +94,7 @@ public class EnhancedCsvTranslatableTable extends CsvTranslatableTable {
   /**
    * Adapter that converts Enumerator of Object arrays to Enumerator of Object.
    */
+  @SuppressWarnings("UnusedNestedClass")
   private static class ObjectArrayToObjectEnumerator implements Enumerator<Object> {
     private final Enumerator<@Nullable Object[]> delegate;
 
@@ -121,8 +122,10 @@ public class EnhancedCsvTranslatableTable extends CsvTranslatableTable {
   /**
    * Enumerator that applies projection to rows.
    */
+  @SuppressWarnings("UnusedNestedClass")
   private static class ProjectingObjectEnumerator implements Enumerator<Object> {
     private final Enumerator<@Nullable Object[]> delegate;
+    @SuppressWarnings("UnusedVariable")
     private final int[] fields;
 
     ProjectingObjectEnumerator(Enumerator<@Nullable Object[]> delegate, int[] fields) {
@@ -156,6 +159,7 @@ public class EnhancedCsvTranslatableTable extends CsvTranslatableTable {
   /**
    * Adapter that converts Enumerator to Iterator.
    */
+  @SuppressWarnings("UnusedNestedClass")
   private static class EnumeratorIteratorAdapter
       implements java.util.Iterator<Object[]>, AutoCloseable {
     private final Enumerator<Object[]> enumerator;

@@ -54,6 +54,7 @@ public class FileTable extends AbstractQueryableTable
   private final @Nullable RelProtoDataType protoRowType;
   private final FileReaderV2 reader;
   private final FileRowConverter converter;
+  @SuppressWarnings("UnusedVariable")
   private final String columnNameCasing;
 
   /** Creates a FileTable. */

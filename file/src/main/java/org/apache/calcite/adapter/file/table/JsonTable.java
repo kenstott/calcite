@@ -48,6 +48,7 @@ public class JsonTable extends AbstractTable {
   private final Source source;
   private final SharedJsonData sharedData;
   private final String jsonPath;
+  @SuppressWarnings("UnusedVariable")
   private final JsonSearchConfig config;
   private @Nullable RelDataType rowType;
   protected @Nullable List<Object> dataList;
@@ -224,6 +225,7 @@ public class JsonTable extends AbstractTable {
    * Build a data list from SharedJsonData at the configured jsonPath.
    * Converts each JSON object to a LinkedHashMap matching the deduced field order.
    */
+  @SuppressWarnings("UnusedVariable")
   private List<Object> buildDataListFromSharedData(RelDataTypeFactory typeFactory) {
     JsonNode pathData = sharedData.getDataAtPath(jsonPath);
     if (pathData == null || !pathData.isArray()) {

@@ -93,10 +93,9 @@ public class ConcurrentSpilloverManager {
   public static void cleanupConnectionDirectory(String connectionId) {
     Path dir = CONNECTION_DIRS.remove(connectionId);
     if (dir != null && Files.exists(dir)) {
-      try {
+      try (java.util.stream.Stream<Path> walker = Files.walk(dir)) {
         // Delete all files in the directory
-        Files.walk(dir)
-            .sorted((a, b) -> b.compareTo(a)) // Delete files before directories
+        walker.sorted((a, b) -> b.compareTo(a)) // Delete files before directories
             .forEach(path -> {
               try {
                 Files.deleteIfExists(path);
@@ -123,30 +122,30 @@ public class ConcurrentSpilloverManager {
 
       long cutoffTime = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(hoursOld);
 
-      Files.list(baseDir)
-          .filter(Files::isDirectory)
-          .filter(dir -> {
-            try {
-              return Files.getLastModifiedTime(dir).toMillis() < cutoffTime;
-            } catch (IOException e) {
-              return false;
-            }
-          })
-          .forEach(dir -> {
-            try {
-              Files.walk(dir)
-                  .sorted((a, b) -> b.compareTo(a))
-                  .forEach(path -> {
-                    try {
-                      Files.deleteIfExists(path);
-                    } catch (IOException e) {
-                      // Ignore
-                    }
-                  });
-            } catch (IOException e) {
-              // Ignore
-            }
-          });
+      try (java.util.stream.Stream<Path> listing = Files.list(baseDir)) {
+        listing.filter(Files::isDirectory)
+            .filter(dir -> {
+              try {
+                return Files.getLastModifiedTime(dir).toMillis() < cutoffTime;
+              } catch (IOException e) {
+                return false;
+              }
+            })
+            .forEach(dir -> {
+              try (java.util.stream.Stream<Path> walker = Files.walk(dir)) {
+                walker.sorted((a, b) -> b.compareTo(a))
+                    .forEach(path -> {
+                      try {
+                        Files.deleteIfExists(path);
+                      } catch (IOException e) {
+                        // Ignore
+                      }
+                    });
+              } catch (IOException e) {
+                // Ignore
+              }
+            });
+      }
 
     } catch (IOException e) {
       LOGGER.error("Error during spillover cleanup: {}", e.getMessage());

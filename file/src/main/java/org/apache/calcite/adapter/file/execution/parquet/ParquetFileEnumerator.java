@@ -65,7 +65,7 @@ public class ParquetFileEnumerator<T> implements Enumerator<T> {
     this.source = source;
     this.rowType = rowType;
     this.batchSize = batchSize;
-    this.parquetBatches = new LinkedList<>();
+    this.parquetBatches = new java.util.ArrayDeque<>();
   }
 
   @Override public T current() {
@@ -249,7 +249,7 @@ public class ParquetFileEnumerator<T> implements Enumerator<T> {
   public ParquetFileEnumerator<T> project(int[] columnIndices) {
     // Apply projection to all batches
     Queue<ParquetExecutionEngine.InMemoryParquetData> projectedBatches =
-        new LinkedList<>();
+        new java.util.ArrayDeque<>();
 
     for (ParquetExecutionEngine.InMemoryParquetData batch : parquetBatches) {
       projectedBatches.offer(ParquetExecutionEngine.project(batch, columnIndices));
@@ -265,7 +265,7 @@ public class ParquetFileEnumerator<T> implements Enumerator<T> {
   public ParquetFileEnumerator<T> filter(int columnIndex,
                                          java.util.function.Predicate<Object> predicate) {
     Queue<ParquetExecutionEngine.InMemoryParquetData> filteredBatches =
-        new LinkedList<>();
+        new java.util.ArrayDeque<>();
 
     for (ParquetExecutionEngine.InMemoryParquetData batch : parquetBatches) {
       ParquetExecutionEngine.InMemoryParquetData filtered =

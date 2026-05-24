@@ -240,6 +240,7 @@ public class S3StorageProvider implements StorageProvider {
     }
   }
 
+  @SuppressWarnings("JavaUtilDate")
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
@@ -296,6 +297,7 @@ public class S3StorageProvider implements StorageProvider {
     return entries;
   }
 
+  @SuppressWarnings("JavaUtilDate")
   @Override public FileMetadata getMetadata(String path) throws IOException {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
@@ -312,6 +314,7 @@ public class S3StorageProvider implements StorageProvider {
         metadata.getETag());
   }
 
+  @SuppressWarnings("JavaUtilDate")
   @Override public InputStream openInputStream(String path) throws IOException {
     // Check persistent cache first if available
     // Use original path as cache key for consistency
@@ -413,7 +416,7 @@ public class S3StorageProvider implements StorageProvider {
             .replace("*", ".*");
 
         // Try each year from 2016 to current year
-        int currentYear = java.time.Year.now().getValue();
+        int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
         for (int year = currentYear; year >= 2016; year--) {
           String yearPrefix = beforeWildcard + year + afterWildcard.substring(0, nextSlash >= 0 ? nextSlash + 1 : 0) + constantPart;
 
@@ -713,6 +716,7 @@ public class S3StorageProvider implements StorageProvider {
    * Writes data to S3 using multipart upload with retry on transient errors.
    * Each retry restarts the entire multipart upload from scratch.
    */
+  @SuppressWarnings("UnusedMethod")
   private void writeMultipartWithRetry(String path, byte[] data) throws IOException {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);

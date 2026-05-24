@@ -167,6 +167,7 @@ public class FormatAwareSchemaResolver {
     return resolveParquetLatestFile(files);
   }
 
+  @SuppressWarnings("JavaUtilDate")
   private RelDataType resolveParquetUnionAllColumns(List<File> files) {
     LOGGER.debug("Using UNION_ALL_COLUMNS strategy for Parquet files");
 
@@ -214,6 +215,7 @@ public class FormatAwareSchemaResolver {
     return result;
   }
 
+  @SuppressWarnings("JavaUtilDate")
   private RelDataType resolveParquetLatestFile(List<File> files) {
     LOGGER.debug("Using LATEST_FILE strategy for Parquet files");
 
@@ -280,6 +282,7 @@ public class FormatAwareSchemaResolver {
   /**
    * Resolves CSV schema using conservative consensus approach.
    */
+  @SuppressWarnings("UnusedVariable")
   private RelDataType resolveCsvSchema(List<File> files, SchemaStrategy strategy) {
     LOGGER.info("Resolving CSV schema for {} files using richest-file strategy", files.size());
 
@@ -307,6 +310,7 @@ public class FormatAwareSchemaResolver {
   /**
    * Resolves JSON schema using latest-wins approach.
    */
+  @SuppressWarnings({"JavaUtilDate", "UnusedVariable"})
   private RelDataType resolveJsonSchema(List<File> files, SchemaStrategy strategy) {
     LOGGER.info("Resolving JSON schema for {} files using latest-file strategy", files.size());
 
@@ -396,7 +400,9 @@ public class FormatAwareSchemaResolver {
   private int getCsvColumnCount(File file) {
     try {
       // Simple CSV column count by reading first line
-      try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+      try (java.io.BufferedReader reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(new java.io.FileInputStream(file),
+              java.nio.charset.StandardCharsets.UTF_8))) {
         String firstLine = reader.readLine();
         if (firstLine != null) {
           // Simple comma counting (not perfect, but works for basic CSV)
@@ -413,7 +419,9 @@ public class FormatAwareSchemaResolver {
   private RelDataType inferCsvSchema(File file) {
     try {
       // Simple CSV schema inference by reading first line
-      try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+      try (java.io.BufferedReader reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(new java.io.FileInputStream(file),
+              java.nio.charset.StandardCharsets.UTF_8))) {
         String firstLine = reader.readLine();
         if (firstLine != null) {
           String[] columns = firstLine.split(",", -1);

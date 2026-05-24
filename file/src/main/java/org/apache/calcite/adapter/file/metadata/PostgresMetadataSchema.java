@@ -244,7 +244,7 @@ public class PostgresMetadataSchema extends AbstractSchema {
   /**
    * pg_type - data types
    */
-  private class PgTypeTable extends AbstractTable implements ScannableTable {
+  private static class PgTypeTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -354,7 +354,7 @@ public class PostgresMetadataSchema extends AbstractSchema {
   /**
    * pg_views view - view listing (empty for file adapter)
    */
-  private class PgViewsView extends AbstractTable implements ScannableTable {
+  private static class PgViewsView extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)

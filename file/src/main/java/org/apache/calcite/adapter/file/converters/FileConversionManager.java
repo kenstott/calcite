@@ -247,6 +247,7 @@ public class FileConversionManager {
   /**
    * Handles JSON files which might be derived via JSONPath extraction.
    */
+  @SuppressWarnings("UnusedVariable")
   private static boolean handleJsonFile(File jsonFile, File outputDir, File baseDirectory) {
     try {
       File metadataDir = baseDirectory != null ? baseDirectory : jsonFile.getParentFile();
@@ -276,6 +277,7 @@ public class FileConversionManager {
    * Handles YAML files which might be derived via JSONPath extraction.
    * YAML is a superset of JSON, so JSONPath queries work with YAML data.
    */
+  @SuppressWarnings("UnusedVariable")
   private static boolean handleYamlFile(File yamlFile, File outputDir, File baseDirectory) {
     try {
       File metadataDir = baseDirectory != null ? baseDirectory : yamlFile.getParentFile();

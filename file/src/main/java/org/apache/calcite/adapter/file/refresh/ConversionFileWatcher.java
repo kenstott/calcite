@@ -147,8 +147,10 @@ public class ConversionFileWatcher {
         long intervalMillis = refreshInterval != null ?
             refreshInterval.toMillis() : 60000; // Default 1 minute
 
-        executor.scheduleWithFixedDelay(() -> checkFile(effectiveSchema, file),
-            intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        @SuppressWarnings("FutureReturnValueIgnored")
+        java.util.concurrent.ScheduledFuture<?> ignored =
+            executor.scheduleWithFixedDelay(() -> checkFile(effectiveSchema, file),
+                intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
       }
     }
   }

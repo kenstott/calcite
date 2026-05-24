@@ -81,6 +81,7 @@ public class GlobParquetTable extends AbstractTable
   private final String tableName;
   private final File cacheDir;
   private final @Nullable Duration refreshInterval;
+  @SuppressWarnings("UnusedVariable")
   private final BufferAllocator allocator;
   private final String columnNameCasing;
 
@@ -283,10 +284,13 @@ public class GlobParquetTable extends AbstractTable
 
     // Walk directory tree for ** patterns
     if (globPattern.contains("**")) {
-      Files.walk(basePath)
-          .filter(Files::isRegularFile)
-          .filter(path -> path.getFileName().toString().matches(regex))
-          .forEach(path -> files.add(path.toFile()));
+      try (java.util.stream.Stream<java.nio.file.Path> stream = Files.walk(basePath)) {
+        stream.filter(Files::isRegularFile)
+            .filter(path -> path.getFileName().toString().matches(regex))
+            .forEach(path -> files.add(path.toFile()));
+      } catch (IOException e) {
+        throw new RuntimeException("Error walking directory: " + basePath, e);
+      }
     } else {
       // Simple directory listing
       File dir = basePath.toFile();

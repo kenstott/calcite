@@ -110,6 +110,7 @@ public final class ParquetExecutionEngine {
    */
   public static InMemoryParquetData convertToParquet(VectorSchemaRoot batch) {
     try {
+      @SuppressWarnings("UnusedVariable")
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
       List<String> stringTable = new ArrayList<>();
 
@@ -329,6 +330,7 @@ public final class ParquetExecutionEngine {
     return new MessageType("root", fields);
   }
 
+  @SuppressWarnings("UnusedVariable")
   private static ParquetMetadata createMinimalMetadata(MessageType schema, int rowCount) {
     // Create minimal metadata for in-memory use
     // In real implementation, would include row groups, column statistics, etc.
@@ -343,6 +345,7 @@ public final class ParquetExecutionEngine {
     return new MessageType("projected", projectedFields);
   }
 
+  @SuppressWarnings("UnusedVariable")
   private static void copyColumn(ByteBuffer source, ByteBuffer dest, int columnIndex,
                                  MessageType schema) {
     // Skip to the right column and copy data

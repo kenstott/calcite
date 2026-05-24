@@ -72,6 +72,7 @@ public final class CsvTypeConverter {
 
   private final Map<SqlTypeName, DateTimeFormatter> formatters;
   private final Set<String> nullEquivalents;
+  @SuppressWarnings("UnusedVariable")
   private final boolean blankStringsAsNull;
 
   public CsvTypeConverter(Map<SqlTypeName, DateTimeFormatter> formatters, Set<String> nullEquivalents, boolean blankStringsAsNull) {

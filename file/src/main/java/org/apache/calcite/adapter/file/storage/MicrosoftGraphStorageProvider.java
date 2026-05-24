@@ -49,7 +49,6 @@ import java.util.Set;
 public class MicrosoftGraphStorageProvider implements StorageProvider {
 
   private static final String GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
-  private static final Logger LOGGER = LoggerFactory.getLogger(MicrosoftGraphStorageProvider.class);
 
   // Common document library names in different languages
   private static final Set<String> DOCUMENT_LIBRARY_NAMES =
@@ -146,8 +145,6 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     ensureInitialized();
     List<FileEntry> entries = new ArrayList<>();
 
-    // Normalize and preserve the original path for building full paths
-    String originalPath = path;
     if (path.startsWith("/")) {
       path = path.substring(1);
     }
@@ -459,6 +456,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     }
   }
 
+  @SuppressWarnings("UnusedMethod")
   private String buildItemPath(JsonNode item) {
     // Build path from parentReference and name
     String name = item.get("name").asText();

@@ -397,7 +397,6 @@ public class HtmlToJsonConverter {
       ObjectNode jsonRow = MAPPER.createObjectNode();
 
       // Process cells based on raw headers, applying mappings and skips
-      int headerIndex = 0;
       for (int cellIndex = 0; cellIndex < Math.min(rawHeaders.size(), cells.size()); cellIndex++) {
         String rawHeader = rawHeaders.get(cellIndex);
 
@@ -509,6 +508,7 @@ public class HtmlToJsonConverter {
     return defaultHeaders;
   }
 
+  @SuppressWarnings("UnusedMethod")
   private static List<String> extractHeaders(Element table, String columnNameCasing) {
     // Try th elements first (in thead or first row)
     Elements headerElements = table.select("thead th, tr:first-child th");
@@ -536,6 +536,7 @@ public class HtmlToJsonConverter {
   /**
    * Determines if the first row should be skipped (used as headers).
    */
+  @SuppressWarnings("UnusedVariable")
   private static boolean shouldSkipFirstRow(Element table, List<String> headers) {
     // Only skip first row if it contains th elements (actual header row)
     // Do NOT skip first row when it contains td elements (data row)
@@ -652,6 +653,7 @@ public class HtmlToJsonConverter {
   /**
    * Processes HTML tables from a crawled page.
    */
+  @SuppressWarnings("UnusedVariable")
   private static List<File> processHtmlTables(String url, List<TableInfo> tables,
                                              File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory) throws IOException {
     List<File> jsonFiles = new ArrayList<>();
@@ -697,6 +699,7 @@ public class HtmlToJsonConverter {
   /**
    * Processes a downloaded data file (CSV, Excel, etc.).
    */
+  @SuppressWarnings("UnusedVariable")
   private static List<File> processDataFile(String url, File dataFile,
                                            File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory) throws IOException {
     List<File> jsonFiles = new ArrayList<>();
@@ -704,8 +707,6 @@ public class HtmlToJsonConverter {
 
     try {
       if (fileName.endsWith(".csv") || fileName.endsWith(".tsv")) {
-        // Process as CSV - create a JSON representation
-        File jsonFile = new File(outputDir, sanitizeUrlForFileName(url) + ".json");
         // TODO: Implement CSV to JSON conversion
         LOGGER.info("CSV conversion not yet implemented for: " + dataFile.getName());
 

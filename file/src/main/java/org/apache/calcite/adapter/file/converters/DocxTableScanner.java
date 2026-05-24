@@ -160,6 +160,7 @@ public final class DocxTableScanner {
   /**
    * Finds a title for the table by looking at preceding paragraphs.
    */
+  @SuppressWarnings("UnusedVariable")
   private static String findTableTitle(XWPFDocument document, XWPFTable table,
       List<XWPFParagraph> paragraphs) {
     // Get body elements in document order (paragraphs and tables interspersed)
@@ -435,6 +436,7 @@ public final class DocxTableScanner {
     return fileName.toString();
   }
 
+  @SuppressWarnings("UnusedMethod")
   private static String toPascalCase(String input) {
     StringBuilder result = new StringBuilder();
     boolean capitalizeNext = true;

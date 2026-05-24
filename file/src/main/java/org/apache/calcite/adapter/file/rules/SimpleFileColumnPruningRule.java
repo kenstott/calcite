@@ -60,7 +60,7 @@ public class SimpleFileColumnPruningRule extends RelRule<SimpleFileColumnPruning
     }
 
     // Only optimize Parquet table scans
-    if (!(scan.getTable().unwrap(ParquetTranslatableTable.class) instanceof ParquetTranslatableTable)) {
+    if (scan.getTable().unwrap(ParquetTranslatableTable.class) == null) {
       return;
     }
 
@@ -84,9 +84,8 @@ public class SimpleFileColumnPruningRule extends RelRule<SimpleFileColumnPruning
 
   private TableStatistics getTableStatistics(TableScan scan) {
     ParquetTranslatableTable parquetTable = scan.getTable().unwrap(ParquetTranslatableTable.class);
-    if (parquetTable instanceof StatisticsProvider) {
-      StatisticsProvider provider = (StatisticsProvider) parquetTable;
-      return provider.getTableStatistics(scan.getTable());
+    if (parquetTable != null) {
+      return ((StatisticsProvider) parquetTable).getTableStatistics(scan.getTable());
     }
     return null;
   }
@@ -160,6 +159,7 @@ public class SimpleFileColumnPruningRule extends RelRule<SimpleFileColumnPruning
     return (long) (baseSize * compressionRatio);
   }
 
+  @SuppressWarnings("UnusedVariable")
   private RelNode createOptimizedProjection(LogicalProject project, TableScan scan,
                                            ColumnPruningAnalysis analysis, RelBuilder builder) {
 

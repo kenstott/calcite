@@ -518,13 +518,10 @@ public class IcebergCatalogManager {
    */
   public static List<TableIdentifier> listAlternatesForSource(
       Map<String, Object> config, String sourceTableName) {
-    List<TableIdentifier> allAlternates = listAlternateTables(config);
-    List<TableIdentifier> sourceAlternates = new ArrayList<TableIdentifier>();
-
     // In the current implementation, we rely on the AlternateRegistry in FileSchema
     // to track source->alternate mappings. This method returns all alternates
     // since the naming convention (_mv_xxx) doesn't encode the source table.
-    return allAlternates;
+    return listAlternateTables(config);
   }
 
   /**

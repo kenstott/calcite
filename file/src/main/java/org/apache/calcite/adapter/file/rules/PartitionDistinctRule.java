@@ -235,6 +235,7 @@ public class PartitionDistinctRule extends RelRule<PartitionDistinctRule.Config>
   /**
    * Create a VALUES node containing the partition values.
    */
+  @SuppressWarnings("UnusedVariable")
   private RelNode createValuesNode(Aggregate aggregate, List<String> columnNames,
       List<List<String>> rows) {
     RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();

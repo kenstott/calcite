@@ -59,6 +59,7 @@ public class SimpleHLLCountDistinctRule extends RelRule<SimpleHLLCountDistinctRu
   public static final SimpleHLLCountDistinctRule APPROX_ONLY_INSTANCE =
       (SimpleHLLCountDistinctRule) Config.APPROX_ONLY.toRule();
 
+  @SuppressWarnings("UnusedVariable")
   private final boolean approxOnly;
 
   private SimpleHLLCountDistinctRule(Config config) {

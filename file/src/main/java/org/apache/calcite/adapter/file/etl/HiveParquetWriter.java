@@ -150,7 +150,8 @@ public class HiveParquetWriter {
     String fullOutputPath = resolveOutputPath(config);
 
     // Temp location with timestamp to isolate each run
-    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        .format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
     String tempBase = fullOutputPath + "/_temp_materialize/" + timestamp;
 
     try (Connection conn = getDuckDBConnection()) {
@@ -370,6 +371,7 @@ public class HiveParquetWriter {
   /**
    * Processes a single batch of data.
    */
+  @SuppressWarnings("UnusedVariable")
   private MaterializeBatchResult processBatch(Connection conn, MaterializeConfig config,
       DataSource source, Map<String, String> batchVariables,
       String tempBase, String finalBase) throws SQLException, IOException {
@@ -417,6 +419,7 @@ public class HiveParquetWriter {
   /**
    * Sets lifecycle rule for temp cleanup (S3 only).
    */
+  @SuppressWarnings("UnusedVariable")
   private void setLifecycleRule(String outputLocation, String tempBase) {
     String tempPrefix = outputLocation + "/_temp_materialize/";
     try {
@@ -430,6 +433,7 @@ public class HiveParquetWriter {
   /**
    * Builds batch combinations from the data source.
    */
+  @SuppressWarnings("UnusedVariable")
   private List<Map<String, String>> buildBatchCombinations(DataSource source,
       List<String> batchByColumns) throws IOException {
 

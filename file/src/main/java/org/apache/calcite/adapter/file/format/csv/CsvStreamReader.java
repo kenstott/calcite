@@ -39,7 +39,9 @@ import java.util.Queue;
  * Extension to {@link CSVReader} that can read newly appended file content.
  */
 public class CsvStreamReader extends CSVReader implements Closeable {
+  @SuppressWarnings("HidingField")
   protected final CSVParser parser;
+  @SuppressWarnings("HidingField")
   protected final int skipLines;
   protected final Tailer tailer;
   protected final Queue<String> contentQueue;
@@ -143,7 +145,7 @@ public class CsvStreamReader extends CSVReader implements Closeable {
    * @return the next line from the file without trailing newline
    *
    */
-  protected @Nullable String getNextLine() {
+  @Override protected @Nullable String getNextLine() {
     return contentQueue.poll();
   }
 

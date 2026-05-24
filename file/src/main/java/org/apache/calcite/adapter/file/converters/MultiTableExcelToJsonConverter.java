@@ -662,6 +662,7 @@ public final class MultiTableExcelToJsonConverter {
     return null;
   }
 
+  @SuppressWarnings("JavaUtilDate")
   private static String getCellValue(Cell cell, FormulaEvaluator evaluator) {
     if (cell == null) {
       return "";

@@ -316,6 +316,7 @@ public class TableConstraints {
    * @param columnNames The ordered list of column names
    * @return List of collations (currently returns null as not implemented)
    */
+  @SuppressWarnings("UnusedVariable")
   private static @Nullable List<RelCollation> parseCollations(
       Map<String, Object> constraints,
       List<String> columnNames) {

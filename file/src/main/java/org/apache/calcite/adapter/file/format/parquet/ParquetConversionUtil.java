@@ -277,6 +277,7 @@ public class ParquetConversionUtil {
   /**
    * Perform conversion to remote storage (S3, etc.).
    */
+  @SuppressWarnings("UnusedVariable")
   private static void performRemoteConversion(Source source, String tableName, Table table,
       StorageProviderFile targetFile, SchemaPlus parentSchema, String schemaName) throws Exception {
 
@@ -307,6 +308,7 @@ public class ParquetConversionUtil {
   /**
    * Perform the actual conversion to a temporary file.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void performConversion(Source source, String tableName, Table table,
       File targetFile, SchemaPlus parentSchema, String schemaName) throws Exception {
 
@@ -386,6 +388,7 @@ public class ParquetConversionUtil {
    * Convert an enumerable directly to Parquet using native Parquet writers.
    * This preserves the original schema structure and column names exactly.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void convertEnumerableToParquetDirect(org.apache.calcite.linq4j.Enumerable<Object[]> enumerable,
       org.apache.calcite.rel.type.RelDataType rowType, File targetFile, JavaTypeFactory typeFactory,
       boolean blankStringsAsNull) throws Exception {
@@ -690,6 +693,7 @@ public class ParquetConversionUtil {
   /**
    * Check if a string value represents a null value using default null equivalents.
    */
+  @SuppressWarnings("UnusedMethod")
   private static boolean isNullRepresentation(String value) {
     return NullEquivalents.isNullRepresentation(value);
   }
@@ -697,6 +701,7 @@ public class ParquetConversionUtil {
   /**
    * Check if a string value represents a null value using specified null equivalents.
    */
+  @SuppressWarnings("UnusedMethod")
   private static boolean isNullRepresentation(String value, Set<String> nullEquivalents) {
     return NullEquivalents.isNullRepresentation(value, nullEquivalents);
   }
@@ -1045,6 +1050,7 @@ public class ParquetConversionUtil {
    */
   private static class TranslatableTableAdapter extends org.apache.calcite.schema.impl.AbstractTable implements org.apache.calcite.schema.ScannableTable {
     private final org.apache.calcite.schema.TranslatableTable translatableTable;
+    @SuppressWarnings("UnusedVariable")
     private final String schemaName;
 
     public TranslatableTableAdapter(org.apache.calcite.schema.TranslatableTable translatableTable, String schemaName) {
@@ -1066,6 +1072,7 @@ public class ParquetConversionUtil {
 
         // Create a temporary schema with just this table
         String tempTableName = "temp_table_" + System.currentTimeMillis();
+        @SuppressWarnings("UnusedVariable")
         SchemaPlus tempSchema = rootSchema.add("TEMP_SCAN", new org.apache.calcite.schema.impl.AbstractSchema() {
           @Override protected java.util.Map<String, org.apache.calcite.schema.Table> getTableMap() {
             return java.util.Collections.singletonMap(tempTableName, translatableTable);

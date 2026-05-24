@@ -95,6 +95,7 @@ public class ParquetEnumerator<E> implements Enumerator<E> {
 
   // Dataset metadata
   private int totalRowCount = -1; // Unknown until fully processed
+  @SuppressWarnings("UnusedVariable")
   private int totalBatchCount = 0;
   private boolean isFullyProcessed = false;
 
@@ -104,6 +105,7 @@ public class ParquetEnumerator<E> implements Enumerator<E> {
   private boolean done = false;
 
   // Batch management
+  @SuppressWarnings("UnusedVariable")
   private Iterator<BatchInfo> batchIterator;
   private final List<BatchInfo> batchInfoList = new ArrayList<>();
 
@@ -427,6 +429,7 @@ public class ParquetEnumerator<E> implements Enumerator<E> {
            GZIPInputStream gzis = new GZIPInputStream(fis);
            ObjectInputStream ois = new ObjectInputStream(gzis)) {
 
+        @SuppressWarnings("BanSerializableRead")
         SpillData spillData = (SpillData) ois.readObject();
 
         // Restore batch data
@@ -620,18 +623,19 @@ public class ParquetEnumerator<E> implements Enumerator<E> {
     final int[] spillFileCount = {0};
 
     try {
-      Files.walk(spillDirectory)
-          .filter(Files::isRegularFile)
-          .forEach(path -> {
-            try {
-              long size = Files.size(path);
-              totalSpillSize[0] += size;
-              spillFileCount[0]++;
-              Files.delete(path);
-            } catch (IOException e) {
-              LOGGER.error("Failed to cleanup spill file: {}, {}", path, e.getMessage());
-            }
-          });
+      try (java.util.stream.Stream<java.nio.file.Path> stream = Files.walk(spillDirectory)) {
+        stream.filter(Files::isRegularFile)
+            .forEach(path -> {
+              try {
+                long size = Files.size(path);
+                totalSpillSize[0] += size;
+                spillFileCount[0]++;
+                Files.delete(path);
+              } catch (IOException e) {
+                LOGGER.error("Failed to cleanup spill file: {}, {}", path, e.getMessage());
+              }
+            });
+      }
       Files.delete(spillDirectory);
 
       if (spillFileCount[0] > 0) {

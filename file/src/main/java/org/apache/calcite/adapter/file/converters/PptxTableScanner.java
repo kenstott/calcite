@@ -536,6 +536,7 @@ public final class PptxTableScanner {
     return fileName.toString();
   }
 
+  @SuppressWarnings("UnusedMethod")
   private static String toPascalCase(String input) {
     StringBuilder result = new StringBuilder();
     boolean capitalizeNext = true;

@@ -553,7 +553,7 @@ public class DimensionConfig {
   @SuppressWarnings("unchecked")
   public static Map<String, DimensionConfig> fromDimensionsMap(Map<String, Object> dimensionsMap) {
     if (dimensionsMap == null || dimensionsMap.isEmpty()) {
-      return Collections.emptyMap();
+      return new LinkedHashMap<String, DimensionConfig>();
     }
 
     Map<String, DimensionConfig> result = new LinkedHashMap<String, DimensionConfig>();

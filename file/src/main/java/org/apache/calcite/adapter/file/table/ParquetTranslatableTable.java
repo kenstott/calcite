@@ -84,6 +84,7 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
   private RelDataType rowType;
   private final StatisticsBuilder statisticsBuilder;
   private volatile TableStatistics cachedStatistics;
+  @SuppressWarnings("UnusedVariable")
   private final String schemaName;
 
   /**
@@ -317,6 +318,7 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
   /**
    * Enumerator that reads from Parquet files.
    */
+  @SuppressWarnings("UnusedNestedClass")
   private class ParquetReaderEnumerator implements Enumerator<Object[]> {
     private final AtomicBoolean cancelFlag;
     private ParquetReader<GenericRecord> reader;
@@ -486,8 +488,6 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
         // Calculate costs based on actual data characteristics
         double cpu = rowCount * 0.01; // CPU cost per row
         double io = dataSize * 0.0001; // IO cost per byte
-        double memory = Math.min(dataSize * 0.1, rowCount * 10); // Memory usage estimate
-
         return planner.getCostFactory().makeCost(rowCount, cpu, io);
       }
 

@@ -95,7 +95,9 @@ public class HttpSource implements DataSource {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HttpSource.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  @SuppressWarnings("UnusedVariable")
   private static final Pattern VAR_PATTERN = Pattern.compile("\\{([^}]+)\\}");
+  @SuppressWarnings("UnusedVariable")
   private static final Pattern ENV_PATTERN = Pattern.compile("env:(.+)");
 
   private final HttpSourceConfig config;
@@ -463,6 +465,7 @@ public class HttpSource implements DataSource {
     private final Map<String, String> baseParams;
     private final Map<String, String> variables;
     private final HttpSourceConfig.PaginationConfig pagination;
+    @SuppressWarnings("UnusedVariable")
     private final String cacheKey;
     private final String rawCacheFilePath;
 
@@ -1209,6 +1212,7 @@ public class HttpSource implements DataSource {
    * @return The cache path
    * @throws IOException if caching fails
    */
+  @SuppressWarnings("UnusedMethod")
   private String cacheResponse(InputStream input, String cachePath) throws IOException {
     if (cachePath == null) {
       return readResponse(input);
@@ -1332,13 +1336,10 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Extracts content from a ZIP archive and caches it to storage provider.
+   * Adds derived variables computed from the given dimension variables.
    *
-   * @param input ZIP file input stream
-   * @param pattern Glob pattern to match file names (e.g., "*.csv")
-   * @param cachePath Path to write file to storage provider
-   * @return The cache path
-   * @throws IOException if extraction fails or no matching file found
+   * @param variables dimension variables for this batch
+   * @return variables map extended with derived entries
    */
   private Map<String, String> addDerivedVariables(Map<String, String> variables) {
     Map<String, String> result = new LinkedHashMap<String, String>(variables);
@@ -1697,7 +1698,7 @@ public class HttpSource implements DataSource {
         if (errorLower.contains("no data") || errorLower.contains("not found")
             || errorLower.contains("parameter_empty") || errorLower.contains("unknown error")) {
           LOGGER.debug("API returned no-data error, returning empty result: {}", errorMessage);
-          return Collections.emptyList();
+          return new ArrayList<Map<String, Object>>();
         }
 
         LOGGER.warn("API error at {}: {}", respConfig.getErrorPath(), errorMessage);
@@ -1746,12 +1747,10 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Parses cached delimited response (CSV or TSV) returning a lazy iterator.
+   * Returns the delimiter character for the given response config.
    *
-   * @param cachePath Path to cached file in storage provider
-   * @param delimiter The delimiter character (comma for CSV, tab for TSV)
-   * @return Iterator over rows, each row is a Map with column names as keys
-   * @throws IOException if reading from cache fails
+   * @param respConfig response configuration
+   * @return delimiter character (comma for CSV, tab for TSV, or custom)
    */
   private static char resolveDelimiter(HttpSourceConfig.ResponseConfig respConfig) {
     String custom = respConfig.getDelimiter();
@@ -1804,6 +1803,7 @@ public class HttpSource implements DataSource {
     private final List<HttpSourceConfig.FixedWidthConfig.Column> columns;
     private Map<String, Object> nextRow;
     private boolean exhausted;
+    @SuppressWarnings("UnusedVariable")
     private int lineNumber;
 
     LazyFixedWidthIterator(InputStream inputStream, String cachePath,
@@ -3039,6 +3039,7 @@ public class HttpSource implements DataSource {
    * @param cachePath Path to write the cached response
    * @param content Response content to cache
    */
+  @SuppressWarnings("UnusedMethod")
   private void writeRawCache(String cachePath, String content) {
     try {
       if (isLocalPath(cachePath)) {

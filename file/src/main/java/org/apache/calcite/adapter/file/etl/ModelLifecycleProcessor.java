@@ -340,11 +340,9 @@ public class ModelLifecycleProcessor {
    */
   private List<ModelConfig.SchemaRef> topologicalSort(List<ModelConfig.SchemaRef> schemas) {
     // Build dependency graph
-    Map<String, ModelConfig.SchemaRef> schemaMap = new HashMap<>();
     Map<String, Set<String>> dependencies = new HashMap<>();
 
     for (ModelConfig.SchemaRef schema : schemas) {
-      schemaMap.put(schema.getName(), schema);
       dependencies.put(schema.getName(), new HashSet<>(schema.getDependsOn()));
     }
 

@@ -353,6 +353,7 @@ public class CompressedColumnBatch implements AutoCloseable {
     return new ColumnCompressionInfo(columnIndex, bestEncoding, bitWidth);
   }
 
+  @SuppressWarnings("UnusedVariable")
   private DataCharacteristics analyzeDataCharacteristics(IntVector vector) {
     // Simplified analysis - real implementation would be more sophisticated
     return new DataCharacteristics();

@@ -53,105 +53,7 @@ public class ConversionMetadata {
   private static final ConcurrentHashMap<String, ReentrantReadWriteLock> JVM_LOCKS =
       new ConcurrentHashMap<>();
 
-  // Use FileConversionManager directly instead of static list
 
-  /**
-   * Generates the complete file extensions list by parsing FileConversionManager methods.
-   * This uses the actual source of truth and includes all compression variants.
-   */
-  private static java.util.List<java.util.Map.Entry<String, String>> generateFileExtensions() {
-    java.util.List<java.util.Map.Entry<String, String>> extensions = new java.util.ArrayList<>();
-
-    // Generate test filenames dynamically from FileConversionManager
-    java.util.List<String> testExtensions = new java.util.ArrayList<>();
-
-    // Test common file types to see which ones are recognized
-    String[] candidateExtensions = {
-        "csv", "csv.gz", "tsv", "tsv.gz", "json", "json.gz", "parquet",
-        "yaml", "yml", "arrow", "xlsx", "xls", "html", "htm",
-        "xml", "md", "docx", "pptx", "gz", "gzip", "bz2", "xz", "zip"
-    };
-
-    for (String ext : candidateExtensions) {
-      testExtensions.add("test." + ext);
-    }
-
-    for (String testFile : testExtensions) {
-      String fileType = detectTypeFromTestFile(testFile);
-      if (!fileType.equals("unknown")) {
-        // Extract the extension part
-        String extension = extractExtension(testFile);
-        if (extension != null) {
-          extensions.add(java.util.Map.entry(extension, fileType));
-        }
-      }
-    }
-
-    // Add compressed variants for directly usable types
-    String[] baseExtensions = {"csv", "tsv", "json", "yaml", "yml", "arrow"};
-    String[] compressionSuffixes = {"gz", "gzip", "bz2", "xz", "zip"};
-
-    for (String base : baseExtensions) {
-      String baseType = detectTypeFromExtension(base);
-      if (!baseType.equals("unknown")) {
-        for (String compression : compressionSuffixes) {
-          extensions.add(java.util.Map.entry(base + "." + compression, baseType));
-        }
-      }
-    }
-
-    return extensions;
-  }
-
-  /**
-   * Detects file type by using FileConversionManager methods.
-   */
-  private static String detectTypeFromTestFile(String filename) {
-    // Use FileConversionManager's actual logic
-    if (org.apache.calcite.adapter.file.converters.FileConversionManager.requiresConversion(filename)) {
-      return detectConvertibleType(filename);
-    } else if (org.apache.calcite.adapter.file.converters.FileConversionManager.isDirectlyUsable(filename)) {
-      return detectDirectType(filename);
-    }
-    return "unknown";
-  }
-
-  private static String detectConvertibleType(String filename) {
-    String lower = filename.toLowerCase();
-    if (lower.contains(".xlsx")) return "excel";
-    if (lower.contains(".xls")) return "excel";
-    if (lower.contains(".html")) return "html";
-    if (lower.contains(".htm")) return "html";
-    if (lower.contains(".xml")) return "xml";
-    if (lower.contains(".md")) return "markdown";
-    if (lower.contains(".docx")) return "docx";
-    if (lower.contains(".pptx")) return "pptx";
-    return "unknown";
-  }
-
-  private static String detectDirectType(String filename) {
-    String lower = filename.toLowerCase();
-    if (lower.contains(".csv")) return "csv";
-    if (lower.contains(".tsv")) return "tsv";
-    if (lower.contains(".json")) return "json";
-    if (lower.contains(".parquet")) return "parquet";
-    if (lower.contains(".yaml")) return "yaml";
-    if (lower.contains(".yml")) return "yaml";
-    if (lower.contains(".arrow")) return "arrow";
-    return "unknown";
-  }
-
-  private static String detectTypeFromExtension(String extension) {
-    return detectTypeFromTestFile("test." + extension);
-  }
-
-  private static String extractExtension(String filename) {
-    // Remove "test." prefix and return the extension part
-    if (filename.startsWith("test.")) {
-      return filename.substring(5);
-    }
-    return null;
-  }
 
   private final File metadataFile;
   private final Map<String, ConversionRecord> conversions = new ConcurrentHashMap<>();
@@ -960,14 +862,22 @@ public class ConversionMetadata {
    */
   private String detectSourceType(String filePath) {
     if (filePath == null) return "unknown";
-
-    // Use FileConversionManager as the single source of truth
+    String lower = filePath.toLowerCase();
     if (FileConversionManager.requiresConversion(filePath)) {
-      return detectConvertibleType(filePath);
+      if (lower.contains(".xlsx") || lower.contains(".xls")) return "excel";
+      if (lower.contains(".html") || lower.contains(".htm")) return "html";
+      if (lower.contains(".xml")) return "xml";
+      if (lower.contains(".md")) return "markdown";
+      if (lower.contains(".docx")) return "docx";
+      if (lower.contains(".pptx")) return "pptx";
     } else if (FileConversionManager.isDirectlyUsable(filePath)) {
-      return detectDirectType(filePath);
+      if (lower.contains(".csv")) return "csv";
+      if (lower.contains(".tsv")) return "tsv";
+      if (lower.contains(".json")) return "json";
+      if (lower.contains(".parquet")) return "parquet";
+      if (lower.contains(".yaml") || lower.contains(".yml")) return "yaml";
+      if (lower.contains(".arrow")) return "arrow";
     }
-
     return "unknown";
   }
 
@@ -1292,7 +1202,6 @@ public class ConversionMetadata {
       if (existingRecord != null) {
         String oldConvertedFile = existingRecord.convertedFile;
         String oldConversionType = existingRecord.conversionType;
-        String oldTableName = existingRecord.tableName;
 
         // Update the existing record with new conversion information
         existingRecord.convertedFile = convertedFile.getCanonicalPath();
@@ -1774,187 +1683,5 @@ public class ConversionMetadata {
         parquetCache, record.viewScanPattern);
   }
 
-  /**
-   * Checks if a list of file paths follows Hive partitioning convention.
-   * Hive partitioning uses directory structure with key=value patterns.
-   *
-   * @param filePaths List of file paths to check
-   * @return true if files follow Hive partitioning
-   */
-  private static boolean isHivePartitioned(java.util.List<String> filePaths) {
-    if (filePaths == null || filePaths.isEmpty()) {
-      return false;
-    }
 
-    // Need at least 2 files to be considered partitioned
-    if (filePaths.size() < 2) {
-      return false;
-    }
-
-    // Check if files contain Hive partition patterns (key=value in path)
-    // Look for patterns like /year=2020/ or /country=US/
-    int partitionedFileCount = 0;
-    for (String filePath : filePaths) {
-      // Check for key=value pattern in path
-      if (filePath.matches(".*[/\\\\][a-zA-Z_][a-zA-Z0-9_]*=[^/\\\\]+[/\\\\].*")) {
-        partitionedFileCount++;
-      }
-    }
-
-    // Consider it Hive partitioned if most files (>50%) have partition patterns
-    return partitionedFileCount > filePaths.size() / 2;
-  }
-
-  /**
-   * Extracts a table-specific glob pattern from a list of Hive-partitioned files.
-   * Finds the common base directory across all files (before partition directories start).
-   * Returns a pattern like: s3://bucket/schema/table/**\/*.parquet
-   *
-   * @param filePaths List of file paths
-   * @return Table-specific glob pattern, or null if cannot be determined
-   */
-  private static String extractTableSpecificPattern(java.util.List<String> filePaths) {
-    if (filePaths == null || filePaths.isEmpty()) {
-      return null;
-    }
-
-    try {
-      // Find the common prefix across ALL files up to the first partition directory
-      String commonPrefix = findCommonPrefixBeforePartitions(filePaths);
-      if (commonPrefix == null || commonPrefix.isEmpty()) {
-        LOGGER.warn("Could not find common prefix for {} files", filePaths.size());
-        return null;
-      }
-
-      // Ensure commonPrefix ends with a directory separator
-      if (!commonPrefix.endsWith("/") && !commonPrefix.endsWith("\\")) {
-        // Find the last separator and use that as the base
-        int lastSep = Math.max(commonPrefix.lastIndexOf('/'), commonPrefix.lastIndexOf('\\'));
-        if (lastSep > 0) {
-          commonPrefix = commonPrefix.substring(0, lastSep + 1);
-        }
-      }
-
-      // Determine file extension from first file
-      String extension = ".parquet";
-      String firstFile = filePaths.get(0);
-      if (firstFile.contains(".")) {
-        int lastDot = firstFile.lastIndexOf('.');
-        if (lastDot > 0) {
-          extension = firstFile.substring(lastDot);
-        }
-      }
-
-      // Create glob pattern: base/**/*.parquet
-      // Remove trailing slash if present for cleaner pattern
-      String basePrefix = commonPrefix.endsWith("/") || commonPrefix.endsWith("\\")
-          ? commonPrefix.substring(0, commonPrefix.length() - 1)
-          : commonPrefix;
-      String globPattern = basePrefix + "/**/*" + extension;
-
-      LOGGER.debug("Extracted table-specific pattern from {} files: {}", filePaths.size(), globPattern);
-      return globPattern;
-
-    } catch (Exception e) {
-      LOGGER.error("Failed to extract table-specific pattern: {}", e.getMessage(), e);
-      return null;
-    }
-  }
-
-  /**
-   * Finds the common directory prefix across all files, stopping before partition directories.
-   * For example, given:
-   *   s3://bucket/schema/table/year=2020/file1.parquet
-   *   s3://bucket/schema/table/year=2021/file2.parquet
-   * Returns: s3://bucket/schema/table/
-   *
-   * @param filePaths List of file paths
-   * @return Common prefix before partition directories, or null if cannot be determined
-   */
-  private static String findCommonPrefixBeforePartitions(java.util.List<String> filePaths) {
-    if (filePaths.isEmpty()) {
-      return null;
-    }
-
-    // Start with the first file path
-    String firstFile = filePaths.get(0);
-    String[] firstParts = firstFile.split("[/\\\\]");
-
-    // Find where partitions start in the first file (first key=value)
-    int firstPartitionIndex = -1;
-    for (int i = 0; i < firstParts.length; i++) {
-      if (firstParts[i].matches("[a-zA-Z_][a-zA-Z0-9_]*=.*")) {
-        firstPartitionIndex = i;
-        break;
-      }
-    }
-
-    if (firstPartitionIndex == -1) {
-      // No partitions found in first file, use parent directory
-      int lastSep = Math.max(firstFile.lastIndexOf('/'), firstFile.lastIndexOf('\\'));
-      if (lastSep > 0) {
-        return firstFile.substring(0, lastSep + 1);
-      }
-      return null;
-    }
-
-    // Build the common prefix up to (but not including) partition directories
-    StringBuilder commonPrefix = new StringBuilder();
-    for (int i = 0; i < firstPartitionIndex; i++) {
-      if (i > 0) {
-        // Use forward slash for consistency (works for both local and S3)
-        commonPrefix.append("/");
-      }
-      commonPrefix.append(firstParts[i]);
-    }
-
-    String result = commonPrefix.toString();
-
-    // Verify this prefix is common across ALL files
-    for (String filePath : filePaths) {
-      if (!filePath.startsWith(result)) {
-        // Prefix doesn't match all files, try to find shorter common prefix
-        LOGGER.warn("Prefix '{}' doesn't match file: {}", result, filePath);
-        // Return the longest common prefix of all paths
-        result = findLongestCommonPrefix(filePaths);
-        break;
-      }
-    }
-
-    return result.endsWith("/") ? result : result + "/";
-  }
-
-  /**
-   * Finds the longest common prefix across all file paths (character by character).
-   */
-  private static String findLongestCommonPrefix(java.util.List<String> filePaths) {
-    if (filePaths.isEmpty()) {
-      return "";
-    }
-
-    String shortest = filePaths.get(0);
-    for (String path : filePaths) {
-      if (path.length() < shortest.length()) {
-        shortest = path;
-      }
-    }
-
-    int prefixLen = 0;
-    for (int i = 0; i < shortest.length(); i++) {
-      char c = shortest.charAt(i);
-      boolean allMatch = true;
-      for (String path : filePaths) {
-        if (path.charAt(i) != c) {
-          allMatch = false;
-          break;
-        }
-      }
-      if (!allMatch) {
-        break;
-      }
-      prefixLen = i + 1;
-    }
-
-    return shortest.substring(0, prefixLen);
-  }
 }

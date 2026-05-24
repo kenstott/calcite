@@ -60,7 +60,9 @@ public class StorageCacheManager {
       return t;
     });
 
-    cleanupExecutor.scheduleAtFixedRate(
+    @SuppressWarnings("FutureReturnValueIgnored")
+    java.util.concurrent.ScheduledFuture<?> ignored =
+        cleanupExecutor.scheduleAtFixedRate(
         this::cleanupAllCaches,
         CLEANUP_INTERVAL_MINUTES,
         CLEANUP_INTERVAL_MINUTES,

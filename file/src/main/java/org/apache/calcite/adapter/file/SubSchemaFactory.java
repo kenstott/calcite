@@ -30,22 +30,24 @@ import java.util.Map;
  * running ETL and creating the final Calcite schema.
  *
  * <p>Example implementation:
- * <pre>{@code
+ * <pre>
  * public class EconSchemaFactory implements SubSchemaFactory {
  *
- *   @Override *   public String getSchemaResourceName() {
+ *   &#64;Override
+ *   public String getSchemaResourceName() {
  *     return "/econ/econ-schema.yaml";
  *   }
  *
- *   @Override *   public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
- *     builder.resolveDimensions("world_indicators", (ctx, dims) ->
+ *   &#64;Override
+ *   public void configureHooks(FileSchemaBuilder builder, Map&lt;String, Object&gt; operand) {
+ *     builder.resolveDimensions("world_indicators", (ctx, dims) -&gt;
  *         resolveWorldBankDimensions(ctx, dims));
  *
- *     builder.isEnabled("employment_statistics", ctx ->
+ *     builder.isEnabled("employment_statistics", ctx -&gt;
  *         hasApiKey("BLS_API_KEY"));
  *   }
  * }
- * }</pre>
+ * </pre>
  *
  * @see ModelLifecycleProcessor
  * @see FileSchemaBuilder

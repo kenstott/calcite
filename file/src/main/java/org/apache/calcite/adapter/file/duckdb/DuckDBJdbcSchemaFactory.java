@@ -324,11 +324,11 @@ public class DuckDBJdbcSchemaFactory {
       }
 
       // Capture S3 configuration for use in DataSource (make final for lambda/anonymous class access)
-      final String finalS3Region = s3Region;
-      final String finalS3AccessKey = s3AccessKey;
-      final String finalS3SecretKey = s3SecretKey;
-      final String finalEndpointHostPort = endpointHostPort;
-      final Boolean finalUseSSL = useSSL;
+      @SuppressWarnings("UnusedVariable") final String finalS3Region = s3Region;
+      @SuppressWarnings("UnusedVariable") final String finalS3AccessKey = s3AccessKey;
+      @SuppressWarnings("UnusedVariable") final String finalS3SecretKey = s3SecretKey;
+      @SuppressWarnings("UnusedVariable") final String finalEndpointHostPort = endpointHostPort;
+      @SuppressWarnings("UnusedVariable") final Boolean finalUseSSL = useSSL;
 
       // Register similarity functions as DuckDB UDFs
       registerSimilarityFunctions(setupConn);
@@ -870,6 +870,7 @@ public class DuckDBJdbcSchemaFactory {
    * @param fileList Comma-separated list of file paths (may be bracketed)
    * @return true if the files follow Hive partitioning convention
    */
+  @SuppressWarnings("UnusedMethod")
   private static boolean isHivePartitioned(String fileList) {
     if (fileList == null || fileList.isEmpty()) {
       return false;
@@ -917,6 +918,7 @@ public class DuckDBJdbcSchemaFactory {
    * @param fileList Comma-separated list of file paths (may be bracketed)
    * @return Glob pattern suitable for DuckDB's parquet_scan with hive_partitioning=true
    */
+  @SuppressWarnings("UnusedMethod")
   private static String deriveGlobPattern(String fileList) {
     if (fileList == null || fileList.isEmpty()) {
       return null;
@@ -999,6 +1001,7 @@ public class DuckDBJdbcSchemaFactory {
    * @param recreatedIcebergTables List of Iceberg tables that were recreated due to schema changes
    *                              Views for these tables will be dropped and recreated
    */
+  @SuppressWarnings("UnusedVariable")
   private static void registerFilesAsViews(Connection conn, String directoryPath, boolean recursive,
                                           String duckdbSchema, String calciteSchemaName,
                                           org.apache.calcite.adapter.file.FileSchema fileSchema,
@@ -1081,10 +1084,7 @@ public class DuckDBJdbcSchemaFactory {
 
       // Get the Parquet file path - either from cache or original if already Parquet
       String parquetPath = null;
-      String tableName = null;
-
-      // All tables should have proper metadata with tableName set
-      tableName = record.getTableName();
+      String tableName = record.getTableName();
 
       if (tableName == null || tableName.isEmpty()) {
         // This indicates a bug - all tables should be registered with tableName
@@ -1377,6 +1377,7 @@ public class DuckDBJdbcSchemaFactory {
    * Legacy method: Scans directories for Parquet files.
    * Used as fallback when registry is not available or empty.
    */
+  @SuppressWarnings("UnusedMethod")
   private static void registerParquetFilesFromDirectory(Connection conn, File directory,
                                                        boolean recursive, String duckdbSchema)
       throws SQLException {
@@ -1521,6 +1522,7 @@ public class DuckDBJdbcSchemaFactory {
    * Checks if an existing view uses iceberg_scan (vs parquet_scan or other).
    * Used to detect if a view needs to be recreated when table format changes.
    */
+  @SuppressWarnings("UnusedMethod")
   private static boolean viewUsesIcebergScan(Connection conn, String schema, String tableName) throws SQLException {
     String viewSql = getViewSql(conn, schema, tableName);
     return viewSql != null && viewSql.toLowerCase().contains("iceberg_scan");

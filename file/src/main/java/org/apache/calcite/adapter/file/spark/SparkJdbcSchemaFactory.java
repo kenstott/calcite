@@ -116,7 +116,8 @@ public class SparkJdbcSchemaFactory {
       // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
       // dispatch to the wrong driver. Direct driver.connect() is deterministic.
       final java.sql.Driver sparkDriver =
-          (java.sql.Driver) Class.forName("org.apache.hive.jdbc.HiveDriver")
+          Class.forName("org.apache.hive.jdbc.HiveDriver")
+              .asSubclass(java.sql.Driver.class)
               .getDeclaredConstructor().newInstance();
 
       // Build JDBC URL via SparkSqlDialect
@@ -333,6 +334,7 @@ public class SparkJdbcSchemaFactory {
   /**
    * Registers tables from the FileSchema's conversion registry as Spark views.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void registerFilesAsViews(Connection conn, String directoryPath,
       boolean recursive, String sparkSchema,
       org.apache.calcite.adapter.file.FileSchema fileSchema)

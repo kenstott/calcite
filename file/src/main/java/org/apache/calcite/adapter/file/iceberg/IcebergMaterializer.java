@@ -624,8 +624,9 @@ public class IcebergMaterializer {
         long durationMs = System.currentTimeMillis() - startTime;
         LOGGER.info("Skipping materialization for '{}' - no source file changes since {} (watermark={})",
             config.getTargetTableId(),
-            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
-                new Date(cached.completedAt)),
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                .format(java.time.Instant.ofEpochMilli(cached.completedAt)
+                    .atZone(java.time.ZoneOffset.UTC).toLocalDateTime()),
             cached.sourceFileWatermark);
         return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
       }
@@ -659,7 +660,6 @@ public class IcebergMaterializer {
 
     // Process batches with accession-level tracking
     for (Map.Entry<Map<String, String>, List<Map<String, String>>> entry : batchesByIncrementalKey.entrySet()) {
-      Map<String, String> incrementalKeyValues = entry.getKey();
       List<Map<String, String>> batchesForKey = entry.getValue();
 
       // Process all batches for this incremental key
@@ -1429,6 +1429,7 @@ public class IcebergMaterializer {
   /**
    * Builds a SELECT SQL with LIMIT/OFFSET for row batching.
    */
+  @SuppressWarnings("UnusedVariable")
   private String buildSelectSqlWithPaging(MaterializationConfig config, String sourcePattern,
       Map<String, String> batch, int limit, int offset, Set<String> excludeAccessions) {
     StringBuilder sql = new StringBuilder();
@@ -1498,6 +1499,7 @@ public class IcebergMaterializer {
   /**
    * Builds a SELECT SQL statement (not COPY TO) for fetching data into memory.
    */
+  @SuppressWarnings("UnusedVariable")
   private String buildSelectSql(MaterializationConfig config, String sourcePattern,
       Map<String, String> batch, Set<String> excludeAccessions) {
     StringBuilder sql = new StringBuilder();
@@ -1557,6 +1559,7 @@ public class IcebergMaterializer {
   /**
    * Processes data using row-level batching to avoid OOM during expensive computations.
    */
+  @SuppressWarnings("UnusedMethod")
   private void processWithRowBatching(MaterializationConfig config, Connection conn,
       String sourcePattern, String stagingPath, Map<String, String> batch, int rowBatchSize)
       throws SQLException {
@@ -1617,6 +1620,7 @@ public class IcebergMaterializer {
    * Fast count of source records for a batch (used for skip optimization).
    * Returns count WITHOUT exclusion filter - just base source count.
    */
+  @SuppressWarnings("UnusedMethod")
   private long getSourceCountForBatch(Connection conn, MaterializationConfig config,
       String sourcePattern, Map<String, String> batch) {
     try {
@@ -1671,6 +1675,7 @@ public class IcebergMaterializer {
    * Creates a temp table with exclusion accessions for efficient anti-join filtering.
    * This is much faster than a NOT IN clause with thousands of values.
    */
+  @SuppressWarnings("UnusedVariable")
   private void createExclusionTempTable(Connection conn, String accessionCol,
       Set<String> excludeAccessions) throws SQLException {
     long startTime = System.currentTimeMillis();
@@ -2229,6 +2234,7 @@ public class IcebergMaterializer {
    * @param partitionValues The partition values to check for (e.g., {year=2026})
    * @return true if the partition has data, false otherwise
    */
+  @SuppressWarnings("UnusedMethod")
   private boolean partitionHasData(Table table, Map<String, String> partitionValues) {
     if (table == null || partitionValues == null || partitionValues.isEmpty()) {
       return false;
@@ -2410,6 +2416,7 @@ public class IcebergMaterializer {
    * @param config The materialization config (unused - watermarking is always enabled)
    * @return always true - source watermarking is mandatory
    */
+  @SuppressWarnings("UnusedVariable")
   private boolean isSourceWatermarkEnabled(MaterializationConfig config) {
     return true; // Source file change detection is always enabled
   }
@@ -2514,6 +2521,7 @@ public class IcebergMaterializer {
    * storage type (local or S3) as the warehouse. For S3, a lifecycle rule is
    * set up to auto-expire orphaned staging files after 1 day.
    */
+  @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
@@ -2538,6 +2546,7 @@ public class IcebergMaterializer {
    *
    * <p>For local: We attempt cleanup to free disk space immediately.
    */
+  @SuppressWarnings("UnusedMethod")
   private void cleanupStagingDirectory(String stagingPath) {
     // For S3 paths, skip cleanup - lifecycle rule handles orphaned staging
     if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
@@ -2572,7 +2581,7 @@ public class IcebergMaterializer {
   private List<Map<String, String>> buildBatchCombinations(MaterializationConfig config) {
     List<String> batchColumns = config.getBatchPartitionColumns();
     if (batchColumns.isEmpty()) {
-      return Collections.emptyList();
+      return new ArrayList<Map<String, String>>();
     }
 
     // Build values for each batch column

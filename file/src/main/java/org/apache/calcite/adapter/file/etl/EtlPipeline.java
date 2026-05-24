@@ -228,7 +228,6 @@ public class EtlPipeline {
 
     // Memory tracking
     List<MemorySnapshot> memSnapshots = new ArrayList<MemorySnapshot>();
-    long peakUsedBytes = 0;
 
     // Track execution statistics
     long totalRows = 0;
@@ -245,7 +244,7 @@ public class EtlPipeline {
 
     MemorySnapshot startSnap = MemorySnapshot.capture("pipeline_start");
     memSnapshots.add(startSnap);
-    peakUsedBytes = startSnap.getUsedBytes();
+    long peakUsedBytes = startSnap.getUsedBytes();
     LOGGER.debug("Memory at pipeline_start: {}", startSnap);
 
     MaterializationWriter writer = null;
@@ -832,7 +831,7 @@ public class EtlPipeline {
                         formatProgress(currentBatch, neededCountFinal, startTimeFinal),
                         variables);
                     long batchRows =
-                        processSingleBatch(cfgFinal, variables, dsFinal, writerFinal, currentBatch, neededCountFinal, pipelineNameFinal);
+                        processSingleBatch(cfgFinal, variables, dsFinal, writerFinal, currentBatch, pipelineNameFinal);
                     partRows.addAndGet(batchRows);
                     partSucceeded.incrementAndGet();
 
@@ -921,7 +920,7 @@ public class EtlPipeline {
                     formatProgress(processedCount, neededCount, startTime),
                     variables);
                 long batchRows =
-                    processSingleBatch(config, variables, dataSource, writer, processedCount, neededCount, pipelineName);
+                    processSingleBatch(config, variables, dataSource, writer, processedCount, pipelineName);
                 totalRows += batchRows;
                 successfulBatches++;
                 consecutiveFailures = 0;
@@ -1012,15 +1011,12 @@ public class EtlPipeline {
           // Parallel mode: fetch data concurrently, writes are serialized via writeLock
           LOGGER.info("Using {} parallel threads for {} batches", threadCount, neededCount);
 
-          // Build work list of (index, variables) for unprocessed batches
-          final List<int[]> workIndices = new ArrayList<int[]>();
+          // Build work list of variables for unprocessed batches
           final List<Map<String, String>> workVariables = new ArrayList<Map<String, String>>();
-          int batchNum = 0;
           for (int idx = 0; idx < combinations.size(); idx++) {
             if (!standardUnprocessedIndices.contains(idx)) {
               continue;
             }
-            workIndices.add(new int[]{idx, ++batchNum});
             workVariables.add(combinations.get(idx));
           }
 
@@ -1043,7 +1039,6 @@ public class EtlPipeline {
 
           for (int wi = 0; wi < workVariables.size(); wi++) {
             final Map<String, String> vars = workVariables.get(wi);
-            final int batchNumber = workIndices.get(wi)[1];
 
             futures.add(
                 executor.submit(new Callable<Void>() {
@@ -1052,7 +1047,7 @@ public class EtlPipeline {
                 try {
                   LOGGER.info("Processing batch {}/{}: {}", currentBatch, neededCountFinal, vars);
                   long batchRows =
-                      processSingleBatch(cfgFinal, vars, dsFinal, writerFinal, currentBatch, neededCountFinal, pipelineNameFinal);
+                      processSingleBatch(cfgFinal, vars, dsFinal, writerFinal, currentBatch, pipelineNameFinal);
                   parallelTotalRows.addAndGet(batchRows);
                   parallelSucceeded.incrementAndGet();
 
@@ -1145,7 +1140,7 @@ public class EtlPipeline {
             try {
               LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
               long batchRows =
-                  processSingleBatch(config, variables, dataSource, writer, processedCount, neededCount, pipelineName);
+                  processSingleBatch(config, variables, dataSource, writer, processedCount, pipelineName);
               totalRows += batchRows;
               successfulBatches++;
               consecutiveFailures = 0;
@@ -1323,7 +1318,6 @@ public class EtlPipeline {
    * @param urlVariables Variables from URL dimension expansion
    * @param partitionConfig Response partitioning configuration
    * @param writer Materialization writer
-   * @param dataWriter Optional custom data writer
    * @param tracker Incremental tracker for marking processed partitions
    * @param pipelineName Name of the pipeline
    * @return Total rows written across all partitions
@@ -1334,7 +1328,6 @@ public class EtlPipeline {
       Map<String, String> urlVariables,
       HttpSourceConfig.ResponsePartitioningConfig partitionConfig,
       MaterializationWriter writer,
-      DataWriter dataWriter,
       IncrementalTracker tracker,
       String pipelineName) throws IOException {
 
@@ -1456,7 +1449,7 @@ public class EtlPipeline {
 
   private long processSingleBatch(EtlPipelineConfig config, Map<String, String> variables,
       DataSource dataSource, MaterializationWriter writer,
-      int processedCount, int neededCount, String pipelineName) throws IOException {
+      int processedCount, String pipelineName) throws IOException {
 
     // Document sources use dataWriter directly — serialize writes
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
@@ -1499,7 +1492,7 @@ public class EtlPipeline {
         batchRows =
             writeWithResponsePartitioning(data, variables,
             sourceConfig.getResponsePartitioning(),
-            writer, dataWriter, incrementalTracker, pipelineName);
+            writer, incrementalTracker, pipelineName);
       } else {
         if (dataWriter != null) {
           batchRows = dataWriter.write(config, data, variables);
@@ -1848,9 +1841,8 @@ public class EtlPipeline {
    * <p>This prevents stale completion markers from causing skipped processing
    * when the underlying data has been deleted (e.g., bucket cleared).
    *
-   * @param pipelineName Pipeline name (also table name)
-   * @param config Pipeline configuration
-   * @return true if data files exist, false otherwise
+   * @param size number of indices
+   * @return set of all indices from 0 to size-1
    */
   private static Set<Integer> allIndicesSet(int size) {
     Set<Integer> all = new HashSet<Integer>();
@@ -2058,13 +2050,7 @@ public class EtlPipeline {
     }
   }
 
-  /**
-   * Reads ETL properties from Iceberg table metadata.
-   * Returns cached config hash, signature, and row count if available.
-   *
-   * @param tableLocation The Iceberg table location
-   * @return CachedEtlProperties, or null if properties not found or table doesn't exist
-   */
+  @SuppressWarnings("UnusedMethod")
   private CachedEtlProperties readEtlPropertiesFromIceberg(String tableLocation) {
     try {
       org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
@@ -2164,15 +2150,7 @@ public class EtlPipeline {
     }
   }
 
-  /**
-   * Stores ETL properties to an existing Iceberg table.
-   * Used to cache dimension config hash and signature for fast-path skip on subsequent connections.
-   *
-   * @param tableLocation The Iceberg table location
-   * @param configHash Hash of dimension configuration
-   * @param signature Dimension signature
-   * @param rowCount Total row count
-   */
+  @SuppressWarnings("UnusedMethod")
   private void storeEtlPropertiesToIceberg(String tableLocation, String configHash,
       String signature, long rowCount) {
     try {

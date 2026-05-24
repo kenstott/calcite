@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
  * Redis-based distributed lock implementation for cross-JVM synchronization.
  * Uses the SET NX PX pattern for atomic lock acquisition with expiration.
  */
+@SuppressWarnings("UnusedVariable")
 public class RedisDistributedLock implements AutoCloseable {
   private final Object jedisPool; // Using Object to avoid compile-time dependency
   private final String lockKey;

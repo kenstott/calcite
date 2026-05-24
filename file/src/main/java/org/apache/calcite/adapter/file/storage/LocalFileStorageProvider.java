@@ -54,7 +54,6 @@ public class LocalFileStorageProvider implements StorageProvider {
     File[] files = currentDir.listFiles();
     if (files != null) {
       for (File file : files) {
-        String relativePath = baseDir.toPath().relativize(file.toPath()).toString();
         entries.add(
             new FileEntry(
             file.getAbsolutePath(),

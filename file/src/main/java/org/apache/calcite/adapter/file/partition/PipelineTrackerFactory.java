@@ -141,6 +141,7 @@ public final class PipelineTrackerFactory {
     return "duckdb";
   }
 
+  @SuppressWarnings("UnusedVariable")
   private static PipelineTracker createS3Tracker(String baseDirectory,
       Map<String, String> config) {
     String bucket = config.get("bucket");

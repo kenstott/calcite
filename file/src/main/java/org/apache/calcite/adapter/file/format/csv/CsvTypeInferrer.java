@@ -348,8 +348,6 @@ public class CsvTypeInferrer {
     private final Map<SqlTypeName, DateTimeFormatter> dateTimeFormatters = new HashMap<>();
     private int totalValues = 0;
     private int nullValues = 0;
-    private int emptyStringValues = 0;
-
     ColumnTypeTracker(String columnName, TypeInferenceConfig config) {
       this.columnName = columnName;
       this.config = config;

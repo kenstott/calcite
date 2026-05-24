@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Used for Parquet conversion where we need to scan the table data.
  */
 public class CsvScannableTable extends CsvTable implements ScannableTable {
+  @SuppressWarnings("UnusedVariable")
   private static final Logger LOGGER = LoggerFactory.getLogger(CsvScannableTable.class);
 
   /** Creates a CsvScannableTable. */

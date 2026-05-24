@@ -515,7 +515,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
 
   private Map<String, String> unflattenKeyValues(String sourceKey) {
     if ("_empty".equals(sourceKey)) {
-      return Collections.emptyMap();
+      return new LinkedHashMap<String, String>();
     }
     Map<String, String> result = new LinkedHashMap<>();
     if (sourceKey.contains("=") && sourceKey.contains("__")) {

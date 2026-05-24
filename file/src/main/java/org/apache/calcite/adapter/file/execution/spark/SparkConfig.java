@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.file.execution.spark;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,8 +45,6 @@ import java.util.Properties;
  * }</pre>
  */
 public class SparkConfig {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SparkConfig.class);
-
   public static final String DEFAULT_HOST = "localhost";
   public static final String DEFAULT_PORT = "10000";
   public static final String DEFAULT_DATABASE = "default";

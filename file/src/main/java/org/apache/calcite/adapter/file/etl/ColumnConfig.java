@@ -292,7 +292,7 @@ public class ColumnConfig {
   @SuppressWarnings("unchecked")
   public static List<ColumnConfig> fromList(List<?> list) {
     if (list == null || list.isEmpty()) {
-      return Collections.emptyList();
+      return new ArrayList<ColumnConfig>();
     }
 
     List<ColumnConfig> result = new ArrayList<ColumnConfig>();

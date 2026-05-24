@@ -177,7 +177,7 @@ public class SourceFileLockManager {
    */
   public interface LockHandle extends AutoCloseable {
     boolean isValid();
-    void close();
+    @Override void close();
   }
 
   /**
@@ -253,6 +253,7 @@ public class SourceFileLockManager {
    * Redis-based lock handle.
    */
   private static class RedisLockHandle implements LockHandle {
+    @SuppressWarnings("UnusedVariable")
     private final String path;
     private final RedisDistributedLock redisLock;
     private volatile boolean closed = false;

@@ -57,8 +57,10 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
   static {
     INSTANCE = new DuckDBHLLCountDistinctRule();
     try {
-      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter("/tmp/duckdb_hll_rule_loaded.txt"));
-      writer.println("DuckDBHLLCountDistinctRule loaded at: " + new java.util.Date());
+      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(
+          new java.io.FileOutputStream("/tmp/duckdb_hll_rule_loaded.txt"),
+          java.nio.charset.StandardCharsets.UTF_8));
+      writer.println("DuckDBHLLCountDistinctRule loaded at: " + java.time.Instant.now());
       writer.close();
     } catch (Exception e) {
       // Ignore
@@ -97,8 +99,10 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
 
     // Write to file to prove this was called
     try {
-      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter("/tmp/duckdb_hll_rule_matched.txt", true));
-      writer.println("Rule matched at: " + new java.util.Date());
+      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(
+          new java.io.FileOutputStream("/tmp/duckdb_hll_rule_matched.txt", true),
+          java.nio.charset.StandardCharsets.UTF_8));
+      writer.println("Rule matched at: " + java.time.Instant.now());
       writer.println("Aggregate: " + aggregate);
       writer.close();
     } catch (Exception e) {
@@ -287,12 +291,6 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
 
       // Create VALUES relation with single row
       RelDataType rowType = aggregate.getRowType();
-
-      // Create the VALUES node
-      LogicalValues logicalValues =
-          LogicalValues.create(aggregate.getCluster(),
-          rowType,
-          ImmutableList.of(ImmutableList.copyOf(values)));
 
       // Convert to enumerable
       return EnumerableValues.create(

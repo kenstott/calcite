@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.file.execution.clickhouse;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Properties;
@@ -47,8 +45,6 @@ import java.util.Properties;
  * }</pre>
  */
 public class ClickHouseConfig {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ClickHouseConfig.class);
-
   public static final String DEFAULT_MODE = "server";
   public static final String DEFAULT_HOST = "localhost";
   public static final String DEFAULT_PORT = "8123";

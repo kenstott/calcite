@@ -45,7 +45,9 @@ import javax.sql.DataSource;
 public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBJdbcSchema.class);
 
+  @SuppressWarnings("UnusedVariable")
   private final String directoryPath;
+  @SuppressWarnings("UnusedVariable")
   private final boolean recursive;
   private final Connection persistentConnection;
   private final org.apache.calcite.adapter.file.FileSchema fileSchema; // Keep reference for refreshes

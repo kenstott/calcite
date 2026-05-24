@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.file.execution.duckdb;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Properties;
@@ -45,8 +43,6 @@ import java.util.Properties;
  * }</pre>
  */
 public class DuckDBConfig {
-  private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBConfig.class);
-
   // Default configuration values
   public static final String DEFAULT_MEMORY_LIMIT = "1GB";
   public static final int DEFAULT_THREADS = Runtime.getRuntime().availableProcessors();

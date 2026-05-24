@@ -467,7 +467,7 @@ public class InformationSchema extends AbstractSchema {
                 List<ImmutableBitSet> keys = statistic.getKeys();
                 if (keys != null) {
                   int keyIndex = 0;
-                  for (ImmutableBitSet key : keys) {
+                  for (@SuppressWarnings("UnusedVariable") ImmutableBitSet key : keys) {
                     String constraintName = (keyIndex == 0)
                         ? "PK_" + tableName.toUpperCase()
                         : "UK_" + tableName.toUpperCase() + "_" + keyIndex;
@@ -491,7 +491,7 @@ public class InformationSchema extends AbstractSchema {
                 List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
                 if (foreignKeys != null) {
                   int fkIndex = 0;
-                  for (RelReferentialConstraint fk : foreignKeys) {
+                  for (@SuppressWarnings("UnusedVariable") RelReferentialConstraint fk : foreignKeys) {
                     String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
 
                     rows.add(new Object[]{
@@ -777,7 +777,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private class CheckConstraintsTable extends EmptyTable {
+  private static class CheckConstraintsTable extends EmptyTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -788,7 +788,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private class ViewsTable extends EmptyTable {
+  private static class ViewsTable extends EmptyTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -805,7 +805,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private class RoutinesTable extends EmptyTable {
+  private static class RoutinesTable extends EmptyTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("SPECIFIC_CATALOG", SqlTypeName.VARCHAR)
@@ -894,7 +894,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private class ParametersTable extends EmptyTable {
+  private static class ParametersTable extends EmptyTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("SPECIFIC_CATALOG", SqlTypeName.VARCHAR)
@@ -933,7 +933,7 @@ public class InformationSchema extends AbstractSchema {
   }
 
   // Base class for empty tables
-  private abstract class EmptyTable extends AbstractTable implements ScannableTable {
+  private abstract static class EmptyTable extends AbstractTable implements ScannableTable {
     @Override public Enumerable<Object[]> scan(DataContext root) {
       return Linq4j.asEnumerable(new ArrayList<Object[]>());
     }

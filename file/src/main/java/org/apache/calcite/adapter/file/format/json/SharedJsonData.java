@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SharedJsonData {
   private final JsonNode rootNode;
   private final Map<String, JsonNode> pathCache = new ConcurrentHashMap<>();
+  @SuppressWarnings("UnusedVariable")
   private final ObjectMapper mapper = new ObjectMapper();
 
   /**

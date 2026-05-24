@@ -37,6 +37,7 @@ public class CrawlerConfiguration {
   private Duration requestDelay = Duration.ofSeconds(1);
   private int maxPages = 100;
   private boolean followExternalLinks = false;
+  @SuppressWarnings("UnusedVariable")
   private Set<String> excludePatterns = new HashSet<>();
 
   // Data file pattern configuration

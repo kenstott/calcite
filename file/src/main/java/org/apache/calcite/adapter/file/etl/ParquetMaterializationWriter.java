@@ -156,10 +156,13 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
    * Creates a temporary JSON file with the batch data.
    */
   private File createTempJsonFile(List<Map<String, Object>> rows) throws IOException {
-    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        .format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
     File tempFile = File.createTempFile("etl_batch_" + timestamp + "_", ".json");
 
-    try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+    try (BufferedWriter writer = new BufferedWriter(
+        new java.io.OutputStreamWriter(new java.io.FileOutputStream(tempFile),
+            java.nio.charset.StandardCharsets.UTF_8))) {
       for (Map<String, Object> row : rows) {
         writer.write(MAPPER.writeValueAsString(row));
         writer.newLine();
@@ -191,6 +194,7 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
   /**
    * Builds the DuckDB COPY SQL statement.
    */
+  @SuppressWarnings("UnusedVariable")
   private String buildCopySql(String jsonPath, Map<String, String> partitionVariables) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");

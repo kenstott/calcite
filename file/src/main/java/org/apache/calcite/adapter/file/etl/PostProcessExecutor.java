@@ -144,7 +144,8 @@ public class PostProcessExecutor {
         final String processName = config.getName();
         Thread outputThread = new Thread(() -> {
           try (BufferedReader reader =
-              new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+              new BufferedReader(new InputStreamReader(process.getInputStream(),
+                  java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
               LOGGER.info("[{}] {}", processName, line);
@@ -175,7 +176,8 @@ public class PostProcessExecutor {
 
       // Synchronous execution - wait for completion
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(),
+              java.nio.charset.StandardCharsets.UTF_8))) {
         String line;
         while ((line = reader.readLine()) != null) {
           LOGGER.info("[{}] {}", config.getName(), line);

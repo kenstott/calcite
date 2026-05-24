@@ -132,7 +132,8 @@ public class ClickHouseJdbcSchemaFactory {
       // (Hive, Trino, ClickHouse) coexist, DriverManager.getConnection() may
       // dispatch to the wrong driver. Direct driver.connect() is deterministic.
       final java.sql.Driver clickhouseDriver =
-          (java.sql.Driver) Class.forName("com.clickhouse.jdbc.ClickHouseDriver")
+          Class.forName("com.clickhouse.jdbc.ClickHouseDriver")
+              .asSubclass(java.sql.Driver.class)
               .getDeclaredConstructor().newInstance();
 
       String jdbcUrl;
@@ -294,6 +295,7 @@ public class ClickHouseJdbcSchemaFactory {
   /**
    * Creates a ClickHouseJdbcSchema with the given connection setup.
    */
+  @SuppressWarnings("UnusedVariable")
   private static JdbcSchema createSchemaWithConnection(DataSource dataSource, Connection setupConn,
       SchemaPlus parentSchema, String schemaName, String directoryPath, boolean recursive,
       org.apache.calcite.adapter.file.FileSchema fileSchema, Map<String, Object> operand,
@@ -375,6 +377,7 @@ public class ClickHouseJdbcSchemaFactory {
   /**
    * Registers tables from the FileSchema's conversion registry as ClickHouse views.
    */
+  @SuppressWarnings("UnusedVariable")
   private static void registerFilesAsViews(Connection conn, String directoryPath,
       boolean recursive, String clickhouseSchema,
       org.apache.calcite.adapter.file.FileSchema fileSchema)

@@ -95,6 +95,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** Lazy-initialized S3 client for ListObjectsV2 file listing. */
   private AmazonS3 s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
+  @SuppressWarnings("UnusedVariable")
   private Boolean hasAnyTrackerData;
   /** Processed keys per table, loaded on demand (absent key = not yet loaded for that table). */
   private final ConcurrentHashMap<String, Set<String>> processedKeysCache =
@@ -340,7 +341,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public Map<String, Set<String>> bulkGetCompletedTables(
       java.util.Collection<String> sourceKeys, String phase) {
     if (sourceKeys.isEmpty()) {
-      return Collections.emptyMap();
+      return new HashMap<String, Set<String>>();
     }
 
     // Return cached results for source keys already in stageCache, only query uncached ones
@@ -478,7 +479,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * <ol>
    * <li><b>Fast path</b>: Read {@code _compacted/*.parquet} (single file, instant).
    *     Available after a previous run compacted the tracker data.</li>
-   * <li><b>Slow path</b>: Read {@code source_key=*&#47;*.parquet} (all individual files).
+   * <li><b>Slow path</b>: Read source_key=*&#47;*.parquet (all individual files).
    *     Only needed on the first run for each year. After scanning, writes a
    *     compacted file from the in-memory cache so future runs use the fast path.</li>
    * </ol>
@@ -762,7 +763,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   /**
    * Read tracker data from ALL phases and populate the stageCache.
-   * Unlike {@link #readTrackerGlob}, this does not filter by phase,
+   * Unlike {@code readTrackerGlob}, this does not filter by phase,
    * so the cache (and subsequent compacted file) contains complete data.
    *
    * @param globOrList glob pattern or explicit file list
@@ -1342,6 +1343,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   }
 
   /** Maximum number of glob paths per DuckDB query to avoid OOM with large dimension spaces. */
+  @SuppressWarnings("UnusedVariable")
   private static final int FILTER_CHUNK_SIZE = 50_000;
 
   @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
@@ -1643,7 +1645,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
   private Map<String, String> unflattenKeyValues(String sourceKey) {
     if ("_empty".equals(sourceKey)) {
-      return Collections.emptyMap();
+      return new LinkedHashMap<String, String>();
     }
     // Try to parse key=value pairs
     Map<String, String> result = new LinkedHashMap<>();
@@ -1808,7 +1810,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     for (final Object[] upload : uploads) {
       futures.add(
           pool.submit(new Runnable() {
-        public void run() {
+        @Override public void run() {
           java.io.File tempFile = (java.io.File) upload[0];
           String s3Path = (String) upload[1];
           @SuppressWarnings("unchecked")

@@ -345,11 +345,13 @@ public final class VectorizedArrowExecutionEngine {
 
     for (int col = 0; col < input.getFieldVectors().size(); col++) {
       org.apache.arrow.vector.FieldVector inputVector = input.getVector(col);
+      @SuppressWarnings("UnusedVariable")
       org.apache.arrow.vector.FieldVector outputVector = output.getVector(col);
 
       // Use Arrow's transfer mechanism with indices for zero-copy slicing
       try {
         // Create a dictionary-encoded view that references original data
+        @SuppressWarnings("UnusedVariable")
         org.apache.arrow.vector.ipc.message.ArrowRecordBatch recordBatch =
             createRecordBatchWithIndices(inputVector, indices);
         // This would normally use Arrow's compute kernels for true zero-copy
@@ -392,6 +394,7 @@ public final class VectorizedArrowExecutionEngine {
   /**
    * Helper for creating record batch with indices (placeholder for true zero-copy).
    */
+  @SuppressWarnings("UnusedVariable")
   private static org.apache.arrow.vector.ipc.message.ArrowRecordBatch createRecordBatchWithIndices(
       org.apache.arrow.vector.FieldVector vector, int[] indices) {
     // This would use Arrow compute kernels in a real implementation

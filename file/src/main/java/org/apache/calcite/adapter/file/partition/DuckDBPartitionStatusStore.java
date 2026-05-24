@@ -499,7 +499,7 @@ public class DuckDBPartitionStatusStore implements PipelineTracker, AutoCloseabl
    */
   private Map<String, String> jsonToMap(String json) {
     if (json == null || json.equals("{}") || json.isEmpty()) {
-      return Collections.emptyMap();
+      return new LinkedHashMap<String, String>();
     }
     Map<String, String> result = new LinkedHashMap<>();
     // Remove outer braces

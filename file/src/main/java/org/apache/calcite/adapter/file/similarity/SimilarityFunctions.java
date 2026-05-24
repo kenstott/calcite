@@ -33,7 +33,7 @@ public class SimilarityFunctions {
    * Handles various input types including:
    * - String representations (comma-separated values or DuckDB array format)
    * - Native arrays (float[], double[], etc.)
-   * - Collections (List<Float>, List<Double>, etc.)
+   * - Collections ({@code List<Float>}, {@code List<Double>}, etc.)
    * - Avro arrays (GenericData.Array)
    * - Any object with a string representation of a vector
    *

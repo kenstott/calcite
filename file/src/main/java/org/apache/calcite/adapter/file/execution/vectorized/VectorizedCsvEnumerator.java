@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <E> the element type (typically Object for single columns or Object[] for multiple)
  */
 public class VectorizedCsvEnumerator<E> implements Enumerator<E> {
+  @SuppressWarnings("UnusedVariable")
   private final Source source;
   private final AtomicBoolean cancelFlag;
   private final List<RelDataType> fieldTypes;

@@ -52,6 +52,7 @@ public class IcebergTimeRangeTable extends AbstractTable implements ScannableTab
   private final String snapshotColumnName;
   private final ExecutionEngineConfig engineConfig;
   private final String tablePath;
+  @SuppressWarnings("UnusedVariable")
   private final String schemaName;
   private RelDataType rowType;
 
@@ -192,9 +193,8 @@ public class IcebergTimeRangeTable extends AbstractTable implements ScannableTab
       LOGGER.debug("Processing file: {} from snapshot: {}", currentFile.getFilePath(), currentFile.getSnapshotId());
 
       try {
-        // Create a ParquetTranslatableTable for this file
+        // Create an enumerable for this Parquet file
         File parquetFile = new File(currentFile.getFilePath());
-        ParquetTranslatableTable parquetTable = new ParquetTranslatableTable(parquetFile, schemaName);
 
         // For now, we'll use a simple approach that reads the file directly
         // In practice, this should integrate with the execution engine configuration
@@ -219,7 +219,6 @@ public class IcebergTimeRangeTable extends AbstractTable implements ScannableTab
     switch (engineConfig.getEngineType()) {
       case PARQUET:
         try {
-          ParquetTranslatableTable parquetTable = new ParquetTranslatableTable(parquetFile, schemaName);
           // ParquetTranslatableTable is TranslatableTable, not ScannableTable,
           // so we create an enumerable directly
           return createBasicParquetEnumerable(parquetFile);

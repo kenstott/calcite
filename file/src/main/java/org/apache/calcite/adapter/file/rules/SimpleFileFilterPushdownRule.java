@@ -57,7 +57,7 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
     }
 
     // Only optimize Parquet table scans
-    if (!(scan.getTable().unwrap(ParquetTranslatableTable.class) instanceof ParquetTranslatableTable)) {
+    if (scan.getTable().unwrap(ParquetTranslatableTable.class) == null) {
       return;
     }
 
@@ -81,9 +81,8 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
 
   private TableStatistics getTableStatistics(TableScan scan) {
     ParquetTranslatableTable parquetTable = scan.getTable().unwrap(ParquetTranslatableTable.class);
-    if (parquetTable instanceof StatisticsProvider) {
-      StatisticsProvider provider = (StatisticsProvider) parquetTable;
-      return provider.getTableStatistics(scan.getTable());
+    if (parquetTable != null) {
+      return ((StatisticsProvider) parquetTable).getTableStatistics(scan.getTable());
     }
     return null;
   }
@@ -177,6 +176,8 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
             // always false ONLY if min == max == filterValue (all rows have same value)
             return checkTrue ? (filter.compareTo(min) < 0 || filter.compareTo(max) > 0) :
                               (filter.compareTo(min) == 0 && filter.compareTo(max) == 0);
+          default:
+            break;
         }
       }
     } catch (Exception e) {

@@ -208,29 +208,25 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       return;
     }
 
-    // Check if table supports statistics
-    if (currentTable instanceof org.apache.calcite.adapter.file.statistics.StatisticsProvider) {
-      try {
-        long startTime = System.currentTimeMillis();
-        org.apache.calcite.adapter.file.statistics.StatisticsProvider statsProvider =
-            (org.apache.calcite.adapter.file.statistics.StatisticsProvider) currentTable;
+    // PartitionedParquetTable always implements StatisticsProvider
+    try {
+      long startTime = System.currentTimeMillis();
+      org.apache.calcite.adapter.file.statistics.StatisticsProvider statsProvider =
+          (org.apache.calcite.adapter.file.statistics.StatisticsProvider) currentTable;
 
-        // This will load/build statistics including HLL sketches into cache
-        org.apache.calcite.adapter.file.statistics.TableStatistics stats =
-            statsProvider.getTableStatistics(null);
+      // This will load/build statistics including HLL sketches into cache
+      org.apache.calcite.adapter.file.statistics.TableStatistics stats =
+          statsProvider.getTableStatistics(null);
 
-        if (stats != null) {
-          long elapsed = System.currentTimeMillis() - startTime;
-          LOGGER.info("Primed HLL statistics for table '{}': {} rows, {} columns with sketches ({} ms)",
-              tableName, stats.getRowCount(), stats.getColumnStatistics().size(), elapsed);
-        } else {
-          LOGGER.debug("No HLL statistics available for table '{}'", tableName);
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Failed to prime HLL statistics for table '{}': {}", tableName, e.getMessage());
+      if (stats != null) {
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("Primed HLL statistics for table '{}': {} rows, {} columns with sketches ({} ms)",
+            tableName, stats.getRowCount(), stats.getColumnStatistics().size(), elapsed);
+      } else {
+        LOGGER.debug("No HLL statistics available for table '{}'", tableName);
       }
-    } else {
-      LOGGER.debug("Table '{}' does not support StatisticsProvider - skipping HLL priming", tableName);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to prime HLL statistics for table '{}': {}", tableName, e.getMessage());
     }
   }
 
@@ -276,76 +272,6 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     } catch (Exception e) {
       LOGGER.error("Failed to create baseline snapshot: {}", e.getMessage(), e);
       return null;
-    }
-  }
-
-  /**
-   * Compares current files against baseline to detect changes.
-   * Returns true if any files were added, removed, or modified.
-   */
-  private boolean hasFilesChanged(org.apache.calcite.adapter.file.metadata.ConversionMetadata.PartitionBaseline baseline) {
-    if (baseline == null || baseline.isEmpty() || storageProvider == null) {
-      return true; // No baseline, must scan
-    }
-
-    try {
-      // Discover current files
-      List<String> currentFiles = discoverFiles();
-      java.util.Set<String> baselineFiles = baseline.files.keySet();
-
-      // Check for added or removed files
-      if (currentFiles.size() != baselineFiles.size()) {
-        LOGGER.info("File count changed for table '{}': {} -> {}",
-            tableName, baselineFiles.size(), currentFiles.size());
-        return true;
-      }
-
-      // Check each file for modifications
-      for (String filePath : currentFiles) {
-        org.apache.calcite.adapter.file.metadata.ConversionMetadata.FileBaseline baselineMetadata =
-            baseline.files.get(filePath);
-
-        if (baselineMetadata == null) {
-          LOGGER.info("New file detected in table '{}': {}", tableName, filePath);
-          return true; // File added
-        }
-
-        // Get current metadata and compare
-        try {
-          org.apache.calcite.adapter.file.storage.StorageProvider.FileMetadata currentMetadata =
-              storageProvider.getMetadata(filePath);
-          if (currentMetadata != null) {
-            org.apache.calcite.adapter.file.metadata.ConversionMetadata.FileBaseline currentBaseline =
-                new org.apache.calcite.adapter.file.metadata.ConversionMetadata.FileBaseline(
-                    currentMetadata.getSize(),
-                    currentMetadata.getEtag(),
-                    currentMetadata.getLastModified());
-
-            if (baselineMetadata.hasChanged(currentBaseline)) {
-              LOGGER.info("File modified in table '{}': {}", tableName, filePath);
-              return true;
-            }
-          }
-        } catch (Exception e) {
-          LOGGER.debug("Failed to get metadata for file '{}': {}", filePath, e.getMessage());
-          return true; // Assume changed if we can't check
-        }
-      }
-
-      // Check for removed files
-      for (String baselineFile : baselineFiles) {
-        if (!currentFiles.contains(baselineFile)) {
-          LOGGER.info("File removed from table '{}': {}", tableName, baselineFile);
-          return true;
-        }
-      }
-
-      LOGGER.debug("No file changes detected for table '{}'", tableName);
-      return false;
-
-    } catch (Exception e) {
-      LOGGER.error("Error checking for file changes: {}", e.getMessage(), e);
-      return true; // Assume changed on error
     }
   }
 
@@ -730,7 +656,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
   private List<String> discoverFiles() {
     if (storageProvider == null) {
       LOGGER.error("Cannot discover files for table '{}' - StorageProvider is null", tableName);
-      return java.util.Collections.emptyList();
+      return new java.util.ArrayList<>();
     }
 
     try {
@@ -764,7 +690,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     } catch (Exception e) {
       LOGGER.error("Failed to discover files for table '{}' in directory '{}': {}",
           tableName, directoryPath, e.getMessage(), e);
-      return java.util.Collections.emptyList();
+      return new java.util.ArrayList<>();
     }
   }
 

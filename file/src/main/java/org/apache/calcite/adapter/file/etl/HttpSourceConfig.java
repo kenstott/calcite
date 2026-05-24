@@ -1621,7 +1621,7 @@ public class HttpSourceConfig {
         } else if (endObj instanceof String) {
           String endStr = (String) endObj;
           if ("current".equalsIgnoreCase(endStr)) {
-            yearEnd = Year.now().getValue();
+            yearEnd = Year.now(java.time.ZoneOffset.UTC).getValue();
           } else {
             yearEnd = VariableResolver.resolveInteger(endStr);
           }

@@ -53,18 +53,21 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
   private final Source originalSource; // The original file if source is a converted file
   private final File cacheDir;
   private volatile File parquetFile;
+  @SuppressWarnings("UnusedVariable")
   private final boolean typeInferenceEnabled;
   private final String columnNameCasing;
   private final String tableNameCasing;
   private final @Nullable RelProtoDataType protoRowType;
+  @SuppressWarnings("UnusedVariable")
   private final ExecutionEngineConfig.ExecutionEngineType engineType;
   protected volatile Table delegateTable;
   private final @Nullable SchemaPlus parentSchema;
   private final String fileSchemaName;
 
   // For DuckDB integration and refresh notifications
+  @SuppressWarnings("UnusedVariable")
   private @Nullable String schemaName;
-  private @Nullable String tableName;
+  private @Nullable String duckdbTableName;
   private org.apache.calcite.adapter.file.@Nullable FileSchema fileSchema;
 
   public RefreshableParquetCacheTable(Source source, File initialParquetFile,
@@ -134,7 +137,7 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
    */
   public void setDuckDBNames(String schemaName, String tableName) {
     this.schemaName = schemaName;
-    this.tableName = tableName;
+    this.duckdbTableName = tableName;
 
     // No longer needed since DuckDB uses JDBC adapter
     // The DuckDB JDBC schema handles all table registration
@@ -145,7 +148,7 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
    */
   public void setRefreshContext(org.apache.calcite.adapter.file.FileSchema fileSchema, String tableName) {
     this.fileSchema = fileSchema;
-    this.tableName = tableName;
+    this.duckdbTableName = tableName;
   }
 
   @Override protected void doRefresh() {
@@ -212,9 +215,9 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
             parquetFile.getAbsolutePath(), parquetFile.length(), parquetFile.lastModified());
 
         // Notify listeners (e.g., DUCKDB) that the table has been refreshed
-        if (fileSchema != null && tableName != null) {
-          fileSchema.notifyTableRefreshed(tableName, parquetFile);
-          LOGGER.debug("Notified listeners of refresh for table '{}'", tableName);
+        if (fileSchema != null && duckdbTableName != null) {
+          fileSchema.notifyTableRefreshed(duckdbTableName, parquetFile);
+          LOGGER.debug("Notified listeners of refresh for table '{}'", duckdbTableName);
         }
       } catch (Exception e) {
         LOGGER.error("Failed to update parquet cache for {}: {}", source.path(), e.getMessage(), e);
@@ -338,24 +341,10 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
       }
     } else if (path.endsWith(".html") || path.endsWith(".htm")) {
       // HTML files need conversion to JSON
-      try {
-        File htmlFile = new File(source.path());
-        // TODO: HTML conversion would go here
-        // For now, treat as unsupported
-        throw new IllegalArgumentException("HTML refresh not yet implemented: " + source.path());
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to convert HTML file for refresh: " + source.path(), e);
-      }
+      throw new IllegalArgumentException("HTML refresh not yet implemented: " + source.path());
     } else if (path.endsWith(".xml")) {
       // XML files need conversion to JSON
-      try {
-        File xmlFile = new File(source.path());
-        // TODO: XML conversion would go here
-        // For now, treat as unsupported
-        throw new IllegalArgumentException("XML refresh not yet implemented: " + source.path());
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to convert XML file for refresh: " + source.path(), e);
-      }
+      throw new IllegalArgumentException("XML refresh not yet implemented: " + source.path());
     } else {
       throw new IllegalArgumentException("Unsupported file type for refresh: " + source.path());
     }

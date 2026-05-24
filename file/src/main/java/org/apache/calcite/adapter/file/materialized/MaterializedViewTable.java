@@ -60,6 +60,7 @@ import java.util.function.Supplier;
 public class MaterializedViewTable extends AbstractTable implements TranslatableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MaterializedViewTable.class);
 
+  @SuppressWarnings("UnusedVariable")
   private final SchemaPlus parentSchema;
   private final String schemaName;
   private final String viewName;
@@ -111,6 +112,7 @@ public class MaterializedViewTable extends AbstractTable implements Translatable
               tables != null ? tables.keySet() : "null");
 
           // Register schema with exact name as provided - no casing transformations
+          @SuppressWarnings("UnusedVariable")
           SchemaPlus schema = rootSchema.add(schemaName, new AbstractSchema() {
             @Override protected Map<String, Table> getTableMap() {
               return tables;

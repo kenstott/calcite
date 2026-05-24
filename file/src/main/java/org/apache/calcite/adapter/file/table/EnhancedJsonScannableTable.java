@@ -44,7 +44,6 @@ import java.util.Map;
 public class EnhancedJsonScannableTable extends JsonScannableTable {
 
   private final ExecutionEngineConfig engineConfig;
-  private final Map<String, Object> options;
 
   /**
    * Creates an EnhancedJsonScannableTable.
@@ -52,7 +51,6 @@ public class EnhancedJsonScannableTable extends JsonScannableTable {
   public EnhancedJsonScannableTable(Source source, ExecutionEngineConfig engineConfig) {
     super(source);
     this.engineConfig = engineConfig;
-    this.options = null;
   }
 
   /**
@@ -62,7 +60,6 @@ public class EnhancedJsonScannableTable extends JsonScannableTable {
       Map<String, Object> options) {
     super(source, options);
     this.engineConfig = engineConfig;
-    this.options = options;
   }
 
   /**
@@ -72,7 +69,6 @@ public class EnhancedJsonScannableTable extends JsonScannableTable {
       Map<String, Object> options, String columnNameCasing) {
     super(source, options, columnNameCasing);
     this.engineConfig = engineConfig;
-    this.options = options;
   }
 
   /**
@@ -82,7 +78,6 @@ public class EnhancedJsonScannableTable extends JsonScannableTable {
       Map<String, Object> options, String columnNameCasing, String forcedDataType) {
     super(source, options, columnNameCasing, forcedDataType);
     this.engineConfig = engineConfig;
-    this.options = options;
   }
 
   @Override public String toString() {

@@ -97,6 +97,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private final StorageProvider storageProvider;
   private final String warehousePath;
+  @SuppressWarnings("UnusedVariable")
   private final IncrementalTracker incrementalTracker;
 
   private MaterializeConfig config;
@@ -145,6 +146,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** Column name in output rows whose value overrides the {@code year} partition key per row. */
   private String effectiveYearField;
   /** Column name in output rows whose value overrides the {@code month} partition key per row. */
+  @SuppressWarnings("UnusedVariable")
   private String effectiveMonthField;
 
   /**
@@ -348,7 +350,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Build expected columns from config
     List<IcebergCatalogManager.ColumnDef> expectedColumns =
         new ArrayList<IcebergCatalogManager.ColumnDef>();
-    java.util.Set<String> expectedColumnNames = new java.util.HashSet<String>();
 
     MaterializePartitionConfig partitionConfig = config.getPartition();
     List<String> partitionColumnNames = new ArrayList<String>();
@@ -376,7 +377,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
             colConfig.getName(),
             icebergType,
             colComment));
-        expectedColumnNames.add(colConfig.getName());
         String lowerName = colConfig.getName().toLowerCase(java.util.Locale.ROOT);
         expectedColumnNamesLower.add(lowerName);
         columnTypeMap.put(lowerName, icebergType);
@@ -429,7 +429,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         expectedColumns.add(
             new IcebergCatalogManager.ColumnDef(
             partitionCol, partitionType, partitionComment));
-        expectedColumnNames.add(partitionCol);
         expectedColumnNamesLower.add(partitionColLower);
         lowerToActualName.put(partitionColLower, partitionCol);
         actualPartitionColumnNames.add(partitionCol);
@@ -528,6 +527,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * Maps YAML column types to DuckDB types.
    * Used for generating CAST expressions in SQL queries.
    */
+  @SuppressWarnings("UnusedMethod")
   private String mapToDuckDBType(String yamlType) {
     if (yamlType == null) {
       return "VARCHAR";
@@ -1236,6 +1236,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * <p>For LOCAL staging mode, DuckDB writes Parquet to local filesystem.
    * This method uploads those files to the Iceberg data location on S3/remote.
    */
+  @SuppressWarnings("UnusedMethod")
   private List<org.apache.iceberg.DataFile> uploadLocalStagingToRemote(String localStagingPath)
       throws IOException {
 
@@ -1405,6 +1406,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * @param stagingPath The staging directory path
    * @return The path to the JSON file (local path or S3 URI)
    */
+  @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingJsonFile(List<Map<String, Object>> rows, String stagingPath)
       throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -1433,6 +1435,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Cleans up the staging JSON file.
    */
+  @SuppressWarnings("UnusedMethod")
   private void cleanupJsonFile(String jsonPath) {
     try {
       if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
@@ -1451,6 +1454,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Builds partition filter from partition variables.
    */
+  @SuppressWarnings("UnusedMethod")
   private Map<String, Object> buildPartitionFilter(Map<String, String> partitionVariables) {
     Map<String, Object> filter = new HashMap<String, Object>();
 
@@ -1483,6 +1487,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    *
    * <p>For remote S3 staging, a lifecycle rule auto-expires orphaned files after 1 day.
    */
+  @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
@@ -1576,6 +1581,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * Creates a new DuckDB connection with required extensions.
    * The connection is configured based on MaterializeOptionsConfig.
    */
+  @SuppressWarnings("UnusedMethod")
   private Connection createDuckDBConnection() throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 
@@ -1646,6 +1652,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Escapes a string for SQL.
    */
+  @SuppressWarnings("UnusedMethod")
   private static String escapeString(String value) {
     return value.replace("'", "''");
   }
@@ -1938,12 +1945,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       if (spec.isUnpartitioned()) {
         LOGGER.debug("Table {} is unpartitioned", tableId);
         return partitions;
-      }
-
-      // Build field index map for partition columns
-      Map<Integer, String> fieldIdToName = new java.util.HashMap<Integer, String>();
-      for (org.apache.iceberg.PartitionField field : spec.fields()) {
-        fieldIdToName.put(field.fieldId(), field.name());
       }
 
       // Scan manifest files to extract partition values
