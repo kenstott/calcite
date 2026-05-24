@@ -28,6 +28,9 @@ REBUILD=false
 SCHEMA_FILTER=""
 START_YEAR=""
 FROM_SCHEMA=""
+MAX_RETRIES=5           # max auto-retry passes after a new release is detected
+POLL_INTERVAL=120       # seconds between release polls
+POLL_MAX=15             # polls before giving up (15 × 120 s = 30 min)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,6 +55,10 @@ while [[ $# -gt 0 ]]; do
     --from-schema)
       shift
       FROM_SCHEMA="${1:?--from-schema requires a schema name}"
+      ;;
+    --max-retries)
+      shift
+      MAX_RETRIES="${1:?--max-retries requires an integer}"
       ;;
     --help|-h)
       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -110,65 +117,125 @@ if [ -n "$FROM_SCHEMA" ]; then
   log_info "run-all-dq: --from-schema=$FROM_SCHEMA — running ${#ALL_SCHEMAS[@]} schema(s): ${ALL_SCHEMAS[*]}"
 fi
 
-log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD schemas=${ALL_SCHEMAS[*]}"
-
 # ── build worker args ─────────────────────────────────────────────────────────
 WORKER_EXTRA_ARGS="--mode $MODE"
 $DRY_RUN    && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --dry-run"
 $REBUILD    && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --rebuild"
 [ -n "$START_YEAR" ] && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --start-year $START_YEAR"
 
-# ── launch workers in parallel ────────────────────────────────────────────────
-LOG_DIR="$SCRIPT_DIR/runs/dq-all-$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$LOG_DIR"
+# ── release helpers ───────────────────────────────────────────────────────────
+CALCITE_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")"
 
-pids=()
-schema_list=()
+_latest_release() {
+  gh release list --repo kenstott/calcite --limit 1 --json tagName \
+    --jq '.[0].tagName' 2>/dev/null || \
+  { [ -n "$CALCITE_ROOT" ] && git -C "$CALCITE_ROOT" describe --tags --abbrev=0 2>/dev/null; } || \
+  echo "unknown"
+}
 
-for schema in "${ALL_SCHEMAS[@]}"; do
-  log_file="$LOG_DIR/${schema}.log"
-  # shellcheck disable=SC2086
-  bash "$DQ_WORKER" "$schema" $WORKER_EXTRA_ARGS > "$log_file" 2>&1 &
-  last_pid=$!
-  pids+=($last_pid)
-  schema_list+=("$schema")
-  log_info "run-all-dq: launched $schema (PID $last_pid)"
-done
+_git_pull() {
+  [ -z "$CALCITE_ROOT" ] && return
+  log_info "run-all-dq: pulling latest code from origin"
+  git -C "$CALCITE_ROOT" pull --ff-only 2>/dev/null && \
+    log_info "run-all-dq: git pull succeeded" || \
+    log_info "run-all-dq: WARNING: git pull failed — proceeding with current checkout"
+}
 
-# ── collect results ───────────────────────────────────────────────────────────
-overall_exit=0
-exit_codes=()
+# Record release at start so we can detect a newer one after a failure
+CURRENT_RELEASE=$(_latest_release)
+log_info "run-all-dq: starting with release $CURRENT_RELEASE"
 
-for i in "${!pids[@]}"; do
-  pid="${pids[$i]}"
-  if wait "$pid"; then
-    exit_codes+=( 0 )
-  else
-    exit_codes+=( 1 )
-    overall_exit=1
+# ── worker launch + collect (runs one pass over a schema list) ─────────────────
+# Populates FAILED_SCHEMAS (array) and PASS_SCHEMAS (array) in the caller.
+_run_pass() {
+  local schemas=("$@")
+  local log_dir="$SCRIPT_DIR/runs/dq-all-$(date +%Y%m%d_%H%M%S)"
+  mkdir -p "$log_dir"
+
+  local pids=()
+  local schema_list=()
+
+  for schema in "${schemas[@]}"; do
+    local log_file="$log_dir/${schema}.log"
+    # shellcheck disable=SC2086
+    bash "$DQ_WORKER" "$schema" $WORKER_EXTRA_ARGS > "$log_file" 2>&1 &
+    local last_pid=$!
+    pids+=($last_pid)
+    schema_list+=("$schema")
+    log_info "run-all-dq: launched $schema (PID $last_pid)"
+  done
+
+  FAILED_SCHEMAS=()
+  PASS_SCHEMAS=()
+
+  echo ""
+  echo "=== DQ Pass Summary (mode=$MODE release=$CURRENT_RELEASE) ==="
+  printf "%-30s  %s\n" "SCHEMA" "RESULT"
+  printf "%-30s  %s\n" "------------------------------" "------"
+
+  for i in "${!pids[@]}"; do
+    local schema="${schema_list[$i]}"
+    if wait "${pids[$i]}"; then
+      PASS_SCHEMAS+=("$schema")
+      printf "%-30s  PASS\n" "$schema"
+    else
+      FAILED_SCHEMAS+=("$schema")
+      printf "%-30s  FAIL\n" "$schema"
+    fi
+  done
+  echo ""
+  log_info "run-all-dq: pass complete — passed=${#PASS_SCHEMAS[@]} failed=${#FAILED_SCHEMAS[@]}"
+  log_info "run-all-dq: logs in $log_dir"
+}
+
+# ── main loop: run → detect new release → retry failing schemas ───────────────
+SCHEMAS_TO_RUN=("${ALL_SCHEMAS[@]}")
+RETRY=0
+
+log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD max_retries=$MAX_RETRIES schemas=${SCHEMAS_TO_RUN[*]}"
+
+while true; do
+  _run_pass "${SCHEMAS_TO_RUN[@]}"
+
+  if [ ${#FAILED_SCHEMAS[@]} -eq 0 ]; then
+    log_info "run-all-dq: ALL SCHEMAS PASSED"
+    exit 0
   fi
-done
 
-# ── print summary ─────────────────────────────────────────────────────────────
-echo ""
-echo "=== DQ Run Summary (mode=$MODE) ==="
-printf "%-30s  %s\n" "SCHEMA" "RESULT"
-printf "%-30s  %s\n" "------------------------------" "------"
-for i in "${!schema_list[@]}"; do
-  schema="${schema_list[$i]}"
-  if [ "${exit_codes[$i]}" -eq 0 ]; then
-    printf "%-30s  PASS\n" "$schema"
-  else
-    printf "%-30s  FAIL\n" "$schema"
+  RETRY=$((RETRY + 1))
+  if [ $RETRY -gt $MAX_RETRIES ]; then
+    log_info "run-all-dq: max retries ($MAX_RETRIES) reached — stopping with ${#FAILED_SCHEMAS[@]} failing schema(s): ${FAILED_SCHEMAS[*]}"
+    exit 1
   fi
+
+  log_info "run-all-dq: retry $RETRY/$MAX_RETRIES — ${#FAILED_SCHEMAS[@]} failing: ${FAILED_SCHEMAS[*]}"
+  log_info "run-all-dq: polling for a new release (max ${POLL_MAX} × ${POLL_INTERVAL}s = $((POLL_MAX * POLL_INTERVAL / 60)) min)"
+
+  # Poll for a newer release
+  NEW_RELEASE=""
+  for poll in $(seq 1 $POLL_MAX); do
+    CANDIDATE=$(_latest_release)
+    if [ "$CANDIDATE" != "$CURRENT_RELEASE" ]; then
+      NEW_RELEASE="$CANDIDATE"
+      break
+    fi
+    log_info "run-all-dq: poll $poll/$POLL_MAX — still at $CURRENT_RELEASE, waiting ${POLL_INTERVAL}s..."
+    sleep "$POLL_INTERVAL"
+  done
+
+  if [ -z "$NEW_RELEASE" ]; then
+    log_info "run-all-dq: no new release detected after $((POLL_MAX * POLL_INTERVAL / 60)) min — stopping (${#FAILED_SCHEMAS[@]} schema(s) still failing)"
+    exit 1
+  fi
+
+  log_info "run-all-dq: new release $NEW_RELEASE (was $CURRENT_RELEASE) — pulling code and re-running failing schemas"
+  CURRENT_RELEASE="$NEW_RELEASE"
+  _git_pull
+
+  # Retry always uses --rebuild so fresh data is materialized with the new code
+  WORKER_EXTRA_ARGS="--mode $MODE --rebuild"
+  $DRY_RUN  && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --dry-run"
+  [ -n "$START_YEAR" ] && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --start-year $START_YEAR"
+
+  SCHEMAS_TO_RUN=("${FAILED_SCHEMAS[@]}")
 done
-echo ""
-
-if [ $overall_exit -eq 0 ]; then
-  log_info "run-all-dq: ALL SCHEMAS PASSED"
-else
-  log_info "run-all-dq: ONE OR MORE SCHEMAS FAILED"
-fi
-
-log_info "run-all-dq: logs in $LOG_DIR"
-exit $overall_exit
