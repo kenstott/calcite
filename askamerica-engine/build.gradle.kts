@@ -191,10 +191,23 @@ publishing {
 // Run: ./gradlew :askamerica-engine:jpackage
 //
 // Requires JDK 17+ (jpackage ships with JDK 14+).
-// On macOS produces a .dmg; on Linux a .deb; on Windows a .msi.
-
-val jpackageDir = layout.buildDirectory.dir("jpackage")
-val jpackageInputDir = layout.buildDirectory.dir("jpackage-input")
+// On macOS produces an app-image; on Linux a .deb; on Windows a .msi.
+//
+// ExFAT + macOS: the project root may live on an ExFAT external drive. ExFAT has no
+// native xattr support, so macOS stores code-signing xattrs as AppleDouble (._*) sidecar
+// files. jpackage calls `codesign --remove-signature` on every file it writes, including
+// the non-Mach-O ._* sidecars, which makes codesign exit 1.
+// Fix: redirect jpackage and jlink output to ~/.gradle/askamerica-engine-build/ which
+// lives on the internal APFS disk (native xattrs, no ._* files). CI is Linux — no issue.
+val isMacOs = System.getProperty("os.name").lowercase().contains("mac")
+val jpackageBuildBase: File = if (isMacOs) {
+    File(System.getProperty("user.home"), ".gradle/askamerica-engine-build")
+} else {
+    layout.buildDirectory.asFile.get()
+}
+val jpackageDirFile     = File(jpackageBuildBase, "jpackage")
+val jpackageInputDirFile = File(jpackageBuildBase, "jpackage-input")
+val jlinkRuntimeDirFile  = File(jpackageBuildBase, "jlink-runtime")
 
 // Thin launcher JAR — only McpServerLauncher; the fat engine JAR is downloaded by postinstall
 val launcherJar by tasks.registering(Jar::class) {
@@ -212,7 +225,32 @@ val launcherJar by tasks.registering(Jar::class) {
 tasks.register<Copy>("prepareJpackageInput") {
     dependsOn(launcherJar)
     from(launcherJar.get().archiveFile)
-    into(jpackageInputDir)
+    into(jpackageInputDirFile)
+}
+
+tasks.register<Exec>("jlinkRuntime") {
+    val jlinkTool = "${System.getProperty("java.home")}/bin/jlink"
+    commandLine(
+        jlinkTool,
+        "--module-path", "${System.getProperty("java.home")}/jmods",
+        "--add-modules", "java.base,java.logging,java.net.http,java.sql,java.xml",
+        "--strip-debug",
+        "--no-header-files",
+        "--no-man-pages",
+        "--compress=2",
+        "--output", jlinkRuntimeDirFile.absolutePath
+    )
+    doFirst {
+        jlinkRuntimeDirFile.deleteRecursively()
+    }
+    doLast {
+        // dot_clean on ExFAT just deletes ._* files (nothing to merge into).
+        // Removes any AppleDouble sidecars jlink created during the output write.
+        project.exec { commandLine("dot_clean", "-m", jlinkRuntimeDirFile.absolutePath) }
+        jlinkRuntimeDirFile.walkTopDown()
+            .filter { it.name.startsWith("._") }
+            .forEach { it.delete() }
+    }
 }
 
 tasks.register<Exec>("jpackage") {
@@ -231,8 +269,11 @@ tasks.register<Exec>("jpackage") {
     val version = project.version.toString().replace("-SNAPSHOT", "")
         .replace("[^0-9.]".toRegex(), "")
         .ifEmpty { "1.0.0" }
-
     val macResourceDir = project.file("src/packaging/mac").absolutePath
+
+    if (isMac) {
+        dependsOn("jlinkRuntime")
+    }
 
     commandLine(
         jpackageTool,
@@ -241,19 +282,17 @@ tasks.register<Exec>("jpackage") {
         "--app-version", version,
         "--vendor", "AskAmerica",
         "--description", "AskAmerica MCP — query US government data from Claude",
-        "--input", jpackageInputDir.get().asFile.absolutePath,
+        "--input", jpackageInputDirFile.absolutePath,
         "--main-jar", launcherJar.get().archiveFileName.get(),
         "--main-class", "org.apache.calcite.adapter.askamerica.McpServerLauncher",
-        "--dest", jpackageDir.get().asFile.absolutePath,
+        "--dest", jpackageDirFile.absolutePath,
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
-        // macOS-specific options
+        *(if (isMac) arrayOf("--runtime-image", jlinkRuntimeDirFile.absolutePath) else emptyArray()),
         *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
         *(if (isMac && !System.getenv("ASKAMERICA_SIGN_IDENTITY").isNullOrEmpty())
-            arrayOf(
-                "--mac-sign",
-                "--mac-signing-key-user-name",
-                System.getenv("ASKAMERICA_SIGN_IDENTITY"))
+            arrayOf("--mac-sign",
+                    "--mac-signing-key-user-name", System.getenv("ASKAMERICA_SIGN_IDENTITY"))
         else emptyArray()),
         *(if (isMac && !System.getenv("ASKAMERICA_SIGN_KEYCHAIN").isNullOrEmpty())
             arrayOf("--mac-signing-keychain", System.getenv("ASKAMERICA_SIGN_KEYCHAIN"))
@@ -261,6 +300,9 @@ tasks.register<Exec>("jpackage") {
     )
 
     doFirst {
-        jpackageDir.get().asFile.mkdirs()
+        jpackageDirFile.mkdirs()
+        for (dir in listOf(jpackageInputDirFile, jpackageDirFile)) {
+            dir.walkTopDown().filter { it.name.startsWith("._") }.forEach { it.delete() }
+        }
     }
 }
