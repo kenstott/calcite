@@ -39,6 +39,7 @@ import java.util.ServiceLoader;
  * Enterprise deployments can set ASKAMERICA_ENGINE_URL to a private mirror.
  */
 public class McpServerLauncher {
+    @SuppressWarnings("EmptyCatch")
     public static void main(String[] args) throws Exception {
         File launcherJar =
             new File(McpServerLauncher.class.getProtectionDomain()

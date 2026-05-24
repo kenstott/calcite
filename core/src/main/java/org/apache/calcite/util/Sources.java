@@ -252,8 +252,8 @@ public abstract class Sources {
    */
   private static class FileSource implements Source {
     private final @Nullable File file;
-    private final URL url;
-    private final String s3Uri;
+    private final @Nullable URL url;
+    private final @Nullable String s3Uri;
     static long maximumSize = 100L;
     static long expireTime = 60L; // in minutes
     static LoadingCache<String, byte[]> fileCache;
@@ -317,9 +317,11 @@ public abstract class Sources {
         String redisPassword = System.getenv("REDIS_PASSWORD");
 
         Config config = new Config();
-        config.useSingleServer()
-            .setAddress("redis://" + redisHost)
-            .setPassword(redisPassword);
+        org.redisson.config.SingleServerConfig serverConfig = config.useSingleServer()
+            .setAddress("redis://" + redisHost);
+        if (redisPassword != null) {
+          serverConfig.setPassword(redisPassword);
+        }
 
         RedissonClient redisson = Redisson.create(config);
         RMapCache<String, byte[]> rMapCache = redisson.getMapCache("myMapCache");
@@ -327,8 +329,11 @@ public abstract class Sources {
         fileCache = Caffeine.newBuilder()
             .maximumSize(maximumSize)
             .expireAfterWrite(expireTime, TimeUnit.MINUTES)
-            .removalListener((String key, byte[] value, RemovalCause cause) ->
-                rMapCache.fastPut(key, value))
+            .removalListener((String key, byte[] value, RemovalCause cause) -> {
+              if (key != null && value != null) {
+                rMapCache.fastPut(key, value);
+              }
+            })
             .build(new CacheLoader<String, byte[]>() {
               @Override public byte[] load(String key) {
                 try {
@@ -441,11 +446,11 @@ public abstract class Sources {
       if (s3Uri != null) {
         return s3Uri;
       }
-      return (urlGenerated ? fileNonNull() : url).toString();
+      return (urlGenerated ? fileNonNull() : requireNonNull(url, "url")).toString();
     }
 
     @Override public URL url() {
-      return url;
+      return requireNonNull(url, "url");
     }
 
     @Override public File file() {
@@ -463,7 +468,7 @@ public abstract class Sources {
       if (s3Uri != null) {
         return "s3";
       }
-      return file != null ? "file" : url.getProtocol();
+      return file != null ? "file" : requireNonNull(url, "url").getProtocol();
     }
 
     @Override public String path() {
@@ -475,7 +480,7 @@ public abstract class Sources {
       }
       try {
         // Decode %20 and friends
-        return url.toURI().getSchemeSpecificPart();
+        return requireNonNull(url, "url").toURI().getSchemeSpecificPart();
       } catch (URISyntaxException e) {
         throw new IllegalArgumentException("Unable to convert URL " + url + " to URI", e);
       }
@@ -494,14 +499,14 @@ public abstract class Sources {
 
     @Override public InputStream openStream() throws IOException {
       if (s3Uri != null) {
-        byte[] bytes = fileCache.get(s3Uri);
+        byte[] bytes = requireNonNull(fileCache.get(s3Uri), "cache returned null for s3Uri");
         return new ByteArrayInputStream(bytes);
       }
       if (file != null) {
-        byte[] bytes = fileCache.get(file.getPath());
+        byte[] bytes = requireNonNull(fileCache.get(file.getPath()), "cache returned null for file path");
         return new ByteArrayInputStream(bytes);
       } else {
-        byte[] bytes = fileCache.get(url.toString());
+        byte[] bytes = requireNonNull(fileCache.get(url.toString()), "cache returned null for url");
         return new ByteArrayInputStream(bytes);
       }
     }
@@ -517,7 +522,7 @@ public abstract class Sources {
         return s == null ? null : Sources.of(s);
       }
       if (!urlGenerated) {
-        final String s = Sources.trimOrNull(url.toExternalForm(), suffix);
+        final String s = Sources.trimOrNull(requireNonNull(url, "url").toExternalForm(), suffix);
         return s == null ? null : Sources.url(s);
       } else {
         final String s = Sources.trimOrNull(fileNonNull().getPath(), suffix);
@@ -548,7 +553,7 @@ public abstract class Sources {
       if (!urlGenerated) {
         String encodedPath = new File(".").toURI().relativize(new File(path).toURI())
             .getRawSchemeSpecificPart();
-        return Sources.url(url + "/" + encodedPath);
+        return Sources.url(requireNonNull(url, "url") + "/" + encodedPath);
       } else {
         return Sources.file(file, path);
       }
@@ -568,7 +573,7 @@ public abstract class Sources {
       } else {
         if (!isFile(this)) {
           String rest =
-              Sources.trimOrNull(url.toExternalForm(),
+              Sources.trimOrNull(requireNonNull(url, "url").toExternalForm(),
                   parent.url().toExternalForm());
           if (rest != null
               && rest.startsWith("/")) {

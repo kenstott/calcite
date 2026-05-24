@@ -1062,8 +1062,8 @@ public class CalciteMetaImpl extends MetaImpl {
    * {@link DatabaseMetaData#getCrossReference}. */
   public static class MetaForeignKeyRow {
     public final String pktableCat;
-    public final String pktableSchem;
-    public final String pktableName;
+    public final @Nullable String pktableSchem;
+    public final @Nullable String pktableName;
     public final String pkcolumnName;
     public final String fktableCat;
     public final String fktableSchem;
@@ -1073,15 +1073,15 @@ public class CalciteMetaImpl extends MetaImpl {
     public final short updateRule;
     public final short deleteRule;
     public final String fkName;
-    public final String pkName;
+    public final @Nullable String pkName;
     public final short deferrability;
 
-    public MetaForeignKeyRow(String pktableCat, String pktableSchem,
-        String pktableName, String pkcolumnName,
+    public MetaForeignKeyRow(String pktableCat, @Nullable String pktableSchem,
+        @Nullable String pktableName, String pkcolumnName,
         String fktableCat, String fktableSchem,
         String fktableName, String fkcolumnName,
         short keySeq, short updateRule, short deleteRule,
-        String fkName, String pkName, short deferrability) {
+        String fkName, @Nullable String pkName, short deferrability) {
       this.pktableCat   = pktableCat;
       this.pktableSchem = pktableSchem;
       this.pktableName  = pktableName;
@@ -1103,7 +1103,7 @@ public class CalciteMetaImpl extends MetaImpl {
   public static class CalciteMetaTable extends MetaTable {
     private final Table calciteTable;
     /** Shadows {@link MetaTable#remarks} so Avatica's reflection reads the comment. */
-    public final String remarks;
+    public final @Nullable String remarks;
 
     /**
      *  Creates a CalciteMetaTable.
@@ -1128,7 +1128,7 @@ public class CalciteMetaImpl extends MetaImpl {
      *
      * @return table comment if the table implements CommentableTable, null otherwise
      */
-    public String getTableComment() {
+    public @Nullable String getTableComment() {
       if (calciteTable instanceof org.apache.calcite.schema.CommentableTable) {
         return ((org.apache.calcite.schema.CommentableTable) calciteTable).getTableComment();
       }
@@ -1141,7 +1141,7 @@ public class CalciteMetaImpl extends MetaImpl {
      * @param columnName name of the column
      * @return column comment if the table implements CommentableTable, null otherwise
      */
-    public String getColumnComment(String columnName) {
+    public @Nullable String getColumnComment(String columnName) {
       if (calciteTable instanceof org.apache.calcite.schema.CommentableTable) {
         return ((org.apache.calcite.schema.CommentableTable) calciteTable).getColumnComment(columnName);
       }

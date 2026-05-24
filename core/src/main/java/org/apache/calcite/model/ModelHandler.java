@@ -319,9 +319,10 @@ public class ModelHandler {
       System.err.println("Exception class: " + e.getClass().getName());
       System.err.println("Full stack trace:");
       e.printStackTrace(System.err);
-      if (e.getCause() != null) {
+      Throwable cause = e.getCause();
+      if (cause != null) {
         System.err.println("=== CAUSED BY ===");
-        e.getCause().printStackTrace(System.err);
+        cause.printStackTrace(System.err);
       }
       System.err.println("=== END ERROR DETAILS ===");
       throw new RuntimeException("Error instantiating " + jsonSchema, e);
