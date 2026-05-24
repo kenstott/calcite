@@ -82,8 +82,12 @@ class DriverTestHarness:
             self._data_available = True
             return True
         try:
-            self.query_rows(conn, self.test_query)
-            self._data_available = True
+            rows = self.query_rows(conn, self.test_query)
+            if rows:
+                self._data_available = True
+            else:
+                print(f"\n  \033[33mSKIP\033[0m  Data probe returned 0 rows — skipping data-dependent tests")
+                self._data_available = False
         except Exception as e:
             print(f"\n  \033[33mSKIP\033[0m  Data probe failed — skipping data-dependent tests: {e}")
             self._data_available = False
