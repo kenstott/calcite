@@ -16,9 +16,6 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.Map;
 
@@ -35,8 +32,6 @@ public class PartitionedTableConfig {
   private final List<TableColumn> columns;
   private final List<AlternatePartitionConfig> alternatePartitions;
   private final Map<String, Object> materialize;
-  private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedTableConfig.class);
-
   public PartitionedTableConfig(String name, String pattern, String type,
                                 PartitionConfig partitions) {
     this(name, pattern, type, partitions, null, null, null, null);
