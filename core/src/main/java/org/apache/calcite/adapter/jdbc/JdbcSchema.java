@@ -620,6 +620,7 @@ public class JdbcSchema implements Schema, Wrapper {
 
     // Store constraint metadata from model files
     private Map<String, Map<String, Object>> tableConstraints;
+    @SuppressWarnings("unused")
     private List<JsonTable> tableDefinitions;
 
     private Factory() {}

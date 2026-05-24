@@ -70,6 +70,7 @@ public class SetupWindow {
     private JLabel statusLabel;
     private JButton configureBtn;
 
+    @SuppressWarnings("EmptyCatch")
     public void show() {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -358,6 +359,8 @@ public class SetupWindow {
         l.setForeground(AMBER);
         l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         l.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            @SuppressWarnings("EmptyCatch")
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 try {
                     Desktop.getDesktop().browse(new URI(url));
