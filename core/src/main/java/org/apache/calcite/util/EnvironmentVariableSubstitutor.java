@@ -187,13 +187,19 @@ public class EnvironmentVariableSubstitutor {
     StringBuffer finalResult = new StringBuffer();
 
     while (mixedMatcher.find()) {
-      String stringValue = mixedMatcher.group(1);
+      @Nullable String stringValue = mixedMatcher.group(1);
+      if (stringValue == null) {
+        continue;
+      }
       // Check if this is just a plain variable (already handled in first pass)
       if (stringValue.matches("\\$\\{[^:}]+(?::[^}]*)?\\}")) {
         // Skip - already handled
         continue;
       }
-      String substituted = substitute(stringValue, environment);
+      @Nullable String substituted = substitute(stringValue, environment);
+      if (substituted == null) {
+        continue;
+      }
       // Escape any special characters for JSON
       substituted = substituted.replace("\\", "\\\\")
                               .replace("\"", "\\\"")

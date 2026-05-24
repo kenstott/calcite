@@ -330,15 +330,12 @@ public abstract class Sources {
             .removalListener((String key, byte[] value, RemovalCause cause) ->
                 rMapCache.fastPut(key, value))
             .build(new CacheLoader<String, byte[]>() {
-              public byte[] load(String key) {
-                // Read data from file, database, etc. using key
-                // then return the data
+              @Override public byte[] load(String key) {
                 try {
                   return loadDataFromExternalResource(key);
-                  // this function should implement logic to return byte[] for a specific key
                 } catch (IOException e) {
                   throw new RuntimeException("Exception loading data", e);
-                } // this function should implement logic to return byte[] for a specific key
+                }
               }
             });
       } else {
@@ -346,15 +343,12 @@ public abstract class Sources {
             .maximumSize(maximumSize)
             .expireAfterWrite(expireTime, TimeUnit.MINUTES)
             .build(new CacheLoader<String, byte[]>() {
-              public byte[] load(String key) {
-                // Read data from file, database, etc. using key
-                // then return the data
+              @Override public byte[] load(String key) {
                 try {
                   return loadDataFromExternalResource(key);
-                  // this function should implement logic to return byte[] for a specific key
                 } catch (IOException e) {
                   throw new RuntimeException("Exception loading data", e);
-                } // this function should implement logic to return byte[] for a specific key
+                }
               }
             }); // Update this line with your cache loading logic if not using Redis
       }

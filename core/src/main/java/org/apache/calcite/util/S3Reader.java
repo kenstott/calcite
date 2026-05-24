@@ -57,11 +57,10 @@ public class S3Reader {
     if (!matcher.matches()) {
       throw new IOException("Invalid S3 URI: " + s3Uri);
     } else {
-      String bucketName = matcher.group("bucket");
-      String key = matcher.group("key");
+      String bucketName = java.util.Objects.requireNonNull(matcher.group("bucket"), "bucket");
+      String key = java.util.Objects.requireNonNull(matcher.group("key"), "key");
       byte[] bytes;
-      Region bucketRegion = getBucketRegion(bucketName);
-      S3Client s3Client = S3Client.create();
+      S3Client s3Client = S3Client.builder().region(getBucketRegion(bucketName)).build();
       GetObjectRequest getObjectRequest =
           GetObjectRequest.builder().bucket(bucketName).key(key).build();
       InputStream s3ObjectStream = s3Client.getObject(getObjectRequest);

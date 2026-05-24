@@ -358,6 +358,7 @@ public class JdbcSchema implements Schema, Wrapper {
     return Pair.of(catalog, schema);
   }
 
+  @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
     return getTableMap(false).get(name);
   }
@@ -519,6 +520,7 @@ public class JdbcSchema implements Schema, Wrapper {
     }
   }
 
+  @SuppressWarnings("deprecation")
   @Override public Set<String> getTableNames() {
     // This method is called during a cache refresh. We can take it as a signal
     // that we need to re-build our own cache.
@@ -539,11 +541,13 @@ public class JdbcSchema implements Schema, Wrapper {
     return (Set<String>) getTypes().keySet();
   }
 
+  @SuppressWarnings("deprecation")
   @Override public @Nullable Schema getSubSchema(String name) {
     // JDBC does not support sub-schemas.
     return null;
   }
 
+  @SuppressWarnings("deprecation")
   @Override public Set<String> getSubSchemaNames() {
     return ImmutableSet.of();
   }

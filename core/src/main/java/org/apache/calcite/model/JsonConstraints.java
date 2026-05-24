@@ -273,11 +273,10 @@ public class JsonConstraints {
    * @param columnNames The ordered list of column names
    * @return List of collations (currently returns null as not implemented)
    */
+  @SuppressWarnings("unused")
   private static @Nullable List<RelCollation> parseCollations(
       Map<String, Object> constraints,
       List<String> columnNames) {
-    // Collations could be added in the future if needed
-    // For now, return null to indicate no specific collations
     return null;
   }
 
