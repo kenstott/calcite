@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.metadata.TableConstraints;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.adapter.jdbc.JdbcTable;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.rel.type.RelDataType;
@@ -79,61 +78,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
   @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
     Table table = delegate.getTable(name);
-
-    // If this table has constraint metadata, wrap it regardless of type
-    // This handles both direct JdbcTable instances and tables already wrapped
-    // by DuckDBJdbcSchema with CommentableJdbcTableWrapper
     if (table != null && constraintMetadata.containsKey(name)) {
-      LOGGER.info("Wrapping table '{}' (type: {}) with constraint metadata",
-                  name, table.getClass().getSimpleName());
-
-      // Try to extract JdbcTable if this is already wrapped by DuckDBJdbcSchema
-      JdbcTable jdbcTable = null;
-      if (table instanceof JdbcTable) {
-        LOGGER.info("Table '{}' is directly a JdbcTable", name);
-        jdbcTable = (JdbcTable) table;
-      } else {
-        LOGGER.info("Table '{}' is not a JdbcTable, trying reflection. Delegate type: {}",
-                    name, delegate.getClass().getName());
-        // Check if delegate is DuckDBJdbcSchema and can provide the underlying JdbcTable
-        // First try to call parent JdbcSchema.getTable() to get the base table
-        try {
-          java.lang.reflect.Method method = JdbcSchema.class.getDeclaredMethod("getTable", String.class);
-          method.setAccessible(true);
-          Object unwrapped = method.invoke(delegate, name);
-          LOGGER.info("Reflection returned object of type: {}",
-                      unwrapped != null ? unwrapped.getClass().getName() : "null");
-
-          if (unwrapped instanceof JdbcTable) {
-            jdbcTable = (JdbcTable) unwrapped;
-            LOGGER.info("Extracted underlying JdbcTable from wrapped table");
-          } else if (unwrapped != null && unwrapped.getClass().getSimpleName().equals("CommentableJdbcTableWrapper")) {
-            // The unwrapped object is a CommentableJdbcTableWrapper, extract the jdbcTable field from it
-            try {
-              java.lang.reflect.Field jdbcTableField = unwrapped.getClass().getDeclaredField("jdbcTable");
-              jdbcTableField.setAccessible(true);
-              Object extractedJdbcTable = jdbcTableField.get(unwrapped);
-              if (extractedJdbcTable instanceof JdbcTable) {
-                jdbcTable = (JdbcTable) extractedJdbcTable;
-                LOGGER.info("Extracted JdbcTable from CommentableJdbcTableWrapper using reflection");
-              }
-            } catch (Exception e) {
-              LOGGER.warn("Could not extract jdbcTable field from CommentableJdbcTableWrapper: {}", e.getMessage());
-            }
-          } else {
-            LOGGER.warn("Reflection did not return a JdbcTable or CommentableJdbcTableWrapper for table '{}'", name);
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Could not extract JdbcTable from wrapped table: {}", e.getMessage());
-        }
-      }
-
-      if (jdbcTable != null) {
-        LOGGER.info("Successfully created ConstraintAwareJdbcTable for '{}'", name);
-        return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name));
-      } else {
-        LOGGER.warn("Failed to create ConstraintAwareJdbcTable for '{}' - returning unwrapped table", name);
-      }
+      return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name));
     }
     return table;
   }
@@ -211,14 +157,11 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
   }
 
   /**
-   * Wrapper for JdbcTable that adds constraint metadata.
+   * Wrapper for any Table that adds constraint metadata.
    * Delegates all methods to the wrapped table except getStatistic().
    *
    * <p>This wrapper implements CommentableTable to delegate comment requests
    * to the underlying table if it supports comments.
-   *
-   * <p>This class handles both simple JdbcTable instances and tables that are
-   * already wrapped by DuckDBJdbcSchema with CommentableJdbcTableWrapper.
    */
   private static class ConstraintAwareJdbcTable implements CommentableTable {
     private final Table wrappedDelegate;
@@ -245,10 +188,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
 
           LOGGER.info("Constraint config for table: {}", constraintConfig);
 
-          // Get column names from wrappedDelegate (not jdbcDelegate) so the indices
-          // align with what CalciteMetaImpl.getPrimaryKeys() uses for bit→name mapping.
-          // For IcebergTable-backed tables, CommentableJdbcTableWrapper.getRowType()
-          // returns IcebergTable.getRowType() whose column order may differ from DuckDB.
+          // Column names must match what CalciteMetaImpl.getPrimaryKeys() uses for bit→name mapping:
+          // both use wrappedDelegate.getRowType(), so indices are always consistent.
           RelDataTypeFactory typeFactory =
               new org.apache.calcite.sql.type.SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
           RelDataType rowType = wrappedDelegate.getRowType(typeFactory);
