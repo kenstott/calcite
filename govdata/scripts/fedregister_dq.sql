@@ -35,11 +35,11 @@ SELECT 'fedregister', 'fr_documents', 'T1_existence',
   n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true));
 
--- T2: row_count (2019-2026 = ~8 years × ~25k docs/year = ~200k expected)
+-- T2: row_count (DQ scope 2024-2026 = ~2.5 years × ~25k docs/year = ~50k minimum)
 INSERT INTO dq_results
 SELECT 'fedregister', 'fr_documents', 'T2_row_count',
-  CASE WHEN n >= 150000 THEN 'pass' ELSE 'fail' END,
-  n, 150000, 'Expected at least 150000 Federal Register documents (2019-2026)'
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
+  n, 50000, 'Expected at least 50000 Federal Register documents (2024-2026 DQ scope)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://govdata-parquet-v1/fedregister/fr_documents', allow_moved_paths := true));
 
 -- T3: sample

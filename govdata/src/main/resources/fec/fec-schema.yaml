@@ -48,7 +48,7 @@ dimension_templates:
     type: yearRange
     cadenceStart: 2010
     cadenceLength: 2
-    minYear: "${GOVDATA_START_YEAR}"
+    minYear: "${GOVDATA_START_YEAR:2024}"
 
 # ============================================================================
 # BULK DOWNLOADS
