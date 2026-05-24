@@ -904,7 +904,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   /**
    * Applies the configured casing transformation and sanitization to an identifier.
    */
-  private String applyCasing(String identifier, String casing) {
+  private static String applyCasing(String identifier, String casing) {
     String casedName = org.apache.calcite.adapter.file.util.SmartCasing.applyCasing(identifier, casing);
     // Sanitize the name to ensure consistent identifier format
     return org.apache.calcite.adapter.file.converters.ConverterUtils.sanitizeIdentifier(casedName);

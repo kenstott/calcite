@@ -130,9 +130,13 @@ val annotationProcessorMain by tasks.registering(JavaCompile::class) {
 }
 
 // The file module requires Java 11+ (uses List.of, Map.of, FileWriter(File,Charset), etc.).
-// Override the root build's Java 8 compatibility setting for this module only when running on JDK 11+.
-// On JDK 8, the module will fail to compile on the missing APIs — that's expected (pre-existing).
-if (JavaVersion.current() >= JavaVersion.VERSION_11) {
+// Skip compilation and tests entirely when running on JDK 8; only set Java 11 compatibility on JDK 11+.
+if (JavaVersion.current() < JavaVersion.VERSION_11) {
+    afterEvaluate {
+        tasks.withType<JavaCompile>().configureEach { enabled = false }
+        tasks.withType<Test>().configureEach { enabled = false }
+    }
+} else {
     plugins.withType<JavaPlugin> {
         configure<JavaPluginExtension> {
             sourceCompatibility = JavaVersion.VERSION_11
