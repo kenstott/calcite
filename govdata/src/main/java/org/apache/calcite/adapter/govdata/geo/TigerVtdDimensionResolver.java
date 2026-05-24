@@ -107,6 +107,7 @@ public class TigerVtdDimensionResolver implements DimensionResolver {
   );
 
   @Override
+  @SuppressWarnings("MixedMutabilityReturnType")
   public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
 

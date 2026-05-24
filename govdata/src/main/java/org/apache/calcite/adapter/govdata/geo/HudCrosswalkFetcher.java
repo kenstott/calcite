@@ -26,8 +26,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -62,6 +66,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudCrosswalkFetcher.class);
 
   private static final String HUD_API_BASE = "https://www.huduser.gov/hudapi/public/usps";
+  @SuppressWarnings("UnusedVariable")
   private static final String HUD_DOWNLOAD_BASE = "https://www.huduser.gov/portal/datasets/usps";
 
   private final String username;
@@ -166,7 +171,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   /**
    * Download all HUD crosswalk data for the specified year range (matching ECON pattern).
    */
-  public void downloadAll(int startYear, int endYear) throws IOException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading all HUD crosswalk data for years {} to {}", startYear, endYear);
 
     // HUD releases data quarterly, we'll download Q2 (mid-year) data for each year
@@ -452,7 +457,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   private void convertJsonToCsv(JsonNode jsonData, File outputFile, String dataType)
       throws IOException {
 
-    try (FileWriter writer = new FileWriter(outputFile)) {
+    try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8)) {
       // Write headers based on data type
       switch (dataType) {
         case "zip_county":
@@ -502,7 +507,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   public List<CrosswalkRecord> loadCrosswalkData(File csvFile) throws IOException {
     List<CrosswalkRecord> records = new ArrayList<>();
 
-    try (BufferedReader reader = new BufferedReader(new FileReader(csvFile))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), StandardCharsets.UTF_8))) {
       String line = reader.readLine(); // Skip header
 
       while ((line = reader.readLine()) != null) {

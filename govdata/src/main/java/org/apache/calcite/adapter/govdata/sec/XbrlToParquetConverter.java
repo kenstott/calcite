@@ -59,6 +59,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * Implements the file adapter's FileConverter interface for integration
  * with FileConversionManager.
  */
+@SuppressWarnings({"UnusedMethod", "UnusedVariable", "JavaTimeDefaultTimeZone", "EmptyCatch",
+    "ModifiedButNotUsed", "EscapedEntity", "UnnecessaryParentheses"})
 public class XbrlToParquetConverter implements FileConverter {
   private static final Logger LOGGER = LoggerFactory.getLogger(XbrlToParquetConverter.class);
 

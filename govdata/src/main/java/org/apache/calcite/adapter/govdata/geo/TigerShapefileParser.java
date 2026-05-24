@@ -340,6 +340,7 @@ public class TigerShapefileParser {
   /**
    * Parse a single shape record using JTS and return JTS Geometry.
    */
+  @SuppressWarnings("UnusedVariable")
   private static Geometry parseShapeRecordWithJTS(byte[] content, int shapeType) {
     try {
       if (content.length < 4) {

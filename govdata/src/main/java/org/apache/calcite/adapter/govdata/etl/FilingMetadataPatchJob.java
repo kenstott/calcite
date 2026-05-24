@@ -119,6 +119,7 @@ public class FilingMetadataPatchJob {
   }
 
   /** Patches all metadata files for a given year, skipping already-checkpointed paths. */
+  @SuppressWarnings("UnusedVariable")
   public void patchYear(String year) throws IOException {
     String yearDir = "s3://" + BUCKET + "/" + SEC_PREFIX + "year=" + year + "/";
     LOGGER.info("Scanning year={}", year);
@@ -317,7 +318,8 @@ public class FilingMetadataPatchJob {
       return;
     }
     try (BufferedWriter w = new BufferedWriter(
-        new java.io.FileWriter(checkpointFile(year), true))) {
+        new java.io.OutputStreamWriter(
+            new java.io.FileOutputStream(checkpointFile(year), true), StandardCharsets.UTF_8))) {
       w.write(s3Path);
       w.newLine();
     } catch (IOException e) {

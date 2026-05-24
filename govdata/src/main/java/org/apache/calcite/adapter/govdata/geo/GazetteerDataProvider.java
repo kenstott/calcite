@@ -97,10 +97,11 @@ public class GazetteerDataProvider implements DataProvider {
       Runtime.getRuntime().addShutdownHook(
           new Thread(() -> {
         try {
-          Files.walk(tempDirToClean)
-              .sorted(Comparator.reverseOrder())
-              .map(Path::toFile)
-              .forEach(File::delete);
+          try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean)) {
+            walk.sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+          }
         } catch (IOException e) {
           LOGGER.debug("Failed to cleanup temp directory: {}", e.getMessage());
         }
@@ -110,9 +111,8 @@ public class GazetteerDataProvider implements DataProvider {
 
     } catch (IOException e) {
       if (tempDir != null) {
-        try {
-          Files.walk(tempDir)
-              .sorted(Comparator.reverseOrder())
+        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+          walk.sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
         } catch (IOException cleanupError) {

@@ -45,6 +45,7 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -379,7 +380,7 @@ public class FecDataRepair {
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process p = pb.start();
-    String out = new BufferedReader(new InputStreamReader(p.getInputStream()))
+    String out = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))
         .lines().collect(Collectors.joining("\n"));
     if (!p.waitFor(90, TimeUnit.MINUTES)) {
       p.destroyForcibly();

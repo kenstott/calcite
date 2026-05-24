@@ -123,6 +123,7 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+  @SuppressWarnings("UnusedVariable")
   private void triggerVulnDownloads(StorageProvider sp, Map<String, Object> operand,
       String nvdApiKey) {
     String directory = (String) operand.get("directory");
@@ -162,6 +163,7 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+  @SuppressWarnings("UnusedVariable")
   private void configureVulnHooks(FileSchemaBuilder builder, Map<String, Object> operand,
       String nvdApiKey, String githubToken) {
     @SuppressWarnings("unchecked")

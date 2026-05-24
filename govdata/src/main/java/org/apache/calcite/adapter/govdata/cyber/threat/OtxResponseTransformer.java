@@ -96,7 +96,7 @@ public class OtxResponseTransformer implements ResponseTransformer {
         try {
           int deltaDays = Integer.parseInt(deltaDaysEnv.trim());
           if (deltaDays > 0) {
-            String since = LocalDateTime.now().minusDays(deltaDays)
+            String since = LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(deltaDays)
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
             baseUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "modified_since=" + since;
             LOGGER.info("OTX: delta mode — modified_since={} ({} days)", since, deltaDays);

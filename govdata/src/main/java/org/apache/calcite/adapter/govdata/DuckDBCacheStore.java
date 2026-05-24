@@ -664,7 +664,6 @@ public class DuckDBCacheStore implements AutoCloseable {
 
         long now = System.currentTimeMillis();
         long downloadRetry = rs.getLong("download_retry");
-        long refreshAfter = rs.getLong("refresh_after");
 
         // Check if we're still in the retry window
         // download_retry > 0 means there was an error, and if it's > now, we should skip

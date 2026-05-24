@@ -108,7 +108,7 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
           reader.close();
           LOGGER.info("PatentCpcClasses: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
-          try { reader.close(); } catch (IOException ignored) { }
+          try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
           throw new RuntimeException("PatentCpcClassesTransformer read failed", e);
         }
       }

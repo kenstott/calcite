@@ -109,6 +109,7 @@ public class OriDimensionResolver implements DimensionResolver {
     return oris;
   }
 
+  @SuppressWarnings("MixedMutabilityReturnType")
   private List<String> loadOrisForState(String stateAbbr, DimensionConfig config,
       StorageProvider storageProvider) {
     String agenciesPath =

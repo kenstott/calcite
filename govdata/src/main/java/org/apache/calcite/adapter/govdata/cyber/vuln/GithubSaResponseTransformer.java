@@ -58,6 +58,7 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
   private static final int TIMEOUT_MS = 60_000;
   private static final long RATE_DELAY_MS = 1000L;
 
+  @SuppressWarnings("InlineFormatString")
   private static final String QUERY_TEMPLATE =
       "{ \"query\": \"{ securityAdvisories(first: %d%s) { pageInfo { hasNextPage endCursor } "
           + "nodes { ghsaId publishedAt severity summary "
@@ -108,6 +109,7 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
   /**
    * Processes one page of GraphQL response and returns next cursor, or null if no more pages.
    */
+  @SuppressWarnings("UnusedVariable")
   private String processPage(String pageResponse, ArrayNode accumulator) throws IOException {
     JsonNode root = MAPPER.readTree(pageResponse);
 

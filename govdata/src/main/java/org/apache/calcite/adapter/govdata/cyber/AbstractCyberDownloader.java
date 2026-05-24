@@ -78,7 +78,7 @@ public abstract class AbstractCyberDownloader {
   protected byte[] fetchBytes(String url, String... headers) throws IOException, InterruptedException {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create(url))
-        .timeout(Duration.ofSeconds(120))
+        .timeout(Duration.ofMinutes(2))
         .GET();
     for (int i = 0; i + 1 < headers.length; i += 2) {
       builder.header(headers[i], headers[i + 1]);
@@ -100,7 +100,7 @@ public abstract class AbstractCyberDownloader {
   protected String fetchString(String url, String... headers) throws IOException, InterruptedException {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create(url))
-        .timeout(Duration.ofSeconds(120))
+        .timeout(Duration.ofMinutes(2))
         .GET();
     for (int i = 0; i + 1 < headers.length; i += 2) {
       builder.header(headers[i], headers[i + 1]);

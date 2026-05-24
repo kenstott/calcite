@@ -393,6 +393,7 @@ public class SecTextVectorizer {
   /**
    * Vectorize an MD&A paragraph with referenced footnotes.
    */
+  @SuppressWarnings("UnusedVariable")
   private ContextualChunk vectorizeMDAParagraph(
       TextBlob mdaPara,
       Map<String, List<String>> references,
@@ -479,6 +480,7 @@ public class SecTextVectorizer {
   /**
    * Vectorize earnings call paragraph with contextual enrichment.
    */
+  @SuppressWarnings("UnusedVariable")
   private ContextualChunk vectorizeEarningsParagraph(
       TextBlob earningsBlob,
       Map<String, List<String>> references,

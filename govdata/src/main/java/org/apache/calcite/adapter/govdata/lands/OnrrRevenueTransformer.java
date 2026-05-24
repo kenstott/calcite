@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
  *     "FIPS Code": "56035",
  *     "Offshore Region": "",
  *     "Revenue Type": "Royalties",
- *     "Mineral Lease Type": "Oil & Gas",
+ *     "Mineral Lease Type": "Oil &amp; Gas",
  *     "Commodity": "Oil",
  *     "Product": "Crude Oil",
  *     "Revenue": "28927814.00"

@@ -22,13 +22,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 
 /**
  * Tracks ETL run history for reproducibility and debugging.
@@ -55,7 +55,8 @@ import java.util.TimeZone;
 public class EtlRunManifest {
 
   private static final ObjectMapper MAPPER = createMapper();
-  private static final SimpleDateFormat ISO_FORMAT = createIsoFormat();
+  private static final DateTimeFormatter ISO_FORMAT =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
 
   private final File manifestFile;
   private final ManifestData data;
@@ -79,12 +80,6 @@ public class EtlRunManifest {
     return mapper;
   }
 
-  private static SimpleDateFormat createIsoFormat() {
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-    return sdf;
-  }
-
   /**
    * Start a new run and record it in the manifest.
    *
@@ -93,7 +88,7 @@ public class EtlRunManifest {
    */
   public RunEntry startRun(String modelFileName) {
     String runId = generateRunId(modelFileName);
-    String started = formatTimestamp(new Date());
+    String started = formatTimestamp(Instant.now());
 
     RunEntry run = new RunEntry();
     run.runId = runId;
@@ -113,7 +108,7 @@ public class EtlRunManifest {
    * @param results result details
    */
   public void completeRun(RunEntry run, RunStatus status, Map<String, Object> results) {
-    run.completed = formatTimestamp(new Date());
+    run.completed = formatTimestamp(Instant.now());
     run.status = status;
     run.results = results;
   }
@@ -152,9 +147,8 @@ public class EtlRunManifest {
   }
 
   private String generateRunId(String modelFileName) {
-    SimpleDateFormat fmt = new SimpleDateFormat("yyyyMMdd-HHmmss");
-    fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
-    String timestamp = fmt.format(new Date());
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+    String timestamp = fmt.format(Instant.now());
 
     // Extract base name without extension
     String baseName = modelFileName;
@@ -171,10 +165,8 @@ public class EtlRunManifest {
     return timestamp + "-" + baseName;
   }
 
-  private String formatTimestamp(Date date) {
-    synchronized (ISO_FORMAT) {
-      return ISO_FORMAT.format(date);
-    }
+  private String formatTimestamp(Instant instant) {
+    return ISO_FORMAT.format(instant);
   }
 
   /**

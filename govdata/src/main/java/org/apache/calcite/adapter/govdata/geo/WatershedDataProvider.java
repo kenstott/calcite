@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -237,7 +238,7 @@ public class WatershedDataProvider implements DataProvider {
 
     StringBuilder procOutput = new StringBuilder();
     try (BufferedReader br = new BufferedReader(
-        new InputStreamReader(proc.getInputStream()))) {
+        new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
       String line;
       while ((line = br.readLine()) != null) {
         procOutput.append(line).append('\n');
@@ -263,7 +264,7 @@ public class WatershedDataProvider implements DataProvider {
     }
 
     try (BufferedReader br = new BufferedReader(
-        new InputStreamReader(Files.newInputStream(outFile)))) {
+        new InputStreamReader(Files.newInputStream(outFile), StandardCharsets.UTF_8))) {
       br.readLine(); // skip TSV header
       String line;
       while ((line = br.readLine()) != null) {

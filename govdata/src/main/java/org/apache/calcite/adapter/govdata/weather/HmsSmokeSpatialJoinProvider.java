@@ -574,9 +574,8 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
 
   private void deleteTempDir(Path tempDir) {
     if (tempDir == null) return;
-    try {
-      Files.walk(tempDir)
-          .sorted(Comparator.reverseOrder())
+    try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+      walk.sorted(Comparator.reverseOrder())
           .map(Path::toFile)
           .forEach(File::delete);
     } catch (IOException e) {

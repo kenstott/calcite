@@ -110,6 +110,7 @@ public class FigiDataProvider implements DataProvider {
     return path.replace("s3:/", "s3://").replace("s3:///", "s3://");
   }
 
+  @SuppressWarnings("MixedMutabilityReturnType")
   private List<String> loadTickers(String tickersPath) {
     try (Connection conn = createDuckDBWithS3();
          Statement stmt = conn.createStatement()) {
@@ -278,6 +279,7 @@ public class FigiDataProvider implements DataProvider {
    * Fields are kept in OpenFIGI naming (e.g., {@code exchCode}) because the
    * figi_instruments column config maps them via {@code source:} to our names.
    */
+  @SuppressWarnings({"MixedMutabilityReturnType", "UnusedVariable"})
   private List<Map<String, Object>> parseResponse(String json, List<String> tickers) {
     List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
 

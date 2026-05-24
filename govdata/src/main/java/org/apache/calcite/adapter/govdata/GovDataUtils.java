@@ -96,7 +96,7 @@ public final class GovDataUtils {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", envYear);
       }
     }
-    return java.time.Year.now().getValue() - 5;
+    return java.time.Year.now(java.time.ZoneOffset.UTC).getValue() - 5;
   }
 
   /**
@@ -120,7 +120,7 @@ public final class GovDataUtils {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", envYear);
       }
     }
-    int currentYear = java.time.Year.now().getValue();
+    int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     int dataLag = 0;
     if (operand != null) {
       Object lagObj = operand.get("dataLagYears");
@@ -232,7 +232,7 @@ public final class GovDataUtils {
    * @param tableName Name of the table to get column comments for
    * @return Map from column name to column comment
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "MixedMutabilityReturnType"})
   public static Map<String, String> loadColumnComments(Class<?> clazz,
       String schemaResourceName, String tableName) {
     List<Map<String, Object>> tables = loadTableDefinitions(clazz, schemaResourceName);

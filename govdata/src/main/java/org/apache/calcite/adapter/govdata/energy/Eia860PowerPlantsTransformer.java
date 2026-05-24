@@ -34,7 +34,7 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     String yearStr = dims != null ? dims.get("year") : null;
     String year = yearStr != null ? yearStr : "";
     int yearInt = 0;
-    try { yearInt = Integer.parseInt(year); } catch (NumberFormatException e) { }
+    try { yearInt = Integer.parseInt(year); } catch (NumberFormatException e) { /* yearInt stays 0 */ }
 
     // EIA moved 2024+ data out of /archive/xls/ to /xls/
     if (yearInt >= 2024) {

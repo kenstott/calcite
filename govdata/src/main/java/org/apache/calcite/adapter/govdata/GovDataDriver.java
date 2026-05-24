@@ -317,7 +317,8 @@ public class GovDataDriver extends Driver {
   private String writeTempModel(String prefix, String modelJson) throws IOException {
     File tempFile = File.createTempFile(prefix, ".json");
     tempFile.deleteOnExit();
-    try (java.io.FileWriter writer = new java.io.FileWriter(tempFile)) {
+    try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
+        new java.io.FileOutputStream(tempFile), java.nio.charset.StandardCharsets.UTF_8)) {
       writer.write(modelJson);
     }
     LOGGER.debug("Created temporary model file: {}", tempFile.getAbsolutePath());

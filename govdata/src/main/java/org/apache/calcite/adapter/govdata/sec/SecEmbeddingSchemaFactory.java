@@ -330,6 +330,7 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
   /**
    * Create a basic schema if the file factory fails.
    */
+  @SuppressWarnings("UnusedVariable")
   private Schema createBasicSchema(Map<String, Object> config) {
     return new org.apache.calcite.schema.impl.AbstractSchema() {
       @Override protected Map<String, org.apache.calcite.schema.Table> getTableMap() {

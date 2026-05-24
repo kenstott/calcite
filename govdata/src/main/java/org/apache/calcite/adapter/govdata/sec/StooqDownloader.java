@@ -686,6 +686,7 @@ public class StooqDownloader {
    * Detects if response indicates rate limiting.
    * Stooq may return 429, empty response, or specific error patterns.
    */
+  @SuppressWarnings("UnusedMethod")
   private boolean isRateLimited(HttpURLConnection conn, int responseCode) throws IOException {
     // Explicit 429 Too Many Requests
     if (responseCode == 429) {

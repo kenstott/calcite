@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashSet;
@@ -50,6 +51,7 @@ public class RSSRefreshMonitor {
 
   // RSS URL patterns
   private static final String SEC_RSS_RECENT = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&output=atom";
+  @SuppressWarnings("InlineFormatString")
   private static final String SEC_RSS_COMPANY = "https://data.sec.gov/rss?cik=%s";
 
   // Pattern to extract filing identifiers from RSS
@@ -65,6 +67,7 @@ public class RSSRefreshMonitor {
     this.maxDebounceMinutes = getIntConfig(refreshConfig, "maxDebounceMinutes", 30);
   }
 
+  @SuppressWarnings("FutureReturnValueIgnored")
   public void start() {
     if (!isEnabled()) {
       LOGGER.info("RSS refresh monitoring is disabled");
@@ -208,7 +211,8 @@ public class RSSRefreshMonitor {
     conn.setConnectTimeout(10000);
     conn.setReadTimeout(30000);
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         Matcher matcher = FILING_ID_PATTERN.matcher(line);

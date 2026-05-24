@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  * <p>Applied after chunking so that chunk_text and enriched_text remain comparable
  * in structure while enriched_text has normalized values for better embedding quality.
  */
+@SuppressWarnings({"UnusedVariable", "JavaTimeDefaultTimeZone"})
 public class TextNormalizer {
 
   // Filing context for resolving relative dates

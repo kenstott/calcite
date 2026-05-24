@@ -26,7 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -55,6 +58,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Rate limits: 500 requests per IP address per day (very generous)
  */
+@SuppressWarnings({"UnusedVariable", "HidingField"})
 public class CensusApiClient extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusApiClient.class);
 
@@ -1128,7 +1132,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       throw new IllegalArgumentException("Invalid Census API response format");
     }
 
-    try (FileWriter writer = new FileWriter(outputFile)) {
+    try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8)) {
       // First row is headers
       JsonNode headers = jsonData.get(0);
       for (int i = 0; i < headers.size(); i++) {

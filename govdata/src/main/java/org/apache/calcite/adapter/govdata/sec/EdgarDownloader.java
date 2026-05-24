@@ -45,7 +45,9 @@ public class EdgarDownloader {
   private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
 
   // SEC API endpoints
+  @SuppressWarnings("InlineFormatString")
   private static final String SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK%s.json";
+  @SuppressWarnings("InlineFormatString")
   private static final String XBRL_URL = "https://www.sec.gov/Archives/edgar/data/%s/%s/%s";
 
   private final Map<String, Object> edgarConfig;
@@ -98,7 +100,7 @@ public class EdgarDownloader {
         : LocalDate.of(2020, 1, 1);
     LocalDate endDate = endDateStr != null
         ? LocalDate.parse(endDateStr)
-        : LocalDate.now();
+        : LocalDate.now(java.time.ZoneOffset.UTC);
 
     LOGGER.info("SEC EDGAR Download Configuration:");
     LOGGER.info("  CIKs: " + ciks);

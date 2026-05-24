@@ -64,6 +64,7 @@ import java.util.Map;
  *   <li>2 - FAILED (critical error)</li>
  * </ul>
  */
+@SuppressWarnings("UnusedVariable")
 public class IcebergMaintenanceRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergMaintenanceRunner.class);

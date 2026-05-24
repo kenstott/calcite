@@ -100,7 +100,7 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
           reader.close();
           LOGGER.info("PatentSummaries: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
-          try { reader.close(); } catch (IOException ignored) { }
+          try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
           throw new RuntimeException("PatentSummariesTransformer read failed", e);
         }
       }

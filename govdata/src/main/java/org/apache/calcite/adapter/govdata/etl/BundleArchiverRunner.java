@@ -17,8 +17,9 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -97,7 +98,7 @@ public class BundleArchiverRunner {
     }
 
     if (bundleId == null) {
-      bundleId = "run-" + new SimpleDateFormat("yyyyMMdd'T'HHmm").format(new Date());
+      bundleId = "run-" + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmm").withZone(ZoneOffset.UTC).format(Instant.now());
     }
 
     Map<String, Object> s3Config = new HashMap<String, Object>();

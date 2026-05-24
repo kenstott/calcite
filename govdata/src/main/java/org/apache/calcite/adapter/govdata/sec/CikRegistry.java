@@ -113,6 +113,7 @@ public class CikRegistry {
   /**
    * Load registry from external file (replaces all data).
    */
+  @SuppressWarnings("UnusedMethod")
   private static void loadRegistryFromFile(File file) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode root = mapper.readTree(file);
@@ -343,6 +344,7 @@ public class CikRegistry {
    *   </ul>
    * @return List of resolved 10-digit CIK strings, empty list if identifier not found
    */
+  @SuppressWarnings("MixedMutabilityReturnType")
   public static List<String> resolveCiks(String identifier) {
     if (identifier == null || identifier.isEmpty()) {
       return Collections.emptyList();

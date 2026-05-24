@@ -90,7 +90,7 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
     }
     if (cellType == CellType.NUMERIC) {
       if (DateUtil.isCellDateFormatted(cell)) {
-        return cell.getDateCellValue().toString();
+        return cell.getLocalDateTimeCellValue().toString();
       }
       double d = cell.getNumericCellValue();
       if (d == Math.floor(d) && !Double.isInfinite(d)) {

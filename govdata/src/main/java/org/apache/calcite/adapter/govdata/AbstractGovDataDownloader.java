@@ -390,6 +390,7 @@ public abstract class AbstractGovDataDownloader {
      * Helper: Insert partition lookup data into temp table.
      * Shared by insertJsonBatch and insertCsvBatch.
      */
+    @SuppressWarnings("UnusedVariable")
     private void insertPartitionLookup(String tableName, List<Map<String, String>> partitionVars,
                                        String idxColumnName) throws SQLException {
       String insertSql = "INSERT INTO " + tableName + " VALUES (" +
@@ -924,7 +925,7 @@ public abstract class AbstractGovDataDownloader {
 
     if (dimensions == null) {
       LOGGER.warn("No dimensions found for table '{}', returning empty list", tableName);
-      return Collections.emptyList();
+      return new ArrayList<>();
     }
 
     if (dimensions instanceof JsonNode) {
@@ -934,7 +935,7 @@ public abstract class AbstractGovDataDownloader {
       if (dimensionNode == null) {
         LOGGER.warn("Dimension '{}' not found in table '{}', returning empty list",
             dimensionName, tableName);
-        return Collections.emptyList();
+        return new ArrayList<>();
       }
 
       // Handle array of values
@@ -956,18 +957,18 @@ public abstract class AbstractGovDataDownloader {
           // (caller should use yearRange() method instead)
           LOGGER.debug("Dimension '{}' is type 'yearRange' - use yearRange() method instead",
               dimensionName);
-          return Collections.emptyList();
+          return new ArrayList<>();
         }
       }
 
       LOGGER.warn("Dimension '{}' in table '{}' has unexpected format: {}",
           dimensionName, tableName, dimensionNode.getNodeType());
-      return Collections.emptyList();
+      return new ArrayList<>();
     }
 
     LOGGER.warn("Dimensions for table '{}' has unexpected type: {}",
         tableName, dimensions.getClass().getName());
-    return Collections.emptyList();
+    return new ArrayList<>();
   }
 
   /**
@@ -1076,11 +1077,11 @@ public abstract class AbstractGovDataDownloader {
 
       LOGGER.warn("API list '{}' not found for table '{}', returning empty list", listKey,
           tableName);
-      return Collections.emptyList();
+      return new ArrayList<>();
     } catch (Exception e) {
       LOGGER.error("Error extracting API list '{}' for table '{}': {}", listKey, tableName,
           e.getMessage());
-      return Collections.emptyList();
+      return new ArrayList<>();
     }
   }
 
@@ -1115,11 +1116,11 @@ public abstract class AbstractGovDataDownloader {
 
       LOGGER.warn("API set '{}' not found for table '{}', returning empty map", objectKey,
           tableName);
-      return Collections.emptyMap();
+      return new LinkedHashMap<>();
     } catch (Exception e) {
       LOGGER.error("Error extracting API set '{}' for table '{}': {}", objectKey, tableName,
           e.getMessage());
-      return Collections.emptyMap();
+      return new LinkedHashMap<>();
     }
   }
 
@@ -1991,7 +1992,7 @@ public abstract class AbstractGovDataDownloader {
         if (fileSize > 0) {
           LOGGER.info("⚡ JSON exists, updating cache manifest: {}", cacheKey.asString());
           // Calculate reasonable default refresh time (same logic as CacheManifest.markCached)
-          int currentYear = java.time.LocalDate.now().getYear();
+          int currentYear = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
           String yearStr = params.get("year");
           int year = yearStr != null ? Integer.parseInt(yearStr) : currentYear;
           long refreshAfter;
@@ -3700,7 +3701,6 @@ public abstract class AbstractGovDataDownloader {
 
     org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
         (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
-    DuckDBCacheStore store = econManifest.getStore();
     String sourceTable = alternate.sourceTableName;
 
     // Check if source table has any stale entries or errors
@@ -4128,6 +4128,7 @@ public abstract class AbstractGovDataDownloader {
    * @param filenamePattern Optional filename pattern (e.g., "year_2020_{i}") for batched writes
    * @return SQL COPY statement
    */
+  @SuppressWarnings("UnusedMethod")
   private String buildReorganizationSql(String sourceGlob, String targetBase,
       List<String> partitionColumns, Map<String, String> columnMappings,
       String filenamePattern) {
@@ -4495,7 +4496,7 @@ public abstract class AbstractGovDataDownloader {
    * @param tableName Table name for logging and manifest operations
    * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
    * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    */
   protected void iterateTableOperationsOptimized(
       String tableName,
@@ -4949,14 +4950,6 @@ public abstract class AbstractGovDataDownloader {
 
     if (dimensionIndex >= dimensions.size()) {
       // Base case: add to results
-      int year = 0;
-      if (variables.containsKey("year")) {
-        try {
-          year = Integer.parseInt(variables.get("year"));
-        } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
-        }
-      }
       results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, variables));
       return;
     }
@@ -5300,7 +5293,7 @@ public abstract class AbstractGovDataDownloader {
    * @return Expiry timestamp in milliseconds (Long.MAX_VALUE for no expiry)
    */
   protected long getCacheExpiryForYear(int year) {
-    int currentYear = java.time.LocalDate.now().getYear();
+    int currentYear = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
     if (year == currentYear) {
       return System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
     }
@@ -5315,7 +5308,7 @@ public abstract class AbstractGovDataDownloader {
    * @return "current_year_daily" for current year, "historical_immutable" otherwise
    */
   protected String getCachePolicyForYear(int year) {
-    int currentYear = java.time.LocalDate.now().getYear();
+    int currentYear = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
     return (year == currentYear) ? "current_year_daily" : "historical_immutable";
   }
 

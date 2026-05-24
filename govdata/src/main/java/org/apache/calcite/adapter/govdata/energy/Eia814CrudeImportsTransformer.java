@@ -29,6 +29,7 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
 
   // EIA-814 switched from .xls to .xlsx in 2017.
   private static final int XLSX_START_YEAR = 2017;
+  @SuppressWarnings("InlineFormatString")
   private static final String URL_PATTERN =
       "https://www.eia.gov/petroleum/imports/companylevel/archive/%d/%d_%s/data/import.%s";
 

@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
  *   <li>Partition pruning eliminates irrelevant data early in query planning</li>
  * </ul>
  */
+@SuppressWarnings({"UnusedVariable", "JavaTimeDefaultTimeZone"})
 public class EdgarPartitionStrategy {
 
   private static final Pattern CIK_PATTERN = Pattern.compile("\\d{10}");

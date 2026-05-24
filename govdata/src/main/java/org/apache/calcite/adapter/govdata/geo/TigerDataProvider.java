@@ -127,9 +127,8 @@ public class TigerDataProvider implements DataProvider {
       final Path tempDirToClean = tempDir;
       Runtime.getRuntime().addShutdownHook(
           new Thread(() -> {
-        try {
-          Files.walk(tempDirToClean)
-              .sorted(Comparator.reverseOrder())
+        try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean)) {
+          walk.sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
         } catch (IOException e) {
@@ -146,9 +145,8 @@ public class TigerDataProvider implements DataProvider {
         LOGGER.info("No data for table {} year={} state={} (HTTP 404 — skipping partition)",
             tableName, year, stateFips);
         if (tempDir != null) {
-          try {
-            Files.walk(tempDir)
-                .sorted(Comparator.reverseOrder())
+          try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+            walk.sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(File::delete);
           } catch (IOException cleanupError) {
@@ -158,9 +156,8 @@ public class TigerDataProvider implements DataProvider {
         return new ArrayList<Map<String, Object>>().iterator();
       }
       if (tempDir != null) {
-        try {
-          Files.walk(tempDir)
-              .sorted(Comparator.reverseOrder())
+        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+          walk.sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
         } catch (IOException cleanupError) {

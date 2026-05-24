@@ -272,6 +272,7 @@ public class CensusResponseTransformer implements ResponseTransformer {
    * @param context Request context for logging
    * @return JSON array string of data
    */
+  @SuppressWarnings("UnusedVariable")
   private String handleObjectResponse(JsonNode root, RequestContext context) {
     // Check for known wrapper fields
     String[] dataFields = {"geos", "variables", "data", "result", "results", "items"};

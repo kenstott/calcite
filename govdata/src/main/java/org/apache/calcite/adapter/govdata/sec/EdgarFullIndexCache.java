@@ -76,7 +76,7 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    */
   public EdgarFullIndexCache(StorageProvider storageProvider, String cacheBasePath,
       int startYear, int endYear) {
-    LocalDate now = LocalDate.now();
+    LocalDate now = LocalDate.now(java.time.ZoneOffset.UTC);
     this.currentYear = now.getYear();
     this.currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
 

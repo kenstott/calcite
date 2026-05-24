@@ -59,6 +59,7 @@ public class UsdaRuralUrbanTransformer implements ResponseTransformer {
   }
 
   @Override
+  @SuppressWarnings("UnusedVariable")
   public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("Empty response body for USDA Rural-Urban data");

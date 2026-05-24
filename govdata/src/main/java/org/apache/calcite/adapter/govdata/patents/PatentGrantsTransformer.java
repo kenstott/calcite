@@ -132,7 +132,7 @@ public class PatentGrantsTransformer extends AbstractPatentsTransformer {
           reader.close();
           LOGGER.info("PatentGrants: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
-          try { reader.close(); } catch (IOException ignored) { }
+          try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
           throw new RuntimeException("PatentGrantsTransformer read failed", e);
         }
       }

@@ -560,7 +560,8 @@ public class SecFilingCache implements AutoCloseable {
       java.util.concurrent.ExecutorService pool =
           java.util.concurrent.Executors.newFixedThreadPool(poolSize);
       for (final EdgarFullIndexCache.IndexEntry ie : toSelfHeal) {
-        pool.submit(new Runnable() {
+        @SuppressWarnings("FutureReturnValueIgnored")
+        java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
           @Override public void run() {
             FileInventory inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
             recordInventory(ie.accession, inv);

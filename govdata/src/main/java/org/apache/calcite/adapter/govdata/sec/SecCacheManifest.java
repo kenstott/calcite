@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Uses HTTP ETags to detect changes on the SEC server, falling back to
  * time-based expiration when ETags are not available.
  */
+@SuppressWarnings("UnusedVariable")
 public class SecCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();

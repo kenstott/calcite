@@ -262,6 +262,7 @@ public class UsdaDataProvider implements DataProvider {
    * <p>RUCA file format varies but typically has tract-level data with
    * primary and secondary RUCA codes.
    */
+  @SuppressWarnings("UnusedVariable")
   private List<Map<String, Object>> parseRucaCsv(String csvContent, String year)
       throws IOException {
     List<Map<String, Object>> result = new ArrayList<>();

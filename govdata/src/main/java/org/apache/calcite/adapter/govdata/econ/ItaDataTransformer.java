@@ -64,6 +64,7 @@ import java.util.Map;
  * @see ResponseTransformer
  * @see RequestContext
  */
+@SuppressWarnings("UnusedVariable")
 public class ItaDataTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ItaDataTransformer.class);

@@ -35,6 +35,7 @@ import java.util.regex.Pattern;
  *   <li>Recording the section path (LCA breadcrumb) on every chunk</li>
  * </ul>
  */
+@SuppressWarnings("UnusedVariable")
 public class SemanticTextChunker {
   private static final Logger LOGGER = LoggerFactory.getLogger(SemanticTextChunker.class);
 

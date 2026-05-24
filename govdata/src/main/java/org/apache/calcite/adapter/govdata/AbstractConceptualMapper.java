@@ -135,7 +135,7 @@ public abstract class AbstractConceptualMapper {
    */
   protected int extractYear(Map<String, Object> dimensions) {
     if (dimensions == null) {
-      return java.time.Year.now().getValue();
+      return java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     }
     Object yearObj = dimensions.get("year");
     if (yearObj instanceof Integer) {
@@ -147,7 +147,7 @@ public abstract class AbstractConceptualMapper {
         LOGGER.warn("Invalid year format in dimensions: {}", yearObj);
       }
     }
-    return java.time.Year.now().getValue();
+    return java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
   }
 
   /**

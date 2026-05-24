@@ -163,12 +163,12 @@ public class CensusVariableNormalizer implements VariableNormalizer {
    */
   private int parseYear(String yearStr) {
     if (yearStr == null || yearStr.isEmpty()) {
-      return java.time.Year.now().getValue();
+      return java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     }
     try {
       return Integer.parseInt(yearStr);
     } catch (NumberFormatException e) {
-      return java.time.Year.now().getValue();
+      return java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     }
   }
 }

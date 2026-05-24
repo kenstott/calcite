@@ -84,6 +84,7 @@ import java.util.regex.Pattern;
  * <p>This factory leverages the file adapter's FileConversionManager for XBRL
  * processing and HtmlToJsonConverter for HTML table extraction.
  */
+@SuppressWarnings({"UnusedMethod", "UnusedVariable", "JavaTimeDefaultTimeZone", "DefaultCharset"})
 public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
@@ -3421,7 +3422,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Check if HTML file contains inline XBRL markers.
    *
-   * @param htmlFile The HTML file to check
+   * @param htmlPath The HTML file path to check
    * @return true if inline XBRL detected, false otherwise
    */
   private boolean checkHtmlForInlineXbrl(String htmlPath) {

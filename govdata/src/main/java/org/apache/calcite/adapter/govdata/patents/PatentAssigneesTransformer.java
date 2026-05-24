@@ -125,7 +125,7 @@ public class PatentAssigneesTransformer extends AbstractPatentsTransformer {
           reader.close();
           LOGGER.info("PatentAssignees: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
-          try { reader.close(); } catch (IOException ignored) { }
+          try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
           throw new RuntimeException("PatentAssigneesTransformer read failed", e);
         }
       }

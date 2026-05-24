@@ -219,7 +219,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
   /**
    * Create a List of Integer years from a range.
-   * Unlike parent's yearRange() which returns List<String>, this returns List<Integer>.
+   * Unlike parent's yearRange() which returns {@code List<String>}, this returns {@code List<Integer>}.
    */
   private static List<Integer> intYearRange(int startYear, int endYear) {
     java.util.List<Integer> years = new java.util.ArrayList<>();
@@ -346,7 +346,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    *
    * @return Cache manifest instance
    */
-  public GeoCacheManifest getCacheManifest() {
+  @Override public GeoCacheManifest getCacheManifest() {
     return getGeoManifest();
   }
 
@@ -439,6 +439,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param startYear First year to convert
    * @param endYear Last year to convert
    */
+  @SuppressWarnings("UnusedVariable")
   private void convertTableForYears(String tableName, int startYear, int endYear) throws IOException {
     LOGGER.debug("Converting {} for years {}-{}", tableName, startYear, endYear);
 
@@ -941,6 +942,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Download congressional districts shapefile for a specific year.
    * Congressional districts are provided as state-level files, we need to download all states.
    */
+  @SuppressWarnings("UnusedVariable")
   public File downloadCongressionalDistrictsForYear(int year) throws IOException {
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
@@ -1651,6 +1653,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Helper to check if we should skip downloading raw file (manifest says already converted).
    * Does NOT check parquet existence - that happens later during conversion.
    */
+  @SuppressWarnings({"UnusedMethod", "UnusedVariable"})
   private boolean shouldSkipDownload(String dataType, int year, String outputPath) {
     // Only check manifest - if it says converted, we can skip download
     // We don't check parquet existence here because we want the raw file regardless

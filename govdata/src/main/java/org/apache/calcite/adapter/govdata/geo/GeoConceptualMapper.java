@@ -281,6 +281,7 @@ public class GeoConceptualMapper extends AbstractConceptualMapper {
    * @param year Year of HUD data
    * @return VariableMapping or null if not found
    */
+  @SuppressWarnings("UnusedVariable")
   private VariableMapping getHudFieldMapping(String conceptualName, int year) {
     JsonNode conceptualFields = mappingsConfig.path("conceptualFields").path(conceptualName);
     if (conceptualFields.isMissingNode()) {

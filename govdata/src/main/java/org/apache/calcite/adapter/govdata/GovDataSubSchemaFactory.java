@@ -23,23 +23,23 @@ import java.util.Map;
  * their specific domain (econ, geo, sec, census, etc.).
  *
  * <p>Example implementation:
- * <pre>{@code
+ * <pre>
  * public class EconSchemaFactory implements GovDataSubSchemaFactory {
  *
- *   @Override *   public String getSchemaResourceName() {
+ *   public String getSchemaResourceName() {
  *     return "/econ/econ-schema.yaml";
  *   }
  *
- *   @Override *   public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
- *     builder.resolveDimensions("world_indicators", (ctx, dims) ->
+ *   public void configureHooks(FileSchemaBuilder builder, Map&lt;String, Object&gt; operand) {
+ *     builder.resolveDimensions("world_indicators", (ctx, dims) -&gt;
  *         resolveWorldBankDimensions(ctx, dims));
  *
  *     for (String tableName : BLS_TABLES) {
- *       builder.isEnabled(tableName, ctx -> isSourceEnabled(operand, "bls"));
+ *       builder.isEnabled(tableName, ctx -&gt; isSourceEnabled(operand, "bls"));
  *     }
  *   }
  * }
- * }</pre>
+ * </pre>
  *
  * @see SubSchemaFactory
  * @see org.apache.calcite.adapter.file.ModelLifecycleProcessor

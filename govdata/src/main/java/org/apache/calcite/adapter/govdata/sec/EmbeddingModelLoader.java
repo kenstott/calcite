@@ -34,6 +34,7 @@ public class EmbeddingModelLoader {
   private int embeddingDim;
   private int vocabFeatures;
   private int contextFeatures;
+  @SuppressWarnings("UnusedVariable")
   private int statisticalFeatures;
 
   private EmbeddingModelLoader() {
@@ -75,7 +76,7 @@ public class EmbeddingModelLoader {
     vocabIndex = new HashMap<>();
 
     try (InputStream is = getClass().getResourceAsStream("/models/financial-vocabulary.txt");
-         BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+         BufferedReader reader = new BufferedReader(new InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8))) {
 
       String line;
       int index = 0;

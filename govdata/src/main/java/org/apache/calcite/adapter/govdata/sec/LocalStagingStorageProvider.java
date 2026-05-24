@@ -201,7 +201,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
   /**
    * Writes parquet data to a local staging file and returns that file.
    */
-  @SuppressWarnings("deprecation")
+  @SuppressWarnings({"deprecation", "UnusedVariable"})
   private File stageLocally(String groupKey, Schema schema,
       List<GenericRecord> records, String recordType) throws IOException {
     // Sanitize groupKey for use as a path segment

@@ -26,7 +26,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -396,7 +399,7 @@ public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
     }
   }
 
-  @SuppressWarnings("deprecation")
+  @SuppressWarnings({"deprecation", "UnusedMethod"})
   private void convertStatesCsvToParquet(File csvFile, String outputRelativePath) throws IOException {
     // If a CSV export is available, convert it to Parquet
     LOGGER.info("Converting CSV file {} to Parquet", csvFile);
@@ -414,7 +417,7 @@ public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
 
     List<GenericRecord> records = new ArrayList<>();
 
-    try (BufferedReader reader = new BufferedReader(new FileReader(csvFile))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), StandardCharsets.UTF_8))) {
       String line = reader.readLine(); // Skip header
       int count = 0;
 

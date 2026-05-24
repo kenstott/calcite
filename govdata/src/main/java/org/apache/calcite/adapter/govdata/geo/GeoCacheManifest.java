@@ -50,6 +50,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
   private final DuckDBCacheStore store;
 
   /** Cache directory path. */
+  @SuppressWarnings("UnusedVariable")
   private final String cacheDir;
 
   /**

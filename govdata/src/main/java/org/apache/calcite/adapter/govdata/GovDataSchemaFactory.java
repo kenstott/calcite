@@ -109,6 +109,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
   // Store constraint metadata to pass to sub-factories
   private Map<String, Map<String, Object>> tableConstraints;
+  @SuppressWarnings("UnusedVariable")
   private List<JsonTable> tableDefinitions;
 
   @Override @NonNull public Schema create(@Nullable SchemaPlus parentSchema, @NonNull String name,
@@ -303,6 +304,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * All env vars that previously had to be baked into generated model JSON files are now
    * readable here so workers can drop JSON generation entirely.
    */
+  @SuppressWarnings("UnusedMethod")
   private Map<String, Object> enrichFromEnv(Map<String, Object> op) {
     // Storage locations
     setFromEnv(op, "directory",      "GOVDATA_PARQUET_DIR");
@@ -735,6 +737,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * Create incremental tracker for resumable ETL.
    * Uses PipelineTrackerFactory to select backend based on operand or environment.
    */
+  @SuppressWarnings("UnusedVariable")
   private IncrementalTracker createIncrementalTracker(String operatingDirectory,
       String schemaName, Map<String, Object> operand) {
     return PipelineTrackerFactory.createFromOperand(operand, operatingDirectory);

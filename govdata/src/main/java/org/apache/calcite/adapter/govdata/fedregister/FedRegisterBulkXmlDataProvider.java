@@ -63,6 +63,7 @@ public class FedRegisterBulkXmlDataProvider implements DataProvider {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(FedRegisterBulkXmlDataProvider.class);
 
+  @SuppressWarnings("InlineFormatString")
   private static final String GOVINFO_URL_TEMPLATE =
       "https://www.govinfo.gov/bulkdata/FR/%d/%02d/FR-%d-%02d.zip";
 

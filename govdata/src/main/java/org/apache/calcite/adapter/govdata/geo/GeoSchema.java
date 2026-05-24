@@ -58,8 +58,8 @@ import java.util.Set;
 public class GeoSchema extends AbstractSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoSchema.class);
 
-  private final SchemaPlus parentSchema;
-  private final String name;
+  @SuppressWarnings("UnusedVariable") private final SchemaPlus parentSchema;
+  @SuppressWarnings("UnusedVariable") private final String name;
   private final String cacheDir;
   private final String censusApiKey;
   private final String hudUsername;

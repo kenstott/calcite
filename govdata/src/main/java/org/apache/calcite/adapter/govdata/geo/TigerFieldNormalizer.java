@@ -421,6 +421,7 @@ public class TigerFieldNormalizer {
    * @param tableName The table name
    * @return List of canonical field names, or empty list if table not configured
    */
+  @SuppressWarnings("MixedMutabilityReturnType")
   public static List<String> getCanonicalFields(String tableName) {
     TableFieldConfig config = TABLE_CONFIGS.get(tableName);
     if (config == null) {
@@ -436,6 +437,7 @@ public class TigerFieldNormalizer {
    * @param canonicalName The canonical field name
    * @return List of source field names, or empty list if not found
    */
+  @SuppressWarnings("MixedMutabilityReturnType")
   public static List<String> getSourceFields(String tableName, String canonicalName) {
     TableFieldConfig config = TABLE_CONFIGS.get(tableName);
     if (config == null) {

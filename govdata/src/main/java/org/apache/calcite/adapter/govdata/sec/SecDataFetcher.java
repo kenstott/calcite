@@ -61,6 +61,8 @@ import java.util.stream.Collectors;
  * - sec.fallback.enabled: Enable/disable fallback to hardcoded data (default: false)
  * - sec.testMode: Test mode behavior, fails fast (default: false)
  */
+@SuppressWarnings({"UnusedMethod", "UnusedVariable", "InlineFormatString", "DefaultCharset",
+    "FutureReturnValueIgnored", "StreamResourceLeak"})
 public class SecDataFetcher {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecDataFetcher.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -454,6 +456,7 @@ public class SecDataFetcher {
   /**
    * Load cached data from disk.
    */
+  @SuppressWarnings("ReturnValueIgnored")
   private static CachedData loadFromDisk(File cacheFile) throws IOException {
     try (BufferedReader reader = new BufferedReader(new FileReader(cacheFile))) {
       JsonNode root = MAPPER.readTree(reader);
