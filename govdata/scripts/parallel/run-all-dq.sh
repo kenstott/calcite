@@ -188,30 +188,29 @@ _run_pass() {
   log_info "run-all-dq: logs in $log_dir"
 }
 
-# ── main loop: run → detect new release → retry failing schemas ───────────────
+# ── main loop: run → poll for new release → re-run all schemas ────────────────
+# Polling is unconditional — a new release always triggers a full re-run,
+# regardless of whether the previous pass passed or failed.
+# Exits when the poll window closes with no new release.
 SCHEMAS_TO_RUN=("${ALL_SCHEMAS[@]}")
-RETRY=0
+PASS=0
 
 log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD max_retries=$MAX_RETRIES schemas=${SCHEMAS_TO_RUN[*]}"
 
 while true; do
+  PASS=$((PASS + 1))
+  log_info "run-all-dq: starting pass $PASS (release=$CURRENT_RELEASE)"
   _run_pass "${SCHEMAS_TO_RUN[@]}"
 
-  if [ ${#FAILED_SCHEMAS[@]} -eq 0 ]; then
-    log_info "run-all-dq: ALL SCHEMAS PASSED"
-    exit 0
+  if [ $PASS -gt $MAX_RETRIES ]; then
+    log_info "run-all-dq: max passes ($MAX_RETRIES) reached — stopping"
+    [ ${#FAILED_SCHEMAS[@]} -eq 0 ] && exit 0 || exit 1
   fi
 
-  RETRY=$((RETRY + 1))
-  if [ $RETRY -gt $MAX_RETRIES ]; then
-    log_info "run-all-dq: max retries ($MAX_RETRIES) reached — stopping with ${#FAILED_SCHEMAS[@]} failing schema(s): ${FAILED_SCHEMAS[*]}"
-    exit 1
-  fi
+  # Always poll for a new release after every pass (pass or fail).
+  # A new release means fixes landed — re-run everything with fresh data.
+  log_info "run-all-dq: pass $PASS done (passed=${#PASS_SCHEMAS[@]} failed=${#FAILED_SCHEMAS[@]}) — polling for new release (max ${POLL_MAX} × ${POLL_INTERVAL}s = $((POLL_MAX * POLL_INTERVAL / 60)) min)"
 
-  log_info "run-all-dq: retry $RETRY/$MAX_RETRIES — ${#FAILED_SCHEMAS[@]} failing: ${FAILED_SCHEMAS[*]}"
-  log_info "run-all-dq: polling for a new release (max ${POLL_MAX} × ${POLL_INTERVAL}s = $((POLL_MAX * POLL_INTERVAL / 60)) min)"
-
-  # Poll for a newer release
   NEW_RELEASE=""
   for poll in $(seq 1 $POLL_MAX); do
     CANDIDATE=$(_latest_release)
@@ -224,18 +223,18 @@ while true; do
   done
 
   if [ -z "$NEW_RELEASE" ]; then
-    log_info "run-all-dq: no new release detected after $((POLL_MAX * POLL_INTERVAL / 60)) min — stopping (${#FAILED_SCHEMAS[@]} schema(s) still failing)"
-    exit 1
+    log_info "run-all-dq: no new release after $((POLL_MAX * POLL_INTERVAL / 60)) min — done"
+    [ ${#FAILED_SCHEMAS[@]} -eq 0 ] && exit 0 || exit 1
   fi
 
-  log_info "run-all-dq: new release $NEW_RELEASE (was $CURRENT_RELEASE) — pulling code and re-running failing schemas"
+  log_info "run-all-dq: new release $NEW_RELEASE (was $CURRENT_RELEASE) — pulling code and re-running all schemas"
   CURRENT_RELEASE="$NEW_RELEASE"
   _git_pull
 
-  # Retry always uses --rebuild so fresh data is materialized with the new code
+  # Re-runs always use --rebuild so data is fresh with the new code
   WORKER_EXTRA_ARGS="--mode $MODE --rebuild"
   $DRY_RUN  && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --dry-run"
   [ -n "$START_YEAR" ] && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --start-year $START_YEAR"
 
-  SCHEMAS_TO_RUN=("${FAILED_SCHEMAS[@]}")
+  SCHEMAS_TO_RUN=("${ALL_SCHEMAS[@]}")
 done
