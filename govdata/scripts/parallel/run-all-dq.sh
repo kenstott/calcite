@@ -145,96 +145,122 @@ _git_pull() {
 CURRENT_RELEASE=$(_latest_release)
 log_info "run-all-dq: starting with release $CURRENT_RELEASE"
 
-# ── worker launch + collect (runs one pass over a schema list) ─────────────────
-# Populates FAILED_SCHEMAS (array) and PASS_SCHEMAS (array) in the caller.
-_run_pass() {
-  local schemas=("$@")
-  local log_dir="$SCRIPT_DIR/runs/dq-all-$(date +%Y%m%d_%H%M%S)"
-  mkdir -p "$log_dir"
+# ── release poller (background) ───────────────────────────────────────────────
+# Writes the new release tag to a temp file when it detects one, then exits.
+# The main loop reads this file to know when to restart.
+RELEASE_SIGNAL_FILE=""
 
-  local pids=()
-  local schema_list=()
-
-  for schema in "${schemas[@]}"; do
-    local log_file="$log_dir/${schema}.log"
-    # shellcheck disable=SC2086
-    bash "$DQ_WORKER" "$schema" $WORKER_EXTRA_ARGS > "$log_file" 2>&1 &
-    local last_pid=$!
-    pids+=($last_pid)
-    schema_list+=("$schema")
-    log_info "run-all-dq: launched $schema (PID $last_pid)"
-  done
-
-  FAILED_SCHEMAS=()
-  PASS_SCHEMAS=()
-
-  echo ""
-  echo "=== DQ Pass Summary (mode=$MODE release=$CURRENT_RELEASE) ==="
-  printf "%-30s  %s\n" "SCHEMA" "RESULT"
-  printf "%-30s  %s\n" "------------------------------" "------"
-
-  for i in "${!pids[@]}"; do
-    local schema="${schema_list[$i]}"
-    if wait "${pids[$i]}"; then
-      PASS_SCHEMAS+=("$schema")
-      printf "%-30s  PASS\n" "$schema"
-    else
-      FAILED_SCHEMAS+=("$schema")
-      printf "%-30s  FAIL\n" "$schema"
-    fi
-  done
-  echo ""
-  log_info "run-all-dq: pass complete — passed=${#PASS_SCHEMAS[@]} failed=${#FAILED_SCHEMAS[@]}"
-  log_info "run-all-dq: logs in $log_dir"
+_start_release_poller() {
+  RELEASE_SIGNAL_FILE=$(mktemp)
+  local signal_file="$RELEASE_SIGNAL_FILE"
+  local known_release="$CURRENT_RELEASE"
+  (
+    while true; do
+      sleep "$POLL_INTERVAL"
+      candidate=$(_latest_release)
+      if [ "$candidate" != "$known_release" ]; then
+        echo "$candidate" > "$signal_file"
+        exit 0
+      fi
+    done
+  ) &
+  POLLER_PID=$!
 }
 
-# ── main loop: run → poll for new release → re-run all schemas ────────────────
-# Polling is unconditional — a new release always triggers a full re-run,
-# regardless of whether the previous pass passed or failed.
-# Exits when the poll window closes with no new release.
-SCHEMAS_TO_RUN=("${ALL_SCHEMAS[@]}")
+_stop_release_poller() {
+  kill "$POLLER_PID" 2>/dev/null || true
+  wait "$POLLER_PID" 2>/dev/null || true
+}
+
+# ── main loop ─────────────────────────────────────────────────────────────────
+# Workers and the release poller run concurrently. When the poller signals a
+# new release, all running workers are killed and the run restarts immediately.
 PASS=0
 
-log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD max_retries=$MAX_RETRIES schemas=${SCHEMAS_TO_RUN[*]}"
+log_info "run-all-dq: mode=$MODE dry_run=$DRY_RUN rebuild=$REBUILD max_retries=$MAX_RETRIES schemas=${ALL_SCHEMAS[*]}"
 
 while true; do
   PASS=$((PASS + 1))
-  log_info "run-all-dq: starting pass $PASS (release=$CURRENT_RELEASE)"
-  _run_pass "${SCHEMAS_TO_RUN[@]}"
-
   if [ $PASS -gt $MAX_RETRIES ]; then
     log_info "run-all-dq: max passes ($MAX_RETRIES) reached — stopping"
-    [ ${#FAILED_SCHEMAS[@]} -eq 0 ] && exit 0 || exit 1
+    exit 1
   fi
 
-  # Always poll for a new release after every pass (pass or fail).
-  # A new release means fixes landed — re-run everything with fresh data.
-  log_info "run-all-dq: pass $PASS done (passed=${#PASS_SCHEMAS[@]} failed=${#FAILED_SCHEMAS[@]}) — polling for new release (max ${POLL_MAX} × ${POLL_INTERVAL}s = $((POLL_MAX * POLL_INTERVAL / 60)) min)"
+  log_info "run-all-dq: starting pass $PASS (release=$CURRENT_RELEASE)"
 
-  NEW_RELEASE=""
-  for poll in $(seq 1 $POLL_MAX); do
-    CANDIDATE=$(_latest_release)
-    if [ "$CANDIDATE" != "$CURRENT_RELEASE" ]; then
-      NEW_RELEASE="$CANDIDATE"
-      break
-    fi
-    log_info "run-all-dq: poll $poll/$POLL_MAX — still at $CURRENT_RELEASE, waiting ${POLL_INTERVAL}s..."
-    sleep "$POLL_INTERVAL"
+  LOG_DIR="$SCRIPT_DIR/runs/dq-all-$(date +%Y%m%d_%H%M%S)"
+  mkdir -p "$LOG_DIR"
+
+  # Launch all workers
+  WORKER_PIDS=()
+  SCHEMA_LIST=()
+  for schema in "${ALL_SCHEMAS[@]}"; do
+    log_file="$LOG_DIR/${schema}.log"
+    # shellcheck disable=SC2086
+    bash "$DQ_WORKER" "$schema" $WORKER_EXTRA_ARGS > "$log_file" 2>&1 &
+    WORKER_PIDS+=($!)
+    SCHEMA_LIST+=("$schema")
+    log_info "run-all-dq: launched $schema (PID ${WORKER_PIDS[-1]})"
   done
 
-  if [ -z "$NEW_RELEASE" ]; then
-    log_info "run-all-dq: no new release after $((POLL_MAX * POLL_INTERVAL / 60)) min — done"
-    [ ${#FAILED_SCHEMAS[@]} -eq 0 ] && exit 0 || exit 1
+  # Start release poller concurrently
+  _start_release_poller
+
+  # Wait for workers — checking the release signal between each
+  WORKER_EXIT_CODES=()
+  NEW_RELEASE=""
+  for i in "${!WORKER_PIDS[@]}"; do
+    # If poller already signalled, no need to wait further
+    if [ -z "$NEW_RELEASE" ] && [ -s "$RELEASE_SIGNAL_FILE" ]; then
+      NEW_RELEASE=$(cat "$RELEASE_SIGNAL_FILE")
+    fi
+    if [ -n "$NEW_RELEASE" ]; then
+      WORKER_EXIT_CODES+=( 255 )   # interrupted
+    else
+      wait "${WORKER_PIDS[$i]}" && WORKER_EXIT_CODES+=( 0 ) || WORKER_EXIT_CODES+=( $? )
+      # Re-check signal after each worker completes
+      [ -s "$RELEASE_SIGNAL_FILE" ] && NEW_RELEASE=$(cat "$RELEASE_SIGNAL_FILE") || true
+    fi
+  done
+
+  _stop_release_poller
+
+  if [ -n "$NEW_RELEASE" ]; then
+    # Kill any still-running workers
+    for pid in "${WORKER_PIDS[@]}"; do
+      kill "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+
+    log_info "run-all-dq: new release $NEW_RELEASE (was $CURRENT_RELEASE) — killing workers, pulling code, restarting"
+    CURRENT_RELEASE="$NEW_RELEASE"
+    > "$RELEASE_SIGNAL_FILE"
+    _git_pull
+
+    # Re-runs always rebuild so data is fresh with the new code
+    WORKER_EXTRA_ARGS="--mode $MODE --rebuild"
+    $DRY_RUN && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --dry-run"
+    [ -n "$START_YEAR" ] && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --start-year $START_YEAR"
+    continue
   fi
 
-  log_info "run-all-dq: new release $NEW_RELEASE (was $CURRENT_RELEASE) — pulling code and re-running all schemas"
-  CURRENT_RELEASE="$NEW_RELEASE"
-  _git_pull
-
-  # Re-runs always use --rebuild so data is fresh with the new code
-  WORKER_EXTRA_ARGS="--mode $MODE --rebuild"
-  $DRY_RUN  && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --dry-run"
-  [ -n "$START_YEAR" ] && WORKER_EXTRA_ARGS="$WORKER_EXTRA_ARGS --start-year $START_YEAR"
-
-  SCHEMAS_TO_RUN=("${ALL_SCHEMAS[@]}")
+  # No new release — collect results and exit
+  rm -f "$RELEASE_SIGNAL_FILE"
+  echo ""
+  echo "=== DQ Pass $PASS Summary (mode=$MODE release=$CURRENT_RELEASE) ==="
+  printf "%-30s  %s\n" "SCHEMA" "RESULT"
+  printf "%-30s  %s\n" "------------------------------" "------"
+  overall_exit=0
+  for i in "${!SCHEMA_LIST[@]}"; do
+    if [ "${WORKER_EXIT_CODES[$i]}" -eq 0 ]; then
+      printf "%-30s  PASS\n" "${SCHEMA_LIST[$i]}"
+    else
+      printf "%-30s  FAIL\n" "${SCHEMA_LIST[$i]}"
+      overall_exit=1
+    fi
+  done
+  echo ""
+  log_info "run-all-dq: logs in $LOG_DIR"
+  [ $overall_exit -eq 0 ] && log_info "run-all-dq: ALL SCHEMAS PASSED" || log_info "run-all-dq: ONE OR MORE SCHEMAS FAILED"
+  exit $overall_exit
 done
