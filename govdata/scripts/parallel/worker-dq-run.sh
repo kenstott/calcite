@@ -362,10 +362,17 @@ SQL
 } | duckdb 2>&1 | tee "$LOG_FILE" || DQ_EXIT=$?
 
 if [ $DQ_EXIT -ne 0 ]; then
-  log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT — table likely missing or schema misconfigured"
-  log_info "$WORKER_ID: SCHEMA RESULT: FAIL (script error)"
-  _file_script_error_issue "DuckDB exited with code ${DQ_EXIT} — table likely missing or schema misconfigured. Check log: \`${LOG_FILE}\`"
-  exit 1
+  if [ ! -f "$RESULT_LOCAL" ]; then
+    # DuckDB crashed before COPY completed — no results written, real error
+    log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT and no results written — table likely missing or schema misconfigured"
+    log_info "$WORKER_ID: SCHEMA RESULT: FAIL (script error)"
+    _file_script_error_issue "DuckDB exited with code ${DQ_EXIT} — table likely missing or schema misconfigured. Check log: \`${LOG_FILE}\`"
+    exit 1
+  fi
+  # DuckDB exited non-zero but results were written (e.g. T3 sample SELECT hit HTTP 403
+  # mid-script but COPY completed). Continue to verdict — the actual DQ checks are in
+  # the result file.
+  log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT but results parquet was written — checking verdict (non-fatal statement error, see log)"
 fi
 
 # ── verdict ───────────────────────────────────────────────────────────────────

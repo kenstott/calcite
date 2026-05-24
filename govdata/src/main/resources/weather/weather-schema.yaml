@@ -778,7 +778,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://aqs.epa.gov/data/api/annualData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={year}0101&edate={year}1231&state={state_fips}"
+      url: "https://aqs.epa.gov/data/api/annualData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={effective_year}0101&edate={effective_year}1231&state={state_fips}"
       method: GET
       response:
         format: json
@@ -886,7 +886,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://aqs.epa.gov/data/api/dailyData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={year}0101&edate={year}1231&state={state_fips}"
+      url: "https://aqs.epa.gov/data/api/dailyData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={effective_year}0101&edate={effective_year}1231&state={state_fips}"
       method: GET
       response:
         format: json
