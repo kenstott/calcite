@@ -202,16 +202,11 @@ publishing {
 // Requires JDK 17+ (jpackage ships with JDK 14+).
 // On macOS produces an app-image; on Linux a .deb; on Windows a .msi.
 //
-// ExFAT + macOS: the project root may live on an ExFAT external drive. ExFAT has no
-// native xattr support, so macOS stores code-signing xattrs as AppleDouble (._*) sidecar
-// files. jpackage calls `codesign --remove-signature` on every file it writes, including
-// the non-Mach-O ._* sidecars, which makes codesign exit 1.
 // ExFAT + macOS: ExFAT has no native xattr support, so macOS stores code-signing xattrs as
 // AppleDouble (._*) sidecar files. jpackage calls `codesign --remove-signature` on every file
 // it writes, including the non-Mach-O ._* sidecars, which makes codesign exit 1.
-// Fix: redirect jpackage and jlink output to ~/.gradle/askamerica-engine-build/ which lives on
-// the internal APFS disk (native xattrs, no ._* files).
-// On macOS CI runners (APFS) and Linux CI, always use layout.buildDirectory.
+// Fix: detect ExFAT via diskutil and redirect output to ~/.gradle/askamerica-engine-build/
+// (APFS, native xattrs). On macOS CI runners (APFS) and Linux CI, use layout.buildDirectory.
 val isMacOs = System.getProperty("os.name").lowercase().contains("mac")
 
 fun isExFat(path: File): Boolean {
@@ -229,9 +224,9 @@ val jpackageBuildBase: File = if (isMacOs && isExFat(projectDir)) {
 } else {
     layout.buildDirectory.asFile.get()
 }
-val jpackageDirFile     = File(jpackageBuildBase, "jpackage")
+val jpackageDirFile = File(jpackageBuildBase, "jpackage")
 val jpackageInputDirFile = File(jpackageBuildBase, "jpackage-input")
-val jlinkRuntimeDirFile  = File(jpackageBuildBase, "jlink-runtime")
+val jlinkRuntimeDirFile = File(jpackageBuildBase, "jlink-runtime")
 
 // Thin launcher JAR — only McpServerLauncher; the fat engine JAR is downloaded by postinstall
 val launcherJar by tasks.registering(Jar::class) {
