@@ -40,6 +40,15 @@ publishing {
     }
 }
 
+// govdata depends on file.etl which requires Java 11+. Skip compilation and tests on JDK 8
+// so the upstream Calcite JDK 8 CI jobs don't fail on missing file.etl classes.
+if (JavaVersion.current() < JavaVersion.VERSION_11) {
+    afterEvaluate {
+        tasks.withType<JavaCompile>().configureEach { enabled = false }
+        tasks.withType<Test>().configureEach { enabled = false }
+    }
+}
+
 dependencies {
     api(project(":core"))
     api(project(":linq4j"))
