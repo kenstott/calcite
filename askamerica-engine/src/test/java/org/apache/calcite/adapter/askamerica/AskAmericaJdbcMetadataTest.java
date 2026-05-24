@@ -73,8 +73,7 @@ public class AskAmericaJdbcMetadataTest {
    *
    * <p>ref-schema.yaml declares: sec_company_tickers.primaryKey = [type, cik]
    */
-  @Test
-  void getPrimaryKeys_secCompanyTickers_returnsExpectedColumns() throws Exception {
+  @Test void getPrimaryKeys_secCompanyTickers_returnsExpectedColumns() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
@@ -101,8 +100,7 @@ public class AskAmericaJdbcMetadataTest {
    *
    * <p>ref-schema.yaml declares: gleif_entities.primaryKey = [type, lei]
    */
-  @Test
-  void getPrimaryKeys_gleifEntities_returnsExpectedColumns() throws Exception {
+  @Test void getPrimaryKeys_gleifEntities_returnsExpectedColumns() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");

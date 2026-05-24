@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.util;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public class EnvironmentVariableSubstitutor {
    * @return the string with environment variables substituted
    * @throws IllegalArgumentException if an environment variable is not found and no default is provided
    */
-  public static String substitute(String input, Map<String, String> environment) {
+  public static @Nullable String substitute(@Nullable String input, Map<String, String> environment) {
     if (input == null) {
       return null;
     }
@@ -145,7 +146,7 @@ public class EnvironmentVariableSubstitutor {
    * @return the JSON string with environment variables substituted
    * @throws IllegalArgumentException if an environment variable is not found and no default is provided
    */
-  public static String substituteInJson(String jsonString, Map<String, String> environment) {
+  public static @Nullable String substituteInJson(@Nullable String jsonString, Map<String, String> environment) {
     if (jsonString == null) {
       return null;
     }
@@ -157,7 +158,10 @@ public class EnvironmentVariableSubstitutor {
 
     while (standaloneMatcher.find()) {
       String variable = standaloneMatcher.group(1);
-      String value = substitute(variable, environment);
+      @Nullable String value = substitute(variable, environment);
+      if (value == null) {
+        continue;
+      }
 
       // Determine if the value should be unquoted (number or boolean)
       if (isNumber(value) || isBoolean(value)) {
