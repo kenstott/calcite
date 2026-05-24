@@ -609,17 +609,20 @@ FROM (
   WHERE month IS NOT NULL
 );
 
--- epa_annual_aqi: aqi must be 0–500 (where non-null)
+-- epa_annual_aqi: negative aqi is a data error (fail); aqi > 500 is Beyond Index (warn — valid for extreme events)
 INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'aqi_range',
-  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(bad AS VARCHAR), '0',
-  'rows with aqi out of [0,500]'
-FROM (
-  SELECT SUM(CASE WHEN aqi < 0 OR aqi > 500 THEN 1 ELSE 0 END) AS bad
-  FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_annual_aqi', allow_moved_paths=true)
-  WHERE aqi IS NOT NULL
-);
+SELECT 'weather', 'epa_annual_aqi', 'aqi_negative',
+  CASE WHEN neg > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(neg AS VARCHAR), '0',
+  'rows with aqi < 0 (impossible value)'
+FROM (SELECT SUM(CASE WHEN aqi < 0 THEN 1 ELSE 0 END) AS neg FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_annual_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'epa_annual_aqi', 'aqi_beyond_index',
+  CASE WHEN hi > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(hi AS VARCHAR), '0',
+  'rows with aqi > 500 (EPA Beyond Index — rare but valid for extreme events)'
+FROM (SELECT SUM(CASE WHEN aqi > 500 THEN 1 ELSE 0 END) AS hi FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_annual_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
 
 -- epa_annual_aqi: parameter_code must be one of 5 known pollutants
 INSERT INTO dq_results
@@ -634,17 +637,20 @@ FROM (
   WHERE parameter_code IS NOT NULL
 );
 
--- epa_daily_aqi: aqi must be 0–500 (where non-null)
+-- epa_daily_aqi: negative aqi is a data error (fail); aqi > 500 is Beyond Index (warn — valid for extreme events)
 INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'aqi_range',
-  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(bad AS VARCHAR), '0',
-  'rows with aqi out of [0,500]'
-FROM (
-  SELECT SUM(CASE WHEN aqi < 0 OR aqi > 500 THEN 1 ELSE 0 END) AS bad
-  FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_daily_aqi', allow_moved_paths=true)
-  WHERE aqi IS NOT NULL
-);
+SELECT 'weather', 'epa_daily_aqi', 'aqi_negative',
+  CASE WHEN neg > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(neg AS VARCHAR), '0',
+  'rows with aqi < 0 (impossible value)'
+FROM (SELECT SUM(CASE WHEN aqi < 0 THEN 1 ELSE 0 END) AS neg FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_daily_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'epa_daily_aqi', 'aqi_beyond_index',
+  CASE WHEN hi > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(hi AS VARCHAR), '0',
+  'rows with aqi > 500 (EPA Beyond Index — rare but valid for extreme events)'
+FROM (SELECT SUM(CASE WHEN aqi > 500 THEN 1 ELSE 0 END) AS hi FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_daily_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
 
 -- ghcnd_daily: temperature range -90 to 60 °C
 INSERT INTO dq_results
