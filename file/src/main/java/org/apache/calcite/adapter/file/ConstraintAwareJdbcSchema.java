@@ -130,7 +130,7 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
 
       if (jdbcTable != null) {
         LOGGER.info("Successfully created ConstraintAwareJdbcTable for '{}'", name);
-        return new ConstraintAwareJdbcTable(jdbcTable, table, constraintMetadata.get(name));
+        return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name));
       } else {
         LOGGER.warn("Failed to create ConstraintAwareJdbcTable for '{}' - returning unwrapped table", name);
       }
@@ -221,14 +221,12 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
    * already wrapped by DuckDBJdbcSchema with CommentableJdbcTableWrapper.
    */
   private static class ConstraintAwareJdbcTable implements CommentableTable {
-    private final JdbcTable jdbcDelegate;     // For building statistic with metadata
-    private final Table wrappedDelegate;      // For delegating other Table methods
+    private final Table wrappedDelegate;
     private final Map<String, Object> constraintConfig;
     private Statistic statistic;  // Non-final to allow lazy initialization
 
-    public ConstraintAwareJdbcTable(JdbcTable jdbcDelegate, Table wrappedDelegate,
+    public ConstraintAwareJdbcTable(Table wrappedDelegate,
                                     Map<String, Object> constraintConfig) {
-      this.jdbcDelegate = jdbcDelegate;
       this.wrappedDelegate = wrappedDelegate;
       this.constraintConfig = constraintConfig;
       // Delay statistic creation until we have column names
