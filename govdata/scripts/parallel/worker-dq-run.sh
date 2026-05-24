@@ -140,8 +140,14 @@ _file_script_error_issue() {
     latest_etl=$(ls -t "$RUN_DIR"/etl_*.log 2>/dev/null | head -1 || true)
   fi
 
-  # Extract root cause from the most relevant log
-  local root_cause_log="${latest_etl:-$LOG_FILE}"
+  # Extract root cause: prefer DQ log when DuckDB ran (it has the actual crash),
+  # fall back to ETL log when DQ log is empty/missing (ETL crashed before DuckDB started).
+  local root_cause_log
+  if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+    root_cause_log="$LOG_FILE"
+  else
+    root_cause_log="${latest_etl:-$LOG_FILE}"
+  fi
   local root_cause
   root_cause=$(_extract_root_cause "$root_cause_log")
 
