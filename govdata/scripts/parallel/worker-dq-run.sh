@@ -106,7 +106,7 @@ _extract_root_cause() {
   local log="$1"
   [ -f "$log" ] || { echo "(log not found)"; return; }
   local line
-  line=$(grep -m1 -E "OutOfMemoryError|Exception|ERROR |FATAL |BUILD FAILURE" "$log" 2>/dev/null || true)
+  line=$(grep -m1 -E "OutOfMemoryError|Exception|ERROR |FATAL |BUILD FAILURE|HTTP Error|HTTP [45][0-9][0-9]" "$log" 2>/dev/null || true)
   if [ -n "$line" ]; then
     echo "${line:0:200}"
   else
