@@ -372,6 +372,60 @@ public class JdbcMetadataIntegrationTest {
     }
   }
 
+  // ── ref schema PK regression guard ──────────────────────────────────────────
+
+  @Test
+  void ref_gleifEntities_hasKnownPrimaryKey() throws Exception {
+    // ref-schema.yaml declares: gleif_entities.primaryKey = [type, lei]
+    // Regression guard for issue #19: IcebergTable-backed tables were returning empty PKs
+    // because ConstraintAwareJdbcTable.getStatistic() used DuckDB column indices while
+    // CalciteMetaImpl.getPrimaryKeys() mapped them using IcebergTable column order.
+    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+    try (Connection c = DriverManager.getConnection("jdbc:govdata:source=ref", props)) {
+      DatabaseMetaData meta = c.getMetaData();
+      List<String> pks = new ArrayList<>();
+      try (ResultSet rs = meta.getPrimaryKeys(null, "ref", "gleif_entities")) {
+        while (rs.next()) {
+          pks.add(rs.getString("COLUMN_NAME").toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+      LOGGER.info("Primary keys for ref.gleif_entities: {}", pks);
+      assertFalse(pks.isEmpty(),
+          "getPrimaryKeys() returned no rows for ref.gleif_entities. "
+          + "primaryKey=[type,lei] is declared in ref-schema.yaml — constraints must flow "
+          + "through IcebergTable with column indices aligned to IcebergTable.getRowType().");
+      assertTrue(pks.contains("lei"),
+          "ref.gleif_entities PK must include lei; got: " + pks);
+    }
+  }
+
+  @Test
+  void ref_secCompanyTickers_hasKnownPrimaryKey() throws Exception {
+    // ref-schema.yaml declares: sec_company_tickers.primaryKey = [type, cik]
+    Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+    try (Connection c = DriverManager.getConnection("jdbc:govdata:source=ref", props)) {
+      DatabaseMetaData meta = c.getMetaData();
+      List<String> pks = new ArrayList<>();
+      try (ResultSet rs = meta.getPrimaryKeys(null, "ref", "sec_company_tickers")) {
+        while (rs.next()) {
+          pks.add(rs.getString("COLUMN_NAME").toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+      LOGGER.info("Primary keys for ref.sec_company_tickers: {}", pks);
+      assertFalse(pks.isEmpty(),
+          "getPrimaryKeys() returned no rows for ref.sec_company_tickers "
+          + "(declared in ref-schema.yaml)");
+      assertTrue(pks.contains("cik"),
+          "ref.sec_company_tickers PK must include cik; got: " + pks);
+    }
+  }
+
   // ── Cross-schema spot check ─────────────────────────────────────────────────
 
   @Test

@@ -247,10 +247,13 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
 
           LOGGER.info("Constraint config for table: {}", constraintConfig);
 
-          // Get column names from the row type using jdbcDelegate
+          // Get column names from wrappedDelegate (not jdbcDelegate) so the indices
+          // align with what CalciteMetaImpl.getPrimaryKeys() uses for bit→name mapping.
+          // For IcebergTable-backed tables, CommentableJdbcTableWrapper.getRowType()
+          // returns IcebergTable.getRowType() whose column order may differ from DuckDB.
           RelDataTypeFactory typeFactory =
               new org.apache.calcite.sql.type.SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
-          RelDataType rowType = jdbcDelegate.getRowType(typeFactory);
+          RelDataType rowType = wrappedDelegate.getRowType(typeFactory);
           List<String> columnNames = new ArrayList<>();
           for (org.apache.calcite.rel.type.RelDataTypeField field : rowType.getFieldList()) {
             columnNames.add(field.getName());
