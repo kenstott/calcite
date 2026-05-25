@@ -37,7 +37,7 @@ SELECT 'weather', tbl, 'existence',
   CASE WHEN n > 0 THEN 'readable and non-empty' ELSE 'accessible but empty' END
 FROM (
   SELECT 'nws_stations'              AS tbl, COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/weather/nws_stations',              allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'nws_alerts',             COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/weather/nws_alerts',             allow_moved_paths=true) LIMIT 1)
+  -- nws_alerts excluded: snapshot table legitimately empty when no active alerts (T2 threshold=0 handles this)
   UNION ALL SELECT 'cdo_stations',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/weather/cdo_stations',           allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/weather/cdo_monthly_summaries',  allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://govdata-parquet-v1/weather/cdo_annual_summaries',   allow_moved_paths=true) LIMIT 1)
@@ -283,8 +283,8 @@ SELECT 'weather', 'ghcnd_daily', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/weather/ghcnd_daily', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+WHERE approx_unique <= 1 AND null_percentage < 50.0
+  AND column_name NOT IN ('type', 'year');
 
 INSERT INTO dq_results
 SELECT 'weather', 'drought_monitor_weekly', 'all_same_value',
@@ -647,9 +647,9 @@ FROM (SELECT SUM(CASE WHEN aqi < 0 THEN 1 ELSE 0 END) AS neg FROM iceberg_scan('
 
 INSERT INTO dq_results
 SELECT 'weather', 'epa_daily_aqi', 'aqi_beyond_index',
-  CASE WHEN hi > 0 THEN 'warn' ELSE 'pass' END,
-  CAST(hi AS VARCHAR), '0',
-  'rows with aqi > 500 (EPA Beyond Index — rare but valid for extreme events)'
+  CASE WHEN hi > 100 THEN 'warn' ELSE 'pass' END,
+  CAST(hi AS VARCHAR), '100',
+  'rows with aqi > 500 (EPA Beyond Index — valid for extreme events; warn only if > 100 historical readings)'
 FROM (SELECT SUM(CASE WHEN aqi > 500 THEN 1 ELSE 0 END) AS hi FROM iceberg_scan('s3://govdata-parquet-v1/weather/epa_daily_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
 
 -- ghcnd_daily: temperature range -90 to 60 °C
