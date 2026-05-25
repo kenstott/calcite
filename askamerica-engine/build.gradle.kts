@@ -159,7 +159,7 @@ publishing {
 
             pom {
                 name.set("AskAmerica Engine")
-                description.set("JDBC driver for querying 15 US government datasets via Apache Calcite")
+                description.set("JDBC driver for querying US government datasets — SEC, BLS, Census, NOAA, FBI, FEC, and more")
                 url.set("https://github.com/kenstott/calcite")
                 licenses {
                     license {
