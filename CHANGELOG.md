@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/kenstott/calcite/compare/v0.6.1...v0.6.2) (2026-05-25)
+
+
+### Bug Fixes
+
+* **ci:** set continue-on-error on JDBC driver test job ([3f7e2a8](https://github.com/kenstott/calcite/commit/3f7e2a8eba8233a3c98effa0fdd6aaff7a9f740a))
+* **ci:** wire release-please config/manifest files and auto-create engine-v alias tag ([f0d68cc](https://github.com/kenstott/calcite/commit/f0d68cc5abdbebfc85b45119e561455851d6c23e))
+
 ## [0.6.1](https://github.com/kenstott/calcite/compare/v0.6.0...v0.6.1) (2026-05-25)
 
 
