@@ -17,3 +17,27 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # Ensure engine-v<version> tag exists even if release-please created only v<version>
+      - name: Create engine-v alias tag
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.release.outputs.tag_name }}"
+          # Strip any leading 'v' prefix to get bare version number
+          BARE="${VERSION#v}"
+          ENGINE_TAG="engine-v${BARE}"
+          SHA=$(git rev-parse HEAD)
+          # Only create if it doesn't already exist
+          if ! gh api "repos/${{ github.repository }}/git/refs/tags/${ENGINE_TAG}" &>/dev/null; then
+            gh api repos/${{ github.repository }}/git/refs \
+              --method POST \
+              --field ref="refs/tags/${ENGINE_TAG}" \
+              --field sha="${SHA}"
+            echo "Created ${ENGINE_TAG} → ${SHA}"
+          else
+            echo "${ENGINE_TAG} already exists"
+          fi
