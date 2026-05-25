@@ -29,21 +29,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IllegalFormatException;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * MaterializationWriter implementation for Iceberg table output.
@@ -140,8 +154,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
   private long totalCommittedFiles = 0;
   /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
-  private java.util.Set<String> icebergPartitionColumns = java.util.Collections.emptySet();
+  private Set<String> icebergPartitionColumns = Collections.emptySet();
   private boolean overwritePartitions = false;
+
+  /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
+  private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
+  /** JVM shutdown hook registered in initialize() to emergency-commit staged files on SIGTERM. */
+  private Thread shutdownHook;
 
   /** Column name in output rows whose value overrides the {@code year} partition key per row. */
   private String effectiveYearField;
@@ -217,7 +236,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Extract Iceberg partition columns for buffer key construction
     MaterializePartitionConfig partConfig = config.getPartition();
     if (partConfig != null && partConfig.getColumns() != null && !partConfig.getColumns().isEmpty()) {
-      this.icebergPartitionColumns = new java.util.HashSet<String>(partConfig.getColumns());
+      this.icebergPartitionColumns = new HashSet<String>(partConfig.getColumns());
       LOGGER.info("Iceberg partition columns for buffer key: {}", icebergPartitionColumns);
     }
 
@@ -240,6 +259,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
         targetTableId, warehousePath);
     this.initialized = true;
+
+    shutdownHook = new Thread(this::emergencyCommitOnShutdown, "iceberg-emergency-commit");
+    shutdownHook.setDaemon(false);
+    Runtime.getRuntime().addShutdownHook(shutdownHook);
   }
 
   /**
@@ -360,10 +383,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Add columns from config if available, and build maps for partition column lookup
     // Use lowercase keys for case-insensitive matching (DuckDB/Iceberg are case-insensitive)
     List<ColumnConfig> columnConfigs = config.getColumns();
-    Map<String, String> columnTypeMap = new java.util.HashMap<String, String>();
-    java.util.Set<String> expectedColumnNamesLower = new java.util.HashSet<String>();
+    Map<String, String> columnTypeMap = new HashMap<String, String>();
+    Set<String> expectedColumnNamesLower = new HashSet<String>();
     // Map lowercase column name -> actual column name (for partition spec)
-    Map<String, String> lowerToActualName = new java.util.HashMap<String, String>();
+    Map<String, String> lowerToActualName = new HashMap<String, String>();
     // Get column comments from config
     Map<String, String> columnComments = config.getColumnComments();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
@@ -377,7 +400,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
             colConfig.getName(),
             icebergType,
             colComment));
-        String lowerName = colConfig.getName().toLowerCase(java.util.Locale.ROOT);
+        String lowerName = colConfig.getName().toLowerCase(Locale.ROOT);
         expectedColumnNamesLower.add(lowerName);
         columnTypeMap.put(lowerName, icebergType);
         lowerToActualName.put(lowerName, colConfig.getName());
@@ -385,11 +408,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Build partition column type map from partition config's columnDefinitions
-    Map<String, String> partitionColumnTypeMap = new java.util.HashMap<String, String>();
+    Map<String, String> partitionColumnTypeMap = new HashMap<String, String>();
     if (partitionConfig != null && partitionConfig.getColumnDefinitions() != null) {
       for (MaterializePartitionConfig.ColumnDefinition colDef
           : partitionConfig.getColumnDefinitions()) {
-        String lowerName = colDef.getName().toLowerCase(java.util.Locale.ROOT);
+        String lowerName = colDef.getName().toLowerCase(Locale.ROOT);
         partitionColumnTypeMap.put(lowerName, mapToIcebergType(colDef.getType()));
       }
     }
@@ -400,7 +423,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Also build the actual partition column names list for Iceberg partition spec
     List<String> actualPartitionColumnNames = new ArrayList<String>();
     for (String partitionCol : partitionColumnNames) {
-      String partitionColLower = partitionCol.toLowerCase(java.util.Locale.ROOT);
+      String partitionColLower = partitionCol.toLowerCase(Locale.ROOT);
       if (!expectedColumnNamesLower.contains(partitionColLower)) {
         // Partition column doesn't exist in source - add it
         // Priority: partitionColumnTypeMap > columnTypeMap > STRING
@@ -448,15 +471,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
       // Check if existing table has all expected data columns
       // This handles the case where a previous run only created partition columns
-      java.util.Set<String> existingColumnNames = new java.util.HashSet<String>();
+      Set<String> existingColumnNames = new HashSet<String>();
       for (org.apache.iceberg.types.Types.NestedField field : existingTable.schema().columns()) {
         existingColumnNames.add(field.name());
       }
 
       // Find missing columns (excluding partition columns which are always present)
-      java.util.Set<String> missingDataColumns = new java.util.HashSet<String>();
+      Set<String> missingDataColumns = new HashSet<String>();
       for (ColumnConfig colConfig : columnConfigs != null ? columnConfigs
-          : java.util.Collections.<ColumnConfig>emptyList()) {
+          : Collections.<ColumnConfig>emptyList()) {
         if (!existingColumnNames.contains(colConfig.getName())) {
           missingDataColumns.add(colConfig.getName());
         }
@@ -1012,18 +1035,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: src."FIELDNAME" or src.FIELDNAME (with src. prefix)
-    java.util.regex.Pattern srcFieldPattern =
-        java.util.regex.Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
-    java.util.regex.Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
+    Pattern srcFieldPattern =
+        Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
+    Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
     if (srcFieldMatcher.matches()) {
       String fieldName = srcFieldMatcher.group(1);
       return getValueCaseInsensitive(row, fieldName);
     }
 
     // Pattern: bare field name (without src. prefix) - e.g., "table_name" or "field_name"
-    java.util.regex.Pattern bareFieldPattern =
-        java.util.regex.Pattern.compile("^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
-    java.util.regex.Matcher bareFieldMatcher = bareFieldPattern.matcher(expr);
+    Pattern bareFieldPattern =
+        Pattern.compile("^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
+    Matcher bareFieldMatcher = bareFieldPattern.matcher(expr);
     if (bareFieldMatcher.matches()) {
       String fieldName = bareFieldMatcher.group(1);
       // Only treat as field reference if the field exists in the row
@@ -1036,34 +1059,34 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(src."FIELDNAME" AS TYPE) or CAST(src."FIELDNAME" AS TYPE)
-    java.util.regex.Pattern castPattern =
-        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher castMatcher = castPattern.matcher(expr);
+    Pattern castPattern =
+        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher castMatcher = castPattern.matcher(expr);
     if (castMatcher.matches()) {
       String fieldName = castMatcher.group(1);
-      String targetType = castMatcher.group(2).toUpperCase(java.util.Locale.ROOT);
+      String targetType = castMatcher.group(2).toUpperCase(Locale.ROOT);
       Object sourceValue = getValueCaseInsensitive(row, fieldName);
       return castValue(sourceValue, targetType);
     }
 
     // Pattern: CAST(FIELDNAME AS TYPE) without src. prefix
-    java.util.regex.Pattern bareCastPattern =
-        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher bareCastMatcher = bareCastPattern.matcher(expr);
+    Pattern bareCastPattern =
+        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher bareCastMatcher = bareCastPattern.matcher(expr);
     if (bareCastMatcher.matches()) {
       String fieldName = bareCastMatcher.group(1);
-      String targetType = bareCastMatcher.group(2).toUpperCase(java.util.Locale.ROOT);
+      String targetType = bareCastMatcher.group(2).toUpperCase(Locale.ROOT);
       Object sourceValue = getValueCaseInsensitive(row, fieldName);
       return castValue(sourceValue, targetType);
     }
 
     // Pattern: REPLACE(src."FIELDNAME", 'old', 'new') - for comma handling in numbers
-    java.util.regex.Pattern replacePattern =
-        java.util.regex.Pattern.compile("^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher replaceMatcher = replacePattern.matcher(expr);
+    Pattern replacePattern =
+        Pattern.compile("^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher replaceMatcher = replacePattern.matcher(expr);
     if (replaceMatcher.matches()) {
       String fieldName = replaceMatcher.group(1);
       String oldStr = replaceMatcher.group(2);
@@ -1076,15 +1099,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(REPLACE(src."FIELDNAME", 'old', 'new') AS TYPE)
-    java.util.regex.Pattern castReplacePattern =
-        java.util.regex.Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher castReplaceMatcher = castReplacePattern.matcher(expr);
+    Pattern castReplacePattern =
+        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher castReplaceMatcher = castReplacePattern.matcher(expr);
     if (castReplaceMatcher.matches()) {
       String fieldName = castReplaceMatcher.group(1);
       String oldStr = castReplaceMatcher.group(2);
       String newStr = castReplaceMatcher.group(3);
-      String targetType = castReplaceMatcher.group(4).toUpperCase(java.util.Locale.ROOT);
+      String targetType = castReplaceMatcher.group(4).toUpperCase(Locale.ROOT);
       Object sourceValue = getValueCaseInsensitive(row, fieldName);
       if (sourceValue != null) {
         String replaced = sourceValue.toString().replace(oldStr, newStr);
@@ -1094,10 +1117,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: SUBSTRING(src."FIELDNAME", start, length) - extract substring
-    java.util.regex.Pattern substringPattern =
-        java.util.regex.Pattern.compile("^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher substringMatcher = substringPattern.matcher(expr);
+    Pattern substringPattern =
+        Pattern.compile("^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher substringMatcher = substringPattern.matcher(expr);
     if (substringMatcher.matches()) {
       String fieldName = substringMatcher.group(1);
       int start = Integer.parseInt(substringMatcher.group(2));
@@ -1116,10 +1139,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: RIGHT(src."FIELDNAME", length) - extract rightmost characters
-    java.util.regex.Pattern rightPattern =
-        java.util.regex.Pattern.compile("^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher rightMatcher = rightPattern.matcher(expr);
+    Pattern rightPattern =
+        Pattern.compile("^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher rightMatcher = rightPattern.matcher(expr);
     if (rightMatcher.matches()) {
       String fieldName = rightMatcher.group(1);
       int length = Integer.parseInt(rightMatcher.group(2));
@@ -1135,16 +1158,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: COALESCE(src."FIELD1", src."FIELD2", ...) - returns first non-null value
-    java.util.regex.Pattern coalescePattern =
-        java.util.regex.Pattern.compile("^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
-        java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher coalesceMatcher = coalescePattern.matcher(expr);
+    Pattern coalescePattern =
+        Pattern.compile("^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
+        Pattern.CASE_INSENSITIVE);
+    Matcher coalesceMatcher = coalescePattern.matcher(expr);
     if (coalesceMatcher.matches()) {
       String argsStr = coalesceMatcher.group(1);
       // Split by comma, but handle quoted field names
-      java.util.regex.Pattern argPattern =
-          java.util.regex.Pattern.compile("src\\.\"?([A-Za-z0-9_]+)\"?");
-      java.util.regex.Matcher argMatcher = argPattern.matcher(argsStr);
+      Pattern argPattern =
+          Pattern.compile("src\\.\"?([A-Za-z0-9_]+)\"?");
+      Matcher argMatcher = argPattern.matcher(argsStr);
       while (argMatcher.find()) {
         String fieldName = argMatcher.group(1);
         Object value = getValueCaseInsensitive(row, fieldName);
@@ -1157,11 +1180,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Pattern: printf('format', src."FIELD" | FIELD) - C-style string formatting
     // DuckDB printf uses C-style format strings identical to Java String.format
-    java.util.regex.Pattern printfPattern =
-        java.util.regex.Pattern.compile(
+    Pattern printfPattern =
+        Pattern.compile(
             "^\\s*printf\\s*\\(\\s*'([^']*)'\\s*,\\s*(?:src\\.\"?)?([A-Za-z0-9_]+)\"?\\s*\\)\\s*$",
-            java.util.regex.Pattern.CASE_INSENSITIVE);
-    java.util.regex.Matcher printfMatcher = printfPattern.matcher(expr);
+            Pattern.CASE_INSENSITIVE);
+    Matcher printfMatcher = printfPattern.matcher(expr);
     if (printfMatcher.matches()) {
       String format = printfMatcher.group(1);
       String fieldName = printfMatcher.group(2);
@@ -1171,7 +1194,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
       try {
         return String.format("%" + format.replaceAll("^%", ""), fieldValue);
-      } catch (java.util.IllegalFormatException e) {
+      } catch (IllegalFormatException e) {
         LOGGER.debug("printf format error for '{}': {}", format, e.getMessage());
         return null;
       }
@@ -1248,20 +1271,20 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     storageProvider.createDirectories(dataLocation);
 
     List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
-    java.nio.file.Path localPath = java.nio.file.Paths.get(localStagingPath);
+    Path localPath = Paths.get(localStagingPath);
 
-    if (!java.nio.file.Files.exists(localPath)) {
+    if (!Files.exists(localPath)) {
       LOGGER.warn("Local staging directory does not exist: {}", localStagingPath);
       return dataFiles;
     }
 
     // Walk local directory and upload Parquet files
-    java.util.stream.Stream<java.nio.file.Path> fileStream = java.nio.file.Files.walk(localPath);
+    Stream<Path> fileStream = Files.walk(localPath);
     try {
-      java.util.Iterator<java.nio.file.Path> iterator = fileStream.iterator();
+      Iterator<Path> iterator = fileStream.iterator();
       while (iterator.hasNext()) {
-        java.nio.file.Path file = iterator.next();
-        if (java.nio.file.Files.isRegularFile(file) && file.toString().endsWith(".parquet")) {
+        Path file = iterator.next();
+        if (Files.isRegularFile(file) && file.toString().endsWith(".parquet")) {
           // Compute relative path from staging root
           String relativePath = localPath.relativize(file).toString();
 
@@ -1275,8 +1298,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           }
 
           // Upload file
-          long fileSize = java.nio.file.Files.size(file);
-          try (java.io.InputStream in = java.nio.file.Files.newInputStream(file)) {
+          long fileSize = Files.size(file);
+          try (java.io.InputStream in = Files.newInputStream(file)) {
             storageProvider.writeFile(finalPath, in);
           }
           LOGGER.debug("Uploaded local {} to remote {} ({} bytes)",
@@ -1422,7 +1445,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Write to local filesystem or remote storage depending on staging mode
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
-      java.nio.file.Files.write(java.nio.file.Paths.get(jsonPath),
+      Files.write(Paths.get(jsonPath),
           jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     } else {
       storageProvider.writeFile(jsonPath, jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -1439,7 +1462,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private void cleanupJsonFile(String jsonPath) {
     try {
       if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
-        java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(jsonPath));
+        Files.deleteIfExists(Paths.get(jsonPath));
         LOGGER.debug("Cleaned up local JSON file: {}", jsonPath);
       } else {
         if (storageProvider.delete(jsonPath)) {
@@ -1497,7 +1520,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
       // Use local temp directory for faster staging
       java.io.File tempDir =
-          new java.io.File(System.getProperty("java.io.tmpdir"), "iceberg-staging/" + stagingSubpath);
+          new File(System.getProperty("java.io.tmpdir"), "iceberg-staging/" + stagingSubpath);
       tempDir.mkdirs();
       stagingPath = tempDir.getAbsolutePath();
       LOGGER.debug("Created local staging path: {}", stagingPath);
@@ -1525,20 +1548,20 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
       // Clean up local staging directory
       try {
-        java.nio.file.Path localPath = java.nio.file.Paths.get(stagingPath);
-        if (java.nio.file.Files.exists(localPath)) {
+        Path localPath = Paths.get(stagingPath);
+        if (Files.exists(localPath)) {
           // Delete all files recursively
-          java.util.stream.Stream<java.nio.file.Path> walkStream = java.nio.file.Files.walk(localPath);
+          Stream<Path> walkStream = Files.walk(localPath);
           try {
-            java.util.List<java.nio.file.Path> pathsToDelete = new ArrayList<java.nio.file.Path>();
-            java.util.Iterator<java.nio.file.Path> it = walkStream.iterator();
+            List<Path> pathsToDelete = new ArrayList<Path>();
+            Iterator<Path> it = walkStream.iterator();
             while (it.hasNext()) {
               pathsToDelete.add(it.next());
             }
             // Sort in reverse order to delete files before directories
-            java.util.Collections.sort(pathsToDelete, java.util.Collections.reverseOrder());
-            for (java.nio.file.Path p : pathsToDelete) {
-              java.nio.file.Files.deleteIfExists(p);
+            Collections.sort(pathsToDelete, Collections.reverseOrder());
+            for (Path p : pathsToDelete) {
+              Files.deleteIfExists(p);
             }
           } finally {
             walkStream.close();
@@ -1661,6 +1684,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (!initialized) {
       throw new IllegalStateException("Writer not initialized");
     }
+    committedSuccessfully.set(true);
+    deregisterShutdownHook();
 
     // Flush all remaining buffered rows before commit
     if (!partitionBuffers.isEmpty()) {
@@ -1724,6 +1749,50 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     LOGGER.info("Iceberg commit complete: {} rows in {} batches",
         totalRowsWritten, totalFilesWritten);
+  }
+
+  private void deregisterShutdownHook() {
+    if (shutdownHook != null) {
+      try {
+        Runtime.getRuntime().removeShutdownHook(shutdownHook);
+      } catch (IllegalStateException e) {
+        // JVM already shutting down — hook is running or has already run
+      }
+      shutdownHook = null;
+    }
+  }
+
+  /**
+   * Called by the JVM shutdown hook when the process receives SIGTERM or is killed.
+   * Commits any data files already flushed to S3 but not yet registered in Iceberg,
+   * so the next DQ run or rebuild can read a valid snapshot rather than failing on
+   * a table with {@code last-sequence-number: 0}.
+   *
+   * <p>Does NOT flush in-memory partition buffers — those rows have not been written
+   * to S3 yet and flushing them would race with the ETL main thread. They will be
+   * re-fetched on the next rebuild (or recovered by self-heal if the ETL retries).
+   */
+  private void emergencyCommitOnShutdown() {
+    if (committedSuccessfully.get()) {
+      return;
+    }
+    List<org.apache.iceberg.DataFile> snapshot;
+    synchronized (pendingDataFiles) {
+      if (pendingDataFiles.isEmpty()) {
+        LOGGER.warn("SIGTERM: no staged data files to commit — Iceberg table will remain empty");
+        return;
+      }
+      snapshot = new ArrayList<org.apache.iceberg.DataFile>(pendingDataFiles);
+    }
+    LOGGER.warn("SIGTERM: emergency-committing {} staged files to Iceberg ({} in-memory rows not saved — "
+        + "will be re-fetched on next rebuild)",
+        snapshot.size(), bufferedRowCount);
+    try {
+      commitInChunks(snapshot);
+      LOGGER.warn("SIGTERM: emergency commit complete — {} files saved to Iceberg", snapshot.size());
+    } catch (Exception e) {
+      LOGGER.error("SIGTERM: emergency commit failed: {}", e.getMessage());
+    }
   }
 
   /**
@@ -1874,6 +1943,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   @Override public void close() throws IOException {
+    deregisterShutdownHook();
     // Close shared DuckDB connection
     if (sharedDuckDBConnection != null) {
       try {
@@ -1921,10 +1991,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * @param partitionColumns List of partition column names
    * @return Set of existing partition value combinations, or empty set if table doesn't exist
    */
-  public static java.util.Set<Map<String, String>> getExistingPartitions(
+  public static Set<Map<String, String>> getExistingPartitions(
       Map<String, Object> catalogConfig, String tableId, List<String> partitionColumns) {
 
-    java.util.Set<Map<String, String>> partitions = new java.util.LinkedHashSet<Map<String, String>>();
+    Set<Map<String, String>> partitions = new LinkedHashSet<Map<String, String>>();
 
     if (!IcebergCatalogManager.tableExists(catalogConfig, tableId)) {
       LOGGER.debug("Table {} does not exist, no existing partitions", tableId);
@@ -1954,7 +2024,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           for (org.apache.iceberg.DataFile dataFile : reader) {
             org.apache.iceberg.StructLike partition = dataFile.partition();
 
-            Map<String, String> partitionValues = new java.util.LinkedHashMap<String, String>();
+            Map<String, String> partitionValues = new LinkedHashMap<String, String>();
             for (int i = 0; i < spec.fields().size(); i++) {
               org.apache.iceberg.PartitionField field = spec.fields().get(i);
               Object value = partition.get(i, Object.class);
