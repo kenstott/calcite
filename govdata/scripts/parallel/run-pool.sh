@@ -245,37 +245,57 @@ _cleanup_log() {
   echo "$msg" > /dev/tty 2>/dev/null || true
 }
 
-# Kill all processes in a setsid'd worker session.
-# $pid is the session leader PID (== SID, written by the setsid wrapper).
-# pkill -s kills by session ID — catches all processes regardless of process
-# group, including java (which ignores SIGTERM and may be in a pipeline sub-group)
-# and rclone. Falls back to process-group and individual kills on systems that
-# lack pkill.
+# Kill all processes associated with a worker.
+# On Linux (setsid available): $pid is the session leader; pkill -s kills by SID.
+# On macOS (no setsid): $pid is the bash -c wrapper child; use pkill -P (by
+# parent PID) to reach the actual worker subtree, then pgid kill as a backstop.
 _kill_worker_session() {
   local pid=$1
-  local procs
-  # List what's in this session before killing (diagnostic)
-  procs=$(ps -s "$pid" -o pid=,comm= 2>/dev/null | tr '\n' ' ' || true)
-  if [ -z "$procs" ]; then
-    _cleanup_log "  session $pid: no processes found (already dead or invalid SID)"
-  else
-    _cleanup_log "  session $pid: killing PIDs — $procs"
-    if command -v pkill >/dev/null 2>&1; then
-      pkill -TERM -s "$pid" 2>/dev/null || true
-    else
-      kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  local procs pgid
+
+  if command -v setsid >/dev/null 2>&1; then
+    # Linux path: $pid is a real session leader; kill by session ID.
+    procs=$(ps -s "$pid" -o pid=,comm= 2>/dev/null | tr '\n' ' ' || true)
+    if [ -z "$procs" ]; then
+      _cleanup_log "  session $pid: no processes found (already dead or invalid SID)"
+      return
     fi
+    _cleanup_log "  session $pid: killing PIDs — $procs"
+    pkill -TERM -s "$pid" 2>/dev/null || true
     sleep 2
     procs=$(ps -s "$pid" -o pid=,comm= 2>/dev/null | tr '\n' ' ' || true)
     if [ -n "$procs" ]; then
       _cleanup_log "  session $pid: still alive after TERM, sending KILL — $procs"
-      if command -v pkill >/dev/null 2>&1; then
-        pkill -KILL -s "$pid" 2>/dev/null || true
-      else
-        kill -KILL -"$pid" 2>/dev/null || true
-      fi
+      pkill -KILL -s "$pid" 2>/dev/null || true
     else
       _cleanup_log "  session $pid: all processes terminated after TERM"
+    fi
+  else
+    # macOS path: no setsid, no new session. $pid is the bash -c wrapper PID.
+    # Kill descendants by parent PID, then the wrapper itself, then its pgid.
+    procs=$(ps -o pid=,comm= -p "$pid" 2>/dev/null | tr '\n' ' ' || true)
+    procs+=$(pgrep -P "$pid" 2>/dev/null | xargs -r ps -o pid=,comm= -p 2>/dev/null | tr '\n' ' ' || true)
+    _cleanup_log "  worker $pid (macOS): killing — ${procs:-<none found>}"
+
+    pkill -TERM -P "$pid" 2>/dev/null || true   # children of the wrapper
+    kill -TERM "$pid" 2>/dev/null || true        # the wrapper itself
+
+    pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+    if [ -n "$pgid" ] && [ "$pgid" != "0" ]; then
+      kill -TERM -- -"$pgid" 2>/dev/null || true  # whole process group
+    fi
+
+    sleep 2
+
+    procs=$(ps -o pid=,comm= -p "$pid" 2>/dev/null | tr '\n' ' ' || true)
+    procs+=$(pgrep -P "$pid" 2>/dev/null | tr '\n' ' ' || true)
+    if [ -n "${procs// /}" ]; then
+      _cleanup_log "  worker $pid (macOS): still alive after TERM, sending KILL"
+      pkill -KILL -P "$pid" 2>/dev/null || true
+      kill -KILL "$pid" 2>/dev/null || true
+      [ -n "$pgid" ] && [ "$pgid" != "0" ] && kill -KILL -- -"$pgid" 2>/dev/null || true
+    else
+      _cleanup_log "  worker $pid (macOS): all processes terminated after TERM"
     fi
   fi
 }
@@ -385,10 +405,12 @@ launch_worker() {
       echo $? > "$6"
     ' -- "$pid_file" "$script" "$schema" "$mode" "$log_file" "$exit_file" &
   else
-    # macOS / no setsid: use bash -c so $$ is the child's own PID (BASHPID is bash 4+ only)
+    # macOS / no setsid: use bash -c so $$ is the child's own PID (BASHPID is bash 4+ only).
+    # No nohup here — without setsid there is no new session, so nohup only prevents
+    # _kill_worker_session from collecting the orphan via pgid/parent-PID kill.
     bash -c '
       echo $$ > "$1"
-      nohup bash "$2" "$3" "$4" >> "$5" 2>&1
+      bash "$2" "$3" "$4" >> "$5" 2>&1
       echo $? > "$6"
     ' -- "$pid_file" "$script" "$schema" "$mode" "$log_file" "$exit_file" &
   fi

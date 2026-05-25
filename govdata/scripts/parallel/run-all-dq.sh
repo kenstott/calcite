@@ -117,7 +117,16 @@ _start_pool() {
 _stop_pool() {
   if [ -n "${POOL_PID:-}" ] && kill -0 "$POOL_PID" 2>/dev/null; then
     log_info "run-all-dq: stopping pool (PID $POOL_PID)"
-    kill -TERM "$POOL_PID" 2>/dev/null || true
+    # Signal the entire process group so run-pool.sh and its workers receive TERM
+    # even when bash exec-optimization makes run-pool-persist.sh and run-pool.sh
+    # separate PIDs. On non-interactive scripts, background jobs share the parent
+    # pgid, so -POOL_PID kills the whole subtree.
+    local pgid
+    pgid=$(ps -o pgid= -p "$POOL_PID" 2>/dev/null | tr -d ' ' || true)
+    if [ -n "$pgid" ] && [ "$pgid" != "0" ]; then
+      kill -TERM -- -"$pgid" 2>/dev/null || true
+    fi
+    kill -TERM "$POOL_PID" 2>/dev/null || true   # belt-and-suspenders: direct PID too
     wait "$POOL_PID" 2>/dev/null || true
     log_info "run-all-dq: pool stopped"
   fi
