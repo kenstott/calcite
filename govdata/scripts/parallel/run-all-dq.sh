@@ -77,6 +77,7 @@ done
 # ── jar management ────────────────────────────────────────────────────────────
 JAR_DIR="$GOVDATA_ROOT/build/libs"
 JAR_PATH="$JAR_DIR/sih-govdata.jar"
+JAR_VERSION_FILE="$JAR_DIR/sih-govdata.jar.version"
 export GOVDATA_JAR="$JAR_PATH"
 
 _latest_release() {
@@ -97,7 +98,8 @@ _download_jar() {
     log_info "run-all-dq: ERROR — jar download failed for $tag"
     return 1
   fi
-  log_info "run-all-dq: jar ready: $JAR_PATH"
+  echo "$tag" > "$JAR_VERSION_FILE"
+  log_info "run-all-dq: jar ready: $JAR_PATH ($tag)"
 }
 
 # ── pool management ───────────────────────────────────────────────────────────
@@ -139,9 +141,12 @@ trap '_stop_pool' INT TERM EXIT
 CURRENT_RELEASE=$(_latest_release)
 log_info "run-all-dq: starting — release=$CURRENT_RELEASE poll_interval=${POLL_INTERVAL}s max_restarts=$MAX_RESTARTS"
 
-if [ ! -f "$JAR_PATH" ]; then
-  log_info "run-all-dq: jar not found — downloading $CURRENT_RELEASE"
+_jar_version=$(cat "$JAR_VERSION_FILE" 2>/dev/null || true)
+if [ ! -f "$JAR_PATH" ] || [ "$_jar_version" != "$CURRENT_RELEASE" ]; then
+  log_info "run-all-dq: jar ${_jar_version:-missing} → downloading $CURRENT_RELEASE"
   _download_jar "$CURRENT_RELEASE" || exit 1
+else
+  log_info "run-all-dq: jar already at $CURRENT_RELEASE — skipping download"
 fi
 
 RESTART_COUNT=0
