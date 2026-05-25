@@ -23,9 +23,33 @@ publishing {
     publications {
         create<MavenPublication>("shadow") {
             artifact(tasks["shadowJar"])
-            groupId = "org.apache.calcite"
-            artifactId = "calcite-govdata"
+            groupId = "io.simpleishard"
+            artifactId = "govdata"
             version = project.version.toString()
+
+            pom {
+                name.set("GovData")
+                description.set("Query US government datasets — SEC, BLS, Census, NOAA, FBI, FEC, and more via SQL")
+                url.set("https://github.com/kenstott/calcite")
+                licenses {
+                    license {
+                        name.set("Business Source License 1.1")
+                        url.set("https://mariadb.com/bsl11/")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("kenstott")
+                        name.set("Ken Stott")
+                        email.set("kennethstott@gmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/kenstott/calcite.git")
+                    developerConnection.set("scm:git:ssh://github.com/kenstott/calcite.git")
+                    url.set("https://github.com/kenstott/calcite")
+                }
+            }
         }
     }
     repositories {

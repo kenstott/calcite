@@ -32,12 +32,16 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Publishing govdata version: ${VERSION}"
 
-      - name: Build and publish shadow JAR
+      - name: Build shadow JAR
+        run: ./gradlew :govdata:shadowJar --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages
         run: |
-          OUTPUT=$(./gradlew :govdata:shadowJar \
-            :govdata:publishShadowPublicationToGitHubPackagesRepository \
-            --no-daemon \
-            -PreleaseVersion=${{ steps.version.outputs.version }} 2>&1) && echo "$OUTPUT" && exit 0
+          OUTPUT=$(./gradlew :govdata:publishShadowPublicationToGitHubPackagesRepository \
+            --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }} 2>&1) && echo "$OUTPUT" && exit 0
           echo "$OUTPUT"
           if echo "$OUTPUT" | grep -q "status code 409"; then
             echo "409 Conflict: artifact already exists in GitHub Packages — treating as success"
@@ -47,3 +51,81 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+      - name: Generate POM
+        run: |
+          ./gradlew :govdata:generatePomFileForShadowPublication \
+            --no-daemon \
+            -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Maven Central bundle
+        env:
+          GPG_KEY_ID:       ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE:   ${{ secrets.GPG_PASSPHRASE }}
+          VERSION:          ${{ steps.version.outputs.version }}
+          GROUP_ID:         io.simpleishard
+          ARTIFACT_ID:      govdata
+        run: |
+          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+          BUNDLE_DIR="bundle/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
+          mkdir -p "$BUNDLE_DIR"
+
+          JAR=$(find govdata/build/libs -name "sih-govdata-*.jar" -o -name "calcite-govdata-*-all.jar" | grep -v sources | grep -v javadoc | head -1)
+          POM=$(find govdata/build/publications -name "*.xml" | head -1)
+
+          cp "$JAR" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar"
+          cp "$POM" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom"
+
+          # Minimal sources and javadoc JARs (required by Central)
+          echo "Sources: ${ARTIFACT_ID} ${VERSION}" > /tmp/placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
+
+          # GPG sign all four artifacts
+          for f in \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+          do
+            if [ -n "$GPG_PASSPHRASE" ]; then
+              gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            else
+              gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            fi
+            md5sum  "$f" | awk '{print $1}' > "${f}.md5"
+            sha1sum "$f" | awk '{print $1}' > "${f}.sha1"
+          done
+
+          (cd bundle && zip -r "../govdata-bundle.zip" .)
+          echo "Bundle: $(du -sh govdata-bundle.zip | cut -f1)"
+
+      - name: Upload to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          VERSION:           ${{ steps.version.outputs.version }}
+        run: |
+          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
+            -H "Authorization: Bearer ${AUTH}" \
+            -H "Accept: application/json" \
+            -F "bundle=@govdata-bundle.zip;type=application/zip" \
+            -F "name=govdata-${VERSION}" \
+            -F "publishingType=AUTOMATIC")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Response ($HTTP_CODE): $BODY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Maven Central upload failed"
+            exit 1
+          fi
