@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/kenstott/calcite/compare/v0.5.0...v0.6.0) (2026-05-25)
+
+
+### Features
+
+* **pool:** add hang-recovery wrappers and auto-download jar on startup ([23f5cc4](https://github.com/kenstott/calcite/commit/23f5cc4a2e0db67af59845602761215d6a44a9db))
+* **publish:** publish govdata as io.simpleishard:govdata to Maven Central ([ea1bc0a](https://github.com/kenstott/calcite/commit/ea1bc0ad701f4ce80ae1ab5f6a17260f815650b2))
+
+
+### Bug Fixes
+
+* **ci:** handle 409 conflict in publish-govdata workflow ([a217bfe](https://github.com/kenstott/calcite/commit/a217bfea54c8700256f2d7e3e2e1cc72389b576d))
+* **pool:** replace BASHPID with bash -c on macOS to fix worker launch failure ([55ed46c](https://github.com/kenstott/calcite/commit/55ed46cc9fbc8b859ad82f8873575c9127ccdd50))
+* **publish:** remove Apache Calcite reference from askamerica-engine POM description ([4849d62](https://github.com/kenstott/calcite/commit/4849d62ceff6d4d5a4abab81ec6696f029d54866))
+* **ref:** replace GLEIF_CSV_URL env var with stable permalink ([88f8e2f](https://github.com/kenstott/calcite/commit/88f8e2f7523931b8a7e606a47dc6906f29b8fef1))
+
 ## [0.5.0](https://github.com/kenstott/calcite/compare/v0.4.15...v0.5.0) (2026-05-25)
 
 
