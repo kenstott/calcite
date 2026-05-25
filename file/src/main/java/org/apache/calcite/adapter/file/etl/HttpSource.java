@@ -2814,10 +2814,25 @@ public class HttpSource implements DataSource {
 
   /**
    * Sanitizes a path component by removing or replacing invalid characters.
+   * Components exceeding 200 chars are replaced with an MD5 hash to stay
+   * under the OS 255-char filename limit (e.g. NWS pagination cursors).
    */
   private String sanitizePathComponent(String value) {
-    // Replace invalid path characters with underscores
-    return value.replaceAll("[/\\\\:*?\"<>|]", "_");
+    String sanitized = value.replaceAll("[/\\\\:*?\"<>|]", "_");
+    if (sanitized.length() <= 200) {
+      return sanitized;
+    }
+    try {
+      java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+      byte[] digest = md.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder();
+      for (byte b : digest) {
+        hex.append(String.format("%02x", b));
+      }
+      return "h_" + hex.toString();
+    } catch (java.security.NoSuchAlgorithmException e) {
+      return sanitized.substring(0, 200);
+    }
   }
 
   /**
