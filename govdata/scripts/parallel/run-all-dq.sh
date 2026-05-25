@@ -80,8 +80,9 @@ JAR_PATH="$JAR_DIR/sih-govdata.jar"
 export GOVDATA_JAR="$JAR_PATH"
 
 _latest_release() {
-  gh release list --repo kenstott/calcite --limit 1 --json tagName \
-    --jq '.[0].tagName' 2>/dev/null || echo "unknown"
+  gh release list --repo kenstott/calcite --limit 20 --json tagName \
+    --jq '[.[] | select(.tagName | startswith("engine-v"))][0].tagName // "unknown"' \
+    2>/dev/null || echo "unknown"
 }
 
 _download_jar() {
