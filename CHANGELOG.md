@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.3](https://github.com/kenstott/calcite/compare/v0.6.2...v0.6.3) (2026-05-25)
+
+
+### Bug Fixes
+
+* **ci:** use steps.release.outputs.sha instead of git rev-parse HEAD in alias step ([b15c914](https://github.com/kenstott/calcite/commit/b15c91458f5f582c20fe84f21b83adf40be2624f))
+* **dq:** prevent self-SIGTERM killing jar download on release upgrade ([edc40b5](https://github.com/kenstott/calcite/commit/edc40b54fb252b0f81b9936e26b8854bc25a2efa))
+* **file:** add SIGTERM shutdown hook to IcebergMaterializationWriter ([f050f27](https://github.com/kenstott/calcite/commit/f050f270dda967ed4453a7c0534ae796646ab2dc))
+
 ## [0.6.2](https://github.com/kenstott/calcite/compare/v0.6.1...v0.6.2) (2026-05-25)
 
 
