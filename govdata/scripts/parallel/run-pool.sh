@@ -385,11 +385,12 @@ launch_worker() {
       echo $? > "$6"
     ' -- "$pid_file" "$script" "$schema" "$mode" "$log_file" "$exit_file" &
   else
-    # macOS / no setsid: subshell gives its own PGID via job control
-    ( echo $BASHPID > "$pid_file"
-      exec nohup bash "$script" "$schema" "$mode" >> "$log_file" 2>&1
-    ) &
-    echo $? > "$exit_file"
+    # macOS / no setsid: use bash -c so $$ is the child's own PID (BASHPID is bash 4+ only)
+    bash -c '
+      echo $$ > "$1"
+      nohup bash "$2" "$3" "$4" >> "$5" 2>&1
+      echo $? > "$6"
+    ' -- "$pid_file" "$script" "$schema" "$mode" "$log_file" "$exit_file" &
   fi
 
   # Wait up to 2s for the worker to write its actual PID
