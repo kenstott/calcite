@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1](https://github.com/kenstott/calcite/compare/v0.6.0...v0.6.1) (2026-05-25)
+
+
+### Bug Fixes
+
+* **dq:** filter release detection to engine-v* tags only ([1378d53](https://github.com/kenstott/calcite/commit/1378d5355b064b8f151a84461a42564c4693752e))
+* **pool:** fix Ctrl+C not killing workers on macOS ([6722369](https://github.com/kenstott/calcite/commit/67223694ff65a75886c23ad011e030274c0c77f0))
+* **pool:** validate jar version on startup, re-download if stale ([b7baf3d](https://github.com/kenstott/calcite/commit/b7baf3d563a5f89e7ea8936682198e826927c256))
+* **weather:** hash long cache path components to fix ENAMETOOLONG on paginated NWS URLs ([0379dea](https://github.com/kenstott/calcite/commit/0379deaaabe70b42d44a19b7674dc805a906e508))
+
 ## [0.6.0](https://github.com/kenstott/calcite/compare/v0.5.0...v0.6.0) (2026-05-25)
 
 
