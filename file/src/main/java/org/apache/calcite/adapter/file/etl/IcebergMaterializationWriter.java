@@ -334,8 +334,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private Map<String, String> buildHadoopS3Config(Map<String, String> s3Config) {
     Map<String, String> hadoopConfig = new HashMap<String, String>();
 
-    // S3A FileSystem implementation
+    // S3A FileSystem implementation — register for both s3:// and s3a:// so Iceberg manifests
+    // that store s3:// paths (written by the S3 storage provider) can be read by HadoopCatalog
     hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+    hadoopConfig.put("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
 
     // Credentials
     String accessKey = s3Config.get("accessKeyId");
