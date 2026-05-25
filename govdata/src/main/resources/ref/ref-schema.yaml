@@ -37,12 +37,12 @@ comment: >
 bulkDownloads:
 
   # GLEIF Golden Copy — full LEI registry (~450MB ZIP, ~3.2M records)
-  # URL is resolved at runtime by the worker script via the GLEIF golden copy API:
-  #   https://goldencopy.gleif.org/api/v2/golden-copies/publishes/latest
+  # Stable permalink — GLEIF API issues a 302 redirect to the current dated file.
+  # Updated 3x/day (02:00, 10:00, 18:00 UTC). No authentication required.
   # The CSV ZIP is downloaded once and shared by gleif_entities and gleif_cik_mapping.
   gleif_golden_copy:
     cachePattern: "type=gleif_bulk/gleif-lei2-golden-copy.csv.zip"
-    url: "${GLEIF_CSV_URL}"
+    url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/lei2/latest.csv"
     dimensions: {}
     comment: >
       GLEIF LEI-CDF 3.1 golden copy CSV download (~450MB compressed, 3.2M records).
@@ -194,7 +194,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "${GLEIF_CSV_URL}"
+      url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/lei2/latest.csv"
       method: GET
       extractPattern: "*.csv"
       response:
@@ -263,7 +263,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "${GLEIF_CSV_URL}"
+      url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/lei2/latest.csv"
       method: GET
       extractPattern: "*.csv"
       rowFilter:
