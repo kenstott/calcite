@@ -30,7 +30,7 @@ load_env
 SCHEMA_FILTER=""
 MAX_RESTARTS=5
 POLL_INTERVAL=300   # seconds between release polls (default 5 min)
-POOL_EXTRA_ARGS=()  # forwarded verbatim to run-pool.sh
+POOL_EXTRA_ARGS=()  # forwarded verbatim to run-pool-persist.sh
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -103,7 +103,7 @@ _download_jar() {
 POOL_PID=""
 
 _start_pool() {
-  local cmd=("$SCRIPT_DIR/run-pool.sh")
+  local cmd=("$SCRIPT_DIR/run-pool-persist.sh")
   [ -n "$SCHEMA_FILTER" ] && cmd+=(--schema "$SCHEMA_FILTER")
   [ "${#POOL_EXTRA_ARGS[@]}" -gt 0 ] && cmd+=("${POOL_EXTRA_ARGS[@]}")
   cmd+=(dq-rebuild)
@@ -128,6 +128,11 @@ trap '_stop_pool' INT TERM EXIT
 # ── main ──────────────────────────────────────────────────────────────────────
 CURRENT_RELEASE=$(_latest_release)
 log_info "run-all-dq: starting — release=$CURRENT_RELEASE poll_interval=${POLL_INTERVAL}s max_restarts=$MAX_RESTARTS"
+
+if [ ! -f "$JAR_PATH" ]; then
+  log_info "run-all-dq: jar not found — downloading $CURRENT_RELEASE"
+  _download_jar "$CURRENT_RELEASE" || exit 1
+fi
 
 RESTART_COUNT=0
 
