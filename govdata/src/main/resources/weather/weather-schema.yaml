@@ -336,7 +336,7 @@ partitionedTables:
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.weather.NwsStationTransformer"
