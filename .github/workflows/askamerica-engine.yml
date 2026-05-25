@@ -12,6 +12,47 @@ on:
         default: '0.1.0'
 
 jobs:
+  # ── GovData ETL JAR (used by run-all-dq.sh on ingest servers) ────────────
+  govdata-jar:
+    name: Build govdata shadow JAR
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build govdata shadow JAR
+        run: ./gradlew :govdata:shadowJar --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename to stable asset name
+        run: |
+          JAR=$(find govdata/build/libs -name "sih-govdata-*.jar" -o -name "calcite-govdata-*-all.jar" | head -1)
+          echo "JAR: $JAR ($(du -sh "$JAR" | cut -f1))"
+          cp "$JAR" govdata/build/libs/sih-govdata.jar
+
+      - name: Upload govdata JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: govdata-jar
+          path: govdata/build/libs/sih-govdata.jar
+          retention-days: 30
+
   # ── JAR build (ubuntu only — same JAR works on all platforms via JPype) ────
   jar:
     name: Build shadow JAR
@@ -507,7 +548,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [jar, installer, publish, publish-python]
+    needs: [jar, govdata-jar, installer, publish, publish-python]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -518,6 +559,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: askamerica-engine-jar
+          path: release-assets/
+
+      - name: Download govdata JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: govdata-jar
           path: release-assets/
 
       - name: Download all installers

@@ -76,7 +76,7 @@ done
 
 # ── jar management ────────────────────────────────────────────────────────────
 JAR_DIR="$GOVDATA_ROOT/build/libs"
-JAR_PATH="$JAR_DIR/askamerica-engine.jar"
+JAR_PATH="$JAR_DIR/sih-govdata.jar"
 export GOVDATA_JAR="$JAR_PATH"
 
 _latest_release() {
@@ -90,7 +90,7 @@ _download_jar() {
   mkdir -p "$JAR_DIR"
   if ! gh release download "$tag" \
       --repo kenstott/calcite \
-      --pattern "askamerica-engine.jar" \
+      --pattern "sih-govdata.jar" \
       --dir "$JAR_DIR" \
       --clobber; then
     log_info "run-all-dq: ERROR — jar download failed for $tag"

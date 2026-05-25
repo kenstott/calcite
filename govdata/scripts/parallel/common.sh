@@ -81,13 +81,16 @@ resolve_classpath() {
     echo "$jar"
     return
   fi
-  jar=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
+  jar=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
+  if [ -z "$jar" ]; then
+    jar=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
+  fi
   if [ -z "$jar" ]; then
     jar=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
   fi
   if [ -z "$jar" ]; then
     echo "ERROR: Shadow JAR not found. Run: ./gradlew :govdata:shadowJar" >&2
-    echo "       Or set GOVDATA_JAR=/path/to/calcite-govdata-*-all.jar to use a worktree build." >&2
+    echo "       Or set GOVDATA_JAR=/path/to/sih-govdata.jar to use a downloaded release jar." >&2
     exit 1
   fi
   echo "$jar"
