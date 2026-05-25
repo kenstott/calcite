@@ -104,6 +104,7 @@ _download_jar() {
 
 # ── pool management ───────────────────────────────────────────────────────────
 POOL_PID=""
+_STOPPING=false
 
 _start_pool() {
   local cmd=("$SCRIPT_DIR/run-pool-persist.sh")
@@ -117,22 +118,30 @@ _start_pool() {
 }
 
 _stop_pool() {
+  # Re-entrancy guard: TERM trap can fire while _stop_pool is already running
+  # because the process-group kill below hits run-all-dq itself when the pool
+  # shares the parent pgid (non-interactive bash does not isolate bg jobs).
+  $_STOPPING && return
+  _STOPPING=true
   if [ -n "${POOL_PID:-}" ] && kill -0 "$POOL_PID" 2>/dev/null; then
     log_info "run-all-dq: stopping pool (PID $POOL_PID)"
-    # Signal the entire process group so run-pool.sh and its workers receive TERM
-    # even when bash exec-optimization makes run-pool-persist.sh and run-pool.sh
-    # separate PIDs. On non-interactive scripts, background jobs share the parent
-    # pgid, so -POOL_PID kills the whole subtree.
-    local pgid
+    local pgid my_pgid
     pgid=$(ps -o pgid= -p "$POOL_PID" 2>/dev/null | tr -d ' ' || true)
-    if [ -n "$pgid" ] && [ "$pgid" != "0" ]; then
+    my_pgid=$(ps -o pgid= -p "$$" 2>/dev/null | tr -d ' ' || true)
+    if [ -n "$pgid" ] && [ "$pgid" != "0" ] && [ "$pgid" != "$my_pgid" ]; then
+      # Pool has its own process group — safe to group-kill without hitting ourselves
       kill -TERM -- -"$pgid" 2>/dev/null || true
+    else
+      # Pool shares our process group — kill its children then the process itself
+      # to avoid sending SIGTERM to run-all-dq and killing subsequent jar downloads
+      pkill -TERM -P "$POOL_PID" 2>/dev/null || true
     fi
-    kill -TERM "$POOL_PID" 2>/dev/null || true   # belt-and-suspenders: direct PID too
+    kill -TERM "$POOL_PID" 2>/dev/null || true
     wait "$POOL_PID" 2>/dev/null || true
     log_info "run-all-dq: pool stopped"
   fi
   POOL_PID=""
+  _STOPPING=false
 }
 
 trap '_stop_pool' INT TERM EXIT
