@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/kenstott/calcite/compare/v0.6.3...v0.6.4) (2026-05-25)
+
+
+### Bug Fixes
+
+* **iceberg:** register s3:// scheme with S3AFileSystem in Hadoop config ([0614717](https://github.com/kenstott/calcite/commit/0614717b5e60a46f56a2b523c190587253e3bac3))
+
 ## [0.6.3](https://github.com/kenstott/calcite/compare/v0.6.2...v0.6.3) (2026-05-25)
 
 
