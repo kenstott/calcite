@@ -27,11 +27,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.release.outputs.tag_name }}"
-          # Strip any leading 'v' prefix to get bare version number
           BARE="${VERSION#v}"
           ENGINE_TAG="engine-v${BARE}"
-          SHA=$(git rev-parse HEAD)
-          # Only create if it doesn't already exist
+          SHA="${{ steps.release.outputs.sha }}"
           if ! gh api "repos/${{ github.repository }}/git/refs/tags/${ENGINE_TAG}" &>/dev/null; then
             gh api repos/${{ github.repository }}/git/refs \
               --method POST \
