@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.5](https://github.com/kenstott/calcite/compare/v0.6.4...v0.6.5) (2026-05-25)
+
+
+### Bug Fixes
+
+* **weather:** suppress permanent warns from valid data characteristics in DQ ([ad9fbc4](https://github.com/kenstott/calcite/commit/ad9fbc4502ad72198694407b8495b158faaa9c86))
+
 ## [0.6.4](https://github.com/kenstott/calcite/compare/v0.6.3...v0.6.4) (2026-05-25)
 
 
