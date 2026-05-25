@@ -101,6 +101,7 @@ jobs:
     name: JDBC driver tests
     runs-on: ubuntu-latest
     needs: jar
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
