@@ -353,6 +353,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -486,6 +487,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -567,6 +569,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -720,6 +723,7 @@ partitionedTables:
         compression: snappy
         batchSize: 100000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -881,6 +885,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1042,6 +1047,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1222,6 +1228,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1390,6 +1397,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1529,6 +1537,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1672,6 +1681,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -1867,6 +1877,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
@@ -2078,6 +2089,7 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        emptyResultTtlMillis: 86400000
       iceberg:
         catalogType: hadoop
         overwritePartitions: true
