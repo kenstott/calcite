@@ -208,7 +208,6 @@ partitionedTables:
     dimensions:
       type:
         - gleif_entities
-      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -280,7 +279,6 @@ partitionedTables:
     dimensions:
       type:
         - gleif_cik_mapping
-      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -465,7 +463,6 @@ partitionedTables:
     dimensions:
       type:
         - figi_instruments
-      year: *ref_year_range
 
     materialize:
       enabled: true
