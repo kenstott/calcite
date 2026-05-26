@@ -177,6 +177,13 @@ while true; do
     candidate=$(_latest_release)
     if [ "$candidate" != "unknown" ] && [ "$candidate" != "$CURRENT_RELEASE" ]; then
       log_info "run-all-dq: new release $candidate detected (was $CURRENT_RELEASE)"
+      # Verify the jar asset exists before killing the pool — the tag may be
+      # published before the CI upload completes.
+      if ! gh release view "$candidate" --repo kenstott/calcite --json assets \
+           --jq '.assets[].name' 2>/dev/null | grep -q "sih-govdata.jar"; then
+        log_info "run-all-dq: $candidate has no jar asset yet — will retry next poll"
+        continue
+      fi
       NEW_RELEASE_FOUND=true
       _stop_pool
       if ! _download_jar "$candidate"; then
