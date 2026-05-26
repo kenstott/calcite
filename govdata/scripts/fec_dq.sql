@@ -26,6 +26,44 @@ CREATE TEMP TABLE dq_results (
 );
 
 -- ─────────────────────────────────────────────────────────────
+-- T0: Iceberg snapshot diagnostic (all FEC tables)
+-- Detects "catalog initialized but ETL never wrote data" vs "ETL ran but found 0 rows".
+-- snap_count = 0 means the Iceberg table was created by the schema factory but no ETL
+-- job completed — most likely the worker was terminated (SIGTERM/OOM) before scheduling
+-- FEC, or a download failure prevented any writes from committing.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fec', tbl, 'T0_iceberg_snapshots',
+  CASE WHEN snap_count = 0 THEN 'warn' ELSE 'pass' END,
+  snap_count::DOUBLE, 1.0,
+  'Iceberg snapshot count (0 = catalog initialized but ETL never wrote data — worker likely terminated before FEC was scheduled)'
+FROM (
+  SELECT 'candidates'                  AS tbl, COUNT(*) AS snap_count FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidates',                  allow_moved_paths := true)
+  UNION ALL
+  SELECT 'committees',                          COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committees',                  allow_moved_paths := true)
+  UNION ALL
+  SELECT 'candidate_committee_linkages',        COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_committee_linkages', allow_moved_paths := true)
+  UNION ALL
+  SELECT 'individual_contributions',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/individual_contributions',     allow_moved_paths := true)
+  UNION ALL
+  SELECT 'committee_contributions',             COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_contributions',      allow_moved_paths := true)
+  UNION ALL
+  SELECT 'intercommittee_transactions',         COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/intercommittee_transactions',  allow_moved_paths := true)
+  UNION ALL
+  SELECT 'operating_expenditures',              COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/operating_expenditures',       allow_moved_paths := true)
+  UNION ALL
+  SELECT 'independent_expenditures',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/independent_expenditures',     allow_moved_paths := true)
+  UNION ALL
+  SELECT 'electioneering_communications',       COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/electioneering_communications',allow_moved_paths := true)
+  UNION ALL
+  SELECT 'communication_costs',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/communication_costs',          allow_moved_paths := true)
+  UNION ALL
+  SELECT 'candidate_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_summaries',          allow_moved_paths := true)
+  UNION ALL
+  SELECT 'committee_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_summaries',          allow_moved_paths := true)
+);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: candidates
 -- ─────────────────────────────────────────────────────────────
 
