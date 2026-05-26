@@ -30,14 +30,8 @@ for arg in "$@"; do
   fi
 done
 
-# ── fresh vs resume detection ─────────────────────────────────────────────────
-# State file absent  → fresh invocation → clear completed checkpoint.
-# State file present → resuming after hang → keep completed checkpoint.
-if [ ! -f "$STATE_FILE" ]; then
-  rm -f "$COMPLETED_FILE"
-fi
-
-# --reset always clears the completed checkpoint (even on a resume).
+# --reset explicitly clears the completed checkpoint; otherwise it persists
+# across restarts so already-finished schemas are never re-run.
 if $RESET; then
   rm -f "$COMPLETED_FILE"
 fi
