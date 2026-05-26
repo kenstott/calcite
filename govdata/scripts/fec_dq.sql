@@ -38,29 +38,29 @@ SELECT 'fec', tbl, 'T0_iceberg_snapshots',
   snap_count::DOUBLE, 1.0,
   'Iceberg snapshot count (0 = catalog initialized but ETL never wrote data — worker likely terminated before FEC was scheduled)'
 FROM (
-  SELECT 'candidates'                  AS tbl, COUNT(*) AS snap_count FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidates',                  allow_moved_paths := true)
+  SELECT 'candidates'                  AS tbl, COUNT(*) AS snap_count FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidates')
   UNION ALL
-  SELECT 'committees',                          COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committees',                  allow_moved_paths := true)
+  SELECT 'committees',                          COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committees')
   UNION ALL
-  SELECT 'candidate_committee_linkages',        COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_committee_linkages', allow_moved_paths := true)
+  SELECT 'candidate_committee_linkages',        COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_committee_linkages')
   UNION ALL
-  SELECT 'individual_contributions',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/individual_contributions',     allow_moved_paths := true)
+  SELECT 'individual_contributions',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/individual_contributions')
   UNION ALL
-  SELECT 'committee_contributions',             COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_contributions',      allow_moved_paths := true)
+  SELECT 'committee_contributions',             COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_contributions')
   UNION ALL
-  SELECT 'intercommittee_transactions',         COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/intercommittee_transactions',  allow_moved_paths := true)
+  SELECT 'intercommittee_transactions',         COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/intercommittee_transactions')
   UNION ALL
-  SELECT 'operating_expenditures',              COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/operating_expenditures',       allow_moved_paths := true)
+  SELECT 'operating_expenditures',             COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/operating_expenditures')
   UNION ALL
-  SELECT 'independent_expenditures',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/independent_expenditures',     allow_moved_paths := true)
+  SELECT 'independent_expenditures',            COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/independent_expenditures')
   UNION ALL
-  SELECT 'electioneering_communications',       COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/electioneering_communications',allow_moved_paths := true)
+  SELECT 'electioneering_communications',       COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/electioneering_communications')
   UNION ALL
-  SELECT 'communication_costs',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/communication_costs',          allow_moved_paths := true)
+  SELECT 'communication_costs',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/communication_costs')
   UNION ALL
-  SELECT 'candidate_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_summaries',          allow_moved_paths := true)
+  SELECT 'candidate_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/candidate_summaries')
   UNION ALL
-  SELECT 'committee_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_summaries',          allow_moved_paths := true)
+  SELECT 'committee_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://govdata-parquet-v1/fec/committee_summaries')
 );
 
 -- ─────────────────────────────────────────────────────────────
