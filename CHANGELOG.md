@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/kenstott/calcite/compare/v0.8.0...v0.8.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* **fec:** add emptyResultTtlMillis to break permanent skip on empty-result FEC tables ([27f60f7](https://github.com/kenstott/calcite/commit/27f60f7021faef5ff2cfda88bb8a4ae55f1b2dea))
+
 ## [0.8.0](https://github.com/kenstott/calcite/compare/v0.7.0...v0.8.0) (2026-05-26)
 
 
