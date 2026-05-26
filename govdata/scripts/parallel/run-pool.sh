@@ -229,6 +229,34 @@ if [ -n "$SCHEMA_FILTER" ]; then
   queue=("${filtered[@]+"${filtered[@]}"}")
 fi
 
+# Filter out already-completed slots (checkpoint resume)
+COMPLETED_FILE="${HOME}/.run-pool-completed.state"
+if [ -f "$COMPLETED_FILE" ]; then
+  mapfile -t completed_slots < "$COMPLETED_FILE"
+  if [ "${#completed_slots[@]}" -gt 0 ]; then
+    remaining=()
+    skipped=()
+    for slot in "${queue[@]}"; do
+      already=false
+      for done_slot in "${completed_slots[@]}"; do
+        if [ "$slot" = "$done_slot" ]; then
+          already=true
+          break
+        fi
+      done
+      if $already; then
+        skipped+=("$slot")
+      else
+        remaining+=("$slot")
+      fi
+    done
+    if [ "${#skipped[@]}" -gt 0 ]; then
+      log_info "Checkpoint: skipping ${#skipped[@]} completed slots (${skipped[*]})"
+    fi
+    queue=("${remaining[@]+"${remaining[@]}"}")
+  fi
+fi
+
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
 
@@ -573,6 +601,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
+        echo "${active_slots[$i]}" >> "${HOME}/.run-pool-completed.state"
       else
         ((failed_count++)) || true
         failed_list+=("$id")

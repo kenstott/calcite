@@ -53,6 +53,9 @@ while [[ $# -gt 0 ]]; do
     --force)
       POOL_EXTRA_ARGS+=(--force)
       ;;
+    --reset)
+      POOL_EXTRA_ARGS+=(--reset)
+      ;;
     --help|-h)
       echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force]"
       echo ""
@@ -64,6 +67,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --poll-interval N    Seconds between release polls (default 300)"
       echo "  -j N                 Max concurrent workers (passed to run-pool)"
       echo "  --force              Bypass release-window checks (passed to run-pool)"
+      echo "  --reset              Clear completed-slots checkpoint, re-run all schemas"
       exit 0
       ;;
     *)

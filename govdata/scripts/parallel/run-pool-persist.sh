@@ -7,19 +7,47 @@
 # run-pool-resume.sh reads the file at boot and re-invokes this script with the
 # same args — but only if the file is present.
 #
-# Usage: run-pool-persist.sh [same args as run-pool.sh]
+# --reset   Clear the completed-slots checkpoint before running (re-run everything).
+#           Stripped from args before saving to state file so a resume after hang
+#           does not also reset.
+#
+# Usage: run-pool-persist.sh [--reset] [same args as run-pool.sh]
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="${HOME}/.run-pool.state"
+COMPLETED_FILE="${HOME}/.run-pool-completed.state"
 
-# Save args one-per-line so args containing spaces survive the round-trip.
-printf '%s\n' "$@" > "$STATE_FILE"
+# ── parse --reset out of args before saving state ────────────────────────────
+RESET=false
+POOL_ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--reset" ]; then
+    RESET=true
+  else
+    POOL_ARGS+=("$arg")
+  fi
+done
+
+# ── fresh vs resume detection ─────────────────────────────────────────────────
+# State file absent  → fresh invocation → clear completed checkpoint.
+# State file present → resuming after hang → keep completed checkpoint.
+if [ ! -f "$STATE_FILE" ]; then
+  rm -f "$COMPLETED_FILE"
+fi
+
+# --reset always clears the completed checkpoint (even on a resume).
+if $RESET; then
+  rm -f "$COMPLETED_FILE"
+fi
+
+# Save args (without --reset) one-per-line so args containing spaces survive.
+printf '%s\n' "${POOL_ARGS[@]+"${POOL_ARGS[@]}"}" > "$STATE_FILE"
 
 _cleanup() {
     rm -f "$STATE_FILE"
 }
 trap _cleanup EXIT
 
-"$SCRIPT_DIR/run-pool.sh" "$@"
+"$SCRIPT_DIR/run-pool.sh" "${POOL_ARGS[@]+"${POOL_ARGS[@]}"}"
