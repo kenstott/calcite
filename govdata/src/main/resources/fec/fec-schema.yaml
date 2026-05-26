@@ -28,6 +28,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fec}"
+workerTimeoutMinutes: 480
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >

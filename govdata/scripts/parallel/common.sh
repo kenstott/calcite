@@ -878,6 +878,18 @@ get_timeout_config() {
     _schema="${_dq_rest%-*}"
   fi
 
+  # Check schema YAML for workerTimeoutMinutes — takes precedence over hardcoded defaults
+  local _yaml_file
+  _yaml_file="$(dirname "${BASH_SOURCE[0]}")/../../src/main/resources/${_schema}/${_schema}-schema.yaml"
+  if [[ -f "$_yaml_file" ]]; then
+    local _yaml_timeout
+    _yaml_timeout=$(grep -E "^workerTimeoutMinutes:" "$_yaml_file" | awk '{print $2}' | tr -d '"'"'"'')
+    if [[ -n "$_yaml_timeout" ]] && [[ "$_yaml_timeout" =~ ^[0-9]+$ ]]; then
+      echo "$_yaml_timeout"
+      return
+    fi
+  fi
+
   case "$_schema" in
     edu)          echo 360 ;;  # K-12 + IPEDS + Scorecard — many sub-pipelines
     weather)      echo 360 ;;  # GHCND × 51 states × years — large volume
