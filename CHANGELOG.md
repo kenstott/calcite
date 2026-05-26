@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/kenstott/calcite/compare/v0.7.0...v0.8.0) (2026-05-26)
+
+
+### Features
+
+* **fec:** make worker idle-timeout configurable via workerTimeoutMinutes in schema YAML ([0363893](https://github.com/kenstott/calcite/commit/0363893ca091b22a30d8e2bc731c95ce8728a091))
+
 ## [0.7.0](https://github.com/kenstott/calcite/compare/v0.6.7...v0.7.0) (2026-05-26)
 
 
