@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/kenstott/calcite/compare/v0.6.5...v0.6.6) (2026-05-26)
+
+
+### Bug Fixes
+
+* **ref:** remove year dimension from static reference tables to prevent data duplication ([3637d96](https://github.com/kenstott/calcite/commit/3637d969f0f4b2a79020b91dd98363ffa19ed992))
+
 ## [0.6.5](https://github.com/kenstott/calcite/compare/v0.6.4...v0.6.5) (2026-05-25)
 
 
