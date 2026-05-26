@@ -73,7 +73,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/candidates', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -149,7 +149,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/committees', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -226,7 +226,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/candidate_committee_linkages', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -295,7 +295,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/individual_contributions', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -370,7 +370,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/committee_contributions', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -439,7 +439,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/intercommittee_transactions', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -507,7 +507,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/operating_expenditures', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year', 'schedule_type')
   )
 );
@@ -578,7 +578,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/independent_expenditures', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -641,7 +641,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/electioneering_communications', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -704,7 +704,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/communication_costs', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -767,7 +767,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/candidate_summaries', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -852,7 +852,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://govdata-parquet-v1/fec/committee_summaries', allow_moved_paths := true))
-    WHERE approx_unique <= 1
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
       AND column_name NOT IN (
         'type', 'year',
         -- FEC summary optional fields: only populated for specific committee types
