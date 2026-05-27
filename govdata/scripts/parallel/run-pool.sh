@@ -232,7 +232,8 @@ fi
 # Filter out already-completed slots (checkpoint resume)
 COMPLETED_FILE="${HOME}/.run-pool-completed.state"
 if [ -f "$COMPLETED_FILE" ]; then
-  mapfile -t completed_slots < "$COMPLETED_FILE"
+  completed_slots=()
+  while IFS= read -r _line; do completed_slots+=("$_line"); done < "$COMPLETED_FILE"
   if [ "${#completed_slots[@]}" -gt 0 ]; then
     remaining=()
     skipped=()

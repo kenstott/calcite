@@ -13,7 +13,8 @@ if [[ ! -f "$STATE_FILE" ]]; then
     exit 0
 fi
 
-mapfile -t args < "$STATE_FILE"
+args=()
+while IFS= read -r _line; do args+=("$_line"); done < "$STATE_FILE"
 
 if [[ "${#args[@]}" -eq 0 ]]; then
     rm -f "$STATE_FILE"
