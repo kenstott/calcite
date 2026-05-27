@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.5](https://github.com/kenstott/calcite/compare/v0.9.4...v0.9.5) (2026-05-27)
+
+
+### Bug Fixes
+
+* **ci:** add actions:write permission to dispatch release workflows ([9613c96](https://github.com/kenstott/calcite/commit/9613c96a2dbca74542c4a6523f8c802374096022))
+* **dq:** point DQ result scripts to govdata-tracker-v1-dq bucket ([b3b2883](https://github.com/kenstott/calcite/commit/b3b2883120a7a443694829e6c0916b97aa6f39af))
+* **econ,edu:** recalibrate DQ thresholds for 2-year window and fix schema expressions ([9623f4a](https://github.com/kenstott/calcite/commit/9623f4a29f1d945d43305e731e49c0676c026d4b))
+
 ## [0.9.4](https://github.com/kenstott/calcite/compare/v0.9.3...v0.9.4) (2026-05-27)
 
 
