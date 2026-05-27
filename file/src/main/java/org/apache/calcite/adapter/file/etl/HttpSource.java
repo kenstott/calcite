@@ -58,6 +58,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -688,6 +689,9 @@ public class HttpSource implements DataSource {
             throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
           }
           InputStream is = conn.getInputStream();
+          if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+            is = new GZIPInputStream(is);
+          }
           csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
           csvHeaderLine = csvReader.readLine();
           if (csvHeaderLine == null) {
@@ -1170,16 +1174,22 @@ public class HttpSource implements DataSource {
           }
           return "";
         }
-        // Read response into memory first to check for API-level errors before caching
-        String responseBody = readResponse(conn.getInputStream());
-
-        // Check for API-level errors in JSON responses before caching
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
-        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.JSON) {
-          String apiError = checkForApiError(responseBody, respConfig);
-          if (apiError != null) {
-            throw new IOException("API error (not cached): " + apiError);
-          }
+        InputStream responseStream = conn.getInputStream();
+        if ("gzip".equalsIgnoreCase(respConfig.getCompressed())) {
+          responseStream = new GZIPInputStream(responseStream);
+        }
+
+        // For non-JSON formats, cache raw bytes directly — no API error check needed
+        if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON) {
+          return cacheResponse(responseStream, rawCachePath);
+        }
+
+        // Read response into memory first to check for API-level errors before caching
+        String responseBody = readResponse(responseStream);
+        String apiError = checkForApiError(responseBody, respConfig);
+        if (apiError != null) {
+          throw new IOException("API error (not cached): " + apiError);
         }
 
         // No API error - cache the response
@@ -1866,7 +1876,7 @@ public class HttpSource implements DataSource {
     @Override
     public Map<String, Object> next() {
       if (!hasNext()) {
-        throw new java.util.NoSuchElementException();
+        throw new NoSuchElementException();
       }
       Map<String, Object> row = nextRow;
       advance();
@@ -2808,7 +2818,12 @@ public class HttpSource implements DataSource {
       }
     }
 
-    path.append("response.json");
+    // Use a distinct filename for gzip sources so old undecompressed caches are never reused
+    if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+      path.append("response_gzip.json");
+    } else {
+      path.append("response.json");
+    }
     return path.toString();
   }
 

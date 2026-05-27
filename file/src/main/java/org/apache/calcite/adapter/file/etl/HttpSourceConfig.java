@@ -999,9 +999,11 @@ public class HttpSourceConfig {
     private final boolean hasHeader;
     private final String columnNames;
     private final String delimiter;
+    private final String compressed;
 
     private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
-        PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter) {
+        PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter,
+        String compressed) {
       this.format = format;
       this.dataPath = dataPath;
       this.errorPath = errorPath;
@@ -1009,11 +1011,12 @@ public class HttpSourceConfig {
       this.hasHeader = hasHeader;
       this.columnNames = columnNames;
       this.delimiter = delimiter;
+      this.compressed = compressed;
     }
 
     public static ResponseConfig defaults() {
       return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none(),
-          true, null, null);
+          true, null, null, null);
     }
 
     public ResponseFormat getFormat() {
@@ -1059,6 +1062,14 @@ public class HttpSourceConfig {
       return delimiter;
     }
 
+    /**
+     * Compression type for the response body (e.g., "gzip").
+     * If null, the response is assumed to be uncompressed.
+     */
+    public String getCompressed() {
+      return compressed;
+    }
+
     @SuppressWarnings("unchecked")
     public static ResponseConfig fromMap(Map<String, Object> map) {
       if (map == null) {
@@ -1083,9 +1094,10 @@ public class HttpSourceConfig {
       boolean hasHeader = hasHeaderObj == null || Boolean.TRUE.equals(hasHeaderObj);
       String columnNames = (String) map.get("columnNames");
       String delimiter = (String) map.get("delimiter");
+      String compressed = (String) map.get("compressed");
 
       return new ResponseConfig(format, dataPath, errorPath, pagination,
-          hasHeader, columnNames, delimiter);
+          hasHeader, columnNames, delimiter, compressed);
     }
   }
 
