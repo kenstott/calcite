@@ -52,7 +52,9 @@ jobs:
           BARE="${VERSION#v}"
           gh workflow run "AskAmerica Engine" \
             --repo "${{ github.repository }}" \
+            --ref "refs/tags/${ENGINE_TAG}" \
             --field version="${BARE}"
           gh workflow run "Publish GovData Driver" \
-            --repo "${{ github.repository }}"
-          echo "Dispatched release workflows for v${BARE}"
+            --repo "${{ github.repository }}" \
+            --ref "refs/tags/${ENGINE_TAG}"
+          echo "Dispatched release workflows on ${ENGINE_TAG}"
