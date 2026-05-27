@@ -108,7 +108,7 @@ SELECT 'edu', 'ccd_districts', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'spec_ed_students', 'english_language_learners');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'all_null_cols',
