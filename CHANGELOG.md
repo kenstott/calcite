@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/kenstott/calcite/compare/v0.8.2...v0.8.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **fec:** suppress structural DQ warnings for known FEC source data characteristics ([de10eb1](https://github.com/kenstott/calcite/commit/de10eb1f69260c886f8f992d189065911e60f0a7))
+
 ## [0.8.2](https://github.com/kenstott/calcite/compare/v0.8.1...v0.8.2) (2026-05-27)
 
 
