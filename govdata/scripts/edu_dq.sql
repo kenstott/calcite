@@ -54,9 +54,16 @@ FROM (
 -- ============================================================
 SELECT '=== T2: ROW COUNTS ===' AS section;
 
+-- Tables with releaseWindow constraints are legitimately empty outside their ingest window.
+-- always_populated: ccd_schools, college_scorecard, college_scorecard_programs, ipeds_institutions → fail when empty
+-- release_window:   all others → warn when empty (expected during off-window periods)
 INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
-  CASE WHEN n >= thresh THEN 'pass' ELSE 'fail' END,
+  CASE
+    WHEN n >= thresh                     THEN 'pass'
+    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions') THEN 'fail'
+    ELSE 'warn'
+  END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
 FROM (
   SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n, 100 AS thresh FROM iceberg_scan('s3://govdata-parquet-v1/edu/ccd_districts',           allow_moved_paths=true)
