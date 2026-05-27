@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/kenstott/calcite/compare/v0.8.3...v0.8.4) (2026-05-27)
+
+
+### Bug Fixes
+
+* **govdata:** filter engine-v* tags in download-jar.sh to skip release-please artifacts ([e6100e1](https://github.com/kenstott/calcite/commit/e6100e16648c9d83ca71724acad38b7ce03cb8ff))
+
 ## [0.8.3](https://github.com/kenstott/calcite/compare/v0.8.2...v0.8.3) (2026-05-27)
 
 
