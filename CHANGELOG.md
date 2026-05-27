@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/kenstott/calcite/compare/v0.8.1...v0.8.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **fec:** add missing start year to fec_year_dimension to fix URISyntaxException ([f3d56e0](https://github.com/kenstott/calcite/commit/f3d56e0535b2d9e878c776784d268c521c94dcf1))
+
 ## [0.6.7](https://github.com/kenstott/calcite/compare/v0.6.6...v0.6.7) (2026-05-26)
 
 
