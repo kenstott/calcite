@@ -66,6 +66,13 @@ if [[ "$MODE" != "daily" && "$MODE" != "historical" ]]; then
   exit 1
 fi
 
+# ── DQ bucket config ──────────────────────────────────────────────────────────
+# Defaults to production. Set GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq (and
+# GOVDATA_DQ_TRACKER_BUCKET=govdata-tracker-v1-dq) plus CF_ACCOUNT_ID /
+# CF_API_TOKEN to use an isolated test bucket instead of purging production.
+export GOVDATA_DQ_BUCKET="${GOVDATA_DQ_BUCKET:-govdata-parquet-v1}"
+export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1}"
+
 WORKER_ID="worker-dq-${SCHEMA}-${MODE}"
 DQ_SQL="$GOVDATA_ROOT/scripts/${SCHEMA}_dq.sql"
 RUN_DIR="$SCRIPT_DIR/runs/$WORKER_ID"
@@ -81,7 +88,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$RUN_DIR/dq_${TIMESTAMP}.log"
 ETL_LOG_DIR=""  # set after rebuild ETL so error handler finds the right log
 
-S3_RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+S3_RESULT_PATH="s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
 
 # ── error handler + EXIT trap (must be defined before rebuild block) ──────────
 _SCRIPT_COMPLETE=false
@@ -220,36 +227,69 @@ _on_exit() {
 }
 trap '_on_exit' EXIT
 
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+# Reset an R2 bucket via the Cloudflare API (delete + recreate).
+# One HTTP call per operation — no per-object Class A charges.
+# Requires CF_ACCOUNT_ID and CF_API_TOKEN with r2:write permission.
+_cf_reset_bucket() {
+  local bucket="$1"
+  local cf_api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets"
+  log_info "$WORKER_ID: resetting R2 bucket '$bucket' via Cloudflare API"
+  curl -sf -X DELETE "${cf_api}/${bucket}" \
+    -H "Authorization: Bearer ${CF_API_TOKEN}" 2>/dev/null || true
+  sleep 3
+  local resp
+  resp=$(curl -sf -X POST "${cf_api}" \
+    -H "Authorization: Bearer ${CF_API_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"${bucket}\"}" 2>/dev/null || echo '{"success":false}')
+  if ! echo "$resp" | grep -q '"success":true'; then
+    log_info "$WORKER_ID: ERROR: failed to recreate R2 bucket '${bucket}': ${resp}"
+    exit 1
+  fi
+  log_info "$WORKER_ID: bucket '$bucket' reset complete"
+}
+
 # ── rebuild: teardown + ETL before DQ ────────────────────────────────────────
 if $REBUILD; then
-  log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA"
+  log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA (bucket=$GOVDATA_DQ_BUCKET)"
 
-  # 1. Discover existing Iceberg tables for this schema so we know which
-  #    tracker type= patterns to remove.
-  ICEBERG_TABLES=$(rclone lsd "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true)
-
-  if [ -n "$ICEBERG_TABLES" ]; then
-    for table in $ICEBERG_TABLES; do
-      log_info "$WORKER_ID: --rebuild: removing tracker entries for type=$table"
-      # Delete all source_key=*__type={table}* objects across every year partition.
-      # rclone --include matches file paths relative to the remote root.
-      rclone delete r2:govdata-tracker-v1 \
-        --include "/year=*/source_key=*__type=${table}*/**" \
-        2>/dev/null || true
-    done
+  if [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
+    # Production bucket: per-object tracker cleanup + rclone purge (original behaviour).
+    # 1. Discover existing Iceberg tables so we know which tracker type= entries to remove.
+    ICEBERG_TABLES=$(rclone lsd "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true)
+    if [ -n "$ICEBERG_TABLES" ]; then
+      for table in $ICEBERG_TABLES; do
+        log_info "$WORKER_ID: --rebuild: removing tracker entries for type=$table"
+        rclone delete r2:govdata-tracker-v1 \
+          --include "/year=*/source_key=*__type=${table}*/**" \
+          2>/dev/null || true
+      done
+    else
+      log_info "$WORKER_ID: --rebuild: no Iceberg tables found — skipping tracker cleanup"
+    fi
+    # 2. Delete Iceberg data (raw cache at r2:govdata-raw-v1 is intentionally preserved).
+    log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
+    rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
   else
-    log_info "$WORKER_ID: --rebuild: no Iceberg tables found — skipping tracker cleanup"
+    # Isolated DQ bucket: reset entire bucket via Cloudflare API (one HTTP call, no
+    # per-object Class A charges). Skip per-object tracker cleanup — FORCE=true bypasses
+    # tracker reads so ETL re-ingests everything fresh into the DQ bucket.
+    if [ -z "${CF_ACCOUNT_ID:-}" ] || [ -z "${CF_API_TOKEN:-}" ]; then
+      log_info "$WORKER_ID: ERROR: CF_ACCOUNT_ID and CF_API_TOKEN must be set when GOVDATA_DQ_BUCKET != govdata-parquet-v1"
+      exit 1
+    fi
+    _cf_reset_bucket "$GOVDATA_DQ_BUCKET"
+    export FORCE=true
+    # Redirect ETL writes to the DQ bucket and its companion tracker.
+    export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
+    export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
   fi
-
-  # 2. Delete Iceberg data and raw-parquet staging for this schema.
-  # Raw cache (r2:govdata-raw-v1) is intentionally preserved — it is the source of truth
-  # for large datasets (e.g. IPEDS) that cannot be cold-fetched reliably from the live API.
-  log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
-  rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
 
   # 3. Delete existing DQ results so the post-ETL run starts clean.
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
-  rclone purge "r2:govdata-tracker-v1/dq-results/schema=$SCHEMA" 2>/dev/null || true
+  rclone purge "r2:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
 
   # 4. Run historical ETL pass.
   log_info "$WORKER_ID: --rebuild: running historical ETL for schema=$SCHEMA"
@@ -302,7 +342,7 @@ if [ -n "${GOVDATA_PARQUET_DIR:-}" ]; then
 fi
 
 # Check for deprecated source= partition on S3
-deprecated_path="r2:govdata-parquet-v1/source=${SCHEMA}/"
+deprecated_path="r2:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
 deprecated_check=$(rclone ls "$deprecated_path" 2>/dev/null | head -1 || true)
 if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
@@ -407,7 +447,7 @@ if $DRY_RUN; then
 else
   log_info "$WORKER_ID: uploading results to $S3_RESULT_PATH"
   # rclone copyto uploads a single file to an exact destination path (not a directory)
-  rclone copyto "$RESULT_LOCAL" "r2:govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+  rclone copyto "$RESULT_LOCAL" "r2:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
   log_info "$WORKER_ID: results written to $S3_RESULT_PATH"
 fi
 
