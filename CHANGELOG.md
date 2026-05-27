@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/kenstott/calcite/compare/v0.9.0...v0.9.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **census:** add API key to Census API URLs and fix building_permits CSV parsing ([405dc98](https://github.com/kenstott/calcite/commit/405dc9859cd911374270723b36f979147132ba4d))
+
 ## [0.9.0](https://github.com/kenstott/calcite/compare/v0.8.5...v0.9.0) (2026-05-27)
 
 
