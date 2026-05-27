@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/kenstott/calcite/compare/v0.9.1...v0.9.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **dq:** edu dq-rebuild yields zero rows — start year &gt; effectiveEnd ([f94f00e](https://github.com/kenstott/calcite/commit/f94f00e6a8234c8a270dae7adf20200f60b80f8c)), closes [#61](https://github.com/kenstott/calcite/issues/61)
+
 ## [0.9.1](https://github.com/kenstott/calcite/compare/v0.9.0...v0.9.1) (2026-05-27)
 
 
