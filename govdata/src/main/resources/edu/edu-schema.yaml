@@ -189,6 +189,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
+        dataLag: 2
 
     materialize:
       enabled: true

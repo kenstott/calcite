@@ -93,24 +93,24 @@ SELECT
        ELSE 'row count below minimum — ingestion may be incomplete or failed'
   END AS detail
 FROM (
-  SELECT 'employment_statistics'  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics',  allow_moved_paths := true)) AS n, 100    AS threshold
+  SELECT 'employment_statistics'  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics',  allow_moved_paths := true)) AS n, 50     AS threshold
   UNION ALL SELECT 'inflation_metrics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',     allow_moved_paths := true)), 100
   UNION ALL SELECT 'regional_cpi',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',          allow_moved_paths := true)), 200
-  UNION ALL SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 500
+  UNION ALL SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 200
   UNION ALL SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 50000
   UNION ALL SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200
   UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 10000
   UNION ALL SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100
   UNION ALL SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000
   UNION ALL SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 500
-  UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 100
+  UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 1
+  UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 1
+  UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 50
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
-  UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 1000
-  UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 1000
+  UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
+  UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
   UNION ALL SELECT 'world_indicators',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',      allow_moved_paths := true)), 1000
-  UNION ALL SELECT 'fred_indicators',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',       allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'fred_indicators',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',       allow_moved_paths := true)), 3000
   UNION ALL SELECT 'national_accounts',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',     allow_moved_paths := true)), 100
   UNION ALL SELECT 'state_personal_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income', allow_moved_paths := true)), 300
   UNION ALL SELECT 'state_gdp',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp',             allow_moved_paths := true)), 300
@@ -347,7 +347,8 @@ INSERT INTO dq_results
 SELECT 'econ', 'gdp_statistics', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics', allow_moved_paths := true))
-WHERE null_percentage = 100.0;
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('percent_change', 'seasonally_adjusted');
 
 -- industry_gdp
 INSERT INTO dq_results

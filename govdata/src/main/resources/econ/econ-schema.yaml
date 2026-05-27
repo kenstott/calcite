@@ -3997,7 +3997,7 @@ partitionedTables:
       - name: value
         type: double
         nullable: true
-        expression: "CAST(REPLACE(DataValue, ',', '') AS DOUBLE)"
+        expression: "CAST(REPLACE(src.DataValue, ',', '') AS DOUBLE)"
         comment: GDP value in millions of dollars (BEA returns comma-formatted numbers)
       - name: percent_change
         type: double
