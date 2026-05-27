@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/kenstott/calcite/compare/v0.9.2...v0.9.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **edu:** biennial worker yields empty year range for naep/crdc tables ([e30f9a3](https://github.com/kenstott/calcite/commit/e30f9a3612be0be7b529c0a6be5b00c68a71d6c8))
+
 ## [0.9.2](https://github.com/kenstott/calcite/compare/v0.9.1...v0.9.2) (2026-05-27)
 
 
