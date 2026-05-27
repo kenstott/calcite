@@ -71,7 +71,7 @@ fi
 # GOVDATA_DQ_TRACKER_BUCKET=govdata-tracker-v1-dq) plus CF_ACCOUNT_ID /
 # CF_API_TOKEN to use an isolated test bucket instead of purging production.
 export GOVDATA_DQ_BUCKET="${GOVDATA_DQ_BUCKET:-govdata-parquet-v1}"
-export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1}"
+export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
 
 WORKER_ID="worker-dq-${SCHEMA}-${MODE}"
 DQ_SQL="$GOVDATA_ROOT/scripts/${SCHEMA}_dq.sql"

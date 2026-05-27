@@ -68,7 +68,7 @@ if [ -n "$S3_ENDPOINT" ]; then
   ENDPOINT_ARGS="--endpoint-url $S3_ENDPOINT"
 fi
 
-RESULT_BASE="s3://govdata-tracker-v1/dq-results"
+RESULT_BASE="s3://${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}/dq-results"
 GLOB_PATH="${RESULT_BASE}/schema=*/run_date=${RUN_DATE}/type=*/results.parquet"
 
 # ── build WHERE clause fragments ──────────────────────────────────────────────

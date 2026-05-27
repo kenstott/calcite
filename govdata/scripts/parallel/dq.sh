@@ -18,7 +18,7 @@
 # Run data quality checks for a schema:
 #   1. Reingest the DQ year window via data-fix.sh (current year + lookback)
 #   2. Execute {schema}_dq.sql via DuckDB with envsubst variable expansion
-#   3. Write results parquet to s3://govdata-tracker-v1/dq-results/
+#   3. Write results parquet to s3://${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}/dq-results/
 #
 # The DQ year window defaults to current year + 1 prior year (lookback=1).
 # SQL files may override the default with a header comment:
@@ -118,7 +118,7 @@ fi
 
 RUN_DATE=$(date +%Y-%m-%d)
 RUN_MODE="daily"
-RESULT_PATH="s3://govdata-tracker-v1/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${RUN_MODE}/results.parquet"
+RESULT_PATH="s3://${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${RUN_MODE}/results.parquet"
 
 export DQ_YEAR_START DQ_YEAR_END
 
