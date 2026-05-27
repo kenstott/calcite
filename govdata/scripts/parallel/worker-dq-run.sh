@@ -235,17 +235,23 @@ trap '_on_exit' EXIT
 _cf_reset_bucket() {
   local bucket="$1"
   local cf_api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets"
+  local auth=(-H "Authorization: Bearer ${CF_API_TOKEN}")
   log_info "$WORKER_ID: resetting R2 bucket '$bucket' via Cloudflare API"
-  curl -sf -X DELETE "${cf_api}/${bucket}" \
-    -H "Authorization: Bearer ${CF_API_TOKEN}" 2>/dev/null || true
+  # DELETE — ignore errors (bucket may not exist yet on first run)
+  curl -s -X DELETE "${cf_api}/${bucket}" "${auth[@]}" 2>/dev/null || true
   sleep 3
+  # CREATE — error code 10004 means "already exists and you own it", which is
+  # acceptable (DELETE may have raced or bucket was pre-created manually)
   local resp
-  resp=$(curl -sf -X POST "${cf_api}" \
-    -H "Authorization: Bearer ${CF_API_TOKEN}" \
+  resp=$(curl -s -X POST "${cf_api}" "${auth[@]}" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"${bucket}\"}" 2>/dev/null || echo '{"success":false}')
-  if ! echo "$resp" | grep -q '"success":true'; then
-    log_info "$WORKER_ID: ERROR: failed to recreate R2 bucket '${bucket}': ${resp}"
+    -d "{\"name\":\"${bucket}\"}" 2>/dev/null || echo '{}')
+  if echo "$resp" | grep -q '"success":true'; then
+    log_info "$WORKER_ID: bucket '$bucket' created"
+  elif echo "$resp" | grep -q '"code":10004'; then
+    log_info "$WORKER_ID: bucket '$bucket' already exists — continuing"
+  else
+    log_info "$WORKER_ID: ERROR: failed to create R2 bucket '${bucket}': ${resp}"
     exit 1
   fi
   log_info "$WORKER_ID: bucket '$bucket' reset complete"
