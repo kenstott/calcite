@@ -57,10 +57,10 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 
 if [ -z "$TAG" ]; then
-  TAG=$(gh release list --repo kenstott/calcite --limit 1 --json tagName \
-    --jq '.[0].tagName' 2>/dev/null || true)
+  TAG=$(gh release list --repo kenstott/calcite --limit 10 --json tagName \
+    --jq '[.[] | select(.tagName | startswith("engine-v"))] | .[0].tagName' 2>/dev/null || true)
   if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
-    echo "ERROR: could not determine latest release tag — check gh auth status" >&2
+    echo "ERROR: could not determine latest engine-v* release tag — check gh auth status" >&2
     exit 1
   fi
 fi
