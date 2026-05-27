@@ -272,7 +272,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B01001_001E,B01001_002E,B01001_026E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B01001_001E,B01001_002E,B01001_026E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -341,7 +341,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B19013_001E,B19301_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B19013_001E,B19301_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -424,7 +424,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B25001_001E,B25002_002E,B25002_003E,B25077_001E,B25064_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B25001_001E,B25002_002E,B25002_003E,B25077_001E,B25064_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -507,7 +507,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B15003_001E,B15003_017E,B15003_022E,B15003_023E,B15003_025E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B15003_001E,B15003_017E,B15003_022E,B15003_023E,B15003_025E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -585,7 +585,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B23025_002E,B23025_004E,B23025_005E,B23025_007E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B23025_002E,B23025_004E,B23025_005E,B23025_007E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -653,7 +653,7 @@ partitionedTables:
     # HTTP Source configuration for EtlPipeline
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B17001_001E,B17001_002E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B17001_001E,B17001_002E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -743,7 +743,7 @@ partitionedTables:
     source:
       type: http
       # URL uses resolved {dataset} and {variables} based on year
-      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{variables}&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{variables}&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -844,7 +844,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B02001_002E,B02001_003E,B02001_004E,B02001_005E,B02001_006E,B02001_007E,B02001_008E,B03003_002E,B03003_003E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B02001_002E,B02001_003E,B02001_004E,B02001_005E,B02001_006E,B02001_007E,B02001_008E,B03003_002E,B03003_003E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -919,7 +919,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B01002_001E,B01001_003E,B01001_004E,B01001_005E,B01001_006E,B01001_007E,B01001_008E,B01001_009E,B01001_010E,B01001_011E,B01001_012E,B01001_013E,B01001_014E,B01001_015E,B01001_016E,B01001_017E,B01001_018E,B01001_019E,B01001_020E,B01001_021E,B01001_022E,B01001_023E,B01001_024E,B01001_025E,B01001_027E,B01001_028E,B01001_029E,B01001_030E,B01001_031E,B01001_032E,B01001_033E,B01001_034E,B01001_035E,B01001_036E,B01001_037E,B01001_038E,B01001_039E,B01001_040E,B01001_041E,B01001_042E,B01001_043E,B01001_044E,B01001_045E,B01001_046E,B01001_047E,B01001_048E,B01001_049E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B01002_001E,B01001_003E,B01001_004E,B01001_005E,B01001_006E,B01001_007E,B01001_008E,B01001_009E,B01001_010E,B01001_011E,B01001_012E,B01001_013E,B01001_014E,B01001_015E,B01001_016E,B01001_017E,B01001_018E,B01001_019E,B01001_020E,B01001_021E,B01001_022E,B01001_023E,B01001_024E,B01001_025E,B01001_027E,B01001_028E,B01001_029E,B01001_030E,B01001_031E,B01001_032E,B01001_033E,B01001_034E,B01001_035E,B01001_036E,B01001_037E,B01001_038E,B01001_039E,B01001_040E,B01001_041E,B01001_042E,B01001_043E,B01001_044E,B01001_045E,B01001_046E,B01001_047E,B01001_048E,B01001_049E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1010,7 +1010,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B08301_001E,B08301_003E,B08301_004E,B08301_010E,B08301_018E,B08301_019E,B08301_021E,B08135_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B08301_001E,B08301_003E,B08301_004E,B08301_010E,B08301_018E,B08301_019E,B08301_021E,B08135_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1085,7 +1085,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B27001_001E,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E,B27002_004E,B27003_004E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B27001_001E,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E,B27002_004E,B27003_004E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1170,7 +1170,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B16001_001E,B16001_002E,B16001_003E,B16001_005E,B16001_006E,B16001_009E,B16001_012E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B16001_001E,B16001_002E,B16001_003E,B16001_005E,B16001_006E,B16001_009E,B16001_012E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1250,7 +1250,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B18101_001E,B18101_004E,B18101_007E,B18101_010E,B18101_013E,B18101_016E,B18101_019E,B18101_023E,B18101_026E,B18101_029E,B18101_032E,B18101_035E,B18101_038E,B18102_004E,B18103_004E,B18104_004E,B18105_004E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B18101_001E,B18101_004E,B18101_007E,B18101_010E,B18101_013E,B18101_016E,B18101_019E,B18101_023E,B18101_026E,B18101_029E,B18101_032E,B18101_035E,B18101_038E,B18102_004E,B18103_004E,B18104_004E,B18105_004E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1325,7 +1325,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B21001_001E,B21001_002E,B21001_003E,B21001_005E,B21001_023E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B21001_001E,B21001_002E,B21001_003E,B21001_005E,B21001_023E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1405,7 +1405,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B07001_001E,B07001_017E,B07001_033E,B07001_049E,B07001_065E,B07001_081E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B07001_001E,B07001_017E,B07001_033E,B07001_049E,B07001_065E,B07001_081E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1485,7 +1485,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,C24010_001E,C24010_003E,C24010_019E,C24010_027E,C24010_030E,C24010_037E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,C24010_001E,C24010_003E,C24010_019E,C24010_027E,C24010_030E,C24010_037E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1605,7 +1605,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,C24030_001E,C24030_003E,C24030_006E,C24030_007E,C24030_008E,C24030_009E,C24030_010E,C24030_013E,C24030_014E,C24030_017E,C24030_021E,C24030_024E,C24030_027E,C24030_028E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,C24030_001E,C24030_003E,C24030_006E,C24030_007E,C24030_008E,C24030_009E,C24030_010E,C24030_013E,C24030_014E,C24030_017E,C24030_021E,C24030_024E,C24030_027E,C24030_028E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1687,7 +1687,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B28002_001E,B28002_002E,B28002_004E,B28002_013E,B28001_002E,B28001_011E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B28002_001E,B28002_002E,B28002_004E,B28002_013E,B28001_002E,B28001_011E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1762,7 +1762,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B05001_001E,B05001_002E,B05001_005E,B05001_006E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B05001_001E,B05001_002E,B05001_005E,B05001_006E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1878,7 +1878,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B12001_001E,B12001_003E,B12001_004E,B12001_006E,B12001_009E,B12001_010E,B12001_012E,B12001_013E,B12001_015E,B12001_018E,B12001_019E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B12001_001E,B12001_003E,B12001_004E,B12001_006E,B12001_009E,B12001_010E,B12001_012E,B12001_013E,B12001_015E,B12001_018E,B12001_019E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -1968,7 +1968,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B11001_001E,B11001_002E,B11001_003E,B11001_005E,B11001_006E,B11001_007E,B11001_008E,B25010_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B11001_001E,B11001_002E,B11001_003E,B11001_005E,B11001_006E,B11001_007E,B11001_008E,B25010_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2048,7 +2048,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B25003_001E,B25003_002E,B25003_003E,B25077_001E,B25064_001E,B25035_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B25003_001E,B25003_002E,B25003_003E,B25077_001E,B25064_001E,B25035_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2138,7 +2138,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B19001_001E,B19001_002E,B19001_003E,B19001_004E,B19001_005E,B19001_006E,B19001_007E,B19001_008E,B19001_009E,B19001_010E,B19001_011E,B19001_012E,B19001_013E,B19001_014E,B19001_015E,B19001_016E,B19001_017E,B19083_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B19001_001E,B19001_002E,B19001_003E,B19001_004E,B19001_005E,B19001_006E,B19001_007E,B19001_008E,B19001_009E,B19001_010E,B19001_011E,B19001_012E,B19001_013E,B19001_014E,B19001_015E,B19001_016E,B19001_017E,B19083_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2207,7 +2207,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{housing_variables}&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{housing_variables}&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2294,7 +2294,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{vintage}/{endpoint}?get=NAME,{variables}&for={geography}:*{year_filter}"
+      url: "https://api.census.gov/data/{vintage}/{endpoint}?get=NAME,{variables}&for={geography}:*{year_filter}&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2379,7 +2379,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=00"
+      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=00&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2454,7 +2454,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B01001_001E,B01001_002E,B01001_026E,B01002_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B01001_001E,B01001_002E,B01001_026E,B01002_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2513,7 +2513,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B19013_001E,B19301_001E&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B19013_001E,B19301_001E&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2609,7 +2609,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/ecnbasic?get=NAME,{naics_var},ESTAB,EMP,PAYANN,RCPTOT&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/ecnbasic?get=NAME,{naics_var},ESTAB,EMP,PAYANN,RCPTOT&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2696,7 +2696,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/poverty/saipe?get=NAME,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEPOV0_17_PT,SAEPOVRT0_17_PT,SAEMHI_PT&for={geography}:*&YEAR={year}"
+      url: "https://api.census.gov/data/timeseries/poverty/saipe?get=NAME,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEPOV0_17_PT,SAEPOVRT0_17_PT,SAEMHI_PT&for={geography}:*&YEAR={year}&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2775,7 +2775,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/healthins/sahie?get=NAME,NIC_PT,NUI_PT,PCTIC_PT,PCTUI_PT&for={geography}:*&time={year}"
+      url: "https://api.census.gov/data/timeseries/healthins/sahie?get=NAME,NIC_PT,NUI_PT,PCTIC_PT,PCTUI_PT&for={geography}:*&time={year}&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2864,7 +2864,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/bds?get=NAME,JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTAB,FIRM,EMP&for={geography}:*&YEAR={year}"
+      url: "https://api.census.gov/data/timeseries/bds?get=NAME,JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTAB,FIRM,EMP&for={geography}:*&YEAR={year}&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -2941,7 +2941,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/abscs?get=NAME,FIRMPDEMP,RCPPDEMP,EMP,PAYANN&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/abscs?get=NAME,FIRMPDEMP,RCPPDEMP,EMP,PAYANN&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -3023,7 +3023,7 @@ partitionedTables:
     source:
       type: http
       # Uses NESTAB and NRCPTOT (N prefix for nonemployer)
-      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*"
+      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -3139,10 +3139,11 @@ partitionedTables:
       url: "https://www2.census.gov/econ/bps/State/st{year}y.txt"
       response:
         format: csv
+        hasHeader: false
+        columnNames: "column0,column1,column2,column3,column4,column5,column6,column7,column8,column9,column10,column11,column12,column13,column14,column15,column16,column17,column18,column19,column20,column21,column22,column23,column24,column25,column26,column27,column28"
       rawCache:
         enabled: true
       # Filter to only include data rows (6-digit survey_date in first column)
-      # and state-level data (2-digit FIPS, not US/R1-R4/D1-D9)
       rowFilter:
         column: column0
         pattern: '^\d{6}$'
@@ -3240,7 +3241,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for=state:{state}&time={time}"
+      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for=state:{state}&time={time}&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -3427,7 +3428,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/intltrade/exports/enduse?get=CTY_CODE,CTY_NAME,ALL_VAL_YR&time={time}&E_ENDUSE=0"
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/enduse?get=CTY_CODE,CTY_NAME,ALL_VAL_YR&time={time}&E_ENDUSE=0&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json
@@ -3502,7 +3503,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/intltrade/imports/enduse?get=CTY_CODE,CTY_NAME,GEN_VAL_YR&time={time}&I_ENDUSE=0"
+      url: "https://api.census.gov/data/timeseries/intltrade/imports/enduse?get=CTY_CODE,CTY_NAME,GEN_VAL_YR&time={time}&I_ENDUSE=0&key=${API_DATA_GOV}"
       method: GET
       response:
         format: json

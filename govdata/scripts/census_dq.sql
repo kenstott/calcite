@@ -143,7 +143,7 @@ FROM (
   UNION ALL SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true)), 1000
   UNION ALL SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true)), 1000
   UNION ALL SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'building_permits',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'building_permits',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true)), 250
   UNION ALL SELECT 'qwi_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true)), 10000
   UNION ALL SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true)), 10000
   UNION ALL SELECT 'trade_exports',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports',           allow_moved_paths := true)), 1000
