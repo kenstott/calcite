@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/kenstott/calcite/compare/v0.8.5...v0.9.0) (2026-05-27)
+
+
+### Features
+
+* **dq:** add isolated DQ bucket support to eliminate rclone purge Class A costs ([b785fe7](https://github.com/kenstott/calcite/commit/b785fe7721c66d217f21d272412e8d88f3c60488))
+
+
+### Bug Fixes
+
+* **dq:** handle CF bucket already-exists (10004) and first-run missing bucket in _cf_reset_bucket ([425e1e9](https://github.com/kenstott/calcite/commit/425e1e9381f1942a98de3132e4dd79b616273654))
+* **file:** decompress gzip HTTP responses before caching ([9db408d](https://github.com/kenstott/calcite/commit/9db408d7a99168afb5fe7b6edb88e8dcb35889b3))
+* **pool:** replace mapfile with while-read loop for bash 3.2 compatibility (macOS) ([8dfadd2](https://github.com/kenstott/calcite/commit/8dfadd2feea97f3d828273a4c2a8e84b36644c4c))
+
 ## [0.8.5](https://github.com/kenstott/calcite/compare/v0.8.4...v0.8.5) (2026-05-27)
 
 
