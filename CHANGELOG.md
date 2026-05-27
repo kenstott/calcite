@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5](https://github.com/kenstott/calcite/compare/v0.8.4...v0.8.5) (2026-05-27)
+
+
+### Bug Fixes
+
+* **edu:** downgrade row_count from fail to warn for release-window tables ([8ba593e](https://github.com/kenstott/calcite/commit/8ba593eee674f999b953cfb9ddd2f5b49cc3edb9))
+
 ## [0.8.4](https://github.com/kenstott/calcite/compare/v0.8.3...v0.8.4) (2026-05-27)
 
 
