@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.4](https://github.com/kenstott/calcite/compare/v0.9.3...v0.9.4) (2026-05-27)
+
+
+### Bug Fixes
+
+* **ci:** dispatch release workflows after engine-v tag creation ([96e65af](https://github.com/kenstott/calcite/commit/96e65af1e90da3e1552a66fc43be4d7725cfd381))
+* **ci:** dispatch release workflows on tag ref, not main ([dbc9988](https://github.com/kenstott/calcite/commit/dbc998801a4084c8dcfee530780166083fdecb9d))
+* **dq:** isolated bucket rebuild skips all tables due to stale DQ tracker ([5c8bdde](https://github.com/kenstott/calcite/commit/5c8bddec6108b9c04f867ca5342fefd3ea550f0a))
+
 ## [0.9.3](https://github.com/kenstott/calcite/compare/v0.9.2...v0.9.3) (2026-05-27)
 
 
