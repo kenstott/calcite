@@ -40,3 +40,19 @@ jobs:
           else
             echo "${ENGINE_TAG} already exists"
           fi
+
+      # Tags created via the API by GITHUB_TOKEN do not trigger push events in other
+      # workflows. Dispatch the release CI explicitly so the jar is always built.
+      - name: Dispatch release workflows
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.release.outputs.tag_name }}"
+          BARE="${VERSION#v}"
+          gh workflow run "AskAmerica Engine" \
+            --repo "${{ github.repository }}" \
+            --field version="${BARE}"
+          gh workflow run "Publish GovData Driver" \
+            --repo "${{ github.repository }}"
+          echo "Dispatched release workflows for v${BARE}"
