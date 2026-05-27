@@ -2089,7 +2089,7 @@ partitionedTables:
       - name: state_fips
         type: string
         nullable: true
-        expression: "SUBSTRING(series, 6, 2)"
+        expression: "SUBSTRING(src.series, 6, 2)"
         comment: 2-digit state FIPS code derived from series ID (LASST{fips}...)
       - name: measure
         type: string
