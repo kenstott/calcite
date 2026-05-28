@@ -283,8 +283,11 @@ if $REBUILD; then
     # This makes each table invisible to Iceberg so the ETL re-creates it from scratch,
     # without incurring Class A per-object delete charges on the parquet data files.
     # Orphaned data files are cleaned up later by scheduled Iceberg maintenance.
-    log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
     _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
+    # Ensure DQ buckets exist (required on first run against a new store like MinIO).
+    rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}" 2>/dev/null || true
+    rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
+    log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
     for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
       log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
       rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
