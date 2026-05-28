@@ -279,10 +279,15 @@ if $REBUILD; then
     log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
     rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
   else
-    # Shared DQ bucket: purge only this schema's prefix (never delete the whole bucket —
-    # govdata-parquet-v1-dq is shared across all schemas).
-    log_info "$WORKER_ID: --rebuild: purging r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}"
-    rclone purge "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null || true
+    # Shared DQ bucket: delete only Iceberg metadata directories per table.
+    # This makes each table invisible to Iceberg so the ETL re-creates it from scratch,
+    # without incurring Class A per-object delete charges on the parquet data files.
+    # Orphaned data files are cleaned up later by scheduled Iceberg maintenance.
+    log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
+    for table in $(rclone lsd "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
+      log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
+      rclone purge "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
+    done
     export FORCE=true
     export FORCE_FRESH=true
     # Redirect ETL writes to the DQ bucket and its companion tracker.
