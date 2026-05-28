@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.13](https://github.com/kenstott/calcite/compare/v0.9.12...v0.9.13) (2026-05-28)
+
+
+### Bug Fixes
+
+* **etl:** use raw response body directly when rawCache is disabled ([528d4f2](https://github.com/kenstott/calcite/commit/528d4f23292a543a6357736699cabb387c67fca2))
+
 ## [0.9.12](https://github.com/kenstott/calcite/compare/v0.9.11...v0.9.12) (2026-05-28)
 
 
