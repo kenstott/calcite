@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.16](https://github.com/kenstott/calcite/compare/v0.9.15...v0.9.16) (2026-05-28)
+
+
+### Bug Fixes
+
+* **edu:** extend DQ start year from N-2 to N-6 to load biennial table history ([ca8ef07](https://github.com/kenstott/calcite/commit/ca8ef0755a3ef633a60bacc4d19bb02bf271adc4))
+
 ## [0.9.15](https://github.com/kenstott/calcite/compare/v0.9.14...v0.9.15) (2026-05-28)
 
 
