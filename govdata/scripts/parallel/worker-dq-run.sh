@@ -284,9 +284,10 @@ if $REBUILD; then
     # without incurring Class A per-object delete charges on the parquet data files.
     # Orphaned data files are cleaned up later by scheduled Iceberg maintenance.
     log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
-    for table in $(rclone lsd "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
+    _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
+    for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
       log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
-      rclone purge "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
+      rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
     done
     export FORCE=true
     export FORCE_FRESH=true
@@ -297,7 +298,7 @@ if $REBUILD; then
 
   # 3. Delete existing DQ results so the post-ETL run starts clean.
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
-  rclone purge "r2:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
+  rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
 
   # 4. Run historical ETL pass.
   log_info "$WORKER_ID: --rebuild: running historical ETL for schema=$SCHEMA"
@@ -350,7 +351,7 @@ if [ -n "${GOVDATA_PARQUET_DIR:-}" ]; then
 fi
 
 # Check for deprecated source= partition on S3
-deprecated_path="r2:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
+deprecated_path="${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
 deprecated_check=$(rclone ls "$deprecated_path" 2>/dev/null | head -1 || true)
 if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
@@ -455,7 +456,7 @@ if $DRY_RUN; then
 else
   log_info "$WORKER_ID: uploading results to $S3_RESULT_PATH"
   # rclone copyto uploads a single file to an exact destination path (not a directory)
-  rclone copyto "$RESULT_LOCAL" "r2:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+  rclone copyto "$RESULT_LOCAL" "${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
   log_info "$WORKER_ID: results written to $S3_RESULT_PATH"
 fi
 

@@ -114,6 +114,7 @@ govdata-production-cache/
 govdata/src/test/java/org/apache/calcite/adapter/govdata/econ/EconDataValidationTest.java
 *.deb
 govdata/.env.prod
+govdata/.env.dq
 
 # Generated/runtime files
 govdata/runs/
