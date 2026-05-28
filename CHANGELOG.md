@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.9](https://github.com/kenstott/calcite/compare/v0.9.8...v0.9.9) (2026-05-28)
+
+
+### Bug Fixes
+
+* **econ:** exclude dataset-constant columns from all_same_value and stale-null value from all_null_cols ([f219e8c](https://github.com/kenstott/calcite/commit/f219e8cf149a7950536b25010b53b64790236f5b))
+
 ## [0.9.8](https://github.com/kenstott/calcite/compare/v0.9.7...v0.9.8) (2026-05-28)
 
 
