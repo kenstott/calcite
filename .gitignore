@@ -115,6 +115,7 @@ govdata/src/test/java/org/apache/calcite/adapter/govdata/econ/EconDataValidation
 *.deb
 govdata/.env.prod
 govdata/.env.dq
+govdata/.env.preprod
 
 # Generated/runtime files
 govdata/runs/
