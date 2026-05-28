@@ -478,7 +478,7 @@ public class EtlPipeline {
       // expensive full-bucket batch scan and treat all combinations as unprocessed.
       // This covers fresh rebuilds where the tracker was cleared but batch parquet
       // files from other schemas remain, making the glob scan very slow.
-      if (!forceReprocessAll && !usePartitionedExpansion
+      if (!forceReprocessAll
           && materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
           && !verifyDataExists(pipelineName, config)) {
@@ -1866,7 +1866,8 @@ public class EtlPipeline {
       }
 
       if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
-        // For Iceberg, check metadata directory exists (indicates table was created).
+        // For Iceberg, check data directory exists — metadata dir alone means an empty table
+        // (current-snapshot-id: -1) created but never written to, which counts as no data.
         // When warehousePath is configured, Iceberg stores data there, not baseDirectory.
         String icebergBase = baseDirectory;
         if (materializeConfig.getIceberg() != null
@@ -1874,15 +1875,15 @@ public class EtlPipeline {
             && !materializeConfig.getIceberg().getWarehousePath().isEmpty()) {
           icebergBase = materializeConfig.getIceberg().getWarehousePath();
         }
-        String metadataPath = icebergBase + "/" + pipelineName + "/metadata";
-        if (storageProvider.isDirectory(metadataPath)) {
-          LOGGER.debug("Verified Iceberg metadata exists at {}", metadataPath);
+        String dataPath = icebergBase + "/" + pipelineName + "/data";
+        if (storageProvider.isDirectory(dataPath)) {
+          LOGGER.debug("Verified Iceberg data exists at {}", dataPath);
           return true;
         }
         if (!icebergBase.equals(baseDirectory)) {
-          String fallbackPath = baseDirectory + "/" + pipelineName + "/metadata";
+          String fallbackPath = baseDirectory + "/" + pipelineName + "/data";
           if (storageProvider.isDirectory(fallbackPath)) {
-            LOGGER.debug("Verified Iceberg metadata exists at fallback {}", fallbackPath);
+            LOGGER.debug("Verified Iceberg data exists at fallback {}", fallbackPath);
             return true;
           }
         }
