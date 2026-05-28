@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.12](https://github.com/kenstott/calcite/compare/v0.9.11...v0.9.12) (2026-05-28)
+
+
+### Bug Fixes
+
+* **dq:** run-all-dq always bypasses release windows so tables load regardless of month ([35de1de](https://github.com/kenstott/calcite/commit/35de1dea5910349b70094a87e21bad3ca8b8ed56))
+
 ## [0.9.11](https://github.com/kenstott/calcite/compare/v0.9.10...v0.9.11) (2026-05-28)
 
 
