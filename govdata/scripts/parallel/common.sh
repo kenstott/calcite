@@ -854,7 +854,7 @@ get_dq_start_year() {
   local schema=$1
   case "$schema" in
     energy)   echo 2022 ;;  # SEDS 2-year publication lag
-    edu)      echo $(( $(date +%Y) - 2 )) ;;  # dataLag=2; must be ≤ N-2 or yearRange is empty
+    edu)      echo $(( $(date +%Y) - 6 )) ;;  # 6-year lookback: covers ipeds_tuition maxYear=2021, crdc biennial 2022, naep biennial 2022+2024
     lands)    echo 2023 ;;  # forest inventory biennial
     census)   echo 2022 ;;  # ACS 5-year span
     patents)  echo 2025 ;;  # only current year published
