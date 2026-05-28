@@ -211,5 +211,13 @@ while true; do
   wait "$SAVED_PID" 2>/dev/null || pool_exit=$?
   POOL_PID=""
   log_info "run-all-dq: pool finished (exit=$pool_exit)"
+
+  # On pre-prod (MinIO), promote validated data to R2 after a clean pool exit.
+  _env_preprod="$SCRIPT_DIR/../../.env.preprod"
+  if [ -f "$_env_preprod" ] && [ "$pool_exit" -eq 0 ]; then
+    log_info "run-all-dq: pre-prod environment detected — promoting validated data to R2"
+    "$SCRIPT_DIR/promote-to-r2.sh" || log_info "run-all-dq: WARNING: promotion to R2 failed (data remains valid on MinIO)"
+  fi
+
   exit $pool_exit
 done
