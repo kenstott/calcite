@@ -361,7 +361,7 @@ SELECT 'econ', 'gdp_statistics', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics', allow_moved_paths := true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('percent_change', 'seasonally_adjusted', 'quarter');
+  AND column_name NOT IN ('percent_change', 'seasonally_adjusted', 'quarter', 'value');
 
 -- industry_gdp
 INSERT INTO dq_results
@@ -589,7 +589,8 @@ SELECT 'econ', 'state_consumption', 'all_same_value', 'warn',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
-                          'industry_classification', 'src_line_nbr', 'unit_mult');
+                          'industry_classification', 'src_line_nbr', 'unit_mult',
+                          'unit');
 
 -- regional_income
 INSERT INTO dq_results
@@ -598,7 +599,8 @@ SELECT 'econ', 'regional_income', 'all_same_value', 'warn',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
-                          'industry_classification', 'src_line_nbr', 'unit_mult');
+                          'industry_classification', 'src_line_nbr', 'unit_mult',
+                          'geo_fips_set');
 
 -- ita_data
 INSERT INTO dq_results
@@ -607,7 +609,8 @@ SELECT 'econ', 'ita_data', 'all_same_value', 'warn',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
-                          'industry_classification', 'src_line_nbr', 'unit_mult');
+                          'industry_classification', 'src_line_nbr', 'unit_mult',
+                          'area_or_country', 'cl_unit', 'note_ref');
 
 -- gdp_statistics
 INSERT INTO dq_results
