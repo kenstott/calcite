@@ -263,43 +263,23 @@ _cf_reset_bucket() {
 if $REBUILD; then
   log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA (bucket=$GOVDATA_DQ_BUCKET)"
 
-  if [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
-    # Production bucket: per-object tracker cleanup + rclone purge (original behaviour).
-    # 1. Discover existing Iceberg tables so we know which tracker type= entries to remove.
-    ICEBERG_TABLES=$(rclone lsd "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true)
-    if [ -n "$ICEBERG_TABLES" ]; then
-      for table in $ICEBERG_TABLES; do
-        log_info "$WORKER_ID: --rebuild: removing tracker entries for type=$table"
-        rclone delete r2:govdata-tracker-v1 \
-          --include "/year=*/source_key=*__type=${table}*/**" \
-          2>/dev/null || true
-      done
-    else
-      log_info "$WORKER_ID: --rebuild: no Iceberg tables found — skipping tracker cleanup"
-    fi
-    # 2. Delete Iceberg data (raw cache at r2:govdata-raw-v1 is intentionally preserved).
-    log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
-    rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
-  else
-    # Shared DQ bucket: delete only Iceberg metadata directories per table.
-    # This makes each table invisible to Iceberg so the ETL re-creates it from scratch,
-    # without incurring Class A per-object delete charges on the parquet data files.
-    # Orphaned data files are cleaned up later by scheduled Iceberg maintenance.
-    _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
-    # Ensure DQ buckets exist (required on first run against a new store like MinIO).
-    rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}" 2>/dev/null || true
-    rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
-    log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
-    for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
-      log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
-      rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
-    done
-    export FORCE=true
-    export FORCE_FRESH=true
-    # Redirect ETL writes to the DQ bucket and its companion tracker.
-    export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
-    export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
-  fi
+  # Delete only Iceberg metadata directories per table — avoids Class A per-object
+  # delete charges on parquet data files. Tables become invisible to Iceberg so the
+  # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
+  _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
+  # Ensure DQ buckets exist (required on first run against a new store like MinIO).
+  rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}" 2>/dev/null || true
+  rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
+  log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
+  for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
+    log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
+    rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
+  done
+  export FORCE=true
+  export FORCE_FRESH=true
+  # Redirect ETL writes to the DQ bucket and its companion tracker.
+  export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
+  export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
 
   # 3. Delete existing DQ results so the post-ETL run starts clean.
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
