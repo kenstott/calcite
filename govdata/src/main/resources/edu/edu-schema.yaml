@@ -864,7 +864,6 @@ partitionedTables:
         type: year_range
         start: "${GOVDATA_START_YEAR:2013}"
         minYear: 2013
-        maxYear: 2021
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -1168,7 +1167,6 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
-        maxYear: 2022
 
     materialize:
       enabled: true
@@ -1401,7 +1399,6 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
-        maxYear: 2023
       fiscal_yy1:
         type: custom
       fiscal_yy2:
