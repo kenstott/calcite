@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/kenstott/calcite/compare/v0.9.9...v0.9.10) (2026-05-28)
+
+
+### Bug Fixes
+
+* **econ:** suppress existence and row_count WARNs for BLS-blocked jolts endpoints ([30fa055](https://github.com/kenstott/calcite/commit/30fa055d7f7053f42ca06b2b671f1c70ba32c6dd))
+
 ## [0.9.9](https://github.com/kenstott/calcite/compare/v0.9.8...v0.9.9) (2026-05-28)
 
 
