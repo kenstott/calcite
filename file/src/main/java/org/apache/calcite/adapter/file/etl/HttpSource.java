@@ -1265,16 +1265,28 @@ public class HttpSource implements DataSource {
     if (isLocalPath(cachePath)) {
       File file = new File(cachePath);
       file.getParentFile().mkdirs();
-      byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-      Files.write(Paths.get(cachePath), bytes);
-      LOGGER.info("Cached response (local): {} ({} bytes)", cachePath, bytes.length);
+      try (java.io.Writer w = new java.io.BufferedWriter(
+          new java.io.OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+        w.write(response);
+      }
+      LOGGER.info("Cached response (local): {}", cachePath);
       return cachePath;
     }
     String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
     storageProvider.createDirectories(parentPath);
-    byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-    storageProvider.writeFile(cachePath, new ByteArrayInputStream(bytes));
-    LOGGER.info("Cached response: {} ({} bytes)", cachePath, bytes.length);
+    File tmpCache = File.createTempFile("cache-str-", ".tmp");
+    try {
+      try (java.io.Writer w = new java.io.BufferedWriter(
+          new java.io.OutputStreamWriter(new FileOutputStream(tmpCache), StandardCharsets.UTF_8))) {
+        w.write(response);
+      }
+      try (InputStream is = new java.io.FileInputStream(tmpCache)) {
+        storageProvider.writeFile(cachePath, is);
+      }
+    } finally {
+      tmpCache.delete();
+    }
+    LOGGER.info("Cached response: {}", cachePath);
     return cachePath;
   }
 

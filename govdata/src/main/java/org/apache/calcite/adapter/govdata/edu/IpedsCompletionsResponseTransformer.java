@@ -11,38 +11,40 @@
 package org.apache.calcite.adapter.govdata.edu;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
- * Transforms NCES IPEDS Completions bulk CSV responses.
+ * Streaming transformer for NCES IPEDS Completions bulk CSV ({@code C{year}_A.zip}).
  *
- * <p>NCES distributes Completions data as ZIP archives (C{year}_A.zip) containing
- * wide-format CSV files. Each row represents one (unitid, cipcode, majornum, award_level)
- * combination with race/ethnicity and sex counts as separate columns. This transformer:
- * <ol>
- *   <li>Parses the CSV (reuses {@link IpedsFinancialsResponseTransformer#parseCsv})</li>
- *   <li>Skips X-prefixed imputation flag columns</li>
- *   <li>Maps NCES uppercase column names to canonical schema column names</li>
- *   <li>Injects {@code year} from the URL dimension context</li>
- * </ol>
+ * <p>Downloads the ZIP, locates the CSV entry (preferring the {@code _rv} revised file),
+ * and streams rows lazily one at a time. Memory is O(one CSV row) regardless of file size.
+ *
+ * <p>Wide format: one row per (unitid, year, cipcode, majornum, award_level) with
+ * race/ethnicity and sex counts as separate columns. {@code year} is injected from
+ * the URL dimension context.
  */
-public class IpedsCompletionsResponseTransformer implements ResponseTransformer {
+public class IpedsCompletionsResponseTransformer implements StreamingResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(IpedsCompletionsResponseTransformer.class);
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final Map<String, String> COLUMN_MAP;
 
@@ -85,85 +87,139 @@ public class IpedsCompletionsResponseTransformer implements ResponseTransformer 
     COLUMN_MAP = Collections.unmodifiableMap(m);
   }
 
-  @Override public String transform(String response, RequestContext context) {
-    if (response == null || response.isEmpty()) {
-      LOGGER.warn("IPEDS Completions: empty response for {}", context.getUrl());
-      return "[]";
-    }
-
+  @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
+      throws IOException {
     String yearStr = context.getDimensionValues().get("year");
 
-    try {
-      List<String[]> rows = IpedsFinancialsResponseTransformer.parseCsv(response);
-      if (rows.size() < 2) {
-        LOGGER.debug("IPEDS Completions: no data rows for year={}", yearStr);
-        return "[]";
-      }
+    File tempZip = IpedsFinancialsResponseTransformer.downloadToTemp(context.getUrl());
+    ZipEntry entry = findCsvEntry(new ZipFile(tempZip), yearStr);
+    if (entry == null) {
+      tempZip.delete();
+      LOGGER.warn("IpedsCompletions: no CSV in ZIP for year={}", yearStr);
+      return Collections.emptyIterator();
+    }
 
-      String[] header = rows.get(0);
-      for (int i = 0; i < header.length; i++) {
-        String h = header[i].trim().toUpperCase();
-        if (i == 0 && !h.isEmpty() && h.charAt(0) == '﻿') {
-          h = h.substring(1);
+    ZipFile zf = new ZipFile(tempZip);
+    BufferedReader reader = new BufferedReader(
+        new InputStreamReader(zf.getInputStream(zf.getEntry(entry.getName())),
+            StandardCharsets.UTF_8));
+    return new LazyCompletionsIterator(reader, zf, tempZip, yearStr);
+  }
+
+  private ZipEntry findCsvEntry(ZipFile zf, String yearStr) throws IOException {
+    String year = yearStr == null ? "" : yearStr.toLowerCase();
+    ZipEntry preferred = null;
+    ZipEntry fallback = null;
+    Enumeration<? extends ZipEntry> entries = zf.entries();
+    while (entries.hasMoreElements()) {
+      ZipEntry e = entries.nextElement();
+      String name = e.getName().toLowerCase();
+      if (name.startsWith("c" + year + "_a") && name.endsWith(".csv")) {
+        if (name.contains("_rv") || name.contains("_r")) {
+          preferred = e;
+        } else if (fallback == null) {
+          fallback = e;
         }
-        header[i] = h;
       }
+    }
+    zf.close();
+    return preferred != null ? preferred : fallback;
+  }
 
-      ArrayNode out = MAPPER.createArrayNode();
-      for (int r = 1; r < rows.size(); r++) {
-        String[] values = rows.get(r);
-        ObjectNode row = MAPPER.createObjectNode();
+  private static final class LazyCompletionsIterator implements Iterator<Map<String, Object>> {
+    private final BufferedReader reader;
+    private final ZipFile zipFile;
+    private final File tempZip;
+    private final String yearStr;
+    private final String[] header;
+    private Map<String, Object> next;
+    private boolean closed;
 
+    LazyCompletionsIterator(BufferedReader reader, ZipFile zipFile, File tempZip,
+        String yearStr) throws IOException {
+      this.reader = reader;
+      this.zipFile = zipFile;
+      this.tempZip = tempZip;
+      this.yearStr = yearStr;
+
+      String headerLine = reader.readLine();
+      if (headerLine == null) {
+        this.header = new String[0];
+        close();
+      } else {
+        if (!headerLine.isEmpty() && headerLine.charAt(0) == '﻿') {
+          headerLine = headerLine.substring(1);
+        }
+        String[] raw = IpedsFinancialsResponseTransformer.parseCsvLine(headerLine);
+        for (int i = 0; i < raw.length; i++) {
+          raw[i] = raw[i].trim().toUpperCase();
+        }
+        this.header = raw;
+        advance();
+      }
+    }
+
+    private void advance() {
+      if (closed) {
+        next = null;
+        return;
+      }
+      try {
+        String line = reader.readLine();
+        if (line == null) {
+          close();
+          next = null;
+          return;
+        }
+        String[] values = IpedsFinancialsResponseTransformer.parseCsvLine(line);
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
         if (yearStr != null) {
-          try {
-            row.put("year", Integer.parseInt(yearStr));
-          } catch (NumberFormatException e) {
-            LOGGER.warn("IPEDS Completions: non-integer year '{}' for {}", yearStr,
-                context.getUrl());
-          }
+          try { row.put("year", Integer.parseInt(yearStr)); } catch (NumberFormatException e) { /**/ }
         }
-
         for (int c = 0; c < header.length && c < values.length; c++) {
           String col = header[c];
-
-          if (col.startsWith("X")) {
-            continue;
-          }
-
+          if (col.startsWith("X")) continue;
           String canonical = COLUMN_MAP.get(col);
-          if (canonical == null) {
-            continue;
-          }
-
-          String rawValue = values[c].trim();
-          if (rawValue.isEmpty()) {
-            row.putNull(canonical);
-            continue;
-          }
-
-          if ("cipcode".equals(canonical)) {
-            row.put(canonical, rawValue);
+          if (canonical == null) continue;
+          String raw = values[c].trim();
+          if (raw.isEmpty()) {
+            row.put(canonical, null);
+          } else if ("cipcode".equals(canonical)) {
+            row.put(canonical, raw);
+          } else if ("unitid".equals(canonical) || "majornum".equals(canonical)
+              || "award_level".equals(canonical)) {
+            try { row.put(canonical, Integer.parseInt(raw)); } catch (NumberFormatException e) { row.put(canonical, null); }
           } else {
-            try {
-              row.put(canonical, Integer.parseInt(rawValue));
-            } catch (NumberFormatException e) {
-              row.putNull(canonical);
-            }
+            try { row.put(canonical, Integer.parseInt(raw)); } catch (NumberFormatException e) { row.put(canonical, null); }
           }
         }
-
-        if (row.has("unitid") && !row.path("unitid").isNull()) {
-          out.add(row);
+        if (row.get("unitid") != null) {
+          next = row;
+        } else {
+          advance();
         }
+      } catch (IOException e) {
+        close();
+        next = null;
       }
+    }
 
-      LOGGER.debug("IPEDS Completions: {} rows for year={}", out.size(), yearStr);
-      return out.toString();
+    private void close() {
+      if (!closed) {
+        closed = true;
+        try { reader.close(); } catch (IOException ignored) { /**/ }
+        try { zipFile.close(); } catch (IOException ignored) { /**/ }
+        tempZip.delete();
+      }
+    }
 
-    } catch (Exception e) {
-      LOGGER.error("IPEDS Completions: transform failed for {}: {}", context.getUrl(),
-          e.getMessage());
-      return "[]";
+    @Override public boolean hasNext() { return next != null; }
+
+    @Override public Map<String, Object> next() {
+      if (next == null) throw new NoSuchElementException();
+      Map<String, Object> result = next;
+      advance();
+      return result;
     }
   }
 }
