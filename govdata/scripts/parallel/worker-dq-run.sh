@@ -20,6 +20,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
+_env_dq="$SCRIPT_DIR/../../.env.dq"
+if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 SCHEMA="${1:-}"
@@ -259,11 +261,6 @@ _cf_reset_bucket() {
 
 # ── rebuild: teardown + ETL before DQ ────────────────────────────────────────
 if $REBUILD; then
-  # Apply DQ-machine overrides (MinIO endpoint etc.) only during rebuild — not during
-  # plain DQ checks where the data may still live on the original store (R2).
-  _env_dq="$SCRIPT_DIR/../../.env.dq"
-  if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
-
   log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA (bucket=$GOVDATA_DQ_BUCKET)"
 
   if [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
