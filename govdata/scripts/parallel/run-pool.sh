@@ -710,4 +710,13 @@ if $RUN_EMBEDDINGS; then
   log_info "Embeddings: complete"
 fi
 
+# On pre-prod (MinIO), promote validated data to R2 after all schemas complete.
+_env_preprod="$SCRIPT_DIR/../../.env.preprod"
+if [ -f "$_env_preprod" ]; then
+  log_info "Pre-prod pool complete — promoting to R2"
+  "$SCRIPT_DIR/promote-to-r2.sh" \
+    && log_info "Promotion to R2 complete" \
+    || log_info "WARNING: promotion to R2 failed (data remains valid on MinIO)"
+fi
+
 exit 0
