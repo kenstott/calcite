@@ -855,10 +855,6 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
-      incremental:
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2013}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer"
@@ -868,7 +864,7 @@ partitionedTables:
         type: year_range
         start: "${GOVDATA_START_YEAR:2013}"
         minYear: 2013
-        dataLag: 2
+        maxYear: 2021
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -1163,10 +1159,6 @@ partitionedTables:
         skipOn: [500]
       rawCache:
         enabled: true
-      incremental:
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer"
@@ -1176,7 +1168,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
-        dataLag: 3
+        maxYear: 2022
 
     materialize:
       enabled: true
@@ -1399,10 +1391,6 @@ partitionedTables:
         retryOn: [500, 503]
       rawCache:
         enabled: true
-      incremental:
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer"
@@ -1413,6 +1401,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2015}"
         minYear: 2015
+        maxYear: 2023
       fiscal_yy1:
         type: custom
       fiscal_yy2:
@@ -1527,10 +1516,6 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
-      incremental:
-        yearParam: "year"
-        yearRange:
-          start: "${GOVDATA_START_YEAR:2015}"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer"
