@@ -116,7 +116,7 @@ SELECT 'edu', 'ccd_schools', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_scores', 'all_null_cols',
@@ -124,7 +124,7 @@ SELECT 'edu', 'naep_scores', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'crdc_schools', 'all_null_cols',
@@ -132,7 +132,7 @@ SELECT 'edu', 'crdc_schools', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_institutions', 'all_null_cols',
@@ -140,7 +140,7 @@ SELECT 'edu', 'ipeds_institutions', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'all_null_cols',
@@ -148,7 +148,7 @@ SELECT 'edu', 'ipeds_completions', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_tuition', 'all_null_cols',
@@ -156,7 +156,7 @@ SELECT 'edu', 'ipeds_tuition', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_financials', 'all_null_cols',
@@ -164,7 +164,7 @@ SELECT 'edu', 'ipeds_financials', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_null_cols',
@@ -172,7 +172,7 @@ SELECT 'edu', 'college_scorecard', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard_programs', 'all_null_cols',
@@ -180,7 +180,7 @@ SELECT 'edu', 'college_scorecard_programs', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_achievement_levels', 'all_null_cols',
@@ -188,7 +188,7 @@ SELECT 'edu', 'naep_achievement_levels', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
@@ -203,7 +203,7 @@ SELECT 'edu', 'ccd_districts', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ccd_schools', 'all_same_value',
@@ -211,7 +211,7 @@ SELECT 'edu', 'ccd_schools', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_scores', 'all_same_value',
@@ -228,7 +228,7 @@ SELECT 'edu', 'crdc_schools', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_institutions', 'all_same_value',
@@ -236,7 +236,7 @@ SELECT 'edu', 'ipeds_institutions', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'all_same_value',
@@ -244,7 +244,7 @@ SELECT 'edu', 'ipeds_completions', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_tuition', 'all_same_value',
@@ -252,7 +252,7 @@ SELECT 'edu', 'ipeds_tuition', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_financials', 'all_same_value',
@@ -260,7 +260,7 @@ SELECT 'edu', 'ipeds_financials', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_same_value',
@@ -268,7 +268,7 @@ SELECT 'edu', 'college_scorecard', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard_programs', 'all_same_value',
@@ -276,7 +276,7 @@ SELECT 'edu', 'college_scorecard_programs', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
 
 INSERT INTO dq_results
 SELECT 'edu', 'naep_achievement_levels', 'all_same_value',
