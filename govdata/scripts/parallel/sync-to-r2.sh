@@ -29,17 +29,25 @@ DRY_RUN=false
 
 MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"
 R2_REMOTE="r2"
+SYNC_STAMP="${HOME}/.r2-last-sync"
 
-# MinIO production buckets → R2 production buckets (same names)
+# Compute --min-age from the local sentinel so we only look at source
+# modification times — no LIST or GET ops on R2 at all.
+_now=$(date +%s)
+_last=$(cat "$SYNC_STAMP" 2>/dev/null || echo 0)
+_elapsed=$(( _now - _last ))
+# Add 60s buffer so files written right at the sentinel boundary aren't missed.
+_age=$(( _elapsed > 60 ? _elapsed - 60 : 0 ))
+
 BUCKETS=(
   "govdata-parquet-v1"
   "govdata-tracker-v1"
 )
 
-_flags="--update --transfers 16 --checkers 32 --stats 60s"
+_flags="--min-age ${_age}s --transfers 16 --stats 60s"
 $DRY_RUN && _flags="$_flags --dry-run"
 
-log_info "sync-to-r2: starting daily sync ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
+log_info "sync-to-r2: syncing files newer than ${_age}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
 for bucket in "${BUCKETS[@]}"; do
   log_info "sync-to-r2: $bucket"
@@ -49,5 +57,10 @@ for bucket in "${BUCKETS[@]}"; do
   done
   log_info "sync-to-r2: $bucket done"
 done
+
+# Update sentinel only on live runs
+if ! $DRY_RUN; then
+  echo "$_now" > "$SYNC_STAMP"
+fi
 
 log_info "sync-to-r2: complete"

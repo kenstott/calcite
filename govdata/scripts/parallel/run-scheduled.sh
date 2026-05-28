@@ -155,7 +155,7 @@ if [ -f "$_env_preprod" ]; then
       log_error "INFO: daily R2 sync starting"
       "$SCRIPT_DIR/sync-to-r2.sh" \
         && log_error "INFO: daily R2 sync complete" \
-        || log_error "WARNING: R2 sync failed"
+        || log_error "WARNING: R2 sync failed (will retry next cycle)"
     done
   ) &
   _sync_pid=$!
