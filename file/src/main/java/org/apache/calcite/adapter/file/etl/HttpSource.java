@@ -440,9 +440,12 @@ public class HttpSource implements DataSource {
         return parseFixedWidthResponseStreaming(cachePath);
       }
 
-      // For JSON, read from cache, transform, and parse
-      // cachePath is "" when skipResponseBody=true; skip readFromCache in that case
-      String content = cachePath.isEmpty() ? "" : readFromCache(cachePath);
+      // For JSON, read from cache, transform, and parse.
+      // When rawCacheFilePath is null (rawCache disabled), executeRequest returns the raw
+      // response body directly (not a path) — use it as-is.
+      // When skipResponseBody=true, cachePath is "" — no content.
+      String content = rawCacheFilePath == null ? cachePath
+          : (cachePath.isEmpty() ? "" : readFromCache(cachePath));
       content = transformResponse(content, url, params, variables);
       List<Map<String, Object>> data = parseResponse(content);
       data = normalizeRecords(data, variables);
