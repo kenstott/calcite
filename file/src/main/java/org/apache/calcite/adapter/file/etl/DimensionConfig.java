@@ -403,11 +403,7 @@ public class DimensionConfig {
       }
     }
 
-    // Support both "dataLag" and "lagYears" (YAML convention)
     Object dataLagObj = map.get("dataLag");
-    if (dataLagObj == null) {
-      dataLagObj = map.get("lagYears");
-    }
     if (dataLagObj instanceof Number) {
       builder.dataLag(((Number) dataLagObj).intValue());
     } else if (dataLagObj instanceof String) {
