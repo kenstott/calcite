@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.6](https://github.com/kenstott/calcite/compare/v0.9.5...v0.9.6) (2026-05-27)
+
+
+### Bug Fixes
+
+* **econ:** add src. prefix to regional_employment state_fips SUBSTRING expression ([d3105ef](https://github.com/kenstott/calcite/commit/d3105efa1e37186d32f8243818bb3d6286ca8e72))
+* **econ:** adjust DQ thresholds, null exclusions, and JOLTS warn level ([8d8ee5b](https://github.com/kenstott/calcite/commit/8d8ee5bdc70d94e887a02c1b0e4ac66844164956))
+
 ## [0.9.5](https://github.com/kenstott/calcite/compare/v0.9.4...v0.9.5) (2026-05-27)
 
 
