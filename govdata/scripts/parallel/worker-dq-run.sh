@@ -267,9 +267,14 @@ if $REBUILD; then
   # delete charges on parquet data files. Tables become invisible to Iceberg so the
   # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
   _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
-  # Ensure DQ buckets exist (required on first run against a new store like MinIO).
-  rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}" 2>/dev/null || true
-  rclone mkdir "${_DQ_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
+  # Ensure DQ buckets exist. Use aws s3 mb with the same endpoint as the Java ETL
+  # so bucket state is consistent. BucketAlreadyOwnedByYou is not an error.
+  _aws_ep="${AWS_ENDPOINT_OVERRIDE:-}"
+  _aws_ep_flag=""
+  [ -n "$_aws_ep" ] && _aws_ep_flag="--endpoint-url $_aws_ep"
+  aws $_aws_ep_flag s3 mb "s3://${GOVDATA_DQ_BUCKET}"         2>/dev/null || true
+  aws $_aws_ep_flag s3 mb "s3://${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
+  log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}"
   log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
   for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
     log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
