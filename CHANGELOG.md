@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.7](https://github.com/kenstott/calcite/compare/v0.9.6...v0.9.7) (2026-05-28)
+
+
+### Bug Fixes
+
+* **ci:** set ENGINE_TAG in dispatch step — was missing, causing 422 ([238e797](https://github.com/kenstott/calcite/commit/238e7975153cb894e9592c4be909172de2713775))
+* **econ:** exclude virtual partition columns from all_same_value DQ checks ([495aece](https://github.com/kenstott/calcite/commit/495aece71510d1225529ee43b412bbcb50c3cf7a))
+
 ## [0.9.6](https://github.com/kenstott/calcite/compare/v0.9.5...v0.9.6) (2026-05-27)
 
 
