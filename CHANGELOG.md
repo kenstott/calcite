@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.15](https://github.com/kenstott/calcite/compare/v0.9.14...v0.9.15) (2026-05-28)
+
+
+### Bug Fixes
+
+* **edu:** remove incorrect maxYear caps from completions, financials, and crdc_schools ([6e97ee7](https://github.com/kenstott/calcite/commit/6e97ee7f2cef24f0c4659f809d5af327ddb0f440))
+
 ## [0.9.14](https://github.com/kenstott/calcite/compare/v0.9.13...v0.9.14) (2026-05-28)
 
 
