@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/kenstott/calcite/compare/v0.10.1...v0.10.2) (2026-05-28)
+
+
+### Bug Fixes
+
+* **dq:** delete only Iceberg metadata dirs on rebuild, not parquet data files ([d5744b8](https://github.com/kenstott/calcite/commit/d5744b8f0dc1d0f5ae414ec07aca659a605e7b7c))
+
 ## [0.10.1](https://github.com/kenstott/calcite/compare/v0.10.0...v0.10.1) (2026-05-28)
 
 
