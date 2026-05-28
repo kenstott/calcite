@@ -1094,13 +1094,11 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      NCES IPEDS Completions survey via Urban Institute completions-cip-2 endpoint.
-      Fully disaggregated: one row per (unitid, year, fips, cipcode, award_level,
-      majornum, race, sex). Race codes: 1=nonresident alien, 2=unknown, 3=two or more,
-      4=AIAN, 5=Asian, 6=Black, 7=Hispanic, 8=NHPI, 9=White, 99=total all races.
-      Sex codes: 1=men, 2=women, 99=total. cipcode is an INTEGER (e.g. 10000 = CIP 01.0000).
-      Filter to race=99 AND sex=99 for institution-level totals only.
-      Note: cip_title is NOT in this endpoint; cipcode is integer not dotted string.
+      NCES IPEDS Completions survey (C_A bulk CSV). One row per (unitid, year, cipcode,
+      majornum, award_level). Race/ethnicity and sex counts are wide columns (ctotalt,
+      caiant, casiat, cbkaat, chispt, cnhpit, cwhitt, c2mort, cunknt, cnralt and
+      per-sex _m/_w variants). cipcode is the full 6-digit dotted string (e.g. "52.0101").
+      Source: nces.ed.gov/ipeds/datacenter/data/C{year}_A.zip. Available 2010–present.
 
     columns:
       - name: unitid
@@ -1110,52 +1108,153 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: Award year — PK component
-      - name: fips
-        type: int
-        nullable: true
-        comment: State FIPS (denormalized from institution record)
+        comment: Award year — PK component; injected from URL dimension
       - name: cipcode
-        type: int
+        type: string
         nullable: false
-        comment: CIP field of study code as integer (e.g. 10000 = CIP 01.0000, 520101 = CIP 52.0101) — PK component
-      - name: award_level
-        type: int
-        nullable: false
-        comment: Award level code — PK component; 1=<1yr cert, 2=1-2yr cert, 3=Associate, 5=Bachelor's, 7=Master's, 17=Doctoral research, 18=Doctoral professional, 19=Doctoral other
+        comment: 6-digit CIP field of study (e.g. "52.0101") — PK component
       - name: majornum
         type: int
         nullable: false
-        comment: 1=first major, 2=second major program — PK component
-      - name: race
+        comment: 1=first major, 2=second major — PK component
+      - name: award_level
         type: int
         nullable: false
-        comment: Race/ethnicity code — PK component; 1=nonresident alien, 2=unknown, 3=two or more, 4=AIAN, 5=Asian, 6=Black, 7=Hispanic, 8=NHPI, 9=White, 99=total
-      - name: sex
-        type: int
-        nullable: false
-        comment: Sex code — PK component; 1=men, 2=women, 99=total both sexes
-      - name: awards
+        comment: IPEDS award level — PK component; 1=<1yr cert, 2=1-2yr cert, 3=Associate, 5=Bachelor's, 7=Master's, 17=Doctoral research, 18=Doctoral professional, 19=Doctoral other
+      - name: ctotalt
         type: int
         nullable: true
-        comment: Count of completions for this institution/CIP/level/major/race/sex cell
+        comment: Total completions (all races, both sexes)
+      - name: ctotalm
+        type: int
+        nullable: true
+        comment: Total completions — men
+      - name: ctotalw
+        type: int
+        nullable: true
+        comment: Total completions — women
+      - name: caiant
+        type: int
+        nullable: true
+        comment: American Indian/Alaska Native — total
+      - name: caianm
+        type: int
+        nullable: true
+        comment: American Indian/Alaska Native — men
+      - name: caianw
+        type: int
+        nullable: true
+        comment: American Indian/Alaska Native — women
+      - name: casiat
+        type: int
+        nullable: true
+        comment: Asian — total
+      - name: casiam
+        type: int
+        nullable: true
+        comment: Asian — men
+      - name: casiaw
+        type: int
+        nullable: true
+        comment: Asian — women
+      - name: cbkaat
+        type: int
+        nullable: true
+        comment: Black or African American — total
+      - name: cbkaam
+        type: int
+        nullable: true
+        comment: Black or African American — men
+      - name: cbkaaw
+        type: int
+        nullable: true
+        comment: Black or African American — women
+      - name: chispt
+        type: int
+        nullable: true
+        comment: Hispanic or Latino — total
+      - name: chispm
+        type: int
+        nullable: true
+        comment: Hispanic or Latino — men
+      - name: chispw
+        type: int
+        nullable: true
+        comment: Hispanic or Latino — women
+      - name: cnhpit
+        type: int
+        nullable: true
+        comment: Native Hawaiian/Other Pacific Islander — total
+      - name: cnhpim
+        type: int
+        nullable: true
+        comment: Native Hawaiian/Other Pacific Islander — men
+      - name: cnhpiw
+        type: int
+        nullable: true
+        comment: Native Hawaiian/Other Pacific Islander — women
+      - name: cwhitt
+        type: int
+        nullable: true
+        comment: White — total
+      - name: cwhitm
+        type: int
+        nullable: true
+        comment: White — men
+      - name: cwhitw
+        type: int
+        nullable: true
+        comment: White — women
+      - name: c2mort
+        type: int
+        nullable: true
+        comment: Two or more races — total
+      - name: c2morm
+        type: int
+        nullable: true
+        comment: Two or more races — men
+      - name: c2morw
+        type: int
+        nullable: true
+        comment: Two or more races — women
+      - name: cunknt
+        type: int
+        nullable: true
+        comment: Race/ethnicity unknown — total
+      - name: cunknm
+        type: int
+        nullable: true
+        comment: Race/ethnicity unknown — men
+      - name: cunknw
+        type: int
+        nullable: true
+        comment: Race/ethnicity unknown — women
+      - name: cnralt
+        type: int
+        nullable: true
+        comment: Nonresident alien — total
+      - name: cnralm
+        type: int
+        nullable: true
+        comment: Nonresident alien — men
+      - name: cnralw
+        type: int
+        nullable: true
+        comment: Nonresident alien — women
 
     source:
       type: http
-      url: "https://educationdata.urban.org/api/v1/college-university/ipeds/completions-cip-2/{year}/"
+      url: "https://nces.ed.gov/ipeds/datacenter/data/C{year}_A.zip"
       method: GET
       response:
-        format: json
-        dataPath: "results"
-        pagination:
-          type: PAGE
-          pageSize: 10000
-          pageParam: "page"
+        format: csv
+        extractPattern: "?{year}_a_??.csv"
+        extractPatternFallback: "?{year}_a.csv"
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 1.0
         maxRetries: 2
         retryOn: [429, 503]
-        skipOn: [500]
+        skipOn: [404, 500]
       rawCache:
         enabled: true
 
@@ -1165,8 +1264,8 @@ partitionedTables:
     dimensions:
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
-        minYear: 2015
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2010
 
     materialize:
       enabled: true
