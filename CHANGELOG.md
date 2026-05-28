@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.6](https://github.com/kenstott/calcite/compare/v0.10.5...v0.10.6) (2026-05-28)
+
+
+### Bug Fixes
+
+* **census:** standardize to dataLag, fix ACS URLs to use {effective_year} ([447507d](https://github.com/kenstott/calcite/commit/447507d6829c70a0c1e90e9ed6d5acef0f2371e3))
+
 ## [0.10.5](https://github.com/kenstott/calcite/compare/v0.10.4...v0.10.5) (2026-05-28)
 
 
