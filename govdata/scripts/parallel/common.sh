@@ -47,6 +47,14 @@ load_env() {
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
 
+  local env_dq="$GOVDATA_ROOT/.env.dq"
+  if [ -f "$env_dq" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_dq"
+    set +a
+  fi
+
   local env_override="$SCRIPT_DIR/env.sh"
   if [ -f "$env_override" ]; then
     # shellcheck disable=SC1090
