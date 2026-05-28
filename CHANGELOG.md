@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.11](https://github.com/kenstott/calcite/compare/v0.9.10...v0.9.11) (2026-05-28)
+
+
+### Bug Fixes
+
+* **census:** use CENSUS_API_KEY instead of API_DATA_GOV in schema URLs ([edb0d76](https://github.com/kenstott/calcite/commit/edb0d7658f354a7ee7f61035a56fe8b988d29518))
+
 ## [0.9.10](https://github.com/kenstott/calcite/compare/v0.9.9...v0.9.10) (2026-05-28)
 
 
