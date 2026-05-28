@@ -279,15 +279,10 @@ if $REBUILD; then
     log_info "$WORKER_ID: --rebuild: purging r2:govdata-parquet-v1/$SCHEMA (raw cache preserved)"
     rclone purge "r2:govdata-parquet-v1/$SCHEMA" 2>/dev/null || true
   else
-    # Isolated DQ bucket: reset entire parquet bucket via Cloudflare API (one HTTP call).
-    # The DQ tracker bucket is NOT wiped — use FORCE_FRESH=true so the ETL passes
-    # freshStart:true, which calls clearAllCompletions on the tracker and re-ingests
-    # everything. FORCE alone only bypasses table_in_window checks, not tracker reads.
-    if [ -z "${CF_ACCOUNT_ID:-}" ] || [ -z "${CF_API_TOKEN:-}" ]; then
-      log_info "$WORKER_ID: ERROR: CF_ACCOUNT_ID and CF_API_TOKEN must be set when GOVDATA_DQ_BUCKET != govdata-parquet-v1"
-      exit 1
-    fi
-    _cf_reset_bucket "$GOVDATA_DQ_BUCKET"
+    # Shared DQ bucket: purge only this schema's prefix (never delete the whole bucket —
+    # govdata-parquet-v1-dq is shared across all schemas).
+    log_info "$WORKER_ID: --rebuild: purging r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}"
+    rclone purge "r2:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null || true
     export FORCE=true
     export FORCE_FRESH=true
     # Redirect ETL writes to the DQ bucket and its companion tracker.
