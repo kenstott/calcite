@@ -111,7 +111,7 @@ POOL_PID=""
 _STOPPING=false
 
 _start_pool() {
-  local cmd=("$SCRIPT_DIR/run-pool-persist.sh")
+  local cmd=("$SCRIPT_DIR/run-pool-persist.sh" --force)
   [ -n "$SCHEMA_FILTER" ] && cmd+=(--schema "$SCHEMA_FILTER")
   [ "${#POOL_EXTRA_ARGS[@]}" -gt 0 ] && cmd+=("${POOL_EXTRA_ARGS[@]}")
   cmd+=(dq-rebuild)
