@@ -36,6 +36,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
@@ -935,6 +937,33 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return rows;  // No transformation needed
     }
 
+    // If any column has a non-partition expression, evaluate the whole batch via DuckDB
+    // so arithmetic, CASE WHEN, and multi-field expressions all resolve correctly.
+    boolean hasDuckDbExpressions = columns.stream().anyMatch(col -> {
+      if (!col.isComputed() || col.getExpression() == null) {
+        return false;
+      }
+      String expr = col.getExpression();
+      if (partitionVariables != null) {
+        for (String key : partitionVariables.keySet()) {
+          String ph = "{" + key + "}";
+          if (expr.equals(ph) || expr.equals("'" + ph + "'")) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    if (hasDuckDbExpressions) {
+      try {
+        return transformRowsWithDuckDb(rows, columns, partitionVariables);
+      } catch (Exception e) {
+        LOGGER.warn("DuckDB expression evaluation failed, falling back to Java evaluator: {}",
+            e.getMessage());
+      }
+    }
+
     List<Map<String, Object>> transformed = new ArrayList<Map<String, Object>>(rows.size());
     for (Map<String, Object> row : rows) {
       Map<String, Object> newRow = new HashMap<String, Object>();
@@ -944,10 +973,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         Object value = null;
 
         if (col.isComputed()) {
-          // For computed columns, evaluate expressions that reference source columns
           String expr = col.getExpression();
           if (expr != null) {
-            // First check for partition variable substitution
             if (partitionVariables != null) {
               for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
                 String placeholder = "{" + pv.getKey() + "}";
@@ -957,18 +984,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
                 }
               }
             }
-
-            // If not a partition variable, try to evaluate the expression
             if (value == null) {
               value = evaluateExpression(expr, row);
             }
           }
         } else {
-          // Direct column: look up by source name
           String sourceName = col.getEffectiveSource();
           value = getValueCaseInsensitive(row, sourceName);
-
-          // If not found in row, check partition variables
           if (value == null && partitionVariables != null) {
             value = getValueCaseInsensitive(partitionVariables, targetName);
             if (value == null) {
@@ -982,7 +1004,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         }
       }
 
-      // Also add partition variables directly if not already present
       if (partitionVariables != null) {
         for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
           if (!newRow.containsKey(pv.getKey())) {
@@ -1205,6 +1226,93 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // If expression cannot be evaluated, return null (like TRY_CAST behavior)
     LOGGER.debug("Cannot evaluate expression locally: {}", expr);
     return null;
+  }
+
+  /**
+   * Evaluates column expressions for a batch of rows using DuckDB.
+   *
+   * <p>Loads the raw rows into a DuckDB in-memory table aliased as {@code src}, then runs
+   * a single SELECT that evaluates every {@code expression:} column inline. DuckDB handles
+   * arbitrary SQL — arithmetic, CASE/WHEN, string functions, multi-field TRY_CAST sums —
+   * without needing a custom Java pattern per expression type.
+   */
+  private List<Map<String, Object>> transformRowsWithDuckDb(
+      List<Map<String, Object>> rows,
+      List<ColumnConfig> columns,
+      Map<String, String> partitionVariables) throws Exception {
+    if (rows.isEmpty()) {
+      return rows;
+    }
+
+    String json = MAPPER.writeValueAsString(rows);
+    // Escape single quotes for DuckDB string literal
+    String escapedJson = json.replace("'", "''");
+
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement stmt = conn.createStatement()) {
+      stmt.execute("CREATE TEMP TABLE _src AS SELECT * FROM read_json_auto('" + escapedJson + "')");
+
+      // Build SELECT: use expression for computed columns, direct field for others.
+      // FROM _src AS src so expressions using src."FIELD" resolve against the alias.
+      StringBuilder sel = new StringBuilder("SELECT ");
+      boolean first = true;
+      for (ColumnConfig col : columns) {
+        if (!first) {
+          sel.append(", ");
+        }
+        first = false;
+        String target = col.getName().replace("\"", "\\\"");
+        if (col.isComputed() && col.getExpression() != null) {
+          String expr = col.getExpression();
+          // Resolve partition variable placeholders
+          String pvValue = null;
+          if (partitionVariables != null) {
+            for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
+              String ph = "{" + pv.getKey() + "}";
+              if (expr.equals(ph) || expr.equals("'" + ph + "'")) {
+                pvValue = pv.getValue();
+                break;
+              }
+            }
+          }
+          if (pvValue != null) {
+            sel.append("'").append(pvValue.replace("'", "''")).append("'");
+          } else {
+            sel.append("(").append(expr).append(")");
+          }
+        } else {
+          String source = col.getEffectiveSource().replace("\"", "\\\"");
+          sel.append("src.\"").append(source).append("\"");
+        }
+        sel.append(" AS \"").append(target).append("\"");
+      }
+      sel.append(" FROM _src AS src");
+
+      List<Map<String, Object>> result = new ArrayList<Map<String, Object>>(rows.size());
+      try (ResultSet rs = stmt.executeQuery(sel.toString())) {
+        ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+        while (rs.next()) {
+          Map<String, Object> row = new LinkedHashMap<String, Object>();
+          for (int i = 1; i <= colCount; i++) {
+            Object val = rs.getObject(i);
+            if (val != null) {
+              row.put(meta.getColumnLabel(i), val);
+            }
+          }
+          if (partitionVariables != null) {
+            for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
+              if (!row.containsKey(pv.getKey())) {
+                row.put(pv.getKey(), pv.getValue());
+              }
+            }
+          }
+          result.add(row);
+        }
+      }
+      LOGGER.debug("DuckDB expression evaluation: {} rows, {} columns", result.size(), columns.size());
+      return result;
+    }
   }
 
   /**
