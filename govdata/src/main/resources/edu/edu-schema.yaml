@@ -690,11 +690,15 @@ partitionedTables:
       - name: crdc_id
         type: string
         nullable: true
-        comment: CRDC school identifier (equals ncessch); chronic-absenteeism pre-2022 data may be null (backfilled by transformer going forward) — PK component
+        comment: >
+          Best available PK component for CRDC records; more properly an AK (alternate key).
+          Equals ncessch for schools in the NCES universe. Chronic-absenteeism pre-2022 data
+          may be null (transformer backfills from ncessch). For schools outside NCES
+          (private/charter), crdc_id is the only identifier; ncessch will be null instead.
       - name: ncessch
         type: string
         nullable: true
-        comment: NCES school ID — FK to ccd_schools.ncessch
+        comment: NCES school ID — FK to ccd_schools.ncessch; null for ~1,800 non-NCES schools
       - name: leaid
         type: string
         nullable: true
