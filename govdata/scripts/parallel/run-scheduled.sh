@@ -18,6 +18,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# On MinIO (pre-prod), redirect all storage to MinIO via .env.preprod.
+_env_preprod="$SCRIPT_DIR/../../.env.preprod"
+if [ -f "$_env_preprod" ]; then set -a; source "$_env_preprod"; set +a; fi
+
 LOG_DIR="$SCRIPT_DIR/runs"
 ERROR_LOG="$LOG_DIR/errors.log"
 PID_FILE="$LOG_DIR/pids/scheduled.pid"
@@ -141,7 +146,20 @@ run_window() {
 
 log_error "INFO: Perpetual runner started (PID $$), first window: $MODE"
 
+_sync_stamp="${HOME}/.r2-last-sync"
+
 while true; do
   run_window "$MODE"
   if [ "$MODE" = "historical" ]; then MODE="daily"; else MODE="historical"; fi
+
+  # On MinIO: sync new files to R2 once per day after a window completes.
+  if [ -f "$_env_preprod" ]; then
+    _now=$(date +%s)
+    _last=$(cat "$_sync_stamp" 2>/dev/null || echo 0)
+    if [ $(( _now - _last )) -ge 86400 ]; then
+      log_error "INFO: daily R2 sync starting"
+      "$SCRIPT_DIR/sync-to-r2.sh" && echo "$_now" > "$_sync_stamp" \
+        || log_error "WARNING: R2 sync failed"
+    fi
+  fi
 done

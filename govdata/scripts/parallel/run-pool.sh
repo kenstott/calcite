@@ -710,21 +710,4 @@ if $RUN_EMBEDDINGS; then
   log_info "Embeddings: complete"
 fi
 
-# On MinIO (pre-prod), sync new files to R2 once a day.
-_env_preprod="$SCRIPT_DIR/../../.env.preprod"
-if [ -f "$_env_preprod" ]; then
-  _sync_stamp="${HOME}/.r2-last-sync"
-  _now=$(date +%s)
-  _last=$(cat "$_sync_stamp" 2>/dev/null || echo 0)
-  _elapsed=$(( _now - _last ))
-  if [ "$_elapsed" -ge 86400 ]; then
-    log_info "Pool: daily R2 sync due (${_elapsed}s since last sync)"
-    "$SCRIPT_DIR/sync-to-r2.sh" \
-      && echo "$_now" > "$_sync_stamp" \
-      || log_info "Pool: WARNING: R2 sync failed"
-  else
-    log_info "Pool: R2 sync not due yet ($(( (86400 - _elapsed) / 3600 ))h remaining)"
-  fi
-fi
-
 exit 0
