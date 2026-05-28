@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/kenstott/calcite/compare/v0.10.0...v0.10.1) (2026-05-28)
+
+
+### Bug Fixes
+
+* **dq:** purge schema prefix only instead of deleting entire shared DQ bucket ([b6b0805](https://github.com/kenstott/calcite/commit/b6b080517c10e0e81f0b53b8e62ffa7306c273b0))
+
 ## [0.10.0](https://github.com/kenstott/calcite/compare/v0.9.16...v0.10.0) (2026-05-28)
 
 
