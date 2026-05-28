@@ -394,31 +394,28 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions', allow_moved_paths=true)
 );
 
--- ipeds_completions PK: unitid, year, cipcode, majornum, race, sex
--- award_level excluded — IPEDS aggregate/total rows use null award_level by convention
+-- ipeds_completions PK: unitid, year, cipcode, majornum, award_level (NCES wide format)
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'pk_nulls',
   CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
   CAST(total AS VARCHAR), '0',
   CONCAT_WS(', ',
-    CASE WHEN n1 > 0 THEN 'unitid:'   || n1 ELSE NULL END,
-    CASE WHEN n2 > 0 THEN 'year:'     || n2 ELSE NULL END,
-    CASE WHEN n3 > 0 THEN 'cipcode:'  || n3 ELSE NULL END,
-    CASE WHEN n5 > 0 THEN 'majornum:' || n5 ELSE NULL END,
-    CASE WHEN n6 > 0 THEN 'race:'     || n6 ELSE NULL END,
-    CASE WHEN n7 > 0 THEN 'sex:'      || n7 ELSE NULL END
+    CASE WHEN n1 > 0 THEN 'unitid:'      || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'year:'        || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'cipcode:'     || n3 ELSE NULL END,
+    CASE WHEN n4 > 0 THEN 'majornum:'    || n4 ELSE NULL END,
+    CASE WHEN n5 > 0 THEN 'award_level:' || n5 ELSE NULL END
   )
 FROM (
   SELECT
-    SUM(CASE WHEN unitid   IS NULL THEN 1 ELSE 0 END) AS n1,
-    SUM(CASE WHEN year     IS NULL THEN 1 ELSE 0 END) AS n2,
-    SUM(CASE WHEN cipcode  IS NULL THEN 1 ELSE 0 END) AS n3,
-    SUM(CASE WHEN majornum IS NULL THEN 1 ELSE 0 END) AS n5,
-    SUM(CASE WHEN race     IS NULL THEN 1 ELSE 0 END) AS n6,
-    SUM(CASE WHEN sex      IS NULL THEN 1 ELSE 0 END) AS n7,
+    SUM(CASE WHEN unitid      IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN year        IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN cipcode     IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN majornum    IS NULL THEN 1 ELSE 0 END) AS n4,
+    SUM(CASE WHEN award_level IS NULL THEN 1 ELSE 0 END) AS n5,
     SUM(CASE WHEN unitid IS NULL OR year IS NULL OR cipcode IS NULL
-                         OR majornum IS NULL OR race IS NULL
-                         OR sex IS NULL THEN 1 ELSE 0 END) AS total
+                         OR majornum IS NULL OR award_level IS NULL
+                         THEN 1 ELSE 0 END) AS total
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions', allow_moved_paths=true)
 );
 
@@ -677,21 +674,15 @@ FROM (
   WHERE award_level IS NOT NULL
 );
 
--- ipeds_completions: race codes 1-9 and 99 (total); sex codes 1,2,99
+-- ipeds_completions: ctotalt should be non-negative where present
 INSERT INTO dq_results
-SELECT 'edu', 'ipeds_completions', 'race_sex_values',
-  CASE WHEN bad_race + bad_sex > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(bad_race + bad_sex AS VARCHAR), '0',
-  CONCAT_WS('; ',
-    CASE WHEN bad_race > 0 THEN 'bad race rows:' || bad_race ELSE NULL END,
-    CASE WHEN bad_sex  > 0 THEN 'bad sex rows:'  || bad_sex  ELSE NULL END
-  )
+SELECT 'edu', 'ipeds_completions', 'ctotalt_nonneg',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0', NULL
 FROM (
-  SELECT
-    SUM(CASE WHEN race NOT IN (1,2,3,4,5,6,7,8,9,99) THEN 1 ELSE 0 END) AS bad_race,
-    SUM(CASE WHEN sex  NOT IN (1,2,99)                THEN 1 ELSE 0 END) AS bad_sex
+  SELECT SUM(CASE WHEN ctotalt < 0 THEN 1 ELSE 0 END) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions', allow_moved_paths=true)
-  WHERE race IS NOT NULL AND sex IS NOT NULL
+  WHERE ctotalt IS NOT NULL
 );
 
 -- ipeds_tuition: level_of_study IN (1,2); tuition_type IN (1,2,3,4)
