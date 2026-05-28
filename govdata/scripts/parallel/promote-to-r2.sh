@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# promote-to-r2.sh — sync validated pre-prod data from MinIO to R2.
+# promote-to-r2.sh — promote validated DQ data from MinIO to R2 production.
 #
-# Runs after all schemas pass DQ on the MinIO pre-prod environment.
-# Uses rclone sync --checksum so only new/changed files generate Class A
-# PUT operations on R2. Existing unchanged files are skipped entirely.
+# DQ rebuild (run-all-dq.sh) writes to MinIO DQ buckets. This script syncs
+# those validated buckets to R2 production (stripping the -dq suffix):
+#   govdata-parquet-v1-dq  →  govdata-parquet-v1
+#   govdata-tracker-v1-dq  →  govdata-tracker-v1
+#
+# Uses rclone sync --checksum — only new/changed files generate Class A
+# PUT operations on R2. Unchanged files are skipped entirely.
 #
 # Usage:
 #   govdata/scripts/parallel/promote-to-r2.sh [--dry-run] [--schema SCHEMA]
@@ -36,11 +40,10 @@ done
 MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"
 R2_REMOTE="r2"
 
-# Buckets to sync from MinIO → R2
-BUCKETS=(
-  "govdata-parquet-v1"
-  "govdata-tracker-v1"
-  "govdata-raw-v1"
+# DQ bucket → production bucket mappings (strip -dq suffix for promotion)
+declare -A BUCKET_MAP=(
+  ["${GOVDATA_DQ_BUCKET:-govdata-parquet-v1-dq}"]="govdata-parquet-v1"
+  ["${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"]="govdata-tracker-v1"
 )
 
 _rclone_sync() {
@@ -60,18 +63,18 @@ _rclone_sync() {
 
 log_info "promote: starting MinIO → R2 promotion ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
-for bucket in "${BUCKETS[@]}"; do
+for src_bucket in "${!BUCKET_MAP[@]}"; do
+  dst_bucket="${BUCKET_MAP[$src_bucket]}"
   if [ -n "$SCHEMA_FILTER" ]; then
-    # Promote only a specific schema prefix within the parquet bucket
     _rclone_sync \
-      "${MINIO_REMOTE}:${bucket}/${SCHEMA_FILTER}" \
-      "${R2_REMOTE}:${bucket}/${SCHEMA_FILTER}" \
-      "${bucket}/${SCHEMA_FILTER}"
+      "${MINIO_REMOTE}:${src_bucket}/${SCHEMA_FILTER}" \
+      "${R2_REMOTE}:${dst_bucket}/${SCHEMA_FILTER}" \
+      "${src_bucket}/${SCHEMA_FILTER} → ${dst_bucket}/${SCHEMA_FILTER}"
   else
     _rclone_sync \
-      "${MINIO_REMOTE}:${bucket}" \
-      "${R2_REMOTE}:${bucket}" \
-      "${bucket}"
+      "${MINIO_REMOTE}:${src_bucket}" \
+      "${R2_REMOTE}:${dst_bucket}" \
+      "${src_bucket} → ${dst_bucket}"
   fi
 done
 

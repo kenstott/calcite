@@ -211,5 +211,15 @@ while true; do
   wait "$SAVED_PID" 2>/dev/null || pool_exit=$?
   POOL_PID=""
   log_info "run-all-dq: pool finished (exit=$pool_exit)"
+
+  # After a clean DQ run, promote validated MinIO data to R2 production.
+  # DQ is pre-prod: govdata-parquet-v1-dq → govdata-parquet-v1 on R2.
+  if [ "$pool_exit" -eq 0 ] && [ -f "$SCRIPT_DIR/../../.env.dq" ]; then
+    log_info "run-all-dq: DQ passed — promoting to R2"
+    "$SCRIPT_DIR/promote-to-r2.sh" \
+      && log_info "run-all-dq: promotion complete" \
+      || log_info "run-all-dq: WARNING: promotion failed (DQ data intact on MinIO)"
+  fi
+
   exit $pool_exit
 done
