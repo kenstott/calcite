@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.4](https://github.com/kenstott/calcite/compare/v0.10.3...v0.10.4) (2026-05-28)
+
+
+### Bug Fixes
+
+* **dq:** abstract rclone remote to support MinIO as DQ target ([ab99111](https://github.com/kenstott/calcite/commit/ab991115ff810c3a45af9a2e1389800cc0ef3ca2))
+* **etl:** prevent DuckDB S3 glob hang on partitioned-expansion tables during rebuild ([bb709b0](https://github.com/kenstott/calcite/commit/bb709b07d6b55b4f1df4d5abaf25faed27b9889f))
+
 ## [0.10.3](https://github.com/kenstott/calcite/compare/v0.10.2...v0.10.3) (2026-05-28)
 
 
