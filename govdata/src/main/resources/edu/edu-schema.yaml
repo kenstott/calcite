@@ -795,14 +795,6 @@ partitionedTables:
         type: double
         nullable: true
         comment: FTE uncertified/emergency-certified teachers
-      - name: teachers_first_year_fte
-        type: double
-        nullable: true
-        comment: FTE first-year teachers
-      - name: teachers_absent_fte
-        type: double
-        nullable: true
-        comment: FTE teachers chronically absent
       - name: counselors_fte
         type: double
         nullable: true
@@ -827,10 +819,6 @@ partitionedTables:
         type: double
         nullable: true
         comment: FTE sworn law enforcement officers
-      - name: law_enforcement_ind
-        type: int
-        nullable: true
-        comment: Any sworn law enforcement present (0/1)
 
     source:
       type: http
@@ -2036,8 +2024,6 @@ views:
         ts.psychologists_fte,
         ts.teachers_certified_fte,
         ts.teachers_uncertified_fte,
-        ts.teachers_absent_fte,
-        ts.law_enforcement_ind,
         o.firearm_incident_ind,
         o.rape_incidents,
         o.possession_firearm_incidents
