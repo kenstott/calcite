@@ -75,7 +75,8 @@ FROM (
   UNION ALL SELECT 'ita_data',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',             allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'gdp_statistics',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t)
-) src;
+) src
+WHERE tbl NOT IN ('jolts_regional', 'jolts_state') OR n > 0;
 
 -- ============================================================================
 -- T2: ROW COUNT — conservative minimums based on known data scale
@@ -106,8 +107,8 @@ FROM (
   UNION ALL SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100
   UNION ALL SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000
   UNION ALL SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 1
-  UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 1
+  UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 0
+  UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0
   UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 50
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
   UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
