@@ -668,7 +668,7 @@ SELECT 'edu', 'ipeds_completions', 'award_level_values',
   CAST(bad AS VARCHAR), '0',
   'distinct award_levels: ' || vals
 FROM (
-  SELECT SUM(CASE WHEN award_level NOT IN (1,2,3,4,5,6,7,8,9,17,18,19,22,23,24,30,31,32,33) THEN 1 ELSE 0 END) AS bad,
+  SELECT SUM(CASE WHEN award_level NOT IN (1,2,3,4,5,6,7,8,9,17,18,19,20,21,22,23,24,30,31,32,33) THEN 1 ELSE 0 END) AS bad,
          STRING_AGG(DISTINCT CAST(award_level AS VARCHAR), ', ' ORDER BY CAST(award_level AS VARCHAR)) AS vals
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions', allow_moved_paths=true)
   WHERE award_level IS NOT NULL
