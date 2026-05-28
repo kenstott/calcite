@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/kenstott/calcite/compare/v0.10.6...v0.11.0) (2026-05-28)
+
+
+### Features
+
+* **etl:** evaluate expression: columns via DuckDB instead of Java regex ([1ab41e2](https://github.com/kenstott/calcite/commit/1ab41e21293c2e52e4b6dc9b930f903067f22e9c))
+
+
+### Bug Fixes
+
+* **census:** replace hardcoded decennial year list with step-based range ([fe41b17](https://github.com/kenstott/calcite/commit/fe41b171a073760ef331c8b93f9cc1041bae7f7f))
+
 ## [0.10.6](https://github.com/kenstott/calcite/compare/v0.10.5...v0.10.6) (2026-05-28)
 
 
