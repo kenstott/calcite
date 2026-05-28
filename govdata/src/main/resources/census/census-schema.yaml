@@ -127,11 +127,12 @@ dimension_values:
     dataLag: 1
     releaseMonth: 9
 
-  # --- Year Values for Decennial Census ---
+  # --- Year Range for Decennial Census (every 10 years from 2000) ---
   decennial_years: &decennial_years
-    - '2020'
-    - '2010'
-    - '2000'
+    type: yearRange
+    start: 2000
+    step: 10
+    dataLag: 2
 
   # --- Geography Levels ---
   state_geography: &state_geography
