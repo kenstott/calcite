@@ -20,6 +20,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
+_env_dq="$SCRIPT_DIR/../../.env.dq"
+if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 SCHEMA="${1:-}"
