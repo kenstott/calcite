@@ -380,7 +380,7 @@ SELECT
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population', allow_moved_paths := true)
-  WHERE total_population IS NOT NULL AND total_population < 0
+  WHERE population IS NOT NULL AND population < 0
 );
 
 -- ============================================================================
