@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.3](https://github.com/kenstott/calcite/compare/v0.10.2...v0.10.3) (2026-05-28)
+
+
+### Bug Fixes
+
+* **etl:** stream large ZIP/CSV responses to eliminate OOM on high-risk transformers ([2190a74](https://github.com/kenstott/calcite/commit/2190a744f641cd0e08e3becce72fe86109364eb3))
+
 ## [0.10.2](https://github.com/kenstott/calcite/compare/v0.10.1...v0.10.2) (2026-05-28)
 
 
