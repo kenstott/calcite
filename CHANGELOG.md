@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.14](https://github.com/kenstott/calcite/compare/v0.9.13...v0.9.14) (2026-05-28)
+
+
+### Bug Fixes
+
+* **edu:** remove conflicting incremental sections that blocked historical year loading ([0ed56d7](https://github.com/kenstott/calcite/commit/0ed56d7bcf18a5503c733619d7b58a25d58f8a0a))
+
 ## [0.9.13](https://github.com/kenstott/calcite/compare/v0.9.12...v0.9.13) (2026-05-28)
 
 
