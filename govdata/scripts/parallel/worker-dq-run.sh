@@ -476,8 +476,37 @@ if $DRY_RUN; then
   log_info "$WORKER_ID: --dry-run — skipping S3 upload (local results at $RESULT_LOCAL)"
 else
   log_info "$WORKER_ID: uploading results to $S3_RESULT_PATH"
-  # rclone copyto uploads a single file to an exact destination path (not a directory)
-  rclone copyto "$RESULT_LOCAL" "${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+  _s3_key="dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+  _ep="${AWS_ENDPOINT_OVERRIDE:-}"
+  if command -v aws >/dev/null 2>&1; then
+    _flag=""; [ -n "$_ep" ] && _flag="--endpoint-url $_ep"
+    aws $_flag s3 cp "$RESULT_LOCAL" "s3://${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}"
+  elif command -v python3 >/dev/null 2>&1 && [ -n "$_ep" ]; then
+    python3 - "$RESULT_LOCAL" "$_ep" "$_s3_key" "${GOVDATA_DQ_TRACKER_BUCKET}" \
+      "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" <<'PYEOF'
+import sys, urllib.request, hmac, hashlib, datetime, os
+local_file, ep, key, bucket, kid, secret = sys.argv[1:]
+with open(local_file,'rb') as f: body = f.read()
+host = ep.replace('http://','').replace('https://','')
+now = datetime.datetime.now(datetime.timezone.utc)
+d, ts = now.strftime('%Y%m%d'), now.strftime('%Y%m%dT%H%M%SZ')
+ph = hashlib.sha256(body).hexdigest()
+hdr = f'host:{host}\nx-amz-content-sha256:{ph}\nx-amz-date:{ts}\n'
+sh = 'host;x-amz-content-sha256;x-amz-date'
+cr = f'PUT\n/{bucket}/{key}\n\n{hdr}\n{sh}\n{ph}'
+sts = f'AWS4-HMAC-SHA256\n{ts}\n{d}/us-east-1/s3/aws4_request\n{hashlib.sha256(cr.encode()).hexdigest()}'
+def sign(k,m): return hmac.new(k,m.encode(),hashlib.sha256).digest()
+k = sign(sign(sign(sign(('AWS4'+secret).encode(),d),'us-east-1'),'s3'),'aws4_request')
+sig = hmac.new(k,sts.encode(),hashlib.sha256).hexdigest()
+auth = f'AWS4-HMAC-SHA256 Credential={kid}/{d}/us-east-1/s3/aws4_request,SignedHeaders={sh},Signature={sig}'
+req = urllib.request.Request(f'{ep}/{bucket}/{key}', data=body, method='PUT')
+for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Authorization',auth),('Content-Length',str(len(body)))]: req.add_header(h,v)
+urllib.request.urlopen(req)
+print(f'Uploaded {len(body)} bytes to {bucket}/{key}')
+PYEOF
+  else
+    rclone copyto "$RESULT_LOCAL" "${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}"
+  fi
   log_info "$WORKER_ID: results written to $S3_RESULT_PATH"
 fi
 
