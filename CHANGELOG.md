@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/kenstott/calcite/compare/v0.9.16...v0.10.0) (2026-05-28)
+
+
+### Features
+
+* **edu:** switch ipeds_completions from Urban Institute API to NCES bulk CSV ([7cea7cd](https://github.com/kenstott/calcite/commit/7cea7cd9cf914565ac64ec56d2999c9d60e49857))
+
 ## [0.9.16](https://github.com/kenstott/calcite/compare/v0.9.15...v0.9.16) (2026-05-28)
 
 
