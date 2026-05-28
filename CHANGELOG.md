@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.5](https://github.com/kenstott/calcite/compare/v0.10.4...v0.10.5) (2026-05-28)
+
+
+### Bug Fixes
+
+* **dq:** auto-create DQ buckets before rebuild teardown ([2e74d70](https://github.com/kenstott/calcite/commit/2e74d706bbaa49f7867be845f0d1ed289f8df5b2))
+* **dq:** auto-source .env.dq in load_env if present ([0dd4f50](https://github.com/kenstott/calcite/commit/0dd4f504d8663823da855c379ac9949cdf970c6e))
+* **dq:** reduce edu DQ lookback from N-6 to N-3 years ([84542d2](https://github.com/kenstott/calcite/commit/84542d2ebbcebff6b9f8d825c605fbfa16a59550))
+* **dq:** reliable bucket creation + reduce Iceberg buffer for large tables ([5e0535c](https://github.com/kenstott/calcite/commit/5e0535cb7878f4b8ebcd6d9dcc38ab566a5cbbf3))
+* **dq:** remove dead production-bucket branch from rebuild teardown ([70ce6ce](https://github.com/kenstott/calcite/commit/70ce6ce42ebd63e6367c58fdb0f2f8ac9f002790))
+* **dq:** restore unconditional .env.dq sourcing in worker-dq-run.sh ([1e99d35](https://github.com/kenstott/calcite/commit/1e99d3513b0bdcd40020982c63fef5c7f705c4d6))
+* **dq:** robust bucket creation via aws CLI → python3 SigV4 → rclone ([cadc5fc](https://github.com/kenstott/calcite/commit/cadc5fc04c89010f2eb57dac9efe812a800587da))
+* **dq:** scope .env.dq to rebuild block only, not plain DQ checks ([abcf54d](https://github.com/kenstott/calcite/commit/abcf54d7841630cb2474129f6365402d5fe1287b))
+* **dq:** source .env.dq only in DQ scripts, not in run-pool ([e4778a6](https://github.com/kenstott/calcite/commit/e4778a6c0afa94e03661dcde514ac2250d3fa4cf))
+* **dq:** strip http:// from DuckDB endpoint and set USE_SSL=false for MinIO ([51d65e2](https://github.com/kenstott/calcite/commit/51d65e21c4b2dcb7aa72739df4456dc0dbf97122))
+* **dq:** URI-encode path components in SigV4 upload for MinIO ([01033a8](https://github.com/kenstott/calcite/commit/01033a83b7da295c893ca3123096434d8c0c3cc5))
+* **dq:** use python3 SigV4 for results upload when rclone remote missing ([e89b624](https://github.com/kenstott/calcite/commit/e89b624635556fb9c66769f10f53a9a8b7305ca8))
+* **edu:** add IPEDS award level codes 20 and 21 to accepted values ([310e1ee](https://github.com/kenstott/calcite/commit/310e1ee78355920855bebd3aaa5ecb5fe5dc7c8c))
+* **edu:** remove 3 always-negative-1 CRDC fields from crdc_schools ([00eb7a7](https://github.com/kenstott/calcite/commit/00eb7a7579a2393fe18460297e514f8fbc8a47f4))
+* **edu:** update ipeds_completions DQ checks for NCES wide format ([4f82b75](https://github.com/kenstott/calcite/commit/4f82b75c9a3b3789d70421b8a64fe065a9ec392e))
+
 ## [0.10.4](https://github.com/kenstott/calcite/compare/v0.10.3...v0.10.4) (2026-05-28)
 
 
