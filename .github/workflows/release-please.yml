@@ -51,6 +51,7 @@ jobs:
         run: |
           VERSION="${{ steps.release.outputs.tag_name }}"
           BARE="${VERSION#v}"
+          ENGINE_TAG="engine-v${BARE}"
           gh workflow run "AskAmerica Engine" \
             --repo "${{ github.repository }}" \
             --ref "refs/tags/${ENGINE_TAG}" \
