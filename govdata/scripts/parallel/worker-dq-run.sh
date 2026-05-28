@@ -494,16 +494,18 @@ else
   elif command -v python3 >/dev/null 2>&1 && [ -n "$_ep" ]; then
     python3 - "$RESULT_LOCAL" "$_ep" "$_s3_key" "${GOVDATA_DQ_TRACKER_BUCKET}" \
       "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" <<'PYEOF'
-import sys, urllib.request, hmac, hashlib, datetime, os
+import sys, urllib.request, urllib.parse, hmac, hashlib, datetime
 local_file, ep, key, bucket, kid, secret = sys.argv[1:]
 with open(local_file,'rb') as f: body = f.read()
 host = ep.replace('http://','').replace('https://','')
 now = datetime.datetime.now(datetime.timezone.utc)
 d, ts = now.strftime('%Y%m%d'), now.strftime('%Y%m%dT%H%M%SZ')
 ph = hashlib.sha256(body).hexdigest()
+# URI-encode each path component (= must be %3D in canonical request)
+canon_key = '/'.join(urllib.parse.quote(p, safe='') for p in key.split('/'))
 hdr = f'host:{host}\nx-amz-content-sha256:{ph}\nx-amz-date:{ts}\n'
 sh = 'host;x-amz-content-sha256;x-amz-date'
-cr = f'PUT\n/{bucket}/{key}\n\n{hdr}\n{sh}\n{ph}'
+cr = f'PUT\n/{bucket}/{canon_key}\n\n{hdr}\n{sh}\n{ph}'
 sts = f'AWS4-HMAC-SHA256\n{ts}\n{d}/us-east-1/s3/aws4_request\n{hashlib.sha256(cr.encode()).hexdigest()}'
 def sign(k,m): return hmac.new(k,m.encode(),hashlib.sha256).digest()
 k = sign(sign(sign(sign(('AWS4'+secret).encode(),d),'us-east-1'),'s3'),'aws4_request')
@@ -511,8 +513,11 @@ sig = hmac.new(k,sts.encode(),hashlib.sha256).hexdigest()
 auth = f'AWS4-HMAC-SHA256 Credential={kid}/{d}/us-east-1/s3/aws4_request,SignedHeaders={sh},Signature={sig}'
 req = urllib.request.Request(f'{ep}/{bucket}/{key}', data=body, method='PUT')
 for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Authorization',auth),('Content-Length',str(len(body)))]: req.add_header(h,v)
-urllib.request.urlopen(req)
-print(f'Uploaded {len(body)} bytes to {bucket}/{key}')
+try:
+    urllib.request.urlopen(req)
+    print(f'Uploaded {len(body)} bytes to {bucket}/{key}')
+except urllib.error.HTTPError as e:
+    print(f'upload error: {e.code} {e.read().decode()[:200]}', file=sys.stderr); sys.exit(1)
 PYEOF
   else
     rclone copyto "$RESULT_LOCAL" "${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}"
