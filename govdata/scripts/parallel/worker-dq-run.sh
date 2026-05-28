@@ -267,13 +267,44 @@ if $REBUILD; then
   # delete charges on parquet data files. Tables become invisible to Iceberg so the
   # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
   _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
-  # Ensure DQ buckets exist. Use aws s3 mb with the same endpoint as the Java ETL
-  # so bucket state is consistent. BucketAlreadyOwnedByYou is not an error.
-  _aws_ep="${AWS_ENDPOINT_OVERRIDE:-}"
-  _aws_ep_flag=""
-  [ -n "$_aws_ep" ] && _aws_ep_flag="--endpoint-url $_aws_ep"
-  aws $_aws_ep_flag s3 mb "s3://${GOVDATA_DQ_BUCKET}"         2>/dev/null || true
-  aws $_aws_ep_flag s3 mb "s3://${GOVDATA_DQ_TRACKER_BUCKET}" 2>/dev/null || true
+  # Ensure DQ buckets exist using the same S3 endpoint/credentials as the Java ETL.
+  # Falls back through aws CLI → python3 SigV4 → rclone, in order of reliability.
+  _ensure_bucket() {
+    local bucket=$1
+    local ep="${AWS_ENDPOINT_OVERRIDE:-}"
+    if command -v aws >/dev/null 2>&1; then
+      local flag=""; [ -n "$ep" ] && flag="--endpoint-url $ep"
+      aws $flag s3 mb "s3://$bucket" 2>/dev/null || true
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$bucket" "$ep" "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" <<'PYEOF'
+import sys, urllib.request, hmac, hashlib, datetime
+bucket, ep, kid, secret = sys.argv[1:]
+if not ep: sys.exit(0)
+host = ep.replace('http://','').replace('https://','')
+now = datetime.datetime.now(datetime.timezone.utc)
+d, ts = now.strftime('%Y%m%d'), now.strftime('%Y%m%dT%H%M%SZ')
+ph = hashlib.sha256(b'').hexdigest()
+hdr = f'host:{host}\nx-amz-content-sha256:{ph}\nx-amz-date:{ts}\n'
+sh = 'host;x-amz-content-sha256;x-amz-date'
+cr = f'PUT\n/{bucket}\n\n{hdr}\n{sh}\n{ph}'
+sts = f'AWS4-HMAC-SHA256\n{ts}\n{d}/us-east-1/s3/aws4_request\n{hashlib.sha256(cr.encode()).hexdigest()}'
+def sign(k,m): return hmac.new(k,m.encode(),hashlib.sha256).digest()
+k = sign(sign(sign(sign(('AWS4'+secret).encode(),d),'us-east-1'),'s3'),'aws4_request')
+sig = hmac.new(k,sts.encode(),hashlib.sha256).hexdigest()
+auth = f'AWS4-HMAC-SHA256 Credential={kid}/{d}/us-east-1/s3/aws4_request,SignedHeaders={sh},Signature={sig}'
+req = urllib.request.Request(f'{ep}/{bucket}', method='PUT')
+for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Authorization',auth)]: req.add_header(h,v)
+try: urllib.request.urlopen(req)
+except urllib.error.HTTPError as e:
+  body = e.read().decode()
+  if 'AlreadyOwned' not in body and 'AlreadyExists' not in body: print(f'bucket create error: {e.code} {body[:100]}', file=sys.stderr)
+PYEOF
+    else
+      rclone mkdir "${_DQ_REMOTE}:$bucket" 2>/dev/null || true
+    fi
+  }
+  _ensure_bucket "$GOVDATA_DQ_BUCKET"
+  _ensure_bucket "$GOVDATA_DQ_TRACKER_BUCKET"
   log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}"
   log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
   for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
