@@ -146,20 +146,23 @@ run_window() {
 
 log_error "INFO: Perpetual runner started (PID $$), first window: $MODE"
 
-_sync_stamp="${HOME}/.r2-last-sync"
+# On MinIO: spawn a background sync daemon that copies new files to R2 every 24h.
+# Runs out-of-band so ETL scheduling is never blocked by the sync.
+if [ -f "$_env_preprod" ]; then
+  (
+    while true; do
+      sleep 86400
+      log_error "INFO: daily R2 sync starting"
+      "$SCRIPT_DIR/sync-to-r2.sh" \
+        && log_error "INFO: daily R2 sync complete" \
+        || log_error "WARNING: R2 sync failed"
+    done
+  ) &
+  _sync_pid=$!
+  log_error "INFO: R2 sync daemon started (PID $_sync_pid, runs every 24h)"
+fi
 
 while true; do
   run_window "$MODE"
   if [ "$MODE" = "historical" ]; then MODE="daily"; else MODE="historical"; fi
-
-  # On MinIO: sync new files to R2 once per day after a window completes.
-  if [ -f "$_env_preprod" ]; then
-    _now=$(date +%s)
-    _last=$(cat "$_sync_stamp" 2>/dev/null || echo 0)
-    if [ $(( _now - _last )) -ge 86400 ]; then
-      log_error "INFO: daily R2 sync starting"
-      "$SCRIPT_DIR/sync-to-r2.sh" && echo "$_now" > "$_sync_stamp" \
-        || log_error "WARNING: R2 sync failed"
-    fi
-  fi
 done
