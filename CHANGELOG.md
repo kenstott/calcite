@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.8](https://github.com/kenstott/calcite/compare/v0.9.7...v0.9.8) (2026-05-28)
+
+
+### Bug Fixes
+
+* **edu:** exclude virtual partition columns from all_same_value DQ checks ([3cdd82d](https://github.com/kenstott/calcite/commit/3cdd82d237887762f14e1c83730914c067c59314))
+
 ## [0.9.7](https://github.com/kenstott/calcite/compare/v0.9.6...v0.9.7) (2026-05-28)
 
 
