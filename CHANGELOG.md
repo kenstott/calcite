@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.4](https://github.com/kenstott/calcite/compare/v0.12.3...v0.12.4) (2026-05-29)
+
+
+### Bug Fixes
+
+* **census:** BPS year dimension must be type:custom not type:yearRange ([4d8445d](https://github.com/kenstott/calcite/commit/4d8445d58d2087903fc93c84f396e1ffe29eb554))
+
 ## [0.12.3](https://github.com/kenstott/calcite/compare/v0.12.2...v0.12.3) (2026-05-29)
 
 
