@@ -85,6 +85,17 @@ public class CensusResponseTransformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  // Census Bureau API suppression/unavailability sentinel integers.
+  // These must be coerced to NULL before writing — storing them as real
+  // numeric values would corrupt aggregations and fail range checks.
+  //   -666666666  suppressed (privacy or reliability threshold not met)
+  //   -333333333  median in open-ended top/bottom interval
+  //   -222222222  not applicable for this geography / estimate type
+  //   -999999999  unknown
+  private static final java.util.Set<String> CENSUS_SENTINELS =
+      new java.util.HashSet<String>(java.util.Arrays.asList(
+          "-666666666", "-333333333", "-222222222", "-999999999"));
+
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("Census: Empty response received for {}", context.getUrl());
@@ -251,7 +262,12 @@ public class CensusResponseTransformer implements ResponseTransformer {
       ObjectNode obj = MAPPER.createObjectNode();
 
       for (int colIndex = 0; colIndex < headers.length && colIndex < row.size(); colIndex++) {
-        obj.set(headers[colIndex], row.get(colIndex));
+        JsonNode val = row.get(colIndex);
+        if (val.isTextual() && CENSUS_SENTINELS.contains(val.asText())) {
+          obj.putNull(headers[colIndex]);
+        } else {
+          obj.set(headers[colIndex], val);
+        }
       }
 
       resultArray.add(obj);
