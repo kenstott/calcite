@@ -307,10 +307,60 @@ PYEOF
   _ensure_bucket "$GOVDATA_DQ_TRACKER_BUCKET"
   log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}"
   log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
-  for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
-    log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
-    rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
-  done
+  if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
+    # MinIO: no Class A charges, so purge all data files for the schema.
+    # This prevents the ETL fast-path from reusing stale data written by
+    # an older engine (e.g. null expression: columns from pre-DuckDB evaluator).
+    log_info "$WORKER_ID: --rebuild: full data purge for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET} (MinIO)"
+    python3 - "${AWS_ENDPOINT_OVERRIDE}" "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" \
+        "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" <<'PYEOF'
+import sys, urllib.request, urllib.parse, hmac, hashlib, datetime, xml.etree.ElementTree as ET
+ep, kid, secret, bucket, schema = sys.argv[1:]
+if not ep: sys.exit(0)
+host = ep.replace('http://','').replace('https://','')
+ns = {'s':'http://s3.amazonaws.com/doc/2006-03-01/'}
+def sign(k,m): return hmac.new(k,m.encode(),hashlib.sha256).digest()
+def auth_headers(method, path, qs_dict, body=b''):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    d, ts = now.strftime('%Y%m%d'), now.strftime('%Y%m%dT%H%M%SZ')
+    ph = hashlib.sha256(body).hexdigest()
+    qs = '&'.join(f'{urllib.parse.quote(k,safe="")}={urllib.parse.quote(str(v),safe="")}' for k,v in sorted(qs_dict.items()))
+    hdr = f'host:{host}\nx-amz-content-sha256:{ph}\nx-amz-date:{ts}\n'
+    sh = 'host;x-amz-content-sha256;x-amz-date'
+    cr = f'{method}\n/{bucket}{path}\n{qs}\n{hdr}\n{sh}\n{ph}'
+    sts = f'AWS4-HMAC-SHA256\n{ts}\n{d}/us-east-1/s3/aws4_request\n{hashlib.sha256(cr.encode()).hexdigest()}'
+    k = sign(sign(sign(sign(('AWS4'+secret).encode(),d),'us-east-1'),'s3'),'aws4_request')
+    sig = hmac.new(k,sts.encode(),hashlib.sha256).hexdigest()
+    auth = f'AWS4-HMAC-SHA256 Credential={kid}/{d}/us-east-1/s3/aws4_request,SignedHeaders={sh},Signature={sig}'
+    return ts, ph, auth, qs
+total, token = 0, None
+while True:
+    params = {'list-type':'2','prefix':f'{schema}/','max-keys':'1000'}
+    if token: params['continuation-token'] = token
+    ts, ph, auth, qs_str = auth_headers('GET','/',params)
+    req = urllib.request.Request(f'{ep}/{bucket}/?{qs_str}')
+    for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Authorization',auth)]: req.add_header(h,v)
+    resp = urllib.request.urlopen(req).read().decode()
+    root = ET.fromstring(resp)
+    keys = [c.find('s:Key',ns).text for c in root.findall('.//s:Contents',ns)]
+    for key in keys:
+        enc = '/'.join(urllib.parse.quote(p,safe='') for p in key.split('/'))
+        ts2, ph2, auth2, _ = auth_headers('DELETE',f'/{enc}',{})
+        req2 = urllib.request.Request(f'{ep}/{bucket}/{enc}', method='DELETE')
+        for h,v in [('Host',host),('x-amz-date',ts2),('x-amz-content-sha256',ph2),('Authorization',auth2)]: req2.add_header(h,v)
+        urllib.request.urlopen(req2); total += 1
+    nxt = root.find('s:NextContinuationToken',ns)
+    if nxt is None: break
+    token = nxt.text
+print(f'Purged {total} objects for schema={schema} from {bucket}')
+PYEOF
+  else
+    # R2: metadata-only teardown avoids Class A charges on data files.
+    for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
+      log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
+      rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
+    done
+  fi
   export FORCE=true
   export FORCE_FRESH=true
   # Redirect ETL writes to the DQ bucket and its companion tracker.
