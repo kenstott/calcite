@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.3](https://github.com/kenstott/calcite/compare/v0.12.2...v0.12.3) (2026-05-29)
+
+
+### Bug Fixes
+
+* **census:** extend BPS year dimensions through December 2027 ([509eab9](https://github.com/kenstott/calcite/commit/509eab9a4b733eb49932d062a7378960b3f0b2fb))
+* **census:** make BPS year dimensions dynamic, not hardcoded ([8f11301](https://github.com/kenstott/calcite/commit/8f1130102a6bce59c58b00b9a95d8278c9aa43e6))
+* **dq:** isolate MinIO rclone remote from prod to prevent cross-upload ([4aeb467](https://github.com/kenstott/calcite/commit/4aeb467fab8af7157df1aa2f63b647b4370c7bf7))
+* **dq:** persist DQ results before upload and retry on failure ([58ce79e](https://github.com/kenstott/calcite/commit/58ce79ea613ae3069e7e328349d0ada8922a8280))
+
 ## [0.12.2](https://github.com/kenstott/calcite/compare/v0.12.1...v0.12.2) (2026-05-29)
 
 
