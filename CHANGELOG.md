@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.2](https://github.com/kenstott/calcite/compare/v0.12.1...v0.12.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **census:** coerce Census API suppression sentinels to NULL in transformer ([e15d73c](https://github.com/kenstott/calcite/commit/e15d73ca3218cd8e6b098414fb06a71d24689ac1))
+* **census:** correct row_count thresholds to match actual dimension cardinality ([bca4609](https://github.com/kenstott/calcite/commit/bca4609faf90c72b2a08f0e3b9c36db72a2060ac))
+
 ## [0.12.1](https://github.com/kenstott/calcite/compare/v0.12.0...v0.12.1) (2026-05-29)
 
 
