@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/kenstott/calcite/compare/v0.13.0...v0.14.0) (2026-05-29)
+
+
+### Features
+
+* **etl:** add detailed S3 path logging for HTTP 404 errors in batch processing ([1784da7](https://github.com/kenstott/calcite/commit/1784da79db633f3e85a2bb557bef23a54fdbb367))
+
 ## [0.13.0](https://github.com/kenstott/calcite/compare/v0.12.6...v0.13.0) (2026-05-29)
 
 
