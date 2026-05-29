@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/kenstott/calcite/compare/v0.12.6...v0.13.0) (2026-05-29)
+
+
+### Features
+
+* **etl:** enhance HTTP error logging to capture full response bodies ([9b7698f](https://github.com/kenstott/calcite/commit/9b7698f7c669c93e3fd0d43507a5fa91f829ef2d))
+
+
+### Bug Fixes
+
+* **census:** add all 50 states + DC to LODES dimension ([3e9fcfa](https://github.com/kenstott/calcite/commit/3e9fcfa9e4a898c12189035002a01dedb323f9b2))
+
 ## [0.12.6](https://github.com/kenstott/calcite/compare/v0.12.5...v0.12.6) (2026-05-29)
 
 
