@@ -798,8 +798,22 @@ public class IcebergMaterializer {
           return true;  // Treat as success - no data to process is OK
         }
 
-        LOGGER.warn("Batch {} failed (attempt {}/{}): {}",
-            batch, attempts, maxRetries, message);
+        // Enhanced diagnostics for HTTP/S3 errors (especially 404s with HTML responses)
+        if (message != null && (message.contains("HTTP") || message.contains("404") || message.contains("<!doctype"))) {
+          // Log full stack trace to capture S3 URI and complete error context
+          LOGGER.error("Batch {} failed with HTTP/S3 error (attempt {}/{}). Batch parameters: {}. Full exception trace:",
+              batch, attempts, maxRetries, batch, e);
+          // Also extract and log just the URL/path if possible
+          String[] stackElements = e.getStackTrace().length > 0 ? new String[0] : null;
+          for (StackTraceElement elem : e.getStackTrace()) {
+            if (elem.toString().contains("s3") || elem.toString().contains("httpfs")) {
+              LOGGER.error("S3/httpfs context: {}", elem);
+            }
+          }
+        } else {
+          LOGGER.warn("Batch {} failed (attempt {}/{}): {}",
+              batch, attempts, maxRetries, message);
+        }
 
         if (attempts < maxRetries) {
           try {
@@ -872,7 +886,7 @@ public class IcebergMaterializer {
   private Set<String> processBatch(MaterializationConfig config, Table table,
       Map<String, String> batch, Set<String> excludeAccessions,
       int startChunkIndex, String checkpointPath) throws SQLException, IOException {
-    LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
+    LOGGER.info("Processing batch: {} for table={}", batch.isEmpty() ? "(all)" : batch, config.getSourceTableName());
 
     Set<String> newAccessions = new HashSet<String>();
 
@@ -883,6 +897,7 @@ public class IcebergMaterializer {
         sourcePattern =
             sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
+      LOGGER.debug("Resolved source pattern for batch: {}", sourcePattern);
 
       // Build partition values for Iceberg writer
       Map<String, String> partitionValues = new HashMap<String, String>();
