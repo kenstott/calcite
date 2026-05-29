@@ -3081,10 +3081,10 @@ partitionedTables:
     dimensions:
       type:
         - bps
-      # Dynamic year range generates YYMM codes (e.g., 2112 = Dec 2021, 2212 = Dec 2022)
+      # Custom dimension resolver generates YYMM codes dynamically
       # BuildingPermitsDimensionResolver transforms years to YYMM format for Census API URLs
       year:
-        type: yearRange
+        type: custom
         start: 2020
         dataLag: 1
 
