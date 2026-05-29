@@ -372,9 +372,7 @@ PYEOF
   export FORCE=true
   export FORCE_FRESH=true
   # Redirect ETL writes to the DQ bucket and its companion tracker.
-  # DQ reads source tables from prod (R2), not from DQ bucket on MinIO
-  # DQ bucket is only for writing results
-  export GOVDATA_PARQUET_DIR="s3://${GOVDATA_PARQUET_BUCKET:-govdata-parquet-v1}"
+  export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
 
   # 3. Delete existing DQ results so the post-ETL run starts clean.
