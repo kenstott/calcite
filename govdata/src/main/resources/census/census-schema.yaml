@@ -3081,17 +3081,12 @@ partitionedTables:
     dimensions:
       type:
         - bps
-      # URL code in YYMM format - serves as both partition key and URL parameter
-      # December (12) cumulative data for each year
+      # Dynamic year range generates YYMM codes (e.g., 2112 = Dec 2021, 2212 = Dec 2022)
+      # BuildingPermitsDimensionResolver transforms years to YYMM format for Census API URLs
       year:
-        - '2012'  # December 2020
-        - '2112'  # December 2021
-        - '2212'  # December 2022
-        - '2312'  # December 2023
-        - '2412'  # December 2024
-        - '2512'  # December 2025
-        - '2612'  # December 2026
-        - '2712'  # December 2027
+        type: yearRange
+        start: 2020
+        dataLag: 1
 
     # Columns match Census Building Permits Survey fixed-width text file format
     # Data parsed from https://www2.census.gov/econ/bps/State/stYYMMy.txt
@@ -3140,6 +3135,9 @@ partitionedTables:
         type: string
         nullable: true
         comment: Value of 5+ unit permits ($1000)
+
+    hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.census.BuildingPermitsDimensionResolver"
 
     source:
       type: http
