@@ -266,7 +266,8 @@ if $REBUILD; then
   # Delete only Iceberg metadata directories per table — avoids Class A per-object
   # delete charges on parquet data files. Tables become invisible to Iceberg so the
   # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
-  _DQ_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
+  # DQ-specific remote (from .env.dq) takes precedence; falls back to prod remote, then r2
+  _DQ_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}"
   # Ensure DQ buckets exist using the same S3 endpoint/credentials as the Java ETL.
   # Falls back through aws CLI → python3 SigV4 → rclone, in order of reliability.
   _ensure_bucket() {
@@ -429,7 +430,7 @@ if [ -n "${GOVDATA_PARQUET_DIR:-}" ]; then
 fi
 
 # Check for deprecated source= partition on S3
-deprecated_path="${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
+deprecated_path="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
 deprecated_check=$(rclone ls "$deprecated_path" 2>/dev/null | head -1 || true)
 if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
@@ -582,7 +583,7 @@ for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Author
 urllib.request.urlopen(req)
 PYEOF
     else
-      rclone copyto "$RESULT_LOCAL" "${GOVDATA_RCLONE_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" 2>/dev/null && { _upload_ok=true; break; }
+      rclone copyto "$RESULT_LOCAL" "${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" 2>/dev/null && { _upload_ok=true; break; }
     fi
     [ "$_attempt" -lt 3 ] && sleep 5
   done
