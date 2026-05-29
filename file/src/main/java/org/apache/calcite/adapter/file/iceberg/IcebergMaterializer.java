@@ -153,7 +153,9 @@ public class IcebergMaterializer {
    */
   public IcebergMaterializer(String warehousePath, StorageProvider storageProvider,
       IncrementalTracker incrementalTracker, int maxRetries, long retryDelayMs) {
-    this.warehousePath = warehousePath;
+    String normalizedPath = org.apache.calcite.adapter.file.storage.StorageProviderFactory
+        .normalizeForHadoop(warehousePath);
+    this.warehousePath = normalizedPath;
     this.storageProvider = storageProvider;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
     this.maxRetries = maxRetries;
@@ -162,7 +164,7 @@ public class IcebergMaterializer {
     // Build catalog config
     this.catalogConfig = new HashMap<String, Object>();
     this.catalogConfig.put("catalog", "hadoop");
-    this.catalogConfig.put("warehousePath", warehousePath);
+    this.catalogConfig.put("warehousePath", normalizedPath);
 
     // Add S3 credentials from storage provider for Hadoop/Iceberg
     if (storageProvider != null) {
