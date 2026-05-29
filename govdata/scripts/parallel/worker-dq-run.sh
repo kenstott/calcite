@@ -305,7 +305,14 @@ PYEOF
   }
   _ensure_bucket "$GOVDATA_DQ_BUCKET"
   _ensure_bucket "$GOVDATA_DQ_TRACKER_BUCKET"
-  log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}"
+  # Also ensure the raw cache bucket exists — it is the authoritative copy of
+  # all HTTP responses so client swaps and re-runs don't require re-fetching.
+  _raw_cache_bucket="${GOVDATA_CACHE_DIR#s3://}"   # strip s3:// prefix
+  _raw_cache_bucket="${_raw_cache_bucket%%/*}"       # strip any path suffix
+  if [ -n "$_raw_cache_bucket" ] && [ "$_raw_cache_bucket" != "$GOVDATA_CACHE_DIR" ]; then
+    _ensure_bucket "$_raw_cache_bucket"
+  fi
+  log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}, ${_raw_cache_bucket:-local}"
   log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
   if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
     # MinIO: no Class A charges, so purge all data files for the schema.
