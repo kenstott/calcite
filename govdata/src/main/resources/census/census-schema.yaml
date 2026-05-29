@@ -128,6 +128,9 @@ dimension_values:
     releaseMonth: 9
 
   # --- Year Range for Decennial Census (every 10 years from 2000) ---
+  # Stepped cadence anchored at 2000: emits 2000, 2010, 2020, ... capped at
+  # currentYear - dataLag. dataLag=2 (census published ~2 years after the
+  # census year), so 2030 won't be fetched until 2032.
   decennial_years: &decennial_years
     type: yearRange
     start: 2000

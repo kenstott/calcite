@@ -599,8 +599,11 @@ public class DimensionIterator {
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
     int lag = dataLag != null ? dataLag : 0;
 
-    // Compute the latest effective year (data availability ceiling).
-    // releaseMonth adjusts for sources that publish mid-year.
+    if (step == null || step == 0) {
+      step = 1;
+    }
+
+    // Latest available data year = currentYear - dataLag, adjusted for releaseMonth.
     int latestEffectiveYear = currentYear - lag;
     Integer releaseMonth = config.getReleaseMonth();
     if (releaseMonth != null && releaseMonth >= 1 && releaseMonth <= 12) {
@@ -612,20 +615,16 @@ public class DimensionIterator {
       }
     }
 
-    // Publish year end cap: latest publish year whose effective year is available.
-    // latestEffectiveYear + lag = currentYear (adjusted for releaseMonth).
-    int publishYearEndCap = latestEffectiveYear + lag;
+    // Ceiling depends on cadence:
+    //  - Contiguous (step==1): iterate publish years up to the current year; the
+    //    effective_year offset (applied in expand()) accounts for dataLag.
+    //  - Stepped (step>1): the year IS the data year, so cap at currentYear - dataLag.
+    int rangeCeiling = (step > 1) ? latestEffectiveYear : latestEffectiveYear + lag;
+    int configuredEnd = (end != null) ? end : rangeCeiling;
+    int effectiveEnd = Math.min(rangeCeiling, configuredEnd);
 
-    // Respect any explicit configured end (null means current publish year).
-    int configuredEnd = (end != null) ? end : publishYearEndCap;
-    int effectiveEnd = Math.min(publishYearEndCap, configuredEnd);
-
-    LOGGER.debug("Year range dimension '{}': publishYearEndCap={}, configuredEnd={}, effectiveEnd={}",
-        config.getName(), publishYearEndCap, configuredEnd, effectiveEnd);
-
-    if (step == null || step == 0) {
-      step = 1;
-    }
+    LOGGER.debug("Year range dimension '{}': rangeCeiling={}, configuredEnd={}, effectiveEnd={}",
+        config.getName(), rangeCeiling, configuredEnd, effectiveEnd);
 
     // Enforce hard data-availability bounds
     Integer minYear = config.getMinYear();
@@ -668,8 +667,12 @@ public class DimensionIterator {
         }
       }
     } else {
-      // Standard contiguous range, always descend.
-      for (int year = effectiveEnd; year >= start; year -= step) {
+      // Anchor the grid at `start`: emitted years are exactly
+      // start, start+step, start+2*step, ... — never relative to the current
+      // year. Descend from the highest aligned year <= effectiveEnd down to start.
+      // (For step==1 this equals effectiveEnd, preserving contiguous behavior.)
+      int latestAligned = start + ((effectiveEnd - start) / step) * step;
+      for (int year = latestAligned; year >= start; year -= step) {
         if (excludeYears != null && excludeYears.contains(year)) {
           LOGGER.debug("Year range dimension '{}' excluding year {}", config.getName(), year);
           continue;
