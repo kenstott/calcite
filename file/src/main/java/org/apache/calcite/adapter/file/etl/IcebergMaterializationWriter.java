@@ -1244,13 +1244,26 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return rows;
     }
 
+    // Write rows to a temp file — read_json_auto treats string args as file paths,
+    // not inline JSON, so passing content directly causes a glob-pattern error.
     String json = MAPPER.writeValueAsString(rows);
-    // Escape single quotes for DuckDB string literal
-    String escapedJson = json.replace("'", "''");
+    java.io.File tmpJson = java.io.File.createTempFile("dq-expr-src-", ".json");
+    tmpJson.deleteOnExit();
+    try {
+      java.nio.file.Files.write(tmpJson.toPath(), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } catch (Exception e) {
+      tmpJson.delete();
+      throw e;
+    }
+    String jsonPath = tmpJson.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
 
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
-      stmt.execute("CREATE TEMP TABLE _src AS SELECT * FROM read_json_auto('" + escapedJson + "')");
+      try {
+        stmt.execute("CREATE TEMP TABLE _src AS SELECT * FROM read_json_auto('" + jsonPath + "')");
+      } finally {
+        tmpJson.delete();
+      }
 
       // Build SELECT: use expression for computed columns, direct field for others.
       // FROM _src AS src so expressions using src."FIELD" resolve against the alias.
@@ -1314,6 +1327,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return result;
     }
   }
+
 
   /**
    * Casts a value to the specified target type.
