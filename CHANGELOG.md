@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1](https://github.com/kenstott/calcite/compare/v0.12.0...v0.12.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dq:** auto-create raw cache bucket on MinIO at rebuild start ([2662126](https://github.com/kenstott/calcite/commit/266212675bd0ca3efb51333a16b48ac0be90254d))
+* **etl:** anchor stepped year ranges at start, not the current year ([e48abd9](https://github.com/kenstott/calcite/commit/e48abd95ae68fb5ef74fe831358dbdb999942467))
+
 ## [0.12.0](https://github.com/kenstott/calcite/compare/v0.11.0...v0.12.0) (2026-05-29)
 
 
