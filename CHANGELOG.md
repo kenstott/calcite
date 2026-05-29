@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.5](https://github.com/kenstott/calcite/compare/v0.12.4...v0.12.5) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dq:** read source tables from prod, not DQ bucket ([2d693b5](https://github.com/kenstott/calcite/commit/2d693b5c80732900d52af743ceb2ec5e20e4abd2))
+
 ## [0.12.4](https://github.com/kenstott/calcite/compare/v0.12.3...v0.12.4) (2026-05-29)
 
 
