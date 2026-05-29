@@ -1755,14 +1755,14 @@ public abstract class AbstractGovDataDownloader {
       for (String series : seriesList) {
         LOGGER.debug("Downloading series: {}", series);
         List<JsonNode> seriesData =
-            downloadWithPagination(downloadConfig, variables, series, paginationEnabled, maxPerRequest);
+            downloadWithPagination(tableName, downloadConfig, variables, series, paginationEnabled, maxPerRequest);
         allData.addAll(seriesData);
       }
     } else {
       // Single download (no iteration)
       LOGGER.info("Downloading {} without iteration", tableName);
       List<JsonNode> data =
-          downloadWithPagination(downloadConfig, variables, null, paginationEnabled, maxPerRequest);
+          downloadWithPagination(tableName, downloadConfig, variables, null, paginationEnabled, maxPerRequest);
       allData.addAll(data);
     }
 
@@ -1799,6 +1799,7 @@ public abstract class AbstractGovDataDownloader {
   /**
    * Downloads data with pagination support for a single iteration.
    *
+   * @param tableName Name of the table being downloaded (for logging/diagnostics)
    * @param downloadConfig Download configuration from schema
    * @param variables Variables for expression evaluation
    * @param iterationValue Current iteration value (e.g., series_id), or null if not iterating
@@ -1809,6 +1810,7 @@ public abstract class AbstractGovDataDownloader {
    * @throws InterruptedException if download is interrupted
    */
   private List<JsonNode> downloadWithPagination(
+      String tableName,
       Map<String, Object> downloadConfig,
       Map<String, String> variables,
       String iterationValue,
@@ -1861,8 +1863,17 @@ public abstract class AbstractGovDataDownloader {
       HttpResponse<String> response = executeWithRetry(request);
 
       if (response.statusCode() != 200) {
+        String responseBody = response.body();
+        // Log full response for debugging, especially HTML error pages
+        if (responseBody.length() > 500 || responseBody.contains("<html") || responseBody.contains("<html>")) {
+          LOGGER.error("HTTP {} error for table='{}' at offset={}\nURL: {}\nVars: {}\n========== FULL RESPONSE ==========\n{}\n==================================",
+              response.statusCode(), tableName, offset, url, variables, responseBody);
+        } else {
+          LOGGER.error("HTTP {} error for table='{}' from {}: {}", response.statusCode(), tableName, url, responseBody);
+        }
         throw new IOException("HTTP " + response.statusCode() + " from " + url
-            + ": " + response.body());
+            + " (table=" + tableName + ")"
+            + ": " + (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody));
       }
 
       // Parse response - Always use JSON_MAPPER since API responses are always JSON
