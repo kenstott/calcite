@@ -230,10 +230,11 @@ public class DimensionIteratorTest {
     DimensionIterator iterator = new DimensionIterator();
     List<Map<String, String>> combinations = iterator.expand(dimensions);
 
+    // Year ranges are emitted most-recent-first (descending).
     assertEquals(3, combinations.size());
-    assertEquals(String.valueOf(currentYear - 2), combinations.get(0).get("year"));
+    assertEquals(String.valueOf(currentYear), combinations.get(0).get("year"));
     assertEquals(String.valueOf(currentYear - 1), combinations.get(1).get("year"));
-    assertEquals(String.valueOf(currentYear), combinations.get(2).get("year"));
+    assertEquals(String.valueOf(currentYear - 2), combinations.get(2).get("year"));
   }
 
   @Test void testDimensionIteratorCartesianProduct() {

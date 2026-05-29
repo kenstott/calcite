@@ -267,9 +267,11 @@ class DimensionIteratorDeepCoverageTest {
         .build();
 
     List<String> values = iterator.resolveDimension(config);
-    // Should not contain currentYear due to dataLag=1
-    assertFalse(values.contains(String.valueOf(currentYear)));
-    assertTrue(values.contains(String.valueOf(currentYear - 1)));
+    // Contiguous (step==1) ranges iterate publish years up to the current year;
+    // dataLag shifts the injected effective_year (in expand()), not the publish-year
+    // list, so currentYear is present here.
+    assertTrue(values.contains(String.valueOf(currentYear)));
+    assertTrue(values.contains(String.valueOf(currentYear - 3)));
   }
 
   @Test void testResolveYearRangeWithExcludeYears() {
@@ -322,10 +324,12 @@ class DimensionIteratorDeepCoverageTest {
     List<String> values = iterator.resolveDimension(config);
     assertFalse(values.isEmpty());
 
-    // If current month < 12, lag year is reduced by another year
+    // Before the release month, the ceiling drops one extra year: currentYear is
+    // excluded and currentYear-1 becomes the latest publish year.
     if (currentMonth < 12) {
-      assertFalse(values.contains(String.valueOf(currentYear - 1)),
-          "Should exclude currentYear-1 when before release month");
+      assertFalse(values.contains(String.valueOf(currentYear)),
+          "Should exclude currentYear before release month");
+      assertTrue(values.contains(String.valueOf(currentYear - 1)));
     }
   }
 
@@ -359,7 +363,8 @@ class DimensionIteratorDeepCoverageTest {
         .build();
 
     List<String> values = iterator.resolveDimension(config);
-    assertEquals(Arrays.asList("2010", "2015", "2020"), values);
+    // Stepped ranges are anchored at start and emitted most-recent-first.
+    assertEquals(Arrays.asList("2020", "2015", "2010"), values);
   }
 
   // ====================================================================

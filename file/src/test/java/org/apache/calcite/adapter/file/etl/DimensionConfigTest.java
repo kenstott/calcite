@@ -268,15 +268,19 @@ class DimensionConfigTest {
     assertEquals(Integer.valueOf(9), config.getReleaseMonth());
   }
 
-  @Test void testFromMapLagYearsAlias() {
-    Map<String, Object> map = new HashMap<String, Object>();
-    map.put("type", "yearRange");
-    map.put("start", 2020);
-    map.put("lagYears", 2);
+  @Test void testFromMapDataLag() {
+    // 'dataLag' is the canonical key; the legacy 'lagYears' alias was removed.
+    Map<String, Object> canonical = new HashMap<String, Object>();
+    canonical.put("type", "yearRange");
+    canonical.put("start", 2020);
+    canonical.put("dataLag", 2);
+    assertEquals(Integer.valueOf(2), DimensionConfig.fromMap("year", canonical).getDataLag());
 
-    DimensionConfig config = DimensionConfig.fromMap("year", map);
-    assertNotNull(config);
-    assertEquals(Integer.valueOf(2), config.getDataLag());
+    Map<String, Object> legacy = new HashMap<String, Object>();
+    legacy.put("type", "yearRange");
+    legacy.put("start", 2020);
+    legacy.put("lagYears", 2);
+    assertEquals(Integer.valueOf(0), DimensionConfig.fromMap("year", legacy).getDataLag());
   }
 
   @Test void testFromMapQuery() {
