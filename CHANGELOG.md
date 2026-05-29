@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.6](https://github.com/kenstott/calcite/compare/v0.12.5...v0.12.6) (2026-05-29)
+
+
+### Bug Fixes
+
+* **iceberg,duckdb:** normalize S3 paths to s3a:// scheme for Hadoop-compatible storage ([0328d75](https://github.com/kenstott/calcite/commit/0328d75f65df3896a1f4e8a39edc7d791571a835))
+
 ## [0.12.5](https://github.com/kenstott/calcite/compare/v0.12.4...v0.12.5) (2026-05-29)
 
 
