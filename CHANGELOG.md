@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.12.0](https://github.com/kenstott/calcite/compare/v0.11.0...v0.12.0) (2026-05-29)
+
+
+### Features
+
+* **preprod:** add MinIO→R2 promotion script, wire into run-all-dq ([3c102ef](https://github.com/kenstott/calcite/commit/3c102efccff094e5ec0d5a6c58f67785b9ac3bc5))
+* **preprod:** add pre-prod environment against MinIO ([185e1bb](https://github.com/kenstott/calcite/commit/185e1bbafd16e4633a9e37b2bac6f3e79ecdbf56))
+* **preprod:** implement 3-step pipeline DQ → MinIO scheduler → daily R2 sync ([6bbf261](https://github.com/kenstott/calcite/commit/6bbf2613930a4dc2c072e6535c235fd92873b17c))
+
+
+### Bug Fixes
+
+* **census:** pep_population column is 'population' not 'total_population' ([426c157](https://github.com/kenstott/calcite/commit/426c15798f287cf45fa710431152a264c721fe67))
+* **dq:** full data purge on MinIO rebuild, metadata-only on R2 ([bf00bd6](https://github.com/kenstott/calcite/commit/bf00bd6c409a4e296a450fe212f269982a171e4a))
+* **etl:** write JSON to temp file before read_json_auto ([1530d30](https://github.com/kenstott/calcite/commit/1530d30fbc735385d65d4cde4f762c3b81cca4b0))
+* **preprod:** DQ = pre-prod; promote after DQ pass, not after prod pool ([9391bbe](https://github.com/kenstott/calcite/commit/9391bbe5c6eeb71d2c89d585bc80251ceda62583))
+* **preprod:** promote after pre-prod pool, not after DQ ([f2626e5](https://github.com/kenstott/calcite/commit/f2626e58fbf44bfa1193343f2782a658a41f0d53))
+* **preprod:** R2 sync runs as out-of-band background daemon in run-scheduled ([16ef8dc](https://github.com/kenstott/calcite/commit/16ef8dc3bc1a0c9e4977da5a0041c3675e242823))
+* **preprod:** wire MinIO and daily R2 sync into run-scheduled.sh ([8c0ec2f](https://github.com/kenstott/calcite/commit/8c0ec2f368c9f687d25df98615f8ef77d50830ec))
+* **sync:** use local sentinel + --min-age to avoid R2 LIST ops ([96e3e42](https://github.com/kenstott/calcite/commit/96e3e4207e19dbbe8e9d968b39d421acdd47b419))
+
 ## [0.11.0](https://github.com/kenstott/calcite/compare/v0.10.6...v0.11.0) (2026-05-28)
 
 
