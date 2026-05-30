@@ -2585,7 +2585,6 @@ partitionedTables:
       - *name_column
       - *state_column
       - *county_column
-      - *county_fips_column
       - name: naics_code
         type: string
         nullable: true
