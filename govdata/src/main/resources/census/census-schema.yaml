@@ -70,7 +70,7 @@ column_templates:
     name: county_fips
     type: string
     nullable: true
-    expression: 'TRY_CAST(src."state" || src."county" AS VARCHAR)'
+    expression: 'CASE WHEN src."county" IS NOT NULL THEN TRY_CAST(src."state" || src."county" AS VARCHAR) ELSE NULL END'
     comment: 5-digit county FIPS code (state + county) for joining to geo.counties
 
   # --- Partition Column Definitions ---
