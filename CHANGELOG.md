@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.16.0](https://github.com/kenstott/calcite/compare/v0.15.5...v0.16.0) (2026-05-30)
+
+
+### Features
+
+* **sec_prices:** add optional DQ script for stock prices dataset ([5c9485b](https://github.com/kenstott/calcite/commit/5c9485bb3675abcfeda8530cd27b17eb234cd0a2))
+* **sec:** stock prices with Stooq bulk zip proxy and DQ integration ([c1e574f](https://github.com/kenstott/calcite/commit/c1e574ffaaa813f7be75f4f79b767fd6b0f46c20))
+* **sec:** use standard optional-dataset pattern for stock_prices ([fc071be](https://github.com/kenstott/calcite/commit/fc071bedbe30e9b784fc466e8eb7e95e117a6041))
+
+
+### Reverts
+
+* **sec_prices:** remove separate DQ script - use existing pattern ([f49bf87](https://github.com/kenstott/calcite/commit/f49bf871c1ad140ac8132d6a9e6ca3ce374a99ae))
+
 ## [0.15.5](https://github.com/kenstott/calcite/compare/v0.15.4...v0.15.5) (2026-05-30)
 
 
