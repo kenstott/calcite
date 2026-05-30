@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/kenstott/calcite/compare/v0.15.0...v0.15.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **etl:** detect HTML error snippets in batch error logging ([c5ad3b3](https://github.com/kenstott/calcite/commit/c5ad3b3859f2e8b60716579c04c4a96787faf85b))
+
 ## [0.15.0](https://github.com/kenstott/calcite/compare/v0.14.0...v0.15.0) (2026-05-30)
 
 
