@@ -375,9 +375,13 @@ PYEOF
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
 
-  # 3. Delete existing DQ results so the post-ETL run starts clean.
+  # 3. Delete existing DQ results and ETL batch tracker so the post-ETL run starts clean.
   log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
   rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
+
+  # Clear ETL batch tracker so batches are not skipped as "already processed"
+  log_info "$WORKER_ID: --rebuild: purging etl-tracker for schema=$SCHEMA"
+  rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
 
   # 4. Run historical ETL pass.
   log_info "$WORKER_ID: --rebuild: running historical ETL for schema=$SCHEMA"
