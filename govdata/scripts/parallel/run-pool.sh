@@ -179,7 +179,7 @@ for arg in "$@"; do
       # Memory-managed by run-pool.sh heap budget (same as historical ETL).
       export GOVDATA_RUN_MODE="historical"
       queue+=(
-        sec:dq-rebuild weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
+        sec:dq-rebuild sec_prices:dq-rebuild weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
