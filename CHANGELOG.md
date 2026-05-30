@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.3](https://github.com/kenstott/calcite/compare/v0.15.2...v0.15.3) (2026-05-30)
+
+
+### Bug Fixes
+
+* **dq:** ensure run-pool sources .env.dq for DQ-specific overrides ([c9875a3](https://github.com/kenstott/calcite/commit/c9875a35c7dee0bc5a73b33279f77c66b601dd8c))
+
 ## [0.15.2](https://github.com/kenstott/calcite/compare/v0.15.1...v0.15.2) (2026-05-30)
 
 
