@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/kenstott/calcite/compare/v0.15.1...v0.15.2) (2026-05-30)
+
+
+### Bug Fixes
+
+* **census:** use correct environment variable syntax for API key ([0bfdea9](https://github.com/kenstott/calcite/commit/0bfdea950589c47265347a3032d8c9e0ca2606ab))
+
 ## [0.15.1](https://github.com/kenstott/calcite/compare/v0.15.0...v0.15.1) (2026-05-30)
 
 
