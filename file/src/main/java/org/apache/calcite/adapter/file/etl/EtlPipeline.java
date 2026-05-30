@@ -1170,14 +1170,20 @@ public class EtlPipeline {
                   String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
 
               // Enhanced diagnostics for HTTP/S3 errors
-              if (e.getMessage() != null && (e.getMessage().contains("HTTP") || e.getMessage().contains("404") || e.getMessage().contains("<!doctype"))) {
-                LOGGER.error("Batch {}/{} failed with HTTP/S3 error. Variables: {}. Full cause chain:",
+              String msg = e.getMessage();
+              boolean isHttpError = msg != null && (msg.contains("HTTP") || msg.contains("404") || msg.contains("<!doctype")
+                  || msg.contains("<html") || msg.contains("console.log") || msg.contains("adobe-launch"));
+
+              if (isHttpError) {
+                LOGGER.error("Batch {}/{} failed with HTTP/API error. Variables: {}. Full cause chain:",
                     processedCount, neededCount, variables);
                 // Log full exception with cause chain
                 Throwable cause = e;
                 int depth = 0;
                 while (cause != null && depth < 5) {
-                  LOGGER.error("  [{}] {}: {}", depth, cause.getClass().getSimpleName(), cause.getMessage());
+                  String causeName = cause.getClass().getSimpleName();
+                  String causeMsg = cause.getMessage() != null ? cause.getMessage() : "(no message)";
+                  LOGGER.error("  [{}] {}: {}", depth, causeName, causeMsg);
                   cause = cause.getCause();
                   depth++;
                 }
