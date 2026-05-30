@@ -23,6 +23,9 @@ load_env
 _env_dq="$SCRIPT_DIR/../../.env.dq"
 if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
 
+# ── debug: check cache directory ──────────────────────────────────────────────
+log_info "DEBUG: GOVDATA_CACHE_DIR='${GOVDATA_CACHE_DIR:-<unset>}'"
+
 # ── argument parsing ──────────────────────────────────────────────────────────
 SCHEMA="${1:-}"
 if [ -z "$SCHEMA" ]; then
