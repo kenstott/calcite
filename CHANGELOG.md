@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.4](https://github.com/kenstott/calcite/compare/v0.15.3...v0.15.4) (2026-05-30)
+
+
+### Bug Fixes
+
+* **census:** qualify county_fips expression with src. alias ([2f48b16](https://github.com/kenstott/calcite/commit/2f48b16a5ebcb4254442445317866a51f1d65cfa))
+
+
+### Reverts
+
+* **dq:** remove unnecessary .env.dq sourcing from run-pool.sh ([0092860](https://github.com/kenstott/calcite/commit/0092860e508df718cf00f2d5f56ecc6bd7247a74))
+
 ## [0.15.3](https://github.com/kenstott/calcite/compare/v0.15.2...v0.15.3) (2026-05-30)
 
 
