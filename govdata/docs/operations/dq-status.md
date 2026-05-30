@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-22
+Last updated: 2026-05-30
 
 ## How to Read This
 
@@ -61,7 +61,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 |--------------|------------|---------|-------|-------|-------|
 | weather      | —          | PENDING | —     | —     | Schema changes pending re-run |
 | edu          | —          | PENDING | —     | —     | Schema changes pending re-run |
-| census       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| census       | 2026-05-30 | PASS    | 0     | 0     | economic_census fix deployed in 0.16.1 |
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
 | crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
 | geo          | —          | PENDING | —     | —     | Schema changes pending re-run |
@@ -568,3 +568,24 @@ Note: Weekly tables (gas_storage, petroleum_stocks) show MIN=2022 because histor
 - `eia_fossil_fuel_production` contains only crude oil field production series; natural gas production endpoint not yet wired in transformer.
 - `eia_power_plants` columns `county_fips`, `city`, `primary_purpose_naics`, `sector_code`, `energy_storage_flag` always NULL: EIA-860 2024 Excel changed header names; column mapping update is a deferred fix.
 - Re-running DQ requires `GOVDATA_START_YEAR=2022` to get SEDS data (2-year publication lag); `GOVDATA_START_YEAR=2024` produces empty eia_state_energy_consumption.
+
+---
+
+## Census (2026-05-30) — PASS
+
+0 fails, 0 warns. All 2 tables populated in R2 Iceberg.
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| decennial_population | 500,000+ | 2020 decennial census data |
+| economic_census | 1,500,000+ | Economic Census 2017, 2022 NAICS data |
+
+### Fixed (2026-05-30)
+
+- **economic_census county_fips bind error**: Census API returns different fields based on geography parameter. State-level queries (`&for=state:*`) omit the `county` field entirely, causing `read_json_auto()` to skip creating a county column. The `county_fips_column` expression then referenced missing `src."county"`, triggering a DuckDB binder error at schema load time. **Solution**: Removed `county_fips_column` from the economic_census table definition. `county_fips` is only meaningful for county-level data, where the raw `county` column is already available for joins. State-level rows (which lack county context) don't need this synthetic field.
+- Applied fix in engine-v0.16.1; DQ rebuild completed without errors.
+
+### Notes
+
+- Census schema uses `CensusResponseTransformer` to convert 2D API arrays to JSON objects and `CensusEconomicDimensionResolver` to dynamically select NAICS variable (NAICS2017 for 2017, NAICS2022 for 2022).
+- Economic Census supports multiple geography levels (state, county, metro, region). Schema accommodates all via a single API URL template with `{geography}` dimension placeholder.
