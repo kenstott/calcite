@@ -609,9 +609,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       else
         ((failed_count++)) || true
         failed_list+=("$id")
-        _log_file="$SCRIPT_DIR/runs/${id}/launch.log"
-        last_err=$(grep -i -E "error|exception|fatal" "$_log_file" 2>/dev/null | tail -1 | cut -c1-120 || true)
-        log_info "$id FAILED (${mins}m): ${last_err:-check log}"
+        log_info "$id FAILED (${mins}m): check launch.log for details"
       fi
 
       remove_active "$i"
