@@ -32,10 +32,8 @@ load_env() {
     # Capture any caller-exported overrides before .env.prod stomps them
     local _pre_start_year="${GOVDATA_START_YEAR+set}"
     local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
-    local _pre_govdata_jar="${GOVDATA_JAR+set}"
     local _saved_start_year="${GOVDATA_START_YEAR:-}"
     local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
-    local _saved_govdata_jar="${GOVDATA_JAR:-}"
 
     set -a
     # shellcheck disable=SC1090
@@ -45,9 +43,17 @@ load_env() {
     # Restore caller-provided overrides
     [ "${_pre_start_year}" = "set" ] && export GOVDATA_START_YEAR="$_saved_start_year"
     [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
-    [ "${_pre_govdata_jar}" = "set" ] && export GOVDATA_JAR="$_saved_govdata_jar"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
+  fi
+
+  # Source DQ overrides if present (e.g., GOVDATA_JAR from run-all-dq.sh)
+  local env_dq="$GOVDATA_ROOT/.env.dq"
+  if [ -f "$env_dq" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_dq"
+    set +a
   fi
 
   local env_override="$SCRIPT_DIR/env.sh"
