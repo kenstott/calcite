@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/kenstott/calcite/compare/v0.14.0...v0.15.0) (2026-05-30)
+
+
+### Features
+
+* **etl:** enhance batch error logging with full exception cause chain ([929e0c5](https://github.com/kenstott/calcite/commit/929e0c5e52f2a11db7ac0520c961416409970d6b))
+
 ## [0.14.0](https://github.com/kenstott/calcite/compare/v0.13.0...v0.14.0) (2026-05-29)
 
 
