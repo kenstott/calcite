@@ -3679,6 +3679,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (cacheManifest != null) {
             downloader.setCacheManifest(cacheManifest);
           }
+
+          // Set up bulk proxy if configured
+          String bulkZipS3Path = getEnvOrOperand("BULK_STOCK_PRICE_ZIP", "bulkStockPriceZip");
+          if (bulkZipS3Path != null && !bulkZipS3Path.isEmpty()) {
+            String cacheDir = getEnvOrOperand("BULK_STOCK_PRICE_CACHE_DIR", "bulkStockPriceZipCacheDir");
+            if (cacheDir == null || cacheDir.isEmpty()) {
+              cacheDir = secCacheDirectory + "/stock_price_seed";
+            }
+            try {
+              StooqBulkProxy bulkProxy = new StooqBulkProxy(bulkZipS3Path, cacheDir, storageProvider);
+              downloader.setBulkProxy(bulkProxy);
+              LOGGER.info("Bulk stock price proxy enabled: {} cache: {}", bulkZipS3Path, cacheDir);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to initialize bulk proxy: {}", e.getMessage());
+              // Continue without bulk proxy - will use HTTP API instead
+            }
+          }
+
           downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
 
         } else {

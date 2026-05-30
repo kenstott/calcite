@@ -5,14 +5,23 @@
 #   - SEC EDGAR API - Company filings (10-K, 10-Q, 8-K, etc.)
 #   - XBRL Documents - Structured financial data
 #   - Form 3/4/5 - Insider trading transactions
-#   - Stock Price APIs - Yahoo Finance, AlphaVantage
+#   - Stooq Bulk Zip / API - Historical stock price data (OHLCV)
 #
 # Features:
 #   - Document-based ETL with multi-table extraction
 #   - XBRL parsing for financial line items and contexts
 #   - MD&A text extraction from HTML filings
 #   - Rate-limited SEC EDGAR compliance (10 req/sec)
+#   - Bulk stock price seeding from Stooq zip (S3), fallback to HTTP API
 #   - Supports both Iceberg and Parquet output formats
+#
+# Stock Price Operands (optional):
+#   - bulkStockPriceZip: S3 path to bulk Stooq zip (e.g., s3://bucket/d_us_txt.zip)
+#     Also readable via BULK_STOCK_PRICE_ZIP env var. When set, tickers found in the
+#     zip are loaded from it instead of calling the Stooq API.
+#   - bulkStockPriceZipCacheDir: Local directory to cache the downloaded zip
+#     (default: <secCacheDirectory>/stock_price_seed).
+#     Also readable via BULK_STOCK_PRICE_CACHE_DIR env var.
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:sec}"
@@ -24,7 +33,9 @@ comment: >
   Securities and Exchange Commission financial data including XBRL filings (10-K, 10-Q, 8-K),
   insider trading transactions, stock prices, and earnings transcripts. Enables financial
   analysis, regulatory compliance monitoring, and investment research across public companies.
-  Uses document-based ETL to extract multiple tables from each SEC filing.
+  Uses document-based ETL to extract multiple tables from each SEC filing. Stock prices can
+  be seeded from a bulk Stooq zip archive stored in S3, with fallback to the HTTP API for
+  missing or newly-listed tickers.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -1225,119 +1236,67 @@ partitionedTables:
   # ==========================================================================
 
   - name: stock_prices
-    enabled: false
-    pattern: "stock_prices/year=*/*_prices.parquet"
-    partitions: *stock_partitions
+    enabled: true
+    pattern: "stock_prices/year=*/ticker=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INT
+        - name: ticker
+          type: VARCHAR
     hooks:
       enabled: false
 
     comment: >
-      Daily stock price data (OHLCV) for SEC-reporting companies. Not from SEC filings
-      but from market data providers (Yahoo Finance, AlphaVantage). Linked to SEC data
-      via ticker symbol to enable correlation of filings with market reactions.
-      Use for: event studies around filing dates, correlating insider trades with price
-      moves, backtesting strategies, and calculating market-based metrics (beta, volatility).
+      Daily OHLCV stock price data for SEC-reporting companies.
+      Stooq API source (bulk S3 cache checked first via StooqBulkProxy).
+      Use for: event studies, volatility analysis, price correlation studies.
 
     columns:
       - *cik_column
-      - name: year
-        type: int
-        nullable: false
-        comment: Trading year for Iceberg partitioning
       - name: ticker
         type: string
         nullable: false
-        comment: Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+        comment: Stock ticker symbol in Stooq format (e.g., 'AAPL.US', 'MSFT.US')
       - name: date
         type: string
         nullable: false
-        comment: Trading date (ISO 8601 format)
+        comment: Trading date in ISO 8601 format (YYYY-MM-DD)
       - name: open
         type: double
-        nullable: false
+        nullable: true
         comment: Opening price for the trading day
       - name: high
         type: double
-        nullable: false
+        nullable: true
         comment: Highest price during the trading day
       - name: low
         type: double
-        nullable: false
+        nullable: true
         comment: Lowest price during the trading day
       - name: close
         type: double
-        nullable: false
+        nullable: true
         comment: Closing price for the trading day
       - name: volume
         type: long
-        nullable: false
+        nullable: true
         comment: Number of shares traded during the day
       - name: adjusted_close
         type: double
         nullable: true
         comment: Closing price adjusted for splits and dividends
-      - name: split_coefficient
-        type: double
-        nullable: true
-        comment: Stock split multiplier (1.0 if no split)
-      - name: dividend
-        type: double
-        nullable: true
-        comment: Dividend amount paid on this date (if any)
-
-
-    # Stock prices use standard HTTP API source (not document)
-    source:
-      type: http
-      url: "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-      method: GET
-      parameters:
-        period1: "{start_timestamp}"
-        period2: "{end_timestamp}"
-        interval: "1d"
-        events: "history,div,split"
-      response:
-        format: json
-        dataPath: "chart.result[0]"
-      rateLimit:
-        requestsPerSecond: 2
-        retryOn: [429, 503]
-        maxRetries: 3
-      responseTransformer: "org.apache.calcite.adapter.govdata.sec.YahooFinanceTransformer"
-
-      # Fallback to AlphaVantage if Yahoo fails
-      fallback:
-        url: "https://www.alphavantage.co/query"
-        parameters:
-          function: "TIME_SERIES_DAILY_ADJUSTED"
-          symbol: "{ticker}"
-          outputsize: "full"
-          apikey: "{env:ALPHAVANTAGE_API_KEY}"
-        response:
-          format: json
-          dataPath: "Time Series (Daily)"
-        responseTransformer: "org.apache.calcite.adapter.govdata.sec.AlphaVantageResponseTransformer"
-
-    dimensions:
-      ticker:
-        type: derived
-        sourceTable: filing_metadata
-        sourceColumn: ticker
-        filter: "ticker IS NOT NULL"
-      year: *year_range
 
     materialize:
       <<: *materialize_defaults
-      rowBatchSize: 100000
       output:
-        pattern: "stock_prices/year=*/"
+        pattern: "year=*/ticker=*/"
       partition:
-        columns: [year]
+        columns: [year, ticker]
       iceberg:
         <<: *iceberg_defaults
         tableName: stock_prices
-        sortOrder: [ticker, date]
-        batchPartitionColumns: [year]
 
   # ==========================================================================
   # VECTORIZED CHUNKS (Optional)

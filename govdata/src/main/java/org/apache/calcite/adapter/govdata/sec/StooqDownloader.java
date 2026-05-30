@@ -109,6 +109,7 @@ public class StooqDownloader {
   private final long batchTimeoutMs;
   private final List<String> failedTickers = new ArrayList<String>();
   private SecCacheManifest cacheManifest;  // Optional, for tracking unavailable tickers
+  private StooqBulkProxy bulkProxy;  // Optional, for looking up tickers in bulk zip
 
   /**
    * Creates a StooqDownloader with default rate limiting configuration.
@@ -310,8 +311,22 @@ public class StooqDownloader {
     }
 
     try {
-      // Fetch ALL data from Stooq in one request for the full date range
-      List<StockPriceRecord> allPrices = fetchWithRateLimiting(pair.ticker, startYear, endYear);
+      // Try bulk proxy first before HTTP API
+      List<StockPriceRecord> allPrices = null;
+      if (bulkProxy != null) {
+        List<StockPriceRecord> bulkRecords = bulkProxy.lookupTicker(pair.ticker);
+        if (!bulkRecords.isEmpty()) {
+          LOGGER.info("Found ticker {} in bulk zip: {} records", pair.ticker, bulkRecords.size());
+          allPrices = bulkRecords;
+        } else {
+          LOGGER.debug("Ticker {} not in bulk zip, falling back to Stooq API", pair.ticker);
+        }
+      }
+
+      // If not found in bulk, fetch from Stooq API
+      if (allPrices == null) {
+        allPrices = fetchWithRateLimiting(pair.ticker, startYear, endYear);
+      }
 
       if (allPrices.isEmpty()) {
         LOGGER.warn("No data returned for {} - ticker may be delisted or invalid", pair.ticker);
@@ -786,6 +801,16 @@ public class StooqDownloader {
    */
   public void setCacheManifest(SecCacheManifest cacheManifest) {
     this.cacheManifest = cacheManifest;
+  }
+
+  /**
+   * Set the bulk proxy for looking up tickers in the Stooq bulk zip before falling back to HTTP API.
+   * When set, tickers found in the bulk zip will be loaded from there instead of calling the API.
+   *
+   * @param bulkProxy The Stooq bulk proxy
+   */
+  public void setBulkProxy(StooqBulkProxy bulkProxy) {
+    this.bulkProxy = bulkProxy;
   }
 
   /**

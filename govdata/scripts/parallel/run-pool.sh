@@ -100,12 +100,12 @@ if [ $# -eq 0 ]; then
   echo "    historical — backfill workers: all SEC years (2010→current), all schemas (historical/initial)"
   echo "    all        — union of historical + daily"
   echo ""
-  echo "  Valid schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime, weather,"
+  echo "  Valid schemas: sec_primary, sec_secondary, sec_prices, sec, econ, census, geo, crime, weather,"
   echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
-  echo "    dq         — DQ checks only for all 16 DQ schemas (data must already be in R2)"
-  echo "    dq-rebuild — full ETL re-ingest + DQ for all 16 DQ schemas (memory-managed)"
+  echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)"
+  echo "    dq-rebuild — full ETL re-ingest + DQ for all 17 DQ schemas (memory-managed)"
   exit 1
 fi
 
@@ -166,9 +166,9 @@ for arg in "$@"; do
 
     dq)
       # DQ-only: run DuckDB checks against existing R2 data (no ETL).
-      # Constrained to the 16 schemas that have *_dq.sql scripts.
+      # Constrained to the 17 schemas that have *_dq.sql scripts.
       queue+=(
-        weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
+        sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
       )
@@ -179,7 +179,7 @@ for arg in "$@"; do
       # Memory-managed by run-pool.sh heap budget (same as historical ETL).
       export GOVDATA_RUN_MODE="historical"
       queue+=(
-        weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
+        sec:dq-rebuild weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
@@ -194,6 +194,7 @@ for arg in "$@"; do
         "sec_primary:${_cy}"
         econ:daily census:daily geo:daily crime:daily weather:daily
         "sec_secondary:${_cy}"
+        "sec_prices:daily"
         ref:daily
         fec:daily fedregister:daily
         cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly
