@@ -70,7 +70,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | lands        | —          | PENDING | —     | —     | Schema changes pending re-run |
 | health       | —          | PENDING | —     | —     | Schema changes pending re-run |
 | patents      | —          | PENDING | —     | —     | Schema changes pending re-run |
-| ref          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
 | econ_reference | —        | PENDING | —     | —     | Schema changes pending re-run |
@@ -243,9 +243,9 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## ref (2026-05-20) — WARN
+## ref (2026-05-30) — PASS
 
-0 fails, 1 warn, 31 pass. 32 checks across 4 tables (T1–T7).
+0 fails, 0 warns, 32 pass. All checks across 4 tables (T1–T7).
 
 | Table | Rows | Notes |
 |-------|------|-------|
@@ -254,10 +254,7 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 | sec_company_tickers | 10,354 | Active US exchange-listed SEC filers from EDGAR company_tickers.json |
 | figi_instruments | 184,221 | OpenFIGI instruments for 9,290 of 10,354 SEC tickers (1,064 tickers had no FIGI match) |
 
-**Warnings:**
-- `gleif_cik_mapping T7_cik_format`: 3 GLEIF data entry errors — one entry has `"File number: 2429466"` label text instead of just the CIK digits; two WisdomTree fund series have SEC series IDs (`S000043385`, `S000052357`) instead of the parent trust's CIK. These are errors in GLEIF's self-reported registrations.
-
-**Fixes applied (2026-05-20):**
+**Previously fixed (2026-05-20):**
 - `HttpSource.parseValue`: only attempts `Double.parseDouble` when the value contains a decimal point (`.`). Previously, integer strings overflowing `Long` (e.g. all-digit 20-char LEIs like `13250000000000000000`) and alphanumeric IDs containing `E` (e.g. `300300E1000345000084`) were incorrectly coerced to `Double`, producing precision-lossy or `Infinity` values. Fix eliminates 13,946 bad LEI values in gleif_entities and 9 in gleif_cik_mapping.
 - `HttpSource.parseValue`: GLEIF CSV `"NULL"` literal is now mapped to SQL NULL. Eliminates 8,892 `entity_status` rows stored as the string `"NULL"` — `T7_entity_status_values` now passes.
 - `HttpSourceConfig`/`HttpSource`: added `bodyWrapArray` flag. OpenFIGI `/v3/mapping` requires a JSON array body (`[{...}]`). Previously the body was sent as a bare object, causing HTTP 400 on every request. Fix wraps the body map in a singleton list before JSON serialization.
