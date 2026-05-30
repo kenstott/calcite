@@ -1168,7 +1168,22 @@ public class EtlPipeline {
               consecutiveFailures++;
               String errorMsg =
                   String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
-              LOGGER.error(errorMsg, e);
+
+              // Enhanced diagnostics for HTTP/S3 errors
+              if (e.getMessage() != null && (e.getMessage().contains("HTTP") || e.getMessage().contains("404") || e.getMessage().contains("<!doctype"))) {
+                LOGGER.error("Batch {}/{} failed with HTTP/S3 error. Variables: {}. Full cause chain:",
+                    processedCount, neededCount, variables);
+                // Log full exception with cause chain
+                Throwable cause = e;
+                int depth = 0;
+                while (cause != null && depth < 5) {
+                  LOGGER.error("  [{}] {}: {}", depth, cause.getClass().getSimpleName(), cause.getMessage());
+                  cause = cause.getCause();
+                  depth++;
+                }
+              } else {
+                LOGGER.error(errorMsg, e);
+              }
               errors.add(errorMsg);
               incrementalTracker.invalidateTableCompletion(pipelineName);
 
