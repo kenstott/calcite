@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.15.5](https://github.com/kenstott/calcite/compare/v0.15.4...v0.15.5) (2026-05-30)
+
+
+### Bug Fixes
+
+* **census:** use TRY_CAST for county_fips to handle missing county field ([aae964a](https://github.com/kenstott/calcite/commit/aae964a0ae157e178c6887bc05fb4579c024768a))
+* **dq:** clear ETL batch tracker on rebuild to prevent skipped batches ([86685db](https://github.com/kenstott/calcite/commit/86685db3f396f27e4add2ff1696b433980e3ebf2))
+* **dq:** preserve GOVDATA_JAR environment variable in load_env ([ed1b25c](https://github.com/kenstott/calcite/commit/ed1b25c9733d4bb6745d3bf0c30df16b50f5f524))
+* **dq:** source .env.dq in load_env to preserve GOVDATA_JAR ([44b4c49](https://github.com/kenstott/calcite/commit/44b4c496026979a4b702e59b29b20514d9fd017f))
+
 ## [0.15.4](https://github.com/kenstott/calcite/compare/v0.15.3...v0.15.4) (2026-05-30)
 
 
