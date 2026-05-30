@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.1](https://github.com/kenstott/calcite/compare/v0.16.0...v0.16.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **census:** remove county_fips from economic_census table ([4ba70e8](https://github.com/kenstott/calcite/commit/4ba70e806214f9588bd4fbd6c8df4c487ed2238f))
+* **census:** use COALESCE to handle missing county column in county_fips ([d4ad816](https://github.com/kenstott/calcite/commit/d4ad816ce72b9e04c5fe9dacf3a0bf60e84c14b7))
+
 ## [0.16.0](https://github.com/kenstott/calcite/compare/v0.15.5...v0.16.0) (2026-05-30)
 
 
