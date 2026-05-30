@@ -1236,7 +1236,7 @@ partitionedTables:
   # ==========================================================================
 
   - name: stock_prices
-    enabled: true
+    enabled: "${FETCH_STOCK_PRICES:false}"
     pattern: "stock_prices/year=*/ticker=*/*.parquet"
     partitions:
       style: hive

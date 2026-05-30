@@ -381,6 +381,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (!op.containsKey("ciks")) {
       setFromEnv(op, "ciks", "GOVDATA_CIKS");
     }
+    if (!op.containsKey("fetchStockPrices")
+        && "true".equalsIgnoreCase(System.getenv("FETCH_STOCK_PRICES"))) {
+      op.put("fetchStockPrices", Boolean.TRUE);
+    }
     if (!op.containsKey("chunksBackfill")
         && "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"))) {
       op.put("chunksBackfill", Boolean.TRUE);
