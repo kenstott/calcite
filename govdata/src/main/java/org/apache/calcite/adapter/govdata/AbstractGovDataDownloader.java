@@ -1797,14 +1797,14 @@ public abstract class AbstractGovDataDownloader {
     // Write aggregated data to JSON cache file
     // (pattern, jsonPath, fullJsonPath already resolved earlier for cache check)
 
-    // Write as JSON array - use ByteArrayOutputStream then writeFile
+    // Write as JSON array - use ByteArrayOutputStream then write to Level 1 cache
     // Always use JSON_MAPPER (not MAPPER) to ensure cache files are JSON regardless of schema format
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     JSON_MAPPER.writeValue(baos, filteredData);
     byte[] data = baos.toByteArray();
-    cacheStorageProvider.writeFile(fullJsonPath, data);
+    writeToCacheLevel1(jsonPath, data);
 
-    LOGGER.info("Wrote {} records ({} bytes) to {}", filteredData.size(), data.length, jsonPath);
+    LOGGER.info("Wrote {} records ({} bytes) to Level 1 cache: {}", filteredData.size(), data.length, jsonPath);
     return new DownloadResult(jsonPath, data.length);
   }
 
@@ -5328,6 +5328,27 @@ public abstract class AbstractGovDataDownloader {
   protected String getCachePolicyForYear(int year) {
     int currentYear = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
     return (year == currentYear) ? "current_year_daily" : "historical_immutable";
+  }
+
+  /**
+   * Write downloaded data to local ETL cache (Level 1) if configured.
+   * If ETL_LOCAL_RAW_CACHE is not set, falls back to storageProvider for Level 2 (remote).
+   * This implements 2-level caching: local → remote with sync.
+   */
+  protected void writeToCacheLevel1(String relativePath, byte[] data) throws IOException {
+    String localCacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCacheRoot != null && !localCacheRoot.isEmpty()) {
+      // Level 1 (local): Write directly to disk
+      String fullPath = new java.io.File(localCacheRoot, relativePath).getAbsolutePath();
+      new java.io.File(fullPath).getParentFile().mkdirs();
+      java.nio.file.Files.write(java.nio.file.Paths.get(fullPath), data);
+      LOGGER.info("💾 Cached to Level 1 (local): {}", fullPath);
+    } else {
+      // Fallback: Level 2 (remote storage) when local cache not configured
+      String remotePath = storageProvider.resolvePath(cacheDirectory, relativePath);
+      cacheStorageProvider.writeFile(remotePath, data);
+      LOGGER.info("☁️  Cached to Level 2 (remote): {} [no local cache configured]", relativePath);
+    }
   }
 
 }
