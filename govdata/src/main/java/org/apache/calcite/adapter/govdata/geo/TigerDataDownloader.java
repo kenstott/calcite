@@ -695,6 +695,26 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       }
     }
 
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ Counties shapefile exists in cache, updating manifest: year={}", year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("year", String.valueOf(year));
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          getGeoManifest().markCached("counties", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "counties_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
+    }
+
     if (!autoDownload) {
       LOGGER.info("Auto-download disabled. Counties shapefile not found for year {}: {}", year, zipCachePath);
       return null;
@@ -786,6 +806,27 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         LOGGER.debug("Places shapefile cached per manifest for state {} year {}", stateFips, year);
         return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
       }
+    }
+
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ Places shapefile exists in cache, updating manifest: state={} year={}", stateFips, year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", stateFips);
+          params.put("year", String.valueOf(year));
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          getGeoManifest().markCached("places", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
     }
 
     if (!autoDownload) {
@@ -892,6 +933,26 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       }
     }
 
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ ZCTAs shapefile exists in cache, updating manifest: year={}", year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("year", String.valueOf(year));
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          getGeoManifest().markCached("zctas", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "zctas_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
+    }
+
     if (!autoDownload) {
       LOGGER.info("Auto-download disabled. ZCTAs shapefile not found: {}", zipCachePath);
       return null;
@@ -974,6 +1035,26 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         LOGGER.debug("Congressional districts shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
       }
+    }
+
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ Congressional districts shapefile exists in cache, updating manifest: year={}", year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("year", String.valueOf(year));
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          getGeoManifest().markCached("congressional_districts", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
     }
 
     if (!autoDownload) {
@@ -1246,6 +1327,38 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         }
       }
 
+      // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      try {
+        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+        if (hasShapefile) {
+          LOGGER.info("⚡ Census tracts shapefile exists in cache, updating manifest: state={} year={}", fips, year);
+          if (cacheManifest != null) {
+            java.util.Map<String, String> params = new java.util.HashMap<>();
+            params.put("state", fips);
+            params.put("year", String.valueOf(year));
+            long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+            getGeoManifest().markCached("census_tracts", year, params, cachePath, totalSize);
+            cacheManifest.save(this.operatingDirectory);
+          }
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "census_tracts_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+        // Fall through to download
+      }
+
       if (!autoDownload) {
         LOGGER.info("Auto-download disabled. Census tracts not found for state {} year {}", fips, year);
         continue;
@@ -1362,6 +1475,38 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         }
       }
 
+      // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      try {
+        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+        if (hasShapefile) {
+          LOGGER.info("⚡ Block groups shapefile exists in cache, updating manifest: state={} year={}", fips, year);
+          if (cacheManifest != null) {
+            java.util.Map<String, String> params = new java.util.HashMap<>();
+            params.put("state", fips);
+            params.put("year", String.valueOf(year));
+            long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+            getGeoManifest().markCached("block_groups", year, params, cachePath, totalSize);
+            cacheManifest.save(this.operatingDirectory);
+          }
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "block_groups_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+        // Fall through to download
+      }
+
       if (!autoDownload) {
         LOGGER.info("Auto-download disabled. Block groups not found for state {} year {}", fips, year);
         continue;
@@ -1466,6 +1611,26 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         LOGGER.debug("CBSA shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "cbsa_" + year);
       }
+    }
+
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ CBSA shapefile exists in cache, updating manifest: year={}", year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("year", String.valueOf(year));
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          getGeoManifest().markCached("cbsa", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "cbsa_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
     }
 
     if (!autoDownload) {
@@ -1587,6 +1752,38 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
           }
           continue;
         }
+      }
+
+      // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      try {
+        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+        if (hasShapefile) {
+          LOGGER.info("⚡ School districts shapefile exists in cache, updating manifest: state={} year={}", fips, year);
+          if (cacheManifest != null) {
+            java.util.Map<String, String> params = new java.util.HashMap<>();
+            params.put("state", fips);
+            params.put("year", String.valueOf(year));
+            long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+            getGeoManifest().markCached("school_districts", year, params, cachePath, totalSize);
+            cacheManifest.save(this.operatingDirectory);
+          }
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+        // Fall through to download
       }
 
       if (!autoDownload) {
