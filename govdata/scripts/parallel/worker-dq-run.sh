@@ -688,6 +688,12 @@ ${FINDINGS_MD}
 fi
 
 _SCRIPT_COMPLETE=true
+
+# Sync local cache to object storage if configured
+if [ -n "${GOVDATA_CACHE_DIR}" ]; then
+  rclone sync "${GOVDATA_PARQUET_DIR}/cache/raw" "${GOVDATA_CACHE_DIR}" &
+fi
+
 log_info "$WORKER_ID complete"
 
 [ "$VERDICT" = "FAIL" ] && exit 1
