@@ -1203,10 +1203,19 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       return;
     }
 
+    // Check if target is local cache (ETL_LOCAL_RAW_CACHE) - use direct File I/O
+    String localCacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
+    boolean isLocalCache = localCacheRoot != null && !localCacheRoot.isEmpty() && targetPath.startsWith(localCacheRoot);
+
     for (File file : files) {
       if (file.isDirectory()) {
         // Recursively upload subdirectory
-        String subPath = cacheStorageProvider.resolvePath(targetPath, file.getName());
+        String subPath;
+        if (isLocalCache) {
+          subPath = new File(targetPath, file.getName()).getAbsolutePath();
+        } else {
+          subPath = cacheStorageProvider.resolvePath(targetPath, file.getName());
+        }
         uploadDirectoryToStorage(file, subPath);
       } else {
         // Skip ZIP files (only upload extracted shapefiles)
@@ -1214,11 +1223,20 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
           LOGGER.debug("Skipping ZIP file upload: {}", file.getName());
           continue;
         }
-        // Upload file to cache storage (local disk, not S3)
-        String filePath = cacheStorageProvider.resolvePath(targetPath, file.getName());
-        LOGGER.debug("Uploading {} to cache: {}", file.getName(), filePath);
-        byte[] data = Files.readAllBytes(file.toPath());
-        cacheStorageProvider.writeFile(filePath, data);
+
+        if (isLocalCache) {
+          // Direct local file I/O for ETL cache
+          File targetFile = new File(targetPath, file.getName());
+          targetFile.getParentFile().mkdirs();
+          LOGGER.info("Caching {} locally: {}", file.getName(), targetFile.getAbsolutePath());
+          Files.copy(file.toPath(), targetFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } else {
+          // Use storage provider for remote storage
+          String filePath = cacheStorageProvider.resolvePath(targetPath, file.getName());
+          LOGGER.debug("Uploading {} to storage: {}", file.getName(), filePath);
+          byte[] data = Files.readAllBytes(file.toPath());
+          cacheStorageProvider.writeFile(filePath, data);
+        }
       }
     }
   }
