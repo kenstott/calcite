@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.17.0](https://github.com/kenstott/calcite/compare/v0.16.1...v0.17.0) (2026-05-31)
+
+
+### Features
+
+* **dq:** sync local cache to MinIO after processing ([d24998d](https://github.com/kenstott/calcite/commit/d24998dee669ed008ebdf3f986bb961f0510592a))
+* **govdata:** add downloadDuckDbExtensions task for multi-platform DuckDB extension bundling ([354fa6c](https://github.com/kenstott/calcite/commit/354fa6cac07a086b4954c6e41fba612ccaf100eb))
+* **govdata:** bundle DuckDB extensions for air-gapped operation ([77eb852](https://github.com/kenstott/calcite/commit/77eb85250c60b886aa190956f4ce2886148a5c76))
+
+
+### Bug Fixes
+
+* **dq:** sync raw cache from ETL_LOCAL_RAW_CACHE, not GOVDATA_PARQUET_DIR ([bafc6c3](https://github.com/kenstott/calcite/commit/bafc6c31ee99c1bd65c68ad63967f157310b3fbe))
+* **geo:** install spatial extension before loading in WatershedDataProvider ([19731a7](https://github.com/kenstott/calcite/commit/19731a7717d5027c094e6c953a0f1a4f28bb7bd1))
+
 ## [0.16.1](https://github.com/kenstott/calcite/compare/v0.16.0...v0.16.1) (2026-05-30)
 
 
