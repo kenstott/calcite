@@ -603,7 +603,15 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
           new org.apache.calcite.adapter.govdata.CacheKey(cacheKey, params);
       if (cacheManifest.isCached(manifestKey)) {
         LOGGER.debug("Using cached ACS data per manifest: {}", cacheFilePath);
-        return readJsonFromStorage(cacheFilePath);
+        // Defensive: verify file actually exists in storage (manifest might be stale)
+        try {
+          if (storageProvider.exists(cacheFilePath)) {
+            return readJsonFromStorage(cacheFilePath);
+          }
+        } catch (IOException e) {
+          LOGGER.debug("Cached file inaccessible, falling back to API: {}", e.getMessage());
+        }
+        // If file doesn't exist or can't be read, fall through to fetch from API
       }
     }
 
