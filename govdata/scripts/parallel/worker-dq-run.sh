@@ -690,8 +690,16 @@ fi
 _SCRIPT_COMPLETE=true
 
 # Sync local cache to object storage if configured
-if [ -n "${GOVDATA_CACHE_DIR}" ]; then
-  rclone sync "${GOVDATA_PARQUET_DIR}/cache/raw" "${GOVDATA_CACHE_DIR}" &
+if [ -n "${GOVDATA_CACHE_DIR:-}" ]; then
+  _local_raw_cache="${ETL_LOCAL_RAW_CACHE:-}"
+  if [ -z "$_local_raw_cache" ]; then
+    _jvm_dir="$(cd "$SCRIPT_DIR/../.." && pwd)/.aperio"
+    _local_raw_cache="$_jvm_dir/cache/raw"
+  fi
+  if [ -d "$_local_raw_cache" ]; then
+    log_info "$WORKER_ID: syncing raw cache from $_local_raw_cache to $GOVDATA_CACHE_DIR"
+    rclone sync "$_local_raw_cache" "${GOVDATA_CACHE_DIR}" &
+  fi
 fi
 
 log_info "$WORKER_ID complete"
