@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/kenstott/calcite/compare/v0.17.0...v0.18.0) (2026-05-31)
+
+
+### Features
+
+* **dq:** add --local-jar flag to run-all-dq to skip jar download and release polling ([3ffd4f3](https://github.com/kenstott/calcite/commit/3ffd4f375d99c0e0b7c869fc87e70c9127daa9a3))
+
+
+### Bug Fixes
+
+* **geo:** add defensive cache fallback to all TIGER download methods ([fb5896c](https://github.com/kenstott/calcite/commit/fb5896cdd660d539a69ad4f0565043a9e9df8862))
+
 ## [0.17.0](https://github.com/kenstott/calcite/compare/v0.16.1...v0.17.0) (2026-05-31)
 
 
