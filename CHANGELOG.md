@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/kenstott/calcite/compare/v0.18.1...v0.18.2) (2026-05-31)
+
+
+### Bug Fixes
+
+* **geo:** check local ETL cache in defensive fallback to prevent re-downloads ([5fc44de](https://github.com/kenstott/calcite/commit/5fc44de5a692842a4cd7e05e699a159af94e9bfe))
+
 ## [0.18.1](https://github.com/kenstott/calcite/compare/v0.18.0...v0.18.1) (2026-05-31)
 
 
