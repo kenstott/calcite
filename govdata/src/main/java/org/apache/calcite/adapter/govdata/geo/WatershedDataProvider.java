@@ -224,12 +224,14 @@ public class WatershedDataProvider implements DataProvider {
     String gdbPath = gdbDir.toAbsolutePath().toString().replace("'", "\\'");
     String outPath = outFile.toAbsolutePath().toString().replace("'", "\\'");
 
+    String spatialPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+        .getLocalExtensionPath("spatial");
     String sql = String.format(
-        "INSTALL spatial; LOAD spatial; "
+        "LOAD '%s'; "
         + "COPY (SELECT lower(%s) AS huc_code, name, areasqkm "
         + "FROM ST_Read('%s', layer='%s')) "
         + "TO '%s' (FORMAT CSV, DELIMITER '\t', HEADER);",
-        hucFieldUpper, gdbPath, layer, outPath);
+        spatialPath, hucFieldUpper, gdbPath, layer, outPath);
 
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.environment().put("HOME", System.getProperty("user.home"));

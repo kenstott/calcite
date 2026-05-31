@@ -308,8 +308,16 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement st = conn.createStatement()) {
 
-      st.execute("INSTALL httpfs; LOAD httpfs");
-      st.execute("INSTALL iceberg; LOAD iceberg");
+      // Ensure extensions are extracted from bundled resources
+      org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller.ensureInstalled(conn);
+
+      // Load extensions from bundled resources
+      String httpfsPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+          .getLocalExtensionPath("httpfs");
+      String icebergPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+          .getLocalExtensionPath("iceberg");
+      st.execute("LOAD '" + httpfsPath + "'");
+      st.execute("LOAD '" + icebergPath + "'");
 
       if (accessKey != null && secretKey != null) {
         StringBuilder secret = new StringBuilder(

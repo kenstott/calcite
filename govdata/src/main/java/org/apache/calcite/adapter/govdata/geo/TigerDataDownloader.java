@@ -1792,11 +1792,12 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Execute conversion via DuckDB
     try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
-      // Load spatial extension
+      // Load spatial extension (pre-extracted from bundled resources)
       try (java.sql.Statement stmt = conn.createStatement()) {
-        stmt.execute("INSTALL spatial");
-        stmt.execute("LOAD spatial");
-        LOGGER.debug("Loaded DuckDB spatial extension");
+        String spatialPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+            .getLocalExtensionPath("spatial");
+        stmt.execute("LOAD '" + spatialPath + "'");
+        LOGGER.debug("Loaded DuckDB spatial extension from {}", spatialPath);
       }
 
       // Execute conversion

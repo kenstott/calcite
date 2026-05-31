@@ -2550,6 +2550,7 @@ public abstract class AbstractGovDataDownloader {
   public static Connection getDuckDBConnection(StorageProvider storageProvider)
       throws java.sql.SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    DuckDbExtensionInstaller.ensureInstalled(conn);
     loadConversionExtensions(conn);
     configureS3Access(conn, storageProvider);
     return conn;
@@ -2566,9 +2567,9 @@ public abstract class AbstractGovDataDownloader {
    */
   private static void configureS3Access(Connection conn, StorageProvider storageProvider) {
     try {
-      // Install and load httpfs extension for S3 support
-      conn.createStatement().execute("INSTALL httpfs");
-      conn.createStatement().execute("LOAD httpfs");
+      // Load httpfs extension for S3 support (pre-extracted from bundled resources)
+      String httpfsPath = DuckDbExtensionInstaller.getLocalExtensionPath("httpfs");
+      conn.createStatement().execute("LOAD '" + httpfsPath + "'");
 
       // Get S3 config from storage provider
       Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
@@ -2642,22 +2643,16 @@ public abstract class AbstractGovDataDownloader {
    * @param conn DuckDB connection to load extensions into
    */
   private static void loadConversionExtensions(Connection conn) {
-    String[][] extensions = {
-        {"quackformers", "FROM community"},  // Embedding generation
-        {"spatial", ""},                      // GIS operations
-        {"h3", "FROM community"},             // Geospatial hex indexing
-        {"excel", ""},                        // Excel file support
-        {"fts", ""},                          // Full-text indexing
-        {"zipfs", "FROM community"}           // ZIP file reading support
-    };
+    String[] extensions = {"spatial", "h3", "excel", "fts", "zipfs", "quackformers"};
 
-    for (String[] ext : extensions) {
+    for (String ext : extensions) {
       try {
-        conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
-        conn.createStatement().execute("LOAD " + ext[0]);
+        // Try loading from bundled resources (pre-extracted by DuckDbExtensionInstaller)
+        String extPath = DuckDbExtensionInstaller.getLocalExtensionPath(ext);
+        conn.createStatement().execute("LOAD '" + extPath + "'");
       } catch (java.sql.SQLException e) {
-        // Special fallback for quackformers: try loading from GitHub
-        if ("quackformers".equals(ext[0])) {
+        // Special fallback for quackformers: try loading from GitHub (community extension)
+        if ("quackformers".equals(ext)) {
           try {
             LOGGER.info("Retrying quackformers from GitHub repository...");
             // Try simple GitHub URL first (DuckDB auto-discovers platform/version)
@@ -2677,7 +2672,7 @@ public abstract class AbstractGovDataDownloader {
             }
           }
         }
-        LOGGER.warn("Failed to load extension '{}' (continuing): {}", ext[0], e.getMessage());
+        LOGGER.warn("Failed to load extension '{}' (continuing): {}", ext, e.getMessage());
       }
     }
   }

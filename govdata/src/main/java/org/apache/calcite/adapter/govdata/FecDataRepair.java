@@ -244,8 +244,12 @@ public class FecDataRepair {
     }
 
     String host = ep.replaceFirst("https?://", "");
+    String httpfsPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+        .getLocalExtensionPath("httpfs");
+    String icebergPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
+        .getLocalExtensionPath("iceberg");
     StringBuilder sb = new StringBuilder();
-    sb.append("INSTALL httpfs; LOAD httpfs; INSTALL iceberg; LOAD iceberg;");
+    sb.append("LOAD '").append(httpfsPath).append("'; LOAD '").append(icebergPath).append("';");
     sb.append("SET s3_access_key_id='").append(ak).append("';");
     sb.append("SET s3_secret_access_key='").append(sk).append("';");
     sb.append("SET s3_endpoint='").append(host).append("';");
