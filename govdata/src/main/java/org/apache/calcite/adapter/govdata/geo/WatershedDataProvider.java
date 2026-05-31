@@ -225,7 +225,7 @@ public class WatershedDataProvider implements DataProvider {
     String outPath = outFile.toAbsolutePath().toString().replace("'", "\\'");
 
     String sql = String.format(
-        "LOAD spatial; "
+        "INSTALL spatial; LOAD spatial; "
         + "COPY (SELECT lower(%s) AS huc_code, name, areasqkm "
         + "FROM ST_Read('%s', layer='%s')) "
         + "TO '%s' (FORMAT CSV, DELIMITER '\t', HEADER);",
