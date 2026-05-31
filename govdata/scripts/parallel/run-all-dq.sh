@@ -33,6 +33,7 @@ SCHEMA_FILTER=""
 MAX_RESTARTS=5
 POLL_INTERVAL=300   # seconds between release polls (default 5 min)
 POOL_EXTRA_ARGS=()  # forwarded verbatim to run-pool-persist.sh
+LOCAL_JAR=false     # skip jar download and release polling when true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,8 +59,11 @@ while [[ $# -gt 0 ]]; do
     --reset)
       POOL_EXTRA_ARGS+=(--reset)
       ;;
+    --local-jar)
+      LOCAL_JAR=true
+      ;;
     --help|-h)
-      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force]"
+      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force] [--local-jar]"
       echo ""
       echo "  Starts run-pool dq-rebuild and monitors for new engine releases."
       echo "  On a new release: kills the pool, downloads the new jar, restarts."
@@ -70,6 +74,8 @@ while [[ $# -gt 0 ]]; do
       echo "  -j N                 Max concurrent workers (passed to run-pool)"
       echo "  --force              Bypass release-window checks (passed to run-pool)"
       echo "  --reset              Clear completed-slots checkpoint, re-run all schemas"
+      echo "  --local-jar          Use the jar already at build/libs/sih-govdata.jar without"
+      echo "                       downloading or polling for new releases"
       exit 0
       ;;
     *)
@@ -153,15 +159,24 @@ _stop_pool() {
 trap '_stop_pool' INT TERM EXIT
 
 # ── main ──────────────────────────────────────────────────────────────────────
-CURRENT_RELEASE=$(_latest_release)
-log_info "run-all-dq: starting — release=$CURRENT_RELEASE poll_interval=${POLL_INTERVAL}s max_restarts=$MAX_RESTARTS"
-
-_jar_version=$(cat "$JAR_VERSION_FILE" 2>/dev/null || true)
-if [ ! -f "$JAR_PATH" ] || [ "$_jar_version" != "$CURRENT_RELEASE" ]; then
-  log_info "run-all-dq: jar ${_jar_version:-missing} → downloading $CURRENT_RELEASE"
-  _download_jar "$CURRENT_RELEASE" || exit 1
+if $LOCAL_JAR; then
+  if [ ! -f "$JAR_PATH" ]; then
+    log_info "run-all-dq: ERROR — --local-jar specified but no jar at $JAR_PATH"
+    exit 1
+  fi
+  CURRENT_RELEASE=$(cat "$JAR_VERSION_FILE" 2>/dev/null || echo "local")
+  log_info "run-all-dq: starting — local jar ($CURRENT_RELEASE), release polling disabled"
 else
-  log_info "run-all-dq: jar already at $CURRENT_RELEASE — skipping download"
+  CURRENT_RELEASE=$(_latest_release)
+  log_info "run-all-dq: starting — release=$CURRENT_RELEASE poll_interval=${POLL_INTERVAL}s max_restarts=$MAX_RESTARTS"
+
+  _jar_version=$(cat "$JAR_VERSION_FILE" 2>/dev/null || true)
+  if [ ! -f "$JAR_PATH" ] || [ "$_jar_version" != "$CURRENT_RELEASE" ]; then
+    log_info "run-all-dq: jar ${_jar_version:-missing} → downloading $CURRENT_RELEASE"
+    _download_jar "$CURRENT_RELEASE" || exit 1
+  else
+    log_info "run-all-dq: jar already at $CURRENT_RELEASE — skipping download"
+  fi
 fi
 
 RESTART_COUNT=0
@@ -171,8 +186,8 @@ while true; do
   SAVED_PID=$POOL_PID
   NEW_RELEASE_FOUND=false
 
-  # Poll for a new release while the pool is alive
-  while kill -0 "$POOL_PID" 2>/dev/null; do
+  # Poll for a new release while the pool is alive (skipped with --local-jar)
+  while ! $LOCAL_JAR && kill -0 "$POOL_PID" 2>/dev/null; do
     sleep "$POLL_INTERVAL"
     kill -0 "$POOL_PID" 2>/dev/null || break   # pool may have finished during sleep
 
