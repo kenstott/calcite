@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.3](https://github.com/kenstott/calcite/compare/v0.18.2...v0.18.3) (2026-05-31)
+
+
+### Bug Fixes
+
+* **geo:** add existence check before reading cached ACS data ([d16ccce](https://github.com/kenstott/calcite/commit/d16ccce61daa2a3a46c99a5ec907ab76420c7498))
+* **geo:** correct defensive fallback logic - sync down from object storage ([16f9afd](https://github.com/kenstott/calcite/commit/16f9afdad92fed320cf2945c5de90ed871a55e55))
+* **geo:** use cacheStorageProvider for TIGER raw file caching ([d613dcc](https://github.com/kenstott/calcite/commit/d613dccf42bc79e083cdf4ee6664bab338269ccd))
+* **geo:** use direct File I/O for local cache writes ([370b18a](https://github.com/kenstott/calcite/commit/370b18abfb0e54fbde1bf9d43f3616b6da9992d0))
+
 ## [0.18.2](https://github.com/kenstott/calcite/compare/v0.18.1...v0.18.2) (2026-05-31)
 
 
