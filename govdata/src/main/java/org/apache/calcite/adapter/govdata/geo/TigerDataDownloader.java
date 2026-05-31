@@ -1206,7 +1206,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     for (File file : files) {
       if (file.isDirectory()) {
         // Recursively upload subdirectory
-        String subPath = storageProvider.resolvePath(targetPath, file.getName());
+        String subPath = cacheStorageProvider.resolvePath(targetPath, file.getName());
         uploadDirectoryToStorage(file, subPath);
       } else {
         // Skip ZIP files (only upload extracted shapefiles)
@@ -1214,11 +1214,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
           LOGGER.debug("Skipping ZIP file upload: {}", file.getName());
           continue;
         }
-        // Upload file
-        String filePath = storageProvider.resolvePath(targetPath, file.getName());
-        LOGGER.debug("Uploading {} to {}", file.getName(), filePath);
+        // Upload file to cache storage (local disk, not S3)
+        String filePath = cacheStorageProvider.resolvePath(targetPath, file.getName());
+        LOGGER.debug("Uploading {} to cache: {}", file.getName(), filePath);
         byte[] data = Files.readAllBytes(file.toPath());
-        storageProvider.writeFile(filePath, data);
+        cacheStorageProvider.writeFile(filePath, data);
       }
     }
   }
@@ -1227,11 +1227,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Downloads files from cache storage to a temp directory for reading.
    */
   private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
-    // Download all files to temp directory via storage provider
+    // Download all files to temp directory from cache storage (local disk)
     File tempDir = Files.createTempDirectory(tempPrefix + "-").toFile();
 
     // List all files in the cache path recursively and download them
-    java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, true);
+    java.util.List<FileEntry> files = cacheStorageProvider.listFiles(cachePath, true);
     if (files.isEmpty()) {
       LOGGER.warn("No files found in cache path: {}", cachePath);
       return tempDir;
@@ -1253,8 +1253,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       File targetFile = new File(tempDir, relativePath);
       targetFile.getParentFile().mkdirs();
 
-      // Download file from storage using InputStream
-      try (java.io.InputStream in = storageProvider.openInputStream(filePath);
+      // Download file from cache storage using InputStream
+      try (java.io.InputStream in = cacheStorageProvider.openInputStream(filePath);
            java.io.OutputStream out = new java.io.FileOutputStream(targetFile)) {
         byte[] buffer = new byte[8192];
         int bytesRead;
