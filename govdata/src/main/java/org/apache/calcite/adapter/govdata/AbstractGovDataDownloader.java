@@ -455,6 +455,18 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Common helper: get local ETL cache path from environment variable.
+   * Subclasses can override for custom logic.
+   */
+  protected String getLocalEtlCachePathFromEnv(String relativePath) {
+    String localCache = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCache != null && !localCache.isEmpty()) {
+      return localCache + "/" + relativePath;
+    }
+    return null;
+  }
+
+  /**
    * Represents a single dimension of iteration with variable name and values.
    * Used for multidimensional iteration over download/conversion operations.
    */
