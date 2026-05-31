@@ -244,7 +244,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
     // Upload to cache
     byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    writeToCacheLevel1(cacheFilePath, csvData);
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -295,7 +295,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
     // Upload to cache
     byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    writeToCacheLevel1(cacheFilePath, csvData);
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -330,7 +330,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
     // Upload to cache
     byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    writeToCacheLevel1(cacheFilePath, csvData);
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -405,7 +405,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
       // Upload to cache
       byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-      storageProvider.writeFile(cacheFilePath, csvData);
+      writeToCacheLevel1(cacheFilePath, csvData);
       LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
       return tempFile;

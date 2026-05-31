@@ -226,7 +226,7 @@ public class EdgarDownloader {
         String cachePath = storageProvider.resolvePath(cacheDirectory, cacheFileName);
         byte[] jsonBytes = MAPPER.writerWithDefaultPrettyPrinter()
             .writeValueAsBytes(submissions);
-        storageProvider.writeFile(cachePath, jsonBytes);
+        writeToCacheLevel1(cachePath, jsonBytes);
 
         long fileSize = jsonBytes.length;
         // Prefer ETag, fallback to Last-Modified, final fallback to 24-hour TTL
@@ -418,7 +418,7 @@ public class EdgarDownloader {
             }
 
             byte[] fileContent = out.toByteArray();
-            storageProvider.writeFile(filePath, fileContent);
+            writeToCacheLevel1(filePath, fileContent);
 
             LOGGER.info("Downloaded " + fileContent.length + " bytes: " + filename);
             return filePath;
@@ -439,5 +439,36 @@ public class EdgarDownloader {
 
     LOGGER.debug("Could not find XBRL document for " + formType + " " + filingDate);
     return null;
+  }
+
+  /**
+   * Write to Level 1 (local) cache if configured, else Level 2 (remote).
+   */
+  private void writeToCacheLevel1(String storagePath, byte[] data) throws IOException {
+    String localCacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCacheRoot != null && !localCacheRoot.isEmpty()) {
+      String relativePath = extractRelativePath(storagePath);
+      String fullPath = new java.io.File(localCacheRoot, relativePath).getAbsolutePath();
+      new java.io.File(fullPath).getParentFile().mkdirs();
+      java.nio.file.Files.write(java.nio.file.Paths.get(fullPath), data);
+      LOGGER.info("💾 Level 1 (local): {}", fullPath);
+    } else {
+      if (!storagePath.contains("://")) {
+        storagePath = storageProvider.resolvePath(cacheDirectory, storagePath);
+      }
+      writeToCacheLevel1(storagePath, data);
+      LOGGER.info("☁️  Level 2 (remote): {}", storagePath);
+    }
+  }
+
+  private String extractRelativePath(String storagePath) {
+    if (storagePath.startsWith(cacheDirectory)) {
+      String relative = storagePath.substring(cacheDirectory.length());
+      if (relative.startsWith("/")) {
+        relative = relative.substring(1);
+      }
+      return relative;
+    }
+    return storagePath;
   }
 }

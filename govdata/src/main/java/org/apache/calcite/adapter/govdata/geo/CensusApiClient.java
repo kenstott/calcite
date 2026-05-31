@@ -566,7 +566,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     String filePath = storageProvider.resolvePath(cachePath, filename);
 
     byte[] jsonBytes = objectMapper.writeValueAsBytes(data);
-    storageProvider.writeFile(filePath, jsonBytes);
+    writeToCacheLevel1(filePath, jsonBytes);
     LOGGER.debug("Saved Census data to {}", filePath);
   }
 
@@ -625,7 +625,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
     // Cache the response
     byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    writeToCacheLevel1(cacheFilePath, jsonBytes);
     LOGGER.info("Cached ACS data to {}", cacheFilePath);
 
     // Mark in manifest
@@ -706,7 +706,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
         // Cache the successful response
         byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        writeToCacheLevel1(cacheFilePath, jsonBytes);
         LOGGER.info("Cached Decennial data to {} using dataset '{}'", cacheFilePath, dataset);
 
         return response;
@@ -766,7 +766,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
         // Cache the successful response
         byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        writeToCacheLevel1(cacheFilePath, jsonBytes);
         LOGGER.info("Cached Economic data to {} using dataset '{}'", cacheFilePath, ds);
 
         return response;
@@ -836,7 +836,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
         // Cache the successful response
         byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        writeToCacheLevel1(cacheFilePath, jsonBytes);
         LOGGER.info("Cached Population Estimates data to {} using dataset '{}'", cacheFilePath, ds);
 
         return response;
@@ -905,7 +905,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
     // Cache the successful response
     byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    writeToCacheLevel1(cacheFilePath, jsonBytes);
     LOGGER.info("Cached CPS Voting data to {} ({} bytes)", cacheFilePath, jsonBytes.length);
 
     return response;
@@ -952,7 +952,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
     // Cache the successful response
     byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
-    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    writeToCacheLevel1(cacheFilePath, jsonBytes);
     LOGGER.info("Cached county FIPS codes to {} ({} bytes)", cacheFilePath, jsonBytes.length);
 
     return parseCountyFipsFromJson(response);

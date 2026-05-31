@@ -5334,21 +5334,43 @@ public abstract class AbstractGovDataDownloader {
    * Write downloaded data to local ETL cache (Level 1) if configured.
    * If ETL_LOCAL_RAW_CACHE is not set, falls back to storageProvider for Level 2 (remote).
    * This implements 2-level caching: local → remote with sync.
+   *
+   * @param storagePath Full storage path (e.g., from storageProvider.resolvePath), or relative path
+   * @param data File content to cache
    */
-  protected void writeToCacheLevel1(String relativePath, byte[] data) throws IOException {
+  protected void writeToCacheLevel1(String storagePath, byte[] data) throws IOException {
     String localCacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
     if (localCacheRoot != null && !localCacheRoot.isEmpty()) {
-      // Level 1 (local): Write directly to disk
+      // Level 1 (local): Extract relative path and write to disk
+      String relativePath = extractRelativePath(storagePath);
       String fullPath = new java.io.File(localCacheRoot, relativePath).getAbsolutePath();
       new java.io.File(fullPath).getParentFile().mkdirs();
       java.nio.file.Files.write(java.nio.file.Paths.get(fullPath), data);
-      LOGGER.info("💾 Cached to Level 1 (local): {}", fullPath);
+      LOGGER.info("💾 Level 1 (local): {}", fullPath);
     } else {
       // Fallback: Level 2 (remote storage) when local cache not configured
-      String remotePath = storageProvider.resolvePath(cacheDirectory, relativePath);
-      cacheStorageProvider.writeFile(remotePath, data);
-      LOGGER.info("☁️  Cached to Level 2 (remote): {} [no local cache configured]", relativePath);
+      // Assume storagePath is already a valid remote path
+      if (!storagePath.contains("://")) {
+        storagePath = storageProvider.resolvePath(cacheDirectory, storagePath);
+      }
+      cacheStorageProvider.writeFile(storagePath, data);
+      LOGGER.info("☁️  Level 2 (remote): {}", storagePath);
     }
+  }
+
+  /**
+   * Extract relative path from a storage path by removing cacheDirectory prefix.
+   */
+  private String extractRelativePath(String storagePath) {
+    if (storagePath.startsWith(cacheDirectory)) {
+      String relative = storagePath.substring(cacheDirectory.length());
+      if (relative.startsWith("/")) {
+        relative = relative.substring(1);
+      }
+      return relative;
+    }
+    // If not prefixed with cacheDirectory, return as-is
+    return storagePath;
   }
 
 }
