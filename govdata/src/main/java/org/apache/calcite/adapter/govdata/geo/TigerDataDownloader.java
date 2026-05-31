@@ -413,6 +413,56 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
+   * Check if cached shapefiles exist in either local ETL cache or remote cache.
+   * For defensive fallback: if files exist locally but manifest doesn't know about them,
+   * this method finds them and returns the path (local or remote).
+   *
+   * ETL rebuild flow:
+   * 1. Files downloaded to local disk at ETL_LOCAL_RAW_CACHE
+   * 2. Manifest may not be updated if process restarts
+   * 3. On restart, defensive fallback finds files in local cache
+   * 4. Later, sync script copies from local to remote (GOVDATA_CACHE_DIR)
+   */
+  private java.util.List<FileEntry> checkBothCaches(String primaryCachePath, String localEtlCachePath) throws IOException {
+    // First try primary cache path (could be S3 or local depending on config)
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(primaryCachePath, false);
+      if (!files.isEmpty()) {
+        return files;
+      }
+    } catch (IOException e) {
+      // Fall through to check local cache
+    }
+
+    // If primary cache is empty or unreachable, check local ETL cache
+    if (localEtlCachePath != null && !localEtlCachePath.isEmpty()) {
+      try {
+        java.util.List<FileEntry> files = storageProvider.listFiles(localEtlCachePath, false);
+        if (!files.isEmpty()) {
+          LOGGER.debug("Found files in local ETL cache, will use those: {}", localEtlCachePath);
+          return files;
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Local ETL cache not accessible: {}", e.getMessage());
+      }
+    }
+
+    return new java.util.ArrayList<>();
+  }
+
+  /**
+   * Build local ETL cache path from environment variable.
+   * Returns null if not set.
+   */
+  private String getLocalEtlCachePath(String relativePath) {
+    String localCache = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCache != null && !localCache.isEmpty()) {
+      return storageProvider.resolvePath(localCache, relativePath);
+    }
+    return null;
+  }
+
+  /**
    * Convert all downloaded TIGER shapefiles to Parquet format (matching ECON pattern).
    * Uses iterateTableOperationsOptimized for efficient cache checking.
    *
@@ -578,8 +628,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/states", year);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ States shapefile exists in cache, updating manifest: year={}", year);
@@ -696,8 +749,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/counties", year);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ Counties shapefile exists in cache, updating manifest: year={}", year);
@@ -809,8 +865,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/places/%s", year, stateFips);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ Places shapefile exists in cache, updating manifest: state={} year={}", stateFips, year);
@@ -934,8 +993,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/zctas", year);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ ZCTAs shapefile exists in cache, updating manifest: year={}", year);
@@ -1038,8 +1100,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/congressional_districts", year);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ Congressional districts shapefile exists in cache, updating manifest: year={}", year);
@@ -1328,8 +1393,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       }
 
       // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      // Checks both primary cache and local ETL cache
+      String relativePathForLocal = String.format("year=%d/census_tracts/%s", year, fips);
+      String localCachePath = getLocalEtlCachePath(relativePathForLocal);
       try {
-        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
         boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
         if (hasShapefile) {
           LOGGER.info("⚡ Census tracts shapefile exists in cache, updating manifest: state={} year={}", fips, year);
@@ -1476,8 +1544,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       }
 
       // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      // Checks both primary cache and local ETL cache
+      String relativePathForLocal = String.format("year=%d/block_groups/%s", year, fips);
+      String localCachePath = getLocalEtlCachePath(relativePathForLocal);
       try {
-        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
         boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
         if (hasShapefile) {
           LOGGER.info("⚡ Block groups shapefile exists in cache, updating manifest: state={} year={}", fips, year);
@@ -1614,8 +1685,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    // Checks both primary cache and local ETL cache
+    String relativePathForLocal = String.format("year=%d/cbsa", year);
+    String localCachePath = getLocalEtlCachePath(relativePathForLocal);
     try {
-      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
       boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
       if (hasShapefile) {
         LOGGER.info("⚡ CBSA shapefile exists in cache, updating manifest: year={}", year);
@@ -1755,8 +1829,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       }
 
       // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+      // Checks both primary cache and local ETL cache
+      String relativePathForLocal = String.format("year=%d/school_districts/%s", year, fips);
+      String localCachePath = getLocalEtlCachePath(relativePathForLocal);
       try {
-        java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+        java.util.List<FileEntry> files = checkBothCaches(cachePath, localCachePath);
         boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
         if (hasShapefile) {
           LOGGER.info("⚡ School districts shapefile exists in cache, updating manifest: state={} year={}", fips, year);
