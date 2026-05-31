@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/kenstott/calcite/compare/v0.18.0...v0.18.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **geo:** upgrade DuckDB from v1.4.3 to v1.4.4 for extension compatibility ([59b8ce8](https://github.com/kenstott/calcite/commit/59b8ce824aa95e842e7d8377cc8585ba8cd09f48))
+
 ## [0.18.0](https://github.com/kenstott/calcite/compare/v0.17.0...v0.18.0) (2026-05-31)
 
 
