@@ -248,6 +248,51 @@ tasks.shadowJar {
     }
 }
 
+// Task to download DuckDB extensions for all platforms (air-gapped operation)
+tasks.register("downloadDuckDbExtensions") {
+    group = "build"
+    description = "Download DuckDB extensions for all platforms (linux_amd64, osx_amd64, osx_arm64, windows_amd64)"
+
+    doLast {
+        val duckdbVersion = "1.4.3"
+        val extensionsDir = file("src/main/resources/duckdb/extensions")
+        val platforms = listOf("linux_amd64", "osx_amd64", "osx_arm64", "windows_amd64")
+        val extensions = listOf("spatial", "httpfs", "iceberg", "h3", "excel", "fts", "zipfs", "quackformers", "parquet")
+        val baseUrl = "http://extensions.duckdb.org/v$duckdbVersion"
+
+        println("Downloading DuckDB $duckdbVersion extensions for ${platforms.size} platforms...")
+
+        for (platform in platforms) {
+            val platformDir = file("$extensionsDir/$platform")
+            platformDir.mkdirs()
+
+            for (ext in extensions) {
+                val extFile = file("$platformDir/$ext.duckdb_extension")
+                if (extFile.exists()) {
+                    println("  ✓ $platform/$ext.duckdb_extension (already present, ${extFile.length() / 1024 / 1024} MB)")
+                    continue
+                }
+
+                val url = "$baseUrl/$platform/$ext.duckdb_extension.gz"
+                println("  ⬇ Downloading $ext for $platform...")
+
+                try {
+                    exec {
+                        commandLine("sh", "-c", "curl -L '$url' | gunzip > '$extFile'")
+                    }
+                    println("    ✓ $ext ($platform) ${extFile.length() / 1024 / 1024} MB")
+                } catch (e: Exception) {
+                    println("    ✗ Error downloading $ext ($platform): ${e.message}")
+                }
+            }
+        }
+
+        println("\nDuckDB extensions download complete!")
+        val totalBytes = extensionsDir.walk().sumOf { if (it.isFile) it.length() else 0L }
+        println("Total size: ${totalBytes / 1024 / 1024 / 1024} GB (${totalBytes / 1024 / 1024} MB)")
+    }
+}
+
 // Task to run ETL runner directly from Gradle
 tasks.register<JavaExec>("etlRunner") {
     group = "application"
