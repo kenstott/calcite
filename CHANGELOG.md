@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/kenstott/calcite/compare/v0.19.0...v0.19.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **geo:** update DuckDB extensions to v1.4.4 to fix watershed tables ([ce7ffa0](https://github.com/kenstott/calcite/commit/ce7ffa0e3c591e7a2027118b7f5906a5282f258c))
+
 ## [0.19.0](https://github.com/kenstott/calcite/compare/v0.18.3...v0.19.0) (2026-06-01)
 
 
