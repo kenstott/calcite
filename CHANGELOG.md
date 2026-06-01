@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.2](https://github.com/kenstott/calcite/compare/v0.21.1...v0.21.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* **providers:** inject StorageProvider via StorageAwareDataProvider interface ([8502bdf](https://github.com/kenstott/calcite/commit/8502bdf327dc177161ca099e5faf087fe8f8439e))
+
 ## [0.21.1](https://github.com/kenstott/calcite/compare/v0.21.0...v0.21.1) (2026-06-01)
 
 
