@@ -282,11 +282,15 @@ public final class ZipDownloadUtils {
       throws IOException {
     File[] files = dir.listFiles();
     if (files == null) return;
+    // Bypass StorageProvider.resolvePath — it strips path segments containing dots
+    // (e.g. WBD_National_GDB.gdb gets treated as a file extension and stripped).
+    // For directory traversal we need raw path concatenation.
+    String base = basePath.endsWith("/") ? basePath : basePath + "/";
     for (File file : files) {
+      String destPath = base + file.getName();
       if (file.isDirectory()) {
-        writeDirectoryToStorage(file, sp.resolvePath(basePath, file.getName()), sp);
+        writeDirectoryToStorage(file, destPath, sp);
       } else {
-        String destPath = sp.resolvePath(basePath, file.getName());
         try (InputStream in = new FileInputStream(file)) {
           sp.writeFile(destPath, in);
         }
