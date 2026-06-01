@@ -142,47 +142,19 @@ public class TigerDataProvider implements DataProvider {
 
       LOGGER.info("Parsed {} records from TIGER shapefile for table {}",
           result.size(), tableName);
-
-      // Cleanup temp directory
-      final File tempDirToClean = tempDir;
-      Runtime.getRuntime().addShutdownHook(
-          new Thread(() -> {
-        try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean.toPath())) {
-          walk.sorted(Comparator.reverseOrder())
-              .map(Path::toFile)
-              .forEach(File::delete);
-        } catch (IOException e) {
-          LOGGER.debug("Failed to cleanup temp directory: {}", e.getMessage());
-        }
-      }));
+      ZipDownloadUtils.deleteDirectory(tempDir);
+      tempDir = null;
 
       return result.iterator();
 
     } catch (IOException e) {
       // 404 means no data exists for this partition (e.g. voting_districts only has
       // census vintages 2012 and 2020 — all other years are legitimately absent).
+      ZipDownloadUtils.deleteDirectory(tempDir);
       if (e.getMessage() != null && e.getMessage().startsWith("HTTP 404")) {
         LOGGER.info("No data for table {} year={} state={} (HTTP 404 — skipping partition)",
             tableName, year, stateFips);
-        if (tempDir != null) {
-          try (java.util.stream.Stream<Path> walk = Files.walk(tempDir.toPath())) {
-            walk.sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-          } catch (IOException cleanupError) {
-            LOGGER.debug("Failed to cleanup temp directory: {}", cleanupError.getMessage());
-          }
-        }
         return new ArrayList<Map<String, Object>>().iterator();
-      }
-      if (tempDir != null) {
-        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir.toPath())) {
-          walk.sorted(Comparator.reverseOrder())
-              .map(Path::toFile)
-              .forEach(File::delete);
-        } catch (IOException cleanupError) {
-          LOGGER.debug("Failed to cleanup temp directory: {}", cleanupError.getMessage());
-        }
       }
       throw e;
     } catch (OutOfMemoryError oom) {

@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
@@ -64,10 +65,10 @@ public class GazetteerDataProvider implements DataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
+    String cachePath = StorageProviderFactory.getGovDataCacheDir() + "/geo/gazetteer/year=" + year + "/" + tableName;
     File tempDir = null;
     try {
-      LOGGER.info("Downloading Gazetteer data from: {}", url);
-      tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "gazetteer-" + tableName);
+      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(url, null, "gazetteer-" + tableName, cachePath, null);
 
       // Find .txt file in extracted temp dir
       File extractedFile = findFileByExtension(tempDir, ".txt");
@@ -117,13 +118,7 @@ public class GazetteerDataProvider implements DataProvider {
   }
 
   private static void deleteDirectory(File dir) {
-    try {
-      try (java.util.stream.Stream<java.nio.file.Path> walk = Files.walk(dir.toPath())) {
-        walk.sorted(Comparator.reverseOrder()).map(java.nio.file.Path::toFile).forEach(File::delete);
-      }
-    } catch (IOException e) {
-      // best-effort cleanup
-    }
+    ZipDownloadUtils.deleteDirectory(dir);
   }
 
   private List<Map<String, Object>> parseTsvFile(File tsvFile, String tableName, String year)

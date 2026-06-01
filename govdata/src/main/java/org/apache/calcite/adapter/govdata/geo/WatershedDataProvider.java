@@ -17,15 +17,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
+
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,8 +33,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
  * Data provider for USGS Watershed Boundary Dataset (WBD).
@@ -57,10 +53,13 @@ public class WatershedDataProvider implements DataProvider {
   private static final String WBD_URL =
       "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip";
 
-  // Cache extracted data to avoid re-downloading
-  private static volatile Map<String, List<Map<String, Object>>> cachedData;
-  private static volatile long cacheTimestamp = 0;
-  private static final long CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  private static final String WBD_CACHE_PATH =
+      StorageProviderFactory.getGovDataCacheDir() + "/geo/wbd_national";
+
+  // JVM-lifetime parsed cache (avoids re-parsing from storage within same run)
+  private static volatile Map<String, List<Map<String, Object>>> parsedCache;
+  private static volatile long parsedCacheTimestamp = 0;
+  private static final long PARSED_CACHE_TTL_MS = 24 * 60 * 60 * 1000L;
 
   @Override
   public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -76,23 +75,22 @@ public class WatershedDataProvider implements DataProvider {
       return Collections.emptyIterator();
     }
 
-    // Check cache
-    if (cachedData != null && System.currentTimeMillis() - cacheTimestamp < CACHE_TTL_MS) {
-      List<Map<String, Object>> data = cachedData.get(hucLevel);
+    // Check JVM-lifetime parsed cache first (avoids re-parsing within same run)
+    if (parsedCache != null && System.currentTimeMillis() - parsedCacheTimestamp < PARSED_CACHE_TTL_MS) {
+      List<Map<String, Object>> data = parsedCache.get(hucLevel);
       if (data != null) {
-        LOGGER.info("Using cached watershed data for HUC{}: {} records", hucLevel, data.size());
+        LOGGER.info("Using parsed cache for HUC{}: {} records", hucLevel, data.size());
         return data.iterator();
       }
     }
 
-    // Download and extract WBD data — retry up to 3 times on transient failures
+    // Download (or restore from StorageProvider cache) and parse
     Exception lastError = null;
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         Map<String, List<Map<String, Object>>> allData = downloadAndExtractWbd();
-        cachedData = allData;
-        cacheTimestamp = System.currentTimeMillis();
-
+        parsedCache = allData;
+        parsedCacheTimestamp = System.currentTimeMillis();
         List<Map<String, Object>> data = allData.get(hucLevel);
         if (data != null) {
           LOGGER.info("Extracted {} HUC{} watershed records", data.size(), hucLevel);
@@ -106,18 +104,8 @@ public class WatershedDataProvider implements DataProvider {
     }
 
     if (lastError != null) {
-      LOGGER.error("Failed to download/extract WBD data after 3 attempts: {}",
-          lastError.getMessage(), lastError);
-      // Populate cache with empty data so subsequent batches skip re-download
-      Map<String, List<Map<String, Object>>> empty = new HashMap<>();
-      empty.put("2", new ArrayList<Map<String, Object>>());
-      empty.put("4", new ArrayList<Map<String, Object>>());
-      empty.put("8", new ArrayList<Map<String, Object>>());
-      empty.put("12", new ArrayList<Map<String, Object>>());
-      cachedData = empty;
-      cacheTimestamp = System.currentTimeMillis();
+      LOGGER.error("Failed to download/extract WBD data after 3 attempts: {}", lastError.getMessage());
     }
-
     return Collections.emptyIterator();
   }
 
@@ -144,55 +132,26 @@ public class WatershedDataProvider implements DataProvider {
     result.put("8", new ArrayList<>());
     result.put("12", new ArrayList<>());
 
-    // Create temp directory for extraction
-    Path tempDir = Files.createTempDirectory("wbd_");
+    LOGGER.info("Downloading WBD data from USGS (cached at {})...", WBD_CACHE_PATH);
+    File tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
+        WBD_URL, null, "wbd", WBD_CACHE_PATH, null);
     try {
-      // Download ZIP file
-      LOGGER.info("Downloading WBD data from USGS...");
-      Path zipFile = tempDir.resolve("wbd.zip");
-      downloadFile(WBD_URL, zipFile.toFile());
-
-      // Extract and parse
-      LOGGER.info("Extracting WBD geodatabase...");
-      extractAndParseGdb(zipFile, tempDir, result);
-
+      LOGGER.info("Parsing WBD geodatabase from {}", tempDir);
+      extractAndParseGdb(tempDir.toPath(), result);
     } finally {
-      // Cleanup temp directory
-      deleteDirectory(tempDir.toFile());
+      deleteDirectory(tempDir);
     }
 
     return result;
   }
 
-  private void downloadFile(String urlString, File destination) throws IOException {
-    URL url = URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000); // 5 minutes for large file
-
-    try (InputStream in = new BufferedInputStream(conn.getInputStream());
-         FileOutputStream out = new FileOutputStream(destination)) {
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      long totalBytes = 0;
-      while ((bytesRead = in.read(buffer)) != -1) {
-        out.write(buffer, 0, bytesRead);
-        totalBytes += bytesRead;
-        if (totalBytes % (10 * 1024 * 1024) == 0) {
-          LOGGER.debug("Downloaded {} MB", totalBytes / (1024 * 1024));
-        }
-      }
-      LOGGER.info("Download complete: {} MB", totalBytes / (1024 * 1024));
-    }
-  }
-
-  private void extractAndParseGdb(Path zipFile, Path tempDir,
+  private void extractAndParseGdb(Path tempDir,
       Map<String, List<Map<String, Object>>> result) throws IOException {
 
-    Path gdbDir = extractGdbFromZip(zipFile, tempDir);
+    // Find .gdb directory in the already-extracted temp dir
+    Path gdbDir = findGdbDir(tempDir);
     if (gdbDir == null) {
-      LOGGER.error("No .gdb directory found in WBD ZIP — cannot parse watershed data");
+      LOGGER.error("No .gdb directory found in extracted WBD — cannot parse watershed data");
       return;
     }
     LOGGER.info("Extracted GDB to: {}", gdbDir);
@@ -303,51 +262,12 @@ public class WatershedDataProvider implements DataProvider {
     return records;
   }
 
-  private Path extractGdbFromZip(Path zipFile, Path tempDir) throws IOException {
-    Path gdbDir = null;
-    String gdbPrefix = null;
-
-    try (ZipInputStream zis = new ZipInputStream(
-        new BufferedInputStream(Files.newInputStream(zipFile)))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        String name = entry.getName();
-        int gdbIdx = name.indexOf(".gdb");
-        if (gdbIdx < 0) {
-          zis.closeEntry();
-          continue;
-        }
-
-        // Determine the prefix before the .gdb segment on the first GDB entry
-        if (gdbPrefix == null) {
-          String upToGdb = name.substring(0, gdbIdx + 4);
-          int lastSlash  = upToGdb.lastIndexOf('/');
-          String gdbSegment  = upToGdb.substring(lastSlash + 1);
-          gdbPrefix = upToGdb.substring(0, lastSlash + 1);
-          gdbDir = tempDir.resolve(gdbSegment);
-          Files.createDirectories(gdbDir);
-        }
-
-        // Strip prefix so the path is relative to tempDir
-        String relative = name.substring(gdbPrefix.length());
-        Path entryPath  = tempDir.resolve(relative);
-
-        if (entry.isDirectory()) {
-          Files.createDirectories(entryPath);
-        } else {
-          Files.createDirectories(entryPath.getParent());
-          try (FileOutputStream out = new FileOutputStream(entryPath.toFile())) {
-            byte[] buf = new byte[65536];
-            int n;
-            while ((n = zis.read(buf)) != -1) {
-              out.write(buf, 0, n);
-            }
-          }
-        }
-        zis.closeEntry();
-      }
+  private Path findGdbDir(Path dir) throws IOException {
+    try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
+      return walk.filter(p -> p.toString().endsWith(".gdb") && Files.isDirectory(p))
+          .findFirst()
+          .orElse(null);
     }
-    return gdbDir;
   }
 
   private void deleteDirectory(File dir) {

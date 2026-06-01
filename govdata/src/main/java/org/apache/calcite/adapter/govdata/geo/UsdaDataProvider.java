@@ -12,17 +12,15 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -78,8 +76,8 @@ public class UsdaDataProvider implements DataProvider {
     }
 
     try {
-      LOGGER.info("Downloading USDA data from: {}", url);
-      String csvContent = downloadCsv(url);
+      String cachePath = StorageProviderFactory.getGovDataCacheDir() + "/geo/usda/" + tableName + ".csv";
+      String csvContent = ZipDownloadUtils.downloadTextCached(url, null, cachePath, null);
 
       List<Map<String, Object>> result;
       switch (tableName) {
@@ -117,33 +115,6 @@ public class UsdaDataProvider implements DataProvider {
     default:
       return null;
     }
-  }
-
-  private String downloadCsv(String urlString) throws IOException {
-    URI uri = URI.create(urlString);
-    URL url = uri.toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(120000);
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter/1.0");
-    conn.setRequestProperty("Accept", "text/csv, */*");
-
-    int responseCode = conn.getResponseCode();
-    if (responseCode != HttpURLConnection.HTTP_OK) {
-      throw new IOException("HTTP " + responseCode + " for URL: " + urlString);
-    }
-
-    StringBuilder content = new StringBuilder();
-    try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(new BufferedInputStream(conn.getInputStream()),
-            StandardCharsets.UTF_8))) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        content.append(line).append("\n");
-      }
-    }
-    return content.toString();
   }
 
   /**

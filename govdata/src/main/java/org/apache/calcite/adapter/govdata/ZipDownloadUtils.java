@@ -10,6 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,8 +21,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
@@ -161,5 +166,129 @@ public final class ZipDownloadUtils {
       conn.disconnect();
     }
     LOGGER.info("Download complete: {} ({} MB)", dest.getName(), dest.length() / (1024 * 1024));
+  }
+
+  /**
+   * Download a ZIP, extract all entries to a temp dir, caching via StorageProvider.
+   *
+   * <p>On first call: downloads from {@code url}, extracts to temp dir, writes each
+   * file to {@code cachePath} via {@code storageProvider}. On subsequent calls:
+   * restores files from cache to a temp dir without downloading.
+   *
+   * @param url        source URL
+   * @param headers    optional request headers
+   * @param prefix     temp dir name prefix
+   * @param cachePath  base storage path for caching extracted files
+   * @param provider   storage provider to use (null = use StorageProviderFactory default)
+   * @return temp dir with extracted files (caller must delete when done)
+   */
+  public static File downloadZipToTempDirCached(String url, Map<String, String> headers,
+      String prefix, String cachePath, StorageProvider provider) throws IOException {
+    if (provider == null) {
+      provider = StorageProviderFactory.createForGovDataCache();
+    }
+    final StorageProvider sp = provider;
+
+    // Check cache first
+    try {
+      List<StorageProvider.FileEntry> cached = sp.listFiles(cachePath, true);
+      if (!cached.isEmpty()) {
+        LOGGER.info("Cache hit: {} ({} files) — restoring to temp dir", cachePath, cached.size());
+        File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-cached-").toFile();
+        for (StorageProvider.FileEntry entry : cached) {
+          if (entry.isDirectory()) continue;
+          String relative = entry.getPath().substring(cachePath.length());
+          if (relative.startsWith("/")) relative = relative.substring(1);
+          File dest = new File(tempDir, relative);
+          dest.getParentFile().mkdirs();
+          try (InputStream in = sp.openInputStream(entry.getPath());
+               FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buf = new byte[65536];
+            int len;
+            while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
+          }
+        }
+        return tempDir;
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Cache check failed for {}: {}", cachePath, e.getMessage());
+    }
+
+    // Download and cache
+    File tempDir = downloadZipToTempDir(url, headers, prefix);
+    try {
+      writeDirectoryToStorage(tempDir, cachePath, sp);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write to cache {}: {}", cachePath, e.getMessage());
+    }
+    return tempDir;
+  }
+
+  /**
+   * Download a text/CSV from {@code url}, caching via StorageProvider.
+   * Returns cached content as a String if available, downloads otherwise.
+   */
+  public static String downloadTextCached(String url, Map<String, String> headers,
+      String cachePath, StorageProvider provider) throws IOException {
+    if (provider == null) {
+      provider = StorageProviderFactory.createForGovDataCache();
+    }
+    final StorageProvider sp = provider;
+
+    // Check cache
+    try {
+      if (sp.exists(cachePath)) {
+        LOGGER.info("Cache hit: {}", cachePath);
+        try (InputStream in = sp.openInputStream(cachePath)) {
+          return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Cache check failed for {}: {}", cachePath, e.getMessage());
+    }
+
+    // Download
+    File tempFile = File.createTempFile("text-download-", ".tmp");
+    try {
+      downloadToFile(url, headers, tempFile);
+      byte[] data = java.nio.file.Files.readAllBytes(tempFile.toPath());
+      try (InputStream in = new java.io.ByteArrayInputStream(data)) {
+        sp.writeFile(cachePath, in);
+      }
+      return new String(data, java.nio.charset.StandardCharsets.UTF_8);
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  /**
+   * Recursively delete a directory. Best-effort — logs warning on failure.
+   */
+  public static void deleteDirectory(File dir) {
+    if (dir == null || !dir.exists()) return;
+    try {
+      java.nio.file.Files.walk(dir.toPath())
+          .sorted(java.util.Comparator.reverseOrder())
+          .map(java.nio.file.Path::toFile)
+          .forEach(File::delete);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to delete temp directory {}: {}", dir, e.getMessage());
+    }
+  }
+
+  private static void writeDirectoryToStorage(File dir, String basePath, StorageProvider sp)
+      throws IOException {
+    File[] files = dir.listFiles();
+    if (files == null) return;
+    for (File file : files) {
+      if (file.isDirectory()) {
+        writeDirectoryToStorage(file, sp.resolvePath(basePath, file.getName()), sp);
+      } else {
+        String destPath = sp.resolvePath(basePath, file.getName());
+        try (InputStream in = new FileInputStream(file)) {
+          sp.writeFile(destPath, in);
+        }
+      }
+    }
   }
 }

@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.govdata.fedregister;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,75 +104,70 @@ public class FedRegisterBulkXmlDataProvider implements DataProvider {
     }
 
     String url = String.format(Locale.US, GOVINFO_URL_TEMPLATE, year, month, year, month);
-    LOGGER.info("Downloading FR bulk XML: {}", url);
+    String cachePath = String.format(Locale.US,
+        "%s/fedregister/year=%d/month=%02d", StorageProviderFactory.getGovDataCacheDir(), year, month);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    downloadAndParse(url, rows);
+    downloadAndParse(url, cachePath, rows);
 
     LOGGER.info("fr_documents: extracted {} rows for {}-{}", rows.size(), year,
         String.format("%02d", month));
     return rows.iterator();
   }
 
-  private void downloadAndParse(String urlString, List<Map<String, Object>> rows)
+  private void downloadAndParse(String urlString, String cachePath, List<Map<String, Object>> rows)
       throws IOException {
 
-    URL url = URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000);
-    conn.setInstanceFollowRedirects(true);
-
-    int status = conn.getResponseCode();
-    if (status == 404) {
-      // Month not yet published (future or pre-Federal Register era)
-      LOGGER.info("FR bulk ZIP not yet available (404): {}", urlString);
-      return;
-    }
-    if (status != 200) {
-      throw new IOException("HTTP " + status + " fetching " + urlString);
+    java.io.File tempDir;
+    try {
+      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
+          urlString, null, "fr-bulk", cachePath, null);
+    } catch (IOException e) {
+      if (e.getMessage() != null && e.getMessage().contains("HTTP 404")) {
+        LOGGER.info("FR bulk ZIP not yet available (404): {}", urlString);
+        return;
+      }
+      throw e;
     }
 
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
     try {
-      // Disable external entity resolution (XXE protection)
-      factory.setFeature(
-          "http://xml.org/sax/features/external-general-entities", false);
-      factory.setFeature(
-          "http://xml.org/sax/features/external-parameter-entities", false);
-      factory.setFeature(
-          "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+      factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+      factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+      factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
       factory.setXIncludeAware(false);
       factory.setExpandEntityReferences(false);
     } catch (ParserConfigurationException e) {
       throw new IOException("XML parser configuration error", e);
     }
 
-    try (InputStream httpIn = new BufferedInputStream(conn.getInputStream());
-         ZipInputStream zis = new ZipInputStream(httpIn)) {
+    // Parse each XML file in the extracted temp dir
+    java.io.File[] xmlFiles = tempDir.listFiles((d, n) -> FILENAME_DATE_PATTERN.matcher(n).find());
+    if (xmlFiles == null || xmlFiles.length == 0) {
+      ZipDownloadUtils.deleteDirectory(tempDir);
+      return;
+    }
+    java.util.Arrays.sort(xmlFiles);
 
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        String name = entry.getName();
-        if (!FILENAME_DATE_PATTERN.matcher(name).find()) {
-          zis.closeEntry();
-          continue;
-        }
-
-        String pubDate = extractDateFromFilename(name);
+    try {
+      for (java.io.File xmlFile : xmlFiles) {
+        String pubDate = extractDateFromFilename(xmlFile.getName());
         try {
           DocumentBuilder builder = factory.newDocumentBuilder();
-          Document xmlDoc = builder.parse(new NonClosingInputStream(zis));
+          Document xmlDoc;
+          try (InputStream in = new java.io.FileInputStream(xmlFile)) {
+            xmlDoc = builder.parse(in);
+          }
           parseXmlDocument(xmlDoc.getDocumentElement(), pubDate, rows);
         } catch (Exception e) {
-          LOGGER.warn("fr_documents: failed to parse {}: {}", name, e.getMessage());
+          LOGGER.warn("Failed to parse {}: {}", xmlFile.getName(), e.getMessage());
         }
-
-        zis.closeEntry();
       }
+    } finally {
+      ZipDownloadUtils.deleteDirectory(tempDir);
     }
   }
+
 
   private void parseXmlDocument(Element root, String pubDate,
       List<Map<String, Object>> rows) {
