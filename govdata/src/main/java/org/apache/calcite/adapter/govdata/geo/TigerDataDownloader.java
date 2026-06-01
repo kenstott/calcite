@@ -446,17 +446,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(objectStoragePath, false);
       if (!files.isEmpty()) {
-        LOGGER.info("☁️  Level 2 cache hit (remote): {}", objectStoragePath);
-        // Attempt to sync down to Level 1 for next run
+        LOGGER.info("☁️  Level 2 cache hit (remote): {} files", files.size());
+        // Sync down to Level 1 for future fast access
         if (localEtlCachePath != null && !localEtlCachePath.isEmpty()) {
-          try {
-            LOGGER.debug("Syncing down from Level 2 to Level 1: {} → {}", objectStoragePath, localEtlCachePath);
-            new java.io.File(localEtlCachePath).mkdirs();
-            // In production: rclone copy $objectStoragePath $localEtlCachePath
-            // For now, just log that we found them
-          } catch (Exception e) {
-            LOGGER.debug("Could not sync from Level 2 to Level 1: {}", e.getMessage());
-          }
+          syncLevel2ToLevel1(objectStoragePath, localEtlCachePath, files);
         }
         return files;
       }
@@ -467,6 +460,42 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     // Step 3: Not found in either cache - return empty, fall through to download
     LOGGER.debug("No cache hit in Level 1 or Level 2, will download");
     return new java.util.ArrayList<>();
+  }
+
+  /**
+   * Sync files from Level 2 (remote) to Level 1 (local) for faster future access.
+   * Called when files are found in remote storage but not in local cache.
+   */
+  private void syncLevel2ToLevel1(String level2Path, String level1Path, java.util.List<FileEntry> files) {
+    try {
+      new java.io.File(level1Path).mkdirs();
+      int synced = 0;
+      for (FileEntry file : files) {
+        if (file.isDirectory()) continue;
+        try {
+          String fileName = file.getPath().substring(file.getPath().lastIndexOf('/') + 1);
+          String targetPath = new java.io.File(level1Path, fileName).getAbsolutePath();
+          try (java.io.InputStream in = storageProvider.openInputStream(file.getPath());
+               java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+              baos.write(buffer, 0, bytesRead);
+            }
+            java.nio.file.Files.write(java.nio.file.Paths.get(targetPath), baos.toByteArray());
+          }
+          synced++;
+        } catch (Exception e) {
+          LOGGER.debug("Failed to sync file: {}", e.getMessage());
+        }
+      }
+      if (synced > 0) {
+        LOGGER.info("📥 Synced {} files from Level 2 to Level 1", synced);
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Level 2→Level 1 sync failed: {}", e.getMessage());
+      // Non-fatal - files are still available from Level 2
+    }
   }
 
   /**
