@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.19.0](https://github.com/kenstott/calcite/compare/v0.18.3...v0.19.0) (2026-06-01)
+
+
+### Features
+
+* **cache:** add syncLevel1ToLevel2() to archive downloads ([f99a707](https://github.com/kenstott/calcite/commit/f99a707975f6d09b8bc5cb0295fab90f684690c9))
+* **cache:** Level 1 first read priority - prefer local cache ([0a4f8c7](https://github.com/kenstott/calcite/commit/0a4f8c7362355f24e1936c40ccd571febe7d5159))
+* **downloader:** all downloaders write to Level 1 cache first ([5b9f282](https://github.com/kenstott/calcite/commit/5b9f282a5223aa9c555d52cc4691f3da49e80916))
+* **govdata:** 2-level cache: write downloads to Level 1 (local) first ([218b576](https://github.com/kenstott/calcite/commit/218b5764d00165220e7517d20431ec2c60388c0c))
+
 ## [0.18.3](https://github.com/kenstott/calcite/compare/v0.18.2...v0.18.3) (2026-05-31)
 
 
