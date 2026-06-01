@@ -85,7 +85,15 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
     String cachePath = storageProvider().resolvePath(cacheBaseDir, "geo/gazetteer/year=" + year + "/" + tableName);
     File tempDir = null;
     try {
-      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(url, null, "gazetteer-" + tableName, cachePath, storageProvider());
+      try {
+        tempDir = ZipDownloadUtils.downloadZipToTempDirCached(url, null, "gazetteer-" + tableName, cachePath, storageProvider());
+      } catch (IOException e) {
+        if (e.getMessage() != null && e.getMessage().contains("HTTP 404")) {
+          LOGGER.info("Gazetteer data not yet published for year={} table={} — skipping", year, tableName);
+          return new ArrayList<Map<String, Object>>().iterator();
+        }
+        throw e;
+      }
 
       // Find .txt file in extracted temp dir
       File extractedFile = findFileByExtension(tempDir, ".txt");

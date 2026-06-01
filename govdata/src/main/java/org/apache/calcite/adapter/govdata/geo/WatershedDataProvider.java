@@ -276,11 +276,19 @@ public class WatershedDataProvider implements StorageAwareDataProvider {
   }
 
   private Path findGdbDir(Path dir) throws IOException {
+    java.util.List<Path> candidates = new java.util.ArrayList<>();
     try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
-      return walk.filter(p -> p.toString().endsWith(".gdb") && Files.isDirectory(p))
-          .findFirst()
-          .orElse(null);
+      walk.filter(p -> {
+        if (!Files.isDirectory(p)) return false;
+        String name = p.getFileName().toString();
+        return name.endsWith(".gdb") || name.equals("gdb");
+      }).forEach(candidates::add);
     }
+    // Prefer directories with .gdb extension (canonical GDB name) over bare "gdb"
+    return candidates.stream()
+        .filter(p -> p.getFileName().toString().endsWith(".gdb"))
+        .findFirst()
+        .orElseGet(() -> candidates.stream().findFirst().orElse(null));
   }
 
   private void deleteDirectory(File dir) {
