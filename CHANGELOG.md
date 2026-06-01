@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/kenstott/calcite/compare/v0.19.1...v0.20.0) (2026-06-01)
+
+
+### Features
+
+* **cache:** implement Level 2→Level 1 sync-down ([54a3f63](https://github.com/kenstott/calcite/commit/54a3f63b53d8601d0906edfeffaa841d83ea2b6d))
+
 ## [0.19.1](https://github.com/kenstott/calcite/compare/v0.19.0...v0.19.1) (2026-06-01)
 
 
