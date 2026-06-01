@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.3](https://github.com/kenstott/calcite/compare/v0.21.2...v0.21.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* **providers:** pass GOVDATA_CACHE_DIR when sourceDirectory is null ([5cada03](https://github.com/kenstott/calcite/commit/5cada03705f22688339271a853bf401a9a2c3ace))
+
 ## [0.21.2](https://github.com/kenstott/calcite/compare/v0.21.1...v0.21.2) (2026-06-01)
 
 
