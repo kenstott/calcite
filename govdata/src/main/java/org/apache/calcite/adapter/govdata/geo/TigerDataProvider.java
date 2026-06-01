@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
@@ -51,30 +52,33 @@ import java.util.Map;
  *   dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
  * </pre>
  */
-public class TigerDataProvider implements DataProvider {
+public class TigerDataProvider implements StorageAwareDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerDataProvider.class);
   private static final String TIGER_BASE_URL = "https://www2.census.gov/geo/tiger";
 
-  private volatile StorageProvider storageProvider;
+  private StorageProvider storageProvider;
+  private String cacheBaseDir;
+
+  @Override public void setStorageProvider(StorageProvider storageProvider, String cacheDirectory) {
+    this.storageProvider = storageProvider;
+    this.cacheBaseDir = cacheDirectory;
+  }
 
   private StorageProvider storageProvider() {
     if (storageProvider == null) {
-      synchronized (this) {
-        if (storageProvider == null) {
-          storageProvider = StorageProviderFactory.createForGovDataCache();
-        }
-      }
+      storageProvider = StorageProviderFactory.createForGovDataCache();
+      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
     }
     return storageProvider;
   }
 
   private String cachePath(String tableName, String year, String stateFips) {
-    String base = StorageProviderFactory.getGovDataCacheDir();
-    String path = storageProvider().resolvePath(base, "geo");
-    path = storageProvider().resolvePath(path, "year=" + year);
-    path = storageProvider().resolvePath(path, tableName);
+    StorageProvider sp = storageProvider();
+    String path = sp.resolvePath(cacheBaseDir, "tiger");
+    path = sp.resolvePath(path, "year=" + year);
+    path = sp.resolvePath(path, tableName);
     if (stateFips != null) {
-      path = storageProvider().resolvePath(path, stateFips);
+      path = sp.resolvePath(path, stateFips);
     }
     return path;
   }

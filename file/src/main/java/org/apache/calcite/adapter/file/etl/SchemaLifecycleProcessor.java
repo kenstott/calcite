@@ -412,6 +412,10 @@ public class SchemaLifecycleProcessor {
         Class<?> clazz = Class.forName(className);
         Object instance = clazz.getDeclaredConstructor().newInstance();
         if (instance instanceof DataProvider) {
+          if (instance instanceof StorageAwareDataProvider) {
+            ((StorageAwareDataProvider) instance)
+                .setStorageProvider(sourceStorageProvider, sourceDirectory);
+          }
           return (DataProvider) instance;
         } else {
           LOGGER.error("Class {} does not implement DataProvider", className);

@@ -10,8 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.fedregister;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
@@ -60,10 +61,26 @@ import javax.xml.parsers.ParserConfigurationException;
  * <p>Fields present in bulk XML: document_number, title, doc_type, publication_date,
  * effective_on, action, agency_names, cfr_references, rin, docket_ids, signing_date.
  */
-public class FedRegisterBulkXmlDataProvider implements DataProvider {
+public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(FedRegisterBulkXmlDataProvider.class);
+
+  private StorageProvider storageProvider;
+  private String cacheBaseDir;
+
+  @Override public void setStorageProvider(StorageProvider sp, String cacheDir) {
+    this.storageProvider = sp;
+    this.cacheBaseDir = cacheDir;
+  }
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      storageProvider = StorageProviderFactory.createForGovDataCache();
+      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
+    }
+    return storageProvider;
+  }
 
   @SuppressWarnings("InlineFormatString")
   private static final String GOVINFO_URL_TEMPLATE =
@@ -104,8 +121,8 @@ public class FedRegisterBulkXmlDataProvider implements DataProvider {
     }
 
     String url = String.format(Locale.US, GOVINFO_URL_TEMPLATE, year, month, year, month);
-    String cachePath = String.format(Locale.US,
-        "%s/fedregister/year=%d/month=%02d", StorageProviderFactory.getGovDataCacheDir(), year, month);
+    String cachePath = storageProvider().resolvePath(cacheBaseDir,
+        String.format(Locale.US, "fedregister/year=%d/month=%02d", year, month));
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     downloadAndParse(url, cachePath, rows);
@@ -121,7 +138,7 @@ public class FedRegisterBulkXmlDataProvider implements DataProvider {
     java.io.File tempDir;
     try {
       tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
-          urlString, null, "fr-bulk", cachePath, null);
+          urlString, null, "fr-bulk", cachePath, storageProvider());
     } catch (IOException e) {
       if (e.getMessage() != null && e.getMessage().contains("HTTP 404")) {
         LOGGER.info("FR bulk ZIP not yet available (404): {}", urlString);

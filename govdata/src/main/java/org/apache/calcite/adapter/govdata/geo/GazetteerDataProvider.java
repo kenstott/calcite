@@ -16,8 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
@@ -46,10 +47,26 @@ import java.util.Map;
  * <p>Gazetteer files contain authoritative names, codes, area measurements,
  * and representative coordinates for geographic entities.
  */
-public class GazetteerDataProvider implements DataProvider {
+public class GazetteerDataProvider implements StorageAwareDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(GazetteerDataProvider.class);
   private static final String GAZETTEER_BASE_URL =
       "https://www2.census.gov/geo/docs/maps-data/data/gazetteer";
+
+  private StorageProvider storageProvider;
+  private String cacheBaseDir;
+
+  @Override public void setStorageProvider(StorageProvider sp, String cacheDir) {
+    this.storageProvider = sp;
+    this.cacheBaseDir = cacheDir;
+  }
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      storageProvider = StorageProviderFactory.createForGovDataCache();
+      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
+    }
+    return storageProvider;
+  }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config, Map<String, String> variables)
       throws IOException {
@@ -65,10 +82,10 @@ public class GazetteerDataProvider implements DataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
-    String cachePath = StorageProviderFactory.getGovDataCacheDir() + "/geo/gazetteer/year=" + year + "/" + tableName;
+    String cachePath = storageProvider().resolvePath(cacheBaseDir, "geo/gazetteer/year=" + year + "/" + tableName);
     File tempDir = null;
     try {
-      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(url, null, "gazetteer-" + tableName, cachePath, null);
+      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(url, null, "gazetteer-" + tableName, cachePath, storageProvider());
 
       // Find .txt file in extracted temp dir
       File extractedFile = findFileByExtension(tempDir, ".txt");

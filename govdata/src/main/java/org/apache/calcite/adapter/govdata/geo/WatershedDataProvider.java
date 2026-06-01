@@ -10,15 +10,14 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.BufferedInputStream;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
-import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -47,14 +46,27 @@ import java.util.Map;
  * <p>For production use with full geometry support, consider using DuckDB's
  * spatial extension with ST_Read() to parse the GDB files directly.
  */
-public class WatershedDataProvider implements DataProvider {
+public class WatershedDataProvider implements StorageAwareDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(WatershedDataProvider.class);
 
   private static final String WBD_URL =
       "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip";
 
-  private static final String WBD_CACHE_PATH =
-      StorageProviderFactory.getGovDataCacheDir() + "/geo/wbd_national";
+  private StorageProvider storageProvider;
+  private String cacheBaseDir;
+
+  @Override public void setStorageProvider(StorageProvider sp, String cacheDir) {
+    this.storageProvider = sp;
+    this.cacheBaseDir = cacheDir;
+  }
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      storageProvider = StorageProviderFactory.createForGovDataCache();
+      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
+    }
+    return storageProvider;
+  }
 
   // JVM-lifetime parsed cache (avoids re-parsing from storage within same run)
   private static volatile Map<String, List<Map<String, Object>>> parsedCache;
@@ -132,9 +144,10 @@ public class WatershedDataProvider implements DataProvider {
     result.put("8", new ArrayList<>());
     result.put("12", new ArrayList<>());
 
-    LOGGER.info("Downloading WBD data from USGS (cached at {})...", WBD_CACHE_PATH);
+    String wbdCachePath = storageProvider().resolvePath(cacheBaseDir, "geo/wbd_national");
+    LOGGER.info("Downloading WBD data from USGS (cached at {})...", wbdCachePath);
     File tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
-        WBD_URL, null, "wbd", WBD_CACHE_PATH, null);
+        WBD_URL, null, "wbd", wbdCachePath, storageProvider());
     try {
       LOGGER.info("Parsing WBD geodatabase from {}", tempDir);
       extractAndParseGdb(tempDir.toPath(), result);

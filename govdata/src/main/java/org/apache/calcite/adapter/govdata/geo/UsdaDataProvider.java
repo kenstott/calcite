@@ -10,8 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
@@ -36,8 +37,24 @@ import java.util.Map;
  * provided in CSV format. The RUCC CSV uses a pivoted key-value format
  * where each county has multiple rows with different attributes.
  */
-public class UsdaDataProvider implements DataProvider {
+public class UsdaDataProvider implements StorageAwareDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(UsdaDataProvider.class);
+
+  private StorageProvider storageProvider;
+  private String cacheBaseDir;
+
+  @Override public void setStorageProvider(StorageProvider sp, String cacheDir) {
+    this.storageProvider = sp;
+    this.cacheBaseDir = cacheDir;
+  }
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      storageProvider = StorageProviderFactory.createForGovDataCache();
+      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
+    }
+    return storageProvider;
+  }
 
   /** RUCC code descriptions. */
   private static final Map<Integer, String> RUCC_DESCRIPTIONS = new HashMap<>();
@@ -76,8 +93,8 @@ public class UsdaDataProvider implements DataProvider {
     }
 
     try {
-      String cachePath = StorageProviderFactory.getGovDataCacheDir() + "/geo/usda/" + tableName + ".csv";
-      String csvContent = ZipDownloadUtils.downloadTextCached(url, null, cachePath, null);
+      String cachePath = storageProvider().resolvePath(cacheBaseDir, "geo/usda/" + tableName + ".csv");
+      String csvContent = ZipDownloadUtils.downloadTextCached(url, null, cachePath, storageProvider());
 
       List<Map<String, Object>> result;
       switch (tableName) {
