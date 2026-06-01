@@ -18,6 +18,8 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.locationtech.jts.geom.Geometry;
@@ -25,7 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -51,6 +55,30 @@ public class TigerDataProvider implements DataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerDataProvider.class);
   private static final String TIGER_BASE_URL = "https://www2.census.gov/geo/tiger";
 
+  private volatile StorageProvider storageProvider;
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      synchronized (this) {
+        if (storageProvider == null) {
+          storageProvider = StorageProviderFactory.createForGovDataCache();
+        }
+      }
+    }
+    return storageProvider;
+  }
+
+  private String cachePath(String tableName, String year, String stateFips) {
+    String base = StorageProviderFactory.getGovDataCacheDir();
+    String path = storageProvider().resolvePath(base, "geo");
+    path = storageProvider().resolvePath(path, "year=" + year);
+    path = storageProvider().resolvePath(path, tableName);
+    if (stateFips != null) {
+      path = storageProvider().resolvePath(path, stateFips);
+    }
+    return path;
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config, Map<String, String> variables)
       throws IOException {
 
@@ -68,7 +96,6 @@ public class TigerDataProvider implements DataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
-    // Download and extract to temp directory
     File tempDir = null;
     try {
       Runtime runtime = Runtime.getRuntime();
@@ -76,8 +103,14 @@ public class TigerDataProvider implements DataProvider {
       long maxMb = runtime.maxMemory() / (1024 * 1024);
       LOGGER.info("Memory before fetch: {}MB used / {}MB max", usedMb, maxMb);
 
-      LOGGER.info("Downloading TIGER shapefile from: {}", url);
-      tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "tiger-" + tableName);
+      // Check cache before downloading
+      String cachePath = cachePath(tableName, year, stateFips);
+      tempDir = restoreFromCache(cachePath, tableName, year, stateFips);
+      if (tempDir == null) {
+        LOGGER.info("Downloading TIGER shapefile from: {}", url);
+        tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "tiger-" + tableName);
+        writeToCache(tempDir, cachePath);
+      }
 
       // Find shapefile prefix
       String prefix = findShapefilePrefix(tempDir);
@@ -169,6 +202,63 @@ public class TigerDataProvider implements DataProvider {
       System.err.println("FATAL ERROR: " + e.getClass().getName() + " in TigerDataProvider: " + e.getMessage());
       System.err.flush();
       throw e;
+    }
+  }
+
+  /**
+   * Restore shapefiles from cache to a temp dir. Returns null if not cached.
+   * TIGER files are immutable by year, so no TTL check needed.
+   */
+  private File restoreFromCache(String cachePath, String tableName, String year, String stateFips) {
+    try {
+      java.util.List<StorageProvider.FileEntry> files = storageProvider().listFiles(cachePath, true);
+      if (files.isEmpty()) {
+        return null;
+      }
+      boolean hasShapefile = files.stream()
+          .anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (!hasShapefile) {
+        return null;
+      }
+      LOGGER.info("Cache hit for {} year={} state={} — restoring from {}", tableName, year, stateFips, cachePath);
+      File tempDir = Files.createTempDirectory("tiger-" + tableName + "-cached-").toFile();
+      for (StorageProvider.FileEntry entry : files) {
+        if (entry.isDirectory()) continue;
+        String relative = entry.getPath().substring(cachePath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+        File dest = new File(tempDir, relative);
+        dest.getParentFile().mkdirs();
+        try (InputStream in = storageProvider().openInputStream(entry.getPath());
+             FileOutputStream out = new FileOutputStream(dest)) {
+          byte[] buf = new byte[65536];
+          int len;
+          while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
+        }
+      }
+      return tempDir;
+    } catch (Exception e) {
+      LOGGER.debug("Cache restore failed for {}: {}", cachePath, e.getMessage());
+      return null;
+    }
+  }
+
+  /** Write extracted shapefile temp dir to cache via storageProvider. */
+  private void writeToCache(File tempDir, String cachePath) {
+    try {
+      File[] files = tempDir.listFiles();
+      if (files == null) return;
+      for (File file : files) {
+        if (file.isDirectory()) continue;
+        if (file.getName().endsWith(".zip")) continue;
+        String destPath = storageProvider().resolvePath(cachePath, file.getName());
+        try (InputStream in = new java.io.FileInputStream(file)) {
+          storageProvider().writeFile(destPath, in);
+        }
+      }
+      LOGGER.info("Cached shapefile to {}", cachePath);
+    } catch (Exception e) {
+      LOGGER.warn("Failed to write shapefile to cache {}: {}", cachePath, e.getMessage());
+      // Non-fatal — data was already parsed successfully
     }
   }
 
