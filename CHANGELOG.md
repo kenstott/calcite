@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.4](https://github.com/kenstott/calcite/compare/v0.21.3...v0.21.4) (2026-06-01)
+
+
+### Bug Fixes
+
+* **geo:** DuckDB extension v1.4.4, fix WBD cache path restore ([2102346](https://github.com/kenstott/calcite/commit/210234667e01a2faabb56421bafb031124f8bdd1))
+
 ## [0.21.3](https://github.com/kenstott/calcite/compare/v0.21.2...v0.21.3) (2026-06-01)
 
 
