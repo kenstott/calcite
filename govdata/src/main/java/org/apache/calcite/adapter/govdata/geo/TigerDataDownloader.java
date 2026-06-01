@@ -605,12 +605,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     LOGGER.info("Downloading states shapefile for year {} from: {}", year, url);
 
     try {
-      // Download and extract to temp directory
-      File tempDir = Files.createTempDirectory("tiger-states-" + year + "-").toFile();
-      File zipFile = new File(tempDir, filename);
-
-      downloadFile(url, zipFile);
-      extractZipFile(zipFile, tempDir);
+      File tempDir = downloadZipToTempDir(url, null, "tiger-states-" + year);
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -618,7 +613,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        getGeoManifest().markCached("states", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("states", year, params, cachePath, tempDir.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -724,11 +719,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     try {
       // Download and extract to temp directory
-      File tempDir = Files.createTempDirectory("tiger-counties-" + year + "-").toFile();
-      File zipFile = new File(tempDir, filename);
-
-      downloadFile(url, zipFile);
-      extractZipFile(zipFile, tempDir);
+      File tempDir = downloadZipToTempDir(url, null, "tiger-counties-" + year);
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -736,7 +727,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        getGeoManifest().markCached("counties", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("counties", year, params, cachePath, tempDir.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -836,12 +827,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     LOGGER.info("Downloading places shapefile for state {} from: {}", stateFips, url);
 
-    // Download and extract to temp directory
-    File tempDir = Files.createTempDirectory("tiger-places-" + stateFips + "-" + year + "-").toFile();
-    File zipFile = new File(tempDir, filename);
-
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, tempDir);
+    File tempDir = downloadZipToTempDir(url, null, "tiger-places-" + stateFips + "-" + year);
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
@@ -850,7 +836,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("state", stateFips);
-      getGeoManifest().markCached("places", year, params, cachePath, zipFile.length());
+      getGeoManifest().markCached("places", year, params, cachePath, tempDir.length());
       cacheManifest.save(this.operatingDirectory);
     }
 
@@ -963,11 +949,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     try {
       // Download and extract to temp directory
-      File tempDir = Files.createTempDirectory("tiger-zctas-" + year + "-").toFile();
-      File zipFile = new File(tempDir, filename);
-
-      downloadFile(url, zipFile);
-      extractZipFile(zipFile, tempDir);
+      File tempDir = downloadZipToTempDir(url, null, "tiger-zctas-" + year);
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -975,7 +957,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        getGeoManifest().markCached("zctas", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("zctas", year, params, cachePath, tempDir.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -1080,12 +1062,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     try {
       LOGGER.info("Downloading CD shapefile for year {} (Congress {})", year, congressNum);
 
-      // Download and extract to temp directory
-      File tempDir = Files.createTempDirectory("tiger-cd-" + year + "-").toFile();
-      File zipFile = new File(tempDir, filename);
-
-      downloadFile(url, zipFile);
-      extractZipFile(zipFile, tempDir);
+      File tempDir = downloadZipToTempDir(url, null, "tiger-cd-" + year);
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -1093,7 +1070,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        getGeoManifest().markCached("congressional_districts", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("congressional_districts", year, params, cachePath, tempDir.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -1185,86 +1162,6 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     return tempDir;
   }
 
-  /**
-   * Download a file from a URL.
-   */
-  private void downloadFile(String urlString, File outputFile) throws IOException {
-    URI uri = URI.create(urlString);
-    URL url = uri.toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(10000);
-    conn.setReadTimeout(60000);
-
-    int responseCode = conn.getResponseCode();
-    if (responseCode != HttpURLConnection.HTTP_OK) {
-      throw new IOException("Failed to download file. HTTP response code: " + responseCode);
-    }
-
-    long contentLength = conn.getContentLengthLong();
-    LOGGER.info("Downloading {} ({} MB)", outputFile.getName(), contentLength / (1024 * 1024));
-
-    try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
-         FileOutputStream out = new FileOutputStream(outputFile)) {
-
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      long totalBytesRead = 0;
-      long lastLogTime = System.currentTimeMillis();
-
-      while ((bytesRead = in.read(buffer)) != -1) {
-        out.write(buffer, 0, bytesRead);
-        totalBytesRead += bytesRead;
-
-        // Log progress every 5 seconds
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastLogTime > 5000) {
-          int percentComplete = (int) ((totalBytesRead * 100) / contentLength);
-          LOGGER.info("Download progress: {}% ({} MB / {} MB)",
-              percentComplete,
-              totalBytesRead / (1024 * 1024),
-              contentLength / (1024 * 1024));
-          lastLogTime = currentTime;
-        }
-      }
-    }
-
-    LOGGER.info("Download complete: {}", outputFile);
-  }
-
-  /**
-   * Extract a ZIP file to a directory.
-   */
-  private void extractZipFile(File zipFile, File outputDir) throws IOException {
-    LOGGER.info("Extracting ZIP file: {}", zipFile);
-
-    try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile.toPath()))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        File outputFile = new File(outputDir, entry.getName());
-
-        if (entry.isDirectory()) {
-          outputFile.mkdirs();
-        } else {
-          outputFile.getParentFile().mkdirs();
-
-          try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = zis.read(buffer)) != -1) {
-              fos.write(buffer, 0, bytesRead);
-            }
-          }
-
-          LOGGER.debug("Extracted: {}", outputFile.getName());
-        }
-
-        zis.closeEntry();
-      }
-    }
-
-    LOGGER.info("Extraction complete to: {}", outputDir);
-  }
 
   /**
    * Download census tracts shapefiles for all configured years.
@@ -1375,15 +1272,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
       }
 
-      File stateDir = new File(tempDir, fips);
-      File zipFile = new File(stateDir, filename);
-
       LOGGER.info("Downloading census tracts shapefile for state {} year {} from: {}", fips, year, url);
-      stateDir.mkdirs();
 
       try {
-        downloadFile(url, zipFile);
-        extractZipFile(zipFile, stateDir);
+        File stateDir = downloadZipToTempDir(url, null, "tiger-census_tracts-" + fips + "-" + year);
         hasAnyDownloads = true;
 
         // Upload extracted files to cache storage for this state
@@ -1393,7 +1285,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         if (cacheManifest != null) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", fips);
-          getGeoManifest().markCached("census_tracts", year, params, cachePath, zipFile.length());
+          getGeoManifest().markCached("census_tracts", year, params, cachePath, tempDir.length());
           cacheManifest.save(this.operatingDirectory);
         }
       } catch (IOException e) {
@@ -1523,15 +1415,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
       }
 
-      File stateDir = new File(tempDir, fips);
-      File zipFile = new File(stateDir, filename);
-
       LOGGER.info("Downloading block groups shapefile for state {} year {} from: {}", fips, year, url);
-      stateDir.mkdirs();
 
       try {
-        downloadFile(url, zipFile);
-        extractZipFile(zipFile, stateDir);
+        File stateDir = downloadZipToTempDir(url, null, "tiger-block_groups-" + fips + "-" + year);
         hasAnyDownloads = true;
 
         // Upload extracted files to cache storage for this state
@@ -1541,7 +1428,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         if (cacheManifest != null) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", fips);
-          getGeoManifest().markCached("block_groups", year, params, cachePath, zipFile.length());
+          getGeoManifest().markCached("block_groups", year, params, cachePath, tempDir.length());
           cacheManifest.save(this.operatingDirectory);
         }
       } catch (IOException e) {
@@ -1640,12 +1527,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     LOGGER.info("Downloading CBSA shapefile for year {} from: {}", year, url);
 
-    // Download and extract to temp directory
-    File tempDir = Files.createTempDirectory("tiger-cbsa-" + year + "-").toFile();
-    File zipFile = new File(tempDir, filename);
-
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, tempDir);
+    File tempDir = downloadZipToTempDir(url, null, "tiger-cbsa-" + year);
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
@@ -1653,7 +1535,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     // Mark as cached in manifest
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      getGeoManifest().markCached("cbsa", year, params, cachePath, zipFile.length());
+      getGeoManifest().markCached("cbsa", year, params, cachePath, tempDir.length());
       cacheManifest.save(this.operatingDirectory);
     }
 
@@ -1805,17 +1687,14 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
             ? String.format("%s/%s/%s/2010/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename)
             : String.format("%s/%s/%s/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename);
 
-        File stateDir = new File(tempDir, fips);
-        File zipFile = new File(stateDir, filename);
-
         LOGGER.info("Downloading school district shapefile for state {} type {} year {} from: {}", fips, type, year, url);
-        stateDir.mkdirs();
 
         try {
-          downloadFile(url, zipFile);
-          extractZipFile(zipFile, stateDir);
+          File stateDir = downloadZipToTempDir(url, null, "tiger-school_districts-" + fips + "-" + type + "-" + year);
           stateHasDownloads = true;
           hasAnyDownloads = true;
+          // Upload to cache for this state
+          uploadDirectoryToStorage(stateDir, cachePath);
         } catch (IOException e) {
           LOGGER.debug("Failed to download school districts for state {} type {}: {}", fips, type, e.getMessage());
         }

@@ -1,0 +1,165 @@
+/*
+ * Copyright (c) 2026 Kenneth Stott
+ *
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ *
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
+ */
+package org.apache.calcite.adapter.govdata;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.util.Map;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+/**
+ * Shared utilities for downloading zip and gzip files from HTTP URLs.
+ *
+ * <p>Used by DataProvider implementations that do not extend AbstractGovDataDownloader
+ * (e.g. GazetteerDataProvider, GhcndBulkDataProvider, TigerDataProvider).
+ * Implementations that do extend AbstractGovDataDownloader should use its instance
+ * methods (downloadZipToTempDir, downloadZipEntry, downloadGzipToFile) instead.
+ */
+public final class ZipDownloadUtils {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ZipDownloadUtils.class);
+
+  private ZipDownloadUtils() { }
+
+  /**
+   * Download a ZIP from {@code url} and extract all entries to a new temp directory.
+   * Caller is responsible for deleting the returned directory when done.
+   *
+   * @param url    URL of the ZIP file
+   * @param headers optional request headers (may be null)
+   * @param prefix temp directory name prefix for diagnostics
+   * @return temp directory containing all extracted files
+   */
+  public static File downloadZipToTempDir(String url, Map<String, String> headers, String prefix)
+      throws IOException {
+    File tempZip = File.createTempFile(prefix + "-", ".zip");
+    File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-").toFile();
+    try {
+      downloadToFile(url, headers, tempZip);
+      try (ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip))) {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          File outFile = new File(tempDir, entry.getName());
+          if (entry.isDirectory()) {
+            outFile.mkdirs();
+          } else {
+            outFile.getParentFile().mkdirs();
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+              byte[] buf = new byte[65536];
+              int len;
+              while ((len = zis.read(buf)) != -1) {
+                fos.write(buf, 0, len);
+              }
+            }
+          }
+          zis.closeEntry();
+        }
+      }
+      return tempDir;
+    } finally {
+      if (tempZip.exists()) {
+        tempZip.delete();
+      }
+    }
+  }
+
+  /**
+   * Download a GZIP file from {@code url} to {@code destFile} on local disk.
+   * Stores the compressed .gz file (not decompressed) — caller decompresses on read.
+   * Uses atomic rename via a .tmp sibling to avoid partial files on failure.
+   *
+   * <p>Skips download if {@code destFile} already exists and has non-zero size.
+   */
+  public static void downloadGzipToFile(String url, File destFile) throws IOException {
+    if (destFile.exists() && destFile.length() > 0) {
+      LOGGER.debug("Gzip cache hit: {}", destFile.getName());
+      return;
+    }
+    destFile.getParentFile().mkdirs();
+    File tmp = new File(destFile.getParentFile(), destFile.getName() + ".tmp");
+    try {
+      downloadToFile(url, null, tmp);
+      if (!tmp.renameTo(destFile)) {
+        tmp.delete();
+        throw new IOException("Failed to rename temp file to " + destFile.getAbsolutePath());
+      }
+    } catch (IOException e) {
+      tmp.delete();
+      throw e;
+    }
+  }
+
+  /**
+   * Open a GZIP file for reading. Caller is responsible for closing the stream.
+   */
+  public static GZIPInputStream openGzip(File gzFile) throws IOException {
+    return new GZIPInputStream(new BufferedInputStream(new FileInputStream(gzFile), 65536));
+  }
+
+  /**
+   * Core HTTP download: GET {@code url} with optional {@code headers}, stream to {@code dest}.
+   * Logs progress every 5 seconds for large files.
+   */
+  public static void downloadToFile(String url, Map<String, String> headers, File dest)
+      throws IOException {
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setConnectTimeout(30000);
+    conn.setReadTimeout(600000);
+    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+    if (headers != null) {
+      for (Map.Entry<String, String> h : headers.entrySet()) {
+        conn.setRequestProperty(h.getKey(), h.getValue());
+      }
+    }
+    int status = conn.getResponseCode();
+    if (status != HttpURLConnection.HTTP_OK) {
+      throw new IOException("HTTP " + status + " from " + url);
+    }
+    String contentType = conn.getContentType();
+    if (contentType != null && contentType.contains("text/html")) {
+      throw new IOException("Expected binary but got HTML from: " + url
+          + " — may be WAF-blocked or unavailable");
+    }
+    long contentLength = conn.getContentLengthLong();
+    LOGGER.info("Downloading {} ({} MB)", dest.getName(), contentLength / (1024 * 1024));
+    try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream(), 65536);
+         FileOutputStream out = new FileOutputStream(dest)) {
+      byte[] buf = new byte[65536];
+      int len;
+      long total = 0;
+      long lastLog = System.currentTimeMillis();
+      while ((len = in.read(buf)) != -1) {
+        out.write(buf, 0, len);
+        total += len;
+        long now = System.currentTimeMillis();
+        if (contentLength > 0 && now - lastLog > 5000) {
+          LOGGER.info("Download progress: {}% ({} MB / {} MB)",
+              total * 100 / contentLength,
+              total / (1024 * 1024),
+              contentLength / (1024 * 1024));
+          lastLog = now;
+        }
+      }
+    } finally {
+      conn.disconnect();
+    }
+    LOGGER.info("Download complete: {} ({} MB)", dest.getName(), dest.length() / (1024 * 1024));
+  }
+}

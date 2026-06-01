@@ -26,10 +26,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -5316,6 +5325,81 @@ public abstract class AbstractGovDataDownloader {
   protected String getCachePolicyForYear(int year) {
     int currentYear = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
     return (year == currentYear) ? "current_year_daily" : "historical_immutable";
+  }
+
+  // ── Shared zip/gzip download utilities ──────────────────────────────────────
+
+  /**
+   * Check whether a cached file at {@code path} exists and is within {@code ttlMs}.
+   * Uses {@code cacheStorageProvider} so it works for both local and S3 paths.
+   */
+  protected boolean isCacheValid(String path, long ttlMs) {
+    try {
+      if (!cacheStorageProvider.exists(path)) {
+        return false;
+      }
+      StorageProvider.FileMetadata meta = cacheStorageProvider.getMetadata(path);
+      return meta != null
+          && (System.currentTimeMillis() - meta.getLastModified()) < ttlMs;
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  /**
+   * Download a ZIP from {@code url} and extract all entries to a new temp directory.
+   * Caller is responsible for deleting the returned directory when done.
+   *
+   * <p>Downloads to a local temp file first (two-phase) to avoid HTTP idle-timeout
+   * failures that can occur when zip extraction stalls the HTTP read loop.
+   *
+   * @param url      URL of the ZIP file
+   * @param headers  optional request headers (may be null)
+   * @param prefix   temp directory name prefix
+   * @return temp directory containing all extracted files
+   */
+  protected File downloadZipToTempDir(String url, Map<String, String> headers, String prefix)
+      throws IOException {
+    return ZipDownloadUtils.downloadZipToTempDir(url, headers, prefix);
+  }
+
+  /**
+   * Download a ZIP from {@code url}, extract the first entry whose name ends with
+   * one of {@code extensions}, and write it to {@code destPath} via
+   * {@code cacheStorageProvider}.
+   */
+  protected void downloadZipEntry(String url, Map<String, String> headers,
+      String destPath, String... extensions) throws IOException {
+    File tempZip = File.createTempFile("zip-entry-", ".zip");
+    try {
+      ZipDownloadUtils.downloadToFile(url, headers, tempZip);
+      try (ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip))) {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
+          for (String ext : extensions) {
+            if (name.endsWith(ext)) {
+              final ZipInputStream finalZis = zis;
+              InputStream nonClosing = new FilterInputStream(finalZis) {
+                @Override public void close() { }
+              };
+              cacheStorageProvider.writeFile(destPath, nonClosing);
+              return;
+            }
+          }
+          zis.closeEntry();
+        }
+      }
+      throw new IOException("No matching entry found in ZIP from: " + url);
+    } finally {
+      if (tempZip.exists()) {
+        tempZip.delete();
+      }
+    }
+  }
+
+  protected void downloadGzipToFile(String url, File destFile) throws IOException {
+    ZipDownloadUtils.downloadGzipToFile(url, destFile);
   }
 
 }

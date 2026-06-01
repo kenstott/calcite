@@ -18,30 +18,23 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
  * Custom DataProvider for Census Bureau Gazetteer data.
@@ -71,55 +64,26 @@ public class GazetteerDataProvider implements DataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
-    Path tempDir = null;
+    File tempDir = null;
     try {
-      tempDir = Files.createTempDirectory("gazetteer_" + tableName + "_");
-      File zipFile = new File(tempDir.toFile(), "download.zip");
-
       LOGGER.info("Downloading Gazetteer data from: {}", url);
-      downloadFile(url, zipFile);
+      tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "gazetteer-" + tableName);
 
-      // Extract .txt file from ZIP
-      File extractedFile = extractTxtFromZip(zipFile, tempDir.toFile());
+      // Find .txt file in extracted temp dir
+      File extractedFile = findFileByExtension(tempDir, ".txt");
       if (extractedFile == null) {
         LOGGER.error("No .txt file found in ZIP for table {}", tableName);
         return new ArrayList<Map<String, Object>>().iterator();
       }
 
-      // Parse TSV and map columns
       List<Map<String, Object>> result = parseTsvFile(extractedFile, tableName, year);
-
-      LOGGER.info("Parsed {} records from Gazetteer for table {}",
-          result.size(), tableName);
-
-      // Cleanup temp directory
-      final Path tempDirToClean = tempDir;
-      Runtime.getRuntime().addShutdownHook(
-          new Thread(() -> {
-        try {
-          try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean)) {
-            walk.sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-          }
-        } catch (IOException e) {
-          LOGGER.debug("Failed to cleanup temp directory: {}", e.getMessage());
-        }
-      }));
-
+      LOGGER.info("Parsed {} records from Gazetteer for table {}", result.size(), tableName);
       return result.iterator();
 
-    } catch (IOException e) {
+    } finally {
       if (tempDir != null) {
-        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
-          walk.sorted(Comparator.reverseOrder())
-              .map(Path::toFile)
-              .forEach(File::delete);
-        } catch (IOException cleanupError) {
-          LOGGER.debug("Failed to cleanup temp directory: {}", cleanupError.getMessage());
-        }
+        deleteDirectory(tempDir);
       }
-      throw e;
     }
   }
 
@@ -139,50 +103,27 @@ public class GazetteerDataProvider implements DataProvider {
     }
   }
 
-  private void downloadFile(String urlString, File outputFile) throws IOException {
-    URI uri = URI.create(urlString);
-    URL url = uri.toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(120000);
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter/1.0");
-    conn.setRequestProperty("Accept", "application/zip, application/octet-stream, */*");
-
-    int responseCode = conn.getResponseCode();
-    if (responseCode != HttpURLConnection.HTTP_OK) {
-      throw new IOException("HTTP " + responseCode + " for URL: " + urlString);
-    }
-
-    try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
-         FileOutputStream out = new FileOutputStream(outputFile)) {
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      while ((bytesRead = in.read(buffer)) != -1) {
-        out.write(buffer, 0, bytesRead);
-      }
-    }
-  }
-
-  private File extractTxtFromZip(File zipFile, File destDir) throws IOException {
-    try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile.toPath()))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        if (entry.getName().endsWith(".txt")) {
-          File destFile = new File(destDir, entry.getName());
-          destFile.getParentFile().mkdirs();
-          try (FileOutputStream fos = new FileOutputStream(destFile)) {
-            byte[] buffer = new byte[8192];
-            int len;
-            while ((len = zis.read(buffer)) > 0) {
-              fos.write(buffer, 0, len);
-            }
-          }
-          return destFile;
-        }
+  private static File findFileByExtension(File dir, String ext) {
+    File[] files = dir.listFiles();
+    if (files == null) return null;
+    for (File f : files) {
+      if (f.isFile() && f.getName().endsWith(ext)) return f;
+      if (f.isDirectory()) {
+        File found = findFileByExtension(f, ext);
+        if (found != null) return found;
       }
     }
     return null;
+  }
+
+  private static void deleteDirectory(File dir) {
+    try {
+      try (java.util.stream.Stream<java.nio.file.Path> walk = Files.walk(dir.toPath())) {
+        walk.sorted(Comparator.reverseOrder()).map(java.nio.file.Path::toFile).forEach(File::delete);
+      }
+    } catch (IOException e) {
+      // best-effort cleanup
+    }
   }
 
   private List<Map<String, Object>> parseTsvFile(File tsvFile, String tableName, String year)

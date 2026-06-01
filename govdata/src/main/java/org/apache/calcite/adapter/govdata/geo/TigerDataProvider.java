@@ -18,18 +18,14 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.locationtech.jts.geom.Geometry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -38,8 +34,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
  * Custom DataProvider for TIGER shapefile data.
@@ -75,25 +69,18 @@ public class TigerDataProvider implements DataProvider {
     }
 
     // Download and extract to temp directory
-    Path tempDir = null;
+    File tempDir = null;
     try {
-      // Log memory status before processing (helps diagnose OOM crashes)
       Runtime runtime = Runtime.getRuntime();
       long usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
       long maxMb = runtime.maxMemory() / (1024 * 1024);
       LOGGER.info("Memory before fetch: {}MB used / {}MB max", usedMb, maxMb);
 
-      tempDir = Files.createTempDirectory("tiger_" + tableName + "_");
-      File zipFile = new File(tempDir.toFile(), "download.zip");
-
       LOGGER.info("Downloading TIGER shapefile from: {}", url);
-      downloadFile(url, zipFile);
-
-      LOGGER.info("Extracting shapefile to: {}", tempDir);
-      extractZip(zipFile, tempDir.toFile());
+      tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "tiger-" + tableName);
 
       // Find shapefile prefix
-      String prefix = findShapefilePrefix(tempDir.toFile());
+      String prefix = findShapefilePrefix(tempDir);
       if (prefix == null) {
         LOGGER.error("No shapefile found in extracted ZIP for table {}", tableName);
         return new ArrayList<Map<String, Object>>().iterator();
@@ -103,7 +90,7 @@ public class TigerDataProvider implements DataProvider {
       int yearInt = Integer.parseInt(year);
       TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName, yearInt);
       List<Object[]> records =
-          TigerShapefileParser.parseShapefile(tempDir.toFile(), prefix, mapper);
+          TigerShapefileParser.parseShapefile(tempDir, prefix, mapper);
 
       // Convert to Map records
       List<Map<String, Object>> result = new ArrayList<>();
@@ -124,10 +111,10 @@ public class TigerDataProvider implements DataProvider {
           result.size(), tableName);
 
       // Cleanup temp directory
-      final Path tempDirToClean = tempDir;
+      final File tempDirToClean = tempDir;
       Runtime.getRuntime().addShutdownHook(
           new Thread(() -> {
-        try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean)) {
+        try (java.util.stream.Stream<Path> walk = Files.walk(tempDirToClean.toPath())) {
           walk.sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
@@ -145,7 +132,7 @@ public class TigerDataProvider implements DataProvider {
         LOGGER.info("No data for table {} year={} state={} (HTTP 404 — skipping partition)",
             tableName, year, stateFips);
         if (tempDir != null) {
-          try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+          try (java.util.stream.Stream<Path> walk = Files.walk(tempDir.toPath())) {
             walk.sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(File::delete);
@@ -156,7 +143,7 @@ public class TigerDataProvider implements DataProvider {
         return new ArrayList<Map<String, Object>>().iterator();
       }
       if (tempDir != null) {
-        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir)) {
+        try (java.util.stream.Stream<Path> walk = Files.walk(tempDir.toPath())) {
           walk.sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
@@ -347,91 +334,6 @@ public class TigerDataProvider implements DataProvider {
 
     default:
       return null;
-    }
-  }
-
-  private void downloadFile(String urlString, File outputFile) throws IOException {
-    // Retry up to 3 times on HTTP 403 (transient rate-limiting from Census Bureau servers)
-    int maxRetries = 3;
-    int[] retryDelaysMs = {5000, 15000, 30000};
-    IOException lastException = null;
-    for (int attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        downloadFileOnce(urlString, outputFile);
-        return;
-      } catch (IOException e) {
-        if (e.getMessage() != null && e.getMessage().startsWith("HTTP 403") && attempt < maxRetries) {
-          lastException = e;
-          LOGGER.warn("HTTP 403 from Census server for {} — retrying in {}ms (attempt {}/{})",
-              urlString, retryDelaysMs[attempt], attempt + 1, maxRetries);
-          try {
-            Thread.sleep(retryDelaysMs[attempt]);
-          } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw e;
-          }
-        } else {
-          throw e;
-        }
-      }
-    }
-    throw lastException;
-  }
-
-  private void downloadFileOnce(String urlString, File outputFile) throws IOException {
-    URI uri = URI.create(urlString);
-    URL url = uri.toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000); // 5 minutes for large shapefiles (block_groups can be 10+ MB)
-    // Required headers - Census Bureau uses Cloudflare which may throttle/reject bare requests
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter/1.0");
-    conn.setRequestProperty("Accept", "application/zip, application/octet-stream, */*");
-
-    int responseCode = conn.getResponseCode();
-    if (responseCode != HttpURLConnection.HTTP_OK) {
-      throw new IOException("HTTP " + responseCode + " for URL: " + urlString);
-    }
-
-    long expectedLength = conn.getContentLengthLong();
-    long totalBytesRead = 0;
-
-    try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
-         FileOutputStream out = new FileOutputStream(outputFile)) {
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      while ((bytesRead = in.read(buffer)) != -1) {
-        out.write(buffer, 0, bytesRead);
-        totalBytesRead += bytesRead;
-      }
-    }
-
-    // Verify download completeness if Content-Length was provided
-    if (expectedLength > 0 && totalBytesRead != expectedLength) {
-      outputFile.delete();
-      throw new IOException("Incomplete download: expected " + expectedLength
-          + " bytes but got " + totalBytesRead + " for URL: " + urlString);
-    }
-  }
-
-  private void extractZip(File zipFile, File destDir) throws IOException {
-    try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile.toPath()))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        if (entry.isDirectory()) {
-          continue;
-        }
-        File destFile = new File(destDir, entry.getName());
-        destFile.getParentFile().mkdirs();
-        try (FileOutputStream fos = new FileOutputStream(destFile)) {
-          byte[] buffer = new byte[8192];
-          int len;
-          while ((len = zis.read(buffer)) > 0) {
-            fos.write(buffer, 0, len);
-          }
-        }
-      }
     }
   }
 

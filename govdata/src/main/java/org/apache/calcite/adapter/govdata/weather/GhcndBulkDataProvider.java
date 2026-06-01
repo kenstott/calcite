@@ -18,21 +18,18 @@ package org.apache.calcite.adapter.govdata.weather;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -70,6 +67,27 @@ import java.util.zip.GZIPInputStream;
 public class GhcndBulkDataProvider implements DataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GhcndBulkDataProvider.class);
+
+  private volatile StorageProvider storageProvider;
+
+  private StorageProvider storageProvider() {
+    if (storageProvider == null) {
+      synchronized (this) {
+        if (storageProvider == null) {
+          storageProvider = StorageProviderFactory.createForGovDataCache();
+        }
+      }
+    }
+    return storageProvider;
+  }
+
+  private String cacheDir() {
+    return storageProvider().resolvePath(StorageProviderFactory.getGovDataCacheDir(), "ghcnd_bulk");
+  }
+
+  private String cachePath(String filename) {
+    return storageProvider().resolvePath(cacheDir(), filename);
+  }
 
   private static final String BULK_URL_TEMPLATE =
       "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/{year}.csv.gz";
@@ -114,11 +132,10 @@ public class GhcndBulkDataProvider implements DataProvider {
 
     ensureStationsLoaded();
 
-    String cacheDir = resolveCacheDir();
-    File gzFile = new File(cacheDir, "ghcnd_bulk_" + year + ".csv.gz");
-    downloadIfAbsent(gzFile, BULK_URL_TEMPLATE.replace("{year}", year));
+    String gzPath = cachePath("ghcnd_bulk_" + year + ".csv.gz");
+    downloadIfAbsent(gzPath, BULK_URL_TEMPLATE.replace("{year}", year));
 
-    List<String> sortedLines = loadAndSortFilteredLines(gzFile, year);
+    List<String> sortedLines = loadAndSortFilteredLines(gzPath, year);
     return new BulkIterator(sortedLines, year);
   }
 
@@ -134,92 +151,55 @@ public class GhcndBulkDataProvider implements DataProvider {
       if (stationsLoaded) {
         return;
       }
-      String cacheDir = resolveCacheDir();
-      File stationsFile = new File(cacheDir, "ghcnd-stations.txt");
-      downloadIfAbsent(stationsFile, STATIONS_URL);
-      loadStations(stationsFile);
+      String stationsPath = cachePath("ghcnd-stations.txt");
+      downloadIfAbsent(stationsPath, STATIONS_URL);
+      try (InputStream in = storageProvider().openInputStream(stationsPath);
+           BufferedReader reader = new BufferedReader(
+               new InputStreamReader(in, StandardCharsets.UTF_8))) {
+        loadStations(reader);
+      }
       stationsLoaded = true;
     }
   }
 
-  private void loadStations(File file) throws IOException {
+  private void loadStations(BufferedReader reader) throws IOException {
     int loaded = 0;
     int skipped = 0;
-    try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (line.length() < 40) {
-          continue;
-        }
-        String stationId = line.substring(0, 11).trim();
-        String stateAbbr = line.substring(38, 40).trim();
-        if (stationId.isEmpty() || stateAbbr.isEmpty()) {
-          skipped++;
-          continue;
-        }
-        String fips = ABBR_TO_FIPS.get(stateAbbr);
-        if (fips == null) {
-          skipped++;
-          continue;
-        }
-        STATION_STATE_CACHE.put(stationId, fips);
-        loaded++;
-      }
+    String line;
+    while ((line = reader.readLine()) != null) {
+      if (line.length() < 40) continue;
+      String stationId = line.substring(0, 11).trim();
+      String stateAbbr = line.substring(38, 40).trim();
+      if (stationId.isEmpty() || stateAbbr.isEmpty()) { skipped++; continue; }
+      String fips = ABBR_TO_FIPS.get(stateAbbr);
+      if (fips == null) { skipped++; continue; }
+      STATION_STATE_CACHE.put(stationId, fips);
+      loaded++;
     }
     LOGGER.info("GHCND Bulk: loaded {} US station→state mappings ({} skipped)", loaded, skipped);
   }
 
-  // ---------------------------------------------------------------------------
-  // HTTP download with local cache
-  // ---------------------------------------------------------------------------
-
-  private String resolveCacheDir() {
-    String localCache = System.getenv("ETL_LOCAL_RAW_CACHE");
-    if (localCache != null && !localCache.isEmpty()) {
-      return localCache + "/ghcnd_bulk";
-    }
-    return System.getProperty("java.io.tmpdir") + "/govdata_ghcnd_bulk";
-  }
-
-  private void downloadIfAbsent(File dest, String url) throws IOException {
-    if (dest.exists() && dest.length() > 0) {
-      LOGGER.info("GHCND Bulk: using cached file {} ({} MB)",
-          dest.getName(), dest.length() / (1024 * 1024));
-      return;
-    }
-    dest.getParentFile().mkdirs();
-    LOGGER.info("GHCND Bulk: downloading {} -> {}", url, dest.getAbsolutePath());
-
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(600000);
-    conn.setRequestProperty("User-Agent", "(calcite-govdata, kennethstott@gmail.com)");
-
-    int code = conn.getResponseCode();
-    if (code < 200 || code >= 300) {
-      throw new IOException("HTTP " + code + " for " + url);
-    }
-
-    File tmp = new File(dest.getParentFile(), dest.getName() + ".tmp");
-    try (InputStream is = new BufferedInputStream(conn.getInputStream(), 65536);
-         FileOutputStream fos = new FileOutputStream(tmp)) {
-      byte[] buf = new byte[65536];
-      int len;
-      long totalBytes = 0;
-      while ((len = is.read(buf)) != -1) {
-        fos.write(buf, 0, len);
-        totalBytes += len;
+  private void downloadIfAbsent(String storagePath, String url) throws IOException {
+    try {
+      if (storageProvider().exists(storagePath)) {
+        StorageProvider.FileMetadata meta = storageProvider().getMetadata(storagePath);
+        if (meta != null && meta.getSize() > 0) {
+          LOGGER.info("GHCND Bulk: using cached {}", storagePath);
+          return;
+        }
       }
-      fos.flush();
-      LOGGER.info("GHCND Bulk: downloaded {} MB to {}", totalBytes / (1024 * 1024), dest.getName());
-    } finally {
-      conn.disconnect();
+    } catch (IOException e) {
+      // not cached — fall through to download
     }
-
-    if (!tmp.renameTo(dest)) {
-      tmp.delete();
-      throw new IOException("Failed to rename temp file to " + dest.getAbsolutePath());
+    LOGGER.info("GHCND Bulk: downloading {} -> {}", url, storagePath);
+    File tempFile = File.createTempFile("ghcnd-", ".tmp");
+    try {
+      ZipDownloadUtils.downloadToFile(url, null, tempFile);
+      try (InputStream in = new java.io.FileInputStream(tempFile)) {
+        storageProvider().writeFile(storagePath, in);
+      }
+    } finally {
+      tempFile.delete();
     }
   }
 
@@ -227,10 +207,11 @@ public class GhcndBulkDataProvider implements DataProvider {
   // Sort-before-stream
   // ---------------------------------------------------------------------------
 
-  private List<String> loadAndSortFilteredLines(File gzFile, String year) throws IOException {
+  private List<String> loadAndSortFilteredLines(String gzPath, String year) throws IOException {
     List<String> lines = new ArrayList<String>();
-    try (InputStream fis = new FileInputStream(gzFile);
-         InputStream gzis = new GZIPInputStream(new BufferedInputStream(fis, 65536));
+    try (InputStream raw = storageProvider().openInputStream(gzPath);
+         java.util.zip.GZIPInputStream gzis = new java.util.zip.GZIPInputStream(
+             new java.io.BufferedInputStream(raw, 65536));
          BufferedReader reader = new BufferedReader(
              new InputStreamReader(gzis, StandardCharsets.UTF_8), 65536)) {
       String line;
@@ -242,7 +223,6 @@ public class GhcndBulkDataProvider implements DataProvider {
     }
     LOGGER.info("GHCND Bulk year={}: loaded {} relevant lines, sorting by station_id...",
         year, lines.size());
-    // US GHCND station IDs are all 11 chars — lexicographic sort gives (station_id, date, element)
     Collections.sort(lines);
     LOGGER.info("GHCND Bulk year={}: sort complete", year);
     return lines;
