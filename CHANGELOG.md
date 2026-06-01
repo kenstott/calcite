@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.1](https://github.com/kenstott/calcite/compare/v0.20.0...v0.20.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **cache:** delete Level 1 files after successful sync to Level 2 ([1100d22](https://github.com/kenstott/calcite/commit/1100d22f12fd75fe73b4216387e4a833f0ac0932))
+* **tiger:** write TIGER downloads to Level 1 (local) cache first ([11cf7a8](https://github.com/kenstott/calcite/commit/11cf7a86561945a136032b29c76d91b82baaf405))
+
 ## [0.20.0](https://github.com/kenstott/calcite/compare/v0.19.1...v0.20.0) (2026-06-01)
 
 
