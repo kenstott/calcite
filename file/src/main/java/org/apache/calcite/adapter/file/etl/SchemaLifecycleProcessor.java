@@ -413,8 +413,11 @@ public class SchemaLifecycleProcessor {
         Object instance = clazz.getDeclaredConstructor().newInstance();
         if (instance instanceof DataProvider) {
           if (instance instanceof StorageAwareDataProvider) {
+            String cacheDir = sourceDirectory != null ? sourceDirectory
+                : org.apache.calcite.adapter.file.storage.StorageProviderFactory
+                    .getGovDataCacheDir();
             ((StorageAwareDataProvider) instance)
-                .setStorageProvider(sourceStorageProvider, sourceDirectory);
+                .setStorageProvider(sourceStorageProvider, cacheDir);
           }
           return (DataProvider) instance;
         } else {
