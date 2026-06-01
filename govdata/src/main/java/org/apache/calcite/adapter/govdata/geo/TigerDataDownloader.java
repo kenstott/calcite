@@ -511,6 +511,18 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
+   * Resolve a cache path — uses ETL_LOCAL_RAW_CACHE if set, otherwise cacheDirectory (S3).
+   * This ensures downloads always go to Level 1 (local) first.
+   */
+  private String resolveWriteCachePath(String relativePath) {
+    String localCache = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCache != null && !localCache.isEmpty()) {
+      return new java.io.File(localCache, relativePath).getAbsolutePath();
+    }
+    return storageProvider.resolvePath(cacheDirectory, relativePath);
+  }
+
+  /**
    * Convert all downloaded TIGER shapefiles to Parquet format (matching ECON pattern).
    * Uses iterateTableOperationsOptimized for efficient cache checking.
    *
@@ -571,7 +583,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   private void convertSingleDataset(String tableName, int year, String stateFips) throws IOException {
     // Build cache path where shapefile is stored
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, tableName);
     if (stateFips != null) {
       cachePath = storageProvider.resolvePath(cachePath, stateFips);
@@ -657,7 +669,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -770,7 +782,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "counties");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -883,7 +895,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "places");
     cachePath = storageProvider.resolvePath(cachePath, stateFips);
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
@@ -1014,7 +1026,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "zctas");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -1117,7 +1129,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   public File downloadCongressionalDistrictsForYear(int year) throws IOException {
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "congressional_districts");
 
     // Calculate correct Congress number: ((year - 1789) / 2) + 1
@@ -1419,7 +1431,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+      String cachePath = resolveWriteCachePath(yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "census_tracts");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
@@ -1570,7 +1582,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+      String cachePath = resolveWriteCachePath(yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "block_groups");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
@@ -1724,7 +1736,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    String cachePath = resolveWriteCachePath(yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "cbsa");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -1845,7 +1857,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+      String cachePath = resolveWriteCachePath(yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "school_districts");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
