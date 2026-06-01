@@ -5373,4 +5373,73 @@ public abstract class AbstractGovDataDownloader {
     return storagePath;
   }
 
+  /**
+   * Sync files from Level 1 (local) cache to Level 2 (remote) storage.
+   * Called at end of download operations to archive cached files.
+   * Uses storageProvider abstraction to handle both local mounts and S3.
+   */
+  protected void syncLevel1ToLevel2() throws IOException {
+    String localCacheRoot = System.getenv("ETL_LOCAL_RAW_CACHE");
+    if (localCacheRoot == null || localCacheRoot.isEmpty()) {
+      LOGGER.debug("Level 1 cache not configured, skipping sync to Level 2");
+      return;
+    }
+
+    try {
+      // Extract schema name from resource name (e.g., "/geo/geo-schema.yaml" → "geo")
+      String schemaName = schemaResourceName.split("/")[1];
+      String schemaLocalPath = new java.io.File(localCacheRoot, schemaName).getAbsolutePath();
+      java.io.File localDir = new java.io.File(schemaLocalPath);
+
+      if (!localDir.exists()) {
+        LOGGER.debug("Level 1 cache directory not found: {}", schemaLocalPath);
+        return;
+      }
+
+      // Walk the directory tree and sync each file to Level 2
+      java.util.List<java.io.File> files = new java.util.ArrayList<>();
+      walkDirectory(localDir, files);
+
+      if (files.isEmpty()) {
+        LOGGER.debug("No files in Level 1 cache to sync: {}", schemaLocalPath);
+        return;
+      }
+
+      LOGGER.info("📤 Syncing {} files from Level 1 to Level 2 ({})", files.size(), cacheDirectory);
+
+      int synced = 0;
+      for (java.io.File file : files) {
+        try {
+          String relativePath = file.getAbsolutePath().substring(localCacheRoot.length() + 1);
+          String targetPath = storageProvider.resolvePath(cacheDirectory, relativePath);
+
+          byte[] data = java.nio.file.Files.readAllBytes(file.toPath());
+          cacheStorageProvider.writeFile(targetPath, data);
+          synced++;
+        } catch (Exception e) {
+          LOGGER.warn("Failed to sync file {}: {}", file.getName(), e.getMessage());
+        }
+      }
+
+      LOGGER.info("✅ Synced {} of {} files to Level 2", synced, files.size());
+
+    } catch (Exception e) {
+      LOGGER.warn("Level 1→Level 2 sync failed: {}", e.getMessage());
+      // Don't fail the entire operation if sync fails
+    }
+  }
+
+  private void walkDirectory(java.io.File dir, java.util.List<java.io.File> files) {
+    java.io.File[] children = dir.listFiles();
+    if (children == null) return;
+
+    for (java.io.File child : children) {
+      if (child.isDirectory()) {
+        walkDirectory(child, files);
+      } else {
+        files.add(child);
+      }
+    }
+  }
+
 }
