@@ -120,7 +120,7 @@ public class DuckDbExtensionInstaller {
   public static String getLocalExtensionPath(String extensionName) {
     // Default to the version we have bundled
     // In air-gapped mode this should match the bundled extensions version
-    String version = "1.4.3";
+    String version = "1.4.4";
 
     String platform = detectPlatform();
     return getInstalledPath(version, platform, extensionName).toString();

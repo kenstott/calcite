@@ -197,8 +197,10 @@ public final class ZipDownloadUtils {
         File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-cached-").toFile();
         for (StorageProvider.FileEntry entry : cached) {
           if (entry.isDirectory()) continue;
-          String relative = entry.getPath().substring(cachePath.length());
-          if (relative.startsWith("/")) relative = relative.substring(1);
+          String entryPath = entry.getPath();
+          int stripLen = cachePath.endsWith("/") ? cachePath.length() : cachePath.length() + 1;
+          String relative = stripLen <= entryPath.length()
+              ? entryPath.substring(stripLen) : entryPath;
           File dest = new File(tempDir, relative);
           dest.getParentFile().mkdirs();
           try (InputStream in = sp.openInputStream(entry.getPath());
