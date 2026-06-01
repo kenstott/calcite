@@ -426,47 +426,46 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * 7. At rebuild end, sync local cache → object storage
    */
   private java.util.List<FileEntry> checkCachesWithSyncDown(String objectStoragePath, String localEtlCachePath) throws IOException {
-    // Step 1: Try object storage (canonical source via GOVDATA_CACHE_DIR/S3)
+    // 2-level cache read priority: Level 1 (local) first, then Level 2 (remote)
+    // This ensures we use fast local cache from recent downloads before falling back to remote
+
+    // Step 1: Check Level 1 (local ETL cache) - has recent downloads
+    if (localEtlCachePath != null && !localEtlCachePath.isEmpty()) {
+      try {
+        java.util.List<FileEntry> files = storageProvider.listFiles(localEtlCachePath, false);
+        if (!files.isEmpty()) {
+          LOGGER.info("🚀 Level 1 cache hit (local): {}", localEtlCachePath);
+          return files;
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Level 1 (local) not accessible: {}", e.getMessage());
+      }
+    }
+
+    // Step 2: Check Level 2 (remote object storage) - archived/synced files
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(objectStoragePath, false);
       if (!files.isEmpty()) {
-        // Step 2: Found in object storage - sync down to local cache for processing
+        LOGGER.info("☁️  Level 2 cache hit (remote): {}", objectStoragePath);
+        // Attempt to sync down to Level 1 for next run
         if (localEtlCachePath != null && !localEtlCachePath.isEmpty()) {
           try {
-            LOGGER.info("⚡ Files found in object storage, syncing down to local cache: {} → {}",
-                objectStoragePath, localEtlCachePath);
-            // Create local cache directory
+            LOGGER.debug("Syncing down from Level 2 to Level 1: {} → {}", objectStoragePath, localEtlCachePath);
             new java.io.File(localEtlCachePath).mkdirs();
-            // In production, this would be: rclone copy $objectStoragePath $localEtlCachePath
-            // For now, mark that we found them in object storage
-            return files;
+            // In production: rclone copy $objectStoragePath $localEtlCachePath
+            // For now, just log that we found them
           } catch (Exception e) {
-            LOGGER.debug("Could not sync down from object storage: {}", e.getMessage());
-            return files; // Return what we found anyway
+            LOGGER.debug("Could not sync from Level 2 to Level 1: {}", e.getMessage());
           }
         }
         return files;
       }
     } catch (IOException e) {
-      LOGGER.debug("Object storage not accessible: {}", e.getMessage());
-      // Fall through to check local cache
+      LOGGER.debug("Level 2 (remote) not accessible: {}", e.getMessage());
     }
 
-    // Step 3 & 4: If not in object storage, check local ETL cache (from previous run)
-    if (localEtlCachePath != null && !localEtlCachePath.isEmpty()) {
-      try {
-        java.util.List<FileEntry> files = storageProvider.listFiles(localEtlCachePath, false);
-        if (!files.isEmpty()) {
-          LOGGER.info("⚡ Files not in object storage, but found in local cache, using cached version: {}",
-              localEtlCachePath);
-          return files;
-        }
-      } catch (IOException e) {
-        LOGGER.debug("Local cache not accessible: {}", e.getMessage());
-      }
-    }
-
-    // Step 5: Not found anywhere - return empty, fall through to download
+    // Step 3: Not found in either cache - return empty, fall through to download
+    LOGGER.debug("No cache hit in Level 1 or Level 2, will download");
     return new java.util.ArrayList<>();
   }
 
