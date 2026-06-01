@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.1](https://github.com/kenstott/calcite/compare/v0.21.0...v0.21.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **providers:** add StorageProvider caching to all DataProviders, clean up /tmp ([970f332](https://github.com/kenstott/calcite/commit/970f33240459a83af20a8faaa8eb0ca077de4b0a))
+* **tiger:** cache shapefile downloads in TigerDataProvider ([093fcfc](https://github.com/kenstott/calcite/commit/093fcfca3535d8e56b7514e3ae75b1cfa9314611))
+
 ## [0.21.0](https://github.com/kenstott/calcite/compare/v0.20.1...v0.21.0) (2026-06-01)
 
 
