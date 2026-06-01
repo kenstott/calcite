@@ -5408,6 +5408,7 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.info("📤 Syncing {} files from Level 1 to Level 2 ({})", files.size(), cacheDirectory);
 
       int synced = 0;
+      int deleted = 0;
       for (java.io.File file : files) {
         try {
           String relativePath = file.getAbsolutePath().substring(localCacheRoot.length() + 1);
@@ -5416,12 +5417,17 @@ public abstract class AbstractGovDataDownloader {
           byte[] data = java.nio.file.Files.readAllBytes(file.toPath());
           cacheStorageProvider.writeFile(targetPath, data);
           synced++;
+
+          // Remove from Level 1 after successful sync to Level 2
+          if (file.delete()) {
+            deleted++;
+          }
         } catch (Exception e) {
           LOGGER.warn("Failed to sync file {}: {}", file.getName(), e.getMessage());
         }
       }
 
-      LOGGER.info("✅ Synced {} of {} files to Level 2", synced, files.size());
+      LOGGER.info("✅ Synced {} of {} files to Level 2, removed {} from Level 1", synced, files.size(), deleted);
 
     } catch (Exception e) {
       LOGGER.warn("Level 1→Level 2 sync failed: {}", e.getMessage());
