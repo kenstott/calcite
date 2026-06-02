@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.patents;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 
 import org.slf4j.Logger;
@@ -60,7 +61,7 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
 
     final BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(dest), StandardCharsets.UTF_8));
-    String headerLine = reader.readLine();
+    String headerLine = CsvRecordReader.readRecord(reader);
     if (headerLine == null) {
       reader.close();
       return Collections.emptyIterator();
@@ -76,7 +77,9 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
         pending = null;
         try {
           String line;
-          while ((line = reader.readLine()) != null) {
+          // Quote-aware record reader: prevents truncation when summary_text
+          // (an RFC4180-quoted multi-line field) contains embedded newlines.
+          while ((line = CsvRecordReader.readRecord(reader)) != null) {
             if (line.trim().isEmpty()) {
               continue;
             }

@@ -696,7 +696,8 @@ public class HttpSource implements DataSource {
             is = new GZIPInputStream(is);
           }
           csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-          csvHeaderLine = csvReader.readLine();
+          // Read the header as a complete record (in case header itself has quoted multi-line cell)
+          csvHeaderLine = CsvRecordReader.readRecord(csvReader);
           if (csvHeaderLine == null) {
             hasMore = false;
             return false;
@@ -709,7 +710,9 @@ public class HttpSource implements DataSource {
         batchSb.append(csvHeaderLine).append("\n");
         int linesRead = 0;
         String line;
-        while (linesRead < batchSize && (line = csvReader.readLine()) != null) {
+        // Use CsvRecordReader so quoted multi-line fields (e.g. patent summaries, FDA
+        // adverse event narratives, clinical trial descriptions) are not truncated.
+        while (linesRead < batchSize && (line = CsvRecordReader.readRecord(csvReader)) != null) {
           batchSb.append(line).append("\n");
           linesRead++;
         }
