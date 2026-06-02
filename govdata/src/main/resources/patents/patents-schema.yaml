@@ -124,7 +124,7 @@ column_templates:
 
 dimension_values:
 
-  patents_year_range: &patents_year_range
+  year_range: &year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2025}"
     end: "${GOVDATA_END_YEAR:current}"
@@ -154,7 +154,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_grants
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -252,7 +252,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_assignees
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -326,7 +326,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_inventors
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -395,7 +395,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_cpc
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -466,7 +466,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_claims
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -532,7 +532,7 @@ partitionedTables:
     dimensions:
       type:
         - patent_summaries
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - *patent_id_column
@@ -584,7 +584,7 @@ partitionedTables:
     dimensions:
       type:
         - trademark_apps
-      year: *patents_year_range
+      year: *year_range
 
     columns:
       - name: serial_no
