@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -418,17 +420,17 @@ public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
     List<GenericRecord> records = new ArrayList<>();
 
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), StandardCharsets.UTF_8))) {
-      String line = reader.readLine(); // Skip header
+      String line = CsvRecordReader.readRecord(reader); // Skip header
       int count = 0;
 
-      while ((line = reader.readLine()) != null) {
-        String[] parts = line.split(",");
-        if (parts.length >= 3) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
+        List<String> parts = CsvRecordReader.splitFields(line, ',');
+        if (parts.size() >= 3) {
           GenericRecord record = new GenericData.Record(schema);
-          record.put("state_fips", parts[0].trim());
-          record.put("state_code", parts.length > 1 ? parts[1].trim() : "");
-          record.put("state_name", parts.length > 2 ? parts[2].trim() : "");
-          record.put("state_abbr", parts.length > 3 ? parts[3].trim() : null);
+          record.put("state_fips", parts.get(0).trim());
+          record.put("state_code", parts.size() > 1 ? parts.get(1).trim() : "");
+          record.put("state_name", parts.size() > 2 ? parts.get(2).trim() : "");
+          record.put("state_abbr", parts.size() > 3 ? parts.get(3).trim() : null);
           record.put("land_area", null);
           record.put("water_area", null);
           record.put("geometry", null);

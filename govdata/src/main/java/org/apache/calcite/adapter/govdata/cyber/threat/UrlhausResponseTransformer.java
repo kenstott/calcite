@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.threat;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -115,7 +116,7 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(in, StandardCharsets.UTF_8));
     String line;
-    while ((line = reader.readLine()) != null) {
+    while ((line = CsvRecordReader.readRecord(reader)) != null) {
       if (line.startsWith("#") || line.trim().isEmpty()) {
         continue;
       }
@@ -148,41 +149,9 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
     }
   }
 
-  /**
-   * Parses one CSV line, respecting double-quoted fields (which may contain commas).
-   * Does not handle escaped quotes within quoted fields (URLhaus doesn't use them).
-   */
+  /** Delegates to {@link CsvRecordReader#splitFields} — canonical CSV field split. */
   static String[] parseCsvLine(String line) {
-    java.util.List<String> fields = new java.util.ArrayList<String>();
-    int i = 0;
-    int len = line.length();
-    while (i <= len) {
-      if (i == len) {
-        fields.add("");
-        break;
-      }
-      if (line.charAt(i) == '"') {
-        // Quoted field
-        int end = line.indexOf('"', i + 1);
-        if (end < 0) {
-          end = len;
-        }
-        fields.add(line.substring(i + 1, end));
-        i = end + 1;
-        if (i < len && line.charAt(i) == ',') {
-          i++;
-        }
-      } else {
-        int comma = line.indexOf(',', i);
-        if (comma < 0) {
-          fields.add(line.substring(i));
-          break;
-        }
-        fields.add(line.substring(i, comma));
-        i = comma + 1;
-      }
-    }
-    return fields.toArray(new String[0]);
+    return CsvRecordReader.splitFields(line, ',').toArray(new String[0]);
   }
 
   private static String col(String[] cols, int idx) {

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -19,8 +20,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Base class for transformers that receive CSV batches (with header line) and return JSON.
@@ -35,7 +34,7 @@ public abstract class AbstractCsvResponseTransformer implements ResponseTransfor
   public String transform(String response, RequestContext context) {
     try {
       BufferedReader reader = new BufferedReader(new StringReader(response));
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return "[]";
       }
@@ -43,7 +42,7 @@ public abstract class AbstractCsvResponseTransformer implements ResponseTransfor
       ArrayNode out = MAPPER.createArrayNode();
 
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.trim().isEmpty()) {
           continue;
         }
@@ -90,29 +89,11 @@ public abstract class AbstractCsvResponseTransformer implements ResponseTransfor
   }
 
   /**
-   * Parses a single CSV line respecting quoted fields.
+   * Parses a complete CSV record (possibly spanning multiple physical lines)
+   * into fields. Delegates to {@link CsvRecordReader#splitFields} so all CSV
+   * parsing in govdata uses one canonical implementation.
    */
   protected static String[] parseCsvLine(String line) {
-    List<String> fields = new ArrayList<String>();
-    boolean inQuotes = false;
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < line.length(); i++) {
-      char c = line.charAt(i);
-      if (c == '"') {
-        if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
-          sb.append('"');
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (c == ',' && !inQuotes) {
-        fields.add(sb.toString());
-        sb.setLength(0);
-      } else {
-        sb.append(c);
-      }
-    }
-    fields.add(sb.toString());
-    return fields.toArray(new String[0]);
+    return CsvRecordReader.splitFields(line, ',').toArray(new String[0]);
   }
 }

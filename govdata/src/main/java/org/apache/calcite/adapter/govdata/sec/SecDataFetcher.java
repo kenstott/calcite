@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -2158,9 +2160,9 @@ public class SecDataFetcher {
           String line = lines[i].trim();
           if (!line.isEmpty()) {
             // CSV format: "Symbol","Name","LastSale","MarketCap","IPOyear","Sector","industry","Summary Quote",
-            String[] parts = line.split(",");
-            if (parts.length > 0) {
-              String ticker = parts[0].replaceAll("\"", "").trim();
+            java.util.List<String> parts = CsvRecordReader.splitFields(line, ',');
+            if (!parts.isEmpty()) {
+              String ticker = parts.get(0).trim();
               String cik = tickerToCik.get(ticker);
               if (cik != null) {
                 ciks.add(cik);
@@ -2382,9 +2384,9 @@ public class SecDataFetcher {
           String line = lines[i].trim();
           if (!line.isEmpty()) {
             // CSV format: "Symbol","Name","LastSale","MarketCap","IPOyear","Sector","industry","Summary Quote",
-            String[] parts = line.split(",");
-            if (parts.length > 0) {
-              String ticker = parts[0].replaceAll("\"", "").trim();
+            java.util.List<String> parts = CsvRecordReader.splitFields(line, ',');
+            if (!parts.isEmpty()) {
+              String ticker = parts.get(0).trim();
               String cik = tickerToCik.get(ticker);
               if (cik != null) {
                 ciks.add(cik);

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -142,7 +143,7 @@ public class IpedsCompletionsResponseTransformer implements StreamingResponseTra
       this.tempZip = tempZip;
       this.yearStr = yearStr;
 
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         this.header = new String[0];
         close();
@@ -165,7 +166,7 @@ public class IpedsCompletionsResponseTransformer implements StreamingResponseTra
         return;
       }
       try {
-        String line = reader.readLine();
+        String line = CsvRecordReader.readRecord(reader);
         if (line == null) {
           close();
           next = null;

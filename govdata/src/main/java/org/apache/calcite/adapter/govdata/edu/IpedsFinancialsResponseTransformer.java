@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -251,35 +252,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
   }
 
   static String[] parseCsvLine(String line) {
-    List<String> fields = new ArrayList<String>();
-    StringBuilder current = new StringBuilder();
-    boolean inQuotes = false;
-    for (int i = 0; i < line.length(); i++) {
-      char c = line.charAt(i);
-      if (inQuotes) {
-        if (c == '"') {
-          if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
-            current.append('"');
-            i++;
-          } else {
-            inQuotes = false;
-          }
-        } else {
-          current.append(c);
-        }
-      } else {
-        if (c == '"') {
-          inQuotes = true;
-        } else if (c == ',') {
-          fields.add(current.toString());
-          current.setLength(0);
-        } else {
-          current.append(c);
-        }
-      }
-    }
-    fields.add(current.toString());
-    return fields.toArray(new String[0]);
+    return CsvRecordReader.splitFields(line, ',').toArray(new String[0]);
   }
 
   private static final class LazyFinancialsIterator implements Iterator<Map<String, Object>> {
@@ -305,7 +278,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
       this.yearStr = yearStr;
       this.isProvisional = isProvisional;
 
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         this.header = new String[0];
         close();
@@ -328,7 +301,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
         return;
       }
       try {
-        String line = reader.readLine();
+        String line = CsvRecordReader.readRecord(reader);
         if (line == null) {
           close();
           next = null;

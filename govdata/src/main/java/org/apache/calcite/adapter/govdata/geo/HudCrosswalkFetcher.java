@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -508,23 +509,23 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     List<CrosswalkRecord> records = new ArrayList<>();
 
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), StandardCharsets.UTF_8))) {
-      String line = reader.readLine(); // Skip header
+      String line = CsvRecordReader.readRecord(reader); // Skip header
 
-      while ((line = reader.readLine()) != null) {
-        String[] parts = line.split(",");
-        if (parts.length >= 6) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
+        List<String> parts = CsvRecordReader.splitFields(line, ',');
+        if (parts.size() >= 6) {
           CrosswalkRecord record = new CrosswalkRecord();
-          record.zip = parts[0];
-          record.geoCode = parts[1];
-          record.resRatio = Double.parseDouble(parts[2]);
-          record.busRatio = Double.parseDouble(parts[3]);
-          record.othRatio = Double.parseDouble(parts[4]);
-          record.totRatio = Double.parseDouble(parts[5]);
+          record.zip = parts.get(0);
+          record.geoCode = parts.get(1);
+          record.resRatio = Double.parseDouble(parts.get(2));
+          record.busRatio = Double.parseDouble(parts.get(3));
+          record.othRatio = Double.parseDouble(parts.get(4));
+          record.totRatio = Double.parseDouble(parts.get(5));
 
           // Add city and state if available (new format)
-          if (parts.length >= 8) {
-            record.city = parts[6];
-            record.state = parts[7];
+          if (parts.size() >= 8) {
+            record.city = parts.get(6);
+            record.state = parts.get(7);
           }
 
           records.add(record);

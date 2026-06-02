@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -153,25 +154,27 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
     try (BufferedReader reader =
         new BufferedReader(new InputStreamReader(Files.newInputStream(tsvFile.toPath()), StandardCharsets.UTF_8))) {
 
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
 
       // Auto-detect delimiter: Census switched from tab to pipe in 2025
-      String delimiter = headerLine.contains("|") ? "\\|" : "\t";
-      String[] headers = headerLine.split(delimiter);
-      for (int i = 0; i < headers.length; i++) {
-        headers[i] = headers[i].trim();
+      char delimiter = headerLine.indexOf('|') >= 0 ? '|' : '\t';
+      List<String> headerList = CsvRecordReader.splitFields(headerLine, delimiter);
+      String[] headers = new String[headerList.size()];
+      for (int i = 0; i < headerList.size(); i++) {
+        headers[i] = headerList.get(i).trim();
       }
 
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.trim().isEmpty()) {
           continue;
         }
 
-        String[] values = line.split(delimiter, -1);
+        List<String> valueList = CsvRecordReader.splitFields(line, delimiter);
+        String[] values = valueList.toArray(new String[0]);
         Map<String, Object> record = transformRecord(headers, values, tableName, year);
         if (record != null) {
           result.add(record);

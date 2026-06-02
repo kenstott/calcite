@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.avro.Schema;
@@ -602,25 +603,25 @@ public class StooqDownloader {
     String line;
     boolean headerSkipped = false;
 
-    while ((line = reader.readLine()) != null) {
+    while ((line = CsvRecordReader.readRecord(reader)) != null) {
       if (!headerSkipped) {
         headerSkipped = true;
         continue;  // Skip header: "Date,Open,High,Low,Close,Volume"
       }
 
-      String[] parts = line.split(",");
-      if (parts.length < 5) {
+      List<String> parts = CsvRecordReader.splitFields(line, ',');
+      if (parts.size() < 5) {
         continue;  // Invalid row
       }
 
       StockPriceRecord record = new StockPriceRecord();
-      record.date = parts[0];  // YYYY-MM-DD format
-      record.open = parseDouble(parts[1]);
-      record.high = parseDouble(parts[2]);
-      record.low = parseDouble(parts[3]);
-      record.close = parseDouble(parts[4]);
+      record.date = parts.get(0);  // YYYY-MM-DD format
+      record.open = parseDouble(parts.get(1));
+      record.high = parseDouble(parts.get(2));
+      record.low = parseDouble(parts.get(3));
+      record.close = parseDouble(parts.get(4));
       record.adjClose = record.close;  // Stooq returns adjusted prices
-      record.volume = parts.length > 5 ? parseLong(parts[5]) : null;
+      record.volume = parts.size() > 5 ? parseLong(parts.get(5)) : null;
 
       prices.add(record);
     }
@@ -642,18 +643,18 @@ public class StooqDownloader {
     String line;
     boolean headerSkipped = false;
 
-    while ((line = reader.readLine()) != null) {
+    while ((line = CsvRecordReader.readRecord(reader)) != null) {
       if (!headerSkipped) {
         headerSkipped = true;
         continue;  // Skip header: "Date,Open,High,Low,Close,Volume"
       }
 
-      String[] parts = line.split(",");
-      if (parts.length < 5) {
+      List<String> parts = CsvRecordReader.splitFields(line, ',');
+      if (parts.size() < 5) {
         continue;  // Invalid row
       }
 
-      String dateStr = parts[0];  // YYYY-MM-DD format
+      String dateStr = parts.get(0);  // YYYY-MM-DD format
 
       // Filter by year if specified
       if (!dateStr.startsWith(String.valueOf(filterYear))) {
@@ -662,12 +663,12 @@ public class StooqDownloader {
 
       StockPriceRecord record = new StockPriceRecord();
       record.date = dateStr;
-      record.open = parseDouble(parts[1]);
-      record.high = parseDouble(parts[2]);
-      record.low = parseDouble(parts[3]);
-      record.close = parseDouble(parts[4]);
+      record.open = parseDouble(parts.get(1));
+      record.high = parseDouble(parts.get(2));
+      record.low = parseDouble(parts.get(3));
+      record.close = parseDouble(parts.get(4));
       record.adjClose = record.close;  // Stooq returns adjusted prices
-      record.volume = parts.length > 5 ? parseLong(parts[5]) : null;
+      record.volume = parts.size() > 5 ? parseLong(parts.get(5)) : null;
 
       prices.add(record);
     }

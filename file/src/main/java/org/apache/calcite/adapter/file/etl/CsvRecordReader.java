@@ -74,4 +74,50 @@ public final class CsvRecordReader {
     }
     return (count & 1) != 0;
   }
+
+  /**
+   * Splits a complete CSV/TSV record into fields, honoring RFC4180-style quoted
+   * fields that may contain the delimiter, newlines, or escaped quotes ({@code ""}).
+   *
+   * <p>Fields surrounded by {@code "..."} have outer quotes stripped and any
+   * embedded {@code ""} replaced with a single {@code "}. Unquoted fields are
+   * returned as-is.
+   *
+   * @param record    a complete record (from {@link #readRecord})
+   * @param delimiter the field delimiter character (e.g. {@code ','} for CSV,
+   *                  {@code '\t'} for TSV)
+   * @return list of fields in order
+   */
+  public static java.util.List<String> splitFields(String record, char delimiter) {
+    java.util.List<String> out = new java.util.ArrayList<>();
+    StringBuilder field = new StringBuilder();
+    boolean inQuotes = false;
+    int len = record.length();
+    for (int i = 0; i < len; i++) {
+      char c = record.charAt(i);
+      if (inQuotes) {
+        if (c == '"') {
+          if (i + 1 < len && record.charAt(i + 1) == '"') {
+            field.append('"');  // escaped quote
+            i++;
+          } else {
+            inQuotes = false;  // closing quote
+          }
+        } else {
+          field.append(c);
+        }
+      } else {
+        if (c == delimiter) {
+          out.add(field.toString());
+          field.setLength(0);
+        } else if (c == '"' && field.length() == 0) {
+          inQuotes = true;  // opening quote at start of field
+        } else {
+          field.append(c);
+        }
+      }
+    }
+    out.add(field.toString());
+    return out;
+  }
 }

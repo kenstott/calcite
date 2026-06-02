@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.patents;
 
+import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -252,7 +253,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -266,7 +267,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       }
 
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
@@ -300,7 +301,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -318,7 +319,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       }
 
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
@@ -357,7 +358,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -375,7 +376,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       }
 
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
@@ -425,7 +426,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -445,7 +446,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         return result;
       }
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
@@ -475,7 +476,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -495,7 +496,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         return result;
       }
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
@@ -554,7 +555,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(path), StandardCharsets.UTF_8));
     try {
-      String headerLine = reader.readLine();
+      String headerLine = CsvRecordReader.readRecord(reader);
       if (headerLine == null) {
         return result;
       }
@@ -575,7 +576,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         return result;
       }
       String line;
-      while ((line = reader.readLine()) != null) {
+      while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.isEmpty()) {
           continue;
         }
