@@ -10,13 +10,16 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.PerRecordResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Transforms CDC mortality data from two Socrata endpoints into a unified schema.
@@ -30,8 +33,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * </ul>
  * Both are normalised to: year, week_ending_date, state, cause_name, full_cause_name, deaths,
  * age_adjusted_rate.
+ *
+ * <p>Implements {@link PerRecordResponseTransformer} so HttpSource's streamFromRawCache path
+ * handles the paginated {@code {"results":[...]}} cache envelope correctly.
  */
-public class CdcMortalityResponseTransformer implements ResponseTransformer {
+public class CdcMortalityResponseTransformer implements PerRecordResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @Override
@@ -40,13 +46,12 @@ public class CdcMortalityResponseTransformer implements ResponseTransformer {
       JsonNode root = MAPPER.readTree(response);
       ArrayNode out = MAPPER.createArrayNode();
 
-      // Socrata returns a top-level array
+      // Socrata live response is a top-level array.
       if (!root.isArray()) {
         return "[]";
       }
 
-      String sourceType = context != null ? context.getDimensionValues().get("source_type") : null;
-      boolean isWeekly = "weekly".equals(sourceType);
+      boolean isWeekly = isWeekly(context);
 
       for (JsonNode record : root) {
         ObjectNode row = MAPPER.createObjectNode();
@@ -62,6 +67,21 @@ public class CdcMortalityResponseTransformer implements ResponseTransformer {
     } catch (Exception e) {
       throw new RuntimeException("Failed to transform CDC mortality response", e);
     }
+  }
+
+  @Override
+  public void transformRecord(Map<String, Object> row, RequestContext context) {
+    Map<String, Object> source = new HashMap<>(row);
+    row.clear();
+    if (isWeekly(context)) {
+      mapWeeklyMap(source, row);
+    } else {
+      mapAnnualMap(source, row);
+    }
+  }
+
+  private static boolean isWeekly(RequestContext context) {
+    return context != null && "weekly".equals(context.getDimensionValues().get("source_type"));
   }
 
   private void mapAnnual(JsonNode r, ObjectNode row) {
@@ -87,6 +107,30 @@ public class CdcMortalityResponseTransformer implements ResponseTransformer {
     put(row, "source_type", "weekly");
   }
 
+  private void mapAnnualMap(Map<String, Object> r, Map<String, Object> row) {
+    row.put("year", str(r.get("year")));
+    row.put("week_ending_date", null);
+    row.put("state", str(r.get("state")));
+    String cause = str(r.get("cause_name"));
+    row.put("cause_name", cause);
+    row.put("full_cause_name", cause);
+    row.put("deaths", str(r.get("deaths")));
+    row.put("age_adjusted_rate", str(r.get("age_adjusted_death_rate")));
+    row.put("source_type", "annual");
+  }
+
+  private void mapWeeklyMap(Map<String, Object> r, Map<String, Object> row) {
+    row.put("year", str(r.get("mmwryear")));
+    row.put("week_ending_date", str(r.get("weekendingdate")));
+    row.put("state", str(r.get("jurisdiction_of_occurrence")));
+    String group = str(r.get("group"));
+    row.put("cause_name", group);
+    row.put("full_cause_name", group);
+    row.put("deaths", str(r.get("covid_19_deaths")));
+    row.put("age_adjusted_rate", null);
+    row.put("source_type", "weekly");
+  }
+
   private static String text(JsonNode node, String field) {
     JsonNode value = node.path(field);
     return value.isMissingNode() || value.isNull() ? null : value.asText(null);
@@ -98,5 +142,9 @@ public class CdcMortalityResponseTransformer implements ResponseTransformer {
     } else {
       row.put(key, value);
     }
+  }
+
+  private static String str(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 }
