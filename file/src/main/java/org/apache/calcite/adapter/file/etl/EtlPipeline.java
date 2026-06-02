@@ -1595,9 +1595,12 @@ public class EtlPipeline {
     HttpSourceConfig.RawCacheConfig rawCacheConfig = sourceConfig.getRawCache();
     if (rawCacheConfig.isEnabled()) {
       // Build raw cache path: just use table name as relative path
+      // (or sharedKey when multiple pipelines need to reuse one upstream fetch).
       // The sourceStorageProvider has its base path configured (e.g., s3://bucket/raw/)
       // so files go to {baseS3Path}/{tableName}/{partitionKey}/response.json
-      rawCachePath = config.getName();
+      rawCachePath = rawCacheConfig.getSharedKey() != null
+          ? rawCacheConfig.getSharedKey()
+          : config.getName();
       LOGGER.info("Creating HttpSource with raw cache: {} (via {})",
           rawCachePath, sourceStorageProvider.getStorageType());
     } else {

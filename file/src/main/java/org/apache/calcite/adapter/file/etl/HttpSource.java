@@ -775,8 +775,16 @@ public class HttpSource implements DataSource {
           cacheGenerator.writeArrayFieldStart("results");
         }
         com.fasterxml.jackson.databind.JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
-        com.fasterxml.jackson.databind.JsonNode resultsNode = root.has("results")
-            ? root.get("results") : root;
+        com.fasterxml.jackson.databind.JsonNode resultsNode;
+        String configuredDataPath = config.getResponse() == null
+            ? null : config.getResponse().getDataPath();
+        if (configuredDataPath != null && !configuredDataPath.isEmpty()) {
+          resultsNode = navigateToPath(root, configuredDataPath);
+        } else if (root.has("results")) {
+          resultsNode = root.get("results");
+        } else {
+          resultsNode = root;
+        }
         if (resultsNode != null && resultsNode.isArray()) {
           for (com.fasterxml.jackson.databind.JsonNode record : resultsNode) {
             OBJECT_MAPPER.writeTree(cacheGenerator, record);

@@ -688,6 +688,7 @@ partitionedTables:
         pageSize: "1000"
       response:
         format: json
+        dataPath: "studies"
         pagination:
           type: CURSOR
           pageSize: 1000
@@ -699,6 +700,7 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+        sharedKey: clinical_trials
       incremental:
         sinceDate: "${GOVDATA_SINCE_DATE:}"
         untilDate: "${GOVDATA_UNTIL_DATE:}"
@@ -765,6 +767,7 @@ partitionedTables:
         pageSize: "1000"
       response:
         format: json
+        dataPath: "studies"
         pagination:
           type: CURSOR
           pageSize: 1000
@@ -776,6 +779,7 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+        sharedKey: clinical_trials
       incremental:
         sinceDate: "${GOVDATA_SINCE_DATE:}"
         untilDate: "${GOVDATA_UNTIL_DATE:}"
@@ -847,6 +851,7 @@ partitionedTables:
         pageSize: "1000"
       response:
         format: json
+        dataPath: "studies"
         pagination:
           type: CURSOR
           pageSize: 1000
@@ -858,6 +863,7 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+        sharedKey: clinical_trials
       incremental:
         sinceDate: "${GOVDATA_SINCE_DATE:}"
         untilDate: "${GOVDATA_UNTIL_DATE:}"

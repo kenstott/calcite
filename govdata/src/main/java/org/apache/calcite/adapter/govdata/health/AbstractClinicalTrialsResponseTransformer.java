@@ -21,7 +21,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * Base class for transforming clinicaltrials.gov API responses.
  *
- * <p>Response structure: { "studies": [ { "protocolSection": {...} }, ... ] }
+ * <p>Recognises two response shapes:
+ * <ul>
+ *   <li>Live API: {@code { "studies": [ { "protocolSection": {...} }, ... ] }} — each element
+ *       wraps a {@code protocolSection}.</li>
+ *   <li>Cached merged envelope (after HttpSource accumulator with {@code dataPath: studies}):
+ *       {@code { "results": [ { "protocolSection": {...} }, ... ] }} — same per-element shape.</li>
+ * </ul>
  * Subclasses receive the protocolSection node per study and write rows to an output array.
  */
 public abstract class AbstractClinicalTrialsResponseTransformer implements ResponseTransformer {
@@ -31,10 +37,13 @@ public abstract class AbstractClinicalTrialsResponseTransformer implements Respo
   public String transform(String response, RequestContext context) {
     try {
       JsonNode root = MAPPER.readTree(response);
-      JsonNode studies = root.path("studies");
+      JsonNode records = root.path("studies");
+      if (records.isMissingNode() || !records.isArray()) {
+        records = root.path("results");
+      }
       ArrayNode out = MAPPER.createArrayNode();
 
-      for (JsonNode study : studies) {
+      for (JsonNode study : records) {
         JsonNode ps = study.path("protocolSection");
         flattenStudy(ps, out);
       }

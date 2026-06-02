@@ -1499,21 +1499,32 @@ public class HttpSourceConfig {
    */
   public static class RawCacheConfig {
     private final boolean enabled;
+    private final String sharedKey;
 
-    private RawCacheConfig(boolean enabled) {
+    private RawCacheConfig(boolean enabled, String sharedKey) {
       this.enabled = enabled;
+      this.sharedKey = sharedKey;
     }
 
     public static RawCacheConfig defaults() {
-      return new RawCacheConfig(false);
+      return new RawCacheConfig(false, null);
     }
 
     public static RawCacheConfig enabled() {
-      return new RawCacheConfig(true);
+      return new RawCacheConfig(true, null);
     }
 
     public boolean isEnabled() {
       return enabled;
+    }
+
+    /**
+     * Optional directory name override. When set, multiple pipelines configured with the same
+     * sharedKey reuse one raw-cache directory — useful when several tables derive from the same
+     * upstream URL. When null, the pipeline name is used as the cache directory.
+     */
+    public String getSharedKey() {
+      return sharedKey;
     }
 
     @SuppressWarnings("unchecked")
@@ -1530,7 +1541,13 @@ public class HttpSourceConfig {
         enabled = "true".equalsIgnoreCase((String) enabledObj);
       }
 
-      return new RawCacheConfig(enabled);
+      String sharedKey = null;
+      Object sharedKeyObj = map.get("sharedKey");
+      if (sharedKeyObj instanceof String && !((String) sharedKeyObj).isEmpty()) {
+        sharedKey = (String) sharedKeyObj;
+      }
+
+      return new RawCacheConfig(enabled, sharedKey);
     }
   }
 
