@@ -866,7 +866,7 @@ get_dq_start_year() {
     edu)      echo $(( $(date +%Y) - 3 )) ;;  # 3-year lookback: covers NAEP/CRDC biennial lag; crdc_schools 2021 data DQ-flags correctly via existence check
     lands)    echo 2023 ;;  # forest inventory biennial
     census)   echo 2022 ;;  # ACS 5-year span
-    patents)  echo 2025 ;;  # only current year published
+    patents)  echo 2022 ;;  # USPTO TRCFECO2 trademark snapshot {year+1}; last published is 2023 → filing year 2022
     *)        echo 2024 ;;  # annual/sub-annual: 1-year lookback sufficient
   esac
 }
