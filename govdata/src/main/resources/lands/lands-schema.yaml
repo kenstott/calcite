@@ -290,13 +290,11 @@ partitionedTables:
   # FOREST INVENTORY — USDA FIA bulk COND CSV per state
   # ---------------------------------------------------------------------------
   - name: forest_inventory
-    pattern: "type=forest_inventory/stateAbbr=*/*.parquet"
+    pattern: "type=forest_inventory/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - *partition_type
-        - name: stateAbbr
-          type: VARCHAR
     comment: >
       USDA Forest Service Forest Inventory and Analysis (FIA) state-level estimates
       derived from bulk COND CSV files (apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv).
@@ -349,9 +347,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=forest_inventory/stateAbbr=*/"
+        pattern: "type=forest_inventory/"
       partition:
-        columns: [type, stateAbbr]
+        columns: [type]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_inventory
@@ -359,20 +357,17 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
-        batchPartitionColumns: [stateAbbr]
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # FOREST METRICS — USDA FIA bulk TREE CSV per state (live-tree metrics)
   # ---------------------------------------------------------------------------
   - name: forest_metrics
-    pattern: "type=forest_metrics/stateAbbr=*/*.parquet"
+    pattern: "type=forest_metrics/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - *partition_type
-        - name: stateAbbr
-          type: VARCHAR
     comment: >
       USDA FIA tree-level metrics derived from bulk TREE CSV files joined to COND.
       One row per state × forest_type_group × ownership_class × inventory_year.
@@ -434,9 +429,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=forest_metrics/stateAbbr=*/"
+        pattern: "type=forest_metrics/"
       partition:
-        columns: [type, stateAbbr]
+        columns: [type]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_metrics
@@ -444,7 +439,6 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
-        batchPartitionColumns: [stateAbbr]
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
