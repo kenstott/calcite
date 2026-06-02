@@ -138,14 +138,15 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
 
-  # Trademark applications: USPTO TRCFECO2 snapshots are published annually, not quarterly.
-  # Available snapshots: 2021 (filing year 2020), 2022 (filing year 2021), 2023 (filing year 2022).
-  # end is the latest filing year with a published snapshot — bump when USPTO publishes
-  # snapshot 2024 (which would cover filing year 2023).
+  # Trademark applications: USPTO TRCFECO2 began regular annual publication in 2021
+  # (snapshot 2021 covers filing year 2020). Earlier years return 404 — the transformer
+  # treats unpublished years as empty batches so the year range can extend to current
+  # without needing schema edits each time USPTO publishes a new snapshot.
   trademark_years: &trademark_years
     type: yearRange
     start: 2020
-    end: 2022
+    end: current
+    dataLag: 1
 
 # ============================================================================
 # PARTITIONED TABLES
