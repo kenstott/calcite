@@ -500,13 +500,13 @@ SELECT 'patents', 'patent_claims', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true)
       WHERE patent_id IS NULL OR grant_year IS NULL);
 
--- T7: independent claims present (dependent = 0 means independent)
+-- T7: independent claims present (dependent IS NULL means independent)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T7_independent_claims_present',
   CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
-  n, 1, 'Count of independent claims (dependent = 0) — expect at least 1'
+  n, 1, 'Count of independent claims (dependent IS NULL) — expect at least 1'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true)
-      WHERE dependent = 0);
+      WHERE dependent IS NULL);
 
 -- T7: claim_text not blank
 INSERT INTO dq_results

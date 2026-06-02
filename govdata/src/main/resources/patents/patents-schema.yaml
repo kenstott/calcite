@@ -484,9 +484,9 @@ partitionedTables:
         nullable: true
         comment: Full claim text
       - name: dependent
-        type: integer
+        type: string
         nullable: true
-        comment: 0 = independent claim; positive integer = claim_sequence of parent
+        comment: NULL = independent claim; otherwise a "claim N" reference to the parent's claim_number (verbatim from PatentsView)
       - name: exemplary
         type: boolean
         nullable: true

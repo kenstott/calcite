@@ -87,7 +87,7 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
             row.put("claim_sequence", intVal(getField(parts, hdr, "claim_sequence")));
             row.put("claim_number", intVal(getField(parts, hdr, "claim_number")));
             row.put("claim_text", strVal(getField(parts, hdr, "claim_text")));
-            row.put("dependent", intVal(getField(parts, hdr, "dependent")));
+            row.put("dependent", strVal(getField(parts, hdr, "dependent")));
             row.put("exemplary", boolVal(getField(parts, hdr, "exemplary")));
             count[0]++;
             pending = row;
