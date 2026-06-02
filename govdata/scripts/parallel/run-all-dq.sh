@@ -34,6 +34,7 @@ MAX_RESTARTS=5
 POLL_INTERVAL=300   # seconds between release polls (default 5 min)
 POOL_EXTRA_ARGS=()  # forwarded verbatim to run-pool-persist.sh
 LOCAL_JAR=false     # skip jar download and release polling when true
+SLOT_MODE="dq-rebuild"  # full ETL re-ingest + DQ; --no-rebuild switches to DQ-only
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,8 +63,14 @@ while [[ $# -gt 0 ]]; do
     --local-jar)
       LOCAL_JAR=true
       ;;
+    --no-rebuild)
+      SLOT_MODE="dq"
+      ;;
+    --etl-resume)
+      SLOT_MODE="dq-etl-resume"
+      ;;
     --help|-h)
-      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force] [--local-jar]"
+      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force] [--local-jar] [--no-rebuild|--etl-resume]"
       echo ""
       echo "  Starts run-pool dq-rebuild and monitors for new engine releases."
       echo "  On a new release: kills the pool, downloads the new jar, restarts."
@@ -76,6 +83,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --reset              Clear completed-slots checkpoint, re-run all schemas"
       echo "  --local-jar          Use the jar already at build/libs/sih-govdata.jar without"
       echo "                       downloading or polling for new releases"
+      echo "  --no-rebuild         Run DQ only against existing R2 data (no ETL teardown/re-ingest)"
+      echo "  --etl-resume         Run ETL (tracker-aware; resumes unfinished partitions) then DQ;"
+      echo "                       no teardown of Iceberg metadata or trackers"
       exit 0
       ;;
     *)
@@ -122,7 +132,7 @@ _start_pool() {
   local cmd=("$SCRIPT_DIR/run-pool-persist.sh" --force)
   [ -n "$SCHEMA_FILTER" ] && cmd+=(--schema "$SCHEMA_FILTER")
   [ "${#POOL_EXTRA_ARGS[@]}" -gt 0 ] && cmd+=("${POOL_EXTRA_ARGS[@]}")
-  cmd+=(dq-rebuild)
+  cmd+=("$SLOT_MODE")
   log_info "run-all-dq: starting pool: ${cmd[*]}"
   "${cmd[@]}" &
   POOL_PID=$!

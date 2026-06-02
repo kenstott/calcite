@@ -36,6 +36,7 @@ fi
 MODE="daily"
 DRY_RUN=false
 REBUILD=false
+ETL_RESUME=false
 INCLUDE_DAILY=false
 REBUILD_START_YEAR=""
 shift
@@ -47,6 +48,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=true
+      ;;
+    --etl-resume)
+      # Resume ETL without teardown: respects tracker, completes unfinished
+      # partitions (historical + daily), then runs DQ. No purge of Iceberg
+      # metadata, MinIO data, dq-results, or etl-tracker.
+      ETL_RESUME=true
+      INCLUDE_DAILY=true
       ;;
     --rebuild)
       REBUILD=true
@@ -262,7 +270,13 @@ _cf_reset_bucket() {
   log_info "$WORKER_ID: bucket '$bucket' reset complete"
 }
 
-# ── rebuild: teardown + ETL before DQ ────────────────────────────────────────
+# ── rebuild/resume: optional teardown + ETL before DQ ────────────────────────
+# --rebuild       → teardown + ETL + DQ (full clean reproduction)
+# --etl-resume    → ETL + DQ (uses tracker to skip completed partitions)
+if $REBUILD || $ETL_RESUME; then
+  if $ETL_RESUME && ! $REBUILD; then
+    log_info "$WORKER_ID: --etl-resume: skipping teardown; tracker will skip completed partitions"
+  fi
 if $REBUILD; then
   log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA (bucket=$GOVDATA_DQ_BUCKET)"
 
@@ -372,22 +386,25 @@ PYEOF
       rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
     done
   fi
+fi  # end iceberg/data teardown (only when --rebuild)
+
+  # Always (for both --rebuild and --etl-resume): redirect ETL writes to DQ bucket
   export FORCE=true
   export FORCE_FRESH=true
-  # Redirect ETL writes to the DQ bucket and its companion tracker.
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
 
   # 3. Delete existing DQ results and ETL batch tracker so the post-ETL run starts clean.
-  log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
-  rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
+  if $REBUILD; then
+    log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
+    rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
 
-  # Clear ETL batch tracker so batches are not skipped as "already processed"
-  log_info "$WORKER_ID: --rebuild: purging etl-tracker for schema=$SCHEMA"
-  rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
+    log_info "$WORKER_ID: --rebuild: purging etl-tracker for schema=$SCHEMA"
+    rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
+  fi
 
   # 4. Run historical ETL pass.
-  log_info "$WORKER_ID: --rebuild: running historical ETL for schema=$SCHEMA"
+  log_info "$WORKER_ID: running historical ETL for schema=$SCHEMA"
   REBUILD_MODEL="$RUN_DIR/models/rebuild_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
   mkdir -p "$(dirname "$REBUILD_MODEL")"
   export GOVDATA_RUN_MODE="historical"

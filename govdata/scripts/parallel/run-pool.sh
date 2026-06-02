@@ -186,6 +186,18 @@ for arg in "$@"; do
       )
       ;;
 
+    dq-etl-resume)
+      # ETL resume + DQ: continue ETL (tracker skips completed partitions), then DQ.
+      # No teardown — useful for iterating on ETL fixes without paying full rebuild cost.
+      export GOVDATA_RUN_MODE="historical"
+      queue+=(
+        sec:dq-etl-resume sec_prices:dq-etl-resume weather:dq-etl-resume edu:dq-etl-resume census:dq-etl-resume econ:dq-etl-resume
+        crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
+        lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
+        energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
+      )
+      ;;
+
     daily)
       # Recurring workers — run every day on the production server.
       export GOVDATA_RUN_MODE="daily"
