@@ -138,16 +138,7 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
 
-  # Trademark applications: USPTO TRCFECO2 publication physically began with snapshot
-  # 2011, which covers filing year 2010 — no data exists for filing years prior to 2010
-  # in this dataset. Publication cadence is irregular (no biennial/quarterly pattern);
-  # years with no published snapshot return 404 and are skipped by default
-  # notFoundAction=SKIP. End ranges to current via GOVDATA_END_YEAR.
-  trademark_years: &trademark_years
-    type: yearRange
-    start: 2010
-    end: "${GOVDATA_END_YEAR:current}"
-    dataLag: 1
+  trademark_years: *patent_grant_years
 
 # ============================================================================
 # PARTITIONED TABLES
