@@ -139,12 +139,13 @@ dimension_values:
     dataLag: 1
 
   # Trademark applications: USPTO TRCFECO2 snapshots are published annually, not quarterly.
-  # Available snapshots: 2021 (filing year 2020), 2022 (2021), 2023 (2022).
+  # Available snapshots: 2021 (filing year 2020), 2022 (filing year 2021), 2023 (filing year 2022).
+  # end is the latest filing year with a published snapshot — bump when USPTO publishes
+  # snapshot 2024 (which would cover filing year 2023).
   trademark_years: &trademark_years
     type: yearRange
     start: 2020
-    end: current
-    dataLag: 1
+    end: 2022
 
 # ============================================================================
 # PARTITIONED TABLES
