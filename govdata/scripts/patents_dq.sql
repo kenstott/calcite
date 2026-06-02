@@ -55,11 +55,11 @@ SELECT 'patents', 'patent_grants', 'T2b_historical_coverage',
   min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
 FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true));
 
--- T2c: daily coverage (daily worker writes 2026)
+-- T2c: daily coverage (PatentsView quarterly; dataLag=1 → currentYear - 1)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_grants', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true));
 
 -- T3: sample
@@ -160,8 +160,8 @@ FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 -- T2c: daily coverage
 INSERT INTO dq_results
 SELECT 'patents', 'patent_assignees', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true));
 
 -- T3: sample
@@ -256,8 +256,8 @@ FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 -- T2c: daily coverage
 INSERT INTO dq_results
 SELECT 'patents', 'patent_inventors', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true));
 
 -- T3: sample
@@ -351,8 +351,8 @@ FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 -- T2c: daily coverage
 INSERT INTO dq_results
 SELECT 'patents', 'patent_cpc_classes', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true));
 
 -- T3: sample
@@ -453,8 +453,8 @@ FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 -- T2c: daily coverage
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true));
 
 -- T3: sample
@@ -547,8 +547,8 @@ FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 -- T2c: daily coverage
 INSERT INTO dq_results
 SELECT 'patents', 'patent_summaries', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2026 THEN 'pass' ELSE 'fail' END,
-  max_year, 2026, 'MAX(grant_year) must be >= 2026 (daily worker)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true));
 
 -- T3: sample

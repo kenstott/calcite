@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-05-30
+Last updated: 2026-06-01
 
 ## How to Read This
 
@@ -64,7 +64,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | census       | 2026-05-30 | PASS    | 0     | 0     | economic_census fix deployed in 0.16.1 |
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
 | crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
-| geo          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
 | fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
 | lands        | —          | PENDING | —     | —     | Schema changes pending re-run |
@@ -288,9 +288,23 @@ Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{y
 
 ---
 
-## geo (2026-05-19) — PASS
+## geo (2026-06-01) — PASS
 
 0 fails, 0 warns, 70 passes. All 32 tables readable. Row counts below are totals across all ingested years.
+
+### Fixed (2026-06-01) — DataProvider cache infrastructure
+
+- **`StorageAwareDataProvider` interface** (`file/etl`): `SchemaLifecycleProcessor` now injects the schema's configured `StorageProvider` (with S3/MinIO credentials) into custom `DataProvider` implementations before the first `fetch()` call. Without this, `StorageProviderFactory.createForGovDataCache()` threw `IllegalArgumentException` for S3 URLs, silently disabling all cache reads/writes.
+- **`TigerDataProvider` cache**: now reads from / writes to `${GOVDATA_CACHE_DIR}/tiger/year={year}/{table}[/{state_fips}]/`. Reduces TIGER shapefile re-downloads from every rebuild to only first run + new years.
+- **`GazetteerDataProvider`, `UsdaDataProvider`, `WatershedDataProvider`, `FedRegisterBulkXmlDataProvider`**: all implement `StorageAwareDataProvider` with persistent cache via `ZipDownloadUtils.downloadZipToTempDirCached` / `downloadTextCached`.
+- **`GhcndBulkDataProvider`**: replaced direct `File` I/O on `ETL_LOCAL_RAW_CACHE` with `StorageProvider` reads/writes (via `StorageProviderFactory.createForGovDataCache()`).
+- **`ZipDownloadUtils`** (new): consolidated zip/gzip download utilities — `downloadZipToTempDir`, `downloadZipToTempDirCached`, `downloadGzipToFile`, `downloadTextCached`, `deleteDirectory`.
+- **`writeDirectoryToStorage` bug**: `S3StorageProvider.resolvePath()` strips path segments containing dots, treating them as file extensions. When writing `WBD_National_GDB.gdb/` to S3, `.gdb` was stripped, files written at wrong level. Bypassed `resolvePath` with raw `basePath + "/" + name` concatenation in `ZipDownloadUtils.writeDirectoryToStorage`. Cleared broken `minio:govdata-raw-v1/geo/wbd_national/` cache (176 objects, 3.18 GiB) so it re-caches correctly.
+- **`WatershedDataProvider.findGdbDir`**: defensively accepts directory named `gdb` (without `.gdb` extension) as a fallback against future S3 cache anomalies; prefers `*.gdb` when both forms exist.
+- **`GazetteerDataProvider` HTTP 404 handling**: Census Gazetteer files for the current year are often not yet published. 404 is now treated as empty result (skipped batch) rather than propagating as fatal error.
+- **`DuckDbExtensionInstaller` v1.4.4**: fallback version updated from `1.4.3` → `1.4.4` to match runtime DuckDB. Previously caused `Failed to load spatial.duckdb_extension` errors on `WatershedDataProvider`.
+
+### Fixed (2026-05-19)
 
 ### Row counts (total across all years)
 
