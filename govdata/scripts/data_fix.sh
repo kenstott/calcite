@@ -23,8 +23,13 @@
 #
 # Usage:
 #   data_fix.sh --schema <schema> --table <table> \
+#               [--env prod|dq] \
 #               [--start YYYY] [--stop YYYY] \
 #               [--raw true|false] [--dry-run]
+#
+# --env prod (default): targets R2 prod buckets via rclone remote `r2:`.
+# --env dq:             targets MinIO DQ buckets via the rclone remote named in
+#                       $GOVDATA_DQ_RCLONE_REMOTE (typically `minio`).
 #
 set -euo pipefail
 
@@ -38,11 +43,13 @@ START_YEAR=""
 STOP_YEAR=""
 RAW_FLAG="false"
 DRY_RUN=false
+ENV_NAME="prod"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --schema)  SCHEMA="$2";     shift 2 ;;
     --table)   TABLE="$2";      shift 2 ;;
+    --env)     ENV_NAME="$2";   shift 2 ;;
     --start)   START_YEAR="$2"; shift 2 ;;
     --stop)    STOP_YEAR="$2";  shift 2 ;;
     --raw)     RAW_FLAG="$2";   shift 2 ;;
@@ -52,7 +59,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SCHEMA" || -z "$TABLE" ]]; then
-  echo "Usage: data_fix.sh --schema <schema> --table <table> [--start YYYY] [--stop YYYY] [--raw true|false] [--dry-run]"
+  echo "Usage: data_fix.sh --schema <schema> --table <table> [--env prod|dq] [--start YYYY] [--stop YYYY] [--raw true|false] [--dry-run]"
+  exit 1
+fi
+
+if [[ "$ENV_NAME" != "prod" && "$ENV_NAME" != "dq" ]]; then
+  echo "Error: --env must be 'prod' or 'dq' (got '$ENV_NAME')"
   exit 1
 fi
 
@@ -67,15 +79,30 @@ if $DELETE_RAW; then
 fi
 
 # ── Load environment ──────────────────────────────────────────────────────────
-for env_file in .env.prod .env.test; do
-  if [[ -f "$GOVDATA_HOME/$env_file" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$GOVDATA_HOME/$env_file"
-    set +a
-    break
+# Always source .env.prod first to get base config (bucket names, etc.).
+# When --env dq, also source .env.dq to override AWS creds + endpoint for MinIO.
+if [[ -f "$GOVDATA_HOME/.env.prod" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$GOVDATA_HOME/.env.prod"
+  set +a
+elif [[ -f "$GOVDATA_HOME/.env.test" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$GOVDATA_HOME/.env.test"
+  set +a
+fi
+
+if [[ "$ENV_NAME" == "dq" ]]; then
+  if [[ ! -f "$GOVDATA_HOME/.env.dq" ]]; then
+    echo "Error: --env dq requested but $GOVDATA_HOME/.env.dq not found"
+    exit 1
   fi
-done
+  set -a
+  # shellcheck source=/dev/null
+  source "$GOVDATA_HOME/.env.dq"
+  set +a
+fi
 
 if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
   echo "Error: AWS credentials not set. Source .env.prod or .env.test first."
@@ -83,21 +110,37 @@ if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
 fi
 
 # ── Derived variables ─────────────────────────────────────────────────────────
-PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
-RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
-TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
+if [[ "$ENV_NAME" == "dq" ]]; then
+  : "${GOVDATA_DQ_BUCKET:?GOVDATA_DQ_BUCKET not set (check .env.dq)}"
+  : "${GOVDATA_DQ_TRACKER_BUCKET:?GOVDATA_DQ_TRACKER_BUCKET not set (check .env.dq)}"
+  : "${GOVDATA_DQ_RCLONE_REMOTE:?GOVDATA_DQ_RCLONE_REMOTE not set (check .env.dq)}"
+  PARQUET_BUCKET="s3://${GOVDATA_DQ_BUCKET}"
+  TRACKER_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
+  RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
+  RCLONE_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE}"
+else
+  PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
+  RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
+  TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
+  RCLONE_REMOTE="r2"
+fi
 
 s3_to_rclone() {
   local path="${1#s3://}"
   path="${path%/}/"
-  echo "r2:${path}"
+  echo "${RCLONE_REMOTE}:${path}"
 }
 RCLONE_PARQUET="$(s3_to_rclone "$PARQUET_BUCKET")"
 RCLONE_RAW="$(s3_to_rclone "$RAW_BUCKET")"
 ICEBERG_PATH="${RCLONE_PARQUET}${SCHEMA}/${TABLE}"
 
-DUCKDB_ENDPOINT="${S3_ENDPOINT:-${AWS_ENDPOINT_OVERRIDE:-}}"
-DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#https://}"
+DUCKDB_ENDPOINT_RAW="${S3_ENDPOINT:-${AWS_ENDPOINT_OVERRIDE:-}}"
+DUCKDB_USE_SSL="true"
+case "$DUCKDB_ENDPOINT_RAW" in
+  http://*)  DUCKDB_USE_SSL="false" ;;
+  https://*) DUCKDB_USE_SSL="true" ;;
+esac
+DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT_RAW#https://}"
 DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#http://}"
 S3_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-auto}}"
 
@@ -105,7 +148,7 @@ S3_CONFIG="INSTALL httpfs; LOAD httpfs;"
 S3_CONFIG="${S3_CONFIG} SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';"
 S3_CONFIG="${S3_CONFIG} SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';"
 if [[ -n "$DUCKDB_ENDPOINT" ]]; then
-  S3_CONFIG="${S3_CONFIG} SET s3_url_style='path'; SET s3_endpoint='${DUCKDB_ENDPOINT}';"
+  S3_CONFIG="${S3_CONFIG} SET s3_url_style='path'; SET s3_endpoint='${DUCKDB_ENDPOINT}'; SET s3_use_ssl=${DUCKDB_USE_SSL};"
 fi
 S3_CONFIG="${S3_CONFIG} SET s3_region='${S3_REGION}';"
 
@@ -113,6 +156,7 @@ S3_CONFIG="${S3_CONFIG} SET s3_region='${S3_REGION}';"
 echo "=================================================="
 echo "data_fix.sh"
 echo "=================================================="
+echo "  Env:       $ENV_NAME (rclone remote: ${RCLONE_REMOTE})"
 echo "  Schema:    $SCHEMA"
 echo "  Table:     $TABLE"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/${TABLE}"
