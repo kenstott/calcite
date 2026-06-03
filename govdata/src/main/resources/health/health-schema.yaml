@@ -686,6 +686,11 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
+        # clinicaltrials.gov v2 has no simple `field.gte` filter; the documented
+        # incremental filter is the AREA[..]RANGE[..,MAX] expression under filter.advanced.
+        # Default lower bound = 2020-01-01 keeps the cache bounded (~250MB) when
+        # no incremental window is exported by the worker.
+        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
       response:
         format: json
         dataPath: "studies"
@@ -701,10 +706,6 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-      incremental:
-        sinceDate: "${GOVDATA_SINCE_DATE:}"
-        untilDate: "${GOVDATA_UNTIL_DATE:}"
-        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialsResponseTransformer"
@@ -765,6 +766,9 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
+        # Shares clinical_trials cache via sharedKey — must use the same filter
+        # parameter set as the parent so cache contents are consistent.
+        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
       response:
         format: json
         dataPath: "studies"
@@ -780,10 +784,6 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-      incremental:
-        sinceDate: "${GOVDATA_SINCE_DATE:}"
-        untilDate: "${GOVDATA_UNTIL_DATE:}"
-        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialConditionsResponseTransformer"
@@ -849,6 +849,9 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
+        # Shares clinical_trials cache via sharedKey — must use the same filter
+        # parameter set as the parent so cache contents are consistent.
+        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
       response:
         format: json
         dataPath: "studies"
@@ -864,10 +867,6 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-      incremental:
-        sinceDate: "${GOVDATA_SINCE_DATE:}"
-        untilDate: "${GOVDATA_UNTIL_DATE:}"
-        filterParam: "lastUpdatePostDate.gte"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialInterventionsResponseTransformer"
@@ -961,11 +960,8 @@ partitionedTables:
         retryOn: [429, 503]
       rawCache:
         enabled: true
-      incremental:
-        sinceDate: "${GOVDATA_SINCE_DATE:}"
-        untilDate: "${GOVDATA_UNTIL_DATE:}"
-        filterParam: "$where"
-        dateField: "date"
+      # No incremental block — CDC froze this dataset at 2023-05-10.
+      # Any sinceDate>2023-05-10 makes $where return zero rows.
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcCovidVaccinationsResponseTransformer"
