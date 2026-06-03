@@ -3026,25 +3026,32 @@ public class HttpSource implements DataSource {
     LOGGER.info("Streaming from raw cache: {}", cachePath);
 
     return new Iterator<Map<String, Object>>() {
-      private Map<String, Object> pending = null;
+      private final java.util.Deque<Map<String, Object>> pending =
+          new java.util.ArrayDeque<Map<String, Object>>();
       private boolean exhausted = false;
 
       @Override public boolean hasNext() {
+        if (!pending.isEmpty()) {
+          return true;
+        }
         if (exhausted) {
           return false;
         }
-        if (pending != null) {
-          return true;
-        }
         try {
-          if (parser.nextToken() == JsonToken.START_OBJECT) {
-            Map<String, Object> row = OBJECT_MAPPER.readValue(parser, Map.class);
-            transformer.transformRecord(row, context);
-            pending = normalizeRow(row, variables);
-            return true;
+          while (pending.isEmpty() && parser.nextToken() == JsonToken.START_OBJECT) {
+            Map<String, Object> source = OBJECT_MAPPER.readValue(parser, Map.class);
+            List<Map<String, Object>> rows = transformer.transformRecordToMany(source, context);
+            if (rows != null) {
+              for (Map<String, Object> row : rows) {
+                pending.add(normalizeRow(row, variables));
+              }
+            }
           }
         } catch (IOException e) {
           LOGGER.error("streamFromRawCache: error reading {}: {}", cachePath, e.getMessage());
+        }
+        if (!pending.isEmpty()) {
+          return true;
         }
         exhausted = true;
         try {
@@ -3060,9 +3067,7 @@ public class HttpSource implements DataSource {
         if (!hasNext()) {
           throw new NoSuchElementException();
         }
-        Map<String, Object> row = pending;
-        pending = null;
-        return row;
+        return pending.removeFirst();
       }
     };
   }
