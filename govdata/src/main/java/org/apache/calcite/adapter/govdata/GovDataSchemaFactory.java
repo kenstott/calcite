@@ -821,6 +821,17 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("Set GOVDATA_END_YEAR={}", endYear);
     }
 
+    // HEALTH_FDA_API_KEY: model operand takes precedence, falls back to env var.
+    // Setting it as a system property keeps schema YAMLs free of direct env-var refs
+    // (per CLAUDE.md rule #7) — the YAML reads ${HEALTH_FDA_API_KEY:} which resolves
+    // against this property.
+    Object healthFdaApiKeyObj = operand.get("healthFdaApiKey");
+    String healthFdaApiKey = healthFdaApiKeyObj != null ? String.valueOf(healthFdaApiKeyObj) : System.getenv("HEALTH_FDA_API_KEY");
+    if (healthFdaApiKey != null && !healthFdaApiKey.isEmpty()) {
+      System.setProperty("HEALTH_FDA_API_KEY", healthFdaApiKey);
+      LOGGER.debug("Set HEALTH_FDA_API_KEY (length={})", healthFdaApiKey.length());
+    }
+
     Object currentMonthObj = operand.get("currentMonth");
     if (currentMonthObj != null) {
       System.setProperty("GOVDATA_CURRENT_MONTH", String.valueOf(currentMonthObj));

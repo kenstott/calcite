@@ -57,7 +57,7 @@ public class HealthSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override
   public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
-    String fdaApiKey = System.getenv("HEALTH_FDA_API_KEY");
+    String fdaApiKey = System.getProperty("HEALTH_FDA_API_KEY");
     if (fdaApiKey == null || fdaApiKey.isEmpty()) {
       LOGGER.info("HEALTH_FDA_API_KEY not set — using openFDA anonymous rate limit (1k req/day)");
     } else {
