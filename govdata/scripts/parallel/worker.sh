@@ -77,7 +77,7 @@ case "$MODE" in
     # ETL resume: continue ETL (tracker skips completed partitions), then DQ.
     # No teardown of Iceberg/MinIO/dq-results/etl-tracker.
     export GOVDATA_RUN_MODE="historical"
-    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical --etl-resume
+    exec "$SCRIPT_DIR/worker-dq-run.sh" "$SCHEMA" --mode historical --etl-resume --include-daily
     ;;
 esac
 
