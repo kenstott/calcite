@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergStorageProvider;
 
 import com.amazonaws.services.s3.AmazonS3;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -324,13 +325,37 @@ public class StorageProviderFactory {
 
   /**
    * Creates a storage provider for the govdata cache directory.
-   * Reads {@code GOVDATA_CACHE_DIR} and delegates to {@link #createFromUrl(String)}.
    *
-   * <p>Throws {@link IllegalArgumentException} if {@code GOVDATA_CACHE_DIR} points to an S3
-   * path, since S3 requires explicit credentials via model.json storageConfig.
+   * <p>When {@code GOVDATA_CACHE_DIR} points to an {@code s3://} URL, credentials are read
+   * from process environment ({@code AWS_ACCESS_KEY_ID}, {@code AWS_SECRET_ACCESS_KEY},
+   * {@code AWS_ENDPOINT_OVERRIDE}, {@code AWS_REGION}) and an S3 provider is built directly
+   * — the govdata cache is process-owned, so model.json storageConfig is not in scope.
+   * Other schemes delegate to {@link #createFromUrl(String)}.
    */
   public static StorageProvider createForGovDataCache() {
-    return createFromUrl(getGovDataCacheDir());
+    String cacheDir = getGovDataCacheDir();
+    if (cacheDir != null && cacheDir.startsWith("s3://")) {
+      return getCachedProvider("govdata-s3:" + cacheDir, () -> {
+        Map<String, Object> s3Config = new HashMap<>();
+        String keyId = System.getenv("AWS_ACCESS_KEY_ID");
+        String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
+        String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+        String region = System.getenv("AWS_REGION");
+        if (keyId != null && !keyId.isEmpty()) {
+          s3Config.put("accessKeyId", keyId);
+        }
+        if (secret != null && !secret.isEmpty()) {
+          s3Config.put("secretAccessKey", secret);
+        }
+        if (endpoint != null && !endpoint.isEmpty()) {
+          s3Config.put("endpoint", endpoint);
+        }
+        s3Config.put("region", (region != null && !region.isEmpty()) ? region : "auto");
+        s3Config.put("directory", cacheDir);
+        return createFromType("s3", s3Config);
+      });
+    }
+    return createFromUrl(cacheDir);
   }
 
   /**

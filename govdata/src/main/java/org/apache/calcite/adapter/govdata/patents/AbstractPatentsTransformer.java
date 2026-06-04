@@ -62,44 +62,86 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   /** Quarterly cache TTL: 90 days in milliseconds. */
   protected static final long CACHE_TTL_MS = 90L * 24 * 60 * 60 * 1000;
 
+  /**
+   * ODP bulk-download base for the disambiguated granted-patent tables (product PVGPATDIS):
+   * g_patent, g_patent_abstract, g_application, g_figures, g_inventor_disambiguated,
+   * g_assignee_disambiguated, g_location_disambiguated, g_cpc_current.
+   */
+  protected static final String ODP_PVGPATDIS_BASE =
+      "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/";
+
+  /**
+   * ODP bulk-download base for the per-year long-text tables (product PVGPATTXT):
+   * g_claims_{year}, g_brf_sum_text_{year}.
+   */
+  protected static final String ODP_PVGPATTXT_BASE =
+      "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATTXT/";
+
+  /**
+   * Env var / system property holding the USPTO Open Data Portal API key. One account-level
+   * key serves every ODP product (PVGPATDIS, PVGPATTXT, the trademark TRCFECO2 snapshot).
+   * GovDataSchemaFactory injects it as a system property from the model operand; the worker
+   * may also export it as an environment variable.
+   */
+  protected static final String USPTO_API_KEY_PROP = "USPTO_API_KEY";
+
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 600_000; // 10 min for large files
 
-  private volatile StorageProvider storageProvider;
-
-  /** Returns the storage provider for the govdata cache, initializing lazily on first call. */
-  protected StorageProvider storageProvider() {
-    if (storageProvider == null) {
-      synchronized (this) {
-        if (storageProvider == null) {
-          String cacheDir = StorageProviderFactory.getGovDataCacheDir();
-          if (cacheDir != null && cacheDir.startsWith("s3://")) {
-            // S3 cache — build provider from process environment credentials.
-            Map<String, Object> s3Config = new HashMap<String, Object>();
-            String keyId = System.getenv("AWS_ACCESS_KEY_ID");
-            String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
-            String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
-            String region = System.getenv("AWS_REGION");
-            if (keyId != null && !keyId.isEmpty()) {
-              s3Config.put("accessKeyId", keyId);
-            }
-            if (secret != null && !secret.isEmpty()) {
-              s3Config.put("secretAccessKey", secret);
-            }
-            if (endpoint != null && !endpoint.isEmpty()) {
-              s3Config.put("endpoint", endpoint);
-            }
-            s3Config.put("region", (region != null && !region.isEmpty()) ? region : "auto");
-            s3Config.put("directory", cacheDir);
-            storageProvider = StorageProviderFactory.createFromType("s3", s3Config);
-            LOGGER.info("Patents transformer: using S3 cache storage at {}", cacheDir);
-          } else {
-            storageProvider = StorageProviderFactory.createForGovDataCache();
-          }
-        }
-      }
+  /**
+   * Resolves the USPTO ODP API key: environment variable first, then system property
+   * (factory-injected). Throws if neither is set — per CLAUDE.md there is no silent
+   * fallback; the design guarantee is that the worker env or GovDataSchemaFactory provides it.
+   */
+  protected String usptoApiKey() {
+    String key = System.getenv(USPTO_API_KEY_PROP);
+    if (key == null || key.isEmpty()) {
+      key = System.getProperty(USPTO_API_KEY_PROP);
     }
-    return storageProvider;
+    if (key == null || key.isEmpty()) {
+      throw new IllegalStateException(
+          "USPTO_API_KEY not set — required for USPTO Open Data Portal bulk downloads. "
+          + "Export it as an environment variable or inject it via the GovDataSchemaFactory "
+          + "model operand. Register at https://data.uspto.gov/apis/getting-started");
+    }
+    return key;
+  }
+
+  /** Request headers required for every ODP bulk download: the API key. */
+  protected Map<String, String> odpRequestHeaders() {
+    Map<String, String> headers = new HashMap<String, String>();
+    headers.put("X-Api-Key", usptoApiKey());
+    return headers;
+  }
+
+  /**
+   * Returns the current-quarter token (e.g. {@code 2026Q2}). The quarter number comes from
+   * the {@code quarter} dimension (fed by ${GOVDATA_CURRENT_QUARTER}); the calendar year is
+   * read from the factory-injected GOVDATA_CURRENT_YEAR so the token is unique across years.
+   * Stamped into full-dump cache filenames so a new quarter lands a new path and forces a
+   * fresh ODP download — the token is never sent to the API. Throws if either input is
+   * absent (no silent fallback).
+   */
+  protected String quarterToken(RequestContext context) {
+    String quarter = context.getDimensionValues().get("quarter");
+    if (quarter == null || quarter.isEmpty()) {
+      throw new IllegalStateException(
+          "quarter dimension not set — required for quarterly cache busting of patents "
+          + "full-dump files. The schema YAML must declare a quarter dimension fed by "
+          + "${GOVDATA_CURRENT_QUARTER}.");
+    }
+    String year = System.getProperty("GOVDATA_CURRENT_YEAR");
+    if (year == null || year.isEmpty()) {
+      throw new IllegalStateException(
+          "GOVDATA_CURRENT_YEAR not set — required to build the quarterly cache-bust token. "
+          + "GovDataSchemaFactory must inject it from the model operand.");
+    }
+    return year + "Q" + quarter;
+  }
+
+  /** Returns the storage provider for the govdata cache. */
+  protected StorageProvider storageProvider() {
+    return StorageProviderFactory.createForGovDataCache();
   }
 
   // ── Cache path resolution ─────────────────────────────────────────────────
@@ -145,7 +187,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       return destPath;
     }
     LOGGER.info("Patents downloading: {}", url);
-    extractZipEntryToFile(url, destPath, ".tsv", ".txt");
+    extractZipEntryToFile(url, odpRequestHeaders(), destPath, ".tsv", ".txt");
     LOGGER.info("Patents cached to {}", destPath);
     return destPath;
   }
@@ -169,6 +211,62 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * closing idle connections while we wait for S3 part uploads to complete.
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
+      String destPath, String... extensions) throws IOException {
+    final int maxAttempts = 3;
+    IOException lastError = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        extractZipEntryToFileOnce(url, requestHeaders, destPath, extensions);
+        return;
+      } catch (IOException e) {
+        lastError = e;
+        if (attempt < maxAttempts && isTransientDownloadError(e)) {
+          long backoffMs = 1000L * (1L << (attempt - 1));
+          LOGGER.warn("Patents: transient download failure (attempt {}/{}) for {}: {} — retrying in {}ms",
+              attempt, maxAttempts, url, e.getMessage(), backoffMs);
+          try {
+            Thread.sleep(backoffMs);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while retrying download", ie);
+          }
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * True when {@code e} (or any cause in its chain) looks like a recoverable network
+   * condition: truncated read, connection reset, or HTTP 5xx/429. These cases warrant
+   * a retry of the entire download.
+   */
+  private static boolean isTransientDownloadError(Throwable e) {
+    Throwable cur = e;
+    while (cur != null) {
+      String msg = cur.getMessage();
+      if (msg != null) {
+        if (msg.contains("Premature end") || msg.contains("Premature EOF")
+            || msg.contains("Connection reset") || msg.contains("Connection closed")
+            || msg.contains("HTTP 429") || msg.contains("HTTP 500") || msg.contains("HTTP 502")
+            || msg.contains("HTTP 503") || msg.contains("HTTP 504")
+            || msg.contains("Truncated")) {
+          return true;
+        }
+      }
+      if (cur instanceof java.net.SocketException
+          || cur instanceof java.io.EOFException
+          || cur instanceof java.net.SocketTimeoutException) {
+        return true;
+      }
+      cur = cur.getCause();
+    }
+    return false;
+  }
+
+  private void extractZipEntryToFileOnce(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
     File tempZip = File.createTempFile("patents-zip-", ".zip");
     try {
@@ -195,13 +293,24 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       long contentLength = conn.getContentLengthLong();
       LOGGER.info("Patents: downloading {} ({} bytes) to temp file",
           url.substring(url.lastIndexOf('/') + 1), contentLength);
+      long bytesRead = 0;
       byte[] buf = new byte[64 * 1024];
       try (java.io.InputStream httpIn = conn.getInputStream();
            OutputStream tmpOut = new FileOutputStream(tempZip)) {
         int n;
         while ((n = httpIn.read(buf)) >= 0) {
           tmpOut.write(buf, 0, n);
+          bytesRead += n;
         }
+      }
+      // Verify the download is complete. Without this check, a server-side
+      // connection close mid-stream produces a truncated cache file that
+      // subsequent runs blindly reuse, marking the pipeline complete on
+      // partial data.
+      if (contentLength >= 0 && bytesRead != contentLength) {
+        throw new IOException(
+            "Truncated download from " + url + ": expected " + contentLength
+            + " bytes, received " + bytesRead);
       }
       LOGGER.info("Patents: download complete, temp file size={}", tempZip.length());
 
@@ -522,6 +631,19 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   protected String getYear(RequestContext context) {
     Map<String, String> dims = context.getDimensionValues();
     return dims != null ? dims.get("year") : null;
+  }
+
+  /**
+   * Extracts the effective_year dimension (publish year minus dataLag) — the actual
+   * data year for lagged sources. Falls back to {@code year} when no lag is configured.
+   */
+  protected String getEffectiveYear(RequestContext context) {
+    Map<String, String> dims = context.getDimensionValues();
+    if (dims == null) {
+      return null;
+    }
+    String effective = dims.get("effective_year");
+    return effective != null ? effective : dims.get("year");
   }
 
   // ── Header / field helpers ────────────────────────────────────────────────
