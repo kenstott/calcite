@@ -51,14 +51,6 @@ The schema is served by `LandsSchemaFactory` via `GovDataSchemaFactory` and is d
 
 ---
 
-## FIA Data Notes
-
-- `forest_inventory` is derived from `{state}_COND.csv` — available for all 51 FIA-reporting states/territories.
-- `forest_metrics` is derived from `{state}_TREE.csv` joined to `{state}_COND.csv` — large states (LA, GA, ME, MI) have multi-million-row TREE files; expect 2–70 minutes per state during initial ETL.
-- Both tables partition by `stateAbbr` and `type`. Join on `(state_fips, inventory_year, forest_type_group, ownership_class)`.
-- `forest_metrics.incrementalTtl=365d` with release window months 6–9 (Jun–Sep); TTL refresh is suppressed outside that window.
-
----
 
 ## Sample Queries
 
@@ -94,3 +86,13 @@ FROM lands.lands_forest_condition_metrics
 WHERE ownership_class = 'National Forest'
 ORDER BY inventory_year DESC, carbon_stock_tons DESC;
 ```
+
+## FIA Per-State Datamart Notes
+
+- The FIA tables (`forest_inventory`, `forest_metrics`, `fia_plots`, `fia_tree_grm`, `fia_seedlings`) fan out across 50 states + 5 territories. Each per-state archive `{state}_CSV.zip` is 80–450 MB and ships ~70 CSV tables for that state.
+- Per-state ETL is driven by the `state` dimension (anchor `all_fia_state_abbrs` → `fia-states.json`); URL template is `https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip`. `parallel: 4` issues four concurrent state downloads, giving ~2.7 MB/s aggregate vs ~800 KB/s single-stream (3.4× speedup).
+- Per-state archives are cached at `$GOVDATA_CACHE_DIR/lands/{state}_CSV.zip` and refreshed via `If-Modified-Since`. Concurrent transformers requesting the same state share one download; distinct states download in parallel.
+- Materialization keeps `state` as a row column, not a partition column. Partition shape stays `[type]` so all 55 per-state writes flush into one nationwide partition and Iceberg compaction (`runCompaction=true, compactionMinFiles=3, compactionTargetFileSizeBytes=64MB`) merges them into a single parquet.
+- `fia_plots` carries the fuzzed public-use lat/lon (FIADB P2 User Guide §2.5.1) and is the join target for plot-grain FIA tables via `plot_cn`.
+- `fia_tree_grm` aggregates per-tree growth/removal/mortality (`ANN_NET_GROWTH`, `REMOVALS`, `MORTALITY`) by (state, inventory_year, SPCD, ESTN_TYPE). Units follow `ESTN_UNITS` for the row's `ESTN_TYPE`.
+- `fia_seedlings` aggregates microplot seedling occurrences (`TREECOUNT`, `TPA_UNADJ`) by (state, inventory_year, SPCD).

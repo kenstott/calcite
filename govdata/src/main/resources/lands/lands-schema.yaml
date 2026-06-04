@@ -122,7 +122,6 @@ partitionedTables:
     dimensions:
       type:
         - national_forests
-      year: *lands_year_range
 
     columns:
       - name: forest_id
@@ -181,12 +180,17 @@ partitionedTables:
       completed harvest activity. Joins to national_forests via forest_code and to
       geo.states via state_abbr. Units_accomplished and uom describe harvest volume
       (CCF, MBF, ACRE, etc.). Enables analysis of federal timber activity by
-      forest, district, and year. Source: EDW_TimberHarvest_01/MapServer/0.
+      forest, district, and year. Source: EDW_TimberHarvest_01/MapServer/{layer}
+      where layer is dispatched per year by UsfsTimberLayerResolver — layer 11
+      covers 2021+, layer 0 covers 2011-2020, layers 1-7 cover earlier eras
+      back to 1820. All layers publish the identical 71-field schema.
 
     dimensions:
       type:
         - timber_sales
       year: *lands_year_range
+      layer:
+        type: custom
 
     columns:
       - name: facts_id
@@ -256,7 +260,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TimberHarvest_01/MapServer/0/query?where=FY_COMPLETED%3D%27{year}%27&outFields=FACTS_ID%2CSALE_NAME%2CFY_COMPLETED%2CFY_AWARDED%2CADMIN_FOREST_CODE%2CADMIN_FOREST_NAME%2CADMIN_DISTRICT_CODE%2CADMIN_DISTRICT_NAME%2CSTATE_ABBR%2CGIS_ACRES%2CACTIVITY_CODE%2CACTIVITY_NAME%2CTREATMENT_TYPE%2CNBR_UNITS_ACCOMPLISHED%2CUOM%2CCOST_PER_UOM&f=json&resultRecordCount=5000"
+      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TimberHarvest_01/MapServer/{layer}/query?where=FY_COMPLETED%3D%27{year}%27&outFields=FACTS_ID%2CSALE_NAME%2CFY_COMPLETED%2CFY_AWARDED%2CADMIN_FOREST_CODE%2CADMIN_FOREST_NAME%2CADMIN_DISTRICT_CODE%2CADMIN_DISTRICT_NAME%2CSTATE_ABBR%2CGIS_ACRES%2CACTIVITY_CODE%2CACTIVITY_NAME%2CTREATMENT_TYPE%2CNBR_UNITS_ACCOMPLISHED%2CUOM%2CCOST_PER_UOM&f=json&resultRecordCount=5000"
       method: GET
       response:
         format: json
@@ -269,6 +273,7 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.lands.UsfsFactsTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.lands.UsfsTimberLayerResolver"
 
     materialize:
       format: iceberg
@@ -287,7 +292,7 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
-  # FOREST INVENTORY — USDA FIA bulk COND CSV per state
+  # FOREST INVENTORY — USDA FIA per-state COND CSV
   # ---------------------------------------------------------------------------
   - name: forest_inventory
     pattern: "type=forest_inventory/*.parquet"
@@ -297,16 +302,20 @@ partitionedTables:
         - *partition_type
     comment: >
       USDA Forest Service Forest Inventory and Analysis (FIA) state-level estimates
-      derived from bulk COND CSV files (apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv).
-      One row per state × forest_type_group × ownership_class × inventory_year.
-      Filtered to COND_STATUS_CD=1 (accessible forest land). Basal area is a
-      CONDPROP_UNADJ-weighted average of BALIVE. Joins to geo.states via state_fips.
+      derived from per-state {ST}_COND.csv files inside the FIA datamart's per-state
+      ZIP archives (apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip). One row per
+      inventory_year × state × forest_type_group × ownership_class. Filtered to
+      COND_STATUS_CD=1 (accessible forest land). Basal area is a CONDPROP_UNADJ-weighted
+      average of BALIVE. Joins to geo.states via state_fips. ETL fans out across states;
+      cached per-state archives in $GOVDATA_CACHE_DIR/lands/ are shared across workers.
+      Materialization keeps state as a row column, not a partition column, so that
+      Iceberg per-partition compaction merges the 55 per-state ETL flushes into a
+      single nationwide parquet.
 
     dimensions:
       type:
         - forest_inventory
-      stateAbbr: *all_fia_state_abbrs
-      year: *lands_year_range
+      state: *all_fia_state_abbrs
 
     columns:
       - name: inventory_year
@@ -330,16 +339,11 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{stateAbbr}_COND.csv"
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
       method: GET
+      parallel: 4
       response:
         format: json
-      rateLimit:
-        requestsPerSecond: 1.0
-        retryOn: [429, 503]
-        maxRetries: 3
-      rawCache:
-        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaDatamartTransformer"
@@ -360,7 +364,7 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
-  # FOREST METRICS — USDA FIA bulk TREE CSV per state (live-tree metrics)
+  # FOREST METRICS — USDA FIA per-state TREE CSV (live-tree metrics)
   # ---------------------------------------------------------------------------
   - name: forest_metrics
     pattern: "type=forest_metrics/*.parquet"
@@ -369,20 +373,19 @@ partitionedTables:
       columnDefinitions:
         - *partition_type
     comment: >
-      USDA FIA tree-level metrics derived from bulk TREE CSV files joined to COND.
-      One row per state × forest_type_group × ownership_class × inventory_year.
-      Columns are CONDPROP_UNADJ-weighted averages across live trees (STATUSCD=1)
-      in accessible forest conditions (COND_STATUS_CD=1). Join to forest_inventory
-      on (state_fips, inventory_year, forest_type_group, ownership_class) for
-      combined basal area + volume + carbon analysis.
-      Source: apps.fs.usda.gov/fia/datamart/CSV/{state}_TREE.csv +
-              apps.fs.usda.gov/fia/datamart/CSV/{state}_COND.csv
+      USDA FIA tree-level metrics derived from per-state {ST}_TREE.csv joined to
+      {ST}_COND.csv (both inside the per-state ZIP archive at
+      apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip). One row per inventory_year ×
+      state × forest_type_group × ownership_class. Columns are CONDPROP_UNADJ-weighted
+      averages across live trees (STATUSCD=1) in accessible forest conditions
+      (COND_STATUS_CD=1). Join to forest_inventory on
+      (state_fips, inventory_year, forest_type_group, ownership_class) for combined
+      basal-area + volume + carbon analysis. ETL fans out across states.
 
     dimensions:
       type:
         - forest_metrics
-      stateAbbr: *all_fia_state_abbrs
-      year: *lands_year_range
+      state: *all_fia_state_abbrs
 
     columns:
       - name: inventory_year
@@ -414,14 +417,11 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{stateAbbr}_TREE.csv"
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
       method: GET
+      parallel: 4
       response:
         format: json
-      rateLimit:
-        requestsPerSecond: 1.0
-        retryOn: [429, 503]
-        maxRetries: 3
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaMetricsTransformer"
@@ -435,6 +435,248 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_metrics
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FIA PLOTS — per-plot identification, fuzzed lat/lon, status
+  # ---------------------------------------------------------------------------
+  - name: fia_plots
+    pattern: "type=fia_plots/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA per-plot identification from per-state {ST}_PLOT.csv. One row per
+      FIA plot. Lat/lon are USDA's publicly-released "fuzzed" coordinates (perturbed
+      so exact plot locations cannot be inferred — FIADB P2 User Guide §2.5.1).
+      plot_cn is the FIA-wide unique plot identifier; join targets are TREE/COND/
+      SEEDLING via PLT_CN. ETL fans out across states.
+
+    dimensions:
+      type:
+        - fia_plots
+      state: *all_fia_state_abbrs
+
+    columns:
+      - name: plot_cn
+        type: string
+        nullable: false
+        comment: FIA-wide unique plot control number (PK)
+      - name: prev_plot_cn
+        type: string
+        nullable: true
+        comment: Previous-cycle plot CN (FK to fia_plots.plot_cn for remeasurement chains)
+      - name: inventory_year
+        type: integer
+        nullable: true
+        comment: FIA inventory year (INVYR)
+      - <<: *state_fips_column
+        nullable: false
+      - <<: *county_fips_column
+      - name: plot_number
+        type: integer
+        nullable: true
+        comment: USDA plot number within state/county
+      - name: plot_status_cd
+        type: integer
+        nullable: true
+        comment: 1=Sampled-forest, 2=Sampled-nonforest, 3=Nonsampled
+      - name: plot_status_name
+        type: string
+        nullable: true
+        comment: Human-readable plot status
+      - name: lat
+        type: double
+        nullable: true
+        comment: Fuzzed plot latitude (decimal degrees, NAD83)
+      - name: lon
+        type: double
+        nullable: true
+        comment: Fuzzed plot longitude (decimal degrees, NAD83)
+      - name: elev_ft
+        type: integer
+        nullable: true
+        comment: Plot elevation in feet
+      - name: measure_year
+        type: integer
+        nullable: true
+        comment: Year the plot was actually measured (MEASYEAR)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaPlotsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_plots/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_plots
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FIA TREE GRM — per-state/year/species annualized growth/removal/mortality
+  # ---------------------------------------------------------------------------
+  - name: fia_tree_grm
+    pattern: "type=fia_tree_grm/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA growth-removal-mortality (GRM) annualized estimates by state, inventory
+      year, species, and estimation type. Derived by joining per-state
+      {ST}_TREE_GRM_ESTN.csv against {ST}_TREE.csv on TRE_CN to attach SPCD, then
+      aggregating per-tree ANN_NET_GROWTH/REMOVALS/MORTALITY into per-group totals.
+      Units are determined by ESTN_UNITS for the row's ESTN_TYPE (typically cubic feet
+      for volume estimates and square feet for basal area). ETL fans out across states.
+
+    dimensions:
+      type:
+        - fia_tree_grm
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - name: species_code
+        type: integer
+        nullable: false
+        comment: FIA species code (SPCD) — joins to REF_SPECIES upstream
+      - name: estimation_type
+        type: string
+        nullable: true
+        comment: ESTN_TYPE label (e.g., AL_FOREST, GS_TIMBER) — defines basis + units
+      - name: ann_net_growth
+        type: double
+        nullable: true
+        comment: Sum of per-tree ANN_NET_GROWTH for the group, in ESTN_UNITS
+      - name: annual_removals
+        type: double
+        nullable: true
+        comment: Sum of per-tree REMOVALS for the group, in ESTN_UNITS
+      - name: annual_mortality
+        type: double
+        nullable: true
+        comment: Sum of per-tree MORTALITY for the group, in ESTN_UNITS
+      - name: tree_count
+        type: long
+        nullable: true
+        comment: Number of tree records contributing to this aggregate
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaTreeGrmTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_tree_grm/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_tree_grm
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FIA SEEDLINGS — per-state/year/species seedling regeneration intensity
+  # ---------------------------------------------------------------------------
+  - name: fia_seedlings
+    pattern: "type=fia_seedlings/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA seedling regeneration estimates by state, inventory year, and species,
+      derived from per-state {ST}_SEEDLING.csv. seedlings_per_acre is the sum of
+      TPA_UNADJ across plot-conditions; seedling_count is the sum of microplot
+      TREECOUNT observations. Pairs with forest_metrics for tree+regeneration analytics.
+
+    dimensions:
+      type:
+        - fia_seedlings
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - name: species_code
+        type: integer
+        nullable: false
+        comment: FIA species code (SPCD)
+      - name: seedling_count
+        type: long
+        nullable: true
+        comment: Sum of microplot seedling counts (TREECOUNT)
+      - name: seedlings_per_acre
+        type: double
+        nullable: true
+        comment: Sum of TPA_UNADJ across plot-conditions for the group
+      - name: record_count
+        type: long
+        nullable: true
+        comment: Number of SEEDLING rows contributing to this aggregate
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaSeedlingsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_seedlings/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_seedlings
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -457,7 +699,6 @@ partitionedTables:
     dimensions:
       type:
         - nps_units
-      year: *lands_year_range
 
     columns:
       - name: unit_code
@@ -736,7 +977,7 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
       rawCache:
-        enabled: false
+        enabled: true
 
     materialize:
       format: iceberg

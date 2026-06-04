@@ -228,7 +228,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/forest_inventory', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'stateAbbr')
+      AND column_name NOT IN ('type')
   )
 );
 
@@ -243,7 +243,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/forest_inventory', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'stateAbbr')
+      AND column_name NOT IN ('type')
   )
 );
 
@@ -630,7 +630,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/forest_metrics', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'stateAbbr')
+      AND column_name NOT IN ('type')
   )
 );
 
@@ -646,7 +646,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/forest_metrics', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'stateAbbr')
+      AND column_name NOT IN ('type')
   )
 );
 
@@ -687,6 +687,125 @@ FROM (
     AND fm.forest_type_group IS NOT NULL
     AND fm.ownership_class IS NOT NULL
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_plots
+-- Source: per-state {ST}_PLOT.csv inside {state}_CSV.zip
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_plots', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_plots', allow_moved_paths := true));
+
+-- T2: row_count (FIA samples ~125K-150K plots nationwide annually × multiple cycles)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_plots', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
+  n, 100000, 'Expected 100K+ FIA plot records nationwide'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_plots', allow_moved_paths := true));
+
+-- T6: state coverage (≥45 of 50+5 territories — sampling skip in tiny states acceptable)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_plots', 'T6_state_coverage',
+  CASE WHEN n >= 45 THEN 'pass' ELSE 'fail' END,
+  n, 45, 'Distinct state_fips values'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_plots', allow_moved_paths := true));
+
+-- T6: pk_nulls (plot_cn, state_fips NOT NULL)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_plots', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL plot_cn or state_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_plots', allow_moved_paths := true)
+      WHERE plot_cn IS NULL OR state_fips IS NULL);
+
+-- T7: lat/lon bounds (US 48 + AK + HI + territories sane bounding box, fuzzed coords)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_plots', 'T7_coordinate_bounds',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'Plots with lat outside [-15, 72] or lon outside [-180, -64]'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_plots', allow_moved_paths := true)
+      WHERE (lat IS NOT NULL AND (lat < -15 OR lat > 72))
+         OR (lon IS NOT NULL AND (lon < -180 OR lon > -64)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_tree_grm
+-- Source: per-state {ST}_TREE_GRM_ESTN.csv joined to {ST}_TREE.csv
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_tree_grm', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_tree_grm', allow_moved_paths := true));
+
+-- T2: row_count (~50 states × ~5 invyrs × ~50 species × ~5 ESTN_TYPE = ~62500)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_tree_grm', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END,
+  n, 10000, 'Expected 10K+ FIA GRM aggregate rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_tree_grm', allow_moved_paths := true));
+
+-- T6: state coverage
+INSERT INTO dq_results
+SELECT 'lands', 'fia_tree_grm', 'T6_state_coverage',
+  CASE WHEN n >= 40 THEN 'pass' ELSE 'fail' END,
+  n, 40, 'Distinct state_fips values'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_tree_grm', allow_moved_paths := true));
+
+-- T6: pk_nulls (state_fips, inventory_year, species_code NOT NULL)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_tree_grm', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_fips, inventory_year, or species_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_tree_grm', allow_moved_paths := true)
+      WHERE state_fips IS NULL OR inventory_year IS NULL OR species_code IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_seedlings
+-- Source: per-state {ST}_SEEDLING.csv
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_seedlings', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_seedlings', allow_moved_paths := true));
+
+-- T2: row_count (similar scale to fia_tree_grm)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_seedlings', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected 5K+ FIA seedling aggregate rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_seedlings', allow_moved_paths := true));
+
+-- T6: state coverage
+INSERT INTO dq_results
+SELECT 'lands', 'fia_seedlings', 'T6_state_coverage',
+  CASE WHEN n >= 35 THEN 'pass' ELSE 'fail' END,
+  n, 35, 'Distinct state_fips values (not all states sample seedlings every cycle)'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_seedlings', allow_moved_paths := true));
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'lands', 'fia_seedlings', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_fips, inventory_year, or species_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_seedlings', allow_moved_paths := true)
+      WHERE state_fips IS NULL OR inventory_year IS NULL OR species_code IS NULL);
+
+-- T7: seedlings_per_acre non-negative
+INSERT INTO dq_results
+SELECT 'lands', 'fia_seedlings', 'T7_seedlings_non_negative',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'Rows with seedlings_per_acre < 0'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_seedlings', allow_moved_paths := true)
+      WHERE seedlings_per_acre IS NOT NULL AND seedlings_per_acre < 0);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
