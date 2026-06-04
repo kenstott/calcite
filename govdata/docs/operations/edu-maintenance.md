@@ -46,9 +46,9 @@ Set these in `.env.prod` (or the environment used by your cron/scheduler):
 export COLLEGE_SCORECARD_API_KEY=your_key_here
 
 # Global incremental boundary (all edu tables use this; set by run-pool.sh from GOVDATA_INCREMENTAL_START_YEAR)
-# Daily workers export GOVDATA_SINCE_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026} automatically.
+# Daily workers export GOVDATA_START_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-2026} automatically.
 # Override only if you need a manual one-off run starting from a specific year:
-# export GOVDATA_SINCE_YEAR=2023
+# export GOVDATA_START_YEAR=2023
 ```
 
 ### API Access
@@ -63,7 +63,7 @@ export COLLEGE_SCORECARD_API_KEY=your_key_here
 
 ## Data Release Calendar
 
-Understanding release windows helps schedule annual cron jobs. The recurring workers automatically use `GOVDATA_SINCE_YEAR` (set from `GOVDATA_INCREMENTAL_START_YEAR`) as the incremental start.
+Understanding release windows helps schedule annual cron jobs. The recurring workers automatically use `GOVDATA_START_YEAR` (set from `GOVDATA_INCREMENTAL_START_YEAR`) as the incremental start.
 
 | Source | Typical Release Window | Tables | Notes |
 |---|---|---|---|
@@ -88,21 +88,21 @@ Understanding release windows helps schedule annual cron jobs. The recurring wor
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
-| `ccd_districts` | NCES CCD | Annual | `GOVDATA_SINCE_YEAR` | 1987–present |
-| `ccd_schools` | NCES CCD | Annual | `GOVDATA_SINCE_YEAR` | 1987–present |
-| `naep_scores` | NCES NAEP | Biennial | `GOVDATA_SINCE_YEAR` | 1990–present |
-| `crdc_schools` | Dept of Ed CRDC | Biennial | `GOVDATA_SINCE_YEAR` | 2009–present |
+| `ccd_districts` | NCES CCD | Annual | `GOVDATA_START_YEAR` | 1987–present |
+| `ccd_schools` | NCES CCD | Annual | `GOVDATA_START_YEAR` | 1987–present |
+| `naep_scores` | NCES NAEP | Biennial | `GOVDATA_START_YEAR` | 1990–present |
+| `crdc_schools` | Dept of Ed CRDC | Biennial | `GOVDATA_START_YEAR` | 2009–present |
 
 ### Higher Education Tables (Annual tables (edu:annual mode))
 
 | Table | Source | Cadence | Inc. env var | Years available |
 |---|---|---|---|---|
-| `ipeds_institutions` | NCES IPEDS HD | Annual | `GOVDATA_SINCE_YEAR` | 1986–present |
-| `ipeds_completions` | NCES IPEDS C | Annual | `GOVDATA_SINCE_YEAR` | 1984–present |
-| `ipeds_financials` | NCES IPEDS F | Annual (Jan release) | `GOVDATA_SINCE_YEAR` | 1986–present |
-| `ipeds_tuition` | NCES IPEDS IC_AY | Annual | `GOVDATA_SINCE_YEAR` | 2000–present |
-| `college_scorecard` | Dept of Ed Scorecard | Annual | `GOVDATA_SINCE_YEAR` | 1996–present |
-| `college_scorecard_programs` | Dept of Ed Scorecard | Annual | `GOVDATA_SINCE_YEAR` | 2014–present |
+| `ipeds_institutions` | NCES IPEDS HD | Annual | `GOVDATA_START_YEAR` | 1986–present |
+| `ipeds_completions` | NCES IPEDS C | Annual | `GOVDATA_START_YEAR` | 1984–present |
+| `ipeds_financials` | NCES IPEDS F | Annual (Jan release) | `GOVDATA_START_YEAR` | 1986–present |
+| `ipeds_tuition` | NCES IPEDS IC_AY | Annual | `GOVDATA_START_YEAR` | 2000–present |
+| `college_scorecard` | Dept of Ed Scorecard | Annual | `GOVDATA_START_YEAR` | 1996–present |
+| `college_scorecard_programs` | Dept of Ed Scorecard | Annual | `GOVDATA_START_YEAR` | 2014–present |
 
 ---
 
@@ -143,7 +143,7 @@ To bypass all checks for a manual run:
 ./worker-edu.sh annual --force             # direct; bypasses pool
 ./worker-edu.sh biennial --force
 ```
-`--force` skips window checks only — year bounds (`GOVDATA_SINCE_YEAR`) are unchanged.
+`--force` skips window checks only — year bounds (`GOVDATA_START_YEAR`) are unchanged.
 
 ### Common Issues
 

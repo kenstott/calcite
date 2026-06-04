@@ -409,7 +409,7 @@ View results:
 Recurring workers (edu, energy, health, cyber_threat, cyber_vuln) gate sub-runs to their
 source's known release window — a sub-run outside its window exits in milliseconds with no
 network I/O. Pass `--force` to bypass all window checks and run every sub-run regardless of
-today's date. Year bounds (`GOVDATA_SINCE_YEAR`, `startYear`, `endYear`) are unaffected by
+today's date. Year bounds (`GOVDATA_START_YEAR`, `startYear`, `endYear`) are unaffected by
 `--force`.
 
 ```bash
@@ -463,8 +463,8 @@ cadence. Stock prices are the only exception — run via `./run-pool.sh sec_pric
 | cyber_threat (static standards) | On-demand | NIST 800-53, NIST CSF, CIS Controls, OWASP Top 10 |
 | Health clinical trials | Daily | `lastUpdatePostDate.gte` filter via `GOVDATA_SINCE_DATE` |
 | Health CDC COVID/mortality | Daily (data lags weekly) | CDC vaccinations delta + mortality full refresh |
-| Health BRFSS/Medicaid/CMS/FDA | Daily (data lags monthly) | Stable reference tables; incremental via `GOVDATA_SINCE_DATE`/`GOVDATA_SINCE_YEAR` |
-| Education CCD/IPEDS/Scorecard | Daily (data lags annually) | Bulk releases; incremental via `GOVDATA_SINCE_YEAR` |
+| Health BRFSS/Medicaid/CMS/FDA | Daily (data lags monthly) | Stable reference tables; incremental via `GOVDATA_SINCE_DATE`/`GOVDATA_START_YEAR` |
+| Education CCD/IPEDS/Scorecard | Daily (data lags annually) | Bulk releases; incremental via `GOVDATA_START_YEAR` |
 | Education NAEP/CRDC | Daily (data lags biennially) | Returns unchanged data in off-cycle years; safe to run daily |
 | Energy electricity/refinery | Daily (data lags weekly/monthly) | EIA API; skips years with no new data |
 | Energy surveys/coal | Daily (data lags annually) | EIA-861/EIA-860/MSHA; skips if no new release |

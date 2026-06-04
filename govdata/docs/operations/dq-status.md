@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 
 ## How to Read This
 
@@ -68,7 +68,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
 | lands        | —          | PENDING | —     | —     | Schema changes pending re-run |
-| health       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
 | patents      | —          | PENDING | —     | —     | Schema changes pending re-run |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
@@ -150,9 +150,9 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## Health (2026-05-15) — WARN
+## Health (2026-06-03) — WARN
 
-0 fails, 7 warns. All 15 tables populated in R2 Iceberg. Row counts:
+0 fails, 8 warns. All 15 tables populated in R2 Iceberg. Row counts (as of 2026-05-15 last full inventory):
 
 | Table | Rows |
 |-------|------|
@@ -176,6 +176,7 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 | Table | Test | Detail |
 |-------|------|--------|
+| cdc_brfss | all_same_value | `year` constant — expected for single-year partition writes |
 | clinical_trials | funder_type | 3 rows with funder_type outside known set — source data variation |
 | cms_hospital_quality | all_null_cols | 6 columns fully null: mort/safety/readm_measures_better/worse — CMS does not populate these fields |
 | cms_hospital_quality | all_same_value | 7 single-value columns (same CMS fields + birthing_friendly) |
