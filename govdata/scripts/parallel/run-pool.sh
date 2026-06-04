@@ -432,11 +432,16 @@ launch_worker() {
   heap_mb=$(get_worker_heap_mb "$slot")
 
   local log_dir="$SCRIPT_DIR/runs/${id}"
-  local log_file="$log_dir/launch.log"
+  local launch_ts
+  launch_ts=$(date +%Y%m%d_%H%M%S)
+  local log_file="$log_dir/launch_${launch_ts}.log"
   local pid_file="$PID_DIR/${id}.pid"
   local exit_file="$PID_DIR/${id}.exit"
   mkdir -p "$log_dir"
   rm -f "$pid_file" "$exit_file"
+  # Point launch.log at the current run so monitoring tools always read the
+  # latest invocation only (prevents stale-content-across-runs confusion).
+  ln -sfn "launch_${launch_ts}.log" "$log_dir/launch.log"
 
   # Launch in a new session so workers survive terminal disconnect.
   # The wrapper writes its own $$ before exec'ing so cleanup() gets the real
