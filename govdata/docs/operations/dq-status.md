@@ -67,7 +67,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
 | fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
-| lands        | —          | PENDING | —     | —     | Schema changes pending re-run |
+| lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
 | health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
 | patents      | —          | PENDING | —     | —     | Schema changes pending re-run |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
