@@ -1209,9 +1209,9 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
+        sinceYear: "${GOVDATA_START_YEAR:}"
         sinceQuarter: "${MEDICAID_SINCE_QUARTER:}"
-        untilYear: "${GOVDATA_UNTIL_YEAR:}"
+        untilYear: "${GOVDATA_END_YEAR:}"
         # DKAN ignores $where; conditions[] syntax needed for server-side filtering (not yet supported).
         # Without server-side filtering, all 5.3M records are fetched from the annual dataset.
         filterParam: "$where"
@@ -1387,8 +1387,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_SINCE_YEAR:}"
-        untilYear: "${GOVDATA_UNTIL_YEAR:}"
+        sinceYear: "${GOVDATA_START_YEAR:}"
+        untilYear: "${GOVDATA_END_YEAR:}"
         filterParam: "$where"
         yearField: "year"
         quoteValues: false

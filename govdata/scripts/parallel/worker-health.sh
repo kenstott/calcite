@@ -93,7 +93,7 @@ case "$MODE" in
 
   initial)
     export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
-    export GOVDATA_UNTIL_YEAR=$((INCREMENTAL_YEAR - 1))
+    export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
     # Full fetch of all 15 health tables — capped at GOVDATA_INCREMENTAL_START_YEAR - 1
     run_health_model "health-initial-fda" \
       '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
@@ -126,7 +126,7 @@ case "$MODE" in
     ;;
 
   monthly)
-    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
+    export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
     # Each sub-run is gated to its source's known release window.
     # FDA catalogs and RxNorm update continuously and always run.
 

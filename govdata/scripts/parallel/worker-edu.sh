@@ -112,7 +112,7 @@ case "$MODE" in
 
   annual)
     START=$INCREMENTAL_YEAR
-    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
+    export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
     # Each sub-run is gated independently — unrelated sources don't block each other.
 
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
@@ -144,7 +144,7 @@ case "$MODE" in
     # naep_scores and crdc_schools both have dataLag:2 — effectiveEnd = N-2.
     # START must be ≤ effectiveEnd or yearRange is empty and nothing is fetched.
     BIENNIAL_START=$(( INCREMENTAL_YEAR - 2 ))
-    export GOVDATA_SINCE_YEAR="${INCREMENTAL_YEAR}"
+    export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
     if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
       run_edu_model "edu-biennial-naep" \
         '"naep_scores", "naep_achievement_levels"' "$BIENNIAL_START"
