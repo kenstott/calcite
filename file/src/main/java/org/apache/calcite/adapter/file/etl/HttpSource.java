@@ -362,9 +362,11 @@ public class HttpSource implements DataSource {
 
     // Check raw cache first (persistent storage-based)
     String rawCacheFilePath = null;
+    String s3RawCacheFilePath = null;
     if (isRawCacheEnabled()) {
       rawCacheFilePath = buildRawCachePath(variables);
-      if (hasValidRawCache(rawCacheFilePath)) {
+      s3RawCacheFilePath = buildS3RawCachePath(variables);
+      if (hasValidRawCache(rawCacheFilePath, s3RawCacheFilePath)) {
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
         if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
             || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
@@ -418,6 +420,8 @@ public class HttpSource implements DataSource {
     if (pagination.getType() == HttpSourceConfig.PaginationType.NONE) {
       // Single request - response is cached in doRequest, returns cache path
       String cachePath = executeRequest(url, params, variables, rawCacheFilePath);
+      // Mirror local cache to S3/cloud storage so other workers can share the response.
+      mirrorLocalCacheToS3(rawCacheFilePath, s3RawCacheFilePath);
 
       // For CSV/TSV without a transformer, stream directly from cache
       HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
@@ -460,7 +464,8 @@ public class HttpSource implements DataSource {
       return data.iterator();
     } else {
       // Paginated requests - use streaming iterator to avoid buffering all pages in memory
-      return new PaginatedIterator(url, params, variables, pagination, cacheKey, rawCacheFilePath);
+      return new PaginatedIterator(url, params, variables, pagination, cacheKey, rawCacheFilePath,
+          s3RawCacheFilePath);
     }
   }
 
@@ -472,6 +477,7 @@ public class HttpSource implements DataSource {
     @SuppressWarnings("UnusedVariable")
     private final String cacheKey;
     private final String rawCacheFilePath;
+    private final String s3RawCacheFilePath;
 
     private int offset = 0;
     private int pageSize;
@@ -495,7 +501,8 @@ public class HttpSource implements DataSource {
     private boolean mergedCacheWritten = false;
 
     PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
-        HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath) {
+        HttpSourceConfig.PaginationConfig pagination, String cacheKey, String rawCacheFilePath,
+        String s3RawCacheFilePath) {
       this.url = url;
       this.baseParams = baseParams;
       this.variables = variables;
@@ -503,6 +510,7 @@ public class HttpSource implements DataSource {
       this.pageSize = pagination.getPageSize();
       this.cacheKey = cacheKey;
       this.rawCacheFilePath = rawCacheFilePath;
+      this.s3RawCacheFilePath = s3RawCacheFilePath;
     }
 
     @Override public boolean hasNext() {
@@ -820,6 +828,8 @@ public class HttpSource implements DataSource {
         mergedCacheWritten = true;
         LOGGER.info("Wrote streaming merged cache: {} ({} records)",
             rawCacheFilePath, cachedRecordCount);
+        // Mirror to s3 so other workers can share the merged cache.
+        mirrorLocalCacheToS3(rawCacheFilePath, s3RawCacheFilePath);
       } catch (Exception e) {
         LOGGER.warn("Failed to write merged cache: {}", e.getMessage());
       } finally {
@@ -2883,25 +2893,140 @@ public class HttpSource implements DataSource {
    * @return true if cache hit, false otherwise
    */
   private boolean hasValidRawCache(String cachePath) {
+    return hasValidRawCache(cachePath, null);
+  }
+
+  /**
+   * Checks for a raw cache hit, preferring the local mirror but falling back to
+   * the shared S3 copy. When only the S3 copy exists, hydrates the local mirror
+   * so subsequent reads avoid the round-trip.
+   *
+   * @param localPath local mirror path (may be the same as cachePath when local-only)
+   * @param s3Path    cloud storage path, or null when no cloud storage is configured
+   * @return true if either tier has a cached response
+   */
+  private boolean hasValidRawCache(String localPath, String s3Path) {
     try {
       // Immutable data - if cache exists, it's valid
       // Staleness is determined by IncrementalTracker, not by TTL
       boolean exists;
-      if (isLocalPath(cachePath)) {
-        exists = new File(cachePath).exists();
+      if (isLocalPath(localPath)) {
+        exists = new File(localPath).exists();
       } else {
-        exists = storageProvider != null && storageProvider.exists(cachePath);
+        exists = storageProvider != null && storageProvider.exists(localPath);
       }
-      if (!exists) {
-        LOGGER.debug("Raw cache miss: {}", cachePath);
-        return false;
+      if (exists) {
+        LOGGER.debug("Raw cache hit: {}", localPath);
+        return true;
       }
-      LOGGER.debug("Raw cache hit: {}", cachePath);
-      return true;
+      // Local miss — try shared S3 copy and hydrate the local mirror.
+      if (s3Path != null && storageProvider != null && isLocalPath(localPath)
+          && !isLocalPath(s3Path) && storageProvider.exists(s3Path)) {
+        try {
+          hydrateLocalFromS3(localPath, s3Path);
+          LOGGER.info("Raw cache hit (rehydrated from s3): {} <- {}", localPath, s3Path);
+          return true;
+        } catch (IOException e) {
+          LOGGER.warn("Failed to hydrate local cache from s3 {} -> {}: {}",
+              s3Path, localPath, e.getMessage());
+          return false;
+        }
+      }
+      LOGGER.debug("Raw cache miss: {}", localPath);
+      return false;
     } catch (IOException e) {
       LOGGER.debug("Error checking raw cache: {}", e.getMessage());
       return false;
     }
+  }
+
+  /**
+   * Builds the cloud-storage (S3/R2/GCS) raw cache path for the given dimension variables.
+   * Returns null when the configured rawCachePath is local-only or no storage provider
+   * is available — i.e. when there is no shared cache to mirror to.
+   */
+  private String buildS3RawCachePath(Map<String, String> variables) {
+    if (storageProvider == null || rawCachePath == null || isLocalPath(rawCachePath)) {
+      return null;
+    }
+    StringBuilder path = new StringBuilder(rawCachePath);
+    if (!rawCachePath.endsWith("/")) {
+      path.append("/");
+    }
+    List<String> sortedKeys = new ArrayList<String>(variables.keySet());
+    Collections.sort(sortedKeys);
+    for (String key : sortedKeys) {
+      String value = variables.get(key);
+      if (value != null && !value.isEmpty()) {
+        path.append(key).append("=").append(sanitizePathComponent(value)).append("/");
+      }
+    }
+    if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+      path.append("response_gzip.json");
+    } else {
+      path.append("response.json");
+    }
+    return path.toString();
+  }
+
+  /**
+   * Mirrors a freshly-written local raw cache file up to the shared S3 location.
+   * No-op when there's no s3 destination, the local file is missing, or the
+   * write fails (the local copy is still valid for this worker).
+   *
+   * <p>Writes via a temp-key + atomic move pattern would be ideal, but
+   * StorageProvider lacks rename; instead we rely on writeFile being all-or-nothing
+   * on the destination (S3 PUT, R2 PUT, etc. are atomic at the object level).
+   */
+  private void mirrorLocalCacheToS3(String localPath, String s3Path) {
+    if (s3Path == null || storageProvider == null || localPath == null) {
+      return;
+    }
+    if (!isLocalPath(localPath) || isLocalPath(s3Path)) {
+      return;
+    }
+    File localFile = new File(localPath);
+    if (!localFile.exists() || localFile.length() == 0) {
+      return;
+    }
+    try {
+      String parentPath = s3Path.substring(0, s3Path.lastIndexOf('/'));
+      storageProvider.createDirectories(parentPath);
+      try (InputStream in = new FileInputStream(localFile)) {
+        storageProvider.writeFile(s3Path, in);
+      }
+      LOGGER.info("Mirrored raw cache to s3: {} -> {} ({} bytes)",
+          localPath, s3Path, localFile.length());
+    } catch (IOException e) {
+      LOGGER.warn("Failed to mirror raw cache to s3 {} -> {}: {}",
+          localPath, s3Path, e.getMessage());
+    }
+  }
+
+  /**
+   * Downloads a shared S3 raw cache object to the local mirror path so subsequent
+   * reads use the fast on-disk copy. Writes to a sibling temp file and atomically
+   * renames so partial writes can never be read.
+   */
+  private void hydrateLocalFromS3(String localPath, String s3Path) throws IOException {
+    File dest = new File(localPath);
+    File parent = dest.getParentFile();
+    if (parent != null) {
+      parent.mkdirs();
+    }
+    File tmp = File.createTempFile("http-raw-hydrate-", ".tmp",
+        parent != null ? parent : new File("."));
+    try (InputStream in = storageProvider.openInputStream(s3Path);
+         FileOutputStream out = new FileOutputStream(tmp)) {
+      byte[] buf = new byte[65536];
+      int len;
+      while ((len = in.read(buf)) != -1) {
+        out.write(buf, 0, len);
+      }
+    }
+    java.nio.file.Files.move(tmp.toPath(), dest.toPath(),
+        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
   }
 
   /**
