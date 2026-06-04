@@ -130,6 +130,12 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
 
+  # Current quarter (e.g. 2026Q2), injected by GovDataSchemaFactory. Not sent to any API —
+  # transformers stamp it into full-dump cache filenames so a new quarter lands a fresh
+  # path and re-downloads the latest ODP bulk file, superseding the 90-day TTL.
+  current_quarter: &current_quarter
+    - "${GOVDATA_CURRENT_QUARTER}"
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -155,6 +161,7 @@ partitionedTables:
       type:
         - patent_grants
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -214,7 +221,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_patent.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_patent.tsv.zip"
       method: GET
       skipResponseBody: true
       response:
@@ -253,6 +260,7 @@ partitionedTables:
       type:
         - patent_assignees
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -289,7 +297,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_assignee_disambiguated.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_assignee_disambiguated.tsv.zip"
       method: GET
       skipResponseBody: true
       response:
@@ -327,6 +335,7 @@ partitionedTables:
       type:
         - patent_inventors
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -359,7 +368,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_inventor_disambiguated.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_inventor_disambiguated.tsv.zip"
       method: GET
       skipResponseBody: true
       response:
@@ -396,6 +405,7 @@ partitionedTables:
       type:
         - patent_cpc
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -427,7 +437,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/download/g_cpc_current.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_cpc_current.tsv.zip"
       method: GET
       skipResponseBody: true
       response:
@@ -467,6 +477,7 @@ partitionedTables:
       type:
         - patent_claims
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -494,7 +505,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/claims/g_claims_{year}.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATTXT/g_claims_{effective_year}.tsv.zip"
       method: GET
       skipResponseBody: true
       response:
@@ -533,6 +544,7 @@ partitionedTables:
       type:
         - patent_summaries
       year: *year_range
+      quarter: *current_quarter
 
     columns:
       - *patent_id_column
@@ -544,7 +556,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://s3.amazonaws.com/data.patentsview.org/brief-summary-text/g_brf_sum_text_{year}.tsv.zip"
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATTXT/g_brf_sum_text_{effective_year}.tsv.zip"
       method: GET
       skipResponseBody: true
       response:

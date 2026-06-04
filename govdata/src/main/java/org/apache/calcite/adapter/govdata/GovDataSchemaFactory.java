@@ -832,6 +832,17 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("Set HEALTH_FDA_API_KEY (length={})", healthFdaApiKey.length());
     }
 
+    // USPTO_API_KEY: model operand takes precedence, falls back to env var. One
+    // account-level USPTO Open Data Portal key serves every ODP product (patents bulk
+    // PVGPATDIS/PVGPATTXT and the trademark TRCFECO2 snapshot). Setting it as a system
+    // property lets the patents transformers resolve it without a direct env-var ref.
+    Object usptoApiKeyObj = operand.get("usptoApiKey");
+    String usptoApiKey = usptoApiKeyObj != null ? String.valueOf(usptoApiKeyObj) : System.getenv("USPTO_API_KEY");
+    if (usptoApiKey != null && !usptoApiKey.isEmpty()) {
+      System.setProperty("USPTO_API_KEY", usptoApiKey);
+      LOGGER.debug("Set USPTO_API_KEY (length={})", usptoApiKey.length());
+    }
+
     Object currentMonthObj = operand.get("currentMonth");
     if (currentMonthObj != null) {
       System.setProperty("GOVDATA_CURRENT_MONTH", String.valueOf(currentMonthObj));

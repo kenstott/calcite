@@ -469,16 +469,22 @@ generate_single_schema_model() {
   local _INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
   local _START_YEAR=${GOVDATA_START_YEAR:-2010}
 
+  # Current calendar context — emitted in BOTH modes so transformers always have a
+  # quarter token for quarterly cache busting (e.g. patents full-dump filenames).
+  local _CURRENT_MONTH _CURRENT_YEAR _CURRENT_QUARTER
+  _CURRENT_MONTH=$(date +%m)
+  _CURRENT_YEAR=$(date +%Y)
+  _CURRENT_QUARTER=$(( ($(date +%-m) - 1) / 3 + 1 ))
+
   # historical mode: cap at INCREMENTAL_YEAR-1; daily mode: start from INCREMENTAL_YEAR
   local _YEAR_RANGE
   if [ "${GOVDATA_RUN_MODE:-daily}" = "historical" ]; then
     _YEAR_RANGE="\"startYear\": ${_START_YEAR},
-      \"endYear\": $((_INCREMENTAL_YEAR - 1))"
+      \"endYear\": $((_INCREMENTAL_YEAR - 1)),
+      \"currentMonth\": \"${_CURRENT_MONTH}\",
+      \"currentYear\": \"${_CURRENT_YEAR}\",
+      \"currentQuarter\": \"${_CURRENT_QUARTER}\""
   else
-    local _CURRENT_MONTH _CURRENT_YEAR _CURRENT_QUARTER
-    _CURRENT_MONTH=$(date +%m)
-    _CURRENT_YEAR=$(date +%Y)
-    _CURRENT_QUARTER=$(( ($(date +%-m) - 1) / 3 + 1 ))
     _YEAR_RANGE="\"startYear\": ${_INCREMENTAL_YEAR},
       \"currentMonth\": \"${_CURRENT_MONTH}\",
       \"currentYear\": \"${_CURRENT_YEAR}\",

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,14 +45,14 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
-    final String yearStr = getYear(context);
+    final String yearStr = getEffectiveYear(context);
     if (yearStr == null || yearStr.isEmpty()) {
       LOGGER.warn("PatentSummaries: missing year dimension");
       return Collections.emptyIterator();
     }
 
     String url = context.getUrl();
-    String dest = cacheFile("g_brf_sum_text_" + yearStr + ".tsv");
+    String dest = cacheFile("g_brf_sum_text_" + yearStr + "_" + quarterToken(context) + ".tsv");
     if (!isCacheValid(dest)) {
       LOGGER.info("PatentSummaries downloading year {}: {}", yearStr, url);
       downloadAndCacheTsv(url, dest);
@@ -104,7 +105,7 @@ public class PatentSummariesTransformer extends AbstractPatentsTransformer {
           LOGGER.info("PatentSummaries: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
-          throw new RuntimeException("PatentSummariesTransformer read failed", e);
+          throw new UncheckedIOException("PatentSummariesTransformer read failed", e);
         }
       }
 

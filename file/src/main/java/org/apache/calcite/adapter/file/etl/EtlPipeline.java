@@ -838,7 +838,7 @@ public class EtlPipeline {
                     if (currentBatch % 10 == 0) {
                       System.gc();
                     }
-                  } catch (IOException e) {
+                  } catch (Exception e) {
                     String errorMsg =
                         String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
                     LOGGER.error(errorMsg, e);
@@ -944,7 +944,7 @@ public class EtlPipeline {
                 skippedBatches++;
                 consecutiveFailures = 0;
                 LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
-              } catch (IOException e) {
+              } catch (Exception e) {
                 consecutiveFailures++;
                 String errorMsg =
                     String.format("Batch %d (partition %d/%d) failed: %s",
@@ -1054,7 +1054,7 @@ public class EtlPipeline {
                   if (currentBatch % 10 == 0) {
                     System.gc();
                   }
-                } catch (IOException e) {
+                } catch (Exception e) {
                   String errorMsg =
                       String.format("Batch %d/%d failed: %s", currentBatch, neededCountFinal, e.getMessage());
                   LOGGER.error(errorMsg, e);
@@ -1097,7 +1097,7 @@ public class EtlPipeline {
             try {
               f.get();
             } catch (Exception e) {
-              LOGGER.error("Unexpected error in parallel batch: {}", e.getMessage());
+              LOGGER.error("Unexpected error in parallel batch: {}", e.getMessage(), e);
             }
           }
           executor.shutdown();
@@ -1164,7 +1164,7 @@ public class EtlPipeline {
               skippedBatches++;
               consecutiveFailures = 0;
               LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
-            } catch (IOException e) {
+            } catch (Exception e) {
               consecutiveFailures++;
               String errorMsg =
                   String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
@@ -1538,7 +1538,7 @@ public class EtlPipeline {
    * Determines the error action based on the exception type.
    */
   private EtlPipelineConfig.ErrorHandlingConfig.ErrorAction determineErrorAction(
-      IOException e, EtlPipelineConfig.ErrorHandlingConfig errorHandling) {
+      Throwable e, EtlPipelineConfig.ErrorHandlingConfig errorHandling) {
 
     String message = e.getMessage();
     if (message == null) {

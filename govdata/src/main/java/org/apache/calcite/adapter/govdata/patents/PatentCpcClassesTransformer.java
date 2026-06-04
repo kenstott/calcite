@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,22 +40,20 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(PatentCpcClassesTransformer.class);
 
-  private static final String BASE_URL =
-      "https://s3.amazonaws.com/data.patentsview.org/download/";
-
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
-    final String yearStr = getYear(context);
+    final String yearStr = getEffectiveYear(context);
     if (yearStr == null || yearStr.isEmpty()) {
       LOGGER.warn("PatentCpcClasses: missing year dimension");
       return Collections.emptyIterator();
     }
 
+    final String q = quarterToken(context);
     String patentFile = downloadAndCacheTsv(
-        BASE_URL + "g_patent.tsv.zip", cacheFile("g_patent.tsv"));
+        ODP_PVGPATDIS_BASE + "g_patent.tsv.zip", cacheFile("g_patent_" + q + ".tsv"));
     final String cpcFile = downloadAndCacheTsv(
-        BASE_URL + "g_cpc_current.tsv.zip", cacheFile("g_cpc_current.tsv"));
+        ODP_PVGPATDIS_BASE + "g_cpc_current.tsv.zip", cacheFile("g_cpc_current_" + q + ".tsv"));
 
     final Set<String> patentIds = readPatentIdsForYear(patentFile, yearStr);
     LOGGER.info("PatentCpcClasses: {} patent IDs for year {}", patentIds.size(), yearStr);
@@ -110,7 +109,7 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
           LOGGER.info("PatentCpcClasses: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
-          throw new RuntimeException("PatentCpcClassesTransformer read failed", e);
+          throw new UncheckedIOException("PatentCpcClassesTransformer read failed", e);
         }
       }
 
