@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -158,7 +159,7 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
 
             Map<String, Object> row = new HashMap<>();
             row.put("serial_no", strVal(serialNo));
-            row.put("registration_no", strVal(csvField(parts, hdr, "registration_no")));
+            row.put("registration_no", strVal(normalizeRegistrationNo(csvField(parts, hdr, "registration_no"))));
             row.put("application_year", intVal(yearStr));
             row.put("filing_dt", strVal(dateVal));
             row.put("registration_dt", strVal(csvField(parts, hdr, "registration_dt")));
@@ -190,7 +191,7 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
           LOGGER.info("TrademarkApplications: {} records for year {}", count[0], yearStr);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.warn("Failed to close trademark reader: {}", closeEx.getMessage()); }
-          throw new RuntimeException("TrademarkApplicationsTransformer read failed", e);
+          throw new UncheckedIOException("TrademarkApplicationsTransformer read failed", e);
         }
       }
 
@@ -202,6 +203,23 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
         return row;
       }
     };
+  }
+
+  /**
+   * USPTO uses an all-zeros registration_no ({@code "0000000"}) as the placeholder for
+   * applications that have not yet been registered. Normalize to null so downstream
+   * consumers and DQ checks see honest cardinality on this column.
+   */
+  private String normalizeRegistrationNo(String v) {
+    if (v == null) {
+      return null;
+    }
+    for (int i = 0; i < v.length(); i++) {
+      if (v.charAt(i) != '0') {
+        return v;
+      }
+    }
+    return null;
   }
 
   private String csvField(String[] parts, Map<String, Integer> hdr, String column) {

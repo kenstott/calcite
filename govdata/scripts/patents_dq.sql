@@ -207,14 +207,15 @@ SELECT 'patents', 'patent_assignees', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
       WHERE patent_id IS NULL OR grant_year IS NULL);
 
--- T7: assignee_type values (PatentsView numeric codes: 1-9)
+-- T7: assignee_type values (PatentsView numeric codes: 1-9 base types; 11-19 = withdrawn/corrected variants)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_assignees', 'T7_assignee_type_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Rows with assignee_type outside known PatentsView codes (1-9)'
+  bad, 0, 'Rows with assignee_type outside known PatentsView codes (1-9, 11-19)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
       WHERE assignee_type IS NOT NULL
-        AND assignee_type NOT IN ('1','2','3','4','5','6','7','8','9'));
+        AND assignee_type NOT IN ('1','2','3','4','5','6','7','8','9',
+                                   '11','12','13','14','15','16','17','18','19'));
 
 -- T7: country_code format (2-letter ISO)
 INSERT INTO dq_results
@@ -450,11 +451,11 @@ SELECT 'patents', 'patent_claims', 'T2b_historical_coverage',
   min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
 FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true));
 
--- T2c: daily coverage
+-- T2c: daily coverage (PatentsView ships per-year claim files g_claims_<year>.tsv with ~3-year lag)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_claims', 'T2c_daily_coverage',
-  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
-  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 3) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 3), 'MAX(grant_year) must be >= currentYear - 3 (per-year g_claims_<year>.tsv lags g_patent.tsv by 2-3 years)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true));
 
 -- T3: sample
@@ -544,11 +545,11 @@ SELECT 'patents', 'patent_summaries', 'T2b_historical_coverage',
   min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
 FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true));
 
--- T2c: daily coverage
+-- T2c: daily coverage (PatentsView ships per-year summary files g_brf_sum_text_<year>.tsv with ~3-year lag)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_summaries', 'T2c_daily_coverage',
-  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
-  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
+  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 3) THEN 'pass' ELSE 'fail' END,
+  max_year, (EXTRACT(year FROM CURRENT_DATE) - 3), 'MAX(grant_year) must be >= currentYear - 3 (per-year g_brf_sum_text_<year>.tsv lags g_patent.tsv by 2-3 years)'
 FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true));
 
 -- T3: sample
