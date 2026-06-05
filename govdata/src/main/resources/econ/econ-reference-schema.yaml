@@ -153,7 +153,7 @@ partitionedTables:
       url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
       method: GET
       headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
         Accept: "text/plain, text/tab-separated-values, */*"
         Accept-Language: "en-US,en;q=0.9"
       response:
@@ -218,7 +218,7 @@ partitionedTables:
       url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
       method: GET
       headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
         Accept: "text/plain, text/tab-separated-values, */*"
         Accept-Language: "en-US,en;q=0.9"
       response:
