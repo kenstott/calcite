@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 
 ## How to Read This
 
@@ -66,7 +66,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
 | geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
 | fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
-| fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
+| fedregister  | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 9/9 pass, 65,167 docs (2024–2026 scope) |
 | lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
 | health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
 | patents      | 2026-06-05 | PASS    | 0     | 0     | Faithful recreation (one table per raw dump, no ETL joins; grant_year only on dated sources) + trademark effective_year fix (14k→911k rows, coverage→2023) + period-keyed completion markers. 0 fails verified (38p/2w); 2 trademark checks recalibrated → 0 warn |
@@ -268,14 +268,14 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## fedregister (2026-05-19) — PASS
+## fedregister (2026-06-05) — PASS
 
-Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip`). Historical run covers 2019–2026, 96 batches (8 years × 12 months). Schema reduced to `fr_documents` only — `fr_agencies` removed (source `api.federalregister.gov` is CAPTCHA-blocked and not intended to be sourced).
+dq-rebuild re-run via an isolated jar (`sih-govdata-iso-fedregister.jar`) in a dedicated worktree, `run-all-dq --schema fedregister --local-jar`. Full teardown + re-ingest over the dq-rebuild window (2024–2026 DQ scope: daily worker → 2026, historical worker → `get_dq_start_year(fedregister)`=2024 through `INCREMENTAL_YEAR-1`=2025), 36 year/month batches. Pool exit 0, 5 min, 1 Done / 0 Failed. All 9 tests pass.
 
 | Table | Test | Status | Detail |
 |-------|------|--------|--------|
-| fr_documents | T1_existence | PASS | 202,473 rows |
-| fr_documents | T2_row_count | PASS | 202,473 ≥ 150,000 (2019–2026 threshold) |
+| fr_documents | T1_existence | PASS | 65,167 rows |
+| fr_documents | T2_row_count | PASS | 65,167 ≥ 50,000 (2024–2026 threshold) |
 | fr_documents | T4_all_null_cols | PASS | No fully-null columns |
 | fr_documents | T5_all_same_value | PASS | No single-value columns |
 | fr_documents | T6_pk_nulls | PASS | No null document_number/doc_type/publication_date |
@@ -284,8 +284,14 @@ Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{y
 | fr_documents | T7_document_number_format | PASS | All document numbers match YYYY-NNNNN |
 | fr_documents | T7_publication_date_format | PASS | All dates match YYYY-MM-DD |
 
+Source: govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip`). Schema is `fr_documents` only — `fr_agencies` removed (source `api.federalregister.gov` is CAPTCHA-blocked and not intended to be sourced).
+
 **Freshness (as of 2026-05-22):**
 - `fr_documents`: month dimension (GOVDATA_CURRENT_MONTH) → monthly cache bust; `batchPartitionColumns: [year, month]`, `incrementalKeys: [year, month]`
+
+### Prior run (2026-05-19) — PASS
+
+Historical run covered 2019–2026, 96 batches (8 years × 12 months): 202,473 rows, ≥ 150,000 threshold. The 2026-06-05 row count is lower because the dq-rebuild window is the narrower 2024–2026 DQ scope, not the full historical backfill.
 
 ---
 
