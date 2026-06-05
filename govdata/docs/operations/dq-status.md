@@ -73,7 +73,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
-| econ_reference | —        | PENDING | —     | —     | Schema changes pending re-run |
+| econ_reference | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 7/7 tables pass; BLS download.bls.gov User-Agent 403 fix (#144) |
 | cyber_threat | —          | PENDING | —     | —     | Schema changes pending re-run |
 | cyber_vuln   | —          | PENDING | —     | —     | Schema changes pending re-run |
 
@@ -218,19 +218,23 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## econ_reference (2026-05-18) — PASS
+## econ_reference (2026-06-05) — PASS
 
-0 fails, 0 warns. 38 checks across 7 tables (T1–T7; nipa_tables and bls_geographies omit T7).
+0 fails, 0 warns. 39 checks across 7 tables (T1–T7; nipa_tables and bls_geographies omit T7). dq-rebuild re-run via an isolated jar after the BLS User-Agent fix (#144).
 
 | Table | Rows | Notes |
 |-------|------|-------|
-| jolts_industries | 28 | BLS JOLTS industry groupings |
-| jolts_dataelements | 8 | Core JOLTS metric codes (JO, HI, QU, TS, LD + OS, UN, UO) |
+| jolts_industries | 56 | BLS JOLTS industry groupings |
+| jolts_dataelements | 20 | JOLTS metric codes incl. all 5 core (JO, HI, QU, TS, LD) |
 | bls_geographies | 82 | States, metro areas, census regions |
 | naics_sectors | 22 | NAICS supersector codes including total nonfarm (00000000) |
 | nipa_tables | 252 | BEA NIPA table catalog across 8 sections |
 | regional_linecodes | 2,769 | BEA Regional line codes across 56 tables |
 | fred_series | 2,050 | FRED series across 5 of 7 configured categories |
+
+### Fixed (2026-06-05) — BLS download.bls.gov 403 (#144)
+
+`download.bls.gov` began returning HTTP 403 for fake-browser User-Agents, serving an HTML block page that parsed to 0 rows — silently emptying `jolts_industries` (28→0) and `jolts_dataelements` (8→0) on the 2026-06-05 dq-rebuild (DQ FAIL, 5 hard fails). Fix: send a self-identifying `User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"` on the 4 `download.bls.gov` JOLTS sources (replaced the hardcoded Chrome UA in `econ-reference-schema.yaml`; added a `headers:` block in `econ-schema.yaml` for `jolts_regional`/`jolts_state`). Verified 200 vs 403. After wiping the stale raw cache and re-running, both JOLTS tables populate (56 / 20 rows) and pass. `econ` schema's `jolts_regional`/`jolts_state` get the same fix on their next run.
 
 **Known issues:**
 - `fred_series`: 5 of 7 configured FRED categories return data; categories 1 (Production & Business Activity) and 3 (Discontinued/Legacy) are capped at 1,000 rows each by the FRED API per-category limit. T7 threshold set to ≥5 categories to account for this.
