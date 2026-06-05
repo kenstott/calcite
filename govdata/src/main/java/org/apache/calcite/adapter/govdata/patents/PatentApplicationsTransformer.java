@@ -27,26 +27,25 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Faithful recreation of PatentsView g_inventor_disambiguated.tsv as patent_inventors rows —
- * one row per patent inventor, keyed by patent_id, no joins and no year. location_id is kept
- * as the foreign key into patent_locations; join there for geography and to patent_grants for
- * a grant year. Loaded once as a snapshot.
+ * Faithful recreation of PatentsView g_application.tsv as patent_applications rows — one row
+ * per patent application record, keyed by patent_id, no joins and no year. Loaded once as a
+ * snapshot; join to patent_grants on patent_id for a grant year.
  */
-public class PatentInventorsTransformer extends AbstractPatentsTransformer {
+public class PatentApplicationsTransformer extends AbstractPatentsTransformer {
 
   private static final Logger LOGGER =
-      LoggerFactory.getLogger(PatentInventorsTransformer.class);
+      LoggerFactory.getLogger(PatentApplicationsTransformer.class);
 
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     final String q = quarterToken(context);
-    final String inventorFile = downloadAndCacheTsv(
-        ODP_PVGPATDIS_BASE + "g_inventor_disambiguated.tsv.zip",
-        cacheFile("g_inventor_disambiguated_" + q + ".tsv"));
+    final String applicationFile = downloadAndCacheTsv(
+        ODP_PVGPATDIS_BASE + "g_application.tsv.zip",
+        cacheFile("g_application_" + q + ".tsv"));
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(storageProvider().openInputStream(inventorFile),
+        new InputStreamReader(storageProvider().openInputStream(applicationFile),
             StandardCharsets.UTF_8));
     String headerLine = CsvRecordReader.readRecord(reader);
     if (headerLine == null) {
@@ -73,27 +72,20 @@ public class PatentInventorsTransformer extends AbstractPatentsTransformer {
             if (patentId == null || patentId.isEmpty()) {
               continue;
             }
-
             Map<String, Object> row = new HashMap<>();
             row.put("patent_id", strVal(patentId));
-            row.put("inventor_id", strVal(getField(parts, hdr, "inventor_id")));
-            row.put("inventor_sequence",
-                intVal(getField(parts, hdr, "inventor_sequence")));
-            row.put("name_first",
-                strVal(getField(parts, hdr, "disambig_inventor_name_first")));
-            row.put("name_last",
-                strVal(getField(parts, hdr, "disambig_inventor_name_last")));
-            row.put("gender_code", strVal(getField(parts, hdr, "gender_code")));
-            row.put("location_id", strVal(getField(parts, hdr, "location_id")));
+            row.put("filing_date", strVal(getField(parts, hdr, "filing_date")));
+            row.put("patent_application_type",
+                strVal(getField(parts, hdr, "patent_application_type")));
             count[0]++;
             pending = row;
             return;
           }
           reader.close();
-          LOGGER.info("PatentInventors: {} records (snapshot)", count[0]);
+          LOGGER.info("PatentApplications: {} records (snapshot)", count[0]);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
-          throw new UncheckedIOException("PatentInventorsTransformer read failed", e);
+          throw new UncheckedIOException("PatentApplicationsTransformer read failed", e);
         }
       }
 

@@ -46,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -843,23 +844,32 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("Set USPTO_API_KEY (length={})", usptoApiKey.length());
     }
 
+    // Calendar context is a single universal value derived from today's date — identical for
+    // every schema and every worker. The factory computes it here so no model/worker has to
+    // thread it through; an explicit operand still wins (lets tests pin a specific quarter).
+    LocalDate today = LocalDate.now();
     Object currentMonthObj = operand.get("currentMonth");
-    if (currentMonthObj != null) {
-      System.setProperty("GOVDATA_CURRENT_MONTH", String.valueOf(currentMonthObj));
-      LOGGER.debug("Set GOVDATA_CURRENT_MONTH={}", currentMonthObj);
-    }
+    String currentMonth = currentMonthObj != null
+        ? String.valueOf(currentMonthObj) : String.format("%02d", today.getMonthValue());
+    System.setProperty("GOVDATA_CURRENT_MONTH", currentMonth);
 
     Object currentYearObj = operand.get("currentYear");
-    if (currentYearObj != null) {
-      System.setProperty("GOVDATA_CURRENT_YEAR", String.valueOf(currentYearObj));
-      LOGGER.debug("Set GOVDATA_CURRENT_YEAR={}", currentYearObj);
-    }
+    String currentYear = currentYearObj != null
+        ? String.valueOf(currentYearObj) : String.valueOf(today.getYear());
+    System.setProperty("GOVDATA_CURRENT_YEAR", currentYear);
 
     Object currentQuarterObj = operand.get("currentQuarter");
-    if (currentQuarterObj != null) {
-      System.setProperty("GOVDATA_CURRENT_QUARTER", String.valueOf(currentQuarterObj));
-      LOGGER.debug("Set GOVDATA_CURRENT_QUARTER={}", currentQuarterObj);
-    }
+    String currentQuarter = currentQuarterObj != null
+        ? String.valueOf(currentQuarterObj) : String.valueOf((today.getMonthValue() - 1) / 3 + 1);
+    System.setProperty("GOVDATA_CURRENT_QUARTER", currentQuarter);
+
+    // Year-unique release token (e.g. 2026Q2) — the cadence value that re-keys quarterly
+    // full-dump caches AND versions the faithful append-only snapshot tables (partition key).
+    String currentQuarterToken = currentYear + "Q" + currentQuarter;
+    System.setProperty("GOVDATA_CURRENT_QUARTER_TOKEN", currentQuarterToken);
+
+    LOGGER.debug("Calendar context: GOVDATA_CURRENT_MONTH={} YEAR={} QUARTER={} TOKEN={}",
+        currentMonth, currentYear, currentQuarter, currentQuarterToken);
 
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
   }

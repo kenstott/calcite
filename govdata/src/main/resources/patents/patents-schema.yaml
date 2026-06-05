@@ -37,6 +37,8 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:patents}"
+# Full-dump TSVs are re-read once per year; a DQ rebuild spans several years back-to-back.
+workerTimeoutMinutes: 180
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -102,11 +104,24 @@ column_templates:
     name: year
     type: INTEGER
 
+  partition_quarter: &partition_quarter
+    name: quarter
+    type: VARCHAR
+
   standard_partitions: &standard_partitions
     style: hive
     columnDefinitions:
       - *partition_type
       - *partition_year
+
+  # Faithful append-only snapshot tables (patent_id / location_id keyed) carry no grant year.
+  # They partition by [type, quarter]: each quarterly full-dump release lands a new partition,
+  # so the table is append-only and old releases drop on whatever retention cadence applies.
+  snapshot_partitions: &snapshot_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_quarter
 
   patents_iceberg_common: &patents_iceberg_common
     warehousePath: "${GOVDATA_PARQUET_DIR}/patents"
@@ -114,6 +129,14 @@ column_templates:
     runCompaction: true
     compactionTargetFileSizeBytes: 134217728
     compactionMinFiles: 5
+
+  # Forever/snapshot tables load the whole dump in one shot into a single quarter partition.
+  # Inline compaction would re-merge millions of rows on every rebuild and dominate runtime —
+  # defer it to a separate maintenance pass. Same warehouse, no inline compaction.
+  patents_snapshot_iceberg_common: &patents_snapshot_iceberg_common
+    warehousePath: "${GOVDATA_PARQUET_DIR}/patents"
+    catalogType: hadoop
+    runCompaction: false
 
   raw_cache_enabled: &raw_cache_enabled
     enabled: true
@@ -129,12 +152,15 @@ dimension_values:
     start: "${GOVDATA_START_YEAR:2025}"
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
+    # Process newest year first — one descending sequence from today across daily + historical.
+    descending: true
 
-  # Current quarter (e.g. 2026Q2), injected by GovDataSchemaFactory. Not sent to any API —
-  # transformers stamp it into full-dump cache filenames so a new quarter lands a fresh
-  # path and re-downloads the latest ODP bulk file, superseding the 90-day TTL.
+  # Current release token (e.g. 2026Q2), injected by GovDataSchemaFactory. Not sent to any API.
+  # Transformers stamp it into full-dump cache filenames so a new quarter lands a fresh path and
+  # re-downloads the latest ODP bulk file (superseding the 90-day TTL); the snapshot tables also
+  # use it as their partition value so each quarterly release appends a new partition.
   current_quarter: &current_quarter
-    - "${GOVDATA_CURRENT_QUARTER}"
+    - "${GOVDATA_CURRENT_QUARTER_TOKEN}"
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -150,12 +176,11 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       One row per granted utility patent (design patents excluded by default;
-      set PATENTS_INCLUDE_DESIGN=true to include). Requires ETL join of 5 files:
-      g_patent.tsv (core attributes), g_application.tsv (filing date),
-      g_patent_abstract.tsv (abstract text), g_figures.tsv (figure/sheet counts),
-      and citation aggregates from g_us_patent_citation.tsv + g_foreign_citation.tsv.
-      All files are full-dump snapshots cached locally with quarterly TTL.
-      Transformer filters output to the requested grant_year dimension.
+      set PATENTS_INCLUDE_DESIGN=true to include). Faithful recreation of g_patent.tsv —
+      no joins. patent_date carries the grant year, so the table self-partitions by
+      grant_year. Abstract, filing date, and figure counts live in their own faithful
+      tables (patent_abstracts, patent_applications, patent_figures), joined on patent_id
+      at query time.
 
     dimensions:
       type:
@@ -170,10 +195,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: Date of patent grant (YYYY-MM-DD)
-      - name: filing_date
-        type: string
-        nullable: true
-        comment: Original application filing date from g_application.tsv
       - name: patent_type
         type: string
         nullable: true
@@ -182,30 +203,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: Patent title
-      - name: patent_abstract
-        type: string
-        nullable: true
-        comment: Patent abstract text (from g_patent_abstract.tsv)
       - name: num_claims
         type: integer
         nullable: true
         comment: Number of claims
-      - name: num_figures
-        type: integer
-        nullable: true
-        comment: Number of figures (from g_figures.tsv)
-      - name: num_sheets
-        type: integer
-        nullable: true
-        comment: Number of drawing sheets (from g_figures.tsv)
-      - name: num_us_citations
-        type: integer
-        nullable: true
-        comment: Count of forward US patent citations (innovation signal)
-      - name: num_foreign_citations
-        type: integer
-        nullable: true
-        comment: Count of forward foreign patent citations
       - name: wipo_kind
         type: string
         nullable: true
@@ -214,10 +215,6 @@ partitionedTables:
         type: boolean
         nullable: true
         comment: Whether patent was withdrawn; filter to false for active grants
-      - name: patent_application_type
-        type: string
-        nullable: true
-        comment: Application type (e.g., utility, continuation) from g_application.tsv
 
     source:
       type: http
@@ -247,24 +244,21 @@ partitionedTables:
   # PATENT_ASSIGNEES — Patent ownership at grant time
   # ---------------------------------------------------------------------------
   - name: patent_assignees
-    pattern: "type=patent_assignees/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=patent_assignees"
+    partitions: *snapshot_partitions
     comment: >
-      One row per patent-assignee combination. Organizations (companies, universities,
-      governments) that own patents at grant time. Requires join of
-      g_assignee_disambiguated.tsv + g_location_disambiguated.tsv via location_id
-      for geographic fields. Assignee-to-SEC entity matching is handled outside
-      this schema via entity extraction.
+      Faithful recreation of g_assignee_disambiguated.tsv — one row per patent-assignee
+      combination, keyed by patent_id, no joins and no year. location_id is the foreign key
+      into patent_locations; join there for geography and to patent_grants for a grant year.
+      Loaded once per quarter as a full snapshot.
 
     dimensions:
       type:
         - patent_assignees
-      year: *year_range
       quarter: *current_quarter
 
     columns:
       - *patent_id_column
-      - *grant_year_column
       - name: assignee_sequence
         type: integer
         nullable: true
@@ -289,11 +283,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: US company / foreign company / US government / individual
-      - *state_fips_column
-      - *county_fips_column
-      - *country_code_column
-      - *latitude_column
-      - *longitude_column
+      - name: location_id
+        type: string
+        nullable: true
+        comment: FK into patent_locations for geographic fields
 
     source:
       type: http
@@ -310,36 +303,33 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=patent_assignees/year=*/"
+        pattern: "type=patent_assignees"
       partition:
-        columns: [type, year]
+        columns: [type, quarter]
       iceberg:
-        <<: *patents_iceberg_common
+        <<: *patents_snapshot_iceberg_common
         tableName: patent_assignees
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
   # PATENT_INVENTORS — Inventor listing per patent
   # ---------------------------------------------------------------------------
   - name: patent_inventors
-    pattern: "type=patent_inventors/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=patent_inventors"
+    partitions: *snapshot_partitions
     comment: >
-      One row per patent-inventor combination. Requires join of
-      g_inventor_disambiguated.tsv (~8 GB uncompressed) +
-      g_location_disambiguated.tsv via location_id. File is cached locally
-      with quarterly TTL. Initial load worker (80) requires -t 480 (8-hour timeout).
+      Faithful recreation of g_inventor_disambiguated.tsv (~8 GB uncompressed) — one row per
+      patent-inventor combination, keyed by patent_id, no joins and no year. location_id is the
+      foreign key into patent_locations; join there for geography and to patent_grants for a
+      grant year. Loaded once per quarter as a full snapshot.
 
     dimensions:
       type:
         - patent_inventors
-      year: *year_range
       quarter: *current_quarter
 
     columns:
       - *patent_id_column
-      - *grant_year_column
       - name: inventor_id
         type: string
         nullable: true
@@ -360,11 +350,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: M / F (inferred by PatentsView disambiguation); useful for diversity analysis
-      - *state_fips_column
-      - *county_fips_column
-      - *country_code_column
-      - *latitude_column
-      - *longitude_column
+      - name: location_id
+        type: string
+        nullable: true
+        comment: FK into patent_locations for geographic fields
 
     source:
       type: http
@@ -381,35 +370,33 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=patent_inventors/year=*/"
+        pattern: "type=patent_inventors"
       partition:
-        columns: [type, year]
+        columns: [type, quarter]
       iceberg:
-        <<: *patents_iceberg_common
+        <<: *patents_snapshot_iceberg_common
         tableName: patent_inventors
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
   # PATENT_CPC_CLASSES — CPC technology classification per patent
   # ---------------------------------------------------------------------------
   - name: patent_cpc_classes
-    pattern: "type=patent_cpc/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=patent_cpc"
+    partitions: *snapshot_partitions
     comment: >
-      One row per patent-CPC code combination. CPC is the primary technology
-      taxonomy for patent analysis. Source: g_cpc_current.tsv (full-dump snapshot,
-      cached locally with quarterly TTL, filtered by grant_year).
+      Faithful recreation of g_cpc_current.tsv — one row per patent-CPC code combination,
+      keyed by patent_id, no joins and no year. CPC is the primary technology taxonomy for
+      patent analysis. Join to patent_grants on patent_id for a grant year. Loaded once per
+      quarter as a full snapshot.
 
     dimensions:
       type:
         - patent_cpc
-      year: *year_range
       quarter: *current_quarter
 
     columns:
       - *patent_id_column
-      - *grant_year_column
       - name: cpc_sequence
         type: integer
         nullable: true
@@ -450,14 +437,222 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=patent_cpc/year=*/"
+        pattern: "type=patent_cpc"
       partition:
-        columns: [type, year]
+        columns: [type, quarter]
       iceberg:
-        <<: *patents_iceberg_common
+        <<: *patents_snapshot_iceberg_common
         tableName: patent_cpc_classes
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [quarter]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_ABSTRACTS — Faithful g_patent_abstract.tsv snapshot
+  # ---------------------------------------------------------------------------
+  - name: patent_abstracts
+    pattern: "type=patent_abstracts"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of g_patent_abstract.tsv — one row per patent abstract, keyed by
+      patent_id. Join to patent_grants on patent_id for a grant year. Loaded once per quarter.
+
+    dimensions:
+      type:
+        - patent_abstracts
+      quarter: *current_quarter
+
+    columns:
+      - *patent_id_column
+      - name: patent_abstract
+        type: string
+        nullable: true
+        comment: Patent abstract text
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_patent_abstract.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentAbstractsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_abstracts"
+      partition:
+        columns: [type, quarter]
+      iceberg:
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_abstracts
+        batchPartitionColumns: [quarter]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_APPLICATIONS — Faithful g_application.tsv snapshot
+  # ---------------------------------------------------------------------------
+  - name: patent_applications
+    pattern: "type=patent_applications"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of g_application.tsv — one row per application record, keyed by
+      patent_id. Join to patent_grants on patent_id for a grant year. Loaded once per quarter.
+
+    dimensions:
+      type:
+        - patent_applications
+      quarter: *current_quarter
+
+    columns:
+      - *patent_id_column
+      - name: filing_date
+        type: string
+        nullable: true
+        comment: Original application filing date (YYYY-MM-DD)
+      - name: patent_application_type
+        type: string
+        nullable: true
+        comment: Application type (e.g., utility, continuation)
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_application.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentApplicationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_applications"
+      partition:
+        columns: [type, quarter]
+      iceberg:
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_applications
+        batchPartitionColumns: [quarter]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_FIGURES — Faithful g_figures.tsv snapshot
+  # ---------------------------------------------------------------------------
+  - name: patent_figures
+    pattern: "type=patent_figures"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of g_figures.tsv — one row per patent figure/sheet count record,
+      keyed by patent_id. Join to patent_grants on patent_id for a grant year. Loaded once
+      per quarter.
+
+    dimensions:
+      type:
+        - patent_figures
+      quarter: *current_quarter
+
+    columns:
+      - *patent_id_column
+      - name: num_figures
+        type: integer
+        nullable: true
+        comment: Number of figures
+      - name: num_sheets
+        type: integer
+        nullable: true
+        comment: Number of drawing sheets
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_figures.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentFiguresTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_figures"
+      partition:
+        columns: [type, quarter]
+      iceberg:
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_figures
+        batchPartitionColumns: [quarter]
+
+  # ---------------------------------------------------------------------------
+  # PATENT_LOCATIONS — Faithful g_location_disambiguated.tsv snapshot
+  # ---------------------------------------------------------------------------
+  - name: patent_locations
+    pattern: "type=patent_locations"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of g_location_disambiguated.tsv — one row per disambiguated
+      location, keyed by location_id. FK target for patent_inventors.location_id and
+      patent_assignees.location_id. Loaded once per quarter.
+
+    dimensions:
+      type:
+        - patent_locations
+      quarter: *current_quarter
+
+    columns:
+      - name: location_id
+        type: string
+        nullable: false
+        comment: PatentsView disambiguated location ID (PK)
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: State FIPS code
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: County FIPS code
+      - name: country_code
+        type: string
+        nullable: true
+        comment: Disambiguated country code
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Longitude
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_location_disambiguated.tsv.zip"
+      method: GET
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentLocationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_locations"
+      partition:
+        columns: [type, quarter]
+      iceberg:
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_locations
+        batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
   # PATENT_CLAIMS — Individual patent claims with vector embeddings
@@ -715,16 +910,10 @@ constraints:
         targetTable: patent_grants
         targetColumns: [patent_id]
         comment: Links assignee row to parent patent grant
-      - columns: [state_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
-        targetColumns: [state_fips]
-        comment: Links assignee location to geographic state
-      - columns: [county_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: counties
-        targetColumns: [county_fips]
-        comment: Links assignee location to geographic county
+      - columns: [location_id]
+        targetTable: patent_locations
+        targetColumns: [location_id]
+        comment: Links assignee to its disambiguated location
   patent_inventors:
     primaryKey: [patent_id, inventor_sequence]
     foreignKeys:
@@ -732,16 +921,10 @@ constraints:
         targetTable: patent_grants
         targetColumns: [patent_id]
         comment: Links inventor row to parent patent grant
-      - columns: [state_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
-        targetColumns: [state_fips]
-        comment: Links inventor location to geographic state
-      - columns: [county_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: counties
-        targetColumns: [county_fips]
-        comment: Links inventor location to geographic county
+      - columns: [location_id]
+        targetTable: patent_locations
+        targetColumns: [location_id]
+        comment: Links inventor to its disambiguated location
   patent_cpc_classes:
     primaryKey: [patent_id, cpc_sequence]
     foreignKeys:
@@ -749,6 +932,40 @@ constraints:
         targetTable: patent_grants
         targetColumns: [patent_id]
         comment: Links CPC classification row to parent patent grant
+  patent_abstracts:
+    primaryKey: [patent_id]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links abstract to parent patent grant
+  patent_applications:
+    primaryKey: [patent_id]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links application record to parent patent grant
+  patent_figures:
+    primaryKey: [patent_id]
+    foreignKeys:
+      - columns: [patent_id]
+        targetTable: patent_grants
+        targetColumns: [patent_id]
+        comment: Links figure-count record to parent patent grant
+  patent_locations:
+    primaryKey: [location_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: Links location to geographic state
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links location to geographic county
   patent_claims:
     primaryKey: [patent_id, claim_sequence]
     foreignKeys:

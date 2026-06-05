@@ -127,16 +127,13 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     if (quarter == null || quarter.isEmpty()) {
       throw new IllegalStateException(
           "quarter dimension not set — required for quarterly cache busting of patents "
-          + "full-dump files. The schema YAML must declare a quarter dimension fed by "
-          + "${GOVDATA_CURRENT_QUARTER}.");
+          + "full-dump files and for versioning the snapshot tables. The schema YAML must "
+          + "declare a quarter dimension fed by ${GOVDATA_CURRENT_QUARTER_TOKEN}.");
     }
-    String year = System.getProperty("GOVDATA_CURRENT_YEAR");
-    if (year == null || year.isEmpty()) {
-      throw new IllegalStateException(
-          "GOVDATA_CURRENT_YEAR not set — required to build the quarterly cache-bust token. "
-          + "GovDataSchemaFactory must inject it from the model operand.");
-    }
-    return year + "Q" + quarter;
+    // The quarter dimension already carries the year-unique release token (e.g. 2026Q2),
+    // injected by GovDataSchemaFactory. Used as the full-dump cache-bust stamp and as the
+    // partition value for the append-only snapshot tables.
+    return quarter;
   }
 
   /** Returns the storage provider for the govdata cache. */

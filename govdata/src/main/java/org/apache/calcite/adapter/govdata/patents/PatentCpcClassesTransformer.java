@@ -25,15 +25,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Transforms PatentsView g_cpc_current.tsv into patent_cpc_classes rows.
- *
- * <p>Downloads and caches two full-dump files (g_patent.tsv + g_cpc_current.tsv).
- * Pass 1 (eager): collects patent_ids for the requested year from g_patent.tsv.
- * Returns a lazy iterator streaming g_cpc_current.tsv, filtering to that year's patents.
- * No intermediate StringWriter — memory is O(patentIds + chunk_size).
+ * Faithful recreation of PatentsView g_cpc_current.tsv as patent_cpc_classes rows — one row
+ * per patent CPC classification, keyed by patent_id, no joins and no year. Loaded once as a
+ * snapshot; join to patent_grants on patent_id for a grant year.
  */
 public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
 
@@ -43,20 +39,9 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
-    final String yearStr = getEffectiveYear(context);
-    if (yearStr == null || yearStr.isEmpty()) {
-      LOGGER.warn("PatentCpcClasses: missing year dimension");
-      return Collections.emptyIterator();
-    }
-
     final String q = quarterToken(context);
-    String patentFile = downloadAndCacheTsv(
-        ODP_PVGPATDIS_BASE + "g_patent.tsv.zip", cacheFile("g_patent_" + q + ".tsv"));
     final String cpcFile = downloadAndCacheTsv(
         ODP_PVGPATDIS_BASE + "g_cpc_current.tsv.zip", cacheFile("g_cpc_current_" + q + ".tsv"));
-
-    final Set<String> patentIds = readPatentIdsForYear(patentFile, yearStr);
-    LOGGER.info("PatentCpcClasses: {} patent IDs for year {}", patentIds.size(), yearStr);
 
     final BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(cpcFile), StandardCharsets.UTF_8));
@@ -82,13 +67,12 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
             }
             String[] parts = splitTsv(line);
             String patentId = getField(parts, hdr, "patent_id");
-            if (patentId == null || !patentIds.contains(patentId)) {
+            if (patentId == null || patentId.isEmpty()) {
               continue;
             }
             String cpcGroup = getField(parts, hdr, "cpc_group");
             Map<String, Object> row = new HashMap<>();
             row.put("patent_id", strVal(patentId));
-            row.put("grant_year", intVal(yearStr));
             row.put("cpc_sequence", intVal(getField(parts, hdr, "cpc_sequence")));
             row.put("cpc_type", strVal(getField(parts, hdr, "cpc_type")));
             row.put("cpc_group", strVal(cpcGroup));
@@ -106,7 +90,7 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
             return;
           }
           reader.close();
-          LOGGER.info("PatentCpcClasses: {} records for year {}", count[0], yearStr);
+          LOGGER.info("PatentCpcClasses: {} records (snapshot)", count[0]);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
           throw new UncheckedIOException("PatentCpcClassesTransformer read failed", e);
