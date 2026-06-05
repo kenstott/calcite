@@ -179,7 +179,7 @@ case "$SCHEMA" in
 
   fec)
     case "$MODE" in
-      historical) export GOVDATA_START_YEAR=2010 ;;
+      historical) export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}" ;;
       daily)      export GOVDATA_START_YEAR="$INCREMENTAL_YEAR" ;;
       *) echo "fec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
     esac
