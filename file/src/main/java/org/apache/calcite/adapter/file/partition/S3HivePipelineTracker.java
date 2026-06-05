@@ -109,6 +109,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** True after preloadAllCompletions has run (even if no markers found). */
   private volatile boolean completionsPreloaded;
   /**
+   * In-memory cache of per-period completion state keyed by the 5-tuple period key.
+   * Value is the latest marker state ("complete"/"invalidate") or "" for known-absent.
+   */
+  private final Map<String, String> periodCompletionCache =
+      new ConcurrentHashMap<String, String>();
+  /**
    * In-memory cache of completed tables per (sourceKey, phase).
    * Key format: "sourceKey\0phase" → Set of completed table names.
    * Populated by {@link #bulkGetCompletedTables} and {@link #getCompletedTables},
@@ -1081,8 +1087,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Read the latest state for a (source_key, table_name, phase) combination.
    */
   private String readLatestState(String sourceKey, String tableName, String phase) {
-    String year = "_table_complete".equals(sourceKey)
-        ? COMPLETION_YEAR : extractYear(sourceKey, System.currentTimeMillis());
+    String year = completionYearFor(sourceKey, System.currentTimeMillis());
     String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
         + "/*.parquet";
     String sql = "SELECT state FROM read_parquet('" + glob + "', "
@@ -1612,6 +1617,49 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return clearedTables.contains(pipelineName);
   }
 
+  // ===== Per-Period Completion =====
+
+  /**
+   * Fixed source_key partition for per-period completion markers, mirroring
+   * {@code _table_complete}. Lands all period markers under year={@link #COMPLETION_YEAR}
+   * so reads avoid year=* wildcard scans. The 5-tuple period key lives in table_name.
+   */
+  private static final String PERIOD_SOURCE_KEY = "_period_complete";
+  private static final String PERIOD_PHASE = "period_completion";
+
+  @Override public void flushPending() {
+    flushPendingStates();
+  }
+
+  @Override public boolean isPeriodComplete(String pipelineName,
+      Map<String, String> periodValues) {
+    String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+    String cached = periodCompletionCache.get(periodKey);
+    if (cached != null) {
+      return "complete".equals(cached);
+    }
+    String state = readLatestState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE);
+    periodCompletionCache.put(periodKey, state == null ? "" : state);
+    return "complete".equals(state);
+  }
+
+  @Override public void markPeriodComplete(String pipelineName,
+      Map<String, String> periodValues) {
+    String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+    if ("complete".equals(periodCompletionCache.get(periodKey))) {
+      return; // already marked complete this run — avoid duplicate appends per batch
+    }
+    writeState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE, "complete", 0, null, null, null);
+    periodCompletionCache.put(periodKey, "complete");
+  }
+
+  @Override public void invalidatePeriod(String pipelineName,
+      Map<String, String> periodValues) {
+    String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+    writeState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE, "invalidate", 0, null, null, null);
+    periodCompletionCache.put(periodKey, "invalidate");
+  }
+
   @Override public void clearAllCompletions() {
     LOGGER.warn("clearAllCompletions on S3 tracker writes 'cleared' markers. "
         + "Old parquet files remain but are superseded by the cleared state.");
@@ -1667,6 +1715,18 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private String sanitizeHiveValue(String value) {
     // Replace characters that are problematic in hive partition paths
     return value.replace("/", "_").replace(" ", "_").replace(":", "_");
+  }
+
+  /**
+   * Resolves the year partition for a marker source key. The fixed completion
+   * source keys ({@code _table_complete}, {@code _period_complete}) land under
+   * {@link #COMPLETION_YEAR}; all others derive the year from the key itself.
+   */
+  private String completionYearFor(String sourceKey, long asOf) {
+    if (PERIOD_SOURCE_KEY.equals(sourceKey)) {
+      return COMPLETION_YEAR;
+    }
+    return "_table_complete".equals(sourceKey) ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
   }
 
   private String extractYear(String sourceKey, long asOf) {
@@ -1765,8 +1825,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     Map<String, List<PendingState>> bySourceKey =
         new LinkedHashMap<String, List<PendingState>>();
     for (PendingState ps : toFlush) {
-      String year = "_table_complete".equals(ps.sourceKey)
-          ? COMPLETION_YEAR : extractYear(ps.sourceKey, ps.asOf);
+      String year = completionYearFor(ps.sourceKey, ps.asOf);
       String groupKey = year + "\0" + ps.sourceKey;
       List<PendingState> list = bySourceKey.get(groupKey);
       if (list == null) {

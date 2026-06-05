@@ -105,6 +105,66 @@ public class IncrementalTrackerTest {
     IncrementalTracker.NOOP.clearAllCompletions();
   }
 
+  // ===== Per-period completion markers (fix #2) =====
+
+  @Test void testPeriodCompletionKeyYearOnlyNaFills() {
+    String key = IncrementalTracker.periodCompletionKey(
+        "patents_patent_grants", Collections.singletonMap("year", "2022"));
+    // canonical slots are year_quarter_month_day, then the pipeline name
+    assertEquals("2022_NA_NA_NA_patents_patent_grants", key);
+  }
+
+  @Test void testPeriodCompletionKeyYearAndQuarter() {
+    Map<String, String> combo = new LinkedHashMap<String, String>();
+    combo.put("year", "2026");
+    combo.put("quarter", "2026Q2");
+    combo.put("geography", "CA"); // non-period dim must be ignored
+    assertEquals("2026_2026Q2_NA_NA_t", IncrementalTracker.periodCompletionKey("t", combo));
+  }
+
+  @Test void testPeriodCompletionKeyNoPeriodAllNa() {
+    assertEquals("NA_NA_NA_NA_t",
+        IncrementalTracker.periodCompletionKey("t", Collections.<String, String>emptyMap()));
+    assertEquals("NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", null));
+  }
+
+  @Test void testPeriodCompletionKeyDistinctPerPeriod() {
+    // The whole point of fix #2: different years => different keys => no cross-period skip.
+    String y2025 = IncrementalTracker.periodCompletionKey("p", Collections.singletonMap("year", "2025"));
+    String y2022 = IncrementalTracker.periodCompletionKey("p", Collections.singletonMap("year", "2022"));
+    assertFalse(y2025.equals(y2022));
+  }
+
+  @Test void testHasCanonicalPeriodTrueForYear() {
+    assertTrue(IncrementalTracker.hasCanonicalPeriod(Collections.singletonMap("year", "2022")));
+  }
+
+  @Test void testHasCanonicalPeriodTrueForQuarter() {
+    assertTrue(IncrementalTracker.hasCanonicalPeriod(Collections.singletonMap("quarter", "2026Q2")));
+  }
+
+  @Test void testHasCanonicalPeriodFalseForNonPeriodOnly() {
+    Map<String, String> combo = new LinkedHashMap<String, String>();
+    combo.put("geography", "CA");
+    combo.put("frequency", "annual");
+    assertFalse(IncrementalTracker.hasCanonicalPeriod(combo));
+    assertFalse(IncrementalTracker.hasCanonicalPeriod(null));
+    assertFalse(IncrementalTracker.hasCanonicalPeriod(Collections.<String, String>emptyMap()));
+  }
+
+  @Test void testHasCanonicalPeriodFalseForEmptyPeriodValue() {
+    assertFalse(IncrementalTracker.hasCanonicalPeriod(Collections.singletonMap("year", "")));
+  }
+
+  @Test void testNoopPeriodMarkersAreSafeNoOps() {
+    Map<String, String> combo = Collections.singletonMap("year", "2099");
+    assertFalse(IncrementalTracker.NOOP.isPeriodComplete("p", combo));
+    IncrementalTracker.NOOP.markPeriodComplete("p", combo); // must not throw
+    IncrementalTracker.NOOP.invalidatePeriod("p", combo);   // must not throw
+    // Non-persistent tracker still cannot prove completion after a mark.
+    assertFalse(IncrementalTracker.NOOP.isPeriodComplete("p", combo));
+  }
+
   // ===== Default methods =====
 
   @Test void testDefaultMarkProcessedWithRowCount() {
