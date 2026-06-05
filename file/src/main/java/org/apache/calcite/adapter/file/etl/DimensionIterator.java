@@ -28,6 +28,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -188,6 +189,52 @@ public class DimensionIterator {
             // non-numeric year value; skip companion injection
           }
         }
+      }
+    }
+
+    // For every monthlyYTD YEAR_RANGE dimension, inject a per-year `month` companion so a
+    // monthly-cadence feed fetches one year-end file per completed year (month=12) and a
+    // year-to-date window for the in-progress year (month = last completed month). This
+    // replaces the global GOVDATA_CURRENT_MONTH that truncated every historical year to the
+    // current month. `month` is a derived companion (like effective_year), not a cartesian axis.
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      DimensionConfig config = entry.getValue();
+      if (config.getType() != DimensionType.YEAR_RANGE || !config.isMonthlyYtd()) {
+        continue;
+      }
+      // Calendar.MONTH is 0-based, so its value is exactly the number of the last fully
+      // completed month: June (MONTH=5) -> 5 (May is the last closed month); January
+      // (MONTH=0) -> 0, meaning no month has completed yet for the current year.
+      int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+      int lastCompletedMonth = Calendar.getInstance().get(Calendar.MONTH);
+      int dropped = 0;
+      Iterator<Map<String, String>> it = combinations.iterator();
+      while (it.hasNext()) {
+        Map<String, String> combo = it.next();
+        String yearVal = combo.get(entry.getKey());
+        if (yearVal == null) {
+          continue;
+        }
+        int year;
+        try {
+          year = Integer.parseInt(yearVal);
+        } catch (NumberFormatException e) {
+          continue;
+        }
+        if (year < currentYear) {
+          combo.put("month", "12");
+        } else if (lastCompletedMonth >= 1) {
+          combo.put("month", lastCompletedMonth < 10
+              ? "0" + lastCompletedMonth : String.valueOf(lastCompletedMonth));
+        } else {
+          // Current year with no completed month yet (January) — nothing to fetch for it.
+          it.remove();
+          dropped++;
+        }
+      }
+      if (dropped > 0) {
+        LOGGER.info("monthlyYTD '{}': dropped {} current-year combination(s) "
+            + "with no completed month yet", entry.getKey(), dropped);
       }
     }
 

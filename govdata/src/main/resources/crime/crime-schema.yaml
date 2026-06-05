@@ -189,11 +189,11 @@ dimension_values:
   arrest_offenses: &arrest_offenses
     - 'all'
 
-  # Year range for FBI CDE data
-  # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
+  # Year range for FBI CDE data. Start floor 2010; the factory-set GOVDATA_START_YEAR
+  # system property overrides it for all schemas.
   crime_year_range: &crime_year_range
     type: yearRange
-    start: "${CRIME_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
@@ -323,8 +323,9 @@ partitionedTables:
     dimensions:
       type:
         - offense
-      year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      year:
+        <<: *crime_year_range
+        monthlyYTD: true
       state_abbr: *all_state_abbrs
       offense: *ucr_core_offenses
 
@@ -486,7 +487,7 @@ partitionedTables:
       type:
         - hate_crime
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -606,7 +607,7 @@ partitionedTables:
       type:
         - agency_offense
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
       offense: *ucr_core_offenses
       ori:
@@ -698,7 +699,7 @@ partitionedTables:
       type:
         - arrest
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
       offense: *arrest_offenses
 
@@ -767,7 +768,7 @@ partitionedTables:
       type:
         - shr
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -896,7 +897,6 @@ partitionedTables:
     dimensions:
       type:
         - trends
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     columns:
       - name: offense_name
@@ -962,7 +962,7 @@ partitionedTables:
       type:
         - supplemental
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -1143,7 +1143,7 @@ partitionedTables:
         - ncvs
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1266,7 +1266,7 @@ partitionedTables:
         - ncvs_pop
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1368,7 +1368,7 @@ partitionedTables:
         - ncvs_hh
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1466,7 +1466,7 @@ partitionedTables:
         - ncvs_hh_pop
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
