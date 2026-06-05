@@ -808,6 +808,108 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/
       WHERE seedlings_per_acre IS NOT NULL AND seedlings_per_acre < 0);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_down_woody_debris
+-- Source: per-state {ST}_COND_DWM_CALC.csv
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_down_woody_debris', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_down_woody_debris', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'lands', 'fia_down_woody_debris', 'T2_row_count',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END,
+  n, 500, 'Expected 500+ DWM aggregate rows (state x year x category)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_down_woody_debris', allow_moved_paths := true));
+
+-- T6: state coverage
+INSERT INTO dq_results
+SELECT 'lands', 'fia_down_woody_debris', 'T6_state_coverage',
+  CASE WHEN n >= 40 THEN 'pass' ELSE 'fail' END,
+  n, 40, 'Distinct state_fips values'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_down_woody_debris', allow_moved_paths := true));
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'lands', 'fia_down_woody_debris', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_fips, inventory_year, or debris_category rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_down_woody_debris', allow_moved_paths := true)
+      WHERE state_fips IS NULL OR inventory_year IS NULL OR debris_category IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_invasives
+-- Source: per-state {ST}_INVASIVE_SUBPLOT_SPP.csv
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_invasives', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_invasives', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'lands', 'fia_invasives', 'T2_row_count',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END,
+  n, 500, 'Expected 500+ invasive aggregate rows (state x year x species)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_invasives', allow_moved_paths := true));
+
+-- T6: state coverage (not all states report invasives)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_invasives', 'T6_state_coverage',
+  CASE WHEN n >= 30 THEN 'pass' ELSE 'fail' END,
+  n, 30, 'Distinct state_fips values (some states do not report invasives)'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_invasives', allow_moved_paths := true));
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'lands', 'fia_invasives', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_fips, inventory_year, or species_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_invasives', allow_moved_paths := true)
+      WHERE state_fips IS NULL OR inventory_year IS NULL OR species_code IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fia_pop_evaluations
+-- Source: per-state {ST}_POP_EVAL.csv + {ST}_POP_EVAL_TYP.csv
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'fia_pop_evaluations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_pop_evaluations', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'lands', 'fia_pop_evaluations', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected 100+ pop_eval (eval x type) rows across states'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_pop_evaluations', allow_moved_paths := true));
+
+-- T6: state coverage
+INSERT INTO dq_results
+SELECT 'lands', 'fia_pop_evaluations', 'T6_state_coverage',
+  CASE WHEN n >= 40 THEN 'pass' ELSE 'fail' END,
+  n, 40, 'Distinct state_fips values'
+FROM (SELECT COUNT(DISTINCT state_fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_pop_evaluations', allow_moved_paths := true));
+
+-- T6: pk_nulls (eval_cn is PK)
+INSERT INTO dq_results
+SELECT 'lands', 'fia_pop_evaluations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_fips or eval_cn rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fia_pop_evaluations', allow_moved_paths := true)
+      WHERE state_fips IS NULL OR eval_cn IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
