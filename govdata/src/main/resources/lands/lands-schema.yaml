@@ -166,7 +166,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: national_forests
         catalogType: hadoop
-        runCompaction: false
+        runCompaction: true
+        compactionMinFiles: 1
+        compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
@@ -684,6 +686,212 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # FIA DOWN WOODY DEBRIS — per-state biomass tons/acre of CWD/FWD/duff+litter
+  # ---------------------------------------------------------------------------
+  - name: fia_down_woody_debris
+    pattern: "type=fia_down_woody_debris/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA down-woody-material biomass aggregated by state, inventory year,
+      and debris category (coarse_woody, fine_woody, duff_litter). Derived from
+      per-state {ST}_COND_DWM_CALC.csv. tons_per_acre is the condition-area
+      weighted mean of the FIA per-condition adjusted dry-biomass tonnage for
+      the category.
+
+    dimensions:
+      type:
+        - fia_down_woody_debris
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - name: debris_category
+        type: string
+        nullable: false
+        comment: One of coarse_woody, fine_woody, duff_litter
+      - name: tons_per_acre
+        type: double
+        nullable: true
+        comment: Condition-area weighted mean of category dry-biomass tons/acre
+      - name: record_count
+        type: long
+        nullable: true
+        comment: Number of COND_DWM_CALC rows contributing to this aggregate
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaDownWoodyDebrisTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_down_woody_debris/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_down_woody_debris
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FIA INVASIVES — invasive plant species cover by state-year-species
+  # ---------------------------------------------------------------------------
+  - name: fia_invasives
+    pattern: "type=fia_invasives/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA invasive plant species observations aggregated by state, inventory
+      year, and species code, derived from per-state {ST}_INVASIVE_SUBPLOT_SPP.csv.
+      cover_pct_avg is the mean COVER_PCT across reporting subplots. Not every
+      state samples invasives every cycle.
+
+    dimensions:
+      type:
+        - fia_invasives
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: inventory_year
+        type: integer
+        nullable: false
+        comment: FIA inventory year (INVYR)
+      - name: species_code
+        type: string
+        nullable: false
+        comment: FIA invasive species code (VEG_SPCD — USDA PLANTS symbol, alphanumeric)
+      - name: cover_pct_avg
+        type: double
+        nullable: true
+        comment: Average COVER_PCT across reporting subplots
+      - name: subplot_count
+        type: long
+        nullable: true
+        comment: Number of subplots reporting this species
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaInvasivesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_invasives/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_invasives
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FIA POP EVALUATIONS — published evaluations with types (EXPVOL, EXPCURR, ...)
+  # ---------------------------------------------------------------------------
+  - name: fia_pop_evaluations
+    pattern: "type=fia_pop_evaluations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USDA FIA population evaluations — the statistically-valid samples used to
+      publish state estimates. Joins {ST}_POP_EVAL.csv with {ST}_POP_EVAL_TYP.csv
+      on EVAL_CN to emit one row per (evaluation, evaluation type) pair. eval_type
+      values include EXPVOL (volume), EXPCURR (current area), EXPGROW, EXPMORT,
+      EXPREMV, etc.
+
+    dimensions:
+      type:
+        - fia_pop_evaluations
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: eval_cn
+        type: string
+        nullable: false
+        comment: POP_EVAL.CN — PK for the evaluation record
+      - name: eval_grp_cn
+        type: string
+        nullable: true
+        comment: POP_EVAL_GRP foreign key
+      - name: eval_descr
+        type: string
+        nullable: true
+        comment: Human-readable description of the evaluation
+      - name: start_invyr
+        type: integer
+        nullable: true
+        comment: First inventory year covered by the evaluation
+      - name: end_invyr
+        type: integer
+        nullable: true
+        comment: Last inventory year covered by the evaluation
+      - name: eval_type
+        type: string
+        nullable: true
+        comment: Evaluation type from POP_EVAL_TYP.EVAL_TYP (EXPVOL, EXPCURR, ...)
+
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaPopEvaluationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_evaluations/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_evaluations
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
   # NPS UNITS — National Park Service unit boundaries (static reference)
   # ---------------------------------------------------------------------------
   - name: nps_units
@@ -751,7 +959,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: nps_units
         catalogType: hadoop
-        runCompaction: false
+        runCompaction: true
+        compactionMinFiles: 1
+        compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
@@ -887,7 +1097,9 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: blm_field_offices
         catalogType: hadoop
-        runCompaction: false
+        runCompaction: true
+        compactionMinFiles: 1
+        compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------

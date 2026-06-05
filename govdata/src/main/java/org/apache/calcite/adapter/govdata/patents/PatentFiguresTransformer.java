@@ -27,26 +27,24 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Faithful recreation of PatentsView g_inventor_disambiguated.tsv as patent_inventors rows —
- * one row per patent inventor, keyed by patent_id, no joins and no year. location_id is kept
- * as the foreign key into patent_locations; join there for geography and to patent_grants for
- * a grant year. Loaded once as a snapshot.
+ * Faithful recreation of PatentsView g_figures.tsv as patent_figures rows — one row per patent
+ * figure/sheet count record, keyed by patent_id, no joins and no year. Loaded once as a
+ * snapshot; join to patent_grants on patent_id for a grant year.
  */
-public class PatentInventorsTransformer extends AbstractPatentsTransformer {
+public class PatentFiguresTransformer extends AbstractPatentsTransformer {
 
   private static final Logger LOGGER =
-      LoggerFactory.getLogger(PatentInventorsTransformer.class);
+      LoggerFactory.getLogger(PatentFiguresTransformer.class);
 
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     final String q = quarterToken(context);
-    final String inventorFile = downloadAndCacheTsv(
-        ODP_PVGPATDIS_BASE + "g_inventor_disambiguated.tsv.zip",
-        cacheFile("g_inventor_disambiguated_" + q + ".tsv"));
+    final String figuresFile = downloadAndCacheTsv(
+        ODP_PVGPATDIS_BASE + "g_figures.tsv.zip", cacheFile("g_figures_" + q + ".tsv"));
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(storageProvider().openInputStream(inventorFile),
+        new InputStreamReader(storageProvider().openInputStream(figuresFile),
             StandardCharsets.UTF_8));
     String headerLine = CsvRecordReader.readRecord(reader);
     if (headerLine == null) {
@@ -73,27 +71,19 @@ public class PatentInventorsTransformer extends AbstractPatentsTransformer {
             if (patentId == null || patentId.isEmpty()) {
               continue;
             }
-
             Map<String, Object> row = new HashMap<>();
             row.put("patent_id", strVal(patentId));
-            row.put("inventor_id", strVal(getField(parts, hdr, "inventor_id")));
-            row.put("inventor_sequence",
-                intVal(getField(parts, hdr, "inventor_sequence")));
-            row.put("name_first",
-                strVal(getField(parts, hdr, "disambig_inventor_name_first")));
-            row.put("name_last",
-                strVal(getField(parts, hdr, "disambig_inventor_name_last")));
-            row.put("gender_code", strVal(getField(parts, hdr, "gender_code")));
-            row.put("location_id", strVal(getField(parts, hdr, "location_id")));
+            row.put("num_figures", intVal(getField(parts, hdr, "num_figures")));
+            row.put("num_sheets", intVal(getField(parts, hdr, "num_sheets")));
             count[0]++;
             pending = row;
             return;
           }
           reader.close();
-          LOGGER.info("PatentInventors: {} records (snapshot)", count[0]);
+          LOGGER.info("PatentFigures: {} records (snapshot)", count[0]);
         } catch (IOException e) {
           try { reader.close(); } catch (IOException closeEx) { LOGGER.debug("close failed", closeEx); }
-          throw new UncheckedIOException("PatentInventorsTransformer read failed", e);
+          throw new UncheckedIOException("PatentFiguresTransformer read failed", e);
         }
       }
 

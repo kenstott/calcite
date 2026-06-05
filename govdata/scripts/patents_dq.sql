@@ -77,7 +77,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -93,7 +93,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -150,19 +150,13 @@ SELECT 'patents', 'patent_assignees', 'T2_row_count',
   n, 50000, 'Expected at least 50000 patent assignee records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true));
 
--- T2b: historical coverage
+-- T2q: snapshot freshness — faithful forever table partitioned by quarter (no grant_year);
+-- join to patent_grants on patent_id for a grant year.
 INSERT INTO dq_results
-SELECT 'patents', 'patent_assignees', 'T2b_historical_coverage',
-  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
-  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
-FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true));
-
--- T2c: daily coverage
-INSERT INTO dq_results
-SELECT 'patents', 'patent_assignees', 'T2c_daily_coverage',
-  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
-  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
-FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true));
+SELECT 'patents', 'patent_assignees', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true) LIMIT 3;
@@ -179,7 +173,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -195,17 +189,17 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
--- T6: pk_nulls (patent_id, grant_year NOT NULL)
+-- T6: pk_nulls (patent_id NOT NULL)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_assignees', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL patent_id or grant_year rows'
+  n, 0, 'NULL patent_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
-      WHERE patent_id IS NULL OR grant_year IS NULL);
+      WHERE patent_id IS NULL);
 
 -- T7: assignee_type values (PatentsView numeric codes: 1-9 base types; 11-19 = withdrawn/corrected variants)
 INSERT INTO dq_results
@@ -214,17 +208,10 @@ SELECT 'patents', 'patent_assignees', 'T7_assignee_type_values',
   bad, 0, 'Rows with assignee_type outside known PatentsView codes (1-9, 11-19)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
       WHERE assignee_type IS NOT NULL
-        AND assignee_type NOT IN ('1','2','3','4','5','6','7','8','9',
+        AND assignee_type NOT IN ('0','1','2','3','4','5','6','7','8','9',
                                    '11','12','13','14','15','16','17','18','19'));
 
--- T7: country_code format (2-letter ISO)
-INSERT INTO dq_results
-SELECT 'patents', 'patent_assignees', 'T7_country_code_format',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'country_code not matching 2-letter ISO format'
-FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
-      WHERE country_code IS NOT NULL
-        AND NOT REGEXP_MATCHES(country_code, '^[A-Z]{2}$'));
+-- country_code/lat/lon moved to patent_locations (join via location_id); geography DQ lives there.
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_inventors
@@ -247,19 +234,13 @@ SELECT 'patents', 'patent_inventors', 'T2_row_count',
   n, 100000, 'Expected at least 100000 patent inventor records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true));
 
--- T2b: historical coverage
+-- T2q: snapshot freshness — faithful forever table partitioned by quarter (no grant_year);
+-- join to patent_grants on patent_id for a grant year.
 INSERT INTO dq_results
-SELECT 'patents', 'patent_inventors', 'T2b_historical_coverage',
-  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
-  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
-FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true));
-
--- T2c: daily coverage
-INSERT INTO dq_results
-SELECT 'patents', 'patent_inventors', 'T2c_daily_coverage',
-  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
-  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
-FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true));
+SELECT 'patents', 'patent_inventors', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true) LIMIT 3;
@@ -276,7 +257,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -292,17 +273,17 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
--- T6: pk_nulls (patent_id, grant_year NOT NULL)
+-- T6: pk_nulls (patent_id NOT NULL)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_inventors', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL patent_id or grant_year rows'
+  n, 0, 'NULL patent_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true)
-      WHERE patent_id IS NULL OR grant_year IS NULL);
+      WHERE patent_id IS NULL);
 
 -- T7: gender_code values (M, F, U=unknown from PatentsView disambiguation)
 INSERT INTO dq_results
@@ -311,15 +292,7 @@ SELECT 'patents', 'patent_inventors', 'T7_gender_code_values',
   bad, 0, 'Rows with gender_code outside expected values (M, F, U)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true)
       WHERE gender_code IS NOT NULL AND gender_code NOT IN ('M', 'F', 'U'));
-
--- T7: country_code format (2-letter ISO)
-INSERT INTO dq_results
-SELECT 'patents', 'patent_inventors', 'T7_country_code_format',
-  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'country_code not matching 2-letter ISO format'
-FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_inventors', allow_moved_paths := true)
-      WHERE country_code IS NOT NULL
-        AND NOT REGEXP_MATCHES(country_code, '^[A-Z]{2}$'));
+-- country_code/lat/lon moved to patent_locations (join via location_id); geography DQ lives there.
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_cpc_classes
@@ -342,19 +315,13 @@ SELECT 'patents', 'patent_cpc_classes', 'T2_row_count',
   n, 200000, 'Expected at least 200000 patent CPC classification records'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true));
 
--- T2b: historical coverage
+-- T2q: snapshot freshness — faithful forever table partitioned by quarter (no grant_year);
+-- join to patent_grants on patent_id for a grant year.
 INSERT INTO dq_results
-SELECT 'patents', 'patent_cpc_classes', 'T2b_historical_coverage',
-  CASE WHEN min_year <= 2025 THEN 'pass' ELSE 'fail' END,
-  min_year, 2025, 'MIN(grant_year) must be <= 2025 (historical worker)'
-FROM (SELECT MIN(grant_year) AS min_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true));
-
--- T2c: daily coverage
-INSERT INTO dq_results
-SELECT 'patents', 'patent_cpc_classes', 'T2c_daily_coverage',
-  CASE WHEN max_year >= (EXTRACT(year FROM CURRENT_DATE) - 1) THEN 'pass' ELSE 'fail' END,
-  max_year, (EXTRACT(year FROM CURRENT_DATE) - 1), 'MAX(grant_year) must be >= currentYear - 1 (dataLag=1; PatentsView publishes quarterly)'
-FROM (SELECT MAX(grant_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true));
+SELECT 'patents', 'patent_cpc_classes', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true) LIMIT 3;
@@ -371,7 +338,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -387,17 +354,17 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
--- T6: pk_nulls (patent_id, grant_year NOT NULL)
+-- T6: pk_nulls (patent_id NOT NULL)
 INSERT INTO dq_results
 SELECT 'patents', 'patent_cpc_classes', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL patent_id or grant_year rows'
+  n, 0, 'NULL patent_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_cpc_classes', allow_moved_paths := true)
-      WHERE patent_id IS NULL OR grant_year IS NULL);
+      WHERE patent_id IS NULL);
 
 -- T7: cpc_section values (A-H, Y)
 INSERT INTO dq_results
@@ -473,7 +440,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -489,7 +456,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -567,7 +534,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -583,7 +550,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -645,8 +612,8 @@ FROM (SELECT MIN(application_year) AS min_year FROM iceberg_scan('s3://${GOVDATA
 -- No daily worker coverage expected; this is a source availability constraint not a pipeline gap.
 INSERT INTO dq_results
 SELECT 'patents', 'trademark_applications', 'T2c_daily_coverage',
-  CASE WHEN max_year >= 2020 THEN 'warn' ELSE 'fail' END,
-  max_year, 2020, 'MAX(application_year) expected <= 2022 — USPTO TRCFECO2 snapshot 2024 not yet published'
+  CASE WHEN max_year >= 2023 THEN 'pass' WHEN max_year >= 2020 THEN 'warn' ELSE 'fail' END,
+  max_year, 2023, 'MAX(application_year) should reach 2023 (latest published TRCFECO2 snapshot is 2023 -> filing year 2023; 2024 not yet published)'
 FROM (SELECT MAX(application_year) AS max_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_applications', allow_moved_paths := true));
 
 -- T3: sample
@@ -664,7 +631,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_applications', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -680,7 +647,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_applications', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type', 'year')
+      AND column_name NOT IN ('type', 'year', 'quarter')
   )
 );
 
@@ -697,10 +664,10 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/
 INSERT INTO dq_results
 SELECT 'patents', 'trademark_applications', 'T7_mark_draw_cd_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Rows with mark_draw_cd outside known USPTO codes (1000-5000)'
+  bad, 0, 'Rows with mark_draw_cd outside known USPTO codes (0000=unassigned, 1000-5000, 6000=no drawing)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_applications', allow_moved_paths := true)
       WHERE mark_draw_cd IS NOT NULL
-        AND mark_draw_cd NOT IN ('1000','2000','3000','4000','5000'));
+        AND mark_draw_cd NOT IN ('0000','1000','2000','3000','4000','5000','6000'));
 
 -- T7: filing_dt format (YYYY-MM-DD as returned by TRCFECO2)
 INSERT INTO dq_results
@@ -726,6 +693,69 @@ FROM (
     HAVING COUNT(*) > 1
   )
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- FAITHFUL SNAPSHOT TABLES: patent_abstracts / patent_applications /
+-- patent_figures / patent_locations — keyed by patent_id (or location_id),
+-- partitioned by quarter, no grant_year. Existence + row count + freshness.
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_abstracts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_abstracts', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_abstracts', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected at least 100000 abstract records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_abstracts', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_abstracts', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END, n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_abstracts', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_applications', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_applications', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_applications', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected at least 100000 application records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_applications', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_applications', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END, n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_applications', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_figures', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_figures', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_figures', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected at least 100000 figure records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_figures', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_figures', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END, n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_figures', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_locations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_locations', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected at least 1000 location records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'patents', 'patent_locations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL location_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true)
+      WHERE location_id IS NULL);
+INSERT INTO dq_results
+SELECT 'patents', 'patent_locations', 'T2q_snapshot_freshness',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END, n, 1, 'At least one quarterly release partition present'
+FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

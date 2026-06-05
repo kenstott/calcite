@@ -258,112 +258,34 @@ public class EtlPipeline {
       String configHash = IncrementalTracker.computeConfigHash(config.getDimensions());
 
       IncrementalTracker.CachedCompletion cached = incrementalTracker.getCachedCompletion(pipelineName);
-      if (cached != null && configHash.equals(cached.configHash)) {
-        // Config hash matches - verify data still exists
-        if (verifyDataExists(pipelineName, config)) {
-          long elapsed = System.currentTimeMillis() - startTime;
-
-          // Check empty result TTL - only retry if TTL has expired
-          // TODO: Consider adding a default emptyResultTtlMillis (e.g., 24 hours) when not configured
-          // to ensure empty results are always retried eventually, rather than requiring explicit config
-          if (cached.rowCount == 0 && materializeConfig != null && materializeConfig.getOptions() != null) {
-            long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
-            // Use TTL-aware check: retry only if TTL has expired
-            if (cached.isEmptyResultTtlExpired(emptyResultTtlMillis)) {
-              LOGGER.info("Pipeline '{}' complete but has 0 rows and TTL expired - invalidating to retry (TTL={}ms, completedAt={})",
-                  pipelineName, emptyResultTtlMillis, cached.completedAt);
-              incrementalTracker.invalidateTableCompletion(pipelineName);
-              // Fall through to normal dimension expansion
-            } else {
-              LOGGER.info("Pipeline '{}' complete (fast-path, no dimension expansion) - "
-                  + "skipping ({}ms, 0 rows, TTL not expired)", pipelineName, elapsed);
-              String tableLocation = baseDirectory + "/" + pipelineName;
-              return EtlResult.builder()
-                  .pipelineName(pipelineName)
-                  .skippedEntirePipeline(true)
-                  .elapsedMs(elapsed)
-                  .tableLocation(tableLocation)
-                  .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
-                  .totalRows(0)
-                  .build();
-            }
-          } else {
-            LOGGER.info("Pipeline '{}' complete (fast-path, no dimension expansion) - "
-                + "skipping ({}ms, {} rows)", pipelineName, elapsed, cached.rowCount);
-            String tableLocation = baseDirectory + "/" + pipelineName;
-            return EtlResult.builder()
-                .pipelineName(pipelineName)
-                .skippedEntirePipeline(true)
-                .elapsedMs(elapsed)
-                .tableLocation(tableLocation)
-                .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
-                .totalRows(cached.rowCount)
-                .build();
-          }
-        } else {
-          // Data doesn't exist - invalidate and fall through
+      if (cached != null) {
+        // A table-level completion marker exists. It is NOT a whole-table skip gate any more:
+        // the per-period markers (isPeriodComplete) + the per-batch filter are authoritative,
+        // because a table-level marker is period-blind — it says a table "completed" but not
+        // WHICH periods, so a daily run (current year) could otherwise shortcut-skip a later
+        // historical backfill. We only use the marker here for stale-data recovery.
+        if (!verifyDataExists(pipelineName, config)) {
+          // Data doesn't exist despite a completion marker — invalidate and reprocess all.
           LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating",
               pipelineName);
           incrementalTracker.invalidateTableCompletion(pipelineName);
           forceReprocessAll = true;
-        }
-      } else if (cached != null && cached.rowCount > 0) {
-        // Config hash mismatch but data exists with rows - skip ETL validation
-        // This handles cases where year range changed but data is already complete
-        if (verifyDataExists(pipelineName, config)) {
-          long elapsed = System.currentTimeMillis() - startTime;
-          String tableLocation = baseDirectory + "/" + pipelineName;
-          // Update cached config hash for future fast-path
-          incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
-              cached.signature, cached.rowCount);
-          LOGGER.info("Pipeline '{}' data exists (config hash updated) - skipping ETL validation ({}ms, {} rows)",
-              pipelineName, elapsed, cached.rowCount);
-          return EtlResult.builder()
-              .pipelineName(pipelineName)
-              .skippedEntirePipeline(true)
-              .elapsedMs(elapsed)
-              .tableLocation(tableLocation)
-              .materializeFormat(materializeConfig != null ? materializeConfig.getFormat() : null)
-              .totalRows(cached.rowCount)
-              .build();
         } else {
-          LOGGER.debug("Config hash mismatch (cached: {}, current: {}) and data not found - will expand dimensions",
-              cached.configHash, configHash);
+          // Data exists — fall through to dimension expansion and the period-aware filter,
+          // which processes only the periods whose latest marker isn't 'complete'.
+          LOGGER.debug("Pipeline '{}' has a table-level marker and data — expanding for per-period filter",
+              pipelineName);
         }
-      } else if (cached != null) {
-        // Config hash mismatch with 0 rows - need to validate
-        LOGGER.debug("Config hash mismatch (cached: {}, current: {}) with 0 rows - will expand dimensions",
-            cached.configHash, configHash);
-      } else if (cached == null && materializeConfig != null
+      } else if (materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
-        // No cached completion - check if Iceberg data exists (cold start recovery)
+        // (c) Cold-start recovery, NARROWED: no table-level marker but Iceberg data exists.
+        // Do NOT return early for the whole table (that was period-blind). Instead, fall
+        // through to dimension expansion; Phase 5 skip-if-materialized marks combos whose
+        // Iceberg partition already exists as processed, then markCompletedPeriods promotes
+        // any period whose full combo set is present to a per-period 'complete' marker.
         if (verifyDataExists(pipelineName, config)) {
-          String tableLocation = baseDirectory + "/" + pipelineName;
-          // Read row count with schema validation - if columns are missing,
-          // the table will be dropped and 0 returned, triggering full ETL
-          // Use config.getColumns() since materializeConfig.getColumns() isn't merged yet
-          List<ColumnConfig> expectedColumns = config.getColumns();
-          if ((expectedColumns == null || expectedColumns.isEmpty())
-              && materializeConfig.getColumns() != null && !materializeConfig.getColumns().isEmpty()) {
-            expectedColumns = materializeConfig.getColumns();
-          }
-          long rowCount = readRowCountFromIceberg(tableLocation, expectedColumns);
-          if (rowCount > 0) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            // Cache the completion for future fast-path
-            incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
-                "recovered", rowCount);
-            LOGGER.info("Pipeline '{}' recovered from Iceberg (cold start) - skipping ETL validation ({}ms, {} rows)",
-                pipelineName, elapsed, rowCount);
-            return EtlResult.builder()
-                .pipelineName(pipelineName)
-                .skippedEntirePipeline(true)
-                .elapsedMs(elapsed)
-                .tableLocation(tableLocation)
-                .materializeFormat(materializeConfig.getFormat())
-                .totalRows(rowCount)
-                .build();
-          }
+          LOGGER.info("Pipeline '{}': no marker but Iceberg data exists — expanding for "
+              + "per-period filter (cold-start, not whole-table skip)", pipelineName);
         }
       }
 
@@ -387,8 +309,17 @@ public class EtlPipeline {
       if (usePartitionedExpansion) {
         // Partitioned mode: we know the prefix count and partition count,
         // but don't expand CUSTOM dimension yet (that's done lazily per-partition).
-        // Use config hash as the signature to avoid materializing 3M+ combos.
-        dimensionSignature = "partitioned:" + configHash;
+        // Sign by the partition PERIOD values (the few context-key values — years,
+        // quarters, months, or days) rather than the full 3M+ expanded combinations.
+        // configHash alone is period-blind: a daily run (e.g. year=2026) and a historical
+        // run (year=2022..2025) of the same table share a configHash, so the daily
+        // completion would shortcut-skip the historical backfill. Including the sorted
+        // period values keeps the marker cheap yet period-keyed, so each run's completion
+        // reflects exactly the periods it covered.
+        List<String> periodValues = new ArrayList<>(partitionPlan.getContextValues());
+        Collections.sort(periodValues);
+        dimensionSignature = "partitioned:" + configHash + ":"
+            + partitionPlan.getContextKey() + "=" + String.join(",", periodValues);
         // totalBatches is unknown until we expand each partition — use prefix count as placeholder
         // for the fast-path check. Actual count is computed during processing.
         totalBatches = partitionPlan.getTotalPrefixCount();
@@ -409,69 +340,18 @@ public class EtlPipeline {
       }
       LOGGER.debug("Memory after_dim_expansion: {}", dimSnap);
 
-      // Fast-path: Check if entire pipeline was already completed with same dimensions
-      if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
-        // Verify data actually exists - completion marker may be stale if bucket was cleared
-        if (verifyDataExists(pipelineName, config)) {
-          long elapsed = System.currentTimeMillis() - startTime;
-          // Include materialization info for skipped tables so DuckDB knows it's Iceberg
-          if (materializeConfig != null && materializeConfig.isEnabled()) {
-            String tableLocation = baseDirectory + "/" + pipelineName;
-            // Read row count from Iceberg metadata for COUNT(*) optimization
-            long rowCount = 0;
-            if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
-              rowCount = readRowCountFromIceberg(tableLocation);
-            }
-            // Store config hash in DuckDB for fast-path skip on subsequent connections
-            incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
-                dimensionSignature, rowCount);
-            // If table has 0 rows and empty result TTL is configured, check if we should retry
-            if (rowCount == 0 && materializeConfig.getOptions() != null) {
-              long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
-              if (emptyResultTtlMillis > 0) {
-                LOGGER.info("Pipeline '{}' complete but has 0 rows - invalidating to retry after TTL ({}ms)",
-                    pipelineName, emptyResultTtlMillis);
-                incrementalTracker.invalidateTableCompletion(pipelineName);
-                // Continue to Phase 2 to check individual partition TTLs
-              } else {
-                LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms, 0 rows)",
-                    pipelineName, totalBatches, dimensionSignature, elapsed);
-                return EtlResult.builder()
-                    .pipelineName(pipelineName)
-                    .skippedEntirePipeline(true)
-                    .elapsedMs(elapsed)
-                    .tableLocation(tableLocation)
-                    .materializeFormat(materializeConfig.getFormat())
-                    .totalRows(rowCount)
-                    .build();
-              }
-            } else {
-              LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
-                  pipelineName, totalBatches, dimensionSignature, elapsed);
-              return EtlResult.builder()
-                  .pipelineName(pipelineName)
-                  .skippedEntirePipeline(true)
-                  .elapsedMs(elapsed)
-                  .tableLocation(tableLocation)
-                  .materializeFormat(materializeConfig.getFormat())
-                  .totalRows(rowCount)
-                  .build();
-            }
-          } else {
-            LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
-                pipelineName, totalBatches, dimensionSignature, elapsed);
-            return EtlResult.skipped(pipelineName, elapsed);
-          }
-        } else {
-          // Data doesn't exist despite completion marker - invalidate and reprocess
-          LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating stale marker",
-              pipelineName);
-          incrementalTracker.invalidateTableCompletion(pipelineName);
-          // Skip expensive invalidateAll() scan — instead force all partitions
-          // to be reprocessed. The old incremental markers will be superseded
-          // when new "complete" markers are written during reprocessing.
-          forceReprocessAll = true;
-        }
+      // Stale-data recovery only (NOT a whole-table skip): if a table-level signature marker
+      // exists but the data is gone (bucket cleared), force a full reprocess. The whole-table
+      // skip that used to live here was period-blind — it skipped historical backfills after a
+      // daily run completed the current year. Completion is now per-period: the Phase 2
+      // per-batch filter (seeded by isPeriodComplete) decides what to process, and the
+      // neededCount==0 path below marks the table complete and returns when nothing is left.
+      if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)
+          && !verifyDataExists(pipelineName, config)) {
+        LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating stale marker",
+            pipelineName);
+        incrementalTracker.invalidateTableCompletion(pipelineName);
+        forceReprocessAll = true;
       }
 
       // No completion marker found — if there is also no Iceberg data, skip the
@@ -557,6 +437,11 @@ public class EtlPipeline {
         }
         long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
+        // Authoritative per-period skip: drop any combo whose latest period marker is
+        // 'complete'. This makes a second identical run skip every already-done period
+        // even if a per-combo TTL would otherwise re-queue it.
+        removePeriodCompleteIndices(pipelineName, combinations, standardUnprocessedIndices);
+
         neededCount = standardUnprocessedIndices.size();
         skippedBatches = totalBatches - neededCount;
         LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
@@ -581,6 +466,12 @@ public class EtlPipeline {
         }
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
             dimensionSignature, cachedRowCount);
+        // Per-period markers: every period is fully processed here (neededCount==0).
+        // Standard mode only — partitioned mode keeps the full combo set out of memory
+        // and relies on the per-combo incremental tracker (unchanged behavior).
+        if (!usePartitionedExpansion) {
+          markCompletedPeriods(pipelineName, combinations);
+        }
         long elapsed = System.currentTimeMillis() - startTime;
         LOGGER.info("All {} combinations already processed - marking complete ({}ms, {} rows)",
             totalBatches, elapsed, cachedRowCount);
@@ -752,6 +643,10 @@ public class EtlPipeline {
             unprocessedIndices =
                 incrementalTracker.filterUnprocessedWithEmptyTtl(
                     pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
+            // NOTE: no per-period skip here. Partitioned mode does not write per-period
+            // markers (a period spans partitions, so completeness can't be decided from
+            // one partition's combos), and the per-combo incremental filter above is the
+            // authority — keeping partitioned behavior identical to before this change.
           }
 
           if (unprocessedIndices.isEmpty()) {
@@ -1262,6 +1157,14 @@ public class EtlPipeline {
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
         LOGGER.info("Marked pipeline '{}' as complete with configHash={}, signature={}, rows={}",
             pipelineName, configHash, dimensionSignature, totalRows);
+      }
+      // Per-period markers: mark each period whose full combo set is now processed,
+      // even if OTHER periods in this table failed — markCompletedPeriods self-guards
+      // via the per-combo tracker, so a period with any unprocessed combo is never marked.
+      // Standard mode only (partitioned keeps combos out of memory; per-combo tracker
+      // remains its authority). It flushes pending marks first so this run's writes are seen.
+      if (!usePartitionedExpansion) {
+        markCompletedPeriods(pipelineName, combinations);
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -1874,6 +1777,113 @@ public class EtlPipeline {
       all.add(i);
     }
     return all;
+  }
+
+  /**
+   * Writes a {@code complete} per-period marker for every period whose ENTIRE combo set
+   * (all non-period partition dimensions, e.g. every {@code geography}) is processed.
+   *
+   * <p>The marker is period-LEVEL, not per-batch: a period is marked complete only when
+   * the per-combo {@code incremental} tracker (the fine-grained authority, which includes
+   * non-period dimensions) shows zero unprocessed combos for that period. This prevents
+   * over-marking tables that fan a period across many non-period combos.
+   *
+   * <p>Only canonical-period combos participate; all-NA combos are left to the per-combo
+   * tracker (their NA key would collide across the whole pipeline).
+   *
+   * @param pipelineName  the pipeline name
+   * @param allCombinations every combination for the pipeline (the full period+partition set)
+   */
+  private void markCompletedPeriods(String pipelineName,
+      List<Map<String, String>> allCombinations) {
+    if (allCombinations == null || allCombinations.isEmpty()) {
+      return;
+    }
+    // Flush buffered per-combo marks so filterUnprocessed (an S3 read) observes THIS run's
+    // just-written marks; otherwise write-behind buffering hides them and no period is
+    // promoted to complete.
+    incrementalTracker.flushPending();
+    // Group combo indices by period key (canonical periods only).
+    Map<String, List<Map<String, String>>> byPeriod =
+        new LinkedHashMap<String, List<Map<String, String>>>();
+    for (Map<String, String> combo : allCombinations) {
+      if (!IncrementalTracker.hasCanonicalPeriod(combo)) {
+        continue;
+      }
+      String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, combo);
+      List<Map<String, String>> group = byPeriod.get(periodKey);
+      if (group == null) {
+        group = new ArrayList<Map<String, String>>();
+        byPeriod.put(periodKey, group);
+      }
+      group.add(combo);
+    }
+    int marked = 0;
+    for (Map.Entry<String, List<Map<String, String>>> e : byPeriod.entrySet()) {
+      List<Map<String, String>> group = e.getValue();
+      // A period is complete iff EVERY one of its combos is individually processed per the
+      // fine-grained per-combo tracker (which keys on the full combo incl. non-period dims
+      // such as geography). isProcessed reads the authoritative per-combo source_key state.
+      boolean allDone = true;
+      for (Map<String, String> combo : group) {
+        if (!incrementalTracker.isProcessed(pipelineName, pipelineName, combo)) {
+          allDone = false;
+          break;
+        }
+      }
+      if (allDone) {
+        incrementalTracker.markPeriodComplete(pipelineName, group.get(0));
+        marked++;
+      }
+    }
+    if (marked > 0) {
+      LOGGER.info("Per-period markers: marked {} of {} periods complete for '{}'",
+          marked, byPeriod.size(), pipelineName);
+    }
+  }
+
+  /**
+   * Removes from {@code unprocessedIndices} any combination whose period is already
+   * marked complete (authoritative per-period skip). Periods are deduplicated so each
+   * distinct period key is checked once even when many combos share it.
+   *
+   * @param pipelineName       the pipeline name
+   * @param combinations       all combinations (indexed by the set entries)
+   * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
+   */
+  private void removePeriodCompleteIndices(String pipelineName,
+      List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
+    if (unprocessedIndices.isEmpty()) {
+      return;
+    }
+    // Cache the per-period decision so duplicate periods (e.g. many combos in one year)
+    // trigger a single tracker check.
+    Map<String, Boolean> periodDecision = new HashMap<String, Boolean>();
+    Iterator<Integer> it = unprocessedIndices.iterator();
+    int removed = 0;
+    while (it.hasNext()) {
+      int idx = it.next();
+      Map<String, String> combo = combinations.get(idx);
+      // Non-canonical combos (all-NA period key) are not period-tracked — leave them
+      // to the per-combo incremental filter so we never over-skip them.
+      if (!IncrementalTracker.hasCanonicalPeriod(combo)) {
+        continue;
+      }
+      String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, combo);
+      Boolean complete = periodDecision.get(periodKey);
+      if (complete == null) {
+        complete = incrementalTracker.isPeriodComplete(pipelineName, combo);
+        periodDecision.put(periodKey, complete);
+      }
+      if (complete) {
+        it.remove();
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      LOGGER.info("Per-period skip: dropped {} of {} combos already marked complete for '{}'",
+          removed, removed + unprocessedIndices.size(), pipelineName);
+    }
   }
 
   private boolean verifyDataExists(String pipelineName, EtlPipelineConfig config) {

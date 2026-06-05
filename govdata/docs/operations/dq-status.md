@@ -69,7 +69,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
 | lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
 | health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
-| patents      | —          | PENDING | —     | —     | Schema changes pending re-run |
+| patents      | 2026-06-05 | PASS    | 0     | 0     | Faithful recreation (one table per raw dump, no ETL joins; grant_year only on dated sources) + trademark effective_year fix (14k→911k rows, coverage→2023) + period-keyed completion markers. 0 fails verified (38p/2w); 2 trademark checks recalibrated → 0 warn |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |

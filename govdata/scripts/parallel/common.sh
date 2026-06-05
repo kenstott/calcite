@@ -29,20 +29,31 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 load_env() {
   local env_prod="$GOVDATA_ROOT/.env.prod"
   if [ -f "$env_prod" ]; then
-    # Capture any caller-exported overrides before .env.prod stomps them
+    # Capture any caller-exported overrides before .env.prod stomps them.
+    # GOVDATA_PARQUET_DIR is preserved so a DQ orchestrator can point the standard
+    # daily/historical workers at the DQ bucket (s3://govdata-parquet-v1-dq) instead of prod.
     local _pre_start_year="${GOVDATA_START_YEAR+set}"
     local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
+    local _pre_parquet_dir="${GOVDATA_PARQUET_DIR+set}"
+    local _pre_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET+set}"
     local _saved_start_year="${GOVDATA_START_YEAR:-}"
     local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
+    local _saved_parquet_dir="${GOVDATA_PARQUET_DIR:-}"
+    local _saved_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET:-}"
 
     set -a
     # shellcheck disable=SC1090
     source "$env_prod"
     set +a
 
-    # Restore caller-provided overrides
+    # Restore caller-provided overrides. CALCITE_TRACKER_S3_BUCKET must be preserved alongside
+    # GOVDATA_PARQUET_DIR: a DQ orchestrator points both at the -dq buckets, and if the tracker
+    # bucket falls back to prod the tracker reads stale prod completions and skips every table
+    # ("table complete") while writing to a bucket that doesn't exist on the DQ endpoint.
     [ "${_pre_start_year}" = "set" ] && export GOVDATA_START_YEAR="$_saved_start_year"
     [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
+    [ "${_pre_parquet_dir}" = "set" ] && export GOVDATA_PARQUET_DIR="$_saved_parquet_dir"
+    [ "${_pre_tracker_bucket}" = "set" ] && export CALCITE_TRACKER_S3_BUCKET="$_saved_tracker_bucket"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
@@ -887,10 +898,15 @@ get_timeout_config() {
   local _id="${worker_id#worker-}"
   local _schema="${_id%-*}"
 
-  # DQ rebuild workers: worker-dq-<schema>-<mode> → use the inner schema
+  # Inner DQ workers: worker-dq-<schema>-<mode> → use the inner schema
   if [[ "$worker_id" == worker-dq-*-* ]]; then
     local _dq_rest="${worker_id#worker-dq-}"
     _schema="${_dq_rest%-*}"
+  # Outer DQ launchers: worker-<schema>-dq[-rebuild|-etl-resume] → strip the -dq* suffix.
+  # Without this, worker-patents-dq-rebuild parses to schema "patents-dq", finds no YAML,
+  # and falls back to the 60-min default — too short for a full rebuild.
+  elif [[ "$worker_id" == worker-*-dq || "$worker_id" == worker-*-dq-* ]]; then
+    _schema="${_id%%-dq*}"
   fi
 
   # Check schema YAML for workerTimeoutMinutes — takes precedence over hardcoded defaults

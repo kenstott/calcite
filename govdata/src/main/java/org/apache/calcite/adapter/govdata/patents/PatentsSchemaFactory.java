@@ -47,7 +47,10 @@ public class PatentsSchemaFactory implements GovDataSubSchemaFactory {
   private static final List<String> ALL_TABLES = Arrays.asList(
       "patent_grants", "patent_assignees", "patent_inventors",
       "patent_cpc_classes", "patent_claims", "patent_summaries",
-      "trademark_applications");
+      "trademark_applications",
+      // Faithful append-only snapshot tables (loaded once in the snapshot pass).
+      "patent_abstracts", "patent_applications", "patent_figures",
+      "patent_locations");
 
   @Override public String getSchemaResourceName() {
     return "/patents/patents-schema.yaml";

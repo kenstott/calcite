@@ -438,6 +438,131 @@ public interface IncrementalTracker {
    */
   void clearAllCompletions();
 
+  // ===== Per-Period Completion Tracking =====
+
+  /**
+   * The literal value used in a period-completion key for any of the four period
+   * slots (year, quarter, month, day) that a table does not partition on.
+   */
+  String PERIOD_NA = "NA";
+
+  /**
+   * Ordered period slots that make up a period-completion key. These are the only
+   * dimension names the marker recognizes — the period dimensions ARE the tracking
+   * mechanism. A schema with a non-canonical period name (e.g. census {@code vintage})
+   * opts into per-period tracking by declaring a canonical {@code year}/{@code quarter}/
+   * {@code month}/{@code day} dimension; the framework intentionally does no aliasing.
+   * Non-period labels such as {@code frequency} are correctly ignored.
+   */
+  String[] PERIOD_SLOTS = {"year", "quarter", "month", "day"};
+
+  /**
+   * Builds the uniform per-period completion key for a pipeline.
+   *
+   * <p>The key is {@code year_quarter_month_day_pipelineName}, with the literal
+   * {@link #PERIOD_NA} substituted for any of the four period slots the pipeline
+   * does not declare. This is the single owner of the key format; both the marker
+   * write and the completion check route through here so the format never drifts.
+   *
+   * <p>Examples: {@code 2025_NA_NA_NA_patents_patent_grants},
+   * {@code 2022_NA_NA_NA_patents_patent_grants}.
+   *
+   * <p>Extension seam (not implemented): the key is always the canonical periods; a future
+   * optional per-table {@code additionalCompletionKeys: [<dim>...]} operand could ADDITIVELY
+   * append extra dimension values (e.g. {@code [state]}/{@code [cik]}) so each
+   * (period + extra-keys) tuple becomes its own completion unit. Default stays periods-only.
+   *
+   * @param pipelineName The pipeline name (already schema-qualified)
+   * @param periodValues The dimension combination; only the year/quarter/month/day
+   *                     entries are read, all others are ignored
+   * @return The period-completion key
+   */
+  static String periodCompletionKey(String pipelineName, Map<String, String> periodValues) {
+    StringBuilder sb = new StringBuilder();
+    for (String slot : PERIOD_SLOTS) {
+      String val = periodValues != null ? periodValues.get(slot) : null;
+      if (val == null || val.isEmpty()) {
+        val = PERIOD_NA;
+      }
+      sb.append(val).append('_');
+    }
+    sb.append(pipelineName);
+    return sb.toString();
+  }
+
+  /**
+   * Returns true if the combination carries at least one canonical period slot
+   * ({@code year}/{@code quarter}/{@code month}/{@code day}).
+   *
+   * <p>When false the combo is NOT period-tracked: its key would be all-{@code NA},
+   * so every such combo for a pipeline would collide. Callers must NOT apply the
+   * per-period marker/skip in that case — they fall back to the existing per-combo
+   * {@code incremental} tracking, so non-canonical schemas are never made worse.
+   *
+   * @param periodValues The dimension combination
+   * @return true if any canonical period slot is present and non-empty
+   */
+  static boolean hasCanonicalPeriod(Map<String, String> periodValues) {
+    if (periodValues == null) {
+      return false;
+    }
+    for (String slot : PERIOD_SLOTS) {
+      String val = periodValues.get(slot);
+      if (val != null && !val.isEmpty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Flushes any buffered/pending tracker writes so subsequent reads observe them.
+   *
+   * <p>Write-behind implementations (e.g. the S3 tracker) buffer state rows in memory
+   * and flush them lazily. The per-period completion sweep reads back per-combo state to
+   * decide whether a period's full combo set is done, so it must flush first or it would
+   * not see this run's just-written marks. Default is a no-op for non-buffered trackers.
+   */
+  default void flushPending() {
+    // No-op for trackers that write through synchronously.
+  }
+
+  /**
+   * Checks whether the given period has been completed for a pipeline.
+   *
+   * <p>Completion is authoritative and period-keyed: the latest append-only marker
+   * for the 5-tuple {@code (year, quarter, month, day, pipelineName)} must be
+   * {@code complete}. A missing or {@code invalidate} latest marker means not done.
+   *
+   * @param pipelineName The pipeline name
+   * @param periodValues The dimension combination carrying the period slots
+   * @return true if the latest marker for this period is {@code complete}
+   */
+  default boolean isPeriodComplete(String pipelineName, Map<String, String> periodValues) {
+    // In-memory / non-persistent trackers cannot prove a period complete.
+    return false;
+  }
+
+  /**
+   * Appends a {@code complete} marker for the given period.
+   *
+   * @param pipelineName The pipeline name
+   * @param periodValues The dimension combination carrying the period slots
+   */
+  default void markPeriodComplete(String pipelineName, Map<String, String> periodValues) {
+    // No-op for non-persistent trackers.
+  }
+
+  /**
+   * Appends an {@code invalidate} marker for the given period (latest-wins).
+   *
+   * @param pipelineName The pipeline name
+   * @param periodValues The dimension combination carrying the period slots
+   */
+  default void invalidatePeriod(String pipelineName, Map<String, String> periodValues) {
+    // No-op for non-persistent trackers.
+  }
+
   // ===== Dimension Signature Computation =====
 
   /**

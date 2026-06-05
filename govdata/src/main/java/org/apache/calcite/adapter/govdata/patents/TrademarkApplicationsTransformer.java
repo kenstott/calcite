@@ -64,16 +64,17 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
   @Override
   public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
-    final String yearStr = getYear(context);
+    // Use the framework's effective_year (dimension year − dataLag) as the data year, exactly
+    // like the other patents tables (e.g. grants). The TRCFECO2 snapshot {Y} contains
+    // applications filed in year {Y}, so the snapshot to download IS the effective year — no
+    // extra hand-rolled offset (the old "+1" duplicated, and inverted, the dataLag concept).
+    final String yearStr = getEffectiveYear(context);
     if (yearStr == null || yearStr.isEmpty()) {
       LOGGER.warn("TrademarkApplications: missing year dimension");
       return Collections.emptyIterator();
     }
 
-    // The USPTO economics/{year}/ snapshot is published in {year} and contains
-    // applications filed in {year-1}. Offset the snapshot year by +1 to retrieve
-    // the target filing year's data.
-    final String snapshotYear = String.valueOf(Integer.parseInt(yearStr) + 1);
+    final String snapshotYear = yearStr;
     String apiKeyRaw = System.getenv(USPTO_API_KEY_ENV);
     if (apiKeyRaw == null || apiKeyRaw.isEmpty()) {
       apiKeyRaw = System.getProperty(USPTO_API_KEY_ENV);

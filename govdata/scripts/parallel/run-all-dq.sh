@@ -98,9 +98,12 @@ done
 
 # ── jar management ────────────────────────────────────────────────────────────
 JAR_DIR="$GOVDATA_ROOT/build/libs"
-JAR_PATH="$JAR_DIR/sih-govdata.jar"
-JAR_VERSION_FILE="$JAR_DIR/sih-govdata.jar.version"
-export GOVDATA_JAR="$JAR_PATH"
+# Honor a caller-set GOVDATA_JAR (e.g. an isolated, uniquely-named jar built by a parallel
+# schema-testing agent in its own worktree) so concurrent agents never collide on the shared
+# sih-govdata.jar. Default to the conventional unversioned jar only when GOVDATA_JAR is unset.
+export GOVDATA_JAR="${GOVDATA_JAR:-$JAR_DIR/sih-govdata.jar}"
+JAR_PATH="$GOVDATA_JAR"
+JAR_VERSION_FILE="${JAR_PATH}.version"
 
 _latest_release() {
   gh release list --repo kenstott/calcite --limit 20 --json tagName \

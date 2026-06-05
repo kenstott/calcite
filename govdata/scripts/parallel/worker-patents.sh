@@ -71,6 +71,11 @@ run_patents_model() {
         "secretAccessKey": "${AWS_SECRET_ACCESS_KEY:-}",
         "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}",
         "region": "${AWS_REGION:-us-east-1}"
+      },
+      "trackerBackend": "s3",
+      "trackerConfig": {
+        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
+        "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}"
       }
     }
   }]
@@ -87,23 +92,18 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
 case "$MODE" in
 
+  # Two table shapes, both driven by their own dimension — no special handling:
+  #   • Dated tables (grants, claims, summaries, trademarks) carry a YEAR dimension.
+  #     historical = older years; daily = current year.
+  #   • Faithful forever tables (abstracts, applications, figures, inventors, assignees,
+  #     locations, cpc) carry a QUARTER dimension (current release token). They have no
+  #     year, so they ride the daily pass: when the quarter rolls over, the token re-keys
+  #     the cache → the new dump is sourced and a new quarter partition is appended.
   historical)
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
-    # Full historical backfill — no release-window check.
-    # Core patent tables (large files — run with extended timeout via -t 480)
     run_patents_model "patents-historical-grants" \
       '"patent_grants"' "$START" "$END"
-
-    run_patents_model "patents-historical-assignees" \
-      '"patent_assignees"' "$START" "$END"
-
-    # Inventor file is ~8 GB uncompressed; runs last to avoid blocking other tables
-    run_patents_model "patents-historical-inventors" \
-      '"patent_inventors"' "$START" "$END"
-
-    run_patents_model "patents-historical-cpc" \
-      '"patent_cpc_classes"' "$START" "$END"
 
     run_patents_model "patents-historical-claims" \
       '"patent_claims"' "$START" "$END"
@@ -123,17 +123,9 @@ case "$MODE" in
 
     START=$INCREMENTAL_YEAR
 
+    # Current-year dated tables.
     run_patents_model "patents-daily-grants" \
       '"patent_grants"' "$START"
-
-    run_patents_model "patents-daily-assignees" \
-      '"patent_assignees"' "$START"
-
-    run_patents_model "patents-daily-inventors" \
-      '"patent_inventors"' "$START"
-
-    run_patents_model "patents-daily-cpc" \
-      '"patent_cpc_classes"' "$START"
 
     run_patents_model "patents-daily-claims" \
       '"patent_claims"' "$START"
@@ -143,6 +135,29 @@ case "$MODE" in
 
     run_patents_model "patents-daily-trademarks" \
       '"trademark_applications"' "$START"
+
+    # Current-quarter forever tables. startYear is unused by these transformers (no year
+    # dimension); the quarter dimension drives sourcing. Inventor file (~8 GB) runs last.
+    run_patents_model "patents-daily-locations" \
+      '"patent_locations"' "$START"
+
+    run_patents_model "patents-daily-abstracts" \
+      '"patent_abstracts"' "$START"
+
+    run_patents_model "patents-daily-applications" \
+      '"patent_applications"' "$START"
+
+    run_patents_model "patents-daily-figures" \
+      '"patent_figures"' "$START"
+
+    run_patents_model "patents-daily-assignees" \
+      '"patent_assignees"' "$START"
+
+    run_patents_model "patents-daily-cpc" \
+      '"patent_cpc_classes"' "$START"
+
+    run_patents_model "patents-daily-inventors" \
+      '"patent_inventors"' "$START"
     ;;
 
   *)
