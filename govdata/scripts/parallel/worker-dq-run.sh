@@ -388,57 +388,37 @@ PYEOF
   fi
 fi  # end iceberg/data teardown (only when --rebuild)
 
-  # Always (for both --rebuild and --etl-resume): redirect ETL writes to DQ bucket
+  # DQ ETL is just the STANDARD daily/historical workers, parameterized by DQ variables:
+  #   object storage          → AWS_ENDPOINT_OVERRIDE (from .env.dq)
+  #   bucket names            → GOVDATA_PARQUET_DIR + CALCITE_TRACKER_S3_BUCKET (DQ buckets)
+  #   truncated year range    → GOVDATA_START_YEAR (get_dq_start_year) .. current year
+  # No DQ-specific ETL path, no FORCE_FRESH — the exact prod code path runs, so DQ validates
+  # what prod produces. load_env preserves the caller-exported GOVDATA_PARQUET_DIR.
   export FORCE=true
-  export FORCE_FRESH=true
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
+  export GOVDATA_INCREMENTAL_START_YEAR="$(date +%Y)"
 
-  # 3. Delete existing DQ results and ETL batch tracker so the post-ETL run starts clean.
+  # On a full rebuild, clear DQ results + the ETL tracker so the standard workers re-ingest
+  # the (already torn-down) data fresh.
   if $REBUILD; then
-    log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
+    log_info "$WORKER_ID: --rebuild: purging dq-results + etl-tracker for schema=$SCHEMA"
     rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
-
-    log_info "$WORKER_ID: --rebuild: purging etl-tracker for schema=$SCHEMA"
     rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
   fi
 
-  # 4. Run historical ETL pass.
-  log_info "$WORKER_ID: running historical ETL for schema=$SCHEMA"
-  REBUILD_MODEL="$RUN_DIR/models/rebuild_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
-  mkdir -p "$(dirname "$REBUILD_MODEL")"
-  export GOVDATA_RUN_MODE="historical"
-  export GOVDATA_INCREMENTAL_START_YEAR="$(date +%Y)"
-  if [ -n "$REBUILD_START_YEAR" ]; then
-    export GOVDATA_START_YEAR="$REBUILD_START_YEAR"
-  else
-    export GOVDATA_START_YEAR="$(get_dq_start_year "$SCHEMA")"
-  fi
-  log_info "$WORKER_ID: --rebuild: year range ${GOVDATA_START_YEAR}–$((GOVDATA_INCREMENTAL_START_YEAR - 1)) for schema=$SCHEMA"
-  if ! generate_single_schema_model "$SCHEMA" "$REBUILD_MODEL" 2>/dev/null; then
-    log_info "$WORKER_ID: --rebuild: ERROR — no single-schema model generator for schema=$SCHEMA"
-    exit 1
-  fi
-  run_etl "$REBUILD_MODEL" "worker-${SCHEMA}-initial"
-  ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-initial"
-  log_info "$WORKER_ID: --rebuild: historical ETL complete"
+  # One descending sequence from today: daily (current year) first, then historical (older
+  # years, newest→oldest via the schema's year_range `descending: true`).
+  log_info "$WORKER_ID: DQ ETL — standard DAILY worker (current year) for schema=$SCHEMA"
+  GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
+  ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-daily"
 
-  # 5. Optionally run daily (current-year) ETL pass before DQ.
-  if $INCLUDE_DAILY; then
-    log_info "$WORKER_ID: --include-daily: running daily ETL pass for schema=$SCHEMA"
-    DAILY_MODEL="$RUN_DIR/models/daily_${SCHEMA}_$(date +%Y%m%d_%H%M%S).json"
-    export GOVDATA_RUN_MODE="daily"
-    unset GOVDATA_START_YEAR
-    if generate_single_schema_model "$SCHEMA" "$DAILY_MODEL" 2>/dev/null; then
-      run_etl "$DAILY_MODEL" "worker-${SCHEMA}-daily"
-      ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-daily"
-      log_info "$WORKER_ID: --include-daily: daily ETL complete"
-    else
-      log_info "$WORKER_ID: --include-daily: no daily model for schema=$SCHEMA — skipping"
-    fi
-  fi
+  _dq_start_year="${REBUILD_START_YEAR:-$(get_dq_start_year "$SCHEMA")}"
+  log_info "$WORKER_ID: DQ ETL — standard HISTORICAL worker (years ${_dq_start_year}–$((GOVDATA_INCREMENTAL_START_YEAR - 1)), desc) for schema=$SCHEMA"
+  GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR="$_dq_start_year" bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" historical --force
+  ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-historical"
 
-  log_info "$WORKER_ID: --rebuild: ETL complete — proceeding to DQ"
+  log_info "$WORKER_ID: DQ ETL complete (standard workers) — proceeding to DQ"
 fi
 
 # ── pre-flight anti-pattern checks (warn only — do not abort) ─────────────────
