@@ -18,8 +18,8 @@ CREATE TEMP TABLE dq_results (
   tbl       VARCHAR,
   test      VARCHAR,
   status    VARCHAR,
-  actual    DOUBLE,
-  expected  DOUBLE,
+  value     DOUBLE,
+  threshold DOUBLE,
   detail    VARCHAR
 );
 
