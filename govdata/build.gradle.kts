@@ -123,11 +123,11 @@ dependencies {
     implementation("ai.djl.huggingface:tokenizers:0.25.0")
 
     // DuckDB for JSON to Parquet conversion
-    implementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
 
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
     implementation("org.apache.iceberg:iceberg-core:1.4.0")
     implementation("org.apache.hadoop:hadoop-aws:3.3.6")
@@ -254,7 +254,7 @@ tasks.register("downloadDuckDbExtensions") {
     description = "Download DuckDB extensions for all platforms (linux_amd64, osx_amd64, osx_arm64, windows_amd64)"
 
     doLast {
-        val duckdbVersion = "1.4.3"
+        val duckdbVersion = "1.4.4"
         val extensionsDir = file("src/main/resources/duckdb/extensions")
         val platforms = listOf("linux_amd64", "osx_amd64", "osx_arm64", "windows_amd64")
         val extensions = listOf("spatial", "httpfs", "iceberg", "h3", "excel", "fts", "zipfs", "quackformers", "parquet")

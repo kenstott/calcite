@@ -78,8 +78,8 @@ dependencies {
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine
-    compileOnly("org.duckdb:duckdb_jdbc:1.4.3.0")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.3.0")
+    compileOnly("org.duckdb:duckdb_jdbc:1.4.4.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     // ClickHouse for optional execution engine
     compileOnly("com.clickhouse:clickhouse-jdbc:0.7.1:all")
     testImplementation("com.clickhouse:clickhouse-jdbc:0.7.1:all")
