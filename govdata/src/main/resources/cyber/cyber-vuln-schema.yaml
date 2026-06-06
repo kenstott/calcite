@@ -31,8 +31,11 @@ partitionedTables:
   # ==========================================================================
   - name: cwe_catalog
     releaseWindow:
-      dow: [0]              # Weekly refresh; Sunday run catches MITRE quarterly updates
+      dow: [0]              # Weekly attempt; freshness gates the actual fetch (cheap HEAD)
     pattern: "type=cwe_catalog.parquet"
+    dataset_type: snapshot          # full-catalog replace; the open snapshot always re-runs
+    freshness:
+      type: last_modified           # MITRE serves Last-Modified (no ETag); skip fetch if unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -101,10 +104,6 @@ partitionedTables:
     dimensions:
       type:
         - cwe_catalog
-      year:
-        - "${GOVDATA_CURRENT_YEAR}"
-      quarter:
-        - "${GOVDATA_CURRENT_QUARTER}"
 
     materialize:
       enabled: true
@@ -118,16 +117,23 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true   # snapshot: replace the type=cwe_catalog partition each change
 
   # ==========================================================================
   # VULNERABILITIES — NVD CVE 2.0 canonical records
   # ==========================================================================
   - name: vulnerabilities
-    pattern: "type=vulnerabilities.parquet"
+    pattern: "type=vulnerabilities/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly        # NVD rejects >120-day windows → quarter is the fetch unit
     partitions:
       style: hive
       columnDefinitions:
         - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+        - name: quarter
           type: VARCHAR
 
     comment: >
@@ -193,6 +199,9 @@ partitionedTables:
       type: http
       url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
       method: GET
+      parameters:
+        pubStartDate: "{period_start}T00:00:00.000"   # quarter bounds from backfill_period
+        pubEndDate: "{period_end}T23:59:59.999"
       headers:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
@@ -215,29 +224,44 @@ partitionedTables:
     dimensions:
       type:
         - vulnerabilities
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: current
+      quarter:
+        type: quarter
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type={type}/year={year}/quarter={quarter}/"
       partition:
-        columns: [type]
+        columns: [type, year, quarter]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true       # delta: replace only the re-fetched (type,year,quarter) partition
+        batchPartitionColumns: [type, year, quarter]
+        incrementalKeys: [type, year, quarter]
 
   # ==========================================================================
   # VULNERABILITY_CWES — NVD CVE→CWE junction, materialized at ingest
   # ==========================================================================
   - name: vulnerability_cwes
-    pattern: "type=vulnerability_cwes.parquet"
+    pattern: "type=vulnerability_cwes/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly        # mirrors vulnerabilities (same NVD windowed fetch)
     partitions:
       style: hive
       columnDefinitions:
         - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+        - name: quarter
           type: VARCHAR
 
     comment: >
@@ -259,6 +283,9 @@ partitionedTables:
       type: http
       url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
       method: GET
+      parameters:
+        pubStartDate: "{period_start}T00:00:00.000"
+        pubEndDate: "{period_end}T23:59:59.999"
       headers:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
@@ -281,25 +308,37 @@ partitionedTables:
     dimensions:
       type:
         - vulnerability_cwes
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: current
+      quarter:
+        type: quarter
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type={type}/year={year}/quarter={quarter}/"
       partition:
-        columns: [type]
+        columns: [type, year, quarter]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true       # delta: replace only the re-fetched (type,year,quarter) partition
+        batchPartitionColumns: [type, year, quarter]
+        incrementalKeys: [type, year, quarter]
 
   # ==========================================================================
   # CISA KEV CATALOG — Known Exploited Vulnerabilities
   # ==========================================================================
   - name: kev_catalog
     pattern: "type=kev_catalog.parquet"
+    dataset_type: snapshot          # full-catalog replace; cumulative KEV JSON
+    freshness:
+      type: etag                    # CISA KEV serves ETag + Last-Modified; skip fetch if unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -393,12 +432,16 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true   # snapshot: replace the type=kev_catalog partition each change
 
   # ==========================================================================
   # KEV_CWES — CISA KEV CVE→CWE junction, materialized at ingest
   # ==========================================================================
   - name: kev_cwes
     pattern: "type=kev_cwes.parquet"
+    dataset_type: snapshot          # mirrors kev_catalog (same KEV file; materialized junction)
+    freshness:
+      type: etag
     partitions:
       style: hive
       columnDefinitions:
@@ -451,6 +494,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true   # snapshot: replace the type=kev_cwes partition each change
 
   # ==========================================================================
   # OSV VULNERABILITIES — Open Source Vulnerabilities per-ecosystem records
@@ -458,16 +502,20 @@ partitionedTables:
   - name: osv_vulnerabilities
     releaseWindow:
       dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
-    pattern: "type=osv_vulnerabilities.parquet"
+    pattern: "type=osv_vulnerabilities/ecosystem=*/*.parquet"
+    dataset_type: snapshot          # per-ecosystem full replace
     partitions:
       style: hive
       columnDefinitions:
         - name: type
           type: VARCHAR
+        - name: ecosystem
+          type: VARCHAR
 
     comment: >
       OSV (Open Source Vulnerabilities) records. One row per OSV entry. Ecosystems
-      controlled by CYBER_OSV_ECOSYSTEMS env var (default: PyPI, npm, Go, Maven, etc.).
+      are a dimension (one per-ecosystem all.zip fetched per combination); the
+      transformer standardizes a single ecosystem read from the dimension context.
       Includes OSV-native entries without a CVE assignment. CVE-aliased entries are also
       cross-referenced in vuln_cross_refs.
 
@@ -547,19 +595,25 @@ partitionedTables:
     dimensions:
       type:
         - osv_vulnerabilities
+      ecosystem:
+        type: list
+        values: [PyPI, npm, Go, Maven, RubyGems, NuGet, Packagist, Hex, Pub, CRAN]
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type={type}/ecosystem={ecosystem}/"
       partition:
-        columns: [type]
+        columns: [type, ecosystem]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true       # snapshot: replace only the re-fetched ecosystem partition
+        batchPartitionColumns: [type, ecosystem]
+        incrementalKeys: [type, ecosystem]
 
   # ==========================================================================
   # VULN CROSS REFS — CVE to external identifier mappings
@@ -568,6 +622,7 @@ partitionedTables:
     releaseWindow:
       dow: [0]              # Weekly refresh; cross-reference data changes infrequently
     pattern: "type=vuln_cross_refs.parquet"
+    dataset_type: snapshot          # full GHSA rebuild each run (single-source; no period axis)
     partitions:
       style: hive
       columnDefinitions:
@@ -632,6 +687,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true   # snapshot: replace the type=vuln_cross_refs partition each run
 
   # ==========================================================================
   # ADVISORIES — CISA cybersecurity advisories
@@ -639,17 +695,22 @@ partitionedTables:
   - name: advisories
     releaseWindow:
       dow: [0]              # Weekly refresh; CISA/GitHub advisories aggregated weekly
-    pattern: "type=advisories.parquet"
+    pattern: "type=advisories/year=*/*.parquet"
+    dataset_type: delta
     partitions:
       style: hive
       columnDefinitions:
         - name: type
           type: VARCHAR
+        - name: year
+          type: INTEGER
 
     comment: >
-      CISA cybersecurity advisory metadata. Parsed from the CISA advisory listing
-      HTML page. Advisory detail pages are fetched for CVE IDs, severity, and
-      affected systems. PDF-only advisories fall back to PdfAdvisoryExtractor.
+      CISA cybersecurity advisory metadata. Sourced from CISA's official CSAF
+      GitHub repository (cisagov/CSAF, branch develop). The CsafAdvisoryDimensionResolver
+      reads the IT/white index.txt to enumerate per-year advisory paths, and the engine
+      fetches each CSAF 2.0 JSON file; CisaAdvisoryResponseTransformer emits one row per
+      advisory with severity, CVE IDs, and affected systems.
 
     columns:
       - name: advisory_id
@@ -680,42 +741,50 @@ partitionedTables:
         type: string
         nullable: true
         comment: Short description of affected products or systems
-      - name: url
-        type: string
-        nullable: true
-        comment: Canonical URL of the advisory
 
     source:
       type: http
-      url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+      url: "https://raw.githubusercontent.com/cisagov/CSAF/develop/csaf_files/IT/white/{advisory_path}"
       method: GET
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 1.0
+        requestsPerSecond: 2.0
         maxRetries: 3
       rawCache:
         enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.CisaAdvisoryResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.cyber.vuln.CsafAdvisoryDimensionResolver"
 
     dimensions:
       type:
         - advisories
+      year:
+        type: yearRange
+        start: "2017"               # CISA CSAF repo coverage begins 2017
+        end: current
+      advisory_path:
+        type: custom                # CsafAdvisoryDimensionResolver filters index.txt by year context
+        properties:
+          indexUrl: "https://raw.githubusercontent.com/cisagov/CSAF/develop/csaf_files/IT/white/index.txt"
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type={type}/year={year}/"
       partition:
-        columns: [type]
+        columns: [type, year]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
         runMaintenance: false
+        overwritePartitions: true       # delta: replace only the re-fetched year's advisory partition
+        batchPartitionColumns: [type, year]
+        incrementalKeys: [type, year]
 
 # ============================================================================
 # CONSTRAINTS

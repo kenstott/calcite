@@ -11,10 +11,7 @@
 package org.apache.calcite.adapter.govdata.cyber;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
-import org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevDownloader;
-import org.apache.calcite.adapter.govdata.cyber.vuln.CweDownloader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,65 +98,15 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
     String threatfoxKey = System.getenv("CYBER_THREATFOX_API_KEY");
     String otxKey = System.getenv("CYBER_OTX_API_KEY");
 
-    Boolean autoDownload = (Boolean) operand.get("autoDownload");
-    if (Boolean.TRUE.equals(autoDownload)) {
-      StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
-      if (sp != null) {
-        if ("cyber_threat".equals(dataSource)) {
-          configureThreatHooks(builder, operand, threatfoxKey, otxKey);
-        } else {
-          triggerVulnDownloads(sp, operand, nvdApiKey);
-          configureVulnHooks(builder, operand, nvdApiKey, githubToken);
-        }
-        return;
-      }
-      LOGGER.warn("autoDownload=true but _storageProvider not set — skipping downloads");
-    }
-
+    // All cyber tables are produced by the generic ETL pipeline (HTTP source +
+    // response transformer + Iceberg materialization, defined in the schema YAML).
+    // There is no bespoke pre-download step: cwe_catalog and kev_catalog flow through
+    // the same pipeline as the rest, so their dataset_type / freshness /
+    // overwritePartitions config is honored.
     if ("cyber_threat".equals(dataSource)) {
       configureThreatHooks(builder, operand, threatfoxKey, otxKey);
     } else {
       configureVulnHooks(builder, operand, nvdApiKey, githubToken);
-    }
-  }
-
-  @SuppressWarnings("UnusedVariable")
-  private void triggerVulnDownloads(StorageProvider sp, Map<String, Object> operand,
-      String nvdApiKey) {
-    String directory = (String) operand.get("directory");
-    if (directory == null || directory.isEmpty()) {
-      LOGGER.warn("autoDownload=true but no 'directory' operand — skipping downloads");
-      return;
-    }
-    String vulnDir = sp.resolvePath(directory, "vuln");
-
-    @SuppressWarnings("unchecked")
-    List<String> enabledList = (List<String>) operand.get("enabledTables");
-    final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
-        ? Collections.emptySet() : new HashSet<>(enabledList);
-
-    try {
-      if (enabled.isEmpty() || enabled.contains("cwe_catalog")) {
-        LOGGER.info("Cyber vuln autoDownload: starting CWE catalog download");
-        new CweDownloader(sp, vulnDir).download();
-      } else {
-        LOGGER.info("Cyber vuln autoDownload: cwe_catalog not in enabledTables — skipping");
-      }
-
-      if (enabled.isEmpty() || enabled.contains("kev_catalog")) {
-        LOGGER.info("Cyber vuln autoDownload: starting CISA KEV download");
-        new CisaKevDownloader(sp, vulnDir).download();
-      } else {
-        LOGGER.info("Cyber vuln autoDownload: kev_catalog not in enabledTables — skipping");
-      }
-
-      // NVD (vulnerabilities + vulnerability_cwes) is fetched by the ETL pipeline via
-      // the file adapter's built-in OFFSET pagination — no autoDownload needed here.
-
-      LOGGER.info("Cyber vuln autoDownload: all downloads complete");
-    } catch (Exception e) {
-      LOGGER.error("Cyber vuln autoDownload failed: {}", e.getMessage(), e);
-      throw new RuntimeException("Cyber vuln autoDownload failed", e);
     }
   }
 

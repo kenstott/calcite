@@ -560,9 +560,9 @@ class CyberAllTablesSmokeTest {
 
   private String buildVulnModel() {
     String engine = coalesce(TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE"), "DUCKDB");
-    // autoDownload=false: let the YAML sources drive all fetching. Using autoDownload=true
-    // triggers CweDownloader/NvdDownloader pre-writes whose output paths diverge from the
-    // Iceberg table paths (materializeDirectory resolves differently), causing dup/null PKs.
+    // All fetching is driven by the YAML sources through the generic ETL pipeline.
+    // (The old bespoke CWE/KEV/NVD downloaders wrote to a divergent path from the
+    // Iceberg materializeDirectory, causing dup/null PKs; they have been removed.)
     return "{"
         + "\"version\":\"1.0\","
         + "\"defaultSchema\":\"cyber_vuln\","
