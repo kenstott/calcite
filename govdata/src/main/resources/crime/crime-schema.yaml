@@ -193,7 +193,7 @@ dimension_values:
   # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
   crime_year_range: &crime_year_range
     type: yearRange
-    start: "${CRIME_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
@@ -1143,7 +1143,7 @@ partitionedTables:
         - ncvs
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1266,7 +1266,7 @@ partitionedTables:
         - ncvs_pop
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1368,7 +1368,7 @@ partitionedTables:
         - ncvs_hh
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 
@@ -1466,7 +1466,7 @@ partitionedTables:
         - ncvs_hh_pop
       year:
         type: yearRange
-        start: "${CRIME_NCVS_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 2
 

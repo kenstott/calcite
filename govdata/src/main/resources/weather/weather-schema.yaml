@@ -240,7 +240,7 @@ dimension_values:
   # Year range for weather/climate data
   weather_year_range: &weather_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
@@ -255,13 +255,13 @@ dimension_values:
   # GHCND daily year range (from 2000 for drought monitor compatibility)
   ghcnd_year_range: &ghcnd_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:current}"
 
   # Drought Monitor year range (data available from 2000)
   drought_year_range: &drought_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2000}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 

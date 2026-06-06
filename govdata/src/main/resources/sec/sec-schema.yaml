@@ -235,8 +235,8 @@ dimension_values:
 
   year_range: &year_range
     type: yearRange
-    start: "${SEC_START_YEAR:${GOVDATA_START_YEAR:2010}}"
-    end: "${SEC_END_YEAR:${GOVDATA_END_YEAR:${CURRENT_YEAR}}}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: "${GOVDATA_END_YEAR:${CURRENT_YEAR}}"
 
 # ============================================================================
 # DOCUMENT SOURCE CONFIGURATION

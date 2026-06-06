@@ -115,7 +115,7 @@ dimension_values:
 
   econ_reference_year_range: &econ_reference_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 

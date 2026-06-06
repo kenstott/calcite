@@ -113,10 +113,22 @@ partitionedTables:
       type:
         - attack_techniques
       year:
-        - "${GOVDATA_CURRENT_YEAR}"
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: current
       month:
-        - "4"
+        - "01"
+        - "02"
+        - "03"
+        - "04"
+        - "05"
+        - "06"
+        - "07"
+        - "08"
+        - "09"
         - "10"
+        - "11"
+        - "12"
 
     materialize:
       enabled: true

@@ -80,19 +80,19 @@ dimension_values:
 
   lands_year_range: &lands_year_range
     type: yearRange
-    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 
   nps_visit_year_range: &nps_visit_year_range
     type: yearRange
-    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 
   onrr_year_range: &onrr_year_range
     type: yearRange
-    start: "${LANDS_SINCE_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 

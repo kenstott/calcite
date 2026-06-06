@@ -318,19 +318,19 @@ dimension_values:
 
   year_range_default: &year_range_default
     type: yearRange
-    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   year_range_from_2020: &year_range_from_2020
     type: yearRange
-    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 
   year_range_from_2000: &year_range_from_2000
     type: yearRange
-    start: "${ECON_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
 

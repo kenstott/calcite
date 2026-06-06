@@ -22,7 +22,7 @@ dimension_templates:
   # Override: HEALTH_START_YEAR for health-only, GOVDATA_START_YEAR for all schemas
   health_year_range: &health_year_range
     type: yearRange
-    start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
 
 partitionedTables:
@@ -1401,7 +1401,7 @@ partitionedTables:
         - cdc_brfss
       year:
         type: yearRange
-        start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 1
 
@@ -1519,7 +1519,7 @@ partitionedTables:
         - ownership
       year:
         type: yearRange
-        start: "${HEALTH_START_YEAR:${GOVDATA_START_YEAR:2015}}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 1
         releaseMonth: 6
