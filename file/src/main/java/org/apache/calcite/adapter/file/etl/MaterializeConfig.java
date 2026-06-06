@@ -631,6 +631,12 @@ public class MaterializeConfig {
       return runMaintenance;
     }
 
+    /**
+     * Iceberg snapshot retention in days — the deliberate <b>history-depth</b> knob.
+     * Every commit is a snapshot; {@code expireSnapshots} only removes snapshots
+     * older than this, so set it to the as-of history window you want to keep
+     * (a long value for tables where time-travel history matters).
+     */
     public int getSnapshotRetentionDays() {
       return snapshotRetentionDays;
     }
@@ -655,10 +661,19 @@ public class MaterializeConfig {
       return overwritePartitions;
     }
 
+    /**
+     * @deprecated TTL-based refresh is replaced by dimension-driven cache-busting:
+     *     declare a period dimension (quarter/month/week/day) so each new period is
+     *     fresh tracker work, or a {@code *_CURRENT_*} cache-bust var for a true
+     *     snapshot. Retained for back-compat until all consumers migrate.
+     */
+    @Deprecated
     public int getIncrementalTtlDays() {
       return incrementalTtlDays;
     }
 
+    /** @deprecated see {@link #getIncrementalTtlDays()}. */
+    @Deprecated
     public long getIncrementalTtlMillis() {
       return incrementalTtlDays * 24L * 60 * 60 * 1000;
     }
