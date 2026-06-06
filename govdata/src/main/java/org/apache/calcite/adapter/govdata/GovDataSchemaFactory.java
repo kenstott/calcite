@@ -30,6 +30,7 @@ import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
 import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
+import org.apache.calcite.adapter.govdata.cftc.CftcSchemaFactory;
 import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
 import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
@@ -181,11 +182,28 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     String operatingDirectory = establishOperatingDirectory(dataSource, operand);
     IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name, operand);
 
-    // Check for freshStart option - clears all completion tracking to force re-download
+    // Check for freshStart option - clears all completion tracking to force re-download.
+    // Honor GOVDATA_FRESH_START env (worker-dq-run.sh sets it on the rebuild's daily pass);
+    // enrichFromEnv() carries the same fallback but is not on this call path, so OR it in here
+    // without mutating the (possibly immutable) operand map.
     Boolean freshStart = (Boolean) operand.get("freshStart");
-    if (Boolean.TRUE.equals(freshStart)) {
+    boolean freshStartEffective = Boolean.TRUE.equals(freshStart)
+        || "true".equalsIgnoreCase(System.getenv("GOVDATA_FRESH_START"));
+    if (freshStartEffective) {
       LOGGER.info("freshStart=true: Clearing all completion tracking for '{}'", name);
       tracker.clearAllCompletions();
+      // Also clear per-period completions scoped to this schema so the historical pass
+      // does not skip already-marked (year, month, ...) periods from a prior run.
+      // The cleared sentinel is written with the current timestamp; only period-complete
+      // markers written AFTER this call will be honoured by isPeriodComplete.
+      tracker.clearPeriodCompletions(name);
+      // Also clear per-combo processed-key states scoped to this schema so the historical
+      // pass does not see stale "complete" entries from a prior run when markCompletedPeriods
+      // calls isProcessed to decide whether to promote a period to period-complete status.
+      // Without this, year-only full-file tables (e.g. eia_coal_mines, eia_crude_oil_imports)
+      // whose combos are not tracked via _batch_* files would have their prior-run per-combo
+      // states promoted to period-complete markers, causing the historical pass to skip them.
+      tracker.clearProcessedKeys(name);
     }
 
     // Check for forceReprocessTables - invalidates specific tables without touching others
@@ -509,11 +527,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "lands":
         return new LandsSchemaFactory();
 
+      case "cftc":
+      case "swap":
+      case "derivatives":
+        return new CftcSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc");
     }
   }
 

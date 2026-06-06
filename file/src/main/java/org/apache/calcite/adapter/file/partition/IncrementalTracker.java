@@ -564,6 +564,56 @@ public interface IncrementalTracker {
     // No-op for non-persistent trackers.
   }
 
+  /**
+   * Writes a schema-scoped "cleared" sentinel that makes all prior period completions
+   * for this schema's pipelines invisible to {@link #isPeriodComplete}.
+   *
+   * <p>One sentinel row is written per schema (not per period) at year=0, using
+   * {@code source_key="_period_cleared"} and {@code table_name=schemaName}.
+   * {@link #isPeriodComplete} compares the period-complete marker's {@code as_of}
+   * against this sentinel's {@code as_of}; a period is complete only if the
+   * complete marker was written <em>after</em> the cleared sentinel.
+   *
+   * <p>This is compaction-safe: the sentinel lives in the normal year=0 store and
+   * survives compaction like any other marker row.
+   *
+   * <p>Concurrency-safe: the sentinel is scoped to {@code schemaName} so it never
+   * affects other schemas' period completions, even when multiple schemas run in
+   * the same tracker bucket.
+   *
+   * @param schemaName The schema whose period completions should be invalidated
+   *                   (e.g. {@code "energy"}, {@code "econ_reference"})
+   */
+  default void clearPeriodCompletions(String schemaName) {
+    // No-op for non-persistent trackers.
+  }
+
+  /**
+   * Writes a schema-scoped "cleared" sentinel that makes all prior per-combo processed-key
+   * states for this schema's pipelines invisible to {@link #isProcessed}.
+   *
+   * <p>One sentinel row is written per schema at year=0, using
+   * {@code source_key="_processed_cleared"} and {@code table_name=schemaName}.
+   * {@link #isProcessed} compares the processed-key marker's {@code as_of} against
+   * this sentinel's {@code as_of}; a combo is considered processed only if its
+   * marker was written <em>after</em> the cleared sentinel.
+   *
+   * <p>This gates {@code markCompletedPeriods}, which calls {@code isProcessed} to decide
+   * whether to promote a combo's year/month period to a period-complete marker.
+   * Without this sentinel, stale per-combo "complete" states from prior runs would be
+   * promoted to period-complete markers, causing the historical pass to skip re-ingestion.
+   *
+   * <p>Same compaction and concurrency guarantees as {@link #clearPeriodCompletions}:
+   * the sentinel lives in the year=0 store, survives compaction, and is scoped to the
+   * target schema so concurrent schemas are not affected.
+   *
+   * @param schemaName The schema whose per-combo processed-key states should be invalidated
+   *                   (e.g. {@code "energy"}, {@code "econ_reference"})
+   */
+  default void clearProcessedKeys(String schemaName) {
+    // No-op for non-persistent trackers.
+  }
+
   // ===== Dimension Signature Computation =====
 
   /**
